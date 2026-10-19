@@ -10,6 +10,13 @@ contextBridge.exposeInMainWorld('atelier', {
   setWindowTheme: (options) => ipcRenderer.invoke('window:theme', options),
   blurSupported: () => ipcRenderer.invoke('window:blurSupported'),
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
+
+  // Chat avec Claude
+  claudeSend: (text) => ipcRenderer.invoke('claude:send', text),
+  claudePermission: (answer) => ipcRenderer.invoke('claude:permission', answer),
+  claudeInterrupt: () => ipcRenderer.invoke('claude:interrupt'),
+  claudeReset: () => ipcRenderer.invoke('claude:reset'),
+  onClaudeEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
   platform: process.platform,
   readFolder: (dir) => ipcRenderer.invoke('folder:read', dir),
   readFile: (file) => ipcRenderer.invoke('file:read', file),

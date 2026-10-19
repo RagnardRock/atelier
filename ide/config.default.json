@@ -9,6 +9,9 @@
   "wordWrap": "on",
   "minimap": true,
   "reopenLastFolder": true,
+  "claudeCommand": "claude",
+  "claudeModel": "",
+  "claudePermissionMode": "ask",
   "terminalFontSize": 14,
   "terminalProfiles": [
     { "name": "PowerShell", "command": "default", "args": [] }
@@ -16,6 +19,7 @@
   "htmlRules": {},
   "shortcuts": {
     "toggleTerminal": "Ctrl+J",
-    "splitEditor": "Ctrl+Alt+D"
+    "splitEditor": "Ctrl+Alt+D",
+    "toggleClaude": "Ctrl+Shift+I"
   }
 }

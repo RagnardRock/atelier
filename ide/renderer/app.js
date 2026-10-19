@@ -58,6 +58,7 @@ async function start() {
   window.atelier.onShortcut((action) => {
     if (action === 'toggleTerminal') terminalPanel.toggle();
     if (action === 'splitEditor') splitEditor();
+    if (action === 'toggleClaude') claudePanel.toggle();
   });
 
   $('#btn-open').onclick = openFolder;
@@ -761,6 +762,27 @@ async function saveActive() {
     applyConfig();
     if (ok) notify.success('Config appliquée');
   }
+}
+
+// Un fichier a été modifié sur le disque par quelqu'un d'autre que l'éditeur (Claude, par exemple) :
+// on recharge son texte s'il est ouvert. Le rechargement passe par l'historique de Monaco,
+// donc Ctrl+Z annule la modification. S'il a des changements non enregistrés, on ne touche à rien.
+async function reloadFromDisk(path) {
+  const file = state.files.get(path);
+  if (!file) return;
+  if (isDirty(file)) {
+    return notify.warning(`${file.name} a été modifié sur le disque, mais tu as des modifications non enregistrées dedans : je n'y touche pas.`);
+  }
+  let content;
+  try {
+    content = await window.atelier.readFile(path);
+  } catch (err) {
+    return notify.error(`Impossible de relire ${file.name} : ${cleanError(err)}`);
+  }
+  if (content === file.model.getValue()) return;
+  file.model.pushEditOperations([], [{ range: file.model.getFullModelRange(), text: content }], () => null);
+  file.savedVersion = file.model.getAlternativeVersionId();
+  for (const t of tabsOf(file)) refreshTab(t);
 }
 
 function flash(msg) {

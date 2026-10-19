@@ -9,6 +9,7 @@ const fs = require('node:fs/promises');
 const { execFile, spawn } = require('node:child_process');
 // node-pty lance un vrai terminal (ConPTY sous Windows) : couleurs, ssh, vim… tout marche.
 const pty = require('node-pty');
+const claude = require('./claude');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -493,6 +494,9 @@ handle('app:relaunch', async () => {
 });
 handle('window:blurSupported', async () => blurSupported());
 
+// Chat avec Claude (voir claude.js).
+claude.register({ handle, getRoot: () => rootFolder, readConfig, log });
+
 function createWindow(config) {
   const blur = wantsBlur(config);
   log('INFO', `Flou Windows 11 : ${blur ? 'activé' : 'désactivé'} (Windows ${os.release()}, pris en charge : ${blurSupported() ? 'oui' : 'non'})`);
@@ -516,6 +520,12 @@ function createWindow(config) {
   });
   win.blurCapable = blur; // fenêtre créée translucide : le flou peut être activé ou coupé
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // L'interface ne doit jamais être remplacée par une autre page (lien cliqué, fichier lâché
+  // sur la fenêtre…) : seul le rechargement de l'IDE lui-même est permis.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   win.webContents.on('before-input-event', (event, input) => {
     // Outils intégrés (il n'y a plus de menu) : F12 = outils de dev, Ctrl+R = recharger l'interface.
@@ -560,5 +570,6 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   // On ne laisse aucun PowerShell ou ssh tourner en fond après la fermeture.
   for (const proc of terminals.values()) proc.kill();
+  claude.stop();
   app.quit();
 });
