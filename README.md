@@ -25,7 +25,7 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 
 > Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`. Le script de mise à jour le fait tout seul.
 
-## Ce que fait l'IDE (v0.9)
+## Ce que fait l'IDE (v0.10)
 
 ### L'interface
 
@@ -71,9 +71,22 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
   - **Pour revenir à une seule colonne** : `Ctrl+Alt+W`, ou la petite croix en haut à droite de la colonne (elle n'apparaît que s'il y a plusieurs colonnes). Les onglets de la colonne rejoignent celle de gauche : rien n'est fermé, même un fichier non enregistré.
   - Une colonne vide se ferme aussi toute seule (dernier onglet fermé, ou glissé ailleurs).
 - **Erreurs soulignées** : en JavaScript, TypeScript, CSS, SCSS, LESS et JSON, Monaco souligne lui-même les erreurs. Pour le **HTML**, c'est [HTMLHint](https://htmlhint.com) qui vérifie le fichier à chaque pause de frappe : balise non fermée, attribut en double, `<!DOCTYPE>` manquant, guillemets… Rouge = erreur, jaune = avertissement, et le survol affiche l'explication (en anglais) avec le nom de la règle. Les règles se règlent dans `htmlRules` (voir ci-dessous).
+- **Palette de commandes** : `Ctrl+Maj+P` ouvre la liste de **toutes les commandes**, rangées par catégorie avec leur raccourci : ouvrir un dossier, nouveau projet, diviser l'écran, terminal, aperçu, Git, réglages… Tape quelques lettres du nom (« col » trouve « Fermer la colonne »), puis `Entrée`. On y trouve aussi les commandes de l'éditeur, en français (« commentaire », « dupliquer », « mettre en forme »…), et un **« npm run … » pour chaque script** du projet. Les commandes utilisées récemment remontent en tête. Dans `Ctrl+P`, commencer par `>` fait la même chose (comme dans VS Code).
 - **Ouvrir un fichier par son nom** : `Ctrl+P` ouvre une petite fenêtre en haut. Tape quelques lettres du nom, même pas collées (« apjs » trouve `js/app.js`), choisis avec les flèches et `Entrée`. Ajoute `:12` pour arriver directement à la ligne 12 (`app.js:12`). Sans rien taper, les fichiers déjà ouverts sont en tête de liste.
-- **Rechercher dans tout le projet** : `Ctrl+Maj+F`, ou la loupe dans la barre d'icônes. Le texte sélectionné dans l'éditeur est repris tout seul. Les résultats s'affichent par fichier, avec le numéro de ligne ; un clic ouvre le fichier à cet endroit, le texte trouvé sélectionné. Trois boutons dans le champ : respecter les majuscules (`Aa`), mot entier, expression régulière (`.*`). La recherche ignore `.git`, `node_modules`, les fichiers binaires (images, PSD…) et ceux de plus de 1 Mo, et s'arrête à 2000 résultats.
+- **Rechercher dans tout le projet** : `Ctrl+Maj+F`, ou la loupe dans la barre d'icônes. Le texte sélectionné dans l'éditeur est repris tout seul. Les résultats s'affichent par fichier, avec le numéro de ligne ; un clic ouvre le fichier à cet endroit, le texte trouvé sélectionné. Trois boutons dans le champ : respecter les majuscules (`Aa`), mot entier, expression régulière (`.*`). La recherche ignore `.git`, `node_modules`, les fichiers binaires (images, PSD…) et ceux de plus de 1 Mo, et s'arrête à 2000 résultats. Elle cherche aussi dans les modifications pas encore enregistrées des fichiers ouverts.
+- **Remplacer dans tout le projet** : `Ctrl+Maj+H`, ou la petite flèche à gauche du champ de recherche, affiche le champ **Remplacer par**.
+  - **Aperçu avant de toucher à quoi que ce soit** : chaque résultat montre l'ancien texte barré en rouge et le nouveau en vert.
+  - **Tout remplacer** : le bouton à droite du champ (ou `Ctrl+Alt+Entrée`). L'IDE demande confirmation avec le nombre de remplacements. Pour un seul fichier : le bouton qui apparaît au survol de son nom dans les résultats.
+  - **Avec l'expression régulière** (`.*`), `$1`, `$2`… reprennent les groupes entre parenthèses : chercher `(\d+)px` et remplacer par `$1rem` transforme `10px` en `10rem`. `$&` reprend tout le texte trouvé.
+  - **Rien n'est perdu** : un fichier ouvert se recharge, et `Ctrl+Z` dans l'éditeur annule le remplacement. Un fichier ouvert avec des modifications non enregistrées est modifié dans l'éditeur seulement : tu l'enregistres quand tu veux. Les fins de ligne (Windows ou Unix) sont gardées.
 - **Emmet** (HTML et CSS) : tape une abréviation, elle apparaît en tête des suggestions, et `Tab` (ou `Entrée`) l'écrit en entier. `ul.liste>li*3` donne une liste `<ul class="liste">` avec trois `<li>`, `div#menu` un `<div id="menu">`, `!` une page HTML complète ; en CSS, `m10` donne `margin: 10px;`. Désactivable dans Réglages › Éditeur. C'est la bibliothèque [emmet-monaco-es](https://github.com/troy351/emmet-monaco-es) qui l'ajoute à Monaco.
+- **Intelligence Vue (Volar)** : dans les fichiers `.vue`, l'IDE fait tourner le même moteur que l'extension « Vue (Official) » de VS Code. Une étiquette **✓ Vue** apparaît dans la barre d'état quand l'analyse du projet est prête (quelques secondes à la première ouverture d'un `.vue`).
+  - **Autocomplétion** : les balises HTML, **les composants du projet** (`<HelloWorld`), **leurs props** (`:msg`), les directives (`v-if`, `@click`…), le CSS de `<style>`, et le JavaScript / TypeScript du `<script>` comme des `{{ expressions }}` du template (`compteur.` propose `value`). Choisir un composant pas encore importé **ajoute son `import`** tout seul.
+  - **Erreurs soulignées**, en français : une variable inconnue dans le template, une prop obligatoire oubliée, une erreur de type… Le survol donne l'explication. En JavaScript (sans TypeScript), comme dans VS Code, seules les erreurs de syntaxe et de Vue sont signalées.
+  - **Survol** : le type d'une variable ou d'une prop (`const compteur: Ref<number>`), et sa documentation.
+  - **`F12`** (ou `Ctrl+clic`) : aller à la définition, même dans un autre fichier (un composant ouvre son `.vue`).
+  - **Aide sur les paramètres** d'une fonction pendant que tu tapes `(` et `,`.
+  - Désactivable dans Réglages › Éditeur. Comment ça marche : voir [Comment c'est construit](#comment-cest-construit).
 - **Mettre en forme (Prettier)** : `Maj+Alt+F`, ou clic droit › Mettre le document en forme. [Prettier](https://prettier.io) remet le code au propre (indentation, guillemets, points-virgules, retours à la ligne), en HTML, CSS, SCSS, LESS, JavaScript, TypeScript, JSON, Markdown, YAML et dans les composants Vue (`.vue`). La largeur des tabulations vient de tes réglages, et un fichier `.prettierrc` (en JSON) à la racine du projet est respecté. Si le code contient une erreur de syntaxe, rien n'est touché et la ligne fautive est indiquée. Option **Mettre en forme à l'enregistrement** dans Réglages › Éditeur.
 - **Images** : un clic sur une image (png, jpg, gif, webp, avif, bmp, ico) l'affiche, sur un damier qui montre la transparence, avec ses dimensions et son poids. Un clic sur l'image passe de la taille ajustée à la taille réelle. Si tu la réexportes depuis Photoshop, elle se met à jour toute seule. Le SVG s'ouvre comme du code, puisque tu peux le modifier.
 - **PSD, AI, PDF et autres fichiers binaires** : au lieu de caractères illisibles, une carte propose **Ouvrir avec l'application par défaut** (Photoshop pour un `.psd`, Illustrator pour un `.ai`) et **Afficher dans l'Explorateur**.
@@ -99,6 +112,11 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
   - L'aperçu **suit l'onglet actif** : passe sur un autre fichier HTML, il l'affiche.
   - En haut : précédent, recharger, la barre d'adresse (tape `/contact.html` puis `Entrée`), la **largeur téléphone** (390 px, pour vérifier la version mobile), **ouvrir dans ton navigateur** habituel, et fermer. La poignée à gauche règle la largeur du panneau.
   - Comment ça marche : l'IDE lance un petit serveur web local (`http://127.0.0.1:<port>/`, invisible depuis les autres ordinateurs), comme l'extension Live Server de VS Code. Il ajoute à la volée, dans les pages qu'il envoie, un petit script qui écoute les changements. **Tes fichiers ne sont pas modifiés.** Comme c'est un vrai serveur, les chemins absolus (`/css/style.css`) et `fetch()` marchent, contrairement à un double-clic sur le fichier.
+- **Scripts npm** : l'icône ▶▶, dans la barre de gauche, liste les scripts de ton `package.json` (`dev`, `build`, `preview`, `test`…), avec la commande de chacun. S'il y a d'autres `package.json` dans des sous-dossiers (par exemple `front/` et `back/`), leurs scripts sont listés aussi, sous leur nom.
+  - **▶ lance** le script dans un onglet de terminal à son nom, **■ l'arrête**. Un clic sur un script qui tourne affiche son terminal. Fermer l'onglet arrête aussi le script.
+  - Une **pastille** sur l'icône compte les scripts qui tournent, et une icône qui tourne les signale dans la liste.
+  - La liste se met à jour toute seule quand `package.json` change. « Nouveau projet » y lance `dev` à la fin.
+  - Les scripts sont aussi dans la palette de commandes (`Ctrl+Maj+P`, tape « npm »).
 - **Git** : l'icône branche, dans la barre de gauche, ouvre le panneau Git. Une pastille indique le nombre de fichiers modifiés. Il utilise le `git` installé sur ton PC ([Git for Windows](https://git-scm.com/download/win)), avec les mêmes commandes que dans un terminal.
   - **La liste des fichiers modifiés**, avec une lettre : `M` modifié, `U` nouveau, `D` supprimé, `R` renommé. Ils sont en deux groupes : **Indexées** (ce qui partira dans le prochain commit) et **Modifications**. Au survol, le `+` indexe un fichier et le `−` le retire ; les mêmes boutons sur le titre d'un groupe agissent sur tout le groupe.
   - **Un clic sur un fichier montre ses changements** : à gauche la version du dernier commit, à droite ton fichier, avec les lignes retirées en rouge et ajoutées en vert. Les boutons en haut passent de côte à côte à l'un sous l'autre, ouvrent le fichier ou ferment la comparaison (`Échap`).
@@ -127,6 +145,7 @@ Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistr
 | `minimap` | Mini-carte du fichier à droite | `true`, `false` |
 | `emmet` | Abréviations Emmet en HTML et CSS | `true`, `false` |
 | `formatOnSave` | Mettre en forme avec Prettier à chaque `Ctrl+S` | `true`, `false` |
+| `vueTools` | Intelligence Vue (Volar) dans les fichiers `.vue` | `true`, `false` |
 | `reopenLastFolder` | Rouvrir le dernier dossier au démarrage | `true`, `false` |
 | `restoreTabs` | Rouvrir les onglets d'un dossier à son ouverture | `true`, `false` |
 | `terminalFontSize` | Taille du texte du terminal | `14` |
@@ -135,7 +154,7 @@ Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistr
 | `claudeModel` | Modèle utilisé par le chat (vide = celui de Claude Code) | `""`, `"opus"`, `"sonnet"`, `"haiku"` |
 | `claudePermissionMode` | `"ask"` : il demande avant chaque modification. `"acceptEdits"` : il modifie les fichiers sans demander (les commandes demandent toujours) | `"ask"` |
 | `claudeCommand` | La commande qui lance Claude Code | `"claude"`, `"C:\\Users\\toi\\AppData\\Roaming\\npm\\claude.cmd"` |
-| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "closeColumn": "Ctrl+Alt+W", "newProject": "Ctrl+Alt+N", "toggleClaude": "Ctrl+Shift+I", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F", "togglePreview": "Ctrl+Alt+P" }` |
+| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "closeColumn": "Ctrl+Alt+W", "newProject": "Ctrl+Alt+N", "toggleClaude": "Ctrl+Shift+I", "commandPalette": "Ctrl+Shift+P", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F", "replaceProject": "Ctrl+Shift+H", "togglePreview": "Ctrl+Alt+P" }` |
 
 ### Profils de terminal
 
@@ -155,7 +174,7 @@ Le fichier est stocké dans `%APPDATA%\atelier-ide\config.json`, et tes serveurs
 
 ### Raccourcis
 
-`toggleTerminal` (afficher / masquer le terminal), `splitEditor` (diviser l'écran), `closeColumn` (fermer la colonne), `newProject` (nouveau projet), `toggleClaude` (afficher / masquer le chat), `quickOpen` (ouvrir un fichier par son nom) `searchProject` (rechercher dans le projet) et `togglePreview` (aperçu navigateur) se règlent dans `shortcuts`. Une combinaison s'écrit avec `Ctrl`, `Alt` et `Shift`, puis la touche : `"Ctrl+Shift+T"`, `"Alt+F12"`… La touche est celle qui est imprimée sur ton clavier (AZERTY compris).
+`toggleTerminal` (afficher / masquer le terminal), `splitEditor` (diviser l'écran), `closeColumn` (fermer la colonne), `newProject` (nouveau projet), `toggleClaude` (afficher / masquer le chat), `commandPalette` (palette de commandes), `quickOpen` (ouvrir un fichier par son nom), `searchProject` (rechercher dans le projet), `replaceProject` (remplacer dans le projet) et `togglePreview` (aperçu navigateur) se règlent dans `shortcuts`. Une combinaison s'écrit avec `Ctrl`, `Alt` et `Shift`, puis la touche : `"Ctrl+Shift+T"`, `"Alt+F12"`… La touche est celle qui est imprimée sur ton clavier (AZERTY compris).
 
 Ces raccourcis sont interceptés par `main.js` *avant* que l'éditeur ou le terminal ne reçoivent la touche. C'est ce qui permet à `Ctrl+J` de fermer le terminal même quand il a le focus, alors que pour un terminal, `Ctrl+J` veut normalement dire « retour à la ligne ».
 
@@ -201,6 +220,10 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | `ide/renderer/media.js` | L'affichage des images et la carte des fichiers binaires (PSD, AI, PDF…) dans les onglets. |
 | `ide/renderer/session.js` | Retient les onglets ouverts de chaque dossier et les rouvre. |
 | `ide/renderer/format.js` | La mise en forme avec Prettier (chargé seulement à la première utilisation). |
+| `ide/vue.js` | Le côté Node de l'intelligence Vue : lance `tsserver` (le moteur de TypeScript, avec l'extension `@vue/typescript-plugin`) et `vue-language-server` (Volar), fait passer entre eux les questions de types, et répond à l'interface (autocomplétion, survol, erreurs, définition). |
+| `ide/renderer/vue.js` | Relie Monaco aux deux moteurs pour les fichiers `.vue` : envoi du texte, autocomplétion (avec l'import automatique), survol, erreurs soulignées, `F12`, aide sur les paramètres, étiquette « Vue » de la barre d'état. |
+| `ide/renderer/scripts.js` | Le panneau Scripts : la liste des scripts npm, ▶ / ■, et le suivi de ceux qui tournent. |
+| `ide/renderer/commands.js` | La palette de commandes : la liste des commandes (une ligne chacune, facile à compléter), plus celles de Monaco et des scripts npm. |
 | `ide/scaffold.js` | Le côté Node de « Nouveau projet » : vérifie le nom et le dossier, lance `create-vue` ou `create-vite` (versions fixées), puis `npm install` et `git init`, en envoyant chaque ligne de leur sortie à la fenêtre. Écrit lui-même les fichiers du site HTML simple. |
 | `ide/renderer/newproject.js` | La fenêtre « Nouveau projet » : les modèles, le nom, l'emplacement, les options, puis le suivi des étapes et l'ouverture du projet. |
 | `ide/renderer/settings.js` | La fenêtre de réglages. Chaque réglage est une ligne dans `SECTIONS` (clé de config + type de contrôle) : en ajouter un est facile. |
@@ -213,6 +236,8 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 Le terminal fonctionne en deux morceaux : **node-pty** (dans `main.js`) lance un vrai processus PowerShell ou ssh via ConPTY, l'API de terminal de Windows. **xterm.js** (dans `terminal.js`) l'affiche, avec les couleurs et le curseur. Entre les deux, chaque frappe et chaque morceau de texte passent par IPC. node-pty fournit ses binaires Windows déjà compilés, donc `npm install` n'a besoin d'aucun outil de compilation.
 
 Le chat parle à Claude Code de la même façon que le SDK officiel d'Anthropic (Agent SDK) : un processus `claude` reste ouvert pendant la conversation, et les deux côtés s'échangent des messages JSON, un par ligne. Grâce à l'option `--permission-prompt-tool=stdio`, chaque fois que Claude veut modifier un fichier ou lancer une commande, Claude Code envoie une demande à l'IDE et attend la réponse que tu donnes sur la carte. Comme c'est ton Claude Code installé, c'est ton compte Claude qui est utilisé, avec ses limites habituelles.
+
+L'intelligence Vue fonctionne comme dans VS Code, avec deux programmes en arrière-plan, lancés à la première ouverture d'un `.vue` (et arrêtés en changeant de dossier ou en fermant l'IDE). **tsserver**, le moteur de TypeScript, comprend les `.vue` grâce à l'extension `@vue/typescript-plugin` : c'est lui qui connaît les types, dans le `<script>` comme dans les expressions du template. **vue-language-server** (Volar) s'occupe du reste (balises, composants, props, directives, CSS) et demande les types à tsserver ; `ide/vue.js` fait passer ces questions de l'un à l'autre. Les deux tournent avec le Node intégré à Electron, et TypeScript est celui de l'IDE (version fixée dans `package.json`), pas celui du projet.
 
 Pas de framework ni de bundler : le code que tu lis est exactement celui qui tourne. Monaco est chargé directement depuis `node_modules` avec son propre chargeur (`loader.js`), et son interface est en français.
 

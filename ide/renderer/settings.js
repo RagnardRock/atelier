@@ -23,6 +23,7 @@ const settings = (() => {
       { key: 'wordWrap', label: 'Retour à la ligne automatique', type: 'toggle', on: 'on', off: 'off' },
       { key: 'minimap', label: 'Mini-carte du fichier', type: 'toggle' },
       { key: 'formatOnSave', label: 'Mettre en forme à l\'enregistrement', type: 'toggle', help: 'Prettier remet le code au propre à chaque Ctrl+S (HTML, CSS, JS, JSON, Markdown…). Sinon : Maj+Alt+F.' },
+      { key: 'vueTools', label: 'Intelligence Vue (Volar)', type: 'toggle', help: 'Dans les fichiers .vue : autocomplétion des composants et des props, types au survol, erreurs soulignées, F12 pour aller à la définition. Le même moteur que l\'extension Vue de VS Code.' },
       { key: 'emmet', label: 'Emmet', type: 'toggle', help: 'En HTML et CSS, une abréviation comme ul>li*3 ou m10 s\'écrit en entier avec Tab.' },
     ] },
     { id: 'terminal', title: 'Terminal', icon: 'terminal', fields: [

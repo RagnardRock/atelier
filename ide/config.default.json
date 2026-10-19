@@ -9,6 +9,7 @@
   "wordWrap": "on",
   "minimap": true,
   "emmet": true,
+  "vueTools": true,
   "formatOnSave": false,
   "reopenLastFolder": true,
   "restoreTabs": true,

@@ -53,6 +53,7 @@ async function start() {
   defineThemes();
   registerComponentLanguages();
   formatter.init(); // Prettier pour Maj+Alt+F (format.js)
+  vueTools.init(); // Volar pour les fichiers .vue (vue.js)
   state.configPath = await window.atelier.getConfigPath();
   await loadConfig();
   createGroup();
@@ -197,21 +198,28 @@ function applyConfig() {
   for (const group of state.groups) group.editor.updateOptions(editorOptions());
   for (const file of state.files.values()) lintHtml(file.model); // les règles HTML ont pu changer
   terminalPanel.applyConfig(c);
-  applyEmmet(c.emmet);
+  applyEmmet(c.emmet, c.vueTools !== false);
+  vueTools.applyConfig(c);
   updateWelcome();
 }
 
 // Emmet : en HTML, tape une abréviation comme "ul>li*3" ou "div.carte" et Tab (ou Entrée)
 // l'écrit en entier. En CSS, "m10" devient "margin: 10px;". Elle apparaît en tête des suggestions.
 // La bibliothèque emmet-monaco-es (chargée dans index.html) ajoute ces suggestions à Monaco.
+// Avec l'intelligence Vue (Volar), Emmet est déjà fourni par Volar dans le <template> des .vue :
+// on ne l'ajoute pas une deuxième fois (il proposerait aussi ses abréviations dans le <script>).
 let emmetDispose = null;
-function applyEmmet(enabled) {
+let emmetLanguages = '';
+function applyEmmet(enabled, vueTools = false) {
+  const htmlLanguages = ['html', 'php', 'svelte', ...(vueTools ? [] : ['vue'])];
+  if (emmetDispose && emmetLanguages !== htmlLanguages.join()) { emmetDispose(); emmetDispose = null; }
+  emmetLanguages = htmlLanguages.join();
   if (enabled && !emmetDispose && window.emmetMonaco) {
     // tokenizer "standard" : Emmet passe par l'API publique de Monaco pour savoir si le curseur est
     // dans du code (et pas dans un commentaire ou une chaîne). Le mode par défaut lit des
     // morceaux internes de Monaco et plantait sur une ligne pas encore colorée.
     const options = { tokenizer: 'standard' };
-    const html = emmetMonaco.emmetHTML(monaco, ['html', 'php', 'vue', 'svelte'], options);
+    const html = emmetMonaco.emmetHTML(monaco, htmlLanguages, options);
     const css = emmetMonaco.emmetCSS(monaco, ['css', 'scss', 'less'], options);
     emmetDispose = () => { html(); css(); };
   } else if (!enabled && emmetDispose) {

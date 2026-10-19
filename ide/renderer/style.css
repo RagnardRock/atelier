@@ -1406,3 +1406,10 @@ body.glass .np-card { border-color: var(--glass-border); }
 .quick-item.command .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .quick-item.command .keys { display: flex; gap: 3px; flex-shrink: 0; }
 .quick-item.command kbd { padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--hover); color: var(--text); font: 11px var(--ui-font); }
+
+/* Étiquette « Vue » de la barre d'état (vue.js) */
+#status-vue { display: inline-flex; align-items: center; gap: 4px; }
+#status-vue[hidden] { display: none; }
+#status-vue .codicon { font-size: 12px; }
+#status-vue.ready .codicon { color: #42b883; }
+#status-vue.loading .codicon { animation: np-spin 1s linear infinite; }

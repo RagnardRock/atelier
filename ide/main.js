@@ -15,6 +15,7 @@ const search = require('./search');
 const preview = require('./preview');
 const gitPanel = require('./git');
 const scaffold = require('./scaffold');
+const vueLanguage = require('./vue');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -663,6 +664,8 @@ claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: a
 search.register({ handle, getRoot: () => rootFolder });
 preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
 gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });
+// Intelligence Vue (Volar) : tsserver + vue-language-server, lancés au premier fichier .vue ouvert.
+const vueServers = vueLanguage.register({ handle, getRoot: () => rootFolder, isAllowed, log, readConfig });
 // Nouveau projet : par défaut, à côté du dossier ouvert, sinon dans Documents.
 scaffold.register({ handle, setRoot, readState, updateState, defaultParent: () => (rootFolder ? path.dirname(rootFolder) : app.getPath('documents')) });
 // Lien cliqué dans un terminal : seulement des adresses web, ouvertes dans ton navigateur habituel.
@@ -752,5 +755,6 @@ app.on('window-all-closed', () => {
   for (const proc of terminals.values()) proc.kill();
   claude.stop();
   preview.stop();
+  vueServers.stop();
   app.quit();
 });
