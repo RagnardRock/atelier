@@ -37,6 +37,7 @@ const settings = (() => {
       { key: 'shortcuts', sub: 'toggleClaude', label: 'Afficher / masquer le chat avec Claude', type: 'shortcut' },
       { key: 'shortcuts', sub: 'quickOpen', label: 'Ouvrir un fichier par son nom', type: 'shortcut' },
       { key: 'shortcuts', sub: 'searchProject', label: 'Rechercher dans le projet', type: 'shortcut' },
+      { key: 'shortcuts', sub: 'replaceProject', label: 'Remplacer dans le projet', type: 'shortcut' },
       { key: 'shortcuts', sub: 'togglePreview', label: 'Aperçu dans le navigateur', type: 'shortcut' },
     ] },
     { id: 'claude', title: 'Claude', icon: 'sparkle', fields: [

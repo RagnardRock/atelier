@@ -167,7 +167,12 @@ const projectSearch = (() => {
   const input = document.querySelector('#search-input');
   const summary = document.querySelector('#search-summary');
   const results = document.querySelector('#search-results');
+  const form = document.querySelector('#search-form');
+  const replaceBox = document.querySelector('#replace-box');
+  const replaceInput = document.querySelector('#replace-input');
+  const replaceAllButton = document.querySelector('#replace-all');
   const options = { caseSensitive: false, wholeWord: false, regex: false };
+  let lastAnswer = null; // derniers résultats affichés (pour « Tout remplacer »)
   let timer = null;
   let searchId = 0; // pour ignorer la réponse d'une recherche dépassée par une plus récente
 
@@ -184,6 +189,63 @@ const projectSearch = (() => {
     clearTimeout(timer);
     timer = setTimeout(run, 300); // on attend une petite pause de frappe
   });
+
+  // --- Remplacer ---
+  // La flèche à gauche du champ (ou Ctrl+Maj+H) affiche le champ « Remplacer par ». Les résultats
+  // montrent alors l'ancien texte barré et le nouveau en vert, avant de toucher à quoi que ce soit.
+  const replacing = () => !replaceBox.hidden;
+  function showReplace(show) {
+    replaceBox.hidden = !show;
+    form.classList.toggle('replacing', show);
+    run();
+  }
+  document.querySelector('#search-toggle-replace').onclick = () => { showReplace(!replacing()); (replacing() ? replaceInput : input).focus(); };
+  replaceInput.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 200); });
+  replaceInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.ctrlKey && e.altKey) { e.preventDefault(); replaceAll(); }
+    if (e.key === 'Escape') state.activeGroup?.editor.focus();
+  });
+  replaceAllButton.onclick = () => replaceAll();
+
+  // Le texte des fichiers ouverts qui ont des modifications non enregistrées.
+  function unsavedTexts() {
+    const texts = {};
+    for (const file of state.files.values()) {
+      if (!file.kind && isDirty(file)) texts[file.path] = file.model.getValue();
+    }
+    return texts;
+  }
+
+  // Remplace partout, ou seulement dans `only` (les fichiers d'un groupe de résultats).
+  // - Fichier fermé, ou ouvert sans modification : réécrit sur le disque. Un onglet ouvert se
+  //   recharge, et Ctrl+Z dans l'éditeur annule le remplacement.
+  // - Fichier ouvert avec des modifications non enregistrées : remplacé dans l'éditeur seulement
+  //   (rien n'est écrit), pour ne pas perdre ce que tu as tapé. Tu enregistres quand tu veux.
+  async function replaceAll(only = null) {
+    if (!lastAnswer || !lastAnswer.count) return;
+    const replace = replaceInput.value;
+    const targets = only ? lastAnswer.results.filter((f) => only.includes(f.path)) : lastAnswer.results;
+    const count = targets.reduce((n, f) => n + f.matches.length, 0);
+    const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+    const what = lastAnswer.truncated && !only ? 'tous les résultats (plus de 2000)' : plural(count, 'résultat');
+    if (!confirm(`Remplacer ${what} dans ${plural(targets.length, 'fichier')} par « ${replace} » ?`)) return;
+    const texts = unsavedTexts();
+    let result;
+    try {
+      result = await window.atelier.replaceText({ query: input.value, ...options }, replace, { only, texts });
+    } catch (err) {
+      return notify.error(`Remplacement impossible : ${cleanError(err)}`);
+    }
+    for (const [path, text] of Object.entries(result.fromEditor)) {
+      const model = state.files.get(path)?.model;
+      if (model) model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
+    }
+    for (const path of result.changed) if (state.files.has(path)) await reloadFromDisk(path, { quiet: true });
+    const files = result.changed.length + Object.keys(result.fromEditor).length;
+    notify.success(`${plural(result.count, 'remplacement')} dans ${plural(files, 'fichier')}.${Object.keys(result.fromEditor).length ? ' Les fichiers ouverts non enregistrés ont été modifiés dans l\'éditeur : pense à les enregistrer.' : ''}`);
+    document.dispatchEvent(new CustomEvent('files-changed', { detail: result.changed })); // le panneau Git se met à jour
+    run();
+  }
   document.querySelector('#search-form').onsubmit = (e) => { e.preventDefault(); clearTimeout(timer); run(); };
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') state.activeGroup?.editor.focus();
@@ -199,12 +261,12 @@ const projectSearch = (() => {
     clearTimeout(timer);
     const query = input.value;
     const id = ++searchId;
-    if (!query) { results.innerHTML = ''; summary.textContent = ''; return; }
+    if (!query) { results.innerHTML = ''; summary.textContent = ''; lastAnswer = null; replaceAllButton.disabled = true; return; }
     if (!state.root) { summary.textContent = "Ouvre d'abord un dossier."; return; }
     summary.innerHTML = '<i class="codicon codicon-loading codicon-modifier-spin"></i> Recherche…';
     let answer;
     try {
-      answer = await window.atelier.searchText({ query, ...options });
+      answer = await window.atelier.searchText({ query, ...options, replace: replacing() ? replaceInput.value : undefined }, unsavedTexts());
     } catch (err) {
       if (id === searchId) { results.innerHTML = ''; summary.textContent = cleanError(err); }
       return;
@@ -213,7 +275,10 @@ const projectSearch = (() => {
     render(answer);
   }
 
-  function render({ results: files, count, truncated }) {
+  function render(answer) {
+    const { results: files, count, truncated } = answer;
+    lastAnswer = answer;
+    replaceAllButton.disabled = !count;
     results.innerHTML = '';
     if (!count) { summary.textContent = 'Aucun résultat.'; return; }
     const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
@@ -228,6 +293,12 @@ const projectSearch = (() => {
       const type = fileIcon(file.rel.slice(slash + 1));
       head.appendChild(iconElement(type.icon, type.color));
       head.insertAdjacentHTML('beforeend', `<span class="name">${escapeHtml(file.rel.slice(slash + 1))}</span><span class="dir">${escapeHtml(slash > 0 ? file.rel.slice(0, slash) : '')}</span><span class="count">${file.matches.length}</span>`);
+      const replaceFile = document.createElement('button');
+      replaceFile.className = 'icon-button replace-file';
+      replaceFile.title = 'Remplacer dans ce fichier';
+      replaceFile.innerHTML = '<i class="codicon codicon-replace-all"></i>';
+      replaceFile.onclick = (e) => { e.stopPropagation(); replaceAll([file.path]); };
+      head.appendChild(replaceFile);
       head.title = file.rel;
       head.onclick = () => group.classList.toggle('collapsed');
       group.appendChild(head);
@@ -238,7 +309,10 @@ const projectSearch = (() => {
         // Le début de la ligne est raccourci pour que le résultat reste visible dans la barre étroite.
         let before = t.slice(0, m.start).replace(/^\s+/, '');
         if (before.length > 24) before = `…${before.slice(-24)}`;
-        row.innerHTML = `<span class="line-no">${m.line}</span><span class="text">${escapeHtml(before)}<mark>${escapeHtml(t.slice(m.start, m.start + m.previewLength))}</mark>${escapeHtml(t.slice(m.start + m.previewLength))}</span>`;
+        const found = escapeHtml(t.slice(m.start, m.start + m.previewLength));
+        // En mode remplacement : l'ancien texte barré en rouge, le nouveau en vert.
+        const middle = m.replacement !== undefined ? `<del>${found}</del><ins>${escapeHtml(m.replacement)}</ins>` : `<mark>${found}</mark>`;
+        row.innerHTML = `<span class="line-no">${m.line}</span><span class="text">${escapeHtml(before)}${middle}${escapeHtml(t.slice(m.start + m.previewLength))}</span>`;
         row.title = `${file.rel}, ligne ${m.line}`;
         row.onclick = () => {
           results.querySelectorAll('.search-match.active').forEach((r) => r.classList.remove('active'));
@@ -268,10 +342,18 @@ const projectSearch = (() => {
   // Le bouton loupe de la barre d'icônes place aussi le curseur dans le champ.
   document.querySelector('#activitybar [data-view="search"]').addEventListener('click', () => setTimeout(() => input.focus(), 0));
 
-  return { open, run, isVisible: () => !view.hidden };
+  // Ctrl+Maj+H : la recherche, avec le champ de remplacement.
+  function openReplace() {
+    open();
+    if (!replacing()) showReplace(true);
+    if (input.value) replaceInput.focus();
+  }
+
+  return { open, openReplace, run, isVisible: () => !view.hidden };
 })();
 
 window.atelier.onShortcut((action) => {
   if (action === 'quickOpen') quickOpen.open();
   if (action === 'searchProject') projectSearch.open();
+  if (action === 'replaceProject') projectSearch.openReplace();
 });

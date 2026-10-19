@@ -61,11 +61,18 @@
           </span>
         </div>
         <form id="search-form">
+          <button type="button" id="search-toggle-replace" class="icon-button" title="Afficher le remplacement (Ctrl+Maj+H)"><i class="codicon codicon-chevron-right"></i></button>
+          <div class="search-fields">
           <div class="search-box">
             <input id="search-input" spellcheck="false" placeholder="Rechercher dans le projet">
             <button type="button" class="search-opt" data-opt="caseSensitive" title="Respecter les majuscules"><i class="codicon codicon-case-sensitive"></i></button>
             <button type="button" class="search-opt" data-opt="wholeWord" title="Mot entier"><i class="codicon codicon-whole-word"></i></button>
             <button type="button" class="search-opt" data-opt="regex" title="Expression régulière"><i class="codicon codicon-regex"></i></button>
+          </div>
+          <div class="search-box" id="replace-box" hidden>
+            <input id="replace-input" spellcheck="false" placeholder="Remplacer par">
+            <button type="button" id="replace-all" class="search-opt" title="Tout remplacer (Ctrl+Alt+Entrée)"><i class="codicon codicon-replace-all"></i></button>
+          </div>
           </div>
         </form>
         <p id="search-summary" class="hint"></p>
