@@ -49,6 +49,9 @@ body {
 }
 #topbar button:hover { border-color: var(--accent); }
 #folder-name { color: var(--muted); margin-left: auto; }
+/* Pastille sur le bouton Mise à jour quand une nouvelle version est disponible */
+#btn-update.available { border-color: var(--accent); color: var(--accent); }
+#btn-update.available::after { content: " ●"; }
 
 /* Zone principale : arborescence à gauche, éditeur à droite */
 #layout { flex: 1; display: flex; min-height: 0; }

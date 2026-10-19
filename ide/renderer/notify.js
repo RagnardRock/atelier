@@ -32,7 +32,7 @@ const notify = (() => {
   };
 
   return {
-    info: (message) => show('info', message),
+    info: (message, { actions = [] } = {}) => show('info', message, { sticky: actions.length > 0, actions }),
     success: (message) => show('success', message),
     error: (message, { log = true } = {}) => {
       if (log) window.atelier.log('ERREUR', `[interface] ${message}`);

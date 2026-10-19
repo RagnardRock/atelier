@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('atelier', {
   onAppError: (callback) => ipcRenderer.on('app:error', (_event, message) => callback(message)),
   onShortcut: (callback) => ipcRenderer.on('shortcut', (_event, action) => callback(action)),
 
+  // Mise à jour
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+
   // Terminaux
   createTerminal: (profileName, cols, rows) => ipcRenderer.invoke('term:create', profileName, cols, rows),
   writeTerminal: (id, data) => ipcRenderer.send('term:write', id, data),

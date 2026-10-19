@@ -6,6 +6,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
+const { execFile, spawn } = require('node:child_process');
 // node-pty lance un vrai terminal (ConPTY sous Windows) : couleurs, ssh, vim… tout marche.
 const pty = require('node-pty');
 
@@ -271,6 +272,47 @@ function spawnTerminal(event, command, args, cols, rows) {
 ipcMain.on('term:write', (_event, id, data) => terminals.get(id)?.write(data));
 ipcMain.on('term:resize', (_event, id, cols, rows) => terminals.get(id)?.resize(cols, rows));
 ipcMain.on('term:kill', (_event, id) => terminals.get(id)?.kill());
+
+// --- Mise à jour ---
+// L'IDE vit dans un clone git du dépôt atelier : mettre à jour = git pull + npm install.
+// main.js vérifie s'il y a des nouveautés ; l'installation est confiée à mettre-a-jour.bat,
+// lancé dans sa propre fenêtre APRÈS la fermeture de l'IDE (sous Windows, npm ne peut pas
+// remplacer Electron ou node-pty tant que l'IDE les utilise).
+
+const REPO = path.join(__dirname, '..');
+
+function git(args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd: REPO, windowsHide: true }, (err, stdout, stderr) => {
+      if (err) reject(new Error((stderr || err.message).trim()));
+      else resolve(stdout.trim());
+    });
+  });
+}
+
+handle('update:check', async () => {
+  try {
+    await git(['fetch', '--quiet']);
+  } catch (err) {
+    if (err.code === 'ENOENT' || /ENOENT/.test(err.message)) throw new Error("git est introuvable : installe Git pour Windows pour pouvoir mettre l'IDE à jour");
+    throw new Error(`Impossible de contacter GitHub : ${err.message}`);
+  }
+  const branch = await git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  const upstream = await git(['rev-parse', '--abbrev-ref', '@{u}']).catch(() => null);
+  if (!upstream) throw new Error(`La branche « ${branch} » n'est reliée à aucune branche GitHub`);
+  const log = await git(['log', '--format=%s', 'HEAD..@{u}']);
+  return { branch, changes: log ? log.split('\n') : [] };
+});
+
+handle('update:install', async () => {
+  log('INFO', 'Mise à jour lancée depuis le bouton');
+  const child = process.platform === 'win32'
+    ? spawn('cmd.exe', ['/c', 'start', '', path.join(REPO, 'mettre-a-jour.bat')], { cwd: REPO, detached: true, stdio: 'ignore' })
+    : spawn('sh', [path.join(REPO, 'mettre-a-jour.sh')], { cwd: REPO, detached: true, stdio: 'ignore' });
+  child.unref();
+  // Le script attend 2 secondes que l'IDE soit fermé avant de toucher aux fichiers.
+  setTimeout(() => app.quit(), 300);
+});
 
 // --- Raccourcis globaux ---
 // Ctrl+J (terminal) et Ctrl+Alt+D (diviser) sont interceptés ici, AVANT que la page ne reçoive
