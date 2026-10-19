@@ -199,9 +199,16 @@ async function existingRecents() {
   return recentFolders.filter((_, i) => checks[i]);
 }
 
+// Le dossier des projets (Réglages › Démarrage), s'il existe encore. Sinon : rien (Windows propose le dernier utilisé).
+async function projectsFolder() {
+  const folder = (await readConfig()).projectsFolder;
+  if (typeof folder !== 'string' || !folder.trim()) return undefined;
+  return (await fs.stat(folder).then((s) => s.isDirectory(), () => false)) ? folder : undefined;
+}
+
 handle('folder:open', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
+  const result = await dialog.showOpenDialog(win, { defaultPath: await projectsFolder(), properties: ['openDirectory'] });
   if (result.canceled) return null;
   return setRoot(result.filePaths[0]);
 });
@@ -667,16 +674,16 @@ gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });
 // Intelligence Vue (Volar) : tsserver + vue-language-server, lancés au premier fichier .vue ouvert.
 const vueServers = vueLanguage.register({ handle, getRoot: () => rootFolder, isAllowed, log, readConfig });
 // Nouveau projet : par défaut, à côté du dossier ouvert, sinon dans Documents.
-scaffold.register({ handle, setRoot, readState, updateState, defaultParent: () => (rootFolder ? path.dirname(rootFolder) : app.getPath('documents')) });
+scaffold.register({ handle, setRoot, readState, updateState, projectsFolder, defaultParent: () => (rootFolder ? path.dirname(rootFolder) : app.getPath('documents')) });
 // Lien cliqué dans un terminal : seulement des adresses web, ouvertes dans ton navigateur habituel.
 handle('link:open', async (_event, url) => {
   if (!/^https?:\/\//i.test(String(url))) throw new Error(`Lien refusé : ${url}`);
   await shell.openExternal(String(url));
 });
 // Choisir le dossier où créer un nouveau projet (sans l'ouvrir).
-handle('dialog:pickFolder', async (event, defaultPath) => {
+handle('dialog:pickFolder', async (event, defaultPath, title) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const result = await dialog.showOpenDialog(win, { title: 'Où créer le projet ?', defaultPath, properties: ['openDirectory', 'createDirectory'] });
+  const result = await dialog.showOpenDialog(win, { title: typeof title === 'string' ? title : 'Où créer le projet ?', defaultPath: defaultPath || undefined, properties: ['openDirectory', 'createDirectory'] });
   return result.canceled ? null : result.filePaths[0];
 });
 

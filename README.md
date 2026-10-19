@@ -41,11 +41,11 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 ### Les fonctions
 
 
-- **Ouvrir un dossier** (bouton ou `Ctrl+O`) : l'arborescence s'affiche à gauche. Les sous-dossiers ne sont lus qu'au clic, donc même un gros projet s'ouvre vite. Le dossier `.git` est masqué. Les onglets de l'ancien dossier se ferment (l'IDE ne pourrait plus les enregistrer) ; un fichier non enregistré demande confirmation.
+- **Ouvrir un dossier** (bouton ou `Ctrl+O`) : la fenêtre s'ouvre dans **`D:\Projets`** (réglable dans Réglages › Démarrage › Dossier des projets ; vide = le dernier dossier utilisé). L'arborescence s'affiche à gauche. Les sous-dossiers ne sont lus qu'au clic, donc même un gros projet s'ouvre vite. Le dossier `.git` est masqué. Les onglets de l'ancien dossier se ferment (l'IDE ne pourrait plus les enregistrer) ; un fichier non enregistré demande confirmation.
 - **Nouveau projet** : la fusée (en haut), `Ctrl+Alt+N`, ou **Nouveau projet** sur l'écran d'accueil.
   - **Les modèles** : **Vue.js** (Vue 3 + Vite, avec l'outil officiel `create-vue`), **Vite** (JavaScript sans framework), **React**, **Svelte**, et **Site HTML** (`index.html`, `css/style.css`, `js/main.js`, sans rien à installer).
   - **Pour Vue**, des interrupteurs pour les options de `create-vue` : TypeScript, Vue Router (plusieurs pages), Pinia (données partagées entre composants), Vitest (tests), ESLint, Prettier. Pour Vite, React et Svelte : TypeScript.
-  - **Le nom** devient le nom du dossier. Il est mis en minuscules et sans espace pendant la frappe (`Mon App` devient `mon-app`), comme l'exige npm. **L'emplacement** est le dossier parent : par défaut, celui de ton dernier projet créé (sinon à côté du dossier ouvert, sinon Documents) ; **Changer…** en choisit un autre.
+  - **Le nom** devient le nom du dossier. Il est mis en minuscules et sans espace pendant la frappe (`Mon App` devient `mon-app`), comme l'exige npm. **L'emplacement** est le dossier parent : par défaut, le dossier des projets (`D:\Projets`), sinon celui de ton dernier projet créé ; **Changer…** en choisit un autre.
   - **Ensuite**, au choix : installer les dépendances (`npm install`), créer un dépôt Git avec un premier commit, et lancer le serveur de développement.
   - **Pendant la création**, la fenêtre montre les étapes et ce qu'affichent les commandes. **Annuler la création** arrête tout. En cas d'erreur (dossier qui existe déjà, Node.js absent, pas de réseau…), le message s'affiche et **Retour** ramène au formulaire.
   - **À la fin**, le projet s'ouvre dans l'IDE avec son fichier principal (`src/App.vue` pour Vue), et `npm run dev` démarre dans un terminal. **Ctrl+clic** sur l'adresse `http://localhost:5173/` l'ouvre dans ton navigateur : chaque `Ctrl+S` met la page à jour.
@@ -145,6 +145,7 @@ Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistr
 | `minimap` | Mini-carte du fichier à droite | `true`, `false` |
 | `emmet` | Abréviations Emmet en HTML et CSS | `true`, `false` |
 | `formatOnSave` | Mettre en forme avec Prettier à chaque `Ctrl+S` | `true`, `false` |
+| `projectsFolder` | Dossier où s'ouvrent `Ctrl+O` et « Nouveau projet » (`""` = le dernier utilisé) | `"D:\\Projets"` |
 | `vueTools` | Intelligence Vue (Volar) dans les fichiers `.vue` | `true`, `false` |
 | `reopenLastFolder` | Rouvrir le dernier dossier au démarrage | `true`, `false` |
 | `restoreTabs` | Rouvrir les onglets d'un dossier à son ouverture | `true`, `false` |

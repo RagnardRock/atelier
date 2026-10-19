@@ -46,7 +46,7 @@ contextBridge.exposeInMainWorld('atelier', {
   cancelProject: () => ipcRenderer.invoke('project:cancel'),
   onProjectLog: (callback) => ipcRenderer.on('project:log', (_event, entry) => callback(entry)),
   openLink: (url) => ipcRenderer.invoke('link:open', url),
-  pickFolder: (defaultPath) => ipcRenderer.invoke('dialog:pickFolder', defaultPath),
+  pickFolder: (defaultPath, title) => ipcRenderer.invoke('dialog:pickFolder', defaultPath, title),
   gitInit: () => ipcRenderer.invoke('git:init'),
   gitHead: (file) => ipcRenderer.invoke('git:head', file),
   gitStage: (files) => ipcRenderer.invoke('git:stage', files),

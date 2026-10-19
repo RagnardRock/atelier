@@ -120,13 +120,14 @@ function run(command, args, cwd, onLine, track) {
   });
 }
 
-function register({ handle, setRoot, readState, updateState, defaultParent }) {
+function register({ handle, setRoot, readState, updateState, projectsFolder, defaultParent }) {
   let current = null; // la commande en cours, pour pouvoir l'annuler
   let cancelled = false;
 
   handle('project:defaults', async () => {
-    const { projectsFolder } = await readState();
-    return { parent: projectsFolder || defaultParent() };
+    // Le dossier des projets choisi dans les réglages, sinon celui du dernier projet créé.
+    const { projectsFolder: last } = await readState();
+    return { parent: (await projectsFolder()) || last || defaultParent() };
   });
 
   handle('project:create', async (event, request) => {

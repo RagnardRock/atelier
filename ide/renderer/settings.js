@@ -51,6 +51,7 @@ const settings = (() => {
       { key: 'htmlRules', type: 'htmlRules', help: 'Règles de HTMLHint. Une règle cochée souligne le problème dans tes fichiers HTML.' },
     ] },
     { id: 'demarrage', title: 'Démarrage', icon: 'rocket', fields: [
+      { key: 'projectsFolder', label: 'Dossier des projets', type: 'folder', help: 'Là où s\'ouvre « Ouvrir un dossier » (Ctrl+O), et où « Nouveau projet » crée les projets. Vide : le dernier dossier utilisé.' },
       { key: 'reopenLastFolder', label: 'Rouvrir le dernier dossier', type: 'toggle' },
       { key: 'restoreTabs', label: 'Rouvrir les onglets', type: 'toggle', help: 'En ouvrant un dossier, ses onglets de la dernière fois reviennent, avec leurs colonnes.' },
     ] },
@@ -261,6 +262,27 @@ const settings = (() => {
       input.onchange = () => set(field.key, input.value.trim());
       input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
       return input;
+    },
+
+    // Un dossier : son chemin (modifiable à la main), « Choisir… » pour le parcourir, et une croix pour l'effacer.
+    folder(field, value) {
+      const wrap = el('div', 'folder-field');
+      const input = el('input', 'text-input');
+      input.value = value || '';
+      input.placeholder = 'Le dernier utilisé';
+      input.spellcheck = false;
+      input.onchange = () => set(field.key, input.value.trim());
+      input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
+      const pick = el('button', 'folder-pick', 'Choisir…');
+      pick.onclick = async () => {
+        const folder = await window.atelier.pickFolder(input.value || undefined, 'Dossier des projets').catch(() => null);
+        if (folder) { input.value = folder; set(field.key, folder); }
+      };
+      const clear = el('button', 'icon-button', '<i class="codicon codicon-close"></i>');
+      clear.title = 'Effacer';
+      clear.onclick = () => { input.value = ''; set(field.key, ''); };
+      wrap.append(input, pick, clear);
+      return wrap;
     },
 
     color(field, value) {

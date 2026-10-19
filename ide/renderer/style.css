@@ -1223,6 +1223,10 @@ body:not(.glass) .settings-card { background: var(--panel); }
 .profiles { display: flex; flex-direction: column; gap: 6px; }
 .profile { display: grid; grid-template-columns: 1fr 1.4fr 1fr auto; gap: 6px; align-items: center; }
 .profile .text-input { width: 100%; }
+.folder-field { display: flex; align-items: center; gap: 6px; }
+.folder-field .text-input { width: 280px; }
+.folder-pick { height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; color: var(--text); cursor: pointer; white-space: nowrap; }
+.folder-pick:hover { background: var(--hover); }
 .add-button { align-self: flex-start; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px dashed var(--border); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
 .add-button:hover { color: var(--text-strong); border-color: var(--muted); }
 

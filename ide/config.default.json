@@ -13,6 +13,7 @@
   "formatOnSave": false,
   "reopenLastFolder": true,
   "restoreTabs": true,
+  "projectsFolder": "D:\\Projets",
   "claudeCommand": "claude",
   "claudeModel": "",
   "claudePermissionMode": "ask",
