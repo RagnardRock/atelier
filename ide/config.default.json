@@ -8,7 +8,6 @@
   "minimap": true,
   "terminalFontSize": 14,
   "terminalProfiles": [
-    { "name": "PowerShell", "command": "default", "args": [] },
-    { "name": "Mon serveur (SSH)", "command": "ssh", "args": ["utilisateur@mon-serveur.fr"] }
+    { "name": "PowerShell", "command": "default", "args": [] }
   ]
 }

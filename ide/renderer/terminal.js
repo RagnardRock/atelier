@@ -46,11 +46,22 @@ const terminalPanel = (() => {
     panel.hidden = resizer.hidden = isOpen();
     if (!isOpen()) return;
     // Premier affichage : on ouvre directement un terminal avec le premier profil.
-    if (terms.size === 0) create(profileSelect.value);
+    if (terms.size === 0) create(profileSelect.value).catch((err) => flash(err.message));
     else focusActive();
   }
 
-  async function create(profileName) {
+  // Terminal à partir d'un profil de la config (PowerShell, Git Bash…).
+  function create(profileName) {
+    return open(profileName, (cols, rows) => window.atelier.createTerminal(profileName, cols, rows));
+  }
+
+  // Terminal connecté en SSH à un serveur favori (panneau Serveurs).
+  function connect(server) {
+    return open(server.name, (cols, rows) => window.atelier.connectServer(server.id, cols, rows));
+  }
+
+  // Ouvre un onglet de terminal. `start` lance le processus côté main.js et renvoie son id.
+  async function open(label, start) {
     if (!isOpen()) { panel.hidden = resizer.hidden = false; }
 
     const term = new Terminal({
@@ -71,10 +82,11 @@ const terminalPanel = (() => {
 
     let id;
     try {
-      id = await window.atelier.createTerminal(profileName, term.cols, term.rows);
+      id = await start(term.cols, term.rows);
     } catch (err) {
-      term.write(`\x1b[31mImpossible de lancer « ${profileName} » : ${err.message}\x1b[0m\r\n`);
-      return;
+      term.dispose();
+      view.remove();
+      throw new Error(`Impossible de lancer « ${label} » : ${err.message}`);
     }
 
     // Ce que tu tapes part vers le processus.
@@ -84,7 +96,7 @@ const terminalPanel = (() => {
     const tab = document.createElement('div');
     tab.className = 'tab';
     tab.innerHTML = '<span class="name"></span><span class="close" title="Fermer ce terminal">×</span>';
-    tab.querySelector('.name').textContent = profileName;
+    tab.querySelector('.name').textContent = label;
     tab.onclick = () => activate(id);
     tab.querySelector('.close').onclick = (e) => { e.stopPropagation(); close(id); };
     tabsEl.appendChild(tab);
@@ -156,7 +168,7 @@ const terminalPanel = (() => {
     window.addEventListener('mouseup', onUp);
   });
 
-  document.querySelector('#term-new').onclick = () => create(profileSelect.value);
+  document.querySelector('#term-new').onclick = () => create(profileSelect.value).catch((err) => flash(err.message));
   document.querySelector('#btn-terminal').onclick = toggle;
 
   // Ctrl+J : afficher / masquer, même quand le curseur est dans l'éditeur ou le terminal.
@@ -169,5 +181,5 @@ const terminalPanel = (() => {
     }
   }, true);
 
-  return { applyConfig, toggle, create };
+  return { applyConfig, toggle, create, connect };
 })();

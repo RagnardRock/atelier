@@ -18,4 +18,11 @@ contextBridge.exposeInMainWorld('atelier', {
   killTerminal: (id) => ipcRenderer.send('term:kill', id),
   onTerminalData: (callback) => ipcRenderer.on('term:data', (_event, id, data) => callback(id, data)),
   onTerminalExit: (callback) => ipcRenderer.on('term:exit', (_event, id, code) => callback(id, code)),
+
+  // Serveurs favoris
+  listServers: () => ipcRenderer.invoke('servers:list'),
+  saveServer: (server) => ipcRenderer.invoke('servers:save', server),
+  deleteServer: (id) => ipcRenderer.invoke('servers:delete', id),
+  pickKeyFile: () => ipcRenderer.invoke('dialog:pickKey'),
+  connectServer: (id, cols, rows) => ipcRenderer.invoke('term:connect', id, cols, rows),
 });

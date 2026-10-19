@@ -20,7 +20,31 @@
 
   <main id="layout">
     <aside id="sidebar">
-      <div id="tree"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+      <!-- Deux vues dans la barre latérale : fichiers du dossier ouvert, ou serveurs favoris -->
+      <div id="side-tabs">
+        <button data-view="tree" class="active">Fichiers</button>
+        <button data-view="servers">Serveurs</button>
+      </div>
+      <div id="tree" class="side-view"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+      <div id="servers" class="side-view" hidden>
+        <div id="server-list"></div>
+        <button id="server-add" class="side-button">+ Ajouter un serveur</button>
+        <form id="server-form" hidden>
+          <h3 id="server-form-title">Nouveau serveur</h3>
+          <label>Nom <input name="name" placeholder="Prod" required></label>
+          <label>Hôte <input name="host" placeholder="mon-site.fr ou 1.2.3.4" required></label>
+          <label>Utilisateur <input name="user" placeholder="root"></label>
+          <label>Port <input name="port" type="number" min="1" max="65535" value="22"></label>
+          <label>Clé SSH (facultatif)
+            <span class="key-row"><input name="keyFile" placeholder="C:\Users\moi\.ssh\id_ed25519"><button type="button" id="server-key-pick" title="Parcourir">…</button></span>
+          </label>
+          <p class="form-error" id="server-form-error"></p>
+          <div class="form-actions">
+            <button type="button" id="server-cancel">Annuler</button>
+            <button type="submit" class="primary">Enregistrer</button>
+          </div>
+        </form>
+      </div>
     </aside>
     <section id="workspace">
       <nav id="tabs"></nav>
@@ -59,5 +83,6 @@
   <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
   <script src="app.js"></script>
   <script src="terminal.js"></script>
+  <script src="servers.js"></script>
 </body>
 </html>

@@ -82,6 +82,64 @@ ipcMain.handle('file:write', async (_event, file, content) => {
 ipcMain.handle('config:get', async () => readConfig());
 ipcMain.handle('config:path', async () => configPath());
 
+// --- Serveurs favoris ---
+// Rangés dans servers.json, à côté de la config. Aucun mot de passe n'y est stocké :
+// ssh le demande dans le terminal, ou utilise ta clé SSH.
+
+const serversPath = () => path.join(app.getPath('userData'), 'servers.json');
+
+async function readServers() {
+  try {
+    return JSON.parse(await fs.readFile(serversPath(), 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+// Un hôte ou un utilisateur qui commence par "-" serait lu par ssh comme une option : refusé.
+function validateServer(s) {
+  const clean = {
+    id: String(s.id || Date.now()),
+    name: String(s.name || '').trim(),
+    host: String(s.host || '').trim(),
+    user: String(s.user || '').trim(),
+    port: Number(s.port) || 22,
+    keyFile: String(s.keyFile || '').trim(),
+  };
+  if (!clean.name) throw new Error('Le nom est obligatoire');
+  if (!clean.host) throw new Error("L'hôte est obligatoire");
+  if (/^-|\s/.test(clean.host) || /^-|[\s@]/.test(clean.user)) throw new Error('Hôte ou utilisateur invalide');
+  if (clean.port < 1 || clean.port > 65535) throw new Error('Port invalide');
+  return clean;
+}
+
+ipcMain.handle('servers:list', async () => readServers());
+
+ipcMain.handle('servers:save', async (_event, server) => {
+  const clean = validateServer(server);
+  const servers = await readServers();
+  const i = servers.findIndex((s) => s.id === clean.id);
+  if (i >= 0) servers[i] = clean; else servers.push(clean);
+  await fs.writeFile(serversPath(), JSON.stringify(servers, null, 2), 'utf8');
+  return servers;
+});
+
+ipcMain.handle('servers:delete', async (_event, id) => {
+  const servers = (await readServers()).filter((s) => s.id !== id);
+  await fs.writeFile(serversPath(), JSON.stringify(servers, null, 2), 'utf8');
+  return servers;
+});
+
+ipcMain.handle('dialog:pickKey', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Choisir ta clé SSH privée',
+    defaultPath: path.join(os.homedir(), '.ssh'),
+    properties: ['openFile', 'showHiddenFiles'],
+  });
+  return result.canceled ? null : result.filePaths[0];
+});
+
 // --- Terminaux ---
 // Chaque terminal est un processus (PowerShell, ssh…) piloté ici.
 // Ce qu'il affiche part vers l'interface ("term:data"), ce que tu tapes revient par "term:write".
@@ -99,9 +157,22 @@ ipcMain.handle('term:create', async (event, profileName, cols, rows) => {
   const { terminalProfiles } = await readConfig();
   const profile = terminalProfiles.find((p) => p.name === profileName);
   if (!profile) throw new Error(`Profil de terminal inconnu : ${profileName}`);
+  return spawnTerminal(event, resolveCommand(profile.command), profile.args || [], cols, rows);
+});
 
+// Connexion à un serveur favori : on construit la commande ssh à partir de sa fiche.
+ipcMain.handle('term:connect', async (event, serverId, cols, rows) => {
+  const server = (await readServers()).find((s) => s.id === serverId);
+  if (!server) throw new Error('Serveur introuvable');
+  const args = ['-p', String(server.port || 22)];
+  if (server.keyFile) args.push('-i', server.keyFile);
+  args.push(server.user ? `${server.user}@${server.host}` : server.host);
+  return spawnTerminal(event, 'ssh', args, cols, rows);
+});
+
+function spawnTerminal(event, command, args, cols, rows) {
   const id = nextTerminalId++;
-  const proc = pty.spawn(resolveCommand(profile.command), profile.args || [], {
+  const proc = pty.spawn(command, args, {
     name: 'xterm-256color',
     cols,
     rows,
@@ -119,7 +190,7 @@ ipcMain.handle('term:create', async (event, profileName, cols, rows) => {
     send('term:exit', exitCode);
   });
   return id;
-});
+}
 
 ipcMain.on('term:write', (_event, id, data) => terminals.get(id)?.write(data));
 ipcMain.on('term:resize', (_event, id, cols, rows) => terminals.get(id)?.resize(cols, rows));
