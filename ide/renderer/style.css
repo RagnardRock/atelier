@@ -1,0 +1,130 @@
+/* Couleurs de l'interface. --accent est remplacé par "accentColor" de ta config. */
+:root {
+  --accent: #e0a526;
+  --bg: #1e1e1e;
+  --panel: #252526;
+  --panel-2: #2d2d2d;
+  --border: #3a3a3a;
+  --text: #d4d4d4;
+  --muted: #8a8a8a;
+}
+body.light {
+  --bg: #ffffff;
+  --panel: #f3f3f3;
+  --panel-2: #e8e8e8;
+  --border: #d0d0d0;
+  --text: #1e1e1e;
+  --muted: #6a6a6a;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+/* Barre du haut */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 10px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+#brand { font-weight: 700; color: var(--accent); margin-right: 8px; }
+#topbar button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+#topbar button:hover { border-color: var(--accent); }
+#folder-name { color: var(--muted); margin-left: auto; }
+
+/* Zone principale : arborescence à gauche, éditeur à droite */
+#layout { flex: 1; display: flex; min-height: 0; }
+#sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow: auto;
+  padding: 6px 0;
+}
+.hint { color: var(--muted); padding: 0 12px; }
+
+.node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.node:hover { background: var(--panel-2); }
+.node.active { background: var(--panel-2); box-shadow: inset 2px 0 var(--accent); }
+.node .chevron { width: 12px; color: var(--muted); }
+.children { display: none; }
+.children.open { display: block; }
+
+#workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+/* Onglets */
+#tabs {
+  display: flex;
+  height: 34px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab.active { background: var(--bg); color: var(--text); box-shadow: inset 0 2px var(--accent); }
+.tab .close { opacity: 0.6; border-radius: 3px; padding: 0 3px; }
+.tab .close:hover { opacity: 1; background: var(--panel-2); }
+
+#editor { flex: 1; min-height: 0; }
+#welcome {
+  position: absolute;
+  inset: 34px 0 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: var(--bg);
+}
+#welcome h1 { color: var(--accent); font-weight: 600; margin: 0 0 8px; }
+kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 12px; }
+body.has-tabs #welcome { display: none; }
+
+/* Barre d'état */
+#statusbar {
+  display: flex;
+  gap: 16px;
+  height: 24px;
+  align-items: center;
+  padding: 0 10px;
+  background: var(--accent);
+  color: #1e1e1e;
+  font-size: 12px;
+}
+#status-msg { margin-left: auto; }

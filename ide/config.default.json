@@ -1,0 +1,9 @@
+{
+  "theme": "vs-dark",
+  "accentColor": "#e0a526",
+  "fontFamily": "Consolas, 'Cascadia Code', monospace",
+  "fontSize": 15,
+  "tabSize": 2,
+  "wordWrap": "on",
+  "minimap": true
+}

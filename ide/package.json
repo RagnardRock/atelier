@@ -1,0 +1,17 @@
+{
+  "name": "atelier-ide",
+  "version": "0.1.0",
+  "description": "Mon IDE perso (Electron + Monaco)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "Ragna",
+  "devDependencies": {
+    "electron": "^33.4.11"
+  },
+  "dependencies": {
+    "monaco-editor": "^0.52.2"
+  },
+  "private": true
+}

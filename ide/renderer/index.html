@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline et de workers data: -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' data: blob:">
+  <title>Atelier</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <span id="brand">Atelier</span>
+    <button id="btn-open" title="Ouvrir un dossier (Ctrl+O)">Ouvrir un dossier</button>
+    <button id="btn-config" title="Modifier la configuration">Config</button>
+    <span id="folder-name"></span>
+  </header>
+
+  <main id="layout">
+    <aside id="sidebar">
+      <div id="tree"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+    </aside>
+    <section id="workspace">
+      <nav id="tabs"></nav>
+      <div id="editor"></div>
+      <div id="welcome">
+        <h1>Atelier</h1>
+        <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet</p>
+      </div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-file"></span>
+    <span id="status-msg"></span>
+    <span id="status-pos"></span>
+    <span id="status-lang"></span>
+  </footer>
+
+  <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
+  <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
