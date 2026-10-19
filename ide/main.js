@@ -474,7 +474,6 @@ handle('window:theme', async (event, { theme, glass, blur }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const wanted = Boolean(glass && blur && theme !== 'light' && blurSupported());
   const useBlur = wanted && win.blurCapable;
-  win.blurOn = useBlur;
   if (win.blurCapable) {
     win.setBackgroundMaterial(useBlur ? 'acrylic' : 'none');
     win.setBackgroundColor(useBlur ? '#00000000' : '#101014');
@@ -516,16 +515,6 @@ function createWindow(config) {
     },
   });
   win.blurCapable = blur; // fenêtre créée translucide : le flou peut être activé ou coupé
-  // Windows retire le flou quand la fenêtre est agrandie, mise en plein écran ou restaurée :
-  // on le réapplique après chacun de ces changements (s'il est actif à ce moment-là).
-  win.blurOn = blur;
-  const reapplyBlur = () => {
-    if (!win.blurOn || win.isDestroyed()) return;
-    win.setBackgroundMaterial('acrylic');
-    // Une seconde fois un peu plus tard : Windows finit parfois son animation après l'événement.
-    setTimeout(() => { if (win.blurOn && !win.isDestroyed()) win.setBackgroundMaterial('acrylic'); }, 300);
-  };
-  for (const name of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen', 'restore']) win.on(name, reapplyBlur);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.webContents.on('before-input-event', (event, input) => {

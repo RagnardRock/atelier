@@ -8,7 +8,7 @@
   },
   "author": "Ragna",
   "devDependencies": {
-    "electron": "^33.4.11"
+    "electron": "44.5.1"
   },
   "dependencies": {
     "@vscode/codicons": "^0.0.45",
