@@ -34,6 +34,14 @@ contextBridge.exposeInMainWorld('atelier', {
   trashPath: (target) => ipcRenderer.invoke('path:trash', target),
   previewUrl: (file) => ipcRenderer.invoke('preview:url', file),
   previewExternal: (url) => ipcRenderer.invoke('preview:external', url),
+  gitStatus: () => ipcRenderer.invoke('git:status'),
+  gitInit: () => ipcRenderer.invoke('git:init'),
+  gitHead: (file) => ipcRenderer.invoke('git:head', file),
+  gitStage: (files) => ipcRenderer.invoke('git:stage', files),
+  gitUnstage: (files) => ipcRenderer.invoke('git:unstage', files),
+  gitCommit: (message) => ipcRenderer.invoke('git:commit', message),
+  gitPush: () => ipcRenderer.invoke('git:push'),
+  gitPull: () => ipcRenderer.invoke('git:pull'),
   joinPath: (...parts) => ipcRenderer.invoke('path:join', ...parts),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),
@@ -44,6 +52,7 @@ contextBridge.exposeInMainWorld('atelier', {
   getLogPath: () => ipcRenderer.invoke('log:path'),
   log: (level, message) => ipcRenderer.send('log:write', level, message),
   onAppError: (callback) => ipcRenderer.on('app:error', (_event, message) => callback(message)),
+  onFilesChanged: (callback) => ipcRenderer.on('fs:changed', (_event, files) => callback(files)),
   onShortcut: (callback) => ipcRenderer.on('shortcut', (_event, action) => callback(action)),
 
   // Mise à jour

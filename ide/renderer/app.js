@@ -782,8 +782,10 @@ async function saveActive() {
     return notify.error(`Échec de l'enregistrement de ${file.name} : ${cleanError(err)}`);
   }
   file.savedVersion = file.model.getAlternativeVersionId();
+  file.savedAt = Date.now(); // pour ne pas prendre notre propre enregistrement pour un changement extérieur
   for (const t of tabsOf(file)) refreshTab(t);
   flash(`Enregistré : ${file.name}`);
+  document.dispatchEvent(new CustomEvent('file-saved', { detail: file })); // le panneau Git se met à jour
 
   // Enregistrer la config l'applique tout de suite (ou explique ce qui ne va pas).
   if (file.path === state.configPath) {
@@ -796,7 +798,7 @@ async function saveActive() {
 // Un fichier a été modifié sur le disque par quelqu'un d'autre que l'éditeur (Claude, par exemple) :
 // on recharge son texte s'il est ouvert. Le rechargement passe par l'historique de Monaco,
 // donc Ctrl+Z annule la modification. S'il a des changements non enregistrés, on ne touche à rien.
-async function reloadFromDisk(path) {
+async function reloadFromDisk(path, { quiet = false } = {}) {
   const file = state.files.get(path);
   if (!file) return;
   if (isDirty(file)) {
@@ -806,6 +808,7 @@ async function reloadFromDisk(path) {
   try {
     content = await window.atelier.readFile(path);
   } catch (err) {
+    if (quiet) return; // fichier supprimé ou déplacé entre-temps : son onglet reste tel quel
     return notify.error(`Impossible de relire ${file.name} : ${cleanError(err)}`);
   }
   if (content === file.model.getValue()) return;
@@ -813,6 +816,16 @@ async function reloadFromDisk(path) {
   file.savedVersion = file.model.getAlternativeVersionId();
   for (const t of tabsOf(file)) refreshTab(t);
 }
+
+// Fichiers modifiés sur le disque par un autre programme (git pull, Claude, Photoshop…) :
+// les onglets ouverts sont rechargés (voir reloadFromDisk), et le panneau Git se met à jour.
+window.atelier.onFilesChanged((paths) => {
+  for (const p of paths) {
+    const file = state.files.get(p);
+    if (file && Date.now() - (file.savedAt || 0) > 1500) reloadFromDisk(p, { quiet: true });
+  }
+  document.dispatchEvent(new CustomEvent('files-changed', { detail: paths }));
+});
 
 function flash(msg) {
   const el = $('#status-msg');

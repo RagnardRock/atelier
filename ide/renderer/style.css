@@ -877,6 +877,79 @@ body:not(.glass) .quick-card { background: var(--panel); }
 #preview-frame { flex: 1; width: 100%; border: none; background: #fff; }
 #preview-panel.mobile #preview-frame { flex: 0 0 390px; max-width: 100%; margin: 10px 0; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
 
+/* ---------- Panneau Git (git.js) ---------- */
+#activitybar .badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+#git { display: flex; flex-direction: column; }
+#git[hidden] { display: none; }
+#git.busy #git-body { opacity: 0.6; pointer-events: none; }
+#git-body { flex: 1; overflow-y: auto; padding-bottom: 10px; }
+.git-commit { display: flex; flex-direction: column; gap: 6px; padding: 4px 10px 10px; }
+#git-message {
+  resize: vertical;
+  min-height: 44px;
+  max-height: 200px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-strong);
+  font: inherit;
+  outline: none;
+  user-select: text;
+}
+#git-message:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.git-wide { justify-content: center; width: 100%; }
+.git-wide:disabled { opacity: 0.45; cursor: default; filter: none; }
+#git-body > .primary-button.git-wide { width: calc(100% - 20px); margin: 4px 10px; }
+.git-error { color: var(--error); white-space: pre-wrap; }
+.git-section { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px 0 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.git-section .count { padding: 0 6px; border-radius: 9px; background: var(--active); letter-spacing: 0; color: var(--text); }
+.git-section .icon-button { margin-left: auto; width: 22px; height: 22px; }
+.git-file { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 22px; margin: 0 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.git-file:hover { background: var(--hover); }
+.git-file .name { color: var(--text-strong); }
+.git-file .dir { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; }
+.git-file .actions { display: none; gap: 1px; }
+.git-file:hover .actions { display: flex; }
+.git-file .actions .icon-button { width: 22px; height: 22px; }
+.git-file .letter { width: 14px; text-align: center; font-size: 12px; font-weight: 700; }
+.git-file.status-M .letter, .git-file.status-M .name { color: #e2c08d; }
+.git-file.status-A .letter, .git-file.status-U .letter, .git-file.status-A .name, .git-file.status-U .name { color: #73c991; }
+.git-file.status-D .letter, .git-file.status-D .name { color: #f48771; }
+.git-file.status-D .name { text-decoration: line-through; }
+.git-file.status-R .letter, .git-file.status-R .name { color: #75beff; }
+#git-push.has-count::after, #git-pull.has-count::after {
+  content: attr(data-count);
+  margin-left: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+}
+#git-push.has-count, #git-pull.has-count { width: auto; padding: 0 4px; }
+
+/* Comparaison avec le dernier commit */
+#diff-view { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; background: var(--bg); }
+body.glass #diff-view { background: #15151b; }
+.diff-bar { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 14px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.diff-bar > .codicon { color: var(--accent); }
+#diff-title { color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diff-legend { flex: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#diff-editor { flex: 1; min-height: 0; }
+
 /* =========================================================================
    Verre dépoli (glassmorphism), activé par "glass": true en thème sombre.
    Le fond de la fenêtre est un dégradé sombre avec deux halos de couleur ;

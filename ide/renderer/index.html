@@ -30,6 +30,7 @@
     <nav id="activitybar">
       <button data-view="tree" class="active" title="Fichiers"><i class="codicon codicon-files"></i></button>
       <button data-view="search" title="Rechercher dans le projet (Ctrl+Shift+F)"><i class="codicon codicon-search"></i></button>
+      <button data-view="git" title="Git : modifications, commit, push"><i class="codicon codicon-source-control"></i><span id="git-badge" class="badge" hidden></span></button>
       <button data-view="servers" title="Serveurs"><i class="codicon codicon-server"></i></button>
       <span class="spacer"></span>
       <button id="btn-update" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
@@ -67,6 +68,19 @@
         </form>
         <p id="search-summary" class="hint"></p>
         <div id="search-results"></div>
+      </div>
+
+      <!-- Git (git.js) -->
+      <div id="git" class="side-view" hidden>
+        <div class="view-header">
+          <span class="view-title" id="git-title">Git</span>
+          <span class="view-actions">
+            <button id="git-pull" class="icon-button" title="Récupérer les commits en ligne (git pull)"><i class="codicon codicon-repo-pull"></i></button>
+            <button id="git-push" class="icon-button" title="Envoyer tes commits en ligne (git push)"><i class="codicon codicon-repo-push"></i></button>
+            <button id="git-refresh" class="icon-button" title="Actualiser"><i class="codicon codicon-refresh"></i></button>
+          </span>
+        </div>
+        <div id="git-body"></div>
       </div>
 
       <div id="servers" class="side-view" hidden>
@@ -118,6 +132,17 @@
       <!-- Colonnes d'éditeurs côte à côte (créées par app.js) -->
       <div id="editor-area">
         <div id="groups"></div>
+        <!-- Comparaison d'un fichier avec sa version du dernier commit (git.js) -->
+        <div id="diff-view" hidden>
+          <div class="diff-bar">
+            <i class="codicon codicon-diff"></i><span id="diff-title"></span>
+            <span class="diff-legend">à gauche : dernier commit · à droite : ton fichier</span>
+            <button id="diff-inline" class="icon-button" title="Côte à côte / l'un sous l'autre"><i class="codicon codicon-split-horizontal"></i></button>
+            <button id="diff-open" class="icon-button" title="Ouvrir le fichier"><i class="codicon codicon-go-to-file"></i></button>
+            <button id="diff-close" class="icon-button" title="Fermer (Échap)"><i class="codicon codicon-close"></i></button>
+          </div>
+          <div id="diff-editor"></div>
+        </div>
         <div id="split-dropzone"><i class="codicon codicon-split-horizontal"></i>Nouvelle colonne</div>
         <div id="welcome">
           <div class="welcome-card">
@@ -223,5 +248,6 @@
   <script src="search.js"></script>
   <script src="fileops.js"></script>
   <script src="preview.js"></script>
+  <script src="git.js"></script>
 </body>
 </html>

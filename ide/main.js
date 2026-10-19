@@ -6,12 +6,14 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron')
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const { execFile, spawn } = require('node:child_process');
 // node-pty lance un vrai terminal (ConPTY sous Windows) : couleurs, ssh, vim… tout marche.
 const pty = require('node-pty');
 const claude = require('./claude');
 const search = require('./search');
 const preview = require('./preview');
+const gitPanel = require('./git');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -132,8 +134,34 @@ async function readState() {
   }
 }
 
+// Surveillance du dossier ouvert : quand un fichier change sur le disque (git pull, Claude,
+// un autre programme…), l'interface est prévenue pour recharger les onglets concernés.
+let rootWatcher = null;
+let changedFiles = new Set();
+let changedTimer = null;
+function watchRoot(root) {
+  rootWatcher?.close();
+  rootWatcher = null;
+  try {
+    rootWatcher = fsSync.watch(root, { recursive: true }, (_type, file) => {
+      if (!file || /(^|[\\/])(\.git|node_modules)([\\/]|$)/.test(file)) return;
+      changedFiles.add(path.join(root, file));
+      clearTimeout(changedTimer);
+      changedTimer = setTimeout(() => {
+        const files = [...changedFiles];
+        changedFiles = new Set();
+        for (const win of BrowserWindow.getAllWindows()) win.webContents.send('fs:changed', files);
+      }, 150);
+    });
+    rootWatcher.on('error', () => {}); // dossier supprimé ou devenu inaccessible : on arrête simplement
+  } catch {
+    rootWatcher = null; // surveillance impossible : l'IDE marche quand même, sans rechargement auto
+  }
+}
+
 async function setRoot(folder) {
   rootFolder = path.resolve(folder);
+  watchRoot(rootFolder);
   const state = await readState();
   state.recentFolders = [rootFolder, ...state.recentFolders.filter((f) => f !== rootFolder)].slice(0, MAX_RECENTS);
   await fs.writeFile(statePath(), JSON.stringify(state, null, 2), 'utf8');
@@ -529,6 +557,7 @@ handle('window:blurSupported', async () => blurSupported());
 claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: app.getPath('userData') });
 search.register({ handle, getRoot: () => rootFolder });
 preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
+gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });
 
 function createWindow(config) {
   const blur = wantsBlur(config);
