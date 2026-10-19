@@ -1228,3 +1228,148 @@ body.glass .term-view .xterm-screen { background: transparent !important; }
 /* Monaco entoure chaque éditeur d'un contour de focus (bleu ou gris) : inutile ici,
    l'onglet actif souligné suffit à savoir quelle colonne a le focus. */
 .monaco-editor, .monaco-editor textarea.inputarea { outline: none !important; }
+
+/* ---------- Écran d'accueil : boutons ---------- */
+.welcome-actions { display: flex; gap: 8px; }
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--hover);
+  color: var(--text-strong);
+  cursor: pointer;
+}
+.secondary-button:hover { background: var(--active); }
+body.glass .secondary-button { border-color: var(--glass-border); }
+
+/* ---------- Nouveau projet (newproject.js) ---------- */
+#new-project {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  animation: fade-in 0.15s ease-out;
+}
+#new-project[hidden] { display: none; }
+.np-card {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 80px);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(40px) saturate(160%);
+  overflow: hidden;
+  animation: pop-in 0.18s ease-out;
+}
+body:not(.glass) .np-card { background: var(--panel); }
+body.glass .np-card { border-color: var(--glass-border); }
+.np-card > header { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 4px 24px; }
+.np-card h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.np-card h2 .codicon { color: var(--accent); }
+.np-form, .np-progress { display: flex; flex-direction: column; gap: 16px; padding: 12px 24px 20px; overflow: auto; }
+.np-form[hidden], .np-progress[hidden] { display: none; }
+.np-templates { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.np-template {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.np-template:hover { background: var(--active); }
+.np-template.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.np-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--badge) 20%, transparent);
+  color: var(--badge);
+  font-weight: 700;
+  font-size: 13px;
+}
+.np-name { font-weight: 600; color: var(--text-strong); }
+.np-text { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.np-field { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: 12px; }
+.np-field input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 14px;
+  user-select: text;
+}
+.np-field input:focus { outline: none; border-color: var(--accent); }
+.np-location { display: flex; align-items: center; gap: 8px; }
+.np-parent { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 13px; }
+.np-target { min-height: 1em; font-size: 11.5px; }
+.np-change, .np-cancel, .np-stop {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.np-change:hover, .np-cancel:hover, .np-stop:hover { background: var(--hover); }
+.np-options, .np-common { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; }
+.np-options { padding: 12px; border-radius: 10px; background: rgba(128, 128, 128, 0.08); }
+.np-options[hidden] { display: none; }
+.np-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.np-toggle .text { display: flex; flex-direction: column; min-width: 0; }
+.np-toggle .label { color: var(--text-strong); }
+.np-toggle .hint { margin: 0; padding: 0; color: var(--muted); font-size: 11.5px; }
+.np-card footer { display: flex; justify-content: flex-end; gap: 8px; }
+.np-card footer [hidden] { display: none; }
+.np-steps { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.np-steps li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.np-steps .codicon { font: normal normal normal 16px/1 codicon; display: inline-block; width: 16px; text-align: center; }
+.np-steps li.current { color: var(--text-strong); }
+.np-steps li.current .codicon::before { content: "\eb19"; } /* codicon-loading */
+.np-steps li.current .codicon { animation: np-spin 1s linear infinite; color: var(--accent); }
+.np-steps li.done .codicon::before { content: "\eab2"; } /* codicon-check */
+.np-steps li.done .codicon { color: var(--success); }
+.np-steps li.failed { color: var(--error); }
+.np-steps li.failed .codicon::before { content: "\ea76"; } /* codicon-close */
+@keyframes np-spin { to { transform: rotate(360deg); } }
+.np-log {
+  height: 260px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+.np-log .command { color: var(--accent); }
+.np-log .warning { color: var(--warning); }
+.np-log .error { color: var(--error); font-weight: 600; }

@@ -14,6 +14,7 @@ const claude = require('./claude');
 const search = require('./search');
 const preview = require('./preview');
 const gitPanel = require('./git');
+const scaffold = require('./scaffold');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -618,6 +619,19 @@ claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: a
 search.register({ handle, getRoot: () => rootFolder });
 preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
 gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });
+// Nouveau projet : par défaut, à côté du dossier ouvert, sinon dans Documents.
+scaffold.register({ handle, setRoot, readState, updateState, defaultParent: () => (rootFolder ? path.dirname(rootFolder) : app.getPath('documents')) });
+// Lien cliqué dans un terminal : seulement des adresses web, ouvertes dans ton navigateur habituel.
+handle('link:open', async (_event, url) => {
+  if (!/^https?:\/\//i.test(String(url))) throw new Error(`Lien refusé : ${url}`);
+  await shell.openExternal(String(url));
+});
+// Choisir le dossier où créer un nouveau projet (sans l'ouvrir).
+handle('dialog:pickFolder', async (event, defaultPath) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, { title: 'Où créer le projet ?', defaultPath, properties: ['openDirectory', 'createDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
+});
 
 function createWindow(config) {
   const blur = wantsBlur(config);

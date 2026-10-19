@@ -7,6 +7,8 @@ const FILE_TYPES = [
   { ext: ['scss', 'sass', 'less'], icon: 'symbol-color', color: '#cd6799' },
   { ext: ['js', 'mjs', 'cjs'], icon: 'symbol-method', color: '#f1dd35' },
   { ext: ['ts', 'tsx', 'jsx'], icon: 'symbol-method', color: '#3d8fd1' },
+  { ext: ['vue'], icon: 'code', color: '#42b883' },
+  { ext: ['svelte'], icon: 'code', color: '#ff3e00' },
   { ext: ['json'], icon: 'json', color: '#f5b642' },
   { ext: ['md', 'markdown'], icon: 'markdown', color: '#5ea0ef' },
   { ext: ['php'], icon: 'code', color: '#8c9eff' },

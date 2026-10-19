@@ -39,6 +39,13 @@ contextBridge.exposeInMainWorld('atelier', {
   previewUrl: (file) => ipcRenderer.invoke('preview:url', file),
   previewExternal: (url) => ipcRenderer.invoke('preview:external', url),
   gitStatus: () => ipcRenderer.invoke('git:status'),
+  // Nouveau projet (Vue, Vite, site HTML…)
+  projectDefaults: () => ipcRenderer.invoke('project:defaults'),
+  createProject: (request) => ipcRenderer.invoke('project:create', request),
+  cancelProject: () => ipcRenderer.invoke('project:cancel'),
+  onProjectLog: (callback) => ipcRenderer.on('project:log', (_event, entry) => callback(entry)),
+  openLink: (url) => ipcRenderer.invoke('link:open', url),
+  pickFolder: (defaultPath) => ipcRenderer.invoke('dialog:pickFolder', defaultPath),
   gitInit: () => ipcRenderer.invoke('git:init'),
   gitHead: (file) => ipcRenderer.invoke('git:head', file),
   gitStage: (files) => ipcRenderer.invoke('git:stage', files),

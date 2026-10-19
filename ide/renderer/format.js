@@ -1,7 +1,7 @@
 // Mise en forme du code avec Prettier : Maj+Alt+F (ou clic droit › Mettre le document en forme).
 // Indentation, guillemets, retours à la ligne… sont remis au propre selon les règles de Prettier,
 // l'outil le plus utilisé en développement web. Langages : HTML, CSS, SCSS, LESS, JavaScript,
-// TypeScript, JSON, Markdown, YAML.
+// TypeScript, JSON, Markdown, YAML, et les composants Vue (.vue).
 // - La largeur des tabulations vient de tes réglages. Un fichier .prettierrc (en JSON) à la racine
 //   du projet est respecté, comme dans VS Code.
 // - Option « Mettre en forme à l'enregistrement » (formatOnSave) dans Réglages › Éditeur.
@@ -15,6 +15,7 @@ const formatter = (() => {
     css: { parser: 'css', plugins: ['postcss'] },
     scss: { parser: 'scss', plugins: ['postcss'] },
     less: { parser: 'less', plugins: ['postcss'] },
+    vue: { parser: 'vue', plugins: ['html', 'postcss', 'babel', 'typescript', 'estree'] },
     javascript: { parser: 'babel', plugins: ['babel', 'estree'] },
     typescript: { parser: 'typescript', plugins: ['typescript', 'estree'] },
     json: { parser: 'json', plugins: ['babel', 'estree'] },

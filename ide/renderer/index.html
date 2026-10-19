@@ -17,6 +17,7 @@
     <span id="brand"><span class="logo">A</span>Atelier</span>
     <div class="title-actions">
       <button id="btn-open" class="icon-button" title="Ouvrir un dossier (Ctrl+O)"><i class="codicon codicon-folder-opened"></i></button>
+      <button id="btn-new-project" class="icon-button" title="Nouveau projet : Vue, Vite, site HTML… (Ctrl+Alt+N)"><i class="codicon codicon-rocket"></i></button>
       <button id="btn-split" class="icon-button" title="Diviser l'éditeur (Ctrl+Alt+D)"><i class="codicon codicon-split-horizontal"></i></button>
       <button id="btn-terminal" class="icon-button" title="Afficher / masquer le terminal (Ctrl+J)"><i class="codicon codicon-terminal"></i></button>
       <button id="btn-preview" class="icon-button" title="Aperçu dans le navigateur (Ctrl+Alt+P)"><i class="codicon codicon-open-preview"></i></button>
@@ -148,15 +149,20 @@
           <div class="welcome-card">
             <div class="welcome-logo">A</div>
             <h1>Atelier</h1>
-            <button id="welcome-open" class="primary-button"><i class="codicon codicon-folder-opened"></i>Ouvrir un dossier</button>
+            <div class="welcome-actions">
+              <button id="welcome-open" class="primary-button"><i class="codicon codicon-folder-opened"></i>Ouvrir un dossier</button>
+              <button id="welcome-new" class="secondary-button"><i class="codicon codicon-rocket"></i>Nouveau projet</button>
+            </div>
             <div id="welcome-recents"></div>
             <dl class="shortcuts">
               <dt><kbd>Ctrl</kbd><kbd>O</kbd></dt><dd>Ouvrir un dossier</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>N</kbd></dt><dd>Nouveau projet (Vue, Vite…)</dd>
               <dt><kbd>Ctrl</kbd><kbd>P</kbd></dt><dd>Ouvrir un fichier par son nom</dd>
               <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>F</kbd></dt><dd>Rechercher dans le projet</dd>
               <dt><kbd>Ctrl</kbd><kbd>S</kbd></dt><dd>Enregistrer</dd>
               <dt><kbd>Ctrl</kbd><kbd>J</kbd></dt><dd>Terminal</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></dt><dd>Diviser l'écran</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></dt><dd>Fermer la colonne</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>P</kbd></dt><dd>Aperçu dans le navigateur</dd>
               <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>I</kbd></dt><dd>Discuter avec Claude</dd>
               <dt><kbd>Molette</kbd></dt><dd>Ouvrir / fermer un onglet</dd>
@@ -231,6 +237,7 @@
        sinon il s'enregistrerait comme module AMD au lieu de créer window.Terminal -->
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
   <!-- HTMLHint (vérification du HTML), lui aussi avant Monaco pour la même raison -->
   <script src="../node_modules/htmlhint/dist/htmlhint.min.js"></script>
   <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
@@ -247,6 +254,7 @@
   <script src="servers.js"></script>
   <script src="update.js"></script>
   <script src="settings.js"></script>
+  <script src="newproject.js"></script>
   <script src="claude.js"></script>
   <script src="search.js"></script>
   <script src="fileops.js"></script>

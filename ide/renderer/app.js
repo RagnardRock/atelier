@@ -33,10 +33,25 @@ require.config({ paths: { vs: `${MONACO_BASE}vs` } });
 // Interface de Monaco en français (menu clic droit, recherche…), puis l'éditeur lui-même.
 require(['vs/nls.messages.fr'], () => require(['vs/editor/editor.main'], start));
 
+// Fichiers .vue et .svelte : Monaco ne les connaît pas. Ce sont du HTML avec <script> et <style>,
+// donc on leur donne la coloration du HTML, sous leur propre nom (pour que la vérification HTML,
+// faite pour des pages complètes, ne les souligne pas à tort).
+function registerComponentLanguages() {
+  const html = monaco.languages.getLanguages().find((l) => l.id === 'html');
+  for (const [id, alias] of [['vue', 'Vue'], ['svelte', 'Svelte']]) {
+    monaco.languages.register({ id, extensions: [`.${id}`], aliases: [alias] });
+    html?.loader?.().then(({ conf, language }) => {
+      monaco.languages.setLanguageConfiguration(id, conf);
+      monaco.languages.setMonarchTokensProvider(id, language);
+    });
+  }
+}
+
 async function start() {
   // Classe de plateforme : sur macOS, la barre de titre laisse la place aux boutons à gauche.
   document.body.classList.add(`platform-${window.atelier.platform}`);
   defineThemes();
+  registerComponentLanguages();
   formatter.init(); // Prettier pour Maj+Alt+F (format.js)
   state.configPath = await window.atelier.getConfigPath();
   await loadConfig();
@@ -60,11 +75,14 @@ async function start() {
     if (action === 'toggleTerminal') terminalPanel.toggle();
     if (action === 'splitEditor') splitEditor();
     if (action === 'closeColumn') mergeColumn(state.activeGroup);
+    if (action === 'newProject') newProject.open();
     if (action === 'toggleClaude') claudePanel.toggle();
   });
 
   $('#btn-open').onclick = openFolder;
   $('#welcome-open').onclick = openFolder;
+  $('#welcome-new').onclick = () => newProject.open();
+  $('#btn-new-project').onclick = () => newProject.open();
   $('#btn-split').onclick = splitEditor;
   $('#menu-terminal').onclick = () => {
     terminalPanel.create($('#term-profile').value, state.selectedDir || state.root)
@@ -193,7 +211,7 @@ function applyEmmet(enabled) {
     // dans du code (et pas dans un commentaire ou une chaîne). Le mode par défaut lit des
     // morceaux internes de Monaco et plantait sur une ligne pas encore colorée.
     const options = { tokenizer: 'standard' };
-    const html = emmetMonaco.emmetHTML(monaco, ['html', 'php'], options);
+    const html = emmetMonaco.emmetHTML(monaco, ['html', 'php', 'vue', 'svelte'], options);
     const css = emmetMonaco.emmetCSS(monaco, ['css', 'scss', 'less'], options);
     emmetDispose = () => { html(); css(); };
   } else if (!enabled && emmetDispose) {
@@ -233,11 +251,25 @@ async function openRecent(folder) {
   if (opened) await showRoot(opened);
 }
 
+// Le fichier `file` est-il dans le dossier `folder` ? (Sous Windows, sans tenir compte des majuscules.)
+function isInside(file, folder) {
+  const norm = (p) => {
+    const s = p.replace(/\\/g, '/').replace(/\/+$/, '');
+    return window.atelier.platform === 'win32' ? s.toLowerCase() : s;
+  };
+  return norm(file).startsWith(`${norm(folder)}/`);
+}
+
 // Nom du dossier sans le chemin : "D:\Projets\mon-site" -> "mon-site".
 const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
 
 // Affiche le dossier ouvert (choisi dans la boîte de dialogue ou dans les récents).
 async function showRoot(folder) {
+  // Les onglets d'un autre dossier se ferment : main.js n'autorise l'écriture que dans le dossier
+  // ouvert, ils ne pourraient plus être enregistrés. (Un fichier modifié demande confirmation.)
+  for (const tab of state.groups.flatMap((g) => g.tabs)) {
+    if (tab.file.path !== state.configPath && !isInside(tab.file.path, folder)) closeTab(tab);
+  }
   state.root = folder;
   state.expanded.clear();
   state.selectedDir = folder;

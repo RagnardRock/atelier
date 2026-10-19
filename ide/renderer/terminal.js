@@ -60,6 +60,13 @@ const terminalPanel = (() => {
     return open(label, (cols, rows) => window.atelier.createTerminal(profileName, cols, rows, dir), 'terminal', dir);
   }
 
+  // Ouvre un terminal dans `dir` et y tape une commande, comme si tu l'avais écrite (npm run dev…).
+  async function run(command, dir) {
+    const id = await create(profileSelect.value, dir);
+    window.atelier.writeTerminal(id, `${command}\r`);
+    return id;
+  }
+
   // Terminal connecté en SSH à un serveur favori (panneau Serveurs).
   function connect(server) {
     return open(server.name, (cols, rows) => window.atelier.connectServer(server.id, cols, rows), 'server', describeServer(server));
@@ -79,6 +86,10 @@ const terminalPanel = (() => {
     });
     const fit = new FitAddon.FitAddon(); // ajuste colonnes/lignes à la taille du panneau
     term.loadAddon(fit);
+    // Les adresses (http://localhost:5173…) deviennent des liens : Ctrl+clic les ouvre dans ton navigateur.
+    term.loadAddon(new WebLinksAddon.WebLinksAddon((event, url) => {
+      if (event.ctrlKey) window.atelier.openLink(url).catch((err) => notify.error(cleanError(err)));
+    }));
 
     const view = document.createElement('div');
     view.className = 'term-view';
@@ -125,6 +136,7 @@ const terminalPanel = (() => {
 
     terms.set(id, { term, fit, tab, view, exited: false });
     activate(id);
+    return id;
   }
 
   function activate(id) {
@@ -216,5 +228,5 @@ const terminalPanel = (() => {
   document.querySelector('#term-hide').onclick = toggle;
   // Ctrl+J est intercepté par main.js (avant l'éditeur et le terminal), puis transmis à app.js.
 
-  return { applyConfig, toggle, create, connect };
+  return { applyConfig, toggle, create, connect, run };
 })();

@@ -24,6 +24,7 @@
     "toggleTerminal": "Ctrl+J",
     "splitEditor": "Ctrl+Alt+D",
     "closeColumn": "Ctrl+Alt+W",
+    "newProject": "Ctrl+Alt+N",
     "toggleClaude": "Ctrl+Shift+I",
     "quickOpen": "Ctrl+P",
     "searchProject": "Ctrl+Shift+F",
