@@ -1,9 +1,37 @@
 {
   "theme": "vs-dark",
+  "glass": true,
+  "windowBlur": false,
   "accentColor": "#e0a526",
-  "fontFamily": "Consolas, 'Cascadia Code', monospace",
+  "fontFamily": "'Cascadia Code', Consolas, monospace",
   "fontSize": 15,
   "tabSize": 2,
   "wordWrap": "on",
-  "minimap": true
+  "minimap": true,
+  "emmet": true,
+  "vueTools": true,
+  "formatOnSave": false,
+  "reopenLastFolder": true,
+  "restoreTabs": true,
+  "projectsFolder": "D:\\Projets",
+  "claudeCommand": "claude",
+  "claudeModel": "",
+  "claudePermissionMode": "ask",
+  "terminalFontSize": 14,
+  "terminalProfiles": [
+    { "name": "PowerShell", "command": "default", "args": [] }
+  ],
+  "htmlRules": {},
+  "shortcuts": {
+    "toggleTerminal": "Ctrl+J",
+    "splitEditor": "Ctrl+Alt+D",
+    "closeColumn": "Ctrl+Alt+W",
+    "newProject": "Ctrl+Alt+N",
+    "toggleClaude": "Ctrl+Shift+I",
+    "quickOpen": "Ctrl+P",
+    "commandPalette": "Ctrl+Shift+P",
+    "searchProject": "Ctrl+Shift+F",
+    "replaceProject": "Ctrl+Shift+H",
+    "togglePreview": "Ctrl+Alt+P"
+  }
 }

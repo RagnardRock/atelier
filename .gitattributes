@@ -1,0 +1,3 @@
+# Les scripts Windows doivent garder des fins de ligne CRLF pour que cmd.exe les lise correctement.
+*.bat text eol=crlf
+*.sh text eol=lf
