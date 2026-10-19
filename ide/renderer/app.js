@@ -78,6 +78,7 @@ async function start() {
     if (!state.root || e.target.closest('.node')) return;
     e.preventDefault();
     selectDir(state.root);
+    state.menuEntry = null;
     showTreeMenu(e.clientX, e.clientY);
   };
   $('#btn-config').onclick = () => settings.open();
@@ -300,13 +301,17 @@ async function renderFolder(dir, container, depth) {
     row.style.paddingLeft = `${8 + depth * 14}px`;
     row.dataset.path = entry.path;
     row.dataset.dir = entry.isDir ? entry.path : dir; // dossier où créer si on part de cette ligne
+    row.dataset.parent = dir;
+    row.dataset.name = entry.name;
+    if (entry.isDir) row.dataset.isDir = '1';
+    row.draggable = true; // glisser sur un dossier pour l'y déplacer (fileops.js)
     row.innerHTML = '<i class="chevron codicon"></i><span class="label"></span>';
     const type = entry.isDir ? { icon: 'folder', color: 'var(--folder)' } : fileIcon(entry.name);
     const icon = iconElement(type.icon, type.color);
     row.querySelector('.label').before(icon);
     row.querySelector('.label').textContent = entry.name;
     if (entry.isDir) row.firstChild.classList.add('codicon-chevron-right');
-    row.oncontextmenu = (e) => { e.preventDefault(); selectDir(row.dataset.dir); showTreeMenu(e.clientX, e.clientY); };
+    row.oncontextmenu = (e) => { e.preventDefault(); selectDir(row.dataset.dir); state.menuEntry = entry.path; showTreeMenu(e.clientX, e.clientY); };
     container.appendChild(row);
 
     if (entry.isDir) {
@@ -325,12 +330,13 @@ async function renderFolder(dir, container, depth) {
         icon.classList.toggle('codicon-folder-opened', open);
         if (open) state.expanded.add(entry.path); else state.expanded.delete(entry.path);
       };
-      row.onclick = () => { selectDir(entry.path); toggle(!children.classList.contains('open')); };
+      row.onclick = () => { selectDir(entry.path); state.treeEntry = entry.path; toggle(!children.classList.contains('open')); };
       row.reveal = () => toggle(true);
       if (state.expanded.has(entry.path)) await toggle(true);
     } else {
       // Clic : aperçu. Double-clic ou clic molette : onglet permanent.
-      row.onclick = () => { selectDir(dir); openFile(entry.path, entry.name); };
+      // Le clic simple laisse le clavier dans l'arborescence (F2, Suppr…), comme dans VS Code.
+      row.onclick = async () => { selectDir(dir); state.treeEntry = entry.path; await openFile(entry.path, entry.name); $('#tree').focus(); };
       row.ondblclick = () => openFile(entry.path, entry.name, { preview: false });
       row.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // pas de défilement auto
       row.addEventListener('auxclick', (e) => {
@@ -403,6 +409,8 @@ async function startCreate(kind, dir = state.selectedDir || state.root) {
 // Menu clic droit de l'arborescence.
 function showTreeMenu(x, y) {
   const menu = $('#tree-menu');
+  // Renommer et Supprimer n'existent que sur un fichier ou un dossier, pas dans le vide.
+  for (const el of menu.querySelectorAll('.entry-only')) el.hidden = !state.menuEntry;
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
   menu.hidden = false;

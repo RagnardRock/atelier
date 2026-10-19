@@ -36,7 +36,7 @@
     </nav>
 
     <aside id="sidebar">
-      <div id="tree" class="side-view">
+      <div id="tree" class="side-view" tabindex="-1">
         <div class="view-header">
           <span class="view-title" id="tree-title">Explorateur</span>
           <span id="tree-toolbar" class="view-actions" hidden>
@@ -100,6 +100,9 @@
       <button id="menu-new-folder"><i class="codicon codicon-new-folder"></i>Nouveau dossier</button>
       <hr>
       <button id="menu-terminal"><i class="codicon codicon-terminal"></i>Ouvrir un terminal ici</button>
+      <hr class="entry-only">
+      <button id="menu-rename" class="entry-only"><i class="codicon codicon-edit"></i>Renommer<kbd>F2</kbd></button>
+      <button id="menu-delete" class="entry-only"><i class="codicon codicon-trash"></i>Mettre à la corbeille<kbd>Suppr</kbd></button>
     </div>
 
     <!-- Ouverture rapide d'un fichier par son nom (Ctrl+P, search.js) -->
@@ -198,5 +201,6 @@
   <script src="settings.js"></script>
   <script src="claude.js"></script>
   <script src="search.js"></script>
+  <script src="fileops.js"></script>
 </body>
 </html>

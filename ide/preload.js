@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('atelier', {
   createFolder: (dir) => ipcRenderer.invoke('folder:create', dir),
   listFiles: () => ipcRenderer.invoke('files:list'),
   searchText: (options) => ipcRenderer.invoke('search:text', options),
+  renamePath: (from, to) => ipcRenderer.invoke('path:rename', from, to),
+  trashPath: (target) => ipcRenderer.invoke('path:trash', target),
   joinPath: (...parts) => ipcRenderer.invoke('path:join', ...parts),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),

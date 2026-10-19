@@ -2,7 +2,7 @@
 // C'est lui qui crée la fenêtre et qui a le droit de toucher au disque.
 // L'interface (renderer/) ne lit et n'écrit des fichiers qu'en lui demandant via IPC.
 
-const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
@@ -211,6 +211,35 @@ handle('folder:create', async (_event, dir) => {
     if (err.code === 'ENOENT') return fs.mkdir(dir, { recursive: true }); // sous-dossiers à créer
     throw err;
   }
+});
+
+// Renommer ou déplacer (c'est la même opération pour le disque). On refuse d'écraser ce qui
+// existe, de toucher au dossier ouvert lui-même et de ranger un dossier dans lui-même.
+const isInside = (parent, child) => {
+  const rel = path.relative(parent, child);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+};
+
+handle('path:rename', async (_event, from, to) => {
+  assertAllowed(from);
+  checkNewPath(to);
+  if (path.resolve(from) === path.resolve(rootFolder)) throw new Error('Impossible de renommer le dossier ouvert lui-même');
+  if (isInside(from, to)) throw new Error('Impossible de ranger un dossier dans lui-même');
+  // Sous Windows, "page.html" et "Page.html" sont le même fichier : changer seulement les
+  // majuscules est permis, alors que le nouveau nom "existe" déjà.
+  const sameFile = from.toLowerCase() === to.toLowerCase();
+  if (!sameFile && await fs.access(to).then(() => true, () => false)) {
+    throw new Error(`« ${path.basename(to)} » existe déjà à cet endroit`);
+  }
+  await fs.mkdir(path.dirname(to), { recursive: true });
+  await fs.rename(from, to);
+});
+
+// Supprimer = mettre à la corbeille de Windows : on peut toujours récupérer le fichier.
+handle('path:trash', async (_event, target) => {
+  assertAllowed(target);
+  if (path.resolve(target) === path.resolve(rootFolder)) throw new Error('Impossible de supprimer le dossier ouvert lui-même');
+  await shell.trashItem(target);
 });
 
 handle('path:join', async (_event, ...parts) => path.join(...parts));
