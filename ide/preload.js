@@ -72,6 +72,7 @@ contextBridge.exposeInMainWorld('atelier', {
   // Mise à jour
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateProgress: (callback) => ipcRenderer.on('update:progress', (_event, percent) => callback(percent)),
 
   // Terminaux
   createTerminal: (profileName, cols, rows, cwd) => ipcRenderer.invoke('term:create', profileName, cols, rows, cwd),

@@ -26,7 +26,7 @@ const TYPES = {
 };
 const IGNORED = /(^|[\\/])(\.git|node_modules)([\\/]|$)/;
 
-const RELOAD_SCRIPT = `<script>/* Atelier : rechargement automatique (ajouté par l'aperçu, absent de ton fichier) */
+const RELOAD_SCRIPT = `<script>/* Rune : rechargement automatique (ajouté par l'aperçu, absent de ton fichier) */
 (() => {
   // L'IDE affiche l'adresse de la page, et son bouton Précédent passe par ici.
   const tell = () => parent !== window && parent.postMessage({ atelierPreview: location.pathname + location.search + location.hash }, '*');

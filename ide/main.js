@@ -19,6 +19,14 @@ const vueLanguage = require('./vue');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
+// Les réglages restent dans %APPDATA%\atelier-ide, que Rune soit lancé depuis le clone (npm start)
+// ou installé avec Rune-Setup.exe : sans cette ligne, Electron utiliserait %APPDATA%\Rune
+// (le nom affiché de l'application) et tu repartirais de zéro.
+app.setPath('userData', path.join(app.getPath('appData'), 'atelier-ide'));
+// Même identifiant que l'installeur (package.json › build.appId) : Windows range ainsi la fenêtre
+// sous l'icône épinglée de Rune dans la barre des tâches.
+if (process.platform === 'win32') app.setAppUserModelId('fr.ragna.rune');
+
 // --- Journal (atelier.log) ---
 // Toutes les erreurs y sont écrites avec la date, pour retrouver ce qui s'est passé.
 // Sous Windows : %APPDATA%\atelier-ide\atelier.log
@@ -553,10 +561,13 @@ ipcMain.on('term:resize', (_event, id, cols, rows) => terminals.get(id)?.resize(
 ipcMain.on('term:kill', (_event, id) => terminals.get(id)?.kill());
 
 // --- Mise à jour ---
-// L'IDE vit dans un clone git du dépôt atelier : mettre à jour = git pull + npm install.
-// main.js vérifie s'il y a des nouveautés ; l'installation est confiée à mettre-a-jour.bat,
-// lancé dans sa propre fenêtre APRÈS la fermeture de l'IDE (sous Windows, npm ne peut pas
-// remplacer Electron ou node-pty tant que l'IDE les utilise).
+// Rune tourne de deux façons, et se met à jour selon celle utilisée :
+// - Installé avec Rune-Setup.exe (app.isPackaged) : chaque version publiée sur GitHub
+//   (onglet « Releases » du dépôt) contient le nouvel installeur. electron-updater le télécharge,
+//   ferme Rune, l'installe sans rien demander et relance Rune.
+// - Lancé depuis le clone git (npm start) : mettre à jour = git pull + npm install. L'installation
+//   est confiée à mettre-a-jour.bat, lancé dans sa propre fenêtre APRÈS la fermeture de l'IDE
+//   (sous Windows, npm ne peut pas remplacer Electron ou node-pty tant que l'IDE les utilise).
 
 const REPO = path.join(__dirname, '..');
 
@@ -569,7 +580,43 @@ function git(args) {
   });
 }
 
+// electron-updater n'est chargé que dans la version installée (il n'a rien à faire dans le clone).
+let autoUpdater = null;
+function installerUpdater() {
+  if (autoUpdater) return autoUpdater;
+  ({ autoUpdater } = require('electron-updater'));
+  autoUpdater.autoDownload = false; // on télécharge seulement quand tu cliques « Mettre à jour »
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.logger = { info: (m) => log('INFO', `Mise à jour : ${m}`), warn: (m) => log('INFO', `Mise à jour : ${m}`), error: (m) => log('ERREUR', `Mise à jour : ${m}`), debug: () => {} };
+  autoUpdater.on('download-progress', (p) => mainWindow()?.webContents.send('update:progress', Math.round(p.percent)));
+  return autoUpdater;
+}
+
+const mainWindow = () => BrowserWindow.getAllWindows()[0];
+
+// Les notes d'une version GitHub arrivent en HTML : on garde une ligne par élément de liste.
+function releaseLines(notes) {
+  const text = Array.isArray(notes) ? notes.map((n) => n.note || '').join('\n') : String(notes || '');
+  const items = [...text.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => m[1]);
+  const lines = items.length ? items : text.split(/<br\s*\/?>|\n/);
+  return lines
+    .map((l) => l.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/^\s*[-*•]\s*/, '').trim())
+    .filter(Boolean);
+}
+
 handle('update:check', async () => {
+  if (app.isPackaged) {
+    let result;
+    try {
+      result = await installerUpdater().checkForUpdates();
+    } catch (err) {
+      throw new Error(`Impossible de contacter GitHub : ${err.message.split('\n')[0]}`);
+    }
+    if (!result?.isUpdateAvailable) return { mode: 'installer', version: app.getVersion(), changes: [] };
+    const { version, releaseNotes } = result.updateInfo;
+    const lines = releaseLines(releaseNotes);
+    return { mode: 'installer', version, changes: lines.length ? lines : [`Version ${version}`] };
+  }
   try {
     await git(['fetch', '--quiet']);
   } catch (err) {
@@ -580,11 +627,18 @@ handle('update:check', async () => {
   const upstream = await git(['rev-parse', '--abbrev-ref', '@{u}']).catch(() => null);
   if (!upstream) throw new Error(`La branche « ${branch} » n'est reliée à aucune branche GitHub`);
   const log = await git(['log', '--format=%s', 'HEAD..@{u}']);
-  return { branch, changes: log ? log.split('\n') : [] };
+  return { mode: 'git', branch, changes: log ? log.split('\n') : [] };
 });
 
 handle('update:install', async () => {
   log('INFO', 'Mise à jour lancée depuis le bouton');
+  if (app.isPackaged) {
+    const updater = installerUpdater();
+    await updater.downloadUpdate();
+    // Installation silencieuse (pas de fenêtre d'installeur), puis Rune se relance tout seul.
+    setTimeout(() => updater.quitAndInstall(true, true), 300);
+    return;
+  }
   const child = process.platform === 'win32'
     ? spawn('cmd.exe', ['/c', 'start', '', path.join(REPO, 'mettre-a-jour.bat')], { cwd: REPO, detached: true, stdio: 'ignore' })
     : spawn('sh', [path.join(REPO, 'mettre-a-jour.sh')], { cwd: REPO, detached: true, stdio: 'ignore' });
@@ -687,6 +741,8 @@ handle('dialog:pickFolder', async (event, defaultPath, title) => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+const WINDOW_ICON = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+
 function createWindow(config) {
   const blur = wantsBlur(config);
   log('INFO', `Flou Windows 11 : ${blur ? 'activé' : 'désactivé'} (Windows ${os.release()}, pris en charge : ${blurSupported() ? 'oui' : 'non'})`);
@@ -697,7 +753,9 @@ function createWindow(config) {
     minHeight: 400,
     backgroundColor: blur ? '#00000000' : '#101014',
     ...(blur ? { backgroundMaterial: 'acrylic' } : {}),
-    title: 'Atelier',
+    title: 'Rune',
+    // L'icône de la fenêtre quand Rune est lancé avec npm start (la version installée prend celle du .exe).
+    ...(fsSync.existsSync(WINDOW_ICON) ? { icon: WINDOW_ICON } : {}),
     // Pas de barre de titre système : la barre du haut de l'interface la remplace,
     // et Windows y dessine ses propres boutons réduire / agrandir / fermer.
     titleBarStyle: 'hidden',
@@ -739,7 +797,7 @@ function createWindow(config) {
     await log('ERREUR', `Interface arrêtée : ${details.reason}`);
     const { response } = await dialog.showMessageBox(win, {
       type: 'error',
-      message: "L'interface d'Atelier s'est arrêtée.",
+      message: "L'interface de Rune s'est arrêtée.",
       detail: `Raison : ${details.reason}. Le détail est dans ${logPath()}.`,
       buttons: ['Recharger', 'Fermer'],
     });
@@ -751,7 +809,7 @@ app.whenReady().then(async () => {
   await ensureConfig();
   const config = await readConfig();
   applyShortcuts(config.shortcuts);
-  log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
+  log('INFO', `Démarrage de Rune ${app.getVersion()}`);
   // Pas de menu natif : tout passe par l'interface et les raccourcis.
   Menu.setApplicationMenu(null);
   createWindow(config);
