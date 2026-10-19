@@ -463,12 +463,18 @@ function blurSupported() {
   return build >= 22621;
 }
 
+// Le flou demande une fenêtre "translucide", et Electron ne choisit ce type de fenêtre qu'à sa
+// création : l'activer ensuite ne fait rien. On le décide donc au démarrage d'après la config,
+// et si tu l'actives en cours de route, l'interface propose de redémarrer.
+const wantsBlur = (c) => Boolean(c.glass && c.windowBlur && c.theme === 'vs-dark' && blurSupported());
+
 // L'interface indique son thème et si le verre dépoli est activé, avec ou sans flou Windows.
-// Renvoie true si le flou Windows est réellement actif.
+// Renvoie { blur: le flou est actif, needsRestart: il faut redémarrer pour l'activer }.
 handle('window:theme', async (event, { theme, glass, blur }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  const useBlur = Boolean(glass && blur && theme !== 'light' && blurSupported());
-  if (blurSupported()) {
+  const wanted = Boolean(glass && blur && theme !== 'light' && blurSupported());
+  const useBlur = wanted && win.blurCapable;
+  if (win.blurCapable) {
     win.setBackgroundMaterial(useBlur ? 'acrylic' : 'none');
     win.setBackgroundColor(useBlur ? '#00000000' : '#101014');
   }
@@ -477,28 +483,38 @@ handle('window:theme', async (event, { theme, glass, blur }) => {
     if (glass && theme !== 'light') colors = { ...colors, color: useBlur ? '#00000000' : '#101014' };
     win.setTitleBarOverlay(colors);
   }
-  return useBlur;
+  return { blur: useBlur, needsRestart: wanted && !win.blurCapable };
+});
+
+// Redémarrer l'IDE (après avoir activé le flou Windows 11).
+handle('app:relaunch', async () => {
+  app.relaunch();
+  app.quit();
 });
 handle('window:blurSupported', async () => blurSupported());
 
-function createWindow() {
+function createWindow(config) {
+  const blur = wantsBlur(config);
+  log('INFO', `Flou Windows 11 : ${blur ? 'activé' : 'désactivé'} (Windows ${os.release()}, pris en charge : ${blurSupported() ? 'oui' : 'non'})`);
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 700,
     minHeight: 400,
-    backgroundColor: '#101014',
+    backgroundColor: blur ? '#00000000' : '#101014',
+    ...(blur ? { backgroundMaterial: 'acrylic' } : {}),
     title: 'Atelier',
     // Pas de barre de titre système : la barre du haut de l'interface la remplace,
     // et Windows y dessine ses propres boutons réduire / agrandir / fermer.
     titleBarStyle: 'hidden',
-    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 13 } } : { titleBarOverlay: TITLE_BAR.dark }),
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 13 } } : { titleBarOverlay: blur ? { ...TITLE_BAR.dark, color: '#00000000' } : TITLE_BAR.dark }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, // l'interface n'a pas accès à Node directement
       nodeIntegration: false,
     },
   });
+  win.blurCapable = blur; // fenêtre créée translucide : le flou peut être activé ou coupé
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.webContents.on('before-input-event', (event, input) => {
@@ -533,11 +549,12 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   await ensureConfig();
-  applyShortcuts((await readConfig()).shortcuts);
+  const config = await readConfig();
+  applyShortcuts(config.shortcuts);
   log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
   // Pas de menu natif : tout passe par l'interface et les raccourcis.
   Menu.setApplicationMenu(null);
-  createWindow();
+  createWindow(config);
 });
 
 app.on('window-all-closed', () => {

@@ -166,13 +166,30 @@ function applyConfig() {
   document.body.classList.toggle('glass', glass);
   // main.js règle les boutons de la fenêtre et, si demandé, le flou de Windows 11.
   window.atelier.setWindowTheme({ theme: light ? 'light' : 'dark', glass, blur: Boolean(c.windowBlur) })
-    .then((blurOn) => document.body.classList.toggle('window-blur', blurOn))
+    .then(({ blur, needsRestart }) => {
+      document.body.classList.toggle('window-blur', blur);
+      if (needsRestart) askRestartForBlur();
+    })
     .catch((err) => notify.error(`Thème de la fenêtre : ${cleanError(err)}`));
   document.documentElement.style.setProperty('--accent', c.accentColor);
   for (const group of state.groups) group.editor.updateOptions(editorOptions());
   for (const file of state.files.values()) lintHtml(file.model); // les règles HTML ont pu changer
   terminalPanel.applyConfig(c);
   updateWelcome();
+}
+
+// Le flou Windows 11 ne s'active qu'au démarrage de la fenêtre (voir main.js) : on propose de
+// redémarrer, une seule fois par session.
+function askRestartForBlur() {
+  if (askRestartForBlur.asked) return;
+  askRestartForBlur.asked = true;
+  notify.info("Le flou Windows 11 s'activera au prochain démarrage d'Atelier.", {
+    actions: [{ label: 'Redémarrer maintenant', run: () => {
+      const unsaved = [...state.files.values()].filter(isDirty).map((f) => f.name);
+      if (unsaved.length && !confirm(`Ces fichiers ne sont pas enregistrés :\n\n${unsaved.join('\n')}\n\nRedémarrer quand même ?`)) return;
+      window.atelier.relaunch();
+    } }],
+  });
 }
 
 // --- Arborescence ---
