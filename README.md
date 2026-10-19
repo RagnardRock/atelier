@@ -14,11 +14,21 @@ npm start
 
 `npm install` télécharge Electron, Monaco et les librairies du terminal dans `ide/node_modules/` (ignoré par git). `npm start` ouvre la fenêtre de l'IDE.
 
-> Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`.
+### Mettre à jour
 
-## Ce que fait l'IDE (v0.3)
+Deux façons, qui font exactement la même chose (`git pull` + `npm install`, puis relance de l'IDE) :
+
+- **Le bouton « Mise à jour »** en haut de l'IDE. Au démarrage, l'IDE vérifie s'il y a des nouveautés sur GitHub : si oui, une notification le signale et le bouton affiche un `●`. Un clic montre la liste des changements et demande confirmation. L'IDE se ferme, la mise à jour se fait dans une fenêtre à part, puis l'IDE se relance. Il prévient avant si des fichiers ne sont pas enregistrés.
+- **Le script `mettre-a-jour.bat`** à la racine du dépôt : double-clique-le (l'IDE doit être fermé). En cas d'erreur, la fenêtre reste ouverte avec le message. Sous Linux ou macOS, c'est `mettre-a-jour.sh`.
+
+La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm install` ne peut pas remplacer Electron ou le terminal pendant que l'IDE les utilise.
+
+> Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`. Le script de mise à jour le fait tout seul.
+
+## Ce que fait l'IDE (v0.4)
 
 - **Ouvrir un dossier** (bouton ou `Ctrl+O`) : l'arborescence s'affiche à gauche. Les sous-dossiers ne sont lus qu'au clic, donc même un gros projet s'ouvre vite. Le dossier `.git` est masqué.
+- **Créer des fichiers et des dossiers** : boutons **+ Fichier** et **+ Dossier** en haut de l'arborescence, ou **clic droit** sur un dossier (ou dans le vide pour créer à la racine). Un champ apparaît dans le dossier sélectionné : tape le nom, puis `Entrée` (ou `Échap` pour annuler). Un nom comme `css/style.css` crée le sous-dossier au passage. Un nouveau fichier s'ouvre directement. L'IDE refuse d'écraser un fichier existant, les caractères interdits par Windows et les chemins qui sortent du dossier ouvert. Le bouton ⟳ relit le dossier sur le disque, si des fichiers ont été ajoutés à côté.
 - **Éditer** : les fichiers s'ouvrent dans Monaco, le moteur de VS Code (coloration selon l'extension, autocomplétion, `Ctrl+F` pour chercher, `Ctrl+H` pour remplacer, multi-curseurs avec `Alt+clic`).
 - **Aperçu ou onglet permanent** :
   - **Clic** sur un fichier : il s'ouvre en *aperçu* (nom en italique), et le prochain fichier cliqué prendra sa place. Pratique pour parcourir un projet sans accumuler les onglets.
@@ -31,6 +41,7 @@ npm start
   - Tu peux aussi glisser un onglet sur la zone **Nouvelle colonne**, qui apparaît au bord droit pendant le glisser.
   - Il n'y a pas de limite au nombre de colonnes. Chacune a ses onglets, et un même fichier affiché dans deux colonnes partage le même texte (une modification apparaît des deux côtés).
   - Une colonne vide se ferme toute seule.
+- **Erreurs soulignées** : en JavaScript, TypeScript, CSS, SCSS, LESS et JSON, Monaco souligne lui-même les erreurs. Pour le **HTML**, c'est [HTMLHint](https://htmlhint.com) qui vérifie le fichier à chaque pause de frappe : balise non fermée, attribut en double, `<!DOCTYPE>` manquant, guillemets… Rouge = erreur, jaune = avertissement, et le survol affiche l'explication (en anglais) avec le nom de la règle. Les règles se règlent dans `htmlRules` (voir ci-dessous).
 - **Enregistrer** : `Ctrl+S`. Un `●` sur l'onglet signale des modifications non enregistrées.
 - **Fermer un onglet** : `×`, clic molette ou `Ctrl+W`. L'IDE demande confirmation si le fichier n'est pas enregistré.
 - **Config perso** : le bouton **Config** ouvre ton fichier de réglages dans l'IDE. Tu le modifies, `Ctrl+S`, et c'est appliqué tout de suite.
@@ -52,6 +63,7 @@ npm start
 | `minimap` | Mini-carte du fichier à droite | `true`, `false` |
 | `terminalFontSize` | Taille du texte du terminal | `14` |
 | `terminalProfiles` | Liste des terminaux locaux proposés (voir ci-dessous) | |
+| `htmlRules` | Règles HTMLHint à activer ou désactiver, par-dessus celles par défaut | `{ "doctype-first": false, "alt-require": true }` |
 | `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D" }` |
 
 ### Profils de terminal
@@ -99,12 +111,14 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 
 | Fichier | Rôle |
 |---------|------|
-| `ide/main.js` | Processus principal. Crée la fenêtre, gère la boîte de dialogue « ouvrir un dossier », lit et écrit les fichiers. Il refuse tout accès en dehors du dossier ouvert (et de ta config). Il lance aussi les processus des terminaux avec node-pty et les arrête à la fermeture de l'IDE. Il tient le journal `atelier.log`, intercepte les raccourcis globaux et attrape les erreurs imprévues. Enfin, il enregistre les serveurs favoris et construit leur commande `ssh`, en refusant un hôte ou un utilisateur qui commence par `-`, pour qu'on ne puisse pas glisser une option ssh dans un champ. |
+| `ide/main.js` | Processus principal. Crée la fenêtre, gère la boîte de dialogue « ouvrir un dossier », lit et écrit les fichiers. Il refuse tout accès en dehors du dossier ouvert (et de ta config). Il lance aussi les processus des terminaux avec node-pty et les arrête à la fermeture de l'IDE. Il tient le journal `atelier.log`, intercepte les raccourcis globaux et attrape les erreurs imprévues. Il crée les fichiers et dossiers, vérifie avec git s'il existe une mise à jour, puis lance le script de mise à jour. Enfin, il enregistre les serveurs favoris et construit leur commande `ssh`, en refusant un hôte ou un utilisateur qui commence par `-`, pour qu'on ne puisse pas glisser une option ssh dans un champ. |
 | `ide/preload.js` | Expose à l'interface `window.atelier` : les fichiers (`openFolder`, `readFolder`, `readFile`, `writeFile`), la config (`getConfig`, `getConfigPath`) les terminaux (`createTerminal`, `writeTerminal`, `resizeTerminal`, `killTerminal`, plus deux écouteurs pour la sortie et la fin d'un processus) les serveurs (`listServers`, `saveServer`, `deleteServer`, `pickKeyFile`, `connectServer`) et la gestion des erreurs et raccourcis (`getLogPath`, `log`, `onAppError`, `onShortcut`). Rien d'autre de Node n'est accessible côté interface (`contextIsolation`). |
 | `ide/renderer/index.html` | Structure de la page : barre du haut, arborescence, onglets, éditeur, barre d'état. La balise `Content-Security-Policy` n'autorise que les scripts locaux. |
 | `ide/renderer/style.css` | Tout le visuel. Les couleurs sont des variables CSS (`--accent`, `--bg`…) en haut du fichier, faciles à changer. |
 | `ide/renderer/notify.js` | Les notifications, et la capture des erreurs imprévues de l'interface. |
-| `ide/renderer/app.js` | La logique : charge Monaco, construit l'arborescence et les colonnes, gère les onglets (aperçu, clic molette, glisser-déposer), l'enregistrement et la config. |
+| `ide/renderer/app.js` | La logique : charge Monaco, construit l'arborescence (avec la création de fichiers et dossiers) et les colonnes, gère les onglets (aperçu, clic molette, glisser-déposer), la vérification HTML, l'enregistrement et la config. |
+| `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, lancement du script. |
+| `mettre-a-jour.bat` / `.sh` | Les scripts de mise à jour (git pull, npm install, relance). |
 | `ide/renderer/terminal.js` | Le panneau terminal : crée les terminaux xterm.js, les onglets, la poignée et le raccourci `Ctrl+J`. |
 | `ide/renderer/servers.js` | Le panneau Serveurs : les onglets Fichiers / Serveurs, la liste, le formulaire d'ajout ou de modification, la suppression et la connexion en un clic. |
 | `ide/config.default.json` | Réglages par défaut. |

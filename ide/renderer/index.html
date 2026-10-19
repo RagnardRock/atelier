@@ -26,7 +26,20 @@
         <button data-view="tree" class="active">Fichiers</button>
         <button data-view="servers">Serveurs</button>
       </div>
-      <div id="tree" class="side-view"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+      <div id="tree" class="side-view">
+        <div id="tree-toolbar" hidden>
+          <span>Explorateur</span>
+          <button id="btn-new-file" title="Nouveau fichier dans le dossier sélectionné">+ Fichier</button>
+          <button id="btn-new-folder" title="Nouveau dossier dans le dossier sélectionné">+ Dossier</button>
+          <button id="btn-refresh" title="Relire le dossier sur le disque">⟳</button>
+        </div>
+        <div id="tree-root"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+      </div>
+      <!-- Menu clic droit de l'arborescence -->
+      <div id="tree-menu" hidden>
+        <button id="menu-new-file">Nouveau fichier</button>
+        <button id="menu-new-folder">Nouveau dossier</button>
+      </div>
       <div id="servers" class="side-view" hidden>
         <div id="server-list"></div>
         <button id="server-add" class="side-button">+ Ajouter un serveur</button>
@@ -82,6 +95,8 @@
        sinon il s'enregistrerait comme module AMD au lieu de créer window.Terminal -->
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <!-- HTMLHint (vérification du HTML), lui aussi avant Monaco pour la même raison -->
+  <script src="../node_modules/htmlhint/dist/htmlhint.min.js"></script>
   <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
   <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
   <script src="notify.js"></script>

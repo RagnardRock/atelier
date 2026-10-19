@@ -141,6 +141,42 @@ handle('file:write', async (_event, file, content) => {
   await fs.writeFile(file, content, 'utf8');
 });
 
+// Création de fichiers et de dossiers. Un nom peut contenir des sous-dossiers
+// ("css/style.css") : ils sont créés au passage. On refuse d'écraser ce qui existe déjà.
+const FORBIDDEN_CHARS = /[<>:"|?*\x00-\x1f]/; // caractères interdits dans un nom sous Windows
+
+function checkNewPath(target) {
+  assertAllowed(target);
+  const name = path.basename(target);
+  if (!name || FORBIDDEN_CHARS.test(path.relative(rootFolder, target))) {
+    throw new Error(`Nom invalide : « ${name} » (caractères interdits : < > : " | ? *)`);
+  }
+}
+
+handle('file:create', async (_event, file) => {
+  checkNewPath(file);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  try {
+    await fs.writeFile(file, '', { flag: 'wx' }); // "wx" = échoue si le fichier existe déjà
+  } catch (err) {
+    if (err.code === 'EEXIST') throw new Error(`« ${path.basename(file)} » existe déjà`);
+    throw err;
+  }
+});
+
+handle('folder:create', async (_event, dir) => {
+  checkNewPath(dir);
+  try {
+    await fs.mkdir(dir, { recursive: false });
+  } catch (err) {
+    if (err.code === 'EEXIST') throw new Error(`« ${path.basename(dir)} » existe déjà`);
+    if (err.code === 'ENOENT') return fs.mkdir(dir, { recursive: true }); // sous-dossiers à créer
+    throw err;
+  }
+});
+
+handle('path:join', async (_event, ...parts) => path.join(...parts));
+
 handle('config:get', async () => {
   const result = await loadConfig();
   if (result.error) log('ATTENTION', result.error);

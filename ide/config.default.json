@@ -10,6 +10,7 @@
   "terminalProfiles": [
     { "name": "PowerShell", "command": "default", "args": [] }
   ],
+  "htmlRules": {},
   "shortcuts": {
     "toggleTerminal": "Ctrl+J",
     "splitEditor": "Ctrl+Alt+D"

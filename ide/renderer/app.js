@@ -58,6 +58,18 @@ async function start() {
   });
 
   $('#btn-open').onclick = openFolder;
+  $('#btn-new-file').onclick = () => startCreate('file');
+  $('#btn-new-folder').onclick = () => startCreate('folder');
+  $('#btn-refresh').onclick = () => state.root && refreshFolder(state.root);
+  $('#menu-new-file').onclick = () => startCreate('file');
+  $('#menu-new-folder').onclick = () => startCreate('folder');
+  // Clic droit dans le vide de l'arborescence : créer à la racine.
+  $('#tree').oncontextmenu = (e) => {
+    if (!state.root || e.target.closest('.node')) return;
+    e.preventDefault();
+    selectDir(state.root);
+    showTreeMenu(e.clientX, e.clientY);
+  };
   $('#btn-config').onclick = () => openFile(state.configPath, 'config.json', { preview: false });
   setupSplitDropzone();
 }
@@ -88,23 +100,46 @@ function applyConfig() {
   document.body.classList.toggle('light', c.theme === 'vs');
   document.documentElement.style.setProperty('--accent', c.accentColor);
   for (const group of state.groups) group.editor.updateOptions(editorOptions());
+  for (const file of state.files.values()) lintHtml(file.model); // les règles HTML ont pu changer
   terminalPanel.applyConfig(c);
   updateWelcome();
 }
 
 // --- Arborescence ---
 
+// Dossiers dépliés : on s'en souvient pour les garder ouverts quand l'arborescence est rafraîchie.
+state.expanded = new Set();
+// Dossier sélectionné : c'est là que "Nouveau fichier" / "Nouveau dossier" créent par défaut.
+state.selectedDir = null;
+
 async function openFolder() {
   const folder = await window.atelier.openFolder().catch((err) => notify.error(cleanError(err)));
   if (!folder) return;
   state.root = folder;
+  state.expanded.clear();
+  state.selectedDir = folder;
   $('#folder-name').textContent = folder;
-  const tree = $('#tree');
-  tree.innerHTML = '';
-  await renderFolder(folder, tree, 0);
+  $('#tree-toolbar').hidden = false;
+  await refreshFolder(folder);
 }
 
-// Affiche le contenu d'un dossier. Les sous-dossiers ne sont lus qu'au premier clic.
+// Conteneur HTML qui affiche le contenu d'un dossier (la racine, ou le bloc sous une ligne de dossier).
+function containerOf(dir) {
+  if (dir === state.root) return $('#tree-root');
+  return [...document.querySelectorAll('#tree .children')].find((c) => c.dataset.dir === dir) || null;
+}
+
+// Relit un dossier sur le disque et réaffiche son contenu (après une création, ou via ⟳).
+async function refreshFolder(dir) {
+  const container = containerOf(dir);
+  if (!container) return;
+  const depth = dir === state.root ? 0 : Number(container.dataset.depth);
+  container.innerHTML = '';
+  await renderFolder(dir, container, depth);
+  refreshStatus();
+}
+
+// Affiche le contenu d'un dossier. Les sous-dossiers ne sont lus qu'au premier dépliage.
 async function renderFolder(dir, container, depth) {
   let entries;
   try {
@@ -117,23 +152,31 @@ async function renderFolder(dir, container, depth) {
     row.className = 'node';
     row.style.paddingLeft = `${8 + depth * 14}px`;
     row.dataset.path = entry.path;
+    row.dataset.dir = entry.isDir ? entry.path : dir; // dossier où créer si on part de cette ligne
     row.innerHTML = `<span class="chevron">${entry.isDir ? '▸' : ''}</span><span></span>`;
     row.lastChild.textContent = entry.name;
+    row.oncontextmenu = (e) => { e.preventDefault(); selectDir(row.dataset.dir); showTreeMenu(e.clientX, e.clientY); };
     container.appendChild(row);
 
     if (entry.isDir) {
       const children = document.createElement('div');
       children.className = 'children';
+      children.dataset.dir = entry.path;
+      children.dataset.depth = depth + 1;
       container.appendChild(children);
       let loaded = false;
-      row.onclick = async () => {
-        if (!loaded) { await renderFolder(entry.path, children, depth + 1); loaded = true; }
-        const open = children.classList.toggle('open');
+      const toggle = async (open) => {
+        if (open && !loaded) { await renderFolder(entry.path, children, depth + 1); loaded = true; }
+        children.classList.toggle('open', open);
         row.firstChild.textContent = open ? '▾' : '▸';
+        if (open) state.expanded.add(entry.path); else state.expanded.delete(entry.path);
       };
+      row.onclick = () => { selectDir(entry.path); toggle(!children.classList.contains('open')); };
+      row.reveal = () => toggle(true);
+      if (state.expanded.has(entry.path)) await toggle(true);
     } else {
       // Clic : aperçu. Double-clic ou clic molette : onglet permanent.
-      row.onclick = () => openFile(entry.path, entry.name);
+      row.onclick = () => { selectDir(dir); openFile(entry.path, entry.name); };
       row.ondblclick = () => openFile(entry.path, entry.name, { preview: false });
       row.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // pas de défilement auto
       row.addEventListener('auxclick', (e) => {
@@ -143,10 +186,91 @@ async function renderFolder(dir, container, depth) {
   }
 }
 
+function selectDir(dir) {
+  state.selectedDir = dir;
+  document.querySelectorAll('#tree .node').forEach((n) => n.classList.toggle('selected', n.dataset.path === dir));
+}
+
+// --- Création de fichiers et de dossiers ---
+// Un champ de saisie apparaît en haut du dossier cible : Entrée pour créer, Échap pour annuler.
+// On peut taper un chemin comme "css/style.css" : les sous-dossiers sont créés au passage.
+
+async function startCreate(kind, dir = state.selectedDir || state.root) {
+  if (!state.root) return notify.info("Ouvre d'abord un dossier");
+  // Le dossier cible doit être déplié pour qu'on voie le champ.
+  const dirRow = document.querySelector(`#tree .node[data-path="${CSS.escape(dir)}"]`);
+  if (dirRow && dirRow.reveal) await dirRow.reveal();
+  const container = containerOf(dir);
+  if (!container) return;
+  document.querySelector('#tree .new-entry')?.remove();
+
+  const depth = dir === state.root ? 0 : Number(container.dataset.depth);
+  const row = document.createElement('div');
+  row.className = 'node new-entry';
+  row.style.paddingLeft = `${8 + depth * 14}px`;
+  row.innerHTML = `<span class="chevron">${kind === 'folder' ? '▸' : ''}</span><input spellcheck="false">`;
+  const input = row.querySelector('input');
+  input.placeholder = kind === 'folder' ? 'nom-du-dossier' : 'nom-du-fichier.html';
+  container.prepend(row);
+  input.focus();
+
+  let done = false;
+  const finish = async (create) => {
+    if (done) return;
+    done = true;
+    const name = input.value.trim().replace(/\\/g, '/');
+    row.remove();
+    if (!create || !name) return;
+    const target = await window.atelier.joinPath(dir, ...name.split('/'));
+    try {
+      if (kind === 'folder') await window.atelier.createFolder(target);
+      else await window.atelier.createFile(target);
+    } catch (err) {
+      return notify.error(`Création impossible : ${cleanError(err)}`);
+    }
+    // On déplie le chemin créé (ex. css/ pour css/style.css), puis on rafraîchit.
+    const parts = name.split('/');
+    let current = dir;
+    for (const part of parts.slice(0, kind === 'folder' ? parts.length : -1)) {
+      current = await window.atelier.joinPath(current, part);
+      state.expanded.add(current);
+    }
+    await refreshFolder(dir);
+    if (kind === 'file') openFile(target, parts[parts.length - 1], { preview: false });
+    else selectDir(target);
+  };
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') finish(true);
+    if (e.key === 'Escape') finish(false);
+  };
+  input.onblur = () => finish(true);
+}
+
+// Menu clic droit de l'arborescence.
+function showTreeMenu(x, y) {
+  const menu = $('#tree-menu');
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.hidden = false;
+}
+document.addEventListener('click', () => { $('#tree-menu').hidden = true; });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#tree-menu').hidden = true; });
+
 // --- Fichiers ouverts (partagés entre colonnes) ---
 
-async function getFile(path, name) {
-  if (state.files.has(path)) return state.files.get(path);
+// Lectures en cours : un double-clic déclenche aussi un clic, donc deux ouvertures du même
+// fichier presque en même temps. La seconde attend la première au lieu de le lire deux fois.
+const pendingFiles = new Map();
+
+function getFile(path, name) {
+  if (state.files.has(path)) return Promise.resolve(state.files.get(path));
+  if (!pendingFiles.has(path)) {
+    pendingFiles.set(path, loadFile(path, name).finally(() => pendingFiles.delete(path)));
+  }
+  return pendingFiles.get(path);
+}
+
+async function loadFile(path, name) {
   const content = await window.atelier.readFile(path);
   // L'URI donne l'extension à Monaco, qui choisit la coloration (js, css, html, json…).
   const model = monaco.editor.createModel(content, undefined, monaco.Uri.file(path));
@@ -159,7 +283,40 @@ async function getFile(path, name) {
     }
   });
   state.files.set(path, file);
+  watchHtml(model);
   return file;
+}
+
+// --- Vérification du HTML (HTMLHint) ---
+// Monaco colore le HTML mais ne le vérifie pas : HTMLHint analyse le texte à chaque pause de
+// frappe, et chaque problème devient un soulignement (rouge = erreur, jaune = avertissement).
+// Les règles se règlent dans "htmlRules" de la config, par exemple { "doctype-first": false }.
+
+const htmlhint = window.HTMLHint && (window.HTMLHint.HTMLHint || window.HTMLHint);
+
+function lintHtml(model) {
+  if (!htmlhint || model.isDisposed() || model.getLanguageId() !== 'html') return;
+  const rules = { ...htmlhint.defaultRuleset, ...state.config.htmlRules };
+  const text = model.getValue();
+  // Un fichier vide (qu'on vient de créer) n'est pas une erreur : pas de « doctype manquant ».
+  const problems = text.trim() ? htmlhint.verify(text, rules) : [];
+  monaco.editor.setModelMarkers(model, 'htmlhint', problems.map((p) => ({
+    startLineNumber: p.line,
+    startColumn: p.col,
+    endLineNumber: p.line,
+    endColumn: p.col + Math.max(p.raw ? p.raw.length : 1, 1),
+    message: `${p.message} (${p.rule.id})`,
+    severity: p.type === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+  })));
+}
+
+function watchHtml(model) {
+  let timer;
+  model.onDidChangeContent(() => {
+    clearTimeout(timer);
+    timer = setTimeout(() => lintHtml(model), 300);
+  });
+  lintHtml(model);
 }
 
 function tabsOf(file) {
