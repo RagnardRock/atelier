@@ -337,7 +337,11 @@ body.platform-darwin #titlebar { padding-left: 80px; padding-right: 12px; }
 
 /* Colonnes d'éditeurs : chacune a ses onglets et son éditeur */
 #groups { flex: 1; display: flex; min-width: 0; }
-.group { flex: 1; min-width: 200px; display: flex; flex-direction: column; border-left: 1px solid var(--border); }
+.group { flex: 1; min-width: 200px; display: flex; flex-direction: column; border-left: 1px solid var(--border); position: relative; }
+/* Croix « fermer la colonne », seulement quand il y a plusieurs colonnes */
+.group .group-close { display: none; position: absolute; top: 6px; right: 6px; z-index: 2; }
+#groups:has(> .group + .group) .group-close { display: flex; }
+#groups:has(> .group + .group) .group .tabs { padding-right: 34px; }
 .group:first-child { border-left: none; }
 .group .tabs {
   display: flex;

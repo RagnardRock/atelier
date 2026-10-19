@@ -59,6 +59,7 @@ async function start() {
   window.atelier.onShortcut((action) => {
     if (action === 'toggleTerminal') terminalPanel.toggle();
     if (action === 'splitEditor') splitEditor();
+    if (action === 'closeColumn') mergeColumn(state.activeGroup);
     if (action === 'toggleClaude') claudePanel.toggle();
   });
 
@@ -509,7 +510,8 @@ function releaseIfUnused(file) {
 function createGroup(afterGroup = null) {
   const el = document.createElement('div');
   el.className = 'group';
-  el.innerHTML = '<nav class="tabs"></nav><div class="editor-area"><div class="editor"></div><div class="drop-target"></div></div>';
+  el.innerHTML = '<nav class="tabs"></nav><button class="group-close icon-button" title="Fermer la colonne (Ctrl+Alt+W) : ses onglets passent dans la colonne voisine"><i class="codicon codicon-close"></i></button>'
+    + '<div class="editor-area"><div class="editor"></div><div class="drop-target"></div></div>';
 
   const editor = monaco.editor.create(el.querySelector('.editor'), {
     automaticLayout: true, // se redimensionne tout seul avec la fenêtre
@@ -523,6 +525,7 @@ function createGroup(afterGroup = null) {
     if (state.activeGroup === group) $('#status-pos').textContent = `Ln ${position.lineNumber}, Col ${position.column}`;
   });
   el.addEventListener('mousedown', () => setActiveGroup(group));
+  el.querySelector('.group-close').onclick = () => mergeColumn(group);
   setupGroupDrop(group);
 
   const groupsEl = $('#groups');
@@ -561,6 +564,26 @@ function splitEditor() {
   if (tab) addTab(group, tab.file, { preview: false });
 }
 
+// Ctrl+Alt+W (ou la croix en haut à droite de la colonne) : l'inverse de diviser.
+// Les onglets de la colonne rejoignent la colonne de gauche (ou de droite pour la première),
+// rien n'est fermé ni perdu, même les fichiers non enregistrés.
+function mergeColumn(group) {
+  if (state.groups.length === 1) return; // une seule colonne : rien à fusionner
+  const i = state.groups.indexOf(group);
+  const target = state.groups[i > 0 ? i - 1 : 1];
+  const active = group.active && group.active.file;
+  // On vide l'éditeur d'abord : sinon chaque départ d'onglet y réafficherait le suivant pour rien.
+  group.active = null;
+  group.editor.setModel(null);
+  showMedia(group, null);
+  // show: false : on n'affiche pas chaque onglet au passage, seulement celui qui était actif, à la fin.
+  for (const tab of [...group.tabs]) moveTab(tab, target, target.tabs.length, { show: false }); // moveTab retire la colonne une fois vide
+  if (state.groups.includes(group)) removeGroup(group); // colonne déjà vide
+  const keep = target.tabs.find((t) => t.file === active) || target.active || target.tabs[0];
+  if (keep) activate(keep);
+  setActiveGroup(target);
+}
+
 // --- Onglets ---
 
 async function openFile(path, name, { preview = true, group = state.activeGroup } = {}) {
@@ -587,7 +610,7 @@ async function openFile(path, name, { preview = true, group = state.activeGroup 
   addTab(group, file, { preview });
 }
 
-function addTab(group, file, { preview = false, index = group.tabs.length } = {}) {
+function addTab(group, file, { preview = false, index = group.tabs.length, show = true } = {}) {
   const tab = { file, group, preview, el: document.createElement('div') };
   tab.el.className = 'tab';
   tab.el.draggable = true;
@@ -603,7 +626,7 @@ function addTab(group, file, { preview = false, index = group.tabs.length } = {}
   group.tabs.splice(index, 0, tab);
   renderTabs(group);
   refreshTab(tab);
-  activate(tab);
+  if (show) activate(tab);
   updateWelcome();
   return tab;
 }
@@ -680,7 +703,7 @@ function closeTab(tab) {
 }
 
 // Déplace un onglet (même colonne = changer l'ordre, autre colonne = l'y envoyer).
-function moveTab(tab, target, index) {
+function moveTab(tab, target, index, { show = true } = {}) {
   const source = tab.group;
   if (source === target) {
     const from = source.tabs.indexOf(tab);
@@ -692,8 +715,8 @@ function moveTab(tab, target, index) {
   // Le fichier est déjà ouvert dans la colonne cible : on y bascule simplement.
   const already = target.tabs.find((t) => t.file === tab.file);
   detachTab(tab);
-  if (already) activate(already);
-  else addTab(target, tab.file, { preview: tab.preview, index });
+  if (already) { if (show) activate(already); }
+  else addTab(target, tab.file, { preview: tab.preview, index, show });
   if (source.tabs.length === 0) removeGroup(source);
 }
 

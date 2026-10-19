@@ -60,7 +60,8 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
   - `Ctrl+Alt+D` ouvre le fichier actif dans une nouvelle colonne à droite.
   - Tu peux aussi glisser un onglet sur la zone **Nouvelle colonne**, qui apparaît au bord droit pendant le glisser.
   - Il n'y a pas de limite au nombre de colonnes. Chacune a ses onglets, et un même fichier affiché dans deux colonnes partage le même texte (une modification apparaît des deux côtés).
-  - Une colonne vide se ferme toute seule.
+  - **Pour revenir à une seule colonne** : `Ctrl+Alt+W`, ou la petite croix en haut à droite de la colonne (elle n'apparaît que s'il y a plusieurs colonnes). Les onglets de la colonne rejoignent celle de gauche : rien n'est fermé, même un fichier non enregistré.
+  - Une colonne vide se ferme aussi toute seule (dernier onglet fermé, ou glissé ailleurs).
 - **Erreurs soulignées** : en JavaScript, TypeScript, CSS, SCSS, LESS et JSON, Monaco souligne lui-même les erreurs. Pour le **HTML**, c'est [HTMLHint](https://htmlhint.com) qui vérifie le fichier à chaque pause de frappe : balise non fermée, attribut en double, `<!DOCTYPE>` manquant, guillemets… Rouge = erreur, jaune = avertissement, et le survol affiche l'explication (en anglais) avec le nom de la règle. Les règles se règlent dans `htmlRules` (voir ci-dessous).
 - **Ouvrir un fichier par son nom** : `Ctrl+P` ouvre une petite fenêtre en haut. Tape quelques lettres du nom, même pas collées (« apjs » trouve `js/app.js`), choisis avec les flèches et `Entrée`. Ajoute `:12` pour arriver directement à la ligne 12 (`app.js:12`). Sans rien taper, les fichiers déjà ouverts sont en tête de liste.
 - **Rechercher dans tout le projet** : `Ctrl+Maj+F`, ou la loupe dans la barre d'icônes. Le texte sélectionné dans l'éditeur est repris tout seul. Les résultats s'affichent par fichier, avec le numéro de ligne ; un clic ouvre le fichier à cet endroit, le texte trouvé sélectionné. Trois boutons dans le champ : respecter les majuscules (`Aa`), mot entier, expression régulière (`.*`). La recherche ignore `.git`, `node_modules`, les fichiers binaires (images, PSD…) et ceux de plus de 1 Mo, et s'arrête à 2000 résultats.
@@ -126,7 +127,7 @@ Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistr
 | `claudeModel` | Modèle utilisé par le chat (vide = celui de Claude Code) | `""`, `"opus"`, `"sonnet"`, `"haiku"` |
 | `claudePermissionMode` | `"ask"` : il demande avant chaque modification. `"acceptEdits"` : il modifie les fichiers sans demander (les commandes demandent toujours) | `"ask"` |
 | `claudeCommand` | La commande qui lance Claude Code | `"claude"`, `"C:\\Users\\toi\\AppData\\Roaming\\npm\\claude.cmd"` |
-| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "toggleClaude": "Ctrl+Shift+I", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F", "togglePreview": "Ctrl+Alt+P" }` |
+| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "closeColumn": "Ctrl+Alt+W", "toggleClaude": "Ctrl+Shift+I", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F", "togglePreview": "Ctrl+Alt+P" }` |
 
 ### Profils de terminal
 

@@ -23,6 +23,7 @@
   "shortcuts": {
     "toggleTerminal": "Ctrl+J",
     "splitEditor": "Ctrl+Alt+D",
+    "closeColumn": "Ctrl+Alt+W",
     "toggleClaude": "Ctrl+Shift+I",
     "quickOpen": "Ctrl+P",
     "searchProject": "Ctrl+Shift+F",
