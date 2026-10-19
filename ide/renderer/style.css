@@ -1400,3 +1400,9 @@ body.glass .np-card { border-color: var(--glass-border); }
 .script .run .codicon { color: var(--success); }
 .script .stop .codicon { color: var(--error); }
 .script.running .state { color: var(--accent); animation: np-spin 1.2s linear infinite; }
+
+/* ---------- Palette de commandes (commands.js, dans la fenêtre Ctrl+P) ---------- */
+.quick-item.command .category { flex-shrink: 0; min-width: 78px; color: var(--muted); font-size: 12px; }
+.quick-item.command .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.quick-item.command .keys { display: flex; gap: 3px; flex-shrink: 0; }
+.quick-item.command kbd { padding: 1px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--hover); color: var(--text); font: 11px var(--ui-font); }

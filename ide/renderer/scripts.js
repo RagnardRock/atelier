@@ -93,5 +93,5 @@ const scriptsPanel = (() => {
   document.querySelector('#scripts-refresh').onclick = refresh;
   render();
 
-  return { refresh, run };
+  return { refresh, run, packages: () => packages };
 })();

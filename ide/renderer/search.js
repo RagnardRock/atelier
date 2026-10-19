@@ -1,6 +1,7 @@
 // Recherche rapide, deux outils :
 // - Ctrl+P : une fenêtre en haut de l'écran pour ouvrir un fichier en tapant quelques lettres
 //   de son nom (« apjs » trouve js/app.js). « app.js:42 » ouvre le fichier à la ligne 42.
+//   Commencer par « > » passe à la palette de commandes (Ctrl+Maj+P, voir commands.js).
 // - Ctrl+Maj+F : la vue Rechercher de la barre latérale cherche un texte dans tous les fichiers
 //   du projet. Un clic sur un résultat ouvre le fichier à cet endroit.
 // La liste des fichiers et la recherche elle-même sont faites par main.js (voir ../search.js).
@@ -67,7 +68,31 @@ const quickOpen = (() => {
     return { query: m[1].replace(/\\/g, '/').replace(/\s+/g, '').toLowerCase(), line: m[2] ? Number(m[2]) : null };
   }
 
+  const isCommands = () => input.value.startsWith('>');
+
+  // « > » : la palette de commandes. Même recherche floue, sur le nom des commandes.
+  function renderCommands() {
+    const query = input.value.slice(1).trim().toLowerCase();
+    const commands = commandPalette.list();
+    shown = query
+      ? commands.map((c) => { const m = fuzzy(query, c.label); return m && { ...c, ...m }; }).filter(Boolean).sort((a, b) => b.score - a.score)
+      : commands.map((c) => ({ ...c, positions: [] }));
+    selected = Math.min(selected, Math.max(shown.length - 1, 0));
+    list.innerHTML = '';
+    if (!shown.length) { list.innerHTML = '<p class="hint">Aucune commande ne correspond.</p>'; return; }
+    shown.forEach((c, i) => {
+      const row = document.createElement('div');
+      row.className = `quick-item command${i === selected ? ' selected' : ''}`;
+      row.innerHTML = `<span class="category">${escapeHtml(c.category)}</span><span class="name">${highlight(c.label, c.positions)}</span>${c.keys ? `<span class="keys">${c.keys.split('+').map((k) => `<kbd>${escapeHtml(k)}</kbd>`).join('')}</span>` : ''}`;
+      row.onmousemove = () => { if (selected !== i) { selected = i; mark(); } };
+      row.onclick = () => choose(i);
+      list.appendChild(row);
+    });
+  }
+
   function render() {
+    input.closest('.quick-card').classList.toggle('commands', isCommands());
+    if (isCommands()) return renderCommands();
     const { query } = parse(input.value);
     if (!query) {
       // Rien de tapé : les fichiers déjà ouverts d'abord, puis les autres.
@@ -115,6 +140,12 @@ const quickOpen = (() => {
   }
 
   async function choose(i = selected) {
+    if (isCommands()) {
+      const command = shown[i];
+      if (!command) return;
+      close();
+      return commandPalette.execute(command);
+    }
     const file = shown[i];
     if (!file) return;
     const { line } = parse(input.value);
@@ -122,12 +153,15 @@ const quickOpen = (() => {
     await openAt(file.path, line, 1, 0, { preview: false });
   }
 
-  async function open() {
-    if (!state.root) return notify.info("Ouvre d'abord un dossier.");
+  // prefix « > » : ouvre directement la palette de commandes.
+  async function open(prefix = '') {
+    if (!state.root && !prefix) return notify.info("Ouvre d'abord un dossier.");
     overlay.hidden = false;
-    input.value = '';
+    input.value = prefix;
     selected = 0;
-    if (filesRoot !== state.root) { files = []; list.innerHTML = '<p class="hint">Lecture du projet…</p>'; } else render();
+    if (filesRoot !== state.root) files = [];
+    if (filesRoot !== state.root && !isCommands()) list.innerHTML = '<p class="hint">Lecture du projet…</p>'; else render();
+    if (!state.root) return input.focus(); // la palette de commandes marche aussi sans dossier ouvert
     input.focus();
     // La liste est relue à chaque ouverture (des fichiers ont pu être créés entre-temps).
     try {

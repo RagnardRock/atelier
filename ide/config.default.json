@@ -27,6 +27,7 @@
     "newProject": "Ctrl+Alt+N",
     "toggleClaude": "Ctrl+Shift+I",
     "quickOpen": "Ctrl+P",
+    "commandPalette": "Ctrl+Shift+P",
     "searchProject": "Ctrl+Shift+F",
     "replaceProject": "Ctrl+Shift+H",
     "togglePreview": "Ctrl+Alt+P"
