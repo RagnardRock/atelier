@@ -8,6 +8,7 @@
   "tabSize": 2,
   "wordWrap": "on",
   "minimap": true,
+  "emmet": true,
   "reopenLastFolder": true,
   "claudeCommand": "claude",
   "claudeModel": "",

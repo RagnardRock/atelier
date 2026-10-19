@@ -22,6 +22,7 @@ const settings = (() => {
       { key: 'tabSize', label: 'Largeur des tabulations', type: 'segmented', options: [[2, '2'], [4, '4'], [8, '8']] },
       { key: 'wordWrap', label: 'Retour à la ligne automatique', type: 'toggle', on: 'on', off: 'off' },
       { key: 'minimap', label: 'Mini-carte du fichier', type: 'toggle' },
+      { key: 'emmet', label: 'Emmet', type: 'toggle', help: 'En HTML et CSS, une abréviation comme ul>li*3 ou m10 s\'écrit en entier avec Tab.' },
     ] },
     { id: 'terminal', title: 'Terminal', icon: 'terminal', fields: [
       { key: 'terminalFontSize', label: 'Taille du texte', type: 'range', min: 10, max: 24, unit: 'px' },
