@@ -525,7 +525,7 @@ handle('app:relaunch', async () => {
 handle('window:blurSupported', async () => blurSupported());
 
 // Chat avec Claude (voir claude.js).
-claude.register({ handle, getRoot: () => rootFolder, readConfig, log });
+claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: app.getPath('userData') });
 search.register({ handle, getRoot: () => rootFolder });
 
 function createWindow(config) {

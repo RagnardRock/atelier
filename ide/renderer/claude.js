@@ -23,6 +23,18 @@ const claudePanel = (() => {
   let includeContext = true; // le contexte de l'éditeur part avec le prochain message
   const tools = new Map();   // id d'outil -> { name, input, row }
 
+  // Conversation affichée : elle est enregistrée dans l'historique (main.js › claude.js) pour
+  // pouvoir y revenir. "items" est ce que le panneau affiche, dans l'ordre.
+  const newConversation = () => ({ id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, title: '', sessionId: null, root: state.root, items: [] });
+  let conv = newConversation();
+  let replaying = false;     // pendant qu'on réaffiche une ancienne conversation, on n'enregistre rien
+  const record = (item) => { if (!replaying) conv.items.push(item); return item; };
+  function saveConversation() {
+    if (!conv.items.length || !conv.root || conv.root !== state.root) return;
+    window.atelier.claudeHistorySave({ id: conv.id, title: conv.title, sessionId: conv.sessionId, items: conv.items })
+      .catch((err) => window.atelier.log('ERREUR', `Historique Claude : ${err.message}`));
+  }
+
   // Outils qui écrivent dans des fichiers : après eux, on recharge le fichier dans l'éditeur.
   const WRITE_TOOLS = ['Edit', 'MultiEdit', 'Write', 'NotebookEdit'];
 
@@ -110,9 +122,13 @@ const claudePanel = (() => {
     const text = input.value.trim();
     if (!text || busy) return;
     if (!state.root) return notify.info("Ouvre d'abord un dossier : Claude travaille dans le projet ouvert.");
+    // Le projet a changé depuis le début de cette conversation : on en commence une nouvelle.
+    if (conv.root !== state.root) await startNew();
     list.querySelector('.claude-welcome')?.remove();
     const ctx = includeContext ? editorContext() : null;
+    if (!conv.title) conv.title = text.replace(/\s+/g, ' ').slice(0, 80);
     addUserBubble(text, ctx);
+    saveConversation();
     input.value = '';
     autoGrow();
     setBusy(true);
@@ -138,16 +154,89 @@ const claudePanel = (() => {
 
   stopButton.onclick = () => window.atelier.claudeInterrupt();
 
-  document.querySelector('#claude-new').onclick = async () => {
-    await window.atelier.claudeReset();
+  function clearView() {
+    endText();
     list.innerHTML = '';
     tools.clear();
-    endText();
     setBusy(false);
+  }
+
+  // "+" : nouvelle conversation. L'ancienne reste dans l'historique.
+  async function startNew() {
+    saveConversation();
+    await window.atelier.claudeReset();
+    clearView();
+    conv = newConversation();
     document.querySelector('#claude-model').textContent = '';
     showWelcome();
-    input.focus();
+  }
+  document.querySelector('#claude-new').onclick = async () => { await startNew(); input.focus(); };
+
+  // --- Historique des conversations ---
+
+  const historyButton = document.querySelector('#claude-history');
+  const historyList = document.querySelector('#claude-history-list');
+
+  function when(ms) {
+    const minutes = Math.round((Date.now() - ms) / 60000);
+    if (minutes < 1) return "à l'instant";
+    if (minutes < 60) return `il y a ${minutes} min`;
+    const d = new Date(ms);
+    const today = new Date();
+    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === today.toDateString()) return `aujourd'hui, ${time}`;
+    return `${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}, ${time}`;
+  }
+
+  async function showHistory() {
+    const conversations = state.root ? await window.atelier.claudeHistory() : [];
+    historyList.innerHTML = '<div class="history-title">Conversations de ce projet</div>';
+    if (!conversations.length) historyList.insertAdjacentHTML('beforeend', '<p class="hint">Aucune conversation pour l\'instant.</p>');
+    for (const c of conversations) {
+      const row = document.createElement('div');
+      row.className = `history-item${c.id === conv.id ? ' current' : ''}`;
+      row.innerHTML = '<div class="history-text"><span class="history-name"></span><span class="history-date"></span></div><button class="icon-button" title="Supprimer cette conversation"><i class="codicon codicon-trash"></i></button>';
+      row.querySelector('.history-name').textContent = c.title || 'Sans titre';
+      row.querySelector('.history-date').textContent = when(c.updatedAt);
+      row.onclick = () => { historyList.hidden = true; openConversation(c.id); };
+      row.querySelector('button').onclick = async (e) => {
+        e.stopPropagation();
+        await window.atelier.claudeHistoryDelete(c.id);
+        if (c.id === conv.id) conv.items = []; // ne pas la réenregistrer
+        showHistory();
+      };
+      historyList.appendChild(row);
+    }
+    historyList.hidden = false;
+  }
+  historyButton.onclick = (e) => {
+    e.stopPropagation();
+    if (historyList.hidden) showHistory(); else historyList.hidden = true;
   };
+  document.addEventListener('click', (e) => { if (!historyList.contains(e.target)) historyList.hidden = true; });
+
+  // Réaffiche une ancienne conversation, et la reprend : ton prochain message relance Claude Code
+  // sur cette session (--resume), il se souvient donc de tout ce qui a été dit.
+  async function openConversation(id) {
+    if (id === conv.id) return;
+    const saved = await window.atelier.claudeHistoryGet(id);
+    if (!saved) return notify.error('Cette conversation est introuvable.');
+    saveConversation();
+    await window.atelier.claudeResume(saved.sessionId);
+    clearView();
+    conv = { id: saved.id, title: saved.title, sessionId: saved.sessionId, root: state.root, items: saved.items || [] };
+    document.querySelector('#claude-model').textContent = '';
+    replaying = true;
+    for (const item of conv.items) {
+      if (item.t === 'user') addUserBubble(item.text, item.meta ? { label: item.meta } : null);
+      if (item.t === 'assistant') { appendText(item.text); endText(); }
+      if (item.t === 'tool') addToolRow(item.icon, item.label, item.state);
+    }
+    replaying = false;
+    if (!saved.sessionId) addNotice('info', "Claude Code n'avait pas encore répondu dans cette conversation : elle repart de zéro.");
+    list.scrollTop = list.scrollHeight;
+    input.focus();
+  }
   document.querySelector('#claude-close').onclick = () => toggle(false);
   document.querySelector('#btn-claude').onclick = () => toggle();
 
@@ -166,12 +255,14 @@ const claudePanel = (() => {
     body.className = 'bubble';
     body.textContent = text;
     el.appendChild(body);
-    if (ctx) {
+    const metaText = ctx && (ctx.label || (ctx.selection ? `${ctx.path} · lignes ${ctx.selection.start}-${ctx.selection.end}` : ctx.path));
+    if (metaText) {
       const meta = document.createElement('div');
       meta.className = 'msg-meta';
-      meta.textContent = ctx.selection ? `${ctx.path} · lignes ${ctx.selection.start}-${ctx.selection.end}` : ctx.path;
+      meta.textContent = metaText;
       el.appendChild(meta);
     }
+    record({ t: 'user', text, meta: metaText || null });
     list.appendChild(el);
     list.scrollTop = list.scrollHeight;
   }
@@ -212,6 +303,7 @@ const claudePanel = (() => {
     const bubble = textBubble;
     bubble.firstChild.innerHTML = renderMarkdown(textRaw);
     textBubble = null;
+    record({ t: 'assistant', text: textRaw });
     decorateCode(bubble);
   }
 
@@ -258,16 +350,23 @@ const claudePanel = (() => {
     }
   }
 
-  function addTool({ id, name, input: inp }) {
-    endText();
-    const [icon, label] = describeTool(name, inp);
+  const STATE_ICONS = { running: 'loading codicon-modifier-spin', done: 'check', failed: 'close' };
+  function addToolRow(icon, label, rowState = 'running') {
     const row = document.createElement('div');
-    row.className = 'claude-tool running';
-    row.innerHTML = `<i class="codicon codicon-${icon}"></i><span class="label"></span><i class="codicon state codicon-loading codicon-modifier-spin"></i>`;
+    row.className = `claude-tool ${rowState}`;
+    row.innerHTML = `<i class="codicon codicon-${icon}"></i><span class="label"></span><i class="codicon state codicon-${STATE_ICONS[rowState] || 'circle-slash'}"></i>`;
     row.querySelector('.label').textContent = label;
     row.title = label;
     list.appendChild(row);
-    tools.set(id, { name, input: inp, row });
+    return row;
+  }
+
+  function addTool({ id, name, input: inp }) {
+    endText();
+    const [icon, label] = describeTool(name, inp);
+    const row = addToolRow(icon, label);
+    const item = record({ t: 'tool', icon, label, state: 'running' });
+    tools.set(id, { name, input: inp, row, item });
     setBusy(true, `${label.length > 40 ? `${label.slice(0, 40)}…` : label}`);
     scrollDown();
   }
@@ -278,6 +377,7 @@ const claudePanel = (() => {
     tool.row.classList.remove('running');
     tool.row.classList.add(isError ? 'failed' : 'done');
     tool.row.querySelector('.state').className = `codicon state codicon-${isError ? 'close' : 'check'}`;
+    tool.item.state = isError ? 'failed' : 'done';
     setBusy(true);
     if (!isError && WRITE_TOOLS.includes(tool.name)) {
       const path = tool.input.file_path || tool.input.notebook_path;
@@ -374,6 +474,7 @@ const claudePanel = (() => {
     switch (e.kind) {
       case 'init':
         document.querySelector('#claude-model').textContent = e.model ? `· ${e.model}` : '';
+        conv.sessionId = e.sessionId;
         break;
       case 'text':
         appendText(e.text);
@@ -391,6 +492,12 @@ const claudePanel = (() => {
       case 'result': {
         endText();
         setBusy(false);
+        // Un outil resté "en cours" (conversation interrompue) n'aura plus de réponse.
+        for (const item of conv.items) if (item.t === 'tool' && item.state === 'running') item.state = 'stopped';
+        for (const t of tools.values()) {
+          if (t.row.classList.contains('running')) { t.row.className = 'claude-tool stopped'; t.row.querySelector('.state').className = 'codicon state codicon-circle-slash'; }
+        }
+        saveConversation();
         if (e.isError) {
           const text = e.text || '';
           const hint = /log ?in|auth|credential/i.test(text) ? '<br>Lance <code>claude</code> une fois dans le terminal pour te connecter.' : '';

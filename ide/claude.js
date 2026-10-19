@@ -16,6 +16,7 @@
 const { spawn, execFile } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
+const fsp = require('node:fs/promises');
 
 let proc = null;          // processus Claude Code en cours
 let procCwd = null;       // dossier dans lequel il a été lancé
@@ -196,7 +197,53 @@ function stop() {
   }
 }
 
-function register({ handle, getRoot, readConfig, log }) {
+// --- Historique des conversations ---
+// Chaque conversation est gardée dans claude-conversations.json (à côté de la config) : son
+// titre, son dossier, l'identifiant de session de Claude Code (pour la reprendre avec --resume)
+// et ce que le panneau affichait (bulles, outils), pour la réafficher telle quelle.
+const MAX_CONVERSATIONS = 100;
+let historyFile = null;
+
+async function readHistory() {
+  try {
+    return JSON.parse(await fsp.readFile(historyFile, 'utf8'));
+  } catch {
+    return []; // pas encore de fichier, ou fichier abîmé : on repart d'une liste vide
+  }
+}
+
+async function writeHistory(list) {
+  await fsp.writeFile(historyFile, JSON.stringify(list.slice(0, MAX_CONVERSATIONS)), 'utf8');
+}
+
+function register({ handle, getRoot, readConfig, log, dataDir }) {
+  historyFile = path.join(dataDir, 'claude-conversations.json');
+
+  // Les conversations du dossier ouvert, la plus récente d'abord (sans leur contenu).
+  handle('claude:history', async () => {
+    const root = getRoot();
+    return (await readHistory())
+      .filter((c) => c.cwd === root)
+      .map(({ id, title, updatedAt }) => ({ id, title, updatedAt }));
+  });
+  handle('claude:history:get', async (_event, id) => (await readHistory()).find((c) => c.id === id) || null);
+  handle('claude:history:save', async (_event, { id, title, sessionId, items }) => {
+    const root = getRoot();
+    if (!root || typeof id !== 'string') return;
+    const list = (await readHistory()).filter((c) => c.id !== id);
+    list.unshift({ id, title: String(title).slice(0, 120), cwd: root, sessionId, items, updatedAt: Date.now() });
+    await writeHistory(list);
+  });
+  handle('claude:history:delete', async (_event, id) => {
+    await writeHistory((await readHistory()).filter((c) => c.id !== id));
+  });
+  // Reprendre une ancienne conversation : Claude Code est arrêté, et le prochain message le
+  // relance avec --resume pour qu'il retrouve tout ce qui a été dit.
+  handle('claude:resume', async (_event, sessionId) => {
+    stop();
+    lastSession = sessionId && /^[\w-]+$/.test(sessionId) ? { id: sessionId, cwd: getRoot() } : null;
+  });
+
   handle('claude:send', async (event, text) => {
     const root = getRoot();
     if (!root) throw new Error("Ouvre d'abord un dossier : Claude travaille dans le projet ouvert.");

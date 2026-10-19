@@ -157,10 +157,12 @@
       <div class="view-header">
         <span class="view-title"><i class="codicon codicon-sparkle"></i>Claude <span id="claude-model"></span></span>
         <span class="view-actions">
+          <button id="claude-history" class="icon-button" title="Conversations précédentes"><i class="codicon codicon-history"></i></button>
           <button id="claude-new" class="icon-button" title="Nouvelle conversation"><i class="codicon codicon-add"></i></button>
           <button id="claude-close" class="icon-button" title="Masquer (Ctrl+Shift+I)"><i class="codicon codicon-chevron-right"></i></button>
         </span>
       </div>
+      <div id="claude-history-list" hidden></div>
       <div id="claude-messages"></div>
       <form id="claude-form">
         <div id="claude-context"></div>
