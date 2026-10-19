@@ -34,6 +34,9 @@ require.config({ paths: { vs: `${MONACO_BASE}vs` } });
 require(['vs/nls.messages.fr'], () => require(['vs/editor/editor.main'], start));
 
 async function start() {
+  // Classe de plateforme : sur macOS, la barre de titre laisse la place aux boutons à gauche.
+  document.body.classList.add(`platform-${window.atelier.platform}`);
+  defineThemes();
   state.configPath = await window.atelier.getConfigPath();
   await loadConfig();
   createGroup();
@@ -58,6 +61,12 @@ async function start() {
   });
 
   $('#btn-open').onclick = openFolder;
+  $('#welcome-open').onclick = openFolder;
+  $('#btn-split').onclick = splitEditor;
+  $('#menu-terminal').onclick = () => {
+    terminalPanel.create($('#term-profile').value, state.selectedDir || state.root)
+      .catch((err) => notify.error(err.message));
+  };
   $('#btn-new-file').onclick = () => startCreate('file');
   $('#btn-new-folder').onclick = () => startCreate('folder');
   $('#btn-refresh').onclick = () => state.root && refreshFolder(state.root);
@@ -72,6 +81,36 @@ async function start() {
   };
   $('#btn-config').onclick = () => openFile(state.configPath, 'config.json', { preview: false });
   setupSplitDropzone();
+
+  // Dossiers récents sur l'écran d'accueil, et réouverture du dernier dossier.
+  const recents = await window.atelier.recentFolders().catch(() => []);
+  renderRecents(recents);
+  if (state.config.reopenLastFolder && recents.length > 0) {
+    await openRecent(recents[0]);
+  }
+}
+
+// Thèmes de l'éditeur : ceux de Monaco, avec le fond et le curseur accordés à l'interface.
+function defineThemes() {
+  const accent = (state.config && state.config.accentColor) || '#e0a526';
+  monaco.editor.defineTheme('atelier-dark', {
+    base: 'vs-dark', inherit: true, rules: [],
+    colors: {
+      'editor.background': '#1f1f1f',
+      'editorCursor.foreground': accent,
+      'editor.lineHighlightBackground': '#2a2a2a',
+      'editorLineNumber.activeForeground': '#cccccc',
+      'editorGutter.background': '#1f1f1f',
+    },
+  });
+  monaco.editor.defineTheme('atelier-light', {
+    base: 'vs', inherit: true, rules: [],
+    colors: {
+      'editor.background': '#ffffff',
+      'editorCursor.foreground': accent,
+      'editor.lineHighlightBackground': '#f5f5f5',
+    },
+  });
 }
 
 // --- Config ---
@@ -96,8 +135,12 @@ function editorOptions() {
 
 function applyConfig() {
   const c = state.config;
-  monaco.editor.setTheme(c.theme);
-  document.body.classList.toggle('light', c.theme === 'vs');
+  const light = c.theme === 'vs';
+  defineThemes(); // la couleur d'accent a pu changer
+  // "vs-dark" et "vs" deviennent nos versions ; tout autre thème Monaco ("hc-black"…) est gardé tel quel.
+  monaco.editor.setTheme(c.theme === 'vs-dark' ? 'atelier-dark' : light ? 'atelier-light' : c.theme);
+  document.body.classList.toggle('light', light);
+  window.atelier.setWindowTheme(light ? 'light' : 'dark'); // couleurs des boutons de la fenêtre
   document.documentElement.style.setProperty('--accent', c.accentColor);
   for (const group of state.groups) group.editor.updateOptions(editorOptions());
   for (const file of state.files.values()) lintHtml(file.model); // les règles HTML ont pu changer
@@ -114,13 +157,52 @@ state.selectedDir = null;
 
 async function openFolder() {
   const folder = await window.atelier.openFolder().catch((err) => notify.error(cleanError(err)));
-  if (!folder) return;
+  if (folder) await showRoot(folder);
+}
+
+async function openRecent(folder) {
+  const opened = await window.atelier.openRecentFolder(folder).catch((err) => notify.error(cleanError(err)));
+  if (opened) await showRoot(opened);
+}
+
+// Nom du dossier sans le chemin : "D:\Projets\mon-site" -> "mon-site".
+const baseName = (p) => p.split(/[\\/]/).filter(Boolean).pop() || p;
+
+// Affiche le dossier ouvert (choisi dans la boîte de dialogue ou dans les récents).
+async function showRoot(folder) {
   state.root = folder;
   state.expanded.clear();
   state.selectedDir = folder;
-  $('#folder-name').textContent = folder;
+  $('#folder-name').textContent = baseName(folder);
+  $('#folder-name').title = folder;
+  $('#tree-title').textContent = baseName(folder);
+  $('#tree-title').title = folder;
+  $('#status-folder span').textContent = baseName(folder);
+  $('#status-folder').title = folder;
   $('#tree-toolbar').hidden = false;
   await refreshFolder(folder);
+  renderRecents(await window.atelier.recentFolders().catch(() => []));
+}
+
+// Liste des dossiers récents sur l'écran d'accueil (clic = rouvrir).
+function renderRecents(recents) {
+  const el = $('#welcome-recents');
+  el.innerHTML = '';
+  const others = recents.filter((f) => f !== state.root).slice(0, 5);
+  if (others.length === 0) return;
+  const title = document.createElement('h2');
+  title.textContent = 'Récents';
+  el.appendChild(title);
+  for (const folder of others) {
+    const button = document.createElement('button');
+    button.className = 'recent';
+    button.title = folder;
+    button.innerHTML = '<i class="codicon codicon-folder"></i><span class="name"></span><span class="path"></span>';
+    button.querySelector('.name').textContent = baseName(folder);
+    button.querySelector('.path').textContent = folder;
+    button.onclick = () => openRecent(folder);
+    el.appendChild(button);
+  }
 }
 
 // Conteneur HTML qui affiche le contenu d'un dossier (la racine, ou le bloc sous une ligne de dossier).
@@ -153,8 +235,12 @@ async function renderFolder(dir, container, depth) {
     row.style.paddingLeft = `${8 + depth * 14}px`;
     row.dataset.path = entry.path;
     row.dataset.dir = entry.isDir ? entry.path : dir; // dossier où créer si on part de cette ligne
-    row.innerHTML = `<span class="chevron">${entry.isDir ? '▸' : ''}</span><span></span>`;
-    row.lastChild.textContent = entry.name;
+    row.innerHTML = '<i class="chevron codicon"></i><span class="label"></span>';
+    const type = entry.isDir ? { icon: 'folder', color: 'var(--folder)' } : fileIcon(entry.name);
+    const icon = iconElement(type.icon, type.color);
+    row.querySelector('.label').before(icon);
+    row.querySelector('.label').textContent = entry.name;
+    if (entry.isDir) row.firstChild.classList.add('codicon-chevron-right');
     row.oncontextmenu = (e) => { e.preventDefault(); selectDir(row.dataset.dir); showTreeMenu(e.clientX, e.clientY); };
     container.appendChild(row);
 
@@ -168,7 +254,10 @@ async function renderFolder(dir, container, depth) {
       const toggle = async (open) => {
         if (open && !loaded) { await renderFolder(entry.path, children, depth + 1); loaded = true; }
         children.classList.toggle('open', open);
-        row.firstChild.textContent = open ? '▾' : '▸';
+        row.firstChild.classList.toggle('codicon-chevron-right', !open);
+        row.firstChild.classList.toggle('codicon-chevron-down', open);
+        icon.classList.toggle('codicon-folder', !open);
+        icon.classList.toggle('codicon-folder-opened', open);
         if (open) state.expanded.add(entry.path); else state.expanded.delete(entry.path);
       };
       row.onclick = () => { selectDir(entry.path); toggle(!children.classList.contains('open')); };
@@ -208,7 +297,7 @@ async function startCreate(kind, dir = state.selectedDir || state.root) {
   const row = document.createElement('div');
   row.className = 'node new-entry';
   row.style.paddingLeft = `${8 + depth * 14}px`;
-  row.innerHTML = `<span class="chevron">${kind === 'folder' ? '▸' : ''}</span><input spellcheck="false">`;
+  row.innerHTML = `<i class="chevron codicon"></i><i class="codicon codicon-${kind === 'folder' ? 'folder' : 'file'} file-icon"></i><input spellcheck="false">`;
   const input = row.querySelector('input');
   input.placeholder = kind === 'folder' ? 'nom-du-dossier' : 'nom-du-fichier.html';
   container.prepend(row);
@@ -421,7 +510,7 @@ function addTab(group, file, { preview = false, index = group.tabs.length } = {}
   const tab = { file, group, preview, el: document.createElement('div') };
   tab.el.className = 'tab';
   tab.el.draggable = true;
-  tab.el.innerHTML = '<span class="name"></span><span class="close">×</span>';
+  tab.el.innerHTML = '<i class="codicon file-icon"></i><span class="name"></span><span class="close" title="Fermer (Ctrl+W)"><i class="codicon codicon-close"></i></span>';
   tab.el.onclick = () => activate(tab);
   tab.el.ondblclick = () => pin(tab);
   tab.el.querySelector('.close').onclick = (e) => { e.stopPropagation(); closeTab(tab); };
@@ -446,7 +535,11 @@ function refreshTab(tab) {
   tab.el.querySelector('.name').textContent = tab.file.name;
   tab.el.title = tab.file.path;
   tab.el.classList.toggle('preview', tab.preview);
-  tab.el.querySelector('.close').textContent = isDirty(tab.file) ? '●' : '×';
+  tab.el.classList.toggle('dirty', isDirty(tab.file)); // le style affiche ● à la place de la croix
+  const type = fileIcon(tab.file.name);
+  const icon = tab.el.querySelector('.file-icon');
+  icon.className = `codicon codicon-${type.icon} file-icon`;
+  icon.style.color = type.color;
 }
 
 function pin(tab) {

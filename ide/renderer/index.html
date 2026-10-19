@@ -7,42 +7,53 @@
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' data: blob:">
   <title>Atelier</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <!-- Codicons : les icônes de VS Code, sous forme de police (classe "codicon codicon-nom") -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header id="topbar">
-    <span id="brand">Atelier</span>
-    <button id="btn-open" title="Ouvrir un dossier (Ctrl+O)">Ouvrir un dossier</button>
-    <button id="btn-config" title="Modifier la configuration">Config</button>
-    <button id="btn-terminal" title="Afficher / masquer le terminal (Ctrl+J)">Terminal</button>
-    <button id="btn-update" title="Chercher et installer la dernière version d'Atelier">Mise à jour</button>
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><span class="logo">A</span>Atelier</span>
+    <div class="title-actions">
+      <button id="btn-open" class="icon-button" title="Ouvrir un dossier (Ctrl+O)"><i class="codicon codicon-folder-opened"></i></button>
+      <button id="btn-split" class="icon-button" title="Diviser l'éditeur (Ctrl+Alt+D)"><i class="codicon codicon-split-horizontal"></i></button>
+      <button id="btn-terminal" class="icon-button" title="Afficher / masquer le terminal (Ctrl+J)"><i class="codicon codicon-terminal"></i></button>
+    </div>
     <span id="folder-name"></span>
   </header>
 
   <main id="layout">
+    <!-- Barre d'icônes verticale : choisir la vue de la barre latérale, et les réglages en bas -->
+    <nav id="activitybar">
+      <button data-view="tree" class="active" title="Fichiers"><i class="codicon codicon-files"></i></button>
+      <button data-view="servers" title="Serveurs"><i class="codicon codicon-server"></i></button>
+      <span class="spacer"></span>
+      <button id="btn-update" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
+      <button id="btn-config" title="Modifier la configuration"><i class="codicon codicon-gear"></i></button>
+    </nav>
+
     <aside id="sidebar">
-      <!-- Deux vues dans la barre latérale : fichiers du dossier ouvert, ou serveurs favoris -->
-      <div id="side-tabs">
-        <button data-view="tree" class="active">Fichiers</button>
-        <button data-view="servers">Serveurs</button>
-      </div>
       <div id="tree" class="side-view">
-        <div id="tree-toolbar" hidden>
-          <span>Explorateur</span>
-          <button id="btn-new-file" title="Nouveau fichier dans le dossier sélectionné">+ Fichier</button>
-          <button id="btn-new-folder" title="Nouveau dossier dans le dossier sélectionné">+ Dossier</button>
-          <button id="btn-refresh" title="Relire le dossier sur le disque">⟳</button>
+        <div class="view-header">
+          <span class="view-title" id="tree-title">Explorateur</span>
+          <span id="tree-toolbar" class="view-actions" hidden>
+            <button id="btn-new-file" class="icon-button" title="Nouveau fichier dans le dossier sélectionné"><i class="codicon codicon-new-file"></i></button>
+            <button id="btn-new-folder" class="icon-button" title="Nouveau dossier dans le dossier sélectionné"><i class="codicon codicon-new-folder"></i></button>
+            <button id="btn-refresh" class="icon-button" title="Relire le dossier sur le disque"><i class="codicon codicon-refresh"></i></button>
+          </span>
         </div>
         <div id="tree-root"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
       </div>
-      <!-- Menu clic droit de l'arborescence -->
-      <div id="tree-menu" hidden>
-        <button id="menu-new-file">Nouveau fichier</button>
-        <button id="menu-new-folder">Nouveau dossier</button>
-      </div>
+
       <div id="servers" class="side-view" hidden>
+        <div class="view-header">
+          <span class="view-title">Serveurs</span>
+          <span class="view-actions">
+            <button id="server-add" class="icon-button" title="Ajouter un serveur"><i class="codicon codicon-add"></i></button>
+          </span>
+        </div>
         <div id="server-list"></div>
-        <button id="server-add" class="side-button">+ Ajouter un serveur</button>
         <form id="server-form" hidden>
           <h3 id="server-form-title">Nouveau serveur</h3>
           <label>Nom <input name="name" placeholder="Prod" required></label>
@@ -50,7 +61,7 @@
           <label>Utilisateur <input name="user" placeholder="root"></label>
           <label>Port <input name="port" type="number" min="1" max="65535" value="22"></label>
           <label>Clé SSH (facultatif)
-            <span class="key-row"><input name="keyFile" placeholder="C:\Users\moi\.ssh\id_ed25519"><button type="button" id="server-key-pick" title="Parcourir">…</button></span>
+            <span class="key-row"><input name="keyFile" placeholder="C:\Users\moi\.ssh\id_ed25519"><button type="button" id="server-key-pick" title="Parcourir"><i class="codicon codicon-folder"></i></button></span>
           </label>
           <p class="form-error" id="server-form-error"></p>
           <div class="form-actions">
@@ -60,24 +71,45 @@
         </form>
       </div>
     </aside>
+
+    <!-- Menu clic droit de l'arborescence -->
+    <div id="tree-menu" class="context-menu" hidden>
+      <button id="menu-new-file"><i class="codicon codicon-new-file"></i>Nouveau fichier</button>
+      <button id="menu-new-folder"><i class="codicon codicon-new-folder"></i>Nouveau dossier</button>
+      <hr>
+      <button id="menu-terminal"><i class="codicon codicon-terminal"></i>Ouvrir un terminal ici</button>
+    </div>
+
     <section id="workspace">
       <!-- Colonnes d'éditeurs côte à côte (créées par app.js) -->
       <div id="editor-area">
         <div id="groups"></div>
-        <div id="split-dropzone">Nouvelle colonne</div>
+        <div id="split-dropzone"><i class="codicon codicon-split-horizontal"></i>Nouvelle colonne</div>
         <div id="welcome">
-          <h1>Atelier</h1>
-          <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet</p>
-          <p><kbd>Ctrl</kbd>+<kbd>J</kbd> terminal · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> diviser l'écran · clic molette : ouvrir / fermer un onglet</p>
+          <div class="welcome-card">
+            <div class="welcome-logo">A</div>
+            <h1>Atelier</h1>
+            <button id="welcome-open" class="primary-button"><i class="codicon codicon-folder-opened"></i>Ouvrir un dossier</button>
+            <div id="welcome-recents"></div>
+            <dl class="shortcuts">
+              <dt><kbd>Ctrl</kbd><kbd>O</kbd></dt><dd>Ouvrir un dossier</dd>
+              <dt><kbd>Ctrl</kbd><kbd>S</kbd></dt><dd>Enregistrer</dd>
+              <dt><kbd>Ctrl</kbd><kbd>J</kbd></dt><dd>Terminal</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></dt><dd>Diviser l'écran</dd>
+              <dt><kbd>Molette</kbd></dt><dd>Ouvrir / fermer un onglet</dd>
+            </dl>
+          </div>
         </div>
       </div>
       <!-- Panneau terminal : poignée pour le redimensionner, onglets, puis les terminaux -->
       <div id="panel-resizer" hidden></div>
       <section id="terminal-panel" hidden>
         <div id="term-bar">
+          <span class="view-title">Terminal</span>
           <div id="term-tabs"></div>
           <select id="term-profile" title="Profil du nouveau terminal"></select>
-          <button id="term-new" title="Nouveau terminal">+</button>
+          <button id="term-new" class="icon-button" title="Nouveau terminal (dans le dossier sélectionné)"><i class="codicon codicon-add"></i></button>
+          <button id="term-hide" class="icon-button" title="Masquer le panneau (Ctrl+J)"><i class="codicon codicon-chevron-down"></i></button>
         </div>
         <div id="term-views"></div>
       </section>
@@ -85,6 +117,7 @@
   </main>
 
   <footer id="statusbar">
+    <span id="status-folder"><i class="codicon codicon-folder"></i><span></span></span>
     <span id="status-file"></span>
     <span id="status-msg"></span>
     <span id="status-pos"></span>
@@ -100,6 +133,7 @@
   <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
   <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
   <script src="notify.js"></script>
+  <script src="icons.js"></script>
   <script src="app.js"></script>
   <script src="terminal.js"></script>
   <script src="servers.js"></script>

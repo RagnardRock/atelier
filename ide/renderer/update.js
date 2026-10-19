@@ -30,8 +30,9 @@ const updater = (() => {
   button.onclick = async () => {
     if (busy) return;
     busy = true;
-    const label = button.textContent;
-    button.textContent = 'Vérification…';
+    // Pendant la vérification, l'icône tourne.
+    const icon = button.querySelector('.codicon');
+    icon.className = 'codicon codicon-sync codicon-modifier-spin';
     try {
       const { changes } = await check();
       if (changes.length === 0) notify.success("Atelier est à jour");
@@ -39,7 +40,7 @@ const updater = (() => {
     } catch (err) {
       notify.error(`Mise à jour impossible : ${cleanError(err)}`);
     } finally {
-      button.textContent = label;
+      icon.className = 'codicon codicon-cloud-download';
       busy = false;
     }
   };

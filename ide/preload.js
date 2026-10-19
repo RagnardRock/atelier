@@ -5,6 +5,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('atelier', {
   openFolder: () => ipcRenderer.invoke('folder:open'),
+  recentFolders: () => ipcRenderer.invoke('folder:recents'),
+  openRecentFolder: (folder) => ipcRenderer.invoke('folder:openRecent', folder),
+  setWindowTheme: (theme) => ipcRenderer.invoke('window:theme', theme),
+  platform: process.platform,
   readFolder: (dir) => ipcRenderer.invoke('folder:read', dir),
   readFile: (file) => ipcRenderer.invoke('file:read', file),
   writeFile: (file, content) => ipcRenderer.invoke('file:write', file, content),
@@ -25,7 +29,7 @@ contextBridge.exposeInMainWorld('atelier', {
   installUpdate: () => ipcRenderer.invoke('update:install'),
 
   // Terminaux
-  createTerminal: (profileName, cols, rows) => ipcRenderer.invoke('term:create', profileName, cols, rows),
+  createTerminal: (profileName, cols, rows, cwd) => ipcRenderer.invoke('term:create', profileName, cols, rows, cwd),
   writeTerminal: (id, data) => ipcRenderer.send('term:write', id, data),
   resizeTerminal: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
   killTerminal: (id) => ipcRenderer.send('term:kill', id),

@@ -1,6 +1,12 @@
 // Panneau "Serveurs" : tes serveurs favoris, connexion SSH en un clic.
 // Les fiches sont enregistrées par main.js dans servers.json (jamais de mot de passe).
 
+// "root@mon-site.fr:2222" (le port n'est affiché que s'il n'est pas 22).
+function describeServer(s) {
+  const target = s.user ? `${s.user}@${s.host}` : s.host;
+  return s.port && Number(s.port) !== 22 ? `${target}:${s.port}` : target;
+}
+
 const serversPanel = (() => {
   const list = document.querySelector('#server-list');
   const form = document.querySelector('#server-form');
@@ -9,18 +15,13 @@ const serversPanel = (() => {
   let servers = [];
   let editingId = null; // null = ajout, sinon id du serveur modifié
 
-  // --- Onglets Fichiers / Serveurs de la barre latérale ---
-  document.querySelectorAll('#side-tabs button').forEach((button) => {
+  // --- Barre d'icônes verticale : Fichiers / Serveurs ---
+  document.querySelectorAll('#activitybar [data-view]').forEach((button) => {
     button.onclick = () => {
-      document.querySelectorAll('#side-tabs button').forEach((b) => b.classList.toggle('active', b === button));
+      document.querySelectorAll('#activitybar [data-view]').forEach((b) => b.classList.toggle('active', b === button));
       document.querySelectorAll('.side-view').forEach((v) => { v.hidden = v.id !== button.dataset.view; });
     };
   });
-
-  function describe(s) {
-    const target = s.user ? `${s.user}@${s.host}` : s.host;
-    return s.port && s.port !== 22 ? `${target}:${s.port}` : target;
-  }
 
   function render() {
     list.innerHTML = '';
@@ -33,13 +34,14 @@ const serversPanel = (() => {
       row.className = 'server';
       row.title = `Se connecter à ${server.name}`;
       row.innerHTML = `
+        <i class="codicon codicon-server"></i>
         <span class="server-info"><span class="server-name"></span><span class="server-target"></span></span>
         <span class="server-actions">
-          <button class="edit" title="Modifier">✎</button>
-          <button class="delete" title="Supprimer">🗑</button>
+          <button class="edit icon-button" title="Modifier"><i class="codicon codicon-edit"></i></button>
+          <button class="delete icon-button" title="Supprimer"><i class="codicon codicon-trash"></i></button>
         </span>`;
       row.querySelector('.server-name').textContent = server.name;
-      row.querySelector('.server-target').textContent = describe(server);
+      row.querySelector('.server-target').textContent = describeServer(server);
 
       row.onclick = () => terminalPanel.connect(server).catch((err) => notify.error(err.message));
       row.querySelector('.edit').onclick = (e) => { e.stopPropagation(); openForm(server); };

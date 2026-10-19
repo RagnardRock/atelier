@@ -36,6 +36,7 @@ const terminalPanel = (() => {
       t.term.options.theme = theme();
       t.term.options.fontSize = config.terminalFontSize;
       t.term.options.fontFamily = config.fontFamily;
+      t.term.refresh(0, t.term.rows - 1); // redessine tout de suite avec les nouvelles couleurs
     }
     fitActive();
   }
@@ -50,18 +51,21 @@ const terminalPanel = (() => {
     else focusActive();
   }
 
-  // Terminal à partir d'un profil de la config (PowerShell, Git Bash…).
-  function create(profileName) {
-    return open(profileName, (cols, rows) => window.atelier.createTerminal(profileName, cols, rows));
+  // Terminal à partir d'un profil de la config (PowerShell, Git Bash…), lancé dans `dir`.
+  // Par défaut : le dossier sélectionné dans l'arborescence, sinon la racine du projet.
+  // main.js vérifie que ce dossier fait partie du projet ouvert.
+  function create(profileName, dir = state.selectedDir || state.root) {
+    const label = dir ? `${profileName} · ${baseName(dir)}` : profileName;
+    return open(label, (cols, rows) => window.atelier.createTerminal(profileName, cols, rows, dir), 'terminal', dir);
   }
 
   // Terminal connecté en SSH à un serveur favori (panneau Serveurs).
   function connect(server) {
-    return open(server.name, (cols, rows) => window.atelier.connectServer(server.id, cols, rows));
+    return open(server.name, (cols, rows) => window.atelier.connectServer(server.id, cols, rows), 'server', describeServer(server));
   }
 
   // Ouvre un onglet de terminal. `start` lance le processus côté main.js et renvoie son id.
-  async function open(label, start) {
+  async function open(label, start, icon, tooltip) {
     if (!isOpen()) { panel.hidden = resizer.hidden = false; }
 
     const term = new Terminal({
@@ -95,8 +99,9 @@ const terminalPanel = (() => {
 
     const tab = document.createElement('div');
     tab.className = 'tab';
-    tab.innerHTML = '<span class="name"></span><span class="close" title="Fermer ce terminal">×</span>';
+    tab.innerHTML = `<i class="codicon codicon-${icon}"></i><span class="name"></span><span class="close" title="Fermer ce terminal"><i class="codicon codicon-close"></i></span>`;
     tab.querySelector('.name').textContent = label;
+    tab.title = tooltip || label;
     tab.onclick = () => activate(id);
     tab.querySelector('.close').onclick = (e) => { e.stopPropagation(); close(id); };
     // Clic molette : fermer ce terminal.
@@ -206,6 +211,7 @@ const terminalPanel = (() => {
 
   document.querySelector('#term-new').onclick = () => create(profileSelect.value).catch((err) => notify.error(err.message));
   document.querySelector('#btn-terminal').onclick = toggle;
+  document.querySelector('#term-hide').onclick = toggle;
   // Ctrl+J est intercepté par main.js (avant l'éditeur et le terminal), puis transmis à app.js.
 
   return { applyConfig, toggle, create, connect };

@@ -113,12 +113,48 @@ async function readConfig() {
 
 // --- Canaux IPC : la liste exacte de ce que l'interface peut demander ---
 
+// --- Dossiers récents ---
+// Rangés dans state.json (à côté de la config). Ils servent à l'écran d'accueil et à rouvrir
+// le dernier dossier au démarrage. L'interface ne peut ouvrir que des dossiers de cette liste
+// ou choisis par toi dans la boîte de dialogue : elle ne peut pas inventer un chemin.
+
+const statePath = () => path.join(app.getPath('userData'), 'state.json');
+const MAX_RECENTS = 8;
+
+async function readState() {
+  try {
+    return { recentFolders: [], ...JSON.parse(await fs.readFile(statePath(), 'utf8')) };
+  } catch {
+    return { recentFolders: [] };
+  }
+}
+
+async function setRoot(folder) {
+  rootFolder = path.resolve(folder);
+  const state = await readState();
+  state.recentFolders = [rootFolder, ...state.recentFolders.filter((f) => f !== rootFolder)].slice(0, MAX_RECENTS);
+  await fs.writeFile(statePath(), JSON.stringify(state, null, 2), 'utf8');
+  return rootFolder;
+}
+
+async function existingRecents() {
+  const { recentFolders } = await readState();
+  const checks = await Promise.all(recentFolders.map((f) => fs.stat(f).then((st) => st.isDirectory(), () => false)));
+  return recentFolders.filter((_, i) => checks[i]);
+}
+
 handle('folder:open', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
   if (result.canceled) return null;
-  rootFolder = path.resolve(result.filePaths[0]);
-  return rootFolder;
+  return setRoot(result.filePaths[0]);
+});
+
+handle('folder:recents', async () => existingRecents());
+
+handle('folder:openRecent', async (_event, folder) => {
+  if (!(await existingRecents()).includes(folder)) throw new Error(`Ce dossier n'existe plus : ${folder}`);
+  return setRoot(folder);
 });
 
 handle('folder:read', async (_event, dir) => {
@@ -260,11 +296,11 @@ function resolveCommand(command) {
   return process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
 }
 
-handle('term:create', async (event, profileName, cols, rows) => {
+handle('term:create', async (event, profileName, cols, rows, cwd) => {
   const { terminalProfiles } = await readConfig();
   const profile = terminalProfiles.find((p) => p.name === profileName);
   if (!profile) throw new Error(`Profil de terminal inconnu : ${profileName}`);
-  return spawnTerminal(event, resolveCommand(profile.command), profile.args || [], cols, rows);
+  return spawnTerminal(event, resolveCommand(profile.command), profile.args || [], cols, rows, cwd);
 });
 
 // Connexion à un serveur favori : on construit la commande ssh à partir de sa fiche.
@@ -277,7 +313,14 @@ handle('term:connect', async (event, serverId, cols, rows) => {
   return spawnTerminal(event, 'ssh', args, cols, rows);
 });
 
-function spawnTerminal(event, command, args, cols, rows) {
+// Dossier de départ d'un terminal : celui demandé par l'interface (le dossier sélectionné dans
+// l'arborescence) s'il est dans le projet ouvert, sinon la racine du projet, sinon ton dossier perso.
+function terminalCwd(requested) {
+  if (requested && isAllowed(requested)) return path.resolve(requested);
+  return rootFolder || os.homedir();
+}
+
+function spawnTerminal(event, command, args, cols, rows, cwd) {
   const id = nextTerminalId++;
   let proc;
   try {
@@ -285,7 +328,7 @@ function spawnTerminal(event, command, args, cols, rows) {
       name: 'xterm-256color',
       cols,
       rows,
-      cwd: rootFolder || os.homedir(), // le terminal démarre dans le dossier ouvert
+      cwd: terminalCwd(cwd),
       env: process.env,
     });
   } catch (err) {
@@ -379,12 +422,29 @@ function matchShortcut(input) {
 
 // --- Fenêtre ---
 
+// Couleurs de la barre de titre (boutons Windows réduire / agrandir / fermer), selon le thème.
+const TITLE_BAR = {
+  dark: { color: '#181818', symbolColor: '#cccccc', height: 40 },
+  light: { color: '#f3f3f3', symbolColor: '#333333', height: 40 },
+};
+
+handle('window:theme', async (event, theme) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (process.platform !== 'darwin') win.setTitleBarOverlay(TITLE_BAR[theme === 'light' ? 'light' : 'dark']);
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
-    backgroundColor: '#1e1e1e',
+    minWidth: 700,
+    minHeight: 400,
+    backgroundColor: '#1f1f1f',
     title: 'Atelier',
+    // Pas de barre de titre système : la barre du haut de l'interface la remplace,
+    // et Windows y dessine ses propres boutons réduire / agrandir / fermer.
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 12, y: 13 } } : { titleBarOverlay: TITLE_BAR.dark }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true, // l'interface n'a pas accès à Node directement
@@ -394,6 +454,15 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.webContents.on('before-input-event', (event, input) => {
+    // Outils intégrés (il n'y a plus de menu) : F12 = outils de dev, Ctrl+R = recharger l'interface.
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      event.preventDefault();
+      return win.webContents.toggleDevTools();
+    }
+    if (input.type === 'keyDown' && input.control && !input.alt && !input.shift && input.key.toLowerCase() === 'r') {
+      event.preventDefault();
+      return win.webContents.reload();
+    }
     const shortcut = matchShortcut(input);
     if (!shortcut) return;
     event.preventDefault();
@@ -417,11 +486,8 @@ app.whenReady().then(async () => {
   await ensureConfig();
   applyShortcuts((await readConfig()).shortcuts);
   log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
-  // Pas de menu Fichier/Édition natif : tout passe par l'interface et les raccourcis.
-  // On garde seulement les outils de dev (F12) et le rechargement (Ctrl+R).
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Vue', submenu: [{ role: 'reload' }, { role: 'toggleDevTools', accelerator: 'F12' }] },
-  ]));
+  // Pas de menu natif : tout passe par l'interface et les raccourcis.
+  Menu.setApplicationMenu(null);
   createWindow();
 });
 

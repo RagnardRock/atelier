@@ -7,10 +7,14 @@ const notify = (() => {
   container.id = 'notifications';
   document.body.appendChild(container);
 
+  const ICONS = { info: 'info', success: 'pass', error: 'error', warning: 'warning' };
+
   function show(type, message, { sticky = false, actions = [] } = {}) {
     const el = document.createElement('div');
     el.className = `notification ${type}`;
-    el.innerHTML = '<span class="message"></span><span class="actions"></span><button class="dismiss" title="Fermer">×</button>';
+    el.innerHTML = `<i class="codicon codicon-${ICONS[type]}"></i>
+      <div class="body"><div class="message"></div><div class="actions"></div></div>
+      <button class="dismiss icon-button" title="Fermer"><i class="codicon codicon-close"></i></button>`;
     el.querySelector('.message').textContent = message;
     for (const { label, run } of actions) {
       const button = document.createElement('button');
