@@ -1,5 +1,13 @@
-// Interface de l'IDE : arborescence, onglets, éditeur Monaco, config.
+// Interface de l'IDE : arborescence, colonnes d'éditeurs, onglets, config.
 // Tout accès au disque passe par window.atelier (défini dans preload.js).
+//
+// Vocabulaire :
+// - un "fichier" ouvert = un modèle Monaco (le texte) + sa version enregistrée. Il est partagé :
+//   le même fichier affiché dans deux colonnes, c'est le même texte, modifié aux deux endroits.
+// - une "colonne" (group) = une barre d'onglets + un éditeur Monaco. Il peut y en avoir autant
+//   qu'on veut côte à côte.
+// - un "onglet" = un fichier dans une colonne. Il peut être en aperçu (italique) : il sera alors
+//   remplacé par le prochain fichier ouvert d'un simple clic.
 
 const MONACO_BASE = new URL('../node_modules/monaco-editor/min/', location.href).href;
 
@@ -13,65 +21,81 @@ const state = {
   root: null,          // dossier ouvert
   config: null,        // config perso fusionnée avec les valeurs par défaut
   configPath: null,
-  tabs: [],            // { path, name, model, savedVersion, el }
-  active: null,        // onglet actif
+  files: new Map(),    // chemin -> { path, name, model, savedVersion }
+  groups: [],          // colonnes, de gauche à droite
+  activeGroup: null,
+  dragged: null,       // onglet en cours de glisser-déposer
 };
 
 const $ = (sel) => document.querySelector(sel);
-let editor;
 
 require.config({ paths: { vs: `${MONACO_BASE}vs` } });
 // Interface de Monaco en français (menu clic droit, recherche…), puis l'éditeur lui-même.
 require(['vs/nls.messages.fr'], () => require(['vs/editor/editor.main'], start));
 
 async function start() {
-  state.config = await window.atelier.getConfig();
   state.configPath = await window.atelier.getConfigPath();
-
-  editor = monaco.editor.create($('#editor'), {
-    automaticLayout: true, // se redimensionne tout seul avec la fenêtre
-    model: null,
-  });
+  await loadConfig();
+  createGroup();
   applyConfig();
 
-  // Raccourcis clavier
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveActive);
+  // Raccourcis gérés dans la page (Ctrl+J et Ctrl+Alt+D passent par main.js, voir onShortcut).
   window.addEventListener('keydown', (e) => {
-    if (!e.ctrlKey) return;
-    if (e.key === 'o') { e.preventDefault(); openFolder(); }
-    if (e.key === 's') { e.preventDefault(); saveActive(); }
-    if (e.key === 'w') { e.preventDefault(); if (state.active) closeTab(state.active); }
+    if (!e.ctrlKey || e.altKey || e.shiftKey) return;
+    const key = e.key.toLowerCase();
+    if (key === 'o') { e.preventDefault(); openFolder(); }
+    if (key === 's') { e.preventDefault(); saveActive(); }
+    if (key === 'w' && !e.target.closest('#terminal-panel')) {
+      e.preventDefault();
+      const tab = state.activeGroup.active;
+      if (tab) closeTab(tab);
+    }
   });
 
-  editor.onDidChangeCursorPosition(({ position }) => {
-    $('#status-pos').textContent = `Ln ${position.lineNumber}, Col ${position.column}`;
+  window.atelier.onShortcut((action) => {
+    if (action === 'toggleTerminal') terminalPanel.toggle();
+    if (action === 'splitEditor') splitEditor();
   });
 
   $('#btn-open').onclick = openFolder;
-  $('#btn-config').onclick = () => openFile(state.configPath, 'config.json');
+  $('#btn-config').onclick = () => openFile(state.configPath, 'config.json', { preview: false });
+  setupSplitDropzone();
 }
 
 // --- Config ---
+
+async function loadConfig() {
+  const { config, error } = await window.atelier.getConfig();
+  state.config = config;
+  if (error) notify.warning(error);
+  return !error;
+}
+
+function editorOptions() {
+  const c = state.config;
+  return {
+    fontFamily: c.fontFamily,
+    fontSize: c.fontSize,
+    tabSize: c.tabSize,
+    wordWrap: c.wordWrap,
+    minimap: { enabled: c.minimap },
+  };
+}
 
 function applyConfig() {
   const c = state.config;
   monaco.editor.setTheme(c.theme);
   document.body.classList.toggle('light', c.theme === 'vs');
   document.documentElement.style.setProperty('--accent', c.accentColor);
-  editor.updateOptions({
-    fontFamily: c.fontFamily,
-    fontSize: c.fontSize,
-    tabSize: c.tabSize,
-    wordWrap: c.wordWrap,
-    minimap: { enabled: c.minimap },
-  });
+  for (const group of state.groups) group.editor.updateOptions(editorOptions());
   terminalPanel.applyConfig(c);
+  updateWelcome();
 }
 
 // --- Arborescence ---
 
 async function openFolder() {
-  const folder = await window.atelier.openFolder();
+  const folder = await window.atelier.openFolder().catch((err) => notify.error(cleanError(err)));
   if (!folder) return;
   state.root = folder;
   $('#folder-name').textContent = folder;
@@ -82,7 +106,12 @@ async function openFolder() {
 
 // Affiche le contenu d'un dossier. Les sous-dossiers ne sont lus qu'au premier clic.
 async function renderFolder(dir, container, depth) {
-  const entries = await window.atelier.readFolder(dir);
+  let entries;
+  try {
+    entries = await window.atelier.readFolder(dir);
+  } catch (err) {
+    return notify.error(`Impossible de lire le dossier ${dir} : ${cleanError(err)}`);
+  }
   for (const entry of entries) {
     const row = document.createElement('div');
     row.className = 'node';
@@ -103,94 +132,340 @@ async function renderFolder(dir, container, depth) {
         row.firstChild.textContent = open ? '▾' : '▸';
       };
     } else {
+      // Clic : aperçu. Double-clic ou clic molette : onglet permanent.
       row.onclick = () => openFile(entry.path, entry.name);
+      row.ondblclick = () => openFile(entry.path, entry.name, { preview: false });
+      row.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); }); // pas de défilement auto
+      row.addEventListener('auxclick', (e) => {
+        if (e.button === 1) openFile(entry.path, entry.name, { preview: false });
+      });
     }
   }
 }
 
-// --- Onglets ---
+// --- Fichiers ouverts (partagés entre colonnes) ---
 
-async function openFile(path, name) {
-  const existing = state.tabs.find((t) => t.path === path);
-  if (existing) return activate(existing);
-
-  let content;
-  try {
-    content = await window.atelier.readFile(path);
-  } catch (err) {
-    return flash(`Impossible d'ouvrir ${name} : ${err.message}`);
-  }
+async function getFile(path, name) {
+  if (state.files.has(path)) return state.files.get(path);
+  const content = await window.atelier.readFile(path);
   // L'URI donne l'extension à Monaco, qui choisit la coloration (js, css, html, json…).
   const model = monaco.editor.createModel(content, undefined, monaco.Uri.file(path));
-  const tab = { path, name, model, savedVersion: model.getAlternativeVersionId() };
+  const file = { path, name, model, savedVersion: model.getAlternativeVersionId() };
+  // Dès qu'on modifie un fichier, ses onglets deviennent permanents et affichent "●".
+  model.onDidChangeContent(() => {
+    for (const tab of tabsOf(file)) {
+      if (isDirty(file)) pin(tab);
+      refreshTab(tab);
+    }
+  });
+  state.files.set(path, file);
+  return file;
+}
 
-  tab.el = document.createElement('div');
+function tabsOf(file) {
+  return state.groups.flatMap((g) => g.tabs.filter((t) => t.file === file));
+}
+
+function isDirty(file) {
+  return file.model.getAlternativeVersionId() !== file.savedVersion;
+}
+
+// Plus aucun onglet n'affiche ce fichier : on libère sa mémoire.
+function releaseIfUnused(file) {
+  if (tabsOf(file).length > 0) return;
+  file.model.dispose();
+  state.files.delete(file.path);
+}
+
+// --- Colonnes ---
+
+function createGroup(afterGroup = null) {
+  const el = document.createElement('div');
+  el.className = 'group';
+  el.innerHTML = '<nav class="tabs"></nav><div class="editor-area"><div class="editor"></div><div class="drop-target"></div></div>';
+
+  const editor = monaco.editor.create(el.querySelector('.editor'), {
+    automaticLayout: true, // se redimensionne tout seul avec la fenêtre
+    model: null,
+    ...editorOptions(),
+  });
+  const group = { el, tabsEl: el.querySelector('.tabs'), editor, tabs: [], active: null, viewStates: new Map() };
+
+  editor.onDidFocusEditorText(() => setActiveGroup(group));
+  editor.onDidChangeCursorPosition(({ position }) => {
+    if (state.activeGroup === group) $('#status-pos').textContent = `Ln ${position.lineNumber}, Col ${position.column}`;
+  });
+  el.addEventListener('mousedown', () => setActiveGroup(group));
+  setupGroupDrop(group);
+
+  const groupsEl = $('#groups');
+  if (afterGroup) {
+    afterGroup.el.after(el);
+    state.groups.splice(state.groups.indexOf(afterGroup) + 1, 0, group);
+  } else {
+    groupsEl.appendChild(el);
+    state.groups.push(group);
+  }
+  setActiveGroup(group);
+  return group;
+}
+
+function removeGroup(group) {
+  if (state.groups.length === 1) return; // on garde toujours au moins une colonne
+  const i = state.groups.indexOf(group);
+  state.groups.splice(i, 1);
+  group.editor.dispose();
+  group.el.remove();
+  if (state.activeGroup === group) setActiveGroup(state.groups[Math.max(0, i - 1)]);
+}
+
+function setActiveGroup(group) {
+  if (state.activeGroup === group) return;
+  state.activeGroup = group;
+  for (const g of state.groups) g.el.classList.toggle('active-group', g === group);
+  refreshStatus();
+}
+
+// Ctrl+Alt+D : ouvre le fichier actif dans une nouvelle colonne à droite.
+function splitEditor() {
+  const from = state.activeGroup;
+  const tab = from.active;
+  const group = createGroup(from);
+  if (tab) addTab(group, tab.file, { preview: false });
+}
+
+// --- Onglets ---
+
+async function openFile(path, name, { preview = true, group = state.activeGroup } = {}) {
+  let file;
+  try {
+    file = await getFile(path, name);
+  } catch (err) {
+    return notify.error(`Impossible d'ouvrir ${name} : ${cleanError(err)}`);
+  }
+  const existing = group.tabs.find((t) => t.file === file);
+  if (existing) {
+    if (!preview) pin(existing);
+    return activate(existing);
+  }
+  // Un clic simple remplace l'onglet d'aperçu de la colonne, s'il y en a un.
+  const previewTab = preview && group.tabs.find((t) => t.preview);
+  if (previewTab) {
+    const old = previewTab.file;
+    previewTab.file = file;
+    refreshTab(previewTab);
+    releaseIfUnused(old);
+    return activate(previewTab);
+  }
+  addTab(group, file, { preview });
+}
+
+function addTab(group, file, { preview = false, index = group.tabs.length } = {}) {
+  const tab = { file, group, preview, el: document.createElement('div') };
   tab.el.className = 'tab';
-  tab.el.title = path;
+  tab.el.draggable = true;
   tab.el.innerHTML = '<span class="name"></span><span class="close">×</span>';
-  tab.el.querySelector('.name').textContent = name;
   tab.el.onclick = () => activate(tab);
+  tab.el.ondblclick = () => pin(tab);
   tab.el.querySelector('.close').onclick = (e) => { e.stopPropagation(); closeTab(tab); };
-  $('#tabs').appendChild(tab.el);
+  // Clic molette sur un onglet : le fermer.
+  tab.el.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+  tab.el.addEventListener('auxclick', (e) => { if (e.button === 1) closeTab(tab); });
+  setupTabDrag(tab);
 
-  // Point "●" sur l'onglet tant que le fichier a des modifications non enregistrées.
-  model.onDidChangeContent(() => refreshDirty(tab));
-
-  state.tabs.push(tab);
-  document.body.classList.add('has-tabs');
+  group.tabs.splice(index, 0, tab);
+  renderTabs(group);
+  refreshTab(tab);
   activate(tab);
+  updateWelcome();
+  return tab;
 }
 
-function isDirty(tab) {
-  return tab.model.getAlternativeVersionId() !== tab.savedVersion;
+function renderTabs(group) {
+  for (const tab of group.tabs) group.tabsEl.appendChild(tab.el); // appendChild déplace : l'ordre suit le tableau
 }
 
-function refreshDirty(tab) {
-  tab.el.querySelector('.close').textContent = isDirty(tab) ? '●' : '×';
+function refreshTab(tab) {
+  tab.el.querySelector('.name').textContent = tab.file.name;
+  tab.el.title = tab.file.path;
+  tab.el.classList.toggle('preview', tab.preview);
+  tab.el.querySelector('.close').textContent = isDirty(tab.file) ? '●' : '×';
+}
+
+function pin(tab) {
+  if (!tab.preview) return;
+  tab.preview = false;
+  refreshTab(tab);
 }
 
 function activate(tab) {
-  state.active = tab;
-  editor.setModel(tab.model);
-  editor.focus();
-  for (const t of state.tabs) t.el.classList.toggle('active', t === tab);
-  document.querySelectorAll('.node').forEach((n) => n.classList.toggle('active', n.dataset.path === tab.path));
-  $('#status-file').textContent = tab.path;
-  $('#status-lang').textContent = tab.model.getLanguageId();
+  const group = tab.group;
+  // On mémorise la position du curseur et du défilement du fichier qu'on quitte.
+  if (group.active && group.active !== tab) group.viewStates.set(group.active.file.path, group.editor.saveViewState());
+  group.active = tab;
+  group.editor.setModel(tab.file.model);
+  const viewState = group.viewStates.get(tab.file.path);
+  if (viewState) group.editor.restoreViewState(viewState);
+  group.editor.focus();
+  for (const t of group.tabs) t.el.classList.toggle('active', t === tab);
+  setActiveGroup(group);
+  refreshStatus();
+}
+
+function refreshStatus() {
+  const tab = state.activeGroup && state.activeGroup.active;
+  document.querySelectorAll('.node').forEach((n) => n.classList.toggle('active', !!tab && n.dataset.path === tab.file.path));
+  $('#status-file').textContent = tab ? tab.file.path : '';
+  $('#status-lang').textContent = tab ? tab.file.model.getLanguageId() : '';
+  if (!tab) $('#status-pos').textContent = '';
+}
+
+// Retire l'onglet de sa colonne, sans libérer le fichier (utilisé pour fermer et pour déplacer).
+function detachTab(tab) {
+  const group = tab.group;
+  const i = group.tabs.indexOf(tab);
+  group.tabs.splice(i, 1);
+  tab.el.remove();
+  group.viewStates.delete(tab.file.path);
+  if (group.active === tab) {
+    const next = group.tabs[i] || group.tabs[i - 1];
+    if (next) activate(next);
+    else { group.active = null; group.editor.setModel(null); refreshStatus(); }
+  }
 }
 
 function closeTab(tab) {
-  if (isDirty(tab) && !confirm(`${tab.name} a des modifications non enregistrées. Fermer quand même ?`)) return;
-  const i = state.tabs.indexOf(tab);
-  state.tabs.splice(i, 1);
-  tab.el.remove();
-  tab.model.dispose();
-  const next = state.tabs[i] || state.tabs[i - 1];
-  if (next) return activate(next);
-  state.active = null;
-  editor.setModel(null);
-  document.body.classList.remove('has-tabs');
-  $('#status-file').textContent = '';
-  $('#status-lang').textContent = '';
+  const lastView = tabsOf(tab.file).length === 1;
+  if (lastView && isDirty(tab.file) && !confirm(`${tab.file.name} a des modifications non enregistrées. Fermer quand même ?`)) return;
+  const group = tab.group;
+  detachTab(tab);
+  releaseIfUnused(tab.file);
+  if (group.tabs.length === 0) removeGroup(group);
+  updateWelcome();
 }
 
-async function saveActive() {
-  const tab = state.active;
-  if (!tab) return;
-  try {
-    await window.atelier.writeFile(tab.path, tab.model.getValue());
-  } catch (err) {
-    return flash(`Échec de l'enregistrement : ${err.message}`);
+// Déplace un onglet (même colonne = changer l'ordre, autre colonne = l'y envoyer).
+function moveTab(tab, target, index) {
+  const source = tab.group;
+  if (source === target) {
+    const from = source.tabs.indexOf(tab);
+    source.tabs.splice(from, 1);
+    source.tabs.splice(from < index ? index - 1 : index, 0, tab);
+    renderTabs(source);
+    return activate(tab);
   }
-  tab.savedVersion = tab.model.getAlternativeVersionId();
-  refreshDirty(tab);
-  flash(`Enregistré : ${tab.name}`);
+  // Le fichier est déjà ouvert dans la colonne cible : on y bascule simplement.
+  const already = target.tabs.find((t) => t.file === tab.file);
+  detachTab(tab);
+  if (already) activate(already);
+  else addTab(target, tab.file, { preview: tab.preview, index });
+  if (source.tabs.length === 0) removeGroup(source);
+}
 
-  // Enregistrer la config l'applique tout de suite.
-  if (tab.path === state.configPath) {
-    state.config = await window.atelier.getConfig();
+function updateWelcome() {
+  const hasTabs = state.groups.some((g) => g.tabs.length > 0);
+  document.body.classList.toggle('has-tabs', hasTabs);
+}
+
+// --- Glisser-déposer des onglets ---
+
+function setupTabDrag(tab) {
+  tab.el.addEventListener('dragstart', (e) => {
+    state.dragged = tab;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tab.file.path);
+    document.body.classList.add('dragging-tab');
+  });
+  tab.el.addEventListener('dragend', () => {
+    state.dragged = null;
+    document.body.classList.remove('dragging-tab');
+    document.querySelectorAll('.drop-before, .drop-after, .drop-hover').forEach((el) => el.classList.remove('drop-before', 'drop-after', 'drop-hover'));
+  });
+}
+
+// Position d'insertion dans une barre d'onglets selon la souris (avant / après le milieu de chaque onglet).
+function dropIndex(group, x) {
+  const i = group.tabs.findIndex((t) => {
+    const r = t.el.getBoundingClientRect();
+    return x < r.left + r.width / 2;
+  });
+  return i === -1 ? group.tabs.length : i;
+}
+
+function setupGroupDrop(group) {
+  // Lâcher sur la barre d'onglets : à l'endroit indiqué par le trait.
+  group.tabsEl.addEventListener('dragover', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    const index = dropIndex(group, e.clientX);
+    group.tabs.forEach((t, i) => {
+      t.el.classList.toggle('drop-before', i === index);
+      t.el.classList.toggle('drop-after', index === group.tabs.length && i === group.tabs.length - 1);
+    });
+  });
+  group.tabsEl.addEventListener('dragleave', () => {
+    group.tabs.forEach((t) => t.el.classList.remove('drop-before', 'drop-after'));
+  });
+  group.tabsEl.addEventListener('drop', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    moveTab(state.dragged, group, dropIndex(group, e.clientX));
+  });
+
+  // Lâcher sur l'éditeur : à la fin des onglets de cette colonne.
+  const target = group.el.querySelector('.drop-target');
+  target.addEventListener('dragover', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    target.classList.add('drop-hover');
+  });
+  target.addEventListener('dragleave', () => target.classList.remove('drop-hover'));
+  target.addEventListener('drop', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    moveTab(state.dragged, group, group.tabs.length);
+  });
+}
+
+// Zone "Nouvelle colonne" au bord droit, visible pendant qu'on glisse un onglet.
+function setupSplitDropzone() {
+  const zone = $('#split-dropzone');
+  zone.addEventListener('dragover', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    zone.classList.add('drop-hover');
+  });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drop-hover'));
+  zone.addEventListener('drop', (e) => {
+    if (!state.dragged) return;
+    e.preventDefault();
+    zone.classList.remove('drop-hover');
+    const tab = state.dragged;
+    const group = createGroup(state.groups[state.groups.length - 1]);
+    moveTab(tab, group, 0);
+  });
+}
+
+// --- Enregistrement ---
+
+async function saveActive() {
+  const tab = state.activeGroup && state.activeGroup.active;
+  if (!tab) return;
+  const file = tab.file;
+  try {
+    await window.atelier.writeFile(file.path, file.model.getValue());
+  } catch (err) {
+    return notify.error(`Échec de l'enregistrement de ${file.name} : ${cleanError(err)}`);
+  }
+  file.savedVersion = file.model.getAlternativeVersionId();
+  for (const t of tabsOf(file)) refreshTab(t);
+  flash(`Enregistré : ${file.name}`);
+
+  // Enregistrer la config l'applique tout de suite (ou explique ce qui ne va pas).
+  if (file.path === state.configPath) {
+    const ok = await loadConfig();
     applyConfig();
-    flash('Config appliquée');
+    if (ok) notify.success('Config appliquée');
   }
 }
 

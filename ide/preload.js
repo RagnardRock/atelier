@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('atelier', {
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),
 
+  // Erreurs et raccourcis
+  getLogPath: () => ipcRenderer.invoke('log:path'),
+  log: (level, message) => ipcRenderer.send('log:write', level, message),
+  onAppError: (callback) => ipcRenderer.on('app:error', (_event, message) => callback(message)),
+  onShortcut: (callback) => ipcRenderer.on('shortcut', (_event, action) => callback(action)),
+
   // Terminaux
   createTerminal: (profileName, cols, rows) => ipcRenderer.invoke('term:create', profileName, cols, rows),
   writeTerminal: (id, data) => ipcRenderer.send('term:write', id, data),

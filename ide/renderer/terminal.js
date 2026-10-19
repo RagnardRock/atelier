@@ -46,7 +46,7 @@ const terminalPanel = (() => {
     panel.hidden = resizer.hidden = isOpen();
     if (!isOpen()) return;
     // Premier affichage : on ouvre directement un terminal avec le premier profil.
-    if (terms.size === 0) create(profileSelect.value).catch((err) => flash(err.message));
+    if (terms.size === 0) create(profileSelect.value).catch((err) => notify.error(err.message));
     else focusActive();
   }
 
@@ -86,7 +86,7 @@ const terminalPanel = (() => {
     } catch (err) {
       term.dispose();
       view.remove();
-      throw new Error(`Impossible de lancer « ${label} » : ${err.message}`);
+      throw new Error(`Impossible de lancer « ${label} » : ${cleanError(err)}`);
     }
 
     // Ce que tu tapes part vers le processus.
@@ -99,6 +99,21 @@ const terminalPanel = (() => {
     tab.querySelector('.name').textContent = label;
     tab.onclick = () => activate(id);
     tab.querySelector('.close').onclick = (e) => { e.stopPropagation(); close(id); };
+    // Clic molette : fermer ce terminal.
+    tab.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    tab.addEventListener('auxclick', (e) => { if (e.button === 1) close(id); });
+    // Glisser-déposer pour changer l'ordre des onglets de terminal.
+    tab.draggable = true;
+    tab.dataset.termId = id;
+    tab.addEventListener('dragstart', (e) => {
+      draggedTab = tab;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', label);
+    });
+    tab.addEventListener('dragend', () => {
+      draggedTab = null;
+      tabsEl.querySelectorAll('.drop-before').forEach((t) => t.classList.remove('drop-before'));
+    });
     tabsEl.appendChild(tab);
 
     terms.set(id, { term, fit, tab, view, exited: false });
@@ -121,9 +136,11 @@ const terminalPanel = (() => {
     if (!t.exited) window.atelier.killTerminal(id);
     t.term.dispose();
     t.view.remove();
+    // Onglet voisin dans l'ordre affiché (qui peut avoir été changé par glisser-déposer).
+    const neighbor = t.tab.nextElementSibling || t.tab.previousElementSibling;
     t.tab.remove();
     terms.delete(id);
-    const next = [...terms.keys()].pop();
+    const next = neighbor ? Number(neighbor.dataset.termId) : undefined;
     if (next !== undefined) activate(next);
     else { activeId = null; panel.hidden = resizer.hidden = true; }
   }
@@ -168,18 +185,28 @@ const terminalPanel = (() => {
     window.addEventListener('mouseup', onUp);
   });
 
-  document.querySelector('#term-new').onclick = () => create(profileSelect.value).catch((err) => flash(err.message));
-  document.querySelector('#btn-terminal').onclick = toggle;
+  // Lâcher un onglet de terminal : il s'insère avant l'onglet survolé (ou à la fin).
+  let draggedTab = null;
+  const tabUnder = (x) => [...tabsEl.children].find((t) => {
+    const r = t.getBoundingClientRect();
+    return x < r.left + r.width / 2;
+  });
+  tabsEl.addEventListener('dragover', (e) => {
+    if (!draggedTab) return;
+    e.preventDefault();
+    const target = tabUnder(e.clientX);
+    [...tabsEl.children].forEach((t) => t.classList.toggle('drop-before', t === target));
+  });
+  tabsEl.addEventListener('drop', (e) => {
+    if (!draggedTab) return;
+    e.preventDefault();
+    const target = tabUnder(e.clientX);
+    if (target !== draggedTab) tabsEl.insertBefore(draggedTab, target || null);
+  });
 
-  // Ctrl+J : afficher / masquer, même quand le curseur est dans l'éditeur ou le terminal.
-  // (Phase de capture pour passer avant Monaco et xterm.)
-  window.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j') {
-      e.preventDefault();
-      e.stopPropagation();
-      toggle();
-    }
-  }, true);
+  document.querySelector('#term-new').onclick = () => create(profileSelect.value).catch((err) => notify.error(err.message));
+  document.querySelector('#btn-terminal').onclick = toggle;
+  // Ctrl+J est intercepté par main.js (avant l'éditeur et le terminal), puis transmis à app.js.
 
   return { applyConfig, toggle, create, connect };
 })();

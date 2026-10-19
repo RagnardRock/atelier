@@ -1,6 +1,6 @@
 {
   "name": "atelier-ide",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Mon IDE perso (Electron + Monaco)",
   "main": "main.js",
   "scripts": {

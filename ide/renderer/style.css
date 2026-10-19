@@ -156,14 +156,7 @@ body {
 
 #workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
 
-/* Onglets */
-#tabs {
-  display: flex;
-  height: 34px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-}
+/* Onglets (éditeur et terminal) */
 .tab {
   display: flex;
   align-items: center;
@@ -178,11 +171,47 @@ body {
 .tab .close { opacity: 0.6; border-radius: 3px; padding: 0 3px; }
 .tab .close:hover { opacity: 1; background: var(--panel-2); }
 
-#editor-area { flex: 1; min-height: 0; position: relative; }
-#editor { position: absolute; inset: 0; }
+#editor-area { flex: 1; min-height: 0; position: relative; display: flex; }
+
+/* Colonnes d'éditeurs : chacune a ses onglets et son éditeur */
+#groups { flex: 1; display: flex; min-width: 0; }
+.group { flex: 1; min-width: 200px; display: flex; flex-direction: column; border-left: 1px solid var(--border); }
+.group:first-child { border-left: none; }
+.group .tabs {
+  display: flex;
+  height: 34px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.editor-area { flex: 1; min-height: 0; position: relative; }
+.editor { position: absolute; inset: 0; }
+/* Onglet actif de la colonne qui n'a pas le focus : souligné plus discret */
+.group:not(.active-group) .tab.active { box-shadow: inset 0 2px var(--border); }
+.tab.preview .name { font-style: italic; }
+
+/* Glisser-déposer */
+.tab.drop-before { box-shadow: inset 2px 0 var(--accent); }
+.tab.drop-after { box-shadow: inset -2px 0 var(--accent); }
+.drop-target { position: absolute; inset: 0; display: none; }
+body.dragging-tab .drop-target { display: block; }
+.drop-target.drop-hover { background: color-mix(in srgb, var(--accent) 15%, transparent); }
+#split-dropzone {
+  display: none;
+  width: 120px;
+  align-items: center;
+  justify-content: center;
+  border-left: 2px dashed var(--accent);
+  color: var(--accent);
+  background: var(--panel);
+}
+body.dragging-tab #split-dropzone { display: flex; }
+#split-dropzone.drop-hover { background: color-mix(in srgb, var(--accent) 20%, var(--panel)); }
 #welcome {
   position: absolute;
   inset: 0;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -231,6 +260,43 @@ body.has-tabs #welcome { display: none; }
 #term-tabs .tab.exited .name { text-decoration: line-through; }
 #term-views { flex: 1; min-height: 0; position: relative; }
 .term-view { position: absolute; inset: 4px 0 0 8px; }
+
+/* Notifications (notify.js) */
+#notifications {
+  position: fixed;
+  right: 14px;
+  bottom: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  max-width: 460px;
+}
+.notification {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.notification.error { border-left-color: #f14c4c; }
+.notification.warning { border-left-color: #cca700; }
+.notification.success { border-left-color: #3fb950; }
+.notification.info { border-left-color: var(--accent); }
+.notification .message { flex: 1; white-space: pre-wrap; word-break: break-word; }
+.notification button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 1px 6px;
+}
+.notification .dismiss { border: none; font-size: 15px; line-height: 1; }
 
 /* Barre d'état */
 #statusbar {

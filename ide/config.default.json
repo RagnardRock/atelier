@@ -9,5 +9,9 @@
   "terminalFontSize": 14,
   "terminalProfiles": [
     { "name": "PowerShell", "command": "default", "args": [] }
-  ]
+  ],
+  "shortcuts": {
+    "toggleTerminal": "Ctrl+J",
+    "splitEditor": "Ctrl+Alt+D"
+  }
 }

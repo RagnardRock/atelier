@@ -41,12 +41,16 @@ const serversPanel = (() => {
       row.querySelector('.server-name').textContent = server.name;
       row.querySelector('.server-target').textContent = describe(server);
 
-      row.onclick = () => terminalPanel.connect(server).catch((err) => flash(err.message));
+      row.onclick = () => terminalPanel.connect(server).catch((err) => notify.error(err.message));
       row.querySelector('.edit').onclick = (e) => { e.stopPropagation(); openForm(server); };
       row.querySelector('.delete').onclick = async (e) => {
         e.stopPropagation();
         if (!confirm(`Supprimer le serveur « ${server.name} » ?`)) return;
-        servers = await window.atelier.deleteServer(server.id);
+        try {
+          servers = await window.atelier.deleteServer(server.id);
+        } catch (err) {
+          return notify.error(`Suppression impossible : ${cleanError(err)}`);
+        }
         render();
       };
       list.appendChild(row);
@@ -88,12 +92,12 @@ const serversPanel = (() => {
       servers = await window.atelier.saveServer(data);
     } catch (err) {
       // Message d'erreur de main.js, sans le préfixe technique d'Electron.
-      errorEl.textContent = err.message.replace(/^.*Error: /, '');
+      errorEl.textContent = cleanError(err);
       return;
     }
     closeForm();
     render();
-    flash(`Serveur enregistré : ${data.name}`);
+    notify.success(`Serveur enregistré : ${data.name}`);
   };
 
   window.atelier.listServers().then((loaded) => { servers = loaded; render(); });

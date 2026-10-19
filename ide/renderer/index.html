@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline et de workers data: -->
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline, d'images et de workers data: -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' data: blob:">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' data: blob:">
   <title>Atelier</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
@@ -47,12 +47,14 @@
       </div>
     </aside>
     <section id="workspace">
-      <nav id="tabs"></nav>
+      <!-- Colonnes d'éditeurs côte à côte (créées par app.js) -->
       <div id="editor-area">
-        <div id="editor"></div>
+        <div id="groups"></div>
+        <div id="split-dropzone">Nouvelle colonne</div>
         <div id="welcome">
           <h1>Atelier</h1>
-          <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet · <kbd>Ctrl</kbd>+<kbd>J</kbd> terminal</p>
+          <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet</p>
+          <p><kbd>Ctrl</kbd>+<kbd>J</kbd> terminal · <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd> diviser l'écran · clic molette : ouvrir / fermer un onglet</p>
         </div>
       </div>
       <!-- Panneau terminal : poignée pour le redimensionner, onglets, puis les terminaux -->
@@ -81,6 +83,7 @@
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
   <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
+  <script src="notify.js"></script>
   <script src="app.js"></script>
   <script src="terminal.js"></script>
   <script src="servers.js"></script>
