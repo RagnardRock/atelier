@@ -25,7 +25,7 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 
 > Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`. Le script de mise à jour le fait tout seul.
 
-## Ce que fait l'IDE (v0.5)
+## Ce que fait l'IDE (v0.6)
 
 ### L'interface
 
@@ -33,8 +33,10 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 - **À gauche, la barre d'icônes** : Fichiers et Serveurs en haut ; Mise à jour et Config en bas. Un point de couleur sur l'icône de mise à jour signale une nouvelle version.
 - **Les icônes** viennent de [Codicons](https://github.com/microsoft/vscode-codicons), celles de VS Code. Chaque type de fichier a son icône et sa couleur (HTML orange, CSS bleu, JS jaune, images violet, PSD et AI bleu Adobe…). La liste est dans `ide/renderer/icons.js` : une ligne par type, facile à compléter.
 - **L'écran d'accueil** (quand aucun fichier n'est ouvert) propose tes **dossiers récents** et rappelle les raccourcis.
-- **Le dernier dossier se rouvre tout seul** au démarrage. Pour ne plus le faire, mets `"reopenLastFolder": false` dans la config.
-- **Thème clair ou sombre** : `"theme": "vs"` ou `"vs-dark"`. Toute l'interface suit, y compris le terminal et les boutons de la fenêtre.
+- **Verre dépoli (glassmorphism)** en thème sombre : le fond de la fenêtre est un dégradé sombre avec deux halos de couleur (dont ta couleur d'accent), et la barre latérale, les éditeurs et le terminal sont des plaques de verre translucides, arrondies et séparées par un petit espace. Les menus, notifications et réglages flottent au-dessus avec un flou.
+- **Flou Windows 11** (option, désactivée par défaut) : ton bureau se voit, flouté, à travers la fenêtre (l'effet « acrylic » de Windows). Il demande Windows 11 22H2 ou plus récent. Ailleurs, l'option est sans effet. Il n'a pas encore été testé sur ton PC : si la fenêtre s'affiche mal, désactive-le.
+- **Le dernier dossier se rouvre tout seul** au démarrage (désactivable dans les réglages).
+- **Thème** : sombre, clair ou contraste élevé. Toute l'interface suit, y compris le terminal et les boutons de la fenêtre.
 
 ### Les fonctions
 
@@ -56,7 +58,9 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 - **Erreurs soulignées** : en JavaScript, TypeScript, CSS, SCSS, LESS et JSON, Monaco souligne lui-même les erreurs. Pour le **HTML**, c'est [HTMLHint](https://htmlhint.com) qui vérifie le fichier à chaque pause de frappe : balise non fermée, attribut en double, `<!DOCTYPE>` manquant, guillemets… Rouge = erreur, jaune = avertissement, et le survol affiche l'explication (en anglais) avec le nom de la règle. Les règles se règlent dans `htmlRules` (voir ci-dessous).
 - **Enregistrer** : `Ctrl+S`. Un `●` à la place de la croix de l'onglet signale des modifications non enregistrées.
 - **Fermer un onglet** : la croix, clic molette ou `Ctrl+W`. L'IDE demande confirmation si le fichier n'est pas enregistré.
-- **Config perso** : l'icône **engrenage** (en bas à gauche) ouvre ton fichier de réglages dans l'IDE. Tu le modifies, `Ctrl+S`, et c'est appliqué tout de suite.
+- **Réglages** : l'icône **engrenage** (en bas à gauche) ouvre la fenêtre de réglages, avec des interrupteurs, des curseurs et des listes plutôt que du JSON. À gauche, les rubriques : Apparence (thème, verre dépoli, flou Windows 11, couleur d'accent avec 8 couleurs proposées ou la pipette pour n'importe quelle autre), Éditeur (police, taille, tabulations, retour à la ligne, mini-carte), Terminal (taille du texte, profils), Raccourcis, Vérification HTML (chaque règle HTMLHint avec son explication), Démarrage. Chaque changement s'applique et s'enregistre tout de suite (« Enregistré » s'affiche en haut). `Échap` ou un clic à côté ferme la fenêtre.
+  - **Changer un raccourci** : clique dessus, puis appuie sur la nouvelle combinaison (avec `Ctrl` ou `Alt`). `Échap` annule.
+  - **Le fichier JSON reste là** : « Ouvrir config.json », en bas à gauche des réglages, l'ouvre dans un onglet. Tu le modifies, `Ctrl+S`, et c'est appliqué tout de suite. Si le fichier contient une erreur, la fenêtre de réglages refuse d'enregistrer (pour ne pas écraser tes réglages) et te dit où est l'erreur.
 - **Terminal intégré** : bouton terminal (en haut) ou `Ctrl+J` pour afficher / masquer le panneau en bas. Tu peux en ouvrir plusieurs en onglets : choisis un profil dans la liste, puis `+`. La poignée au-dessus du panneau permet de régler sa hauteur, et la flèche à droite le masque.
 - **Dans quel dossier démarre le terminal ?** Dans le **dossier sélectionné dans l'arborescence** (le dernier sur lequel tu as cliqué), sinon à la racine du projet. Le nom de l'onglet le rappelle : `PowerShell · css`. Le plus direct : **clic droit sur un dossier › Ouvrir un terminal ici**.
 - **Serveurs favoris** : l'onglet **Serveurs** de la barre latérale liste tes serveurs. Un clic sur un serveur ouvre la connexion SSH dans un nouvel onglet de terminal. Le **+** ouvre un formulaire (nom, hôte, utilisateur, port, clé SSH facultative avec un bouton pour la choisir). Au survol d'un serveur, le crayon permet de le modifier et la corbeille de le supprimer. La connexion utilise `ssh`, le client intégré à Windows 10/11. **Aucun mot de passe n'est enregistré** : avec une clé SSH, la connexion est directe, sinon ssh te demande ton mot de passe dans le terminal.
@@ -65,9 +69,13 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 
 ### Réglages disponibles
 
+Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistrés dans `config.json` (sous Windows : `%APPDATA%\atelier-ide\config.json`), que tu peux aussi modifier à la main.
+
 | Clé | Rôle | Exemples |
 |-----|------|----------|
 | `theme` | Thème de l'éditeur et de l'interface | `"vs-dark"`, `"vs"` (clair), `"hc-black"` (contraste élevé) |
+| `glass` | Verre dépoli (thème sombre uniquement) | `true`, `false` |
+| `windowBlur` | Flou Windows 11 derrière la fenêtre (demande `glass`) | `true`, `false` |
 | `accentColor` | Couleur d'accent : logo, onglet actif, curseur, boutons principaux… | `"#e0a526"` |
 | `fontFamily` | Police de l'éditeur | `"Consolas, monospace"` |
 | `fontSize` | Taille du texte | `15` |
@@ -125,13 +133,14 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 
 | Fichier | Rôle |
 |---------|------|
-| `ide/main.js` | Processus principal. Crée la fenêtre, gère la boîte de dialogue « ouvrir un dossier », lit et écrit les fichiers. Il refuse tout accès en dehors du dossier ouvert (et de ta config). Il lance aussi les processus des terminaux avec node-pty et les arrête à la fermeture de l'IDE. Il tient le journal `atelier.log`, intercepte les raccourcis globaux et attrape les erreurs imprévues. Il retient tes dossiers récents (`state.json`, à côté de la config) et choisit le dossier de départ des terminaux. Il crée les fichiers et dossiers, vérifie avec git s'il existe une mise à jour, puis lance le script de mise à jour. Enfin, il enregistre les serveurs favoris et construit leur commande `ssh`, en refusant un hôte ou un utilisateur qui commence par `-`, pour qu'on ne puisse pas glisser une option ssh dans un champ. |
+| `ide/main.js` | Processus principal. Crée la fenêtre, gère la boîte de dialogue « ouvrir un dossier », lit et écrit les fichiers. Il refuse tout accès en dehors du dossier ouvert (et de ta config). Il lance aussi les processus des terminaux avec node-pty et les arrête à la fermeture de l'IDE. Il tient le journal `atelier.log`, intercepte les raccourcis globaux et attrape les erreurs imprévues. Il enregistre les changements faits dans la fenêtre de réglages (en gardant le reste de ton config.json), règle le flou de Windows 11 et retient tes dossiers récents (`state.json`, à côté de la config) et choisit le dossier de départ des terminaux. Il crée les fichiers et dossiers, vérifie avec git s'il existe une mise à jour, puis lance le script de mise à jour. Enfin, il enregistre les serveurs favoris et construit leur commande `ssh`, en refusant un hôte ou un utilisateur qui commence par `-`, pour qu'on ne puisse pas glisser une option ssh dans un champ. |
 | `ide/preload.js` | Expose à l'interface `window.atelier` : les dossiers et fichiers (`openFolder`, `recentFolders`, `openRecentFolder`, `readFolder`, `readFile`, `writeFile`, `createFile`, `createFolder`), le thème de la fenêtre (`setWindowTheme`), la config (`getConfig`, `getConfigPath`) les terminaux (`createTerminal`, `writeTerminal`, `resizeTerminal`, `killTerminal`, plus deux écouteurs pour la sortie et la fin d'un processus) les serveurs (`listServers`, `saveServer`, `deleteServer`, `pickKeyFile`, `connectServer`) et la gestion des erreurs et raccourcis (`getLogPath`, `log`, `onAppError`, `onShortcut`). Rien d'autre de Node n'est accessible côté interface (`contextIsolation`). |
 | `ide/renderer/index.html` | Structure de la page : barre de titre, barre d'icônes, arborescence, onglets, éditeur, terminal, barre d'état. La balise `Content-Security-Policy` n'autorise que les scripts locaux. |
 | `ide/renderer/icons.js` | L'icône et la couleur de chaque type de fichier. |
 | `ide/renderer/style.css` | Tout le visuel. Les couleurs sont des variables CSS (`--accent`, `--bg`…) en haut du fichier, faciles à changer. |
 | `ide/renderer/notify.js` | Les notifications, et la capture des erreurs imprévues de l'interface. |
 | `ide/renderer/app.js` | La logique : charge Monaco, construit l'arborescence (avec la création de fichiers et dossiers) et les colonnes, gère les onglets (aperçu, clic molette, glisser-déposer), la vérification HTML, l'enregistrement et la config. |
+| `ide/renderer/settings.js` | La fenêtre de réglages. Chaque réglage est une ligne dans `SECTIONS` (clé de config + type de contrôle) : en ajouter un est facile. |
 | `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, lancement du script. |
 | `mettre-a-jour.bat` / `.sh` | Les scripts de mise à jour (git pull, npm install, relance). |
 | `ide/renderer/terminal.js` | Le panneau terminal : crée les terminaux xterm.js, les onglets, la poignée et le raccourci `Ctrl+J`. |

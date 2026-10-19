@@ -526,3 +526,242 @@ body.has-tabs #welcome { display: none; }
 #status-folder { display: flex; align-items: center; gap: 5px; color: var(--text); }
 #status-folder .codicon { color: var(--accent); font-size: 14px; }
 #status-msg { margin-left: auto; color: var(--text); }
+
+/* =========================================================================
+   Verre dépoli (glassmorphism), activé par "glass": true en thème sombre.
+   Le fond de la fenêtre est un dégradé sombre avec deux halos de couleur ;
+   les panneaux sont des plaques de verre translucides posées dessus, séparées
+   par un petit espace. Avec "windowBlur" (Windows 11), c'est ton bureau flouté
+   qui remplace le dégradé.
+   ========================================================================= */
+body.glass {
+  --bg: rgba(0, 0, 0, 0.22);                 /* champs de saisie */
+  --panel: transparent;
+  --panel-2: rgba(30, 31, 40, 0.72);         /* menus, notifications, réglages */
+  --glass: rgba(255, 255, 255, 0.035);       /* plaques de verre */
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(24px) saturate(140%);
+  --border: rgba(255, 255, 255, 0.07);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.10);
+  --term-bg: rgba(0, 0, 0, 0);
+  --radius: 10px;
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  background:
+    radial-gradient(1100px 700px at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 65%),
+    radial-gradient(1000px 700px at 100% 100%, rgba(88, 101, 242, 0.14), transparent 65%),
+    #101014;
+}
+/* Flou Windows 11 : le fond devient translucide pour laisser voir le bureau flouté. */
+body.glass.window-blur {
+  background:
+    radial-gradient(1100px 700px at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 65%),
+    rgba(12, 12, 16, 0.55);
+}
+
+body.glass #titlebar,
+body.glass #activitybar,
+body.glass #statusbar { border: none; background: transparent; }
+
+/* Les plaques : barre latérale, éditeurs, terminal */
+body.glass #layout { gap: 8px; padding: 0 8px 0 0; }
+body.glass #sidebar,
+body.glass #editor-area,
+body.glass #terminal-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+body.glass #panel-resizer { height: 8px; margin: 0; background: transparent; }
+body.glass #panel-resizer:hover, body.glass #panel-resizer.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 4px; }
+body.glass #terminal-panel { border-top: 1px solid var(--glass-border); }
+body.glass .view-header { background: transparent; }
+body.glass #welcome { background: transparent; }
+
+/* Onglets : sans séparateurs, l'actif est une pastille claire soulignée d'accent */
+body.glass .group { border-left-color: var(--glass-border); }
+body.glass .group .tabs { gap: 2px; padding: 4px 6px 0; border-bottom-color: var(--glass-border); }
+body.glass .tab { border-right: none; border-radius: 8px 8px 0 0; }
+body.glass .tab.active { background: rgba(255, 255, 255, 0.06); }
+body.glass .tab.active::after { top: auto; bottom: 0; left: 10px; right: 10px; border-radius: 2px; }
+body.glass #term-tabs .tab { border-radius: 8px; margin: 4px 0; }
+body.glass #term-tabs .tab.active::after { display: none; }
+
+/* Arborescence : lignes arrondies plutôt qu'en pleine largeur */
+body.glass .node { margin: 0 6px; border-radius: 6px; }
+
+/* Ce qui flotte au-dessus : menus, notifications, réglages */
+body.glass .context-menu,
+body.glass .notification,
+body.glass #server-form {
+  border-color: var(--glass-border);
+  backdrop-filter: blur(30px) saturate(150%);
+}
+body.glass .welcome-logo { box-shadow: 0 10px 40px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ---------- Fenêtre de réglages (settings.js) ---------- */
+#settings {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  animation: fade-in 0.15s ease-out;
+}
+@keyframes fade-in { from { opacity: 0; } }
+.settings-card {
+  display: flex;
+  width: min(920px, calc(100vw - 48px));
+  height: min(640px, calc(100vh - 80px));
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(40px) saturate(160%);
+  overflow: hidden;
+  animation: pop-in 0.18s ease-out;
+}
+body:not(.glass) .settings-card { background: var(--panel); }
+@keyframes pop-in { from { transform: scale(0.97); opacity: 0; } }
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 210px;
+  flex-shrink: 0;
+  padding: 18px 10px 12px;
+  border-right: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.12);
+}
+.settings-nav h2 { margin: 0 10px 14px; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.settings-links { display: flex; flex-direction: column; gap: 2px; }
+.settings-nav .spacer { flex: 1; }
+.settings-nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.settings-nav button:hover { background: var(--hover); color: var(--text-strong); }
+.settings-nav button .codicon { color: var(--muted); }
+.settings-json { color: var(--muted) !important; font-size: 12px; }
+.settings-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.settings-main header { display: flex; align-items: center; justify-content: flex-end; gap: 10px; height: 44px; padding: 0 10px; }
+.settings-saved { display: flex; align-items: center; gap: 4px; color: var(--success); font-size: 12px; opacity: 0; }
+.settings-saved.show { animation: saved 1.6s ease-out; }
+@keyframes saved { 10%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.settings-content { flex: 1; overflow: auto; padding: 0 32px 32px; scroll-behavior: smooth; user-select: text; }
+.settings-section { padding-bottom: 18px; }
+.settings-section + .settings-section { border-top: 1px solid var(--border); padding-top: 6px; }
+.settings-section h3 { margin: 14px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.setting { display: flex; align-items: center; gap: 24px; padding: 12px 0; }
+.setting-text { flex: 1; min-width: 0; }
+.setting-label { color: var(--text-strong); font-size: 13px; }
+.setting-help { color: var(--muted); font-size: 12px; line-height: 1.45; margin-top: 3px; }
+.setting-note { color: var(--warning); }
+.setting-profiles, .setting-htmlRules { flex-direction: column; align-items: stretch; gap: 10px; }
+
+/* Interrupteur */
+.toggle {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 11px;
+  background: rgba(128, 128, 128, 0.35);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.toggle .knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
+.toggle.on { background: var(--accent); }
+.toggle.on .knob { transform: translateX(16px); }
+
+/* Choix multiple */
+.segmented { display: flex; padding: 3px; gap: 2px; border-radius: 8px; background: rgba(128, 128, 128, 0.14); }
+.segmented button { min-width: 44px; height: 26px; padding: 0 12px; border: none; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.segmented button:hover { color: var(--text-strong); }
+.segmented button.active { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+
+/* Curseur */
+.range { display: flex; align-items: center; gap: 12px; }
+.range input {
+  -webkit-appearance: none;
+  width: 180px;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 50%), rgba(128, 128, 128, 0.3) var(--fill, 50%));
+  outline: none;
+}
+.range input::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4); cursor: pointer; }
+.range-value { width: 44px; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* Champs texte */
+.text-input {
+  width: 260px;
+  height: 30px;
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--text-strong);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font: inherit;
+  outline: none;
+}
+.text-input:focus { border-color: var(--accent); }
+
+/* Couleurs */
+.swatches { display: flex; gap: 8px; align-items: center; }
+.swatch {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+.swatch.active { box-shadow: 0 0 0 2px var(--panel-2), 0 0 0 4px currentColor; color: var(--text-strong); }
+.swatch.custom { display: inline-flex; align-items: center; justify-content: center; background: conic-gradient(#f25f8b, #e0a526, #7ccf62, #38bdf8, #b18cff, #f25f8b); color: #fff; }
+.swatch.custom .codicon { font-size: 12px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.6)); }
+.swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* Raccourcis */
+.shortcut-button { display: flex; align-items: center; min-width: 140px; height: 32px; padding: 0 10px; justify-content: center; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); cursor: pointer; }
+.shortcut-button:hover { border-color: var(--muted); }
+.shortcut-button.recording { border-color: var(--accent); color: var(--accent); }
+
+/* Profils de terminal */
+.profiles { display: flex; flex-direction: column; gap: 6px; }
+.profile { display: grid; grid-template-columns: 1fr 1.4fr 1fr auto; gap: 6px; align-items: center; }
+.profile .text-input { width: 100%; }
+.add-button { align-self: flex-start; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border: 1px dashed var(--border); border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+.add-button:hover { color: var(--text-strong); border-color: var(--muted); }
+
+/* Règles HTML */
+.rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 2px 16px; }
+.rule { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+.rule:hover { background: var(--hover); }
+.rule input { grid-row: span 2; accent-color: var(--accent); margin-top: 2px; }
+.rule-id { color: var(--text-strong); font-family: var(--mono, Consolas, monospace); font-size: 12px; }
+.rule-desc { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+/* xterm peint son fond opaque même avec une couleur transparente : on le force. */
+body.glass .term-view .xterm-viewport,
+body.glass .term-view .xterm-screen { background: transparent !important; }
+/* Monaco entoure chaque éditeur d'un contour de focus (bleu ou gris) : inutile ici,
+   l'onglet actif souligné suffit à savoir quelle colonne a le focus. */
+.monaco-editor, .monaco-editor textarea.inputarea { outline: none !important; }

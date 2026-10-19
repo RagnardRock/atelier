@@ -7,7 +7,8 @@ contextBridge.exposeInMainWorld('atelier', {
   openFolder: () => ipcRenderer.invoke('folder:open'),
   recentFolders: () => ipcRenderer.invoke('folder:recents'),
   openRecentFolder: (folder) => ipcRenderer.invoke('folder:openRecent', folder),
-  setWindowTheme: (theme) => ipcRenderer.invoke('window:theme', theme),
+  setWindowTheme: (options) => ipcRenderer.invoke('window:theme', options),
+  blurSupported: () => ipcRenderer.invoke('window:blurSupported'),
   platform: process.platform,
   readFolder: (dir) => ipcRenderer.invoke('folder:read', dir),
   readFile: (file) => ipcRenderer.invoke('file:read', file),
@@ -17,6 +18,8 @@ contextBridge.exposeInMainWorld('atelier', {
   joinPath: (...parts) => ipcRenderer.invoke('path:join', ...parts),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),
+  saveConfig: (changes) => ipcRenderer.invoke('config:save', changes),
+  pauseShortcuts: (paused) => ipcRenderer.invoke('shortcuts:pause', paused),
 
   // Erreurs et raccourcis
   getLogPath: () => ipcRenderer.invoke('log:path'),

@@ -79,7 +79,7 @@ async function start() {
     selectDir(state.root);
     showTreeMenu(e.clientX, e.clientY);
   };
-  $('#btn-config').onclick = () => openFile(state.configPath, 'config.json', { preview: false });
+  $('#btn-config').onclick = () => settings.open();
   setupSplitDropzone();
 
   // Dossiers récents sur l'écran d'accueil, et réouverture du dernier dossier.
@@ -101,6 +101,27 @@ function defineThemes() {
       'editor.lineHighlightBackground': '#2a2a2a',
       'editorLineNumber.activeForeground': '#cccccc',
       'editorGutter.background': '#1f1f1f',
+    },
+  });
+  // Verre dépoli : fond transparent, l'éditeur laisse voir la plaque de verre derrière lui.
+  monaco.editor.defineTheme('atelier-glass', {
+    base: 'vs-dark', inherit: true, rules: [],
+    colors: {
+      'editor.background': '#00000000',
+      'editorGutter.background': '#00000000',
+      'minimap.background': '#00000000',
+      'editorOverviewRuler.background': '#00000000',
+      'editorOverviewRuler.border': '#00000000',
+      'scrollbar.shadow': '#00000000',
+      'editorStickyScroll.background': '#16171d',
+      'editorCursor.foreground': accent,
+      'editor.lineHighlightBackground': '#ffffff08',
+      'editor.lineHighlightBorder': '#00000000',
+      'editorLineNumber.foreground': '#5a5d6b',
+      'editorLineNumber.activeForeground': '#d4d4d4',
+      'editorWidget.background': '#1c1d24',
+      'editorSuggestWidget.background': '#1c1d24',
+      'editorHoverWidget.background': '#1c1d24',
     },
   });
   monaco.editor.defineTheme('atelier-light', {
@@ -138,9 +159,15 @@ function applyConfig() {
   const light = c.theme === 'vs';
   defineThemes(); // la couleur d'accent a pu changer
   // "vs-dark" et "vs" deviennent nos versions ; tout autre thème Monaco ("hc-black"…) est gardé tel quel.
-  monaco.editor.setTheme(c.theme === 'vs-dark' ? 'atelier-dark' : light ? 'atelier-light' : c.theme);
+  // Le verre dépoli n'existe qu'en thème sombre.
+  const glass = Boolean(c.glass) && c.theme === 'vs-dark';
+  monaco.editor.setTheme(glass ? 'atelier-glass' : c.theme === 'vs-dark' ? 'atelier-dark' : light ? 'atelier-light' : c.theme);
   document.body.classList.toggle('light', light);
-  window.atelier.setWindowTheme(light ? 'light' : 'dark'); // couleurs des boutons de la fenêtre
+  document.body.classList.toggle('glass', glass);
+  // main.js règle les boutons de la fenêtre et, si demandé, le flou de Windows 11.
+  window.atelier.setWindowTheme({ theme: light ? 'light' : 'dark', glass, blur: Boolean(c.windowBlur) })
+    .then((blurOn) => document.body.classList.toggle('window-blur', blurOn))
+    .catch((err) => notify.error(`Thème de la fenêtre : ${cleanError(err)}`));
   document.documentElement.style.setProperty('--accent', c.accentColor);
   for (const group of state.groups) group.editor.updateOptions(editorOptions());
   for (const file of state.files.values()) lintHtml(file.model); // les règles HTML ont pu changer

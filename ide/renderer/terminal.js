@@ -17,7 +17,8 @@ const terminalPanel = (() => {
     const css = getComputedStyle(document.body);
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     return {
-      background: css.getPropertyValue('--bg').trim(),
+      // En verre dépoli, --term-bg est transparent : le terminal laisse voir la plaque de verre.
+      background: (css.getPropertyValue('--term-bg') || css.getPropertyValue('--bg')).trim(),
       foreground: css.getPropertyValue('--text').trim(),
       cursor: accent,
       selectionBackground: `${accent}55`,
@@ -73,6 +74,7 @@ const terminalPanel = (() => {
       fontSize: config.terminalFontSize,
       theme: theme(),
       cursorBlink: true,
+      allowTransparency: true, // nécessaire pour un fond transparent (verre dépoli)
       scrollback: 5000,
     });
     const fit = new FitAddon.FitAddon(); // ajuste colonnes/lignes à la taille du panneau

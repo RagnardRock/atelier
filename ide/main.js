@@ -220,6 +220,33 @@ handle('config:get', async () => {
   return result;
 });
 handle('config:path', async () => configPath());
+
+// Fenêtre de réglages : elle envoie seulement les clés modifiées, qu'on fusionne dans ton
+// config.json (les autres clés, et celles que l'interface ne connaît pas, sont gardées).
+// Seules les clés de config.default.json sont acceptées.
+handle('config:save', async (_event, changes) => {
+  const defaults = JSON.parse(await fs.readFile(DEFAULT_CONFIG, 'utf8'));
+  let user = {};
+  const text = await fs.readFile(configPath(), 'utf8').catch(() => '{}');
+  try {
+    user = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`config.json contient une erreur (${describeJsonError(text, err)}). Corrige-la d'abord dans le fichier, sinon tes réglages seraient écrasés.`);
+  }
+  for (const [key, value] of Object.entries(changes)) {
+    if (!(key in defaults)) throw new Error(`Réglage inconnu : ${key}`);
+    user[key] = value;
+  }
+  await fs.writeFile(configPath(), `${JSON.stringify(user, null, 2)}\n`, 'utf8');
+  const result = await loadConfig();
+  applyShortcuts(result.config.shortcuts);
+  return result;
+});
+
+// Pendant qu'on enregistre un nouveau raccourci dans les réglages, main.js ne doit pas
+// intercepter les touches (sinon Ctrl+J ouvrirait le terminal au lieu d'être enregistré).
+let shortcutsPaused = false;
+handle('shortcuts:pause', async (_event, paused) => { shortcutsPaused = Boolean(paused); });
 handle('log:path', async () => logPath());
 
 // L'interface envoie ici ses propres erreurs, pour qu'elles finissent aussi dans le journal.
@@ -428,10 +455,31 @@ const TITLE_BAR = {
   light: { color: '#f3f3f3', symbolColor: '#333333', height: 40 },
 };
 
-handle('window:theme', async (event, theme) => {
+// Flou de Windows 11 ("acrylic") : le bureau se voit, flouté, à travers la fenêtre.
+// Il n'existe qu'à partir de Windows 11 22H2 (build 22621).
+function blurSupported() {
+  if (process.platform !== 'win32') return false;
+  const build = Number(os.release().split('.')[2]);
+  return build >= 22621;
+}
+
+// L'interface indique son thème et si le verre dépoli est activé, avec ou sans flou Windows.
+// Renvoie true si le flou Windows est réellement actif.
+handle('window:theme', async (event, { theme, glass, blur }) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (process.platform !== 'darwin') win.setTitleBarOverlay(TITLE_BAR[theme === 'light' ? 'light' : 'dark']);
+  const useBlur = Boolean(glass && blur && theme !== 'light' && blurSupported());
+  if (blurSupported()) {
+    win.setBackgroundMaterial(useBlur ? 'acrylic' : 'none');
+    win.setBackgroundColor(useBlur ? '#00000000' : '#101014');
+  }
+  if (process.platform !== 'darwin') {
+    let colors = TITLE_BAR[theme === 'light' ? 'light' : 'dark'];
+    if (glass && theme !== 'light') colors = { ...colors, color: useBlur ? '#00000000' : '#101014' };
+    win.setTitleBarOverlay(colors);
+  }
+  return useBlur;
 });
+handle('window:blurSupported', async () => blurSupported());
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -439,7 +487,7 @@ function createWindow() {
     height: 900,
     minWidth: 700,
     minHeight: 400,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: '#101014',
     title: 'Atelier',
     // Pas de barre de titre système : la barre du haut de l'interface la remplace,
     // et Windows y dessine ses propres boutons réduire / agrandir / fermer.
@@ -463,6 +511,7 @@ function createWindow() {
       event.preventDefault();
       return win.webContents.reload();
     }
+    if (shortcutsPaused) return;
     const shortcut = matchShortcut(input);
     if (!shortcut) return;
     event.preventDefault();
