@@ -10,6 +10,7 @@ const { execFile, spawn } = require('node:child_process');
 // node-pty lance un vrai terminal (ConPTY sous Windows) : couleurs, ssh, vim… tout marche.
 const pty = require('node-pty');
 const claude = require('./claude');
+const search = require('./search');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -496,6 +497,7 @@ handle('window:blurSupported', async () => blurSupported());
 
 // Chat avec Claude (voir claude.js).
 claude.register({ handle, getRoot: () => rootFolder, readConfig, log });
+search.register({ handle, getRoot: () => rootFolder });
 
 function createWindow(config) {
   const blur = wantsBlur(config);

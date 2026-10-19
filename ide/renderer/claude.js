@@ -408,7 +408,7 @@ const claudePanel = (() => {
         if (busy || e.notInstalled) {
           setBusy(false);
           if (e.notInstalled) addNotice('error', INSTALL_HELP);
-          else if (e.code) addNotice('error', `Claude Code s'est arrêté (code ${e.code}).${e.stderr ? `<br><code>${escapeHtml(e.stderr.slice(-400))}</code>` : ''}<br>Ton prochain message reprendra la conversation.`);
+          else addNotice('error', `Claude Code s'est arrêté sans répondre${e.code ? ` (code ${e.code})` : ''}.${e.stderr ? `<br><code>${escapeHtml(e.stderr.slice(-400))}</code>` : ''}<br>Ton prochain message reprendra la conversation.`);
         }
         break;
       default:

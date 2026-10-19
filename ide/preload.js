@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('atelier', {
   writeFile: (file, content) => ipcRenderer.invoke('file:write', file, content),
   createFile: (file) => ipcRenderer.invoke('file:create', file),
   createFolder: (dir) => ipcRenderer.invoke('folder:create', dir),
+  listFiles: () => ipcRenderer.invoke('files:list'),
+  searchText: (options) => ipcRenderer.invoke('search:text', options),
   joinPath: (...parts) => ipcRenderer.invoke('path:join', ...parts),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),

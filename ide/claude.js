@@ -14,6 +14,8 @@
 // de la conversation. "Nouvelle conversation" l'arrête.
 
 const { spawn, execFile } = require('node:child_process');
+const path = require('node:path');
+const fs = require('node:fs');
 
 let proc = null;          // processus Claude Code en cours
 let procCwd = null;       // dossier dans lequel il a été lancé
@@ -30,14 +32,43 @@ function write(message) {
   if (proc && proc.stdin.writable) proc.stdin.write(`${JSON.stringify(message)}\n`);
 }
 
-// Sous Windows, `claude` est souvent un fichier .cmd (installé par npm) : il faut passer par
-// le shell. Les arguments ne contiennent pas d'espace, seul le chemin de la commande peut en avoir.
+// Sous Windows, on cherche nous-mêmes le vrai programme (claude.exe, ou claude.cmd installé par
+// npm) dans le PATH. Si on laissait faire Windows, il chercherait d'abord dans le dossier
+// courant, et avec ses règles il prendrait un fichier "claude.js" du projet pour la commande
+// (il l'ouvrirait alors avec l'application associée aux .js au lieu de lancer Claude Code).
+const WINDOWS_EXTENSIONS = ['.exe', '.cmd', '.bat'];
+
+function findWindowsCommand(command) {
+  const candidates = (base) => (WINDOWS_EXTENSIONS.includes(path.extname(base).toLowerCase())
+    ? [base]
+    : WINDOWS_EXTENSIONS.map((ext) => base + ext));
+  if (path.isAbsolute(command) || /[\\/]/.test(command)) {
+    return candidates(path.resolve(command)).find((f) => fs.existsSync(f)) || null;
+  }
+  const dirs = (process.env.PATH || '').split(';').filter(Boolean);
+  // Emplacements habituels de Claude Code, au cas où ils ne seraient pas dans le PATH.
+  if (process.env.USERPROFILE) dirs.push(path.join(process.env.USERPROFILE, '.local', 'bin'));
+  if (process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, 'npm'));
+  for (const dir of dirs) {
+    const found = candidates(path.join(dir.replace(/"/g, ''), command)).find((f) => fs.existsSync(f));
+    if (found) return found;
+  }
+  return null;
+}
+
 function spawnClaude(command, args, cwd) {
   const env = { ...process.env };
   delete env.CLAUDECODE; // si l'IDE a été lancé depuis Claude Code, ce ne doit pas être vu comme imbriqué
   if (process.platform === 'win32') {
-    const quoted = command.includes(' ') ? `"${command}"` : command;
-    return spawn(quoted, args, { cwd, env, shell: true, windowsHide: true });
+    const file = findWindowsCommand(command);
+    if (!file) {
+      const err = new Error(`commande introuvable : ${command}`);
+      err.code = 'ENOENT';
+      throw err;
+    }
+    // Un .exe se lance directement. Un .cmd ou .bat (installation npm) a besoin de cmd.exe.
+    if (path.extname(file).toLowerCase() === '.exe') return spawn(file, args, { cwd, env, windowsHide: true });
+    return spawn(`"${file}"`, args, { cwd, env, shell: true, windowsHide: true });
   }
   return spawn(command, args, { cwd, env });
 }
@@ -56,7 +87,13 @@ function start({ command, model, permissionMode, cwd, log, resume }) {
   if (resume) args.push('--resume', resume);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}`);
-  proc = spawnClaude(command, args, cwd);
+  try {
+    proc = spawnClaude(command, args, cwd);
+  } catch (err) {
+    log('ERREUR', `Claude : ${err.message}`);
+    emit({ kind: 'error', notInstalled: err.code === 'ENOENT', message: err.message });
+    return false;
+  }
   procCwd = cwd;
   buffer = '';
   const current = proc;
@@ -95,6 +132,7 @@ function start({ command, model, permissionMode, cwd, log, resume }) {
 
   // Première chose attendue par Claude Code : la "poignée de main" du protocole.
   write({ type: 'control_request', request_id: `init-${nextRequestId++}`, request: { subtype: 'initialize' } });
+  return true;
 }
 
 // Traduit les messages de Claude Code en événements simples pour l'interface.
@@ -169,7 +207,7 @@ function register({ handle, getRoot, readConfig, log }) {
       const config = await readConfig();
       // Claude Code s'était arrêté en cours de conversation (plantage, mise en veille…) : on la reprend.
       const resume = lastSession && lastSession.cwd === root && /^[\w-]+$/.test(lastSession.id) ? lastSession.id : null;
-      start({ command: config.claudeCommand || 'claude', model: config.claudeModel, permissionMode: config.claudePermissionMode, cwd: root, log, resume });
+      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, permissionMode: config.claudePermissionMode, cwd: root, log, resume })) return;
     }
     write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' });
   });

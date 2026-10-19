@@ -28,6 +28,7 @@
     <!-- Barre d'icônes verticale : choisir la vue de la barre latérale, et les réglages en bas -->
     <nav id="activitybar">
       <button data-view="tree" class="active" title="Fichiers"><i class="codicon codicon-files"></i></button>
+      <button data-view="search" title="Rechercher dans le projet (Ctrl+Shift+F)"><i class="codicon codicon-search"></i></button>
       <button data-view="servers" title="Serveurs"><i class="codicon codicon-server"></i></button>
       <span class="spacer"></span>
       <button id="btn-update" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
@@ -45,6 +46,26 @@
           </span>
         </div>
         <div id="tree-root"><p class="hint">Ouvre un dossier pour voir tes fichiers.</p></div>
+      </div>
+
+      <!-- Recherche dans tout le projet (search.js) -->
+      <div id="search" class="side-view" hidden>
+        <div class="view-header">
+          <span class="view-title">Rechercher</span>
+          <span class="view-actions">
+            <button id="search-collapse" class="icon-button" title="Tout replier / déplier"><i class="codicon codicon-collapse-all"></i></button>
+          </span>
+        </div>
+        <form id="search-form">
+          <div class="search-box">
+            <input id="search-input" spellcheck="false" placeholder="Rechercher dans le projet">
+            <button type="button" class="search-opt" data-opt="caseSensitive" title="Respecter les majuscules"><i class="codicon codicon-case-sensitive"></i></button>
+            <button type="button" class="search-opt" data-opt="wholeWord" title="Mot entier"><i class="codicon codicon-whole-word"></i></button>
+            <button type="button" class="search-opt" data-opt="regex" title="Expression régulière"><i class="codicon codicon-regex"></i></button>
+          </div>
+        </form>
+        <p id="search-summary" class="hint"></p>
+        <div id="search-results"></div>
       </div>
 
       <div id="servers" class="side-view" hidden>
@@ -81,6 +102,14 @@
       <button id="menu-terminal"><i class="codicon codicon-terminal"></i>Ouvrir un terminal ici</button>
     </div>
 
+    <!-- Ouverture rapide d'un fichier par son nom (Ctrl+P, search.js) -->
+    <div id="quick-open" hidden>
+      <div class="quick-card">
+        <div class="quick-input"><i class="codicon codicon-search"></i><input id="quick-input" spellcheck="false" placeholder="Nom du fichier… (ajoute :12 pour aller à la ligne 12)"></div>
+        <div id="quick-list"></div>
+      </div>
+    </div>
+
     <section id="workspace">
       <!-- Colonnes d'éditeurs côte à côte (créées par app.js) -->
       <div id="editor-area">
@@ -94,6 +123,8 @@
             <div id="welcome-recents"></div>
             <dl class="shortcuts">
               <dt><kbd>Ctrl</kbd><kbd>O</kbd></dt><dd>Ouvrir un dossier</dd>
+              <dt><kbd>Ctrl</kbd><kbd>P</kbd></dt><dd>Ouvrir un fichier par son nom</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>F</kbd></dt><dd>Rechercher dans le projet</dd>
               <dt><kbd>Ctrl</kbd><kbd>S</kbd></dt><dd>Enregistrer</dd>
               <dt><kbd>Ctrl</kbd><kbd>J</kbd></dt><dd>Terminal</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></dt><dd>Diviser l'écran</dd>
@@ -164,5 +195,6 @@
   <script src="update.js"></script>
   <script src="settings.js"></script>
   <script src="claude.js"></script>
+  <script src="search.js"></script>
 </body>
 </html>
