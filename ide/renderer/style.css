@@ -844,6 +844,39 @@ body:not(.glass) .quick-card { background: var(--panel); }
 .search-match .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .search-match mark { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--text-strong); border-radius: 2px; }
 
+/* ---------- Aperçu navigateur (preview.js) ---------- */
+#preview-resizer { width: 4px; margin-left: -2px; cursor: col-resize; flex-shrink: 0; position: relative; z-index: 2; }
+#preview-resizer:hover, #preview-resizer.dragging { background: var(--accent); }
+#preview-panel {
+  width: 560px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+}
+.preview-bar { display: flex; align-items: center; gap: 2px; height: 36px; padding: 0 6px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+#preview-form { flex: 1; min-width: 0; margin: 0 4px; }
+#preview-address {
+  width: 100%;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+  user-select: text;
+}
+#preview-address:focus { border-color: color-mix(in srgb, var(--accent) 70%, transparent); color: var(--text-strong); }
+.preview-bar .icon-button.active, #btn-preview.active { color: var(--accent); }
+#preview-stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: rgba(0, 0, 0, 0.15); }
+#preview-frame { flex: 1; width: 100%; border: none; background: #fff; }
+#preview-panel.mobile #preview-frame { flex: 0 0 390px; max-width: 100%; margin: 10px 0; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+
 /* =========================================================================
    Verre dépoli (glassmorphism), activé par "glass": true en thème sombre.
    Le fond de la fenêtre est un dégradé sombre avec deux halos de couleur ;
@@ -885,6 +918,7 @@ body.glass #layout { gap: 8px; padding: 0 8px 0 0; }
 body.glass #sidebar,
 body.glass #editor-area,
 body.glass #terminal-panel,
+body.glass #preview-panel,
 body.glass #claude-panel {
   background: var(--glass);
   border: 1px solid var(--glass-border);
@@ -893,6 +927,8 @@ body.glass #claude-panel {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
 }
+body.glass #preview-resizer { width: 8px; margin: 0 -8px; background: transparent; }
+body.glass #preview-resizer:hover, body.glass #preview-resizer.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 4px; }
 body.glass #claude-resizer { width: 8px; margin: 0 -8px; background: transparent; } /* posée dans les espaces entre les plaques */
 body.glass #claude-resizer:hover, body.glass #claude-resizer.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 4px; }
 body.glass #panel-resizer { height: 8px; margin: 0; background: transparent; }

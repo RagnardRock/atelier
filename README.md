@@ -29,7 +29,7 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 
 ### L'interface
 
-- **En haut, la barre de titre** : le logo, quatre boutons (ouvrir un dossier, diviser l'éditeur, afficher le terminal, discuter avec Claude) et le nom du dossier ouvert. On peut y attraper la fenêtre pour la déplacer, et Windows y dessine ses boutons réduire / agrandir / fermer.
+- **En haut, la barre de titre** : le logo, cinq boutons (ouvrir un dossier, diviser l'éditeur, afficher le terminal, aperçu navigateur, discuter avec Claude) et le nom du dossier ouvert. On peut y attraper la fenêtre pour la déplacer, et Windows y dessine ses boutons réduire / agrandir / fermer.
 - **À gauche, la barre d'icônes** : Fichiers et Serveurs en haut ; Mise à jour et Config en bas. Un point de couleur sur l'icône de mise à jour signale une nouvelle version.
 - **Les icônes** viennent de [Codicons](https://github.com/microsoft/vscode-codicons), celles de VS Code. Chaque type de fichier a son icône et sa couleur (HTML orange, CSS bleu, JS jaune, images violet, PSD et AI bleu Adobe…). La liste est dans `ide/renderer/icons.js` : une ligne par type, facile à compléter.
 - **L'écran d'accueil** (quand aucun fichier n'est ouvert) propose tes **dossiers récents** et rappelle les raccourcis.
@@ -82,6 +82,11 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
   - Sa réponse s'écrit au fil de l'eau, en Markdown, avec le code coloré et un bouton pour le copier. Le carré rouge l'arrête en cours de route.
   - **Plusieurs conversations** : le **+** en commence une nouvelle, et l'horloge liste les conversations précédentes de ce projet (avec leur date). Un clic en rouvre une : elle s'affiche comme tu l'avais laissée, et Claude reprend où il en était (il se souvient de tout ce qui a été dit). La corbeille, au survol, en supprime une. L'historique est gardé dans `claude-conversations.json`, à côté de la config.
   - Dans **Réglages › Claude** : le modèle (Opus, Sonnet, Haiku ou celui de Claude Code), accepter les modifications de fichiers sans demander, et le chemin de Claude Code s'il n'est pas trouvé tout seul.
+- **Aperçu navigateur** : le bouton œil (en haut) ou `Ctrl+Alt+P` ouvre à droite ton site tel qu'un navigateur l'affiche : le fichier HTML actif, sinon `index.html`.
+  - **Rechargement automatique** : dès qu'un fichier du projet change (enregistré avec `Ctrl+S`, modifié par Claude ou par un autre programme), la page se recharge. Si seul le CSS a changé, seuls les styles sont rechargés, et la page garde sa position.
+  - L'aperçu **suit l'onglet actif** : passe sur un autre fichier HTML, il l'affiche.
+  - En haut : précédent, recharger, la barre d'adresse (tape `/contact.html` puis `Entrée`), la **largeur téléphone** (390 px, pour vérifier la version mobile), **ouvrir dans ton navigateur** habituel, et fermer. La poignée à gauche règle la largeur du panneau.
+  - Comment ça marche : l'IDE lance un petit serveur web local (`http://127.0.0.1:<port>/`, invisible depuis les autres ordinateurs), comme l'extension Live Server de VS Code. Il ajoute à la volée, dans les pages qu'il envoie, un petit script qui écoute les changements. **Tes fichiers ne sont pas modifiés.** Comme c'est un vrai serveur, les chemins absolus (`/css/style.css`) et `fetch()` marchent, contrairement à un double-clic sur le fichier.
 - **Erreurs** : voir la section [Gestion des erreurs](#gestion-des-erreurs).
 - **Outils de dev** : `F12` ouvre la console Chromium, comme dans un navigateur. `Ctrl+R` recharge l'interface.
 
@@ -108,7 +113,7 @@ Tous ces réglages se changent dans la fenêtre de réglages. Ils sont enregistr
 | `claudeModel` | Modèle utilisé par le chat (vide = celui de Claude Code) | `""`, `"opus"`, `"sonnet"`, `"haiku"` |
 | `claudePermissionMode` | `"ask"` : il demande avant chaque modification. `"acceptEdits"` : il modifie les fichiers sans demander (les commandes demandent toujours) | `"ask"` |
 | `claudeCommand` | La commande qui lance Claude Code | `"claude"`, `"C:\\Users\\toi\\AppData\\Roaming\\npm\\claude.cmd"` |
-| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "toggleClaude": "Ctrl+Shift+I", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F" }` |
+| `shortcuts` | Raccourcis globaux, qui marchent même quand le terminal a le focus | `{ "toggleTerminal": "Ctrl+J", "splitEditor": "Ctrl+Alt+D", "toggleClaude": "Ctrl+Shift+I", "quickOpen": "Ctrl+P", "searchProject": "Ctrl+Shift+F", "togglePreview": "Ctrl+Alt+P" }` |
 
 ### Profils de terminal
 
@@ -128,7 +133,7 @@ Le fichier est stocké dans `%APPDATA%\atelier-ide\config.json`, et tes serveurs
 
 ### Raccourcis
 
-`toggleTerminal` (afficher / masquer le terminal), `splitEditor` (diviser l'écran) `toggleClaude` (afficher / masquer le chat), `quickOpen` (ouvrir un fichier par son nom) et `searchProject` (rechercher dans le projet) se règlent dans `shortcuts`. Une combinaison s'écrit avec `Ctrl`, `Alt` et `Shift`, puis la touche : `"Ctrl+Shift+T"`, `"Alt+F12"`… La touche est celle qui est imprimée sur ton clavier (AZERTY compris).
+`toggleTerminal` (afficher / masquer le terminal), `splitEditor` (diviser l'écran) `toggleClaude` (afficher / masquer le chat), `quickOpen` (ouvrir un fichier par son nom) `searchProject` (rechercher dans le projet) et `togglePreview` (aperçu navigateur) se règlent dans `shortcuts`. Une combinaison s'écrit avec `Ctrl`, `Alt` et `Shift`, puis la touche : `"Ctrl+Shift+T"`, `"Alt+F12"`… La touche est celle qui est imprimée sur ton clavier (AZERTY compris).
 
 Ces raccourcis sont interceptés par `main.js` *avant* que l'éditeur ou le terminal ne reçoivent la touche. C'est ce qui permet à `Ctrl+J` de fermer le terminal même quand il a le focus, alors que pour un terminal, `Ctrl+J` veut normalement dire « retour à la ligne ».
 
@@ -156,7 +161,7 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | Fichier | Rôle |
 |---------|------|
 | `ide/main.js` | Processus principal. Crée la fenêtre, gère la boîte de dialogue « ouvrir un dossier », lit et écrit les fichiers. Il refuse tout accès en dehors du dossier ouvert (et de ta config). Il lance aussi les processus des terminaux avec node-pty et les arrête à la fermeture de l'IDE. Il tient le journal `atelier.log`, intercepte les raccourcis globaux et attrape les erreurs imprévues. Il enregistre les changements faits dans la fenêtre de réglages (en gardant le reste de ton config.json), règle le flou de Windows 11 et retient tes dossiers récents (`state.json`, à côté de la config) et choisit le dossier de départ des terminaux. Il crée les fichiers et dossiers, vérifie avec git s'il existe une mise à jour, puis lance le script de mise à jour. Enfin, il enregistre les serveurs favoris et construit leur commande `ssh`, en refusant un hôte ou un utilisateur qui commence par `-`, pour qu'on ne puisse pas glisser une option ssh dans un champ. |
-| `ide/preload.js` | Expose à l'interface `window.atelier` : les dossiers et fichiers (`openFolder`, `recentFolders`, `openRecentFolder`, `readFolder`, `readFile`, `writeFile`, `createFile`, `createFolder`, `renamePath`, `trashPath`), le thème de la fenêtre (`setWindowTheme`), la config (`getConfig`, `getConfigPath`) les terminaux (`createTerminal`, `writeTerminal`, `resizeTerminal`, `killTerminal`, plus deux écouteurs pour la sortie et la fin d'un processus) les serveurs (`listServers`, `saveServer`, `deleteServer`, `pickKeyFile`, `connectServer`) la gestion des erreurs et raccourcis (`getLogPath`, `log`, `onAppError`, `onShortcut`) la recherche (`listFiles`, `searchText`) et le chat avec Claude (`claudeSend`, `claudePermission`, `claudeInterrupt`, `claudeReset`, `onClaudeEvent`). Rien d'autre de Node n'est accessible côté interface (`contextIsolation`). |
+| `ide/preload.js` | Expose à l'interface `window.atelier` : les dossiers et fichiers (`openFolder`, `recentFolders`, `openRecentFolder`, `readFolder`, `readFile`, `writeFile`, `createFile`, `createFolder`, `renamePath`, `trashPath`), le thème de la fenêtre (`setWindowTheme`), la config (`getConfig`, `getConfigPath`) les terminaux (`createTerminal`, `writeTerminal`, `resizeTerminal`, `killTerminal`, plus deux écouteurs pour la sortie et la fin d'un processus) les serveurs (`listServers`, `saveServer`, `deleteServer`, `pickKeyFile`, `connectServer`) la gestion des erreurs et raccourcis (`getLogPath`, `log`, `onAppError`, `onShortcut`) la recherche (`listFiles`, `searchText`), l'aperçu (`previewUrl`, `previewExternal`) et le chat avec Claude (`claudeSend`, `claudePermission`, `claudeInterrupt`, `claudeReset`, `onClaudeEvent`). Rien d'autre de Node n'est accessible côté interface (`contextIsolation`). |
 | `ide/renderer/index.html` | Structure de la page : barre de titre, barre d'icônes, arborescence, onglets, éditeur, terminal, barre d'état. La balise `Content-Security-Policy` n'autorise que les scripts locaux. |
 | `ide/renderer/icons.js` | L'icône et la couleur de chaque type de fichier. |
 | `ide/renderer/style.css` | Tout le visuel. Les couleurs sont des variables CSS (`--accent`, `--bg`…) en haut du fichier, faciles à changer. |
@@ -167,6 +172,8 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | `ide/search.js` | Le côté Node de la recherche : la liste de tous les fichiers du projet (pour `Ctrl+P`) et la recherche d'un texte dans tous les fichiers (pour `Ctrl+Maj+F`). |
 | `ide/renderer/search.js` | La fenêtre `Ctrl+P` (avec sa recherche « floue ») et la vue Rechercher de la barre latérale. |
 | `ide/renderer/fileops.js` | Renommer, supprimer (corbeille) et déplacer par glisser-déposer dans l'arborescence, en gardant les onglets ouverts à jour. |
+| `ide/preview.js` | Le serveur web local de l'aperçu : sert le dossier ouvert, surveille ses fichiers et prévient les pages pour qu'elles se rechargent. |
+| `ide/renderer/preview.js` | Le panneau Aperçu : le cadre qui affiche la page, la barre d'adresse et ses boutons. |
 | `ide/renderer/settings.js` | La fenêtre de réglages. Chaque réglage est une ligne dans `SECTIONS` (clé de config + type de contrôle) : en ajouter un est facile. |
 | `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, lancement du script. |
 | `mettre-a-jour.bat` / `.sh` | Les scripts de mise à jour (git pull, npm install, relance). |
@@ -182,6 +189,5 @@ Pas de framework ni de bundler : le code que tu lis est exactement celui qui tou
 
 ## Prochaines étapes
 
-1. Panneau d'aperçu navigateur avec rechargement auto.
-2. Pipeline d'assets Photoshop / Illustrator.
-3. Actions serveur en un clic (déployer, logs, redémarrer), à côté de chaque serveur favori.
+1. Pipeline d'assets Photoshop / Illustrator.
+2. Actions serveur en un clic (déployer, logs, redémarrer), à côté de chaque serveur favori.

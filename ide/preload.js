@@ -32,6 +32,8 @@ contextBridge.exposeInMainWorld('atelier', {
   searchText: (options) => ipcRenderer.invoke('search:text', options),
   renamePath: (from, to) => ipcRenderer.invoke('path:rename', from, to),
   trashPath: (target) => ipcRenderer.invoke('path:trash', target),
+  previewUrl: (file) => ipcRenderer.invoke('preview:url', file),
+  previewExternal: (url) => ipcRenderer.invoke('preview:external', url),
   joinPath: (...parts) => ipcRenderer.invoke('path:join', ...parts),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),

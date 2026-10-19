@@ -11,6 +11,7 @@ const { execFile, spawn } = require('node:child_process');
 const pty = require('node-pty');
 const claude = require('./claude');
 const search = require('./search');
+const preview = require('./preview');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -527,6 +528,7 @@ handle('window:blurSupported', async () => blurSupported());
 // Chat avec Claude (voir claude.js).
 claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: app.getPath('userData') });
 search.register({ handle, getRoot: () => rootFolder });
+preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
 
 function createWindow(config) {
   const blur = wantsBlur(config);
@@ -602,5 +604,6 @@ app.on('window-all-closed', () => {
   // On ne laisse aucun PowerShell ou ssh tourner en fond après la fermeture.
   for (const proc of terminals.values()) proc.kill();
   claude.stop();
+  preview.stop();
   app.quit();
 });

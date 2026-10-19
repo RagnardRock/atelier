@@ -23,6 +23,7 @@
     "splitEditor": "Ctrl+Alt+D",
     "toggleClaude": "Ctrl+Shift+I",
     "quickOpen": "Ctrl+P",
-    "searchProject": "Ctrl+Shift+F"
+    "searchProject": "Ctrl+Shift+F",
+    "togglePreview": "Ctrl+Alt+P"
   }
 }

@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline, d'images et de workers data: -->
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline, d'images et de workers data:. Le cadre de l'aperçu n'affiche que le serveur local (preview.js). -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' data: blob:">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' data: blob:; frame-src http://127.0.0.1:*">
   <title>Atelier</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <!-- Codicons : les icônes de VS Code, sous forme de police (classe "codicon codicon-nom") -->
@@ -19,6 +19,7 @@
       <button id="btn-open" class="icon-button" title="Ouvrir un dossier (Ctrl+O)"><i class="codicon codicon-folder-opened"></i></button>
       <button id="btn-split" class="icon-button" title="Diviser l'éditeur (Ctrl+Alt+D)"><i class="codicon codicon-split-horizontal"></i></button>
       <button id="btn-terminal" class="icon-button" title="Afficher / masquer le terminal (Ctrl+J)"><i class="codicon codicon-terminal"></i></button>
+      <button id="btn-preview" class="icon-button" title="Aperçu dans le navigateur (Ctrl+Alt+P)"><i class="codicon codicon-open-preview"></i></button>
       <button id="btn-claude" class="icon-button" title="Discuter avec Claude (Ctrl+Shift+I)"><i class="codicon codicon-sparkle"></i></button>
     </div>
     <span id="folder-name"></span>
@@ -131,6 +132,7 @@
               <dt><kbd>Ctrl</kbd><kbd>S</kbd></dt><dd>Enregistrer</dd>
               <dt><kbd>Ctrl</kbd><kbd>J</kbd></dt><dd>Terminal</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></dt><dd>Diviser l'écran</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>P</kbd></dt><dd>Aperçu dans le navigateur</dd>
               <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>I</kbd></dt><dd>Discuter avec Claude</dd>
               <dt><kbd>Molette</kbd></dt><dd>Ouvrir / fermer un onglet</dd>
             </dl>
@@ -149,6 +151,22 @@
         </div>
         <div id="term-views"></div>
       </section>
+    </section>
+
+    <!-- Aperçu navigateur (preview.js) : la page servie par le serveur local, rechargée toute seule -->
+    <div id="preview-resizer" hidden></div>
+    <section id="preview-panel" hidden>
+      <div class="preview-bar">
+        <button id="preview-back" class="icon-button" title="Page précédente"><i class="codicon codicon-arrow-left"></i></button>
+        <button id="preview-reload" class="icon-button" title="Recharger"><i class="codicon codicon-refresh"></i></button>
+        <form id="preview-form"><input id="preview-address" spellcheck="false" title="Adresse de la page dans ton projet (Entrée pour y aller)"></form>
+        <button id="preview-device" class="icon-button" title="Largeur téléphone (390 px)"><i class="codicon codicon-device-mobile"></i></button>
+        <button id="preview-external" class="icon-button" title="Ouvrir dans ton navigateur"><i class="codicon codicon-link-external"></i></button>
+        <button id="preview-close" class="icon-button" title="Fermer l'aperçu (Ctrl+Alt+P)"><i class="codicon codicon-close"></i></button>
+      </div>
+      <div id="preview-stage">
+        <iframe id="preview-frame" title="Aperçu" sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-downloads"></iframe>
+      </div>
     </section>
 
     <!-- Chat avec Claude (claude.js) : à droite, redimensionnable par sa poignée -->
@@ -204,5 +222,6 @@
   <script src="claude.js"></script>
   <script src="search.js"></script>
   <script src="fileops.js"></script>
+  <script src="preview.js"></script>
 </body>
 </html>

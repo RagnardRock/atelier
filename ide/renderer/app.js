@@ -633,6 +633,7 @@ function activate(tab) {
   for (const t of group.tabs) t.el.classList.toggle('active', t === tab);
   setActiveGroup(group);
   refreshStatus();
+  document.dispatchEvent(new CustomEvent('tab-activated', { detail: tab })); // l'aperçu suit le fichier HTML actif
 }
 
 function refreshStatus() {
