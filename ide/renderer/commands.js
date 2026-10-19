@@ -40,8 +40,8 @@ const commandPalette = (() => {
     ['Réglages', 'Ouvrir les réglages', null, () => settings.open()],
     ['Réglages', 'Ouvrir config.json', null, () => openFile(state.configPath, 'config.json', { preview: false })],
     ['Réglages', 'Changer les raccourcis', null, () => settings.open('raccourcis')],
-    ['Atelier', 'Chercher une mise à jour', null, () => document.querySelector('#btn-update').click()],
-    ["Atelier", "Recharger l'interface", 'Ctrl+R', () => location.reload()],
+    ['Rune', 'Chercher une mise à jour', null, () => document.querySelector('#btn-update').click()],
+    ["Rune", "Recharger l'interface", 'Ctrl+R', () => location.reload()],
   ];
 
   function showView(id) {

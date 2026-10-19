@@ -1,0 +1,69 @@
+# Fabrique l'installeur Windows de Rune (Rune-Setup-<version>.exe) sur un PC Windows de GitHub.
+# - Sur une pull request qui touche ide/ : l'installeur est fabriqué pour vérifier que tout marche,
+#   et se télécharge depuis l'onglet « Checks » de la PR (rubrique « Artifacts »).
+# - Sur une étiquette rune-vX.Y.Z (git tag rune-v0.11.0 puis git push origin rune-v0.11.0) :
+#   l'installeur est publié comme nouvelle version dans l'onglet « Releases » du dépôt.
+#   Les Rune déjà installés la voient et proposent de se mettre à jour.
+name: Rune (installeur Windows)
+
+on:
+  pull_request:
+    paths: ['ide/**', '.github/workflows/rune.yml']
+  push:
+    tags: ['rune-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # pour créer la version (release) et y déposer l'installeur
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ide
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tout l'historique, pour écrire les notes de version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ide/package-lock.json
+      - run: npm ci
+
+      - name: Vérifier que l'étiquette correspond à la version de package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "rune-v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "L'étiquette $GITHUB_REF_NAME ne correspond pas à la version $VERSION de ide/package.json"
+            exit 1
+          fi
+
+      - name: Fabriquer l'installeur
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npx electron-builder --win nsis --publish never
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: Rune-Setup
+          path: ide/dist/Rune-Setup-*.exe
+          retention-days: 14
+
+      - name: Fabriquer et publier la version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npx electron-builder --win nsis --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Écrire les notes de version (les commits de ide/ depuis la version précédente)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PREVIOUS=$(git describe --tags --abbrev=0 --match 'rune-v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          RANGE=${PREVIOUS:+$PREVIOUS..}$GITHUB_REF_NAME
+          git log --no-merges --format='- %s' "$RANGE" -- . > notes.md
+          gh release edit "$GITHUB_REF_NAME" --title "Rune ${GITHUB_REF_NAME#rune-v}" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

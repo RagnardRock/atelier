@@ -233,7 +233,7 @@ function applyEmmet(enabled, vueTools = false) {
 function askRestartForBlur() {
   if (askRestartForBlur.asked) return;
   askRestartForBlur.asked = true;
-  notify.info("Le flou Windows 11 s'activera au prochain démarrage d'Atelier.", {
+  notify.info("Le flou Windows 11 s'activera au prochain démarrage de Rune.", {
     actions: [{ label: 'Redémarrer maintenant', run: () => {
       const unsaved = [...state.files.values()].filter(isDirty).map((f) => f.name);
       if (unsaved.length && !confirm(`Ces fichiers ne sont pas enregistrés :\n\n${unsaved.join('\n')}\n\nRedémarrer quand même ?`)) return;

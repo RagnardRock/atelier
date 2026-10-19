@@ -5,7 +5,7 @@
   <!-- Sécurité : seuls les scripts locaux s'exécutent. Monaco a besoin de styles inline, d'images et de workers data:. Le cadre de l'aperçu n'affiche que le serveur local (preview.js). -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; worker-src 'self' data: blob:; frame-src http://127.0.0.1:*">
-  <title>Atelier</title>
+  <title>Rune</title>
   <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <!-- Codicons : les icônes de VS Code, sous forme de police (classe "codicon codicon-nom") -->
   <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
@@ -14,7 +14,7 @@
 <body>
   <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
   <header id="titlebar">
-    <span id="brand"><span class="logo">A</span>Atelier</span>
+    <span id="brand"><img class="logo" src="rune.svg" alt="">Rune</span>
     <div class="title-actions">
       <button id="btn-open" class="icon-button" title="Ouvrir un dossier (Ctrl+O)"><i class="codicon codicon-folder-opened"></i></button>
       <button id="btn-new-project" class="icon-button" title="Nouveau projet : Vue, Vite, site HTML… (Ctrl+Alt+N)"><i class="codicon codicon-rocket"></i></button>
@@ -35,7 +35,7 @@
       <button data-view="scripts" title="Scripts npm : dev, build, preview… en un clic"><i class="codicon codicon-run-all"></i><span id="scripts-badge" class="badge" hidden></span></button>
       <button data-view="servers" title="Serveurs"><i class="codicon codicon-server"></i></button>
       <span class="spacer"></span>
-      <button id="btn-update" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
+      <button id="btn-update" title="Chercher et installer la dernière version de Rune"><i class="codicon codicon-cloud-download"></i></button>
       <button id="btn-config" title="Réglages"><i class="codicon codicon-gear"></i></button>
     </nav>
 
@@ -166,8 +166,8 @@
         <div id="split-dropzone"><i class="codicon codicon-split-horizontal"></i>Nouvelle colonne</div>
         <div id="welcome">
           <div class="welcome-card">
-            <div class="welcome-logo">A</div>
-            <h1>Atelier</h1>
+            <img class="welcome-logo" src="rune.svg" alt="">
+            <h1>Rune</h1>
             <div class="welcome-actions">
               <button id="welcome-open" class="primary-button"><i class="codicon codicon-folder-opened"></i>Ouvrir un dossier</button>
               <button id="welcome-new" class="secondary-button"><i class="codicon codicon-rocket"></i>Nouveau projet</button>

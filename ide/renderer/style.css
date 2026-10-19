@@ -107,16 +107,10 @@ body.platform-darwin #titlebar { padding-left: 80px; padding-right: 12px; }
 #titlebar button { -webkit-app-region: no-drag; }
 #brand { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text-strong); }
 .logo, .welcome-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-weight: 800;
-  font-size: 13px;
+  /* L'icône de Rune (rune.svg, la même que celle du .exe). */
+  display: inline-block;
+  width: 24px;
+  height: 24px;
 }
 .title-actions { display: flex; gap: 2px; margin-left: 6px; }
 #folder-name {
@@ -421,7 +415,7 @@ body.dragging-tab #split-dropzone { display: flex; }
 }
 body.has-tabs #welcome { display: none; }
 .welcome-card { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 400px; margin: auto; }
-.welcome-logo { width: 64px; height: 64px; border-radius: 16px; font-size: 34px; box-shadow: var(--shadow); }
+.welcome-logo { width: 72px; height: 72px; }
 #welcome h1 { margin: 0; font-size: 26px; font-weight: 600; color: var(--text-strong); }
 .primary-button {
   display: inline-flex;
@@ -1074,7 +1068,7 @@ body.glass #server-form {
   border-color: var(--glass-border);
   backdrop-filter: blur(30px) saturate(150%);
 }
-body.glass .welcome-logo { box-shadow: 0 10px 40px color-mix(in srgb, var(--accent) 35%, transparent); }
+body.glass .welcome-logo { filter: drop-shadow(0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent)); }
 
 /* ---------- Fenêtre de réglages (settings.js) ---------- */
 #settings {

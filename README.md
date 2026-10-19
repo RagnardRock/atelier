@@ -1,8 +1,38 @@
 # Atelier
 
-Mes outils perso, réunis dans un seul dépôt. Pour l'instant, un seul outil : **l'IDE** (`ide/`). Les prochains (pipeline d'assets, panneau serveur…) viendront à côté.
+Mes outils perso, réunis dans un seul dépôt. Pour l'instant, un seul outil : **Rune**, mon IDE (`ide/`). Les prochains (pipeline d'assets, panneau serveur…) viendront à côté.
 
-## Lancer l'IDE (Windows)
+## Installer Rune (Windows)
+
+Rune s'installe comme n'importe quel logiciel, avec **`Rune-Setup-<version>.exe`** :
+
+1. Télécharge le dernier `Rune-Setup-….exe` dans l'onglet **Releases** du dépôt GitHub (colonne de droite de la page du dépôt).
+2. Double-clique-le. Windows peut afficher « Windows a protégé votre ordinateur » : c'est parce que l'installeur n'est pas signé par un certificat payant. Clique **Informations complémentaires**, puis **Exécuter quand même**.
+3. Choisis le dossier d'installation (par défaut `%LOCALAPPDATA%\Programs\Rune`, sans droits administrateur), et c'est tout : Rune a son icône ᚱ sur le bureau et dans le menu Démarrer, et se désinstalle depuis Paramètres › Applications.
+
+Rune garde tes réglages, ta session et tes serveurs dans `%APPDATA%\atelier-ide` : ils sont communs à la version installée et à la version lancée depuis le clone, et la désinstallation ne les efface pas.
+
+**Mises à jour.** Au démarrage, Rune regarde s'il existe une version plus récente dans les Releases. Si oui, une notification le signale et le bouton « Mise à jour » (en haut) affiche un `●`. Un clic montre ce qui a changé et demande confirmation : Rune télécharge le nouvel installeur, se ferme, s'installe en silence et se relance. Il prévient avant si des fichiers ne sont pas enregistrés.
+
+### Publier une nouvelle version de Rune
+
+Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/workflows/rune.yml`) :
+
+1. Monte la version dans `ide/package.json` (par exemple `"version": "0.12.0"`) et pousse ce commit sur `main`.
+2. Pose l'étiquette correspondante et pousse-la :
+   ```bat
+   git tag rune-v0.12.0
+   git push origin rune-v0.12.0
+   ```
+3. GitHub fabrique `Rune-Setup-0.12.0.exe` et le publie dans les Releases, avec comme notes la liste des commits de `ide/` depuis la version précédente. Tous les Rune installés la proposent ensuite.
+
+Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, sans le publier : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ». Pratique pour essayer une version avant de fusionner.
+
+Tu peux aussi le fabriquer sur ton PC : `cd ide`, puis `npm run dist`. L'installeur arrive dans `ide/dist/` (ignoré par git).
+
+> Les autres outils d'Atelier ne devront pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
+
+## Lancer Rune depuis le clone (pour le développer)
 
 Prérequis : [Node.js](https://nodejs.org) 20 ou plus.
 
@@ -12,20 +42,20 @@ npm install
 npm start
 ```
 
-`npm install` télécharge Electron, Monaco et les librairies du terminal dans `ide/node_modules/` (ignoré par git). `npm start` ouvre la fenêtre de l'IDE.
+`npm install` télécharge Electron, Monaco et les librairies du terminal dans `ide/node_modules/` (ignoré par git). `npm start` ouvre la fenêtre de Rune, avec les fichiers du clone : ce que tu modifies dans `ide/` se voit au prochain `npm start` (ou `Ctrl+R` pour l'interface).
 
-### Mettre à jour
+### Mettre à jour le clone
 
-Deux façons, qui font exactement la même chose (`git pull` + `npm install`, puis relance de l'IDE) :
+Deux façons, qui font exactement la même chose (`git pull` + `npm install`, puis relance) :
 
-- **Le bouton « Mise à jour »** en haut de l'IDE. Au démarrage, l'IDE vérifie s'il y a des nouveautés sur GitHub : si oui, une notification le signale et le bouton affiche un `●`. Un clic montre la liste des changements et demande confirmation. L'IDE se ferme, la mise à jour se fait dans une fenêtre à part, puis l'IDE se relance. Il prévient avant si des fichiers ne sont pas enregistrés.
-- **Le script `mettre-a-jour.bat`** à la racine du dépôt : double-clique-le (l'IDE doit être fermé). En cas d'erreur, la fenêtre reste ouverte avec le message. Sous Linux ou macOS, c'est `mettre-a-jour.sh`.
+- **Le bouton « Mise à jour »** en haut de Rune. Lancé depuis le clone, il vérifie les nouveautés de ta branche sur GitHub au lieu des Releases. Un clic montre la liste des changements et demande confirmation. Rune se ferme, la mise à jour se fait dans une fenêtre à part, puis Rune se relance.
+- **Le script `mettre-a-jour.bat`** à la racine du dépôt : double-clique-le (Rune doit être fermé). En cas d'erreur, la fenêtre reste ouverte avec le message. Sous Linux ou macOS, c'est `mettre-a-jour.sh`.
 
-La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm install` ne peut pas remplacer Electron ou le terminal pendant que l'IDE les utilise.
+La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm install` ne peut pas remplacer Electron ou le terminal pendant que Rune les utilise.
 
 > Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`. Le script de mise à jour le fait tout seul.
 
-## Ce que fait l'IDE (v0.10)
+## Ce que fait Rune (v0.11)
 
 ### L'interface
 
@@ -228,13 +258,23 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | `ide/scaffold.js` | Le côté Node de « Nouveau projet » : vérifie le nom et le dossier, lance `create-vue` ou `create-vite` (versions fixées), puis `npm install` et `git init`, en envoyant chaque ligne de leur sortie à la fenêtre. Écrit lui-même les fichiers du site HTML simple. |
 | `ide/renderer/newproject.js` | La fenêtre « Nouveau projet » : les modèles, le nom, l'emplacement, les options, puis le suivi des étapes et l'ouverture du projet. |
 | `ide/renderer/settings.js` | La fenêtre de réglages. Chaque réglage est une ligne dans `SECTIONS` (clé de config + type de contrôle) : en ajouter un est facile. |
-| `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, lancement du script. |
+| `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, puis installation (nouvel installeur pour la version installée, script pour le clone). |
+| `ide/build/` | L'icône de Rune (`icon.svg`, et `icon.ico` / `icon.png` qui en sont tirés) et `garder-fichiers.js`, qui dit à electron-builder de garder les fichiers de types (`.d.ts`) dont l'intelligence TypeScript/Vue a besoin. |
+| `ide/renderer/rune.svg` | La même icône, affichée en haut à gauche et sur l'écran d'accueil. |
+| `.github/workflows/rune.yml` | La fabrication de l'installeur sur GitHub (à chaque PR, et publication à chaque étiquette `rune-v…`). |
 | `mettre-a-jour.bat` / `.sh` | Les scripts de mise à jour (git pull, npm install, relance). |
 | `ide/renderer/terminal.js` | Le panneau terminal : crée les terminaux xterm.js, les onglets, la poignée et le raccourci `Ctrl+J`. |
 | `ide/renderer/servers.js` | Le panneau Serveurs : les onglets Fichiers / Serveurs, la liste, le formulaire d'ajout ou de modification, la suppression et la connexion en un clic. |
 | `ide/config.default.json` | Réglages par défaut. |
 
 Le terminal fonctionne en deux morceaux : **node-pty** (dans `main.js`) lance un vrai processus PowerShell ou ssh via ConPTY, l'API de terminal de Windows. **xterm.js** (dans `terminal.js`) l'affiche, avec les couleurs et le curseur. Entre les deux, chaque frappe et chaque morceau de texte passent par IPC. node-pty fournit ses binaires Windows déjà compilés, donc `npm install` n'a besoin d'aucun outil de compilation.
+
+L'installeur est fabriqué par **electron-builder** (réglages dans la partie `"build"` de `ide/package.json`) : il copie Electron (renommé `Rune.exe`), le code de `ide/` et les librairies nécessaires (sans les outils de développement), puis emballe le tout dans un installeur **NSIS**, le format d'installeur Windows le plus courant. Trois choix à connaître :
+- les fichiers restent des fichiers normaux dans le dossier d'installation (pas d'archive `app.asar`) : tsserver et le serveur Vue, qui sont lancés comme des programmes à part, peuvent ainsi lire leurs fichiers comme dans le clone ;
+- rien n'est recompilé (`npmRebuild: false`) : node-pty fournit déjà ses binaires Windows ;
+- de Monaco, seule la version `min/` (celle que charge Rune) est copiée, ce qui allège l'installeur d'environ 90 Mo.
+
+La mise à jour de la version installée passe par **electron-updater** : il lit la dernière Release du dépôt (le fichier `latest.yml` qu'electron-builder y dépose donne la version et l'empreinte de l'installeur), télécharge `Rune-Setup-….exe`, vérifie son empreinte puis le lance en mode silencieux.
 
 Le chat parle à Claude Code de la même façon que le SDK officiel d'Anthropic (Agent SDK) : un processus `claude` reste ouvert pendant la conversation, et les deux côtés s'échangent des messages JSON, un par ligne. Grâce à l'option `--permission-prompt-tool=stdio`, chaque fois que Claude veut modifier un fichier ou lancer une commande, Claude Code envoie une demande à l'IDE et attend la réponse que tu donnes sur la carte. Comme c'est ton Claude Code installé, c'est ton compte Claude qui est utilisé, avec ses limites habituelles.
 
