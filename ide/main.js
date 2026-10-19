@@ -4,7 +4,10 @@
 
 const { app, BrowserWindow, dialog, ipcMain, Menu } = require('electron');
 const path = require('node:path');
+const os = require('node:os');
 const fs = require('node:fs/promises');
+// node-pty lance un vrai terminal (ConPTY sous Windows) : couleurs, ssh, vim… tout marche.
+const pty = require('node-pty');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 // La config perso vit dans le dossier utilisateur de l'app
@@ -79,6 +82,49 @@ ipcMain.handle('file:write', async (_event, file, content) => {
 ipcMain.handle('config:get', async () => readConfig());
 ipcMain.handle('config:path', async () => configPath());
 
+// --- Terminaux ---
+// Chaque terminal est un processus (PowerShell, ssh…) piloté ici.
+// Ce qu'il affiche part vers l'interface ("term:data"), ce que tu tapes revient par "term:write".
+
+const terminals = new Map(); // id -> processus
+let nextTerminalId = 1;
+
+// "default" = le shell habituel du système : PowerShell sous Windows, bash/zsh ailleurs.
+function resolveCommand(command) {
+  if (command !== 'default') return command;
+  return process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash');
+}
+
+ipcMain.handle('term:create', async (event, profileName, cols, rows) => {
+  const { terminalProfiles } = await readConfig();
+  const profile = terminalProfiles.find((p) => p.name === profileName);
+  if (!profile) throw new Error(`Profil de terminal inconnu : ${profileName}`);
+
+  const id = nextTerminalId++;
+  const proc = pty.spawn(resolveCommand(profile.command), profile.args || [], {
+    name: 'xterm-256color',
+    cols,
+    rows,
+    cwd: rootFolder || os.homedir(), // le terminal démarre dans le dossier ouvert
+    env: process.env,
+  });
+  terminals.set(id, proc);
+
+  const send = (channel, ...args) => {
+    if (!event.sender.isDestroyed()) event.sender.send(channel, id, ...args);
+  };
+  proc.onData((data) => send('term:data', data));
+  proc.onExit(({ exitCode }) => {
+    terminals.delete(id);
+    send('term:exit', exitCode);
+  });
+  return id;
+});
+
+ipcMain.on('term:write', (_event, id, data) => terminals.get(id)?.write(data));
+ipcMain.on('term:resize', (_event, id, cols, rows) => terminals.get(id)?.resize(cols, rows));
+ipcMain.on('term:kill', (_event, id) => terminals.get(id)?.kill());
+
 // --- Fenêtre ---
 
 function createWindow() {
@@ -106,4 +152,8 @@ app.whenReady().then(async () => {
   createWindow();
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  // On ne laisse aucun PowerShell ou ssh tourner en fond après la fermeture.
+  for (const proc of terminals.values()) proc.kill();
+  app.quit();
+});

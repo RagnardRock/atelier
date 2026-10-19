@@ -65,6 +65,7 @@ function applyConfig() {
     wordWrap: c.wordWrap,
     minimap: { enabled: c.minimap },
   });
+  terminalPanel.applyConfig(c);
 }
 
 // --- Arborescence ---

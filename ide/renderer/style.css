@@ -101,10 +101,11 @@ body {
 .tab .close { opacity: 0.6; border-radius: 3px; padding: 0 3px; }
 .tab .close:hover { opacity: 1; background: var(--panel-2); }
 
-#editor { flex: 1; min-height: 0; }
+#editor-area { flex: 1; min-height: 0; position: relative; }
+#editor { position: absolute; inset: 0; }
 #welcome {
   position: absolute;
-  inset: 34px 0 0 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -115,6 +116,44 @@ body {
 #welcome h1 { color: var(--accent); font-weight: 600; margin: 0 0 8px; }
 kbd { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; font-size: 12px; }
 body.has-tabs #welcome { display: none; }
+
+/* Panneau terminal */
+#panel-resizer {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--border);
+}
+#panel-resizer:hover, #panel-resizer.dragging { background: var(--accent); }
+#terminal-panel {
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+[hidden] { display: none !important; }
+#term-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+#term-tabs { display: flex; flex: 1; overflow-x: auto; height: 100%; }
+#term-bar select, #term-bar button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+#term-bar button { cursor: pointer; min-width: 26px; }
+#term-bar button:hover { border-color: var(--accent); }
+#term-tabs .tab { font-size: 12px; }
+#term-tabs .tab.exited .name { text-decoration: line-through; }
+#term-views { flex: 1; min-height: 0; position: relative; }
+.term-view { position: absolute; inset: 4px 0 0 8px; }
 
 /* Barre d'état */
 #statusbar {

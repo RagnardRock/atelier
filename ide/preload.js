@@ -10,4 +10,12 @@ contextBridge.exposeInMainWorld('atelier', {
   writeFile: (file, content) => ipcRenderer.invoke('file:write', file, content),
   getConfig: () => ipcRenderer.invoke('config:get'),
   getConfigPath: () => ipcRenderer.invoke('config:path'),
+
+  // Terminaux
+  createTerminal: (profileName, cols, rows) => ipcRenderer.invoke('term:create', profileName, cols, rows),
+  writeTerminal: (id, data) => ipcRenderer.send('term:write', id, data),
+  resizeTerminal: (id, cols, rows) => ipcRenderer.send('term:resize', id, cols, rows),
+  killTerminal: (id) => ipcRenderer.send('term:kill', id),
+  onTerminalData: (callback) => ipcRenderer.on('term:data', (_event, id, data) => callback(id, data)),
+  onTerminalExit: (callback) => ipcRenderer.on('term:exit', (_event, id, code) => callback(id, code)),
 });

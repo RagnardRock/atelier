@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' data: blob:">
   <title>Atelier</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -13,6 +14,7 @@
     <span id="brand">Atelier</span>
     <button id="btn-open" title="Ouvrir un dossier (Ctrl+O)">Ouvrir un dossier</button>
     <button id="btn-config" title="Modifier la configuration">Config</button>
+    <button id="btn-terminal" title="Afficher / masquer le terminal (Ctrl+J)">Terminal</button>
     <span id="folder-name"></span>
   </header>
 
@@ -22,11 +24,23 @@
     </aside>
     <section id="workspace">
       <nav id="tabs"></nav>
-      <div id="editor"></div>
-      <div id="welcome">
-        <h1>Atelier</h1>
-        <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet</p>
+      <div id="editor-area">
+        <div id="editor"></div>
+        <div id="welcome">
+          <h1>Atelier</h1>
+          <p><kbd>Ctrl</kbd>+<kbd>O</kbd> ouvrir un dossier · <kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Ctrl</kbd>+<kbd>W</kbd> fermer l'onglet · <kbd>Ctrl</kbd>+<kbd>J</kbd> terminal</p>
+        </div>
       </div>
+      <!-- Panneau terminal : poignée pour le redimensionner, onglets, puis les terminaux -->
+      <div id="panel-resizer" hidden></div>
+      <section id="terminal-panel" hidden>
+        <div id="term-bar">
+          <div id="term-tabs"></div>
+          <select id="term-profile" title="Profil du nouveau terminal"></select>
+          <button id="term-new" title="Nouveau terminal">+</button>
+        </div>
+        <div id="term-views"></div>
+      </section>
     </section>
   </main>
 
@@ -37,8 +51,13 @@
     <span id="status-lang"></span>
   </footer>
 
+  <!-- xterm.js (affichage du terminal) : chargé AVANT le chargeur de Monaco,
+       sinon il s'enregistrerait comme module AMD au lieu de créer window.Terminal -->
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
   <!-- Monaco : chargé depuis node_modules avec son propre chargeur AMD -->
   <script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
   <script src="app.js"></script>
+  <script src="terminal.js"></script>
 </body>
 </html>
