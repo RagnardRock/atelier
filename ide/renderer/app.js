@@ -37,6 +37,7 @@ async function start() {
   // Classe de plateforme : sur macOS, la barre de titre laisse la place aux boutons à gauche.
   document.body.classList.add(`platform-${window.atelier.platform}`);
   defineThemes();
+  formatter.init(); // Prettier pour Maj+Alt+F (format.js)
   state.configPath = await window.atelier.getConfigPath();
   await loadConfig();
   createGroup();
@@ -248,6 +249,7 @@ async function showRoot(folder) {
   $('#tree-toolbar').hidden = false;
   await refreshFolder(folder);
   renderRecents(await window.atelier.recentFolders().catch(() => []));
+  if (state.config.restoreTabs) await restoreSession(); // session.js
 }
 
 // Liste des dossiers récents sur l'écran d'accueil (clic = rouvrir).
@@ -433,6 +435,12 @@ function getFile(path, name) {
 }
 
 async function loadFile(path, name) {
+  // Image ou fichier binaire (PSD…) : affiché à part, pas lu comme du texte (voir media.js).
+  const media = await mediaFile(path, name);
+  if (media) {
+    state.files.set(path, media);
+    return media;
+  }
   const content = await window.atelier.readFile(path);
   // L'URI donne l'extension à Monaco, qui choisit la coloration (js, css, html, json…).
   const model = monaco.editor.createModel(content, undefined, monaco.Uri.file(path));
@@ -602,6 +610,7 @@ function addTab(group, file, { preview = false, index = group.tabs.length } = {}
 
 function renderTabs(group) {
   for (const tab of group.tabs) group.tabsEl.appendChild(tab.el); // appendChild déplace : l'ordre suit le tableau
+  document.dispatchEvent(new Event('tabs-changed')); // session.js retient les onglets ouverts
 }
 
 function refreshTab(tab) {
@@ -627,6 +636,7 @@ function activate(tab) {
   if (group.active && group.active !== tab) group.viewStates.set(group.active.file.path, group.editor.saveViewState());
   group.active = tab;
   group.editor.setModel(tab.file.model);
+  showMedia(group, tab.file);
   const viewState = group.viewStates.get(tab.file.path);
   if (viewState) group.editor.restoreViewState(viewState);
   group.editor.focus();
@@ -647,6 +657,7 @@ function refreshStatus() {
 // Retire l'onglet de sa colonne, sans libérer le fichier (utilisé pour fermer et pour déplacer).
 function detachTab(tab) {
   const group = tab.group;
+  document.dispatchEvent(new Event('tabs-changed'));
   const i = group.tabs.indexOf(tab);
   group.tabs.splice(i, 1);
   tab.el.remove();
@@ -654,7 +665,7 @@ function detachTab(tab) {
   if (group.active === tab) {
     const next = group.tabs[i] || group.tabs[i - 1];
     if (next) activate(next);
-    else { group.active = null; group.editor.setModel(null); refreshStatus(); }
+    else { group.active = null; group.editor.setModel(null); showMedia(group, null); refreshStatus(); }
   }
 }
 
@@ -776,6 +787,11 @@ async function saveActive() {
   const tab = state.activeGroup && state.activeGroup.active;
   if (!tab) return;
   const file = tab.file;
+  if (file.kind) return; // image ou fichier binaire : rien à enregistrer (surtout pas un texte vide !)
+  // Mise en forme Prettier avant d'enregistrer, si l'option est activée (format.js).
+  if (state.config.formatOnSave && formatter.supports(file.model)) {
+    await state.activeGroup.editor.getAction('editor.action.formatDocument')?.run();
+  }
   try {
     await window.atelier.writeFile(file.path, file.model.getValue());
   } catch (err) {
@@ -801,6 +817,7 @@ async function saveActive() {
 async function reloadFromDisk(path, { quiet = false } = {}) {
   const file = state.files.get(path);
   if (!file) return;
+  if (file.kind) return refreshMedia(file);
   if (isDirty(file)) {
     return notify.warning(`${file.name} a été modifié sur le disque, mais tu as des modifications non enregistrées dedans : je n'y touche pas.`);
   }

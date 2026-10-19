@@ -159,14 +159,37 @@ function watchRoot(root) {
   }
 }
 
+// Les modifications de state.json passent l'une après l'autre : deux écritures en même temps
+// (dossier récent + onglets de la session) ne doivent pas s'effacer mutuellement.
+let stateQueue = Promise.resolve();
+function updateState(change) {
+  stateQueue = stateQueue.then(async () => {
+    const state = await readState();
+    change(state);
+    await fs.writeFile(statePath(), JSON.stringify(state, null, 2), 'utf8');
+  }).catch((err) => log('ERREUR', `state.json : ${err.message}`));
+  return stateQueue;
+}
+
 async function setRoot(folder) {
   rootFolder = path.resolve(folder);
   watchRoot(rootFolder);
-  const state = await readState();
-  state.recentFolders = [rootFolder, ...state.recentFolders.filter((f) => f !== rootFolder)].slice(0, MAX_RECENTS);
-  await fs.writeFile(statePath(), JSON.stringify(state, null, 2), 'utf8');
+  await updateState((state) => {
+    state.recentFolders = [rootFolder, ...state.recentFolders.filter((f) => f !== rootFolder)].slice(0, MAX_RECENTS);
+  });
   return rootFolder;
 }
+
+// Onglets ouverts de chaque dossier, pour les rouvrir la prochaine fois (20 dossiers au plus).
+handle('session:get', async () => ((await readState()).sessions || {})[rootFolder] || null);
+handle('session:save', async (_event, session) => {
+  if (!rootFolder) return;
+  const folder = rootFolder;
+  await updateState((state) => {
+    const others = Object.entries(state.sessions || {}).filter(([f]) => f !== folder).slice(0, 19);
+    state.sessions = Object.fromEntries([[folder, session], ...others]);
+  });
+});
 
 async function existingRecents() {
   const { recentFolders } = await readState();
@@ -201,6 +224,43 @@ handle('folder:read', async (_event, dir) => {
 handle('file:read', async (_event, file) => {
   assertAllowed(file);
   return fs.readFile(file, 'utf8');
+});
+
+// Images et fichiers binaires (PSD, AI, PDF…) : l'éditeur ne les ouvre pas comme du texte.
+// "binary" = le début du fichier contient un octet nul, ce qui n'arrive pas dans un fichier texte.
+handle('file:info', async (_event, file) => {
+  assertAllowed(file);
+  const stat = await fs.stat(file);
+  const handleFile = await fs.open(file, 'r');
+  try {
+    const { buffer, bytesRead } = await handleFile.read(Buffer.alloc(8192), 0, 8192, 0);
+    return { size: stat.size, binary: buffer.subarray(0, bytesRead).includes(0) };
+  } finally {
+    await handleFile.close();
+  }
+});
+
+const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon' };
+const MAX_IMAGE_SIZE = 30 * 1024 * 1024;
+// L'image est envoyée à l'interface en "data URL" (base64) : la page de l'IDE n'a pas le droit de
+// lire directement les fichiers du disque.
+handle('file:dataUrl', async (_event, file) => {
+  assertAllowed(file);
+  const type = IMAGE_TYPES[path.extname(file).toLowerCase()];
+  if (!type) throw new Error("Ce n'est pas une image que l'aperçu sait afficher");
+  const stat = await fs.stat(file);
+  if (stat.size > MAX_IMAGE_SIZE) throw new Error(`Image trop lourde pour l'aperçu (${Math.round(stat.size / 1048576)} Mo)`);
+  return `data:${type};base64,${(await fs.readFile(file)).toString('base64')}`;
+});
+// Ouvrir avec le programme associé (Photoshop pour un .psd…), ou montrer dans l'Explorateur.
+handle('file:openDefault', async (_event, file) => {
+  assertAllowed(file);
+  const error = await shell.openPath(file);
+  if (error) throw new Error(error);
+});
+handle('file:reveal', async (_event, file) => {
+  assertAllowed(file);
+  shell.showItemInFolder(file);
 });
 
 handle('file:write', async (_event, file, content) => {

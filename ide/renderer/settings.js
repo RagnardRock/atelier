@@ -22,6 +22,7 @@ const settings = (() => {
       { key: 'tabSize', label: 'Largeur des tabulations', type: 'segmented', options: [[2, '2'], [4, '4'], [8, '8']] },
       { key: 'wordWrap', label: 'Retour à la ligne automatique', type: 'toggle', on: 'on', off: 'off' },
       { key: 'minimap', label: 'Mini-carte du fichier', type: 'toggle' },
+      { key: 'formatOnSave', label: 'Mettre en forme à l\'enregistrement', type: 'toggle', help: 'Prettier remet le code au propre à chaque Ctrl+S (HTML, CSS, JS, JSON, Markdown…). Sinon : Maj+Alt+F.' },
       { key: 'emmet', label: 'Emmet', type: 'toggle', help: 'En HTML et CSS, une abréviation comme ul>li*3 ou m10 s\'écrit en entier avec Tab.' },
     ] },
     { id: 'terminal', title: 'Terminal', icon: 'terminal', fields: [
@@ -46,6 +47,7 @@ const settings = (() => {
     ] },
     { id: 'demarrage', title: 'Démarrage', icon: 'rocket', fields: [
       { key: 'reopenLastFolder', label: 'Rouvrir le dernier dossier', type: 'toggle' },
+      { key: 'restoreTabs', label: 'Rouvrir les onglets', type: 'toggle', help: 'En ouvrant un dossier, ses onglets de la dernière fois reviennent, avec leurs colonnes.' },
     ] },
   ];
 

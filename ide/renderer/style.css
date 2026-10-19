@@ -950,6 +950,36 @@ body.glass #diff-view { background: #15151b; }
 .diff-legend { flex: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #diff-editor { flex: 1; min-height: 0; }
 
+/* ---------- Images et fichiers binaires (media.js) ---------- */
+.media-view { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; background: var(--bg); }
+body.glass .media-view { background: #15151b; }
+.media-stage {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  padding: 20px;
+  /* damier : on voit les zones transparentes de l'image */
+  background-color: #1b1b20;
+  background-image: linear-gradient(45deg, #26262c 25%, transparent 25%), linear-gradient(-45deg, #26262c 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #26262c 75%), linear-gradient(-45deg, transparent 75%, #26262c 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+body.light .media-stage { background-color: #f4f4f4; background-image: linear-gradient(45deg, #e6e6e6 25%, transparent 25%), linear-gradient(-45deg, #e6e6e6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e6e6e6 75%), linear-gradient(-45deg, transparent 75%, #e6e6e6 75%); }
+.media-stage img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; image-rendering: auto; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.media-stage.actual-size img { max-width: none; max-height: none; cursor: zoom-out; }
+.media-footer { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 12px; flex-shrink: 0; border-top: 1px solid var(--border); }
+.media-info { flex: 1; color: var(--muted); font-size: 12px; }
+.media-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.media-actions button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--hover); cursor: pointer; font-size: 12px; }
+.media-actions button:hover { background: var(--active); color: var(--text-strong); }
+.media-view.binary { align-items: center; justify-content: center; }
+.media-card { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; text-align: center; }
+.media-card > i.codicon.file-icon { font-size: 64px; }
+.media-name { font-size: 16px; color: var(--text-strong); word-break: break-all; }
+.media-card .hint { padding: 0 0 6px; }
+
 /* =========================================================================
    Verre dépoli (glassmorphism), activé par "glass": true en thème sombre.
    Le fond de la fenêtre est un dégradé sombre avec deux halos de couleur ;

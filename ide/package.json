@@ -1,6 +1,6 @@
 {
   "name": "atelier-ide",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Mon IDE perso (Electron + Monaco)",
   "main": "main.js",
   "scripts": {
@@ -17,7 +17,8 @@
     "emmet-monaco-es": "5.7.0",
     "htmlhint": "^1.9.2",
     "monaco-editor": "^0.52.2",
-    "node-pty": "^1.1.0"
+    "node-pty": "^1.1.0",
+    "prettier": "3.9.9"
   },
   "private": true
 }
