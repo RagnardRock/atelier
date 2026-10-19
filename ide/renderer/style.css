@@ -415,12 +415,12 @@ body.dragging-tab #split-dropzone { display: flex; }
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: auto; /* fenêtre basse ou terminal ouvert : l'accueil défile au lieu d'être coupé */
+  padding: 24px 0;
   background: var(--bg);
 }
 body.has-tabs #welcome { display: none; }
-.welcome-card { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 360px; }
+.welcome-card { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 400px; margin: auto; }
 .welcome-logo { width: 64px; height: 64px; border-radius: 16px; font-size: 34px; box-shadow: var(--shadow); }
 #welcome h1 { margin: 0; font-size: 26px; font-weight: 600; color: var(--text-strong); }
 .primary-button {
@@ -448,7 +448,7 @@ body.has-tabs #welcome { display: none; }
   cursor: pointer;
 }
 .recent:hover { background: var(--hover); }
-.recent .name { color: var(--accent); }
+.recent .name { color: var(--accent); white-space: nowrap; }
 .recent .path { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .shortcuts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; width: 100%; margin: 6px 0 0; padding: 14px 8px 0; border-top: 1px solid var(--border); color: var(--muted); }
 .shortcuts dt { text-align: right; }
@@ -1373,3 +1373,19 @@ body.glass .np-card { border-color: var(--glass-border); }
 .np-log .command { color: var(--accent); }
 .np-log .warning { color: var(--warning); }
 .np-log .error { color: var(--error); font-weight: 600; }
+
+/* ---------- Scripts npm (scripts.js) ---------- */
+.scripts-package { display: flex; align-items: center; gap: 6px; height: 28px; margin-top: 4px; padding: 0 12px; color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.scripts-package .name { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scripts-package .dir { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.script { display: flex; align-items: center; gap: 8px; height: 26px; margin: 0 6px; padding: 0 6px 0 16px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.script:hover { background: var(--hover); }
+.script .state { color: var(--muted); }
+.script .name { color: var(--text-strong); }
+.script .command { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--muted); font-size: 12px; font-family: Consolas, "Cascadia Mono", monospace; }
+.script .actions { display: none; }
+.script:hover .actions, .script.running .actions { display: flex; }
+.script .actions .icon-button { width: 22px; height: 22px; }
+.script .run .codicon { color: var(--success); }
+.script .stop .codicon { color: var(--error); }
+.script.running .state { color: var(--accent); animation: np-spin 1.2s linear infinite; }

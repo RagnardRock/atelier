@@ -283,6 +283,7 @@ async function showRoot(folder) {
   await refreshFolder(folder);
   renderRecents(await window.atelier.recentFolders().catch(() => []));
   if (state.config.restoreTabs) await restoreSession(); // session.js
+  document.dispatchEvent(new Event('root-changed')); // le panneau Scripts relit les package.json
 }
 
 // Liste des dossiers récents sur l'écran d'accueil (clic = rouvrir).

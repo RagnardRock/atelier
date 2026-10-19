@@ -85,5 +85,7 @@ contextBridge.exposeInMainWorld('atelier', {
   saveServer: (server) => ipcRenderer.invoke('servers:save', server),
   deleteServer: (id) => ipcRenderer.invoke('servers:delete', id),
   pickKeyFile: () => ipcRenderer.invoke('dialog:pickKey'),
+  listScripts: () => ipcRenderer.invoke('scripts:list'),
+  runScript: (dir, script, cols, rows) => ipcRenderer.invoke('term:script', dir, script, cols, rows),
   connectServer: (id, cols, rows) => ipcRenderer.invoke('term:connect', id, cols, rows),
 });

@@ -230,7 +230,7 @@ const newProject = (() => {
     await showRoot(result.root);
     if (result.mainFile) await openFile(result.mainFile, baseName(result.mainFile), { preview: false });
     if (result.hasDev && choice.dev) {
-      terminalPanel.run('npm run dev', result.root).catch((err) => notify.error(err.message));
+      await scriptsPanel.run(result.root, 'dev'); // affiché comme « en cours » dans le panneau Scripts
       notify.success(`${name} est prêt. Le serveur de développement démarre dans le terminal : Ctrl+clic sur l'adresse http://localhost:… pour l'ouvrir.`);
     } else {
       notify.success(`${name} est prêt.`);

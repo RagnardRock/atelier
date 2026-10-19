@@ -461,6 +461,50 @@ handle('term:connect', async (event, serverId, cols, rows) => {
   return spawnTerminal(event, 'ssh', args, cols, rows);
 });
 
+// --- Scripts npm (panneau Scripts) ---
+// Les "scripts" des package.json du projet : celui de la racine, et ceux des sous-dossiers
+// (sur deux niveaux, pour un projet qui a par exemple front/ et back/). node_modules est ignoré.
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.nuxt', '.next', 'vendor']);
+
+async function readPackage(dir) {
+  try {
+    const pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'));
+    const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+    return { dir, name: typeof pkg.name === 'string' ? pkg.name : path.basename(dir), scripts: Object.fromEntries(Object.entries(scripts).filter(([, v]) => typeof v === 'string')) };
+  } catch {
+    return null; // pas de package.json, ou JSON cassé
+  }
+}
+
+handle('scripts:list', async () => {
+  if (!rootFolder) return [];
+  const found = [];
+  async function walk(dir, depth) {
+    const pkg = await readPackage(dir);
+    if (pkg && Object.keys(pkg.scripts).length) found.push({ ...pkg, rel: path.relative(rootFolder, dir) });
+    if (depth === 2) return;
+    const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const e of entries) {
+      if (e.isDirectory() && !e.name.startsWith('.') && !SKIP_DIRS.has(e.name)) await walk(path.join(dir, e.name), depth + 1);
+    }
+  }
+  await walk(rootFolder, 0);
+  return found;
+});
+
+// Lance « npm run <script> » comme processus d'un onglet de terminal : arrêter le script = fermer
+// ce processus. Le nom doit exister dans le package.json et ne contenir aucun caractère spécial
+// (sous Windows, la commande passe par cmd.exe, qui interpréterait & ou |).
+handle('term:script', async (event, dir, script, cols, rows) => {
+  assertAllowed(dir);
+  const pkg = await readPackage(dir);
+  if (!pkg || !Object.hasOwn(pkg.scripts, script)) throw new Error(`Script introuvable dans package.json : ${script}`);
+  if (!/^[\w:.@/+-]+$/.test(script)) throw new Error(`Nom de script non pris en charge : ${script}`);
+  return process.platform === 'win32'
+    ? spawnTerminal(event, 'cmd.exe', ['/d', '/c', `npm run ${script}`], cols, rows, dir)
+    : spawnTerminal(event, 'npm', ['run', script], cols, rows, dir);
+});
+
 // Dossier de départ d'un terminal : celui demandé par l'interface (le dossier sélectionné dans
 // l'arborescence) s'il est dans le projet ouvert, sinon la racine du projet, sinon ton dossier perso.
 function terminalCwd(requested) {

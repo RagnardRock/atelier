@@ -67,6 +67,28 @@ const terminalPanel = (() => {
     return id;
   }
 
+  // Script npm (panneau Scripts) : l'onglet EST le script, le fermer l'arrête.
+  function script(dir, name, label) {
+    return open(label, (cols, rows) => window.atelier.runScript(dir, name, cols, rows), 'play', `npm run ${name} · ${dir}`);
+  }
+
+  // Afficher un terminal précis (ouvre le panneau s'il est masqué).
+  function show(id) {
+    if (!terms.has(id)) return;
+    panel.hidden = resizer.hidden = false;
+    activate(id);
+  }
+
+  // Arrêter le processus sans fermer l'onglet : sa sortie reste lisible.
+  function stop(id) {
+    const t = terms.get(id);
+    if (t && !t.exited) window.atelier.killTerminal(id);
+  }
+
+  // Prévenir quand un processus se termine (le panneau Scripts remet le bouton ▶).
+  const exitListeners = [];
+  const onExit = (fn) => exitListeners.push(fn);
+
   // Terminal connecté en SSH à un serveur favori (panneau Serveurs).
   function connect(server) {
     return open(server.name, (cols, rows) => window.atelier.connectServer(server.id, cols, rows), 'server', describeServer(server));
@@ -153,6 +175,7 @@ const terminalPanel = (() => {
     const t = terms.get(id);
     if (!t) return;
     if (!t.exited) window.atelier.killTerminal(id);
+    if (!t.exited) exitListeners.forEach((fn) => fn(id, null));
     t.term.dispose();
     t.view.remove();
     // Onglet voisin dans l'ordre affiché (qui peut avoir été changé par glisser-déposer).
@@ -180,6 +203,7 @@ const terminalPanel = (() => {
     if (!t) return;
     t.exited = true;
     t.tab.classList.add('exited');
+    exitListeners.forEach((fn) => fn(id, code));
     t.term.write(`\r\n\x1b[90m[Processus terminé (code ${code}). Ferme l'onglet ou ouvre un nouveau terminal.]\x1b[0m\r\n`);
   });
 
@@ -228,5 +252,5 @@ const terminalPanel = (() => {
   document.querySelector('#term-hide').onclick = toggle;
   // Ctrl+J est intercepté par main.js (avant l'éditeur et le terminal), puis transmis à app.js.
 
-  return { applyConfig, toggle, create, connect, run };
+  return { applyConfig, toggle, create, connect, run, script, show, stop, onExit };
 })();
