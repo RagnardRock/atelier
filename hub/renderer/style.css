@@ -292,16 +292,49 @@ input[type=range]::-webkit-slider-thumb {
 @keyframes va-et-vient { from { margin-left: 0; } to { margin-left: 70%; } }
 
 /* ---------- Widgets ---------- */
+/* La grille se remplit toute seule : sur un écran normal, deux ou trois colonnes qui défilent ;
+   sur un écran ultralarge, tous les widgets côte à côte. Notes prend deux colonnes. */
 #widgets {
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(560px, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  grid-auto-rows: minmax(330px, 1fr);
+  grid-auto-flow: dense;
   gap: 12px;
+  overflow-y: auto;
 }
+.widget { grid-row: span 2; }
+.widget.petit { grid-row: span 1; }
+#widget-notes { grid-column: span 2; }
+.widget-liste { flex: 1; min-height: 0; margin: 0; padding: 6px; list-style: none; overflow-y: auto; }
+.widget-liste li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.widget-liste li:hover { background: var(--hover); }
+.widget-liste li.vide { color: var(--muted); cursor: default; background: none; line-height: 1.45; }
+.widget-pied { padding: 8px 14px; border-top: 1px solid var(--plate-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+.plaque-titre input[type=text] { width: 160px; height: 28px; font-weight: 400; }
+.field-actions { margin: -4px 0 0 130px; }
+
+/* Projets récents */
+.ligne-principale { display: flex; align-items: center; gap: 8px; }
+.ligne-principale .icon-button { opacity: 0; }
+.widget-liste li:hover .icon-button { opacity: 1; }
+.projet-nom { color: var(--text-strong); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.type { padding: 1px 7px; border-radius: 10px; font-size: 11px; background: rgba(255, 255, 255, 0.08); color: var(--text); flex-shrink: 0; }
+.type-vue, .type-nuxt { background: rgba(65, 184, 131, 0.18); color: #6fd3a3; }
+.type-vite { background: rgba(189, 52, 254, 0.18); color: #d08cff; }
+.type-react { background: rgba(97, 218, 251, 0.15); color: #7fdcfb; }
+.type-electron { background: rgba(71, 132, 155, 0.25); color: #9fd2e6; }
+.type-html { background: rgba(227, 79, 38, 0.18); color: #ff9b7a; }
+.type-php { background: rgba(119, 123, 180, 0.22); color: #b4b8ef; }
+.projet-git { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: var(--muted); }
+.branche { display: inline-flex; align-items: center; gap: 4px; }
+.branche .codicon { font-size: 12px; }
+.pastille { font-variant-numeric: tabular-nums; }
+.pastille.modifie { color: var(--warning); }
+.pastille.pousser { color: var(--accent); }
+.pastille.recuperer { color: #5ec8ff; }
 
 /* Notes */
-#notes-recherche { width: 220px; height: 28px; font-weight: 400; }
 .notes-corps { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px 1fr; }
 #notes-liste { margin: 0; padding: 8px; list-style: none; overflow-y: auto; border-right: 1px solid var(--plate-border); }
 #notes-liste li { padding: 8px 10px; border-radius: 8px; cursor: pointer; }

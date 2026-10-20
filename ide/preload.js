@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('atelier', {
   openFolder: () => ipcRenderer.invoke('folder:open'),
   recentFolders: () => ipcRenderer.invoke('folder:recents'),
   openRecentFolder: (folder) => ipcRenderer.invoke('folder:openRecent', folder),
+  startupFolder: () => ipcRenderer.invoke('folder:startup'),
   setWindowTheme: (options) => ipcRenderer.invoke('window:theme', options),
   blurSupported: () => ipcRenderer.invoke('window:blurSupported'),
   relaunch: () => ipcRenderer.invoke('app:relaunch'),

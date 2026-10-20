@@ -20,6 +20,12 @@ contextBridge.exposeInMainWorld('atelier', {
   ecrireNotes: (notes) => ipcRenderer.invoke('notes:write', notes),
   montrerNotes: () => ipcRenderer.invoke('notes:reveal'),
 
+  // Projets récents
+  projets: () => ipcRenderer.invoke('projets:liste'),
+  ouvrirDansRune: (dossier) => ipcRenderer.invoke('projets:ouvrirRune', dossier),
+  ouvrirExplorateur: (dossier) => ipcRenderer.invoke('projets:explorateur', dossier),
+  choisirDossierProjets: () => ipcRenderer.invoke('projets:choisirDossier'),
+
   // Réglages, fenêtre, mise à jour d'Atelier
   readConfig: () => ipcRenderer.invoke('config:read'),
   writeConfig: (changes) => ipcRenderer.invoke('config:write', changes),

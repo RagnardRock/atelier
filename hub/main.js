@@ -6,7 +6,7 @@
 // - garder les notes et les réglages dans %APPDATA%\atelier-hub ;
 // - mettre Atelier lui-même à jour.
 
-const { app, BrowserWindow, ipcMain, Menu, net, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, shell } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -83,6 +83,10 @@ const DEFAULT_CONFIG = {
   glass: true,
   windowBlur: false,
   checkToolUpdates: true, // au démarrage, regarder sur GitHub si Rune, Skald… ont une nouvelle version
+  // Le dossier où sont rangés tes projets (widget Projets récents), comme dans Rune.
+  dossierProjets: process.platform === 'win32' ? 'D:\\Projets' : path.join(os.homedir(), 'Projets'),
+  // Widgets affichés (Réglages › Widgets).
+  widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true },
 };
 const readConfig = async () => ({ ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) });
 
@@ -350,6 +354,106 @@ handle('outils:installer', async (_event, id) => {
     installing.delete(id);
     progress('fin');
   }
+});
+
+// --- Widget Projets récents ---
+// Les dossiers de ton dossier de projets (D:\Projets par défaut), du plus récemment touché au plus
+// ancien, avec pour chacun : son type (Vue, Vite, Node, HTML…), sa branche Git, le nombre de fichiers
+// modifiés et de commits pas encore poussés. Un clic l'ouvre dans Rune.
+
+async function dossierProjets() {
+  const folder = (await readConfig()).dossierProjets;
+  return typeof folder === 'string' && folder.trim() ? path.resolve(folder) : null;
+}
+
+// Le type d'un projet, d'après son package.json (ou la présence d'un index.html…).
+async function typeProjet(folder) {
+  const pkg = await readJson(path.join(folder, 'package.json'), null);
+  if (pkg) {
+    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+    for (const [dep, label] of [['nuxt', 'Nuxt'], ['vue', 'Vue'], ['react', 'React'], ['svelte', 'Svelte'], ['electron', 'Electron'], ['vite', 'Vite'], ['express', 'Express']]) if (deps[dep]) return label;
+    return 'Node';
+  }
+  if (fsSync.existsSync(path.join(folder, 'composer.json'))) return 'PHP';
+  if (fsSync.existsSync(path.join(folder, 'index.html'))) return 'HTML';
+  return null;
+}
+
+// Branche, fichiers modifiés et commits à pousser / à récupérer. null si ce n'est pas un dépôt git
+// (ou si git n'est pas installé).
+async function etatGit(folder) {
+  if (!fsSync.existsSync(path.join(folder, '.git'))) return null;
+  try {
+    const opts = { cwd: folder, timeout: 8000 };
+    const [branche, status] = await Promise.all([
+      run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], opts),
+      run('git', ['status', '--porcelain'], opts),
+    ]);
+    // « 2	1 » : 2 commits sur GitHub pas encore récupérés, 1 commit local pas encore poussé.
+    const ecart = await run('git', ['rev-list', '--left-right', '--count', '@{u}...HEAD'], opts).catch(() => null);
+    const [aRecuperer, aPousser] = ecart ? ecart.trim().split(/\s+/).map(Number) : [null, null];
+    return { branche: branche.trim(), modifies: status.split('\n').filter(Boolean).length, aPousser, aRecuperer };
+  } catch {
+    return null;
+  }
+}
+
+// Date de dernière activité : le plus récent entre le dossier, l'index git et le package.json.
+async function derniereActivite(folder) {
+  let last = 0;
+  for (const f of [folder, path.join(folder, '.git', 'index'), path.join(folder, 'package.json'), path.join(folder, 'src')]) {
+    const st = await fs.stat(f).catch(() => null);
+    if (st && st.mtimeMs > last) last = st.mtimeMs;
+  }
+  return last;
+}
+
+const MAX_PROJETS = 40;
+handle('projets:liste', async () => {
+  const racine = await dossierProjets();
+  if (!racine || !fsSync.existsSync(racine)) return { racine, existe: false, projets: [] };
+  const entries = (await fs.readdir(racine, { withFileTypes: true }))
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules');
+  const projets = await Promise.all(entries.map(async (e) => {
+    const folder = path.join(racine, e.name);
+    return { nom: e.name, dossier: folder, activite: await derniereActivite(folder) };
+  }));
+  projets.sort((a, b) => b.activite - a.activite);
+  const garder = projets.slice(0, MAX_PROJETS);
+  // Type et état git en parallèle pour tous les projets gardés.
+  await Promise.all(garder.map(async (p) => {
+    [p.type, p.git] = await Promise.all([typeProjet(p.dossier), etatGit(p.dossier)]);
+  }));
+  return { racine, existe: true, projets: garder, total: projets.length };
+});
+
+// Un projet ne peut être ouvert que s'il est bien dans le dossier des projets.
+async function projetAutorise(folder) {
+  const racine = await dossierProjets();
+  const full = path.resolve(String(folder));
+  if (!racine || path.dirname(full) !== racine || !fsSync.existsSync(full)) throw new Error(`Ce dossier n'est pas un de tes projets : ${folder}`);
+  return full;
+}
+
+handle('projets:ouvrirRune', async (_event, folder) => {
+  const full = await projetAutorise(folder);
+  const rune = OUTILS.find((t) => t.id === 'rune');
+  const installed = await findInstalled(rune, await readUninstallRegistry());
+  if (!installed) throw new Error('Rune n\'est pas installé : installe-le depuis la colonne Outils');
+  // Rune 0.12 et plus ouvre le dossier passé en ligne de commande.
+  const child = spawn(installed.exe, [full], { cwd: full, detached: true, stdio: 'ignore' });
+  child.on('error', (err) => reportError('Ouverture dans Rune', err));
+  child.unref();
+  log('INFO', `Ouverture de ${full} dans Rune`);
+});
+handle('projets:explorateur', async (_event, folder) => {
+  const err = await shell.openPath(await projetAutorise(folder));
+  if (err) throw new Error(err);
+});
+handle('projets:choisirDossier', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, { title: 'Dossier de mes projets', defaultPath: (await dossierProjets()) || os.homedir(), properties: ['openDirectory'] });
+  return result.canceled ? null : result.filePaths[0];
 });
 
 // --- Mise à jour d'Atelier lui-même ---

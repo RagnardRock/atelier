@@ -15,11 +15,23 @@ const App = (() => {
     return needsRestart;
   }
 
+  // --- Widgets affichés (Réglages › Widgets) ---
+  // Chaque widget est un <article id="widget-…"> dans index.html.
+  const WIDGETS = [
+    ['notes', 'Notes', 'widget-notes'],
+    ['projets', 'Projets récents', 'widget-projets'],
+  ];
+  function applyWidgets(c) {
+    for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
+  }
+
   // --- Réglages ---
   async function openSettings() {
     const blurOk = await window.atelier.blurSupported();
     const version = await window.atelier.version();
     const swatches = el('div', { className: 'accent-swatches' });
+    // Bouton « Parcourir… » sous le dossier des projets.
+    const parcourir = el('div', { className: 'field-actions' }, el('button', { type: 'button', className: 'button small', textContent: 'Parcourir…' }));
     const v = await Dialogs.form({
       title: 'Réglages d\'Atelier',
       okLabel: 'Enregistrer',
@@ -30,10 +42,18 @@ const App = (() => {
         { key: 'glass', label: 'Verre dépoli (glassmorphism)', type: 'checkbox', value: config.glass },
         { key: 'windowBlur', label: blurOk ? 'Flou de Windows 11 derrière la fenêtre' : 'Flou de Windows 11 (non disponible ici)', type: 'checkbox', value: config.windowBlur },
         { key: 'checkToolUpdates', label: 'Au démarrage, chercher les nouvelles versions de mes outils', type: 'checkbox', value: config.checkToolUpdates },
+        { key: 'dossierProjets', label: 'Dossier des projets', type: 'text', value: config.dossierProjets },
+        { type: 'element', element: parcourir },
+        { type: 'info', text: 'Widgets affichés :' },
+        ...WIDGETS.map(([key, label]) => ({ key: `widget-${key}`, label, type: 'checkbox', value: config.widgets?.[key] !== false })),
         { type: 'info', text: `Atelier ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
       buttons: [{ label: 'Dossier des notes', run: () => window.atelier.montrerNotes() }],
       onInput(values, f) {
+        parcourir.firstChild.onclick = async () => {
+          const dossier = await window.atelier.choisirDossierProjets();
+          if (dossier) f.setValue('dossierProjets', dossier);
+        };
         if (!swatches.childElementCount) {
           for (const c of ACCENTS) {
             const b = el('button', { type: 'button', className: 'mini-swatch', title: c });
@@ -48,7 +68,13 @@ const App = (() => {
       },
     });
     if (!v) return applyTheme(config);
-    config = await window.atelier.writeConfig(v);
+    // Les cases « widget-… » deviennent config.widgets = { notes: true, … }.
+    const widgets = {};
+    for (const [key] of WIDGETS) { widgets[key] = v[`widget-${key}`]; delete v[`widget-${key}`]; }
+    const dossierChange = v.dossierProjets !== config.dossierProjets;
+    config = await window.atelier.writeConfig({ ...v, widgets: { ...config.widgets, ...widgets } });
+    applyWidgets(config);
+    if (dossierChange) Projets.refresh();
     if (await applyTheme(config)) notify('Le flou de Windows 11 sera actif au prochain démarrage d\'Atelier.', 'info', 6000);
   }
   $('#btn-settings').onclick = openSettings;
@@ -74,8 +100,10 @@ const App = (() => {
   async function start() {
     ({ config, path: configPath } = await window.atelier.readConfig());
     await applyTheme(config);
+    applyWidgets(config);
     salut();
     await Notes.start();
+    Projets.refresh();
     // Les versions installées s'affichent tout de suite ; GitHub n'est contacté au démarrage que si
     // le réglage est coché (sinon seulement quand tu cliques ↻).
     try {

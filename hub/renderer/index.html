@@ -56,6 +56,17 @@
           </div>
         </div>
       </article>
+
+      <article id="widget-projets" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-repo"></i><span>Projets récents</span>
+          <span class="spacer"></span>
+          <input id="projets-recherche" type="text" placeholder="Filtrer" spellcheck="false">
+          <button id="btn-projets-actualiser" class="icon-button" title="Relire les projets et leur état Git"><i class="codicon codicon-refresh"></i></button>
+        </header>
+        <ul id="projets-liste" class="widget-liste"></ul>
+        <footer class="widget-pied discret"><span id="projets-racine"></span></footer>
+      </article>
     </section>
   </main>
 
@@ -66,6 +77,7 @@
   <script src="dialogs.js"></script>
   <script src="outils.js"></script>
   <script src="notes.js"></script>
+  <script src="projets.js"></script>
   <script src="update.js"></script>
   <script src="app.js"></script>
 </body>
