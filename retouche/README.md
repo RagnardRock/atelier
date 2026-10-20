@@ -29,7 +29,7 @@ Le bouton nuage en haut à droite (comme dans Rune) cherche une nouvelle version
 
 Avant de fermer, Skald propose d'enregistrer les images modifiées. Ses réglages vivent dans `%APPDATA%\atelier-retouche` et ne sont pas effacés.
 
-## Ce que fait Skald (v0.2)
+## Ce que fait Skald (v0.3)
 
 **Fichiers**
 - Ouvre PSD (avec ses calques), PNG, JPEG, WebP, GIF, BMP, ICO, AVIF et SVG (dessiné en au moins 1024 px pour rester net).

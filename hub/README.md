@@ -20,15 +20,15 @@ Une carte par outil, avec sa version installée et la dernière publiée sur Git
 
 Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelier le fait tout seul (réglable).
 
-**Comment Atelier trouve les outils installés.** Les installeurs de Rune et Skald s'inscrivent dans le registre de Windows, à l'endroit que lit « Paramètres › Applications » (nom, version, dossier). Atelier lit cet endroit ; s'il n'y trouve rien, il regarde `%LOCALAPPDATA%\Programs\<nom>`.
+**Comment Atelier trouve les outils installés.** Les installeurs de Rune, Skald et Brokk s'inscrivent dans le registre de Windows, à l'endroit que lit « Paramètres › Applications » (nom, version, dossier). Atelier lit cet endroit ; s'il n'y trouve rien, il regarde `%LOCALAPPDATA%\Programs\<nom>`.
 
-**Comment Atelier trouve les nouvelles versions.** Toutes les versions de tous les outils sont des Releases du même dépôt. Atelier garde pour chaque outil la plus récente dont l'étiquette commence par son préfixe (`rune-v`, `skald-v`).
+**Comment Atelier trouve les nouvelles versions.** Toutes les versions de tous les outils sont des Releases du même dépôt. Atelier garde pour chaque outil la plus récente dont l'étiquette commence par son préfixe (`rune-v`, `skald-v`, `brokk-v`).
 
 ### Ajouter un futur outil
 
 1. Une ligne de plus dans [`outils.js`](outils.js) : nom, rune, description, préfixe d'étiquette, nom du `.exe`, et la version à partir de laquelle il sait ouvrir un dossier.
 2. Son icône dans `renderer/outils/`.
-3. Son installeur doit s'appeler `<Nom>-Setup-<version>.exe`, avec `latest.yml` dans sa Release, et sa Release **ne doit pas** être marquée « Latest » (comme Skald et Atelier : Rune cherche ses mises à jour dans la Release « Latest »).
+3. Son installeur doit s'appeler `<Nom>-Setup-<version>.exe`, avec `latest.yml` dans sa Release, et sa Release **ne doit pas** être marquée « Latest » (comme Skald, Brokk et Atelier : Rune cherche ses mises à jour dans la Release « Latest »).
 
 ## Les widgets
 

@@ -36,7 +36,7 @@ Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, s
 
 Tu peux aussi le fabriquer sur ton PC : `cd ide`, puis `npm run dist`. L'installeur arrive dans `ide/dist/` (ignoré par git).
 
-> Les autres outils (Skald, le hub Atelier…) ne doivent pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
+> Les autres outils (Skald, Brokk, le hub Atelier…) ne doivent pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
 
 ## Lancer Rune depuis le clone (pour le développer)
 
@@ -61,7 +61,7 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 
 > Sous Windows, `npm install` peut réécrire légèrement `ide/package-lock.json`. Si git refuse ensuite un `git checkout` ou un `git pull` à cause de ce fichier, annule sa modification avec `git checkout -- ide/package-lock.json` : il sera régénéré au prochain `npm install`. Le script de mise à jour le fait tout seul.
 
-## Ce que fait Rune (v0.11)
+## Ce que fait Rune (v0.12)
 
 ### L'interface
 
@@ -267,7 +267,7 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | `ide/renderer/update.js` | Le bouton Mise à jour : vérification au démarrage, liste des nouveautés, puis installation (nouvel installeur pour la version installée, script pour le clone). |
 | `ide/build/` | L'icône de Rune (`icon.svg`, et `icon.ico` / `icon.png` qui en sont tirés) et `garder-fichiers.js`, qui dit à electron-builder de garder les fichiers de types (`.d.ts`) dont l'intelligence TypeScript/Vue a besoin. |
 | `ide/renderer/rune.svg` | La même icône, affichée en haut à gauche et sur l'écran d'accueil. |
-| `.github/workflows/rune.yml` | La fabrication de l'installeur sur GitHub (à chaque PR, et publication à chaque étiquette `rune-v…`). |
+| `.github/workflows/rune.yml` | La fabrication de l'installeur sur GitHub (à chaque PR, et publication de la Release quand une fusion sur `main` monte la version). |
 | `mettre-a-jour.bat` / `.sh` | Les scripts de mise à jour (git pull, npm install, relance). |
 | `ide/renderer/terminal.js` | Le panneau terminal : crée les terminaux xterm.js, les onglets, la poignée et le raccourci `Ctrl+J`. |
 | `ide/renderer/servers.js` | Le panneau Serveurs : les onglets Fichiers / Serveurs, la liste, le formulaire d'ajout ou de modification, la suppression et la connexion en un clic. |
@@ -290,5 +290,4 @@ Pas de framework ni de bundler : le code que tu lis est exactement celui qui tou
 
 ## Prochaines étapes
 
-1. Pipeline d'assets Photoshop / Illustrator.
-2. Actions serveur en un clic (déployer, logs, redémarrer), à côté de chaque serveur favori.
+1. Actions serveur en un clic (déployer, logs, redémarrer), à côté de chaque serveur favori.
