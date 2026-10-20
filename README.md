@@ -31,13 +31,13 @@ Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/w
 1. Quand la PR est fusionnée dans `main`, GitHub voit que l'étiquette `rune-v0.13.0` n'existe pas encore : il fabrique `Rune-Setup-0.13.0.exe`, crée l'étiquette et publie la Release, avec comme notes la liste des commits de `ide/` depuis la version précédente.
 2. Tous les Rune installés (et Atelier) la proposent ensuite.
 
-Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json` et `hub/package.json`.
+Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk, Tafl et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json`, `tuiles/package.json` et `hub/package.json`.
 
 Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, sans le publier : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ». Pratique pour essayer une version avant de fusionner.
 
 Tu peux aussi le fabriquer sur ton PC : `cd ide`, puis `npm run dist`. L'installeur arrive dans `ide/dist/` (ignoré par git).
 
-> Les autres outils (Skald, Brokk, le hub Atelier…) ne doivent pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
+> Les autres outils (Skald, Brokk, Tafl, le hub Atelier…) ne doivent pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
 
 ## Lancer Rune depuis le clone (pour le développer)
 
