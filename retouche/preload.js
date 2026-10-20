@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('skald', {
   platform: process.platform,
-  openFiles: () => ipcRenderer.invoke('file:open'),
+  openFiles: (dossier) => ipcRenderer.invoke('file:open', dossier),
   openPath: (file) => ipcRenderer.invoke('file:openPath', file),
   recentFiles: () => ipcRenderer.invoke('file:recents'),
   saveDialog: (options) => ipcRenderer.invoke('file:saveDialog', options),
@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('skald', {
   // Chemin d'un fichier glissé depuis l'Explorateur Windows sur la fenêtre.
   pathOfDropped: (file) => webUtils.getPathForFile(file),
   startupFiles: () => ipcRenderer.invoke('file:startup'),
+  startupFolder: () => ipcRenderer.invoke('folder:startup'),
+  onExternalFolder: (callback) => ipcRenderer.on('folder:external', (_event, folder) => callback(folder)),
   onExternalFile: (callback) => ipcRenderer.on('file:external', (_event, file) => callback(file)),
   onError: (callback) => ipcRenderer.on('app:error', (_event, message) => callback(message)),
 

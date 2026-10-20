@@ -22,8 +22,8 @@ contextBridge.exposeInMainWorld('atelier', {
 
   // Projets récents
   projets: () => ipcRenderer.invoke('projets:liste'),
-  ouvrirDansRune: (dossier) => ipcRenderer.invoke('projets:ouvrirRune', dossier),
-  ouvrirExplorateur: (dossier) => ipcRenderer.invoke('projets:explorateur', dossier),
+  ouvrirProjet: (dossier, outil) => ipcRenderer.invoke('projets:ouvrir', dossier, outil),
+  choisirOutilProjet: (nom, outil) => ipcRenderer.invoke('projets:choisirOutil', nom, outil),
   choisirDossierProjets: () => ipcRenderer.invoke('projets:choisirDossier'),
 
   // Données des widgets (couleurs, calendrier…)

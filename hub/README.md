@@ -26,7 +26,7 @@ Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelie
 
 ### Ajouter un futur outil
 
-1. Une ligne de plus dans [`outils.js`](outils.js) : nom, rune, description, préfixe d'étiquette, nom du `.exe`.
+1. Une ligne de plus dans [`outils.js`](outils.js) : nom, rune, description, préfixe d'étiquette, nom du `.exe`, et la version à partir de laquelle il sait ouvrir un dossier.
 2. Son icône dans `renderer/outils/`.
 3. Son installeur doit s'appeler `<Nom>-Setup-<version>.exe`, avec `latest.yml` dans sa Release, et sa Release **ne doit pas** être marquée « Latest » (comme Skald et Atelier : Rune cherche ses mises à jour dans la Release « Latest »).
 
@@ -35,7 +35,10 @@ Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelie
 Chaque widget s'affiche ou se cache dans les réglages (`Ctrl+,`). Sur un écran ultralarge ils tiennent tous côte à côte ; sur un écran plus petit la zone défile.
 
 - **Notes** : la première ligne devient le titre. Tout s'enregistre une demi-seconde après la dernière frappe. `Ctrl+N` nouvelle note, `Ctrl+F` chercher, l'épingle garde une note en haut.
-- **Projets récents** : les dossiers de ton dossier de projets (`D:\Projets` par défaut, réglable), du plus récent au plus ancien, avec leur type (Vue, Vite, Node, HTML…), leur branche Git, les fichiers modifiés (● jaune), les commits à pousser (↑) ou à récupérer (↓). **Un clic ouvre le projet dans Rune** (il faut Rune 0.12 ou plus).
+- **Projets récents** : les dossiers de ton dossier de projets (`D:\Projets` par défaut, réglable), du plus récent au plus ancien, avec leur type (Vue, Vite, Node, HTML, Images…), leur branche Git, les fichiers modifiés (● jaune), les commits à pousser (↑) ou à récupérer (↓).
+  - **Un clic ouvre le projet avec son outil**, montré par la petite icône à gauche. Atelier le devine en comptant les fichiers : un projet surtout fait d'images (PSD, AI, PNG, SVG…) s'ouvre dans **Skald** (la fenêtre « Ouvrir » se place dans le dossier), le reste dans **Rune** (sur le dossier).
+  - **Clic droit** : ouvrir avec Rune, Skald ou l'Explorateur, et « Toujours ouvrir ce projet avec… » pour corriger la devinette. Ce choix est gardé dans les réglages d'Atelier, rien n'est ajouté au dossier du projet.
+  - Il faut Rune 0.12 et Skald 0.3 ou plus : une version plus ancienne s'ouvrirait sur son dernier dossier, alors Atelier te propose plutôt de la mettre à jour.
 - **Presse-papiers et couleurs** : l'historique de ce que tu copies (texte seulement, 40 éléments) ; un clic le recopie. En haut, ta palette : clic sur une pastille = copier en HEX, clic droit = copier en RGB ou HSL. La pipette prend une couleur n'importe où sur l'écran. Un code couleur copié s'affiche avec sa pastille et le bouton ⊕ l'ajoute à la palette. Par défaut, l'historique est oublié à la fermeture (un mot de passe copié ne doit pas finir dans un fichier) ; un réglage permet de le garder.
 - **Minuteurs** : 5, 15, 25 minutes, Pomodoro (25 min de travail, 5 min de pause, grande pause de 15 min toutes les 4 séances, enchaînés tout seuls), ou durée au choix avec `+`. À la fin : un carillon, une notification de Windows, et l'icône d'Atelier clignote dans la barre des tâches. Ils continuent de compter si tu fermes Atelier.
 - **Calendrier** : double-clic sur un jour pour ajouter un évènement (heure facultative), clic pour le modifier ou le supprimer. Sous la grille : le jour choisi puis les 14 prochains jours. Si Atelier est ouvert, il te prévient 10 minutes avant un évènement qui a une heure.

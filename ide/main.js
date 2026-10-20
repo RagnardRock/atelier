@@ -229,7 +229,7 @@ handle('folder:recents', async () => existingRecents());
 let startupFolder = process.argv.slice(app.isPackaged ? 1 : 2)
   .filter((a) => !a.startsWith('-') && a !== '.')
   .map((a) => path.resolve(a))
-  .find((a) => fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
+  .find((a) => a !== app.getAppPath() && fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
 handle('folder:startup', async () => {
   const folder = startupFolder;
   startupFolder = null;

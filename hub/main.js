@@ -84,6 +84,8 @@ const DEFAULT_CONFIG = {
   windowBlur: false,
   checkToolUpdates: true, // au démarrage, regarder sur GitHub si Rune, Skald… ont une nouvelle version
   // Le dossier où sont rangés tes projets (widget Projets récents), comme dans Rune.
+  // Outil choisi pour certains projets (clic droit › Toujours ouvrir avec…) : { nomDuDossier: 'skald' }.
+  outilsProjets: {},
   dossierProjets: process.platform === 'win32' ? 'D:\\Projets' : path.join(os.homedir(), 'Projets'),
   // Presse-papiers : retenir ce que tu copies, et le garder après la fermeture d'Atelier (désactivé par
   // défaut : un mot de passe copié finirait sinon dans un fichier).
@@ -450,6 +452,29 @@ async function typeProjet(folder) {
   return null;
 }
 
+// Projet de code ou projet d'images ? On compte les fichiers du dossier et de ses sous-dossiers
+// directs (sans node_modules ni .git) : s'il y a plus d'images (PSD, AI, PNG, SVG…) que de fichiers
+// de code, c'est un projet d'images, qui s'ouvre dans Skald. Sinon, dans Rune.
+const EXT_IMAGES = new Set(['psd', 'psb', 'ai', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'ico', 'avif', 'tif', 'tiff', 'xcf', 'kra']);
+const EXT_CODE = new Set(['js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'vue', 'svelte', 'html', 'htm', 'css', 'scss', 'sass', 'less', 'php', 'py', 'rb', 'go', 'rs', 'java', 'c', 'cpp', 'h', 'cs', 'json', 'md', 'sh', 'bat', 'ps1', 'yml', 'yaml', 'toml', 'sql', 'twig']);
+async function categorieProjet(folder) {
+  let images = 0, code = 0, vus = 0;
+  const compter = (name) => {
+    const ext = path.extname(name).slice(1).toLowerCase();
+    if (EXT_IMAGES.has(ext)) images++;
+    else if (EXT_CODE.has(ext)) code++;
+  };
+  const entries = await fs.readdir(folder, { withFileTypes: true }).catch(() => []);
+  for (const e of entries) {
+    if (e.isFile()) compter(e.name);
+    else if (e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules' && vus < 40) {
+      vus++;
+      for (const sub of await fs.readdir(path.join(folder, e.name), { withFileTypes: true }).catch(() => [])) if (sub.isFile()) compter(sub.name);
+    }
+  }
+  return images > code ? 'images' : 'code';
+}
+
 // Branche, fichiers modifiés et commits à pousser / à récupérer. null si ce n'est pas un dépôt git
 // (ou si git n'est pas installé).
 async function etatGit(folder) {
@@ -491,9 +516,14 @@ handle('projets:liste', async () => {
   }));
   projets.sort((a, b) => b.activite - a.activite);
   const garder = projets.slice(0, MAX_PROJETS);
-  // Type et état git en parallèle pour tous les projets gardés.
+  const { outilsProjets = {} } = await readConfig();
+  // Type, catégorie et état git en parallèle pour tous les projets gardés.
   await Promise.all(garder.map(async (p) => {
-    [p.type, p.git] = await Promise.all([typeProjet(p.dossier), etatGit(p.dossier)]);
+    [p.type, p.categorie, p.git] = await Promise.all([typeProjet(p.dossier), categorieProjet(p.dossier), etatGit(p.dossier)]);
+    if (p.categorie === 'images' && !p.type) p.type = 'Images';
+    // L'outil qui l'ouvre : ton choix s'il y en a un, sinon Skald pour les images et Rune pour le reste.
+    p.outilAuto = p.categorie === 'images' ? 'skald' : 'rune';
+    p.outil = outilsProjets[p.nom] || p.outilAuto;
   }));
   return { racine, existe: true, projets: garder, total: projets.length };
 });
@@ -506,20 +536,33 @@ async function projetAutorise(folder) {
   return full;
 }
 
-handle('projets:ouvrirRune', async (_event, folder) => {
+// Ouvre un projet avec un outil (rune, skald) ou dans l'Explorateur.
+handle('projets:ouvrir', async (_event, folder, outil) => {
   const full = await projetAutorise(folder);
-  const rune = OUTILS.find((t) => t.id === 'rune');
-  const installed = await findInstalled(rune, await readUninstallRegistry());
-  if (!installed) throw new Error('Rune n\'est pas installé : installe-le depuis la colonne Outils');
-  // Rune 0.12 et plus ouvre le dossier passé en ligne de commande.
+  if (outil === 'explorateur') {
+    const err = await shell.openPath(full);
+    if (err) throw new Error(err);
+    return;
+  }
+  const tool = toolById(outil);
+  const installed = await findInstalled(tool, await readUninstallRegistry());
+  if (!installed) throw new Error(`${tool.nom} n'est pas installé : installe-le depuis la colonne Outils`);
+  // Une version trop ancienne s'ouvrirait, mais sur son dernier dossier et pas sur celui-ci.
+  if (tool.ouvreDossier && installed.version && newer(tool.ouvreDossier, installed.version)) {
+    throw new Error(`${tool.nom} ${installed.version} ne sait pas encore ouvrir un dossier : mets-le à jour (version ${tool.ouvreDossier} ou plus) depuis la colonne Outils`);
+  }
   const child = spawn(installed.exe, [full], { cwd: full, detached: true, stdio: 'ignore' });
-  child.on('error', (err) => reportError('Ouverture dans Rune', err));
+  child.on('error', (err) => reportError(`Ouverture dans ${tool.nom}`, err));
   child.unref();
-  log('INFO', `Ouverture de ${full} dans Rune`);
+  log('INFO', `Ouverture de ${full} dans ${tool.nom}`);
 });
-handle('projets:explorateur', async (_event, folder) => {
-  const err = await shell.openPath(await projetAutorise(folder));
-  if (err) throw new Error(err);
+// Toujours ouvrir ce projet avec cet outil (null : revenir au choix automatique).
+handle('projets:choisirOutil', async (_event, nom, outil) => {
+  const config = await readConfig();
+  const outilsProjets = { ...config.outilsProjets };
+  if (outil) outilsProjets[String(nom)] = String(outil);
+  else delete outilsProjets[String(nom)];
+  await writeJson(configPath(), { ...config, outilsProjets });
 });
 handle('projets:choisirDossier', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);

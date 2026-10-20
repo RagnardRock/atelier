@@ -22,3 +22,24 @@ function dateRelative(ms) {
   if (d.toDateString() === hier.toDateString()) return `hier à ${heure}`;
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', ...(d.getFullYear() !== aujourdhui.getFullYear() ? { year: 'numeric' } : {}) });
 }
+
+// Petit menu au clic droit : ouvrirMenu(x, y, [[libellé, action, coché ?], null (séparateur), 'Titre', …]).
+let menuOuvert = null;
+function fermerMenu() { menuOuvert?.remove(); menuOuvert = null; }
+function ouvrirMenu(x, y, items) {
+  fermerMenu();
+  menuOuvert = el('div', { className: 'menu' });
+  for (const item of items) {
+    if (!item) { menuOuvert.append(el('div', { className: 'menu-sep' })); continue; }
+    if (typeof item === 'string') { menuOuvert.append(el('div', { className: 'menu-titre', textContent: item })); continue; }
+    const [label, run, coche] = item;
+    const b = el('button', { className: `menu-item${coche ? ' coche' : ''}`, textContent: label });
+    b.onclick = () => { fermerMenu(); run(); };
+    menuOuvert.append(b);
+  }
+  document.body.append(menuOuvert);
+  menuOuvert.style.left = `${Math.min(x, innerWidth - menuOuvert.offsetWidth - 8)}px`;
+  menuOuvert.style.top = `${Math.min(y, innerHeight - menuOuvert.offsetHeight - 8)}px`;
+}
+document.addEventListener('pointerdown', (e) => { if (menuOuvert && !menuOuvert.contains(e.target)) fermerMenu(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenu(); });

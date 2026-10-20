@@ -55,24 +55,6 @@ const PressePapiers = (() => {
     enregistrerCouleurs();
   }
 
-  // Petit menu au clic droit sur une pastille.
-  let menu = null;
-  function fermerMenu() { menu?.remove(); menu = null; }
-  function ouvrirMenu(x, y, items) {
-    fermerMenu();
-    menu = el('div', { className: 'menu' });
-    for (const [label, run] of items) {
-      const b = el('button', { className: 'menu-item', textContent: label });
-      b.onclick = () => { fermerMenu(); run(); };
-      menu.append(b);
-    }
-    document.body.append(menu);
-    menu.style.left = `${Math.min(x, innerWidth - menu.offsetWidth - 8)}px`;
-    menu.style.top = `${Math.min(y, innerHeight - menu.offsetHeight - 8)}px`;
-  }
-  document.addEventListener('pointerdown', (e) => { if (menu && !menu.contains(e.target)) fermerMenu(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenu(); });
-
   function renderPalette() {
     palette.replaceChildren(...couleurs.map((hex) => {
       const b = el('button', { className: 'pastille-couleur', title: `${hex} : clic pour copier, clic droit pour plus` });

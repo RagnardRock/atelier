@@ -99,12 +99,14 @@ async function loadFile(file) {
   return { path: file, name: path.basename(file), bytes };
 }
 
-handle('file:open', async (event) => {
+// dossier : où ouvrir la fenêtre (un projet ouvert depuis Atelier) ; sinon le dernier dossier utilisé.
+handle('file:open', async (event, dossier) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const config = await readConfig();
+  const ici = typeof dossier === 'string' && fsSync.existsSync(dossier) ? dossier : null;
   const result = await dialog.showOpenDialog(win, {
     title: 'Ouvrir une image',
-    defaultPath: config.lastFolder || app.getPath('pictures'),
+    defaultPath: ici || config.lastFolder || app.getPath('pictures'),
     properties: ['openFile', 'multiSelections'],
     filters: [
       { name: 'Images et Photoshop', extensions: IMAGE_EXTENSIONS },
@@ -336,6 +338,20 @@ handle('file:startup', async () => {
   return files;
 });
 
+// Dossier passé en ligne de commande (« Skald.exe D:\Projets\logos », c'est ainsi qu'Atelier ouvre un
+// projet d'images) : Skald s'ouvre avec la fenêtre « Ouvrir » placée dans ce dossier.
+// (Lancé depuis le clone, un des arguments est le dossier de Skald lui-même : on le saute.)
+const folderFromArgs = (argv) => argv.slice(app.isPackaged ? 1 : 2)
+  .filter((a) => !a.startsWith('-') && a !== '.')
+  .map((a) => path.resolve(a))
+  .find((a) => a !== app.getAppPath() && fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
+let startupFolder = folderFromArgs(process.argv);
+handle('folder:startup', async () => {
+  const folder = startupFolder;
+  startupFolder = null;
+  return folder;
+});
+
 function createWindow(config) {
   const blur = wantsBlur(config);
   const win = new BrowserWindow({
@@ -386,6 +402,8 @@ if (!app.requestSingleInstanceLock()) {
     if (win.isMinimized()) win.restore();
     win.focus();
     for (const file of filesFromArgs(argv)) win.webContents.send('file:external', file);
+    const folder = folderFromArgs(argv);
+    if (folder) win.webContents.send('folder:external', folder);
   });
 
   app.whenReady().then(async () => {

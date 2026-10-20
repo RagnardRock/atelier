@@ -7,6 +7,8 @@
 // - nom : aussi le nom affiché dans « Paramètres › Applications » de Windows
 //   (package.json › build.nsis.uninstallDisplayName) ; Atelier s'en sert pour le retrouver.
 //   L'installeur publié s'appelle toujours « <nom>-Setup-<version>.exe ».
+// - ouvreDossier : à partir de quelle version l'outil sait ouvrir un dossier passé en ligne de commande
+//   (« Rune.exe D:\Projets\site ») ; c'est ce qu'utilise le widget Projets récents.
 
 module.exports = [
   {
@@ -17,6 +19,7 @@ module.exports = [
     prefixe: 'rune-v',
     exe: 'Rune.exe',
     icone: 'rune.svg',
+    ouvreDossier: '0.12.0',
   },
   {
     id: 'skald',
@@ -26,5 +29,6 @@ module.exports = [
     prefixe: 'skald-v',
     exe: 'Skald.exe',
     icone: 'skald.svg',
+    ouvreDossier: '0.3.0',
   },
 ];

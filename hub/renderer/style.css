@@ -457,3 +457,9 @@ label.icon-button input[type=color] { position: absolute; inset: 0; opacity: 0; 
 .widget-liste li.cal-section { cursor: default; background: none; padding: 12px 10px 4px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; }
 input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: rgba(0, 0, 0, 0.25); outline: none; color-scheme: dark; }
 .field input[type=date], .field input[type=time] { flex: 1; }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.menu-item.coche::before { content: "✓"; display: inline-block; width: 16px; margin-left: -4px; }
+.menu-item:not(.coche) { padding-left: 22px; }
+.menu-titre { padding: 6px 10px 2px 22px; color: var(--muted); font-size: 11px; }
+/* Icône de l'outil qui ouvre le projet */
+.projet-outil { width: 16px; height: 16px; flex-shrink: 0; }
