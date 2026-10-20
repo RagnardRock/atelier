@@ -52,13 +52,7 @@ Le bouton nuage en haut à droite, comme dans Rune et Skald :
 
 ### Publier une nouvelle version d'Atelier
 
-1. Monte la version dans `hub/package.json` et fusionne sur `main`.
-2. Pose l'étiquette et pousse-la :
-   ```bat
-   git tag atelier-v0.1.0
-   git push origin atelier-v0.1.0
-   ```
-3. GitHub fabrique `Atelier-Setup-0.1.0.exe` (fichier `.github/workflows/atelier.yml`) et le publie dans les Releases, sans la marquer « Latest ».
+Monte la version dans `hub/package.json` dans la PR. Quand elle est fusionnée sur `main`, GitHub fabrique `Atelier-Setup-<version>.exe` (fichier `.github/workflows/atelier.yml`), crée l'étiquette `atelier-v<version>` et publie la Release, sans la marquer « Latest ». Pas d'étiquette à poser à la main.
 
 Sur chaque pull request qui touche `hub/`, l'installeur est aussi fabriqué sans être publié : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ».
 
