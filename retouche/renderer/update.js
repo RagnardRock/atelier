@@ -49,7 +49,11 @@ const Updater = (() => {
     icon.className = 'codicon codicon-sync codicon-modifier-spin';
     try {
       const result = await check();
-      if (result.changes.length === 0) notify('Skald est à jour', 'success');
+      if (result.changes.length === 0) {
+        notify(result.mode === 'installer'
+          ? `Skald ${result.version} est à jour : aucune version plus récente n'est publiée sur GitHub.`
+          : 'Skald est à jour : rien de nouveau sur GitHub pour Skald.', 'success', 6000);
+      }
       else await install(result);
     } catch (err) {
       notify(`Mise à jour impossible : ${cleanError(err)}`, 'error');
