@@ -67,17 +67,28 @@ const Tools = (() => {
         const layer = activeLayer(doc);
         if (!layer) return notify('Ajoute d\'abord un calque.', 'warning');
         if (!layer.visible) return notify('Le calque actif est masqué : affiche-le (œil) pour peindre dessus.', 'warning');
-        const snap = snapshot(doc, name);
+        // Sur un calque de réglage ou de remplissage, on peint son masque, comme dans Photoshop :
+        // noir = cacher l'effet, blanc = le montrer, gris = à moitié.
+        const onMask = Adjust.isSpecial(layer);
+        if (onMask && clone) return notify('Le tampon ne marche pas sur un calque de réglage : choisis un calque de pixels.', 'warning');
+        let strokeErase = erase, strength = 1;
+        if (onMask && !erase) {
+          const [r, g, b] = hexToRgb(App.colors.primary);
+          const light = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+          strokeErase = light < 0.5;
+          strength = strokeErase ? 1 - light : light;
+        }
+        const snap = snapshot(doc, onMask ? 'Masque' : name);
         editPixels(layer, doc, true);
         const s = settings[id];
         const sel = doc.selection;
         doc.stroke = {
-          snap, layer, erase,
+          snap, layer, erase: strokeErase,
           buffer: newCanvas(layer.canvas.width, layer.canvas.height),
           temp: newCanvas(layer.canvas.width, layer.canvas.height),
-          stamp: makeStamp(s.size, s.hardness / 100, erase || clone ? '#000000' : App.colors.primary),
+          stamp: makeStamp(s.size, s.hardness / 100, strokeErase || clone || onMask ? (onMask && !strokeErase ? '#ffffff' : '#000000') : App.colors.primary),
           spacing: Math.max(0.5, s.size * 0.1),
-          opacity: s.opacity / 100,
+          opacity: (s.opacity / 100) * strength,
           sel,
           last: null,
         };
@@ -313,7 +324,7 @@ const Tools = (() => {
   // Calque visible le plus haut qui a un pixel non transparent sous la souris.
   function layerAt(doc, p) {
     for (const layer of [...doc.layers].reverse()) {
-      if (!layer.visible) continue;
+      if (!layer.visible || layer.adjust) continue; // un calque de réglage n'a rien à attraper
       const x = Math.floor(p.x - layer.x), y = Math.floor(p.y - layer.y);
       if (x < 0 || y < 0 || x >= layer.canvas.width || y >= layer.canvas.height) continue;
       if (layer.canvas.getContext('2d').getImageData(x, y, 1, 1).data[3] > 10) return layer;
@@ -500,6 +511,88 @@ const Tools = (() => {
         ctx.stroke();
         ctx.strokeStyle = '#fff';
         ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      },
+    },
+    {
+      // Lasso polygonal : un clic par sommet ; on ferme en cliquant sur le premier point,
+      // par un double-clic ou avec Entrée. Retour arrière retire le dernier point, Échap abandonne.
+      id: 'polylasso', name: 'Lasso polygonal', key: 'l', icon: ICONS.polylasso, cursor: 'crosshair',
+      hint: 'Clique pour chaque sommet (Maj : droit ou à 45°). Ferme sur le premier point, par double-clic ou Entrée. Retour arrière : dernier point en moins. Échap : abandonner.',
+      options: [SELECT_MODE],
+      // Le point suivant, aligné à 45° près si Maj est enfoncée.
+      snap(p, e) {
+        const last = this.poly?.points.at(-1);
+        if (!last || !e?.shiftKey) return { x: p.x, y: p.y };
+        const a = Math.round(Math.atan2(p.y - last.y, p.x - last.x) / (Math.PI / 4)) * (Math.PI / 4);
+        const len = Math.hypot(p.x - last.x, p.y - last.y);
+        return { x: last.x + Math.cos(a) * len, y: last.y + Math.sin(a) * len };
+      },
+      down(doc, p, e) {
+        if (!this.poly || this.poly.doc !== doc) {
+          this.poly = { doc, snap: snapshot(doc, 'Lasso polygonal'), before: doc.selection, mode: Sel.modeFrom(e, settings.polylasso.mode), points: [] };
+        }
+        const first = this.poly.points[0];
+        if (first && this.poly.points.length >= 3) {
+          const c = View.toScreen(doc, first.x, first.y);
+          if (Math.hypot(c.sx - p.sx, c.sy - p.sy) <= 8) return this.enter(doc);
+        }
+        this.poly.points.push(this.snap(p, e));
+        View.request();
+      },
+      hover(doc, p, e) {
+        if (!this.poly) return;
+        this.poly.pointer = this.snap(p, e);
+        View.request();
+      },
+      move(doc, p, e) { this.hover(doc, p, e); },
+      dblclick(doc) { this.enter(doc); },
+      enter(doc) {
+        const d = this.poly;
+        this.poly = null;
+        if (!d) return;
+        // Un double-clic pose deux fois le même point : on ne le garde qu'une fois.
+        const pts = d.points.filter((pt, i, a) => !i || Math.hypot(pt.x - a[i - 1].x, pt.y - a[i - 1].y) > 0.5);
+        const shape = Sel.polygon(doc, pts);
+        doc.selection = shape ? Sel.combine(doc, d.before, shape, d.mode) : d.mode === 'new' ? null : d.before;
+        if (doc.selection !== d.before) commit(doc, d.snap); else App.refresh();
+        View.request();
+      },
+      escape(doc) {
+        if (!this.poly) return Ops.deselect();
+        this.poly = null;
+        View.request();
+      },
+      keydown(doc, e) {
+        if (!this.poly || e.key !== 'Backspace') return false;
+        this.poly.points.pop();
+        if (!this.poly.points.length) this.poly = null;
+        View.request();
+        return true;
+      },
+      deactivate() { this.poly = null; },
+      overlay(ctx, doc) {
+        const d = this.poly;
+        if (!d || d.doc !== doc || !d.points.length) return;
+        const pts = [...d.points, ...(d.pointer ? [d.pointer] : [])].map((pt) => View.toScreen(doc, pt.x, pt.y));
+        ctx.save();
+        ctx.beginPath();
+        pts.forEach((c, i) => (i ? ctx.lineTo(c.sx, c.sy) : ctx.moveTo(c.sx, c.sy)));
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Le premier point : un cercle, plus gros quand la souris est assez près pour fermer.
+        const f = pts[0], last = pts[pts.length - 1];
+        const near = d.points.length >= 3 && Math.hypot(last.sx - f.sx, last.sy - f.sy) <= 8;
+        ctx.beginPath();
+        ctx.arc(f.sx, f.sy, near ? 6 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = near ? '#5ec8ff' : '#fff';
+        ctx.fill();
+        ctx.strokeStyle = '#000';
         ctx.stroke();
         ctx.restore();
       },

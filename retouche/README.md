@@ -53,6 +53,7 @@ Avant de fermer, Skald propose d'enregistrer les images modifiées. Ses réglage
 | Déplacement | V | Déplace le calque ; avec une sélection, soulève et déplace ces pixels. Choisit le calque sous la souris. Flèches : 1 px (Maj : 10 px). |
 | Sélection | M | Rectangle ou ellipse (Maj pendant le glisser : carré / cercle). Glisser dedans la déplace. |
 | Lasso | L | Sélection à main levée : glisser autour de la zone. |
+| Lasso polygonal | L (Maj+L) | Un clic par sommet (Maj : droit ou à 45°). Se ferme sur le premier point, par double-clic ou Entrée. Retour arrière retire le dernier point. |
 | Baguette magique | W | Sélectionne la zone d'une couleur proche (tolérance, zone continue, tous les calques). |
 | Recadrage | C | Cadre à poignées, proportions libres ou fixes (1:1, 16:9…), peut dépasser pour agrandir. Entrée pour valider. |
 | Pinceau | B | Taille, dureté, opacité. Maj + clic : ligne droite. Alt + clic : pipette. |
@@ -70,7 +71,9 @@ Pour toutes les sélections : Maj au clic ajoute, Alt retire, Maj+Alt garde l'in
 
 Taille du pinceau au clavier : `[` et `]` (ou `ù` et `*` en AZERTY). `X` échange les couleurs, `D` remet noir et blanc.
 
-**Calques** : nouveau, dupliquer, supprimer, fusionner vers le bas, aplatir, monter/descendre (ou glisser dans la liste), renommer (double-clic), masquer (œil), opacité, 17 modes de fusion, transformation libre à la souris (`Ctrl+T` : poignées aux coins pour agrandir, glisser dedans pour déplacer, dehors pour tourner, Entrée pour valider, Échap pour annuler) ou avec des valeurs précises, centrer dans l'image, miroir.
+**Calques** : nouveau, dupliquer, supprimer, fusionner vers le bas, aplatir, monter/descendre (ou glisser dans la liste), renommer (double-clic), masquer (œil), opacité, 17 modes de fusion, transformation libre à la souris (`Ctrl+T` : poignées aux coins pour agrandir, glisser dedans pour déplacer, dehors pour tourner, Entrée pour valider, Échap pour annuler ; avec une sélection, seuls les pixels sélectionnés sont transformés) ou avec des valeurs précises, centrer dans l'image, miroir.
+
+**Calques de remplissage et de réglage** (bouton ◐ du panneau Calques, ou menu Calque) : couleur unie et dégradé ; luminosité/contraste, niveaux, teinte/saturation, exposition, vibrance, noir et blanc, filtre photo, négatif, seuil, isohélie. Ils ne touchent pas aux pixels des calques du dessous : double-clic sur leur vignette pour les régler à nouveau. Leur masque se peint au pinceau (noir = cacher l'effet, blanc = le montrer). Créés avec une sélection active, ils ne s'appliquent qu'à elle. Ils sont enregistrés dans le PSD comme de vrais calques de réglage de Photoshop, et relus depuis un PSD.
 
 **Sélection** : tout (`Ctrl+A`), désélectionner (`Ctrl+D`), intervertir (`Ctrl+Maj+I`), contenu d'un calque (`Ctrl` + clic sur le calque), contour progressif (`Maj+F6`), étendre ou réduire, nouveau calque avec la sélection (`Ctrl+J`).
 
@@ -93,6 +96,7 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 | `main.js` | Fenêtre, ouverture/enregistrement des fichiers, presse-papiers, réglages (`config.json`). L'interface ne peut écrire que là où tu as choisi d'enregistrer. |
 | `preload.js` | Les seules fonctions de `main.js` accessibles à l'interface (`window.skald`). |
 | `renderer/doc.js` | Le modèle : document, calques, composition, historique (annuler/rétablir). |
+| `renderer/adjustments.js` | Calques de remplissage et de réglage (calculs, masque, lecture/écriture PSD). |
 | `renderer/selection.js` | Les sélections de toutes formes (masques), et les calculs dessus : ajouter, retirer, intervertir, adoucir. |
 | `renderer/view.js` | La zone de travail : zoom, déplacement de la vue, damier, sélection, souris. |
 | `renderer/tools.js` | Les outils de la barre de gauche. |
@@ -106,7 +110,8 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 ## Pas encore
 
 - Masques de calque non destructifs.
+- Courbes et réglages par couche (rouge, vert, bleu) dans les niveaux.
 - Correcteur / pièce (retouche « intelligente »), densité / netteté locale au pinceau, doigt.
-- Courbes, repères et règles.
-- Calques de réglage, styles de calque modifiables après coup (l'ombre et le contour sont appliqués aux pixels).
+- Repères et règles.
+- Styles de calque modifiables après coup (l'ombre et le contour sont appliqués aux pixels).
 - Ouvrir les textes d'un PSD comme textes modifiables (ils arrivent en pixels).

@@ -14,6 +14,15 @@ const Ops = (() => {
     if (doc && !layer) notify('Choisis d\'abord un calque.', 'warning');
     return layer ? { doc, layer } : {};
   };
+  // Pour les opérations qui retouchent des pixels : pas sur un calque de remplissage ou de réglage.
+  const needPixels = () => {
+    const found = needLayer();
+    if (Adjust.isSpecial(found.layer)) {
+      notify('Ce calque est un calque de réglage ou de remplissage : il n\'a pas de pixels à retoucher. Double-clique sur sa vignette pour changer ses réglages, ou choisis un autre calque.', 'warning', 6000);
+      return {};
+    }
+    return found;
+  };
 
   // Canvas passé au travers d'un filtre CSS (luminosité, flou…), même taille.
   function filtered(src, filter) {
@@ -33,7 +42,7 @@ const Ops = (() => {
   // Réglage avec aperçu en direct : la fenêtre s'ouvre, chaque curseur bougé recalcule l'aperçu,
   // « Appliquer » le rend définitif (et annulable), « Annuler » remet tout comme avant.
   async function adjust(title, fields, apply) {
-    const { doc, layer } = needLayer();
+    const { doc, layer } = needPixels();
     if (!layer) return;
     const src = layer.canvas;
     let timer = null;
@@ -62,7 +71,7 @@ const Ops = (() => {
 
   // Réglage sans fenêtre (noir et blanc, inverser…).
   function instant(title, apply) {
-    const { doc, layer } = needLayer();
+    const { doc, layer } = needPixels();
     if (!layer) return;
     change(doc, title, () => {
       const r = limitToSelection(doc, layer, layer.canvas, apply(layer.canvas));
@@ -79,50 +88,13 @@ const Ops = (() => {
     { key: 'hue', label: 'Teinte', type: 'range', min: -180, max: 180, value: 0, unit: '°' },
   ], (src, v) => ({ canvas: filtered(src, `brightness(${100 + v.brightness}%) contrast(${100 + v.contrast}%) saturate(${100 + v.saturation}%) hue-rotate(${v.hue}deg)`) }));
 
-  // Niveaux : on choisit quel gris devient le noir, le blanc, et le gris moyen (gamma).
-  const levels = () => adjust('Niveaux', [
-    { type: 'info', text: 'Noir et blanc d\'entrée : les tons plus sombres / plus clairs deviennent du noir / blanc pur. Gamma : éclaircit (> 1) ou assombrit (< 1) les tons moyens.' },
-    { key: 'inBlack', label: 'Noir d\'entrée', type: 'range', min: 0, max: 254, value: 0 },
-    { key: 'gamma', label: 'Gamma', type: 'range', min: 0.1, max: 3, step: 0.01, value: 1 },
-    { key: 'inWhite', label: 'Blanc d\'entrée', type: 'range', min: 1, max: 255, value: 255 },
-    { key: 'outBlack', label: 'Noir de sortie', type: 'range', min: 0, max: 255, value: 0 },
-    { key: 'outWhite', label: 'Blanc de sortie', type: 'range', min: 0, max: 255, value: 255 },
-  ], (src, v) => {
-    const lut = new Uint8ClampedArray(256);
-    const lo = Math.min(v.inBlack, v.inWhite - 1), hi = Math.max(v.inWhite, lo + 1);
-    for (let i = 0; i < 256; i++) {
-      const t = Math.min(1, Math.max(0, (i - lo) / (hi - lo)));
-      lut[i] = v.outBlack + Math.pow(t, 1 / v.gamma) * (v.outWhite - v.outBlack);
-    }
-    const out = cloneCanvas(src);
-    const g = out.getContext('2d');
-    const img = g.getImageData(0, 0, out.width, out.height);
-    const d = img.data;
-    for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
-    g.putImageData(img, 0, 0);
-    return { canvas: out };
-  });
-
-  // Vibrance et exposition, deux réglages photo courants.
+  // Niveaux, exposition, vibrance : les mêmes calculs que les calques de réglage (adjustments.js),
+  // mais appliqués directement aux pixels du calque.
+  const levels = () => adjust('Niveaux', Adjust.TYPES.levels.fields, (src, v) => ({ canvas: Adjust.TYPES.levels.apply(src, v) }));
   const exposure = () => adjust('Exposition et vibrance', [
-    { key: 'exposure', label: 'Exposition', type: 'range', min: -3, max: 3, step: 0.05, value: 0, unit: 'IL' },
-    { key: 'vibrance', label: 'Vibrance', type: 'range', min: -100, max: 100, value: 0 },
-  ], (src, v) => {
-    const out = cloneCanvas(src);
-    const g = out.getContext('2d');
-    const img = g.getImageData(0, 0, out.width, out.height);
-    const d = img.data, k = Math.pow(2, v.exposure), vib = v.vibrance / 100;
-    for (let i = 0; i < d.length; i += 4) {
-      let r = d[i] * k, gr = d[i + 1] * k, b = d[i + 2] * k;
-      // Vibrance : sature davantage les couleurs ternes que les couleurs déjà vives.
-      const max = Math.max(r, gr, b), avg = (r + gr + b) / 3;
-      const amount = vib * (1 - (max - Math.min(r, gr, b)) / 255);
-      r += (r - avg) * amount; gr += (gr - avg) * amount; b += (b - avg) * amount;
-      d[i] = r; d[i + 1] = gr; d[i + 2] = b;
-    }
-    g.putImageData(img, 0, 0);
-    return { canvas: out };
-  });
+    ...Adjust.TYPES.exposure.fields,
+    ...Adjust.TYPES.vibrance.fields.filter((f) => f.key),
+  ], (src, v) => ({ canvas: Adjust.TYPES.vibrance.apply(Adjust.TYPES.exposure.apply(src, v), v) }));
 
   const blur = () => adjust('Flou', [
     { key: 'radius', label: 'Rayon', type: 'range', min: 0, max: 100, step: 0.5, value: 4, unit: 'px' },
@@ -497,11 +469,24 @@ const Ops = (() => {
     const index = doc.layers.indexOf(layer);
     if (index === 0) return notify('Il n\'y a pas de calque en dessous.', 'warning');
     const lower = doc.layers[index - 1];
+    if (Adjust.isSpecial(lower)) return notify('Le calque du dessous est un calque de réglage ou de remplissage : on ne peut pas fusionner dedans.', 'warning', 5000);
     change(doc, 'Fusionner avec le calque inférieur', (d) => {
-      mergeInto(lower, layer);
+      // Un calque de réglage ou de remplissage s'applique pour de bon au calque du dessous.
+      if (Adjust.isSpecial(layer)) {
+        const merged = composite({ ...d, layers: [{ ...lower, opacity: 1, blend: 'source-over' }, layer], preview: null, stroke: null, float: null, live: null }, newCanvas(d.width, d.height));
+        replacePixels(lower, merged, 0, 0);
+      } else mergeInto(lower, layer);
       d.layers.splice(index, 1);
       d.activeId = lower.id;
     });
+  }
+
+  // Calque de remplissage → calque de pixels ordinaire (pour le retoucher au pinceau, aux filtres…).
+  function rasterizeLayer() {
+    const { doc, layer } = needLayer();
+    if (!layer) return;
+    if (!layer.fill) return notify(layer.adjust ? 'Un calque de réglage n\'a pas de pixels : fusionne-le plutôt avec le calque du dessous (Ctrl+E).' : 'Ce calque est déjà un calque de pixels.', 'info', 5000);
+    change(doc, 'Pixelliser le calque', () => Adjust.rasterize(doc, layer));
   }
 
   function flattenImage() {
@@ -688,7 +673,7 @@ const Ops = (() => {
   return {
     colors, levels, exposure, blur, sharpen, invertSelection, selectLayerPixels, featherSelection, growSelection, transformNumeric, grayscale, invert, removeColor, recolor, outline, shadow,
     imageSize, canvasSize, rotateImage, flipLayer, trim, cropToSelection, resample, scaleDocument,
-    newLayer, duplicateLayer, deleteLayer, moveLayer, mergeDown, flattenImage, centerLayer, transformLayer,
+    newLayer, duplicateLayer, deleteLayer, moveLayer, mergeDown, flattenImage, rasterizeLayer, centerLayer, transformLayer,
     selectAll, deselect, clearSelection, fillSelection, layerFromSelection, copy, paste, clipboardSize, canvasToPng,
   };
 })();

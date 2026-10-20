@@ -9,7 +9,8 @@ const IO = (() => {
   // Photoshop range les calques dans des groupes : on les met à plat, en gardant le nom du groupe
   // (« Logo / Texte »). La visibilité et l'opacité des groupes sont reportées sur leurs calques.
   // Les masques de fusion et les masques d'écrêtage sont appliqués aux pixels.
-  // Les calques de réglage (courbes, niveaux…) n'ont pas de pixels : ils sont ignorés.
+  // Les calques de réglage et de remplissage que Skald connaît restent modifiables (adjustments.js) ;
+  // les autres (courbes, mélangeur de couches…) n'ont pas de pixels : ils sont ignorés.
   const PSD_BLENDS = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken', lighten: 'lighten', 'color dodge': 'color-dodge', 'color burn': 'color-burn', 'hard light': 'hard-light', 'soft light': 'soft-light', difference: 'difference', exclusion: 'exclusion', hue: 'hue', saturation: 'saturation', color: 'color', luminosity: 'luminosity', 'linear dodge': 'lighter' };
   const toPsdBlend = (blend) => Object.entries(PSD_BLENDS).find(([, v]) => v === blend)?.[0] || 'normal';
 
@@ -36,6 +37,33 @@ const IO = (() => {
     return out;
   }
 
+  // Calque de réglage ou de remplissage de Photoshop → { adjust } ou { fill } pour Skald, sinon null.
+  // (Un calque de forme a aussi un remplissage, mais avec un tracé : on le garde en pixels.)
+  const colorHex = (c) => (c && 'r' in c ? rgbToHex(Math.round(c.r), Math.round(c.g), Math.round(c.b)) : '#000000');
+  function specialFromPsd(child) {
+    if (child.adjustment) {
+      const adjust = Adjust.fromPsd(child.adjustment);
+      return adjust ? { adjust } : null;
+    }
+    const f = child.vectorFill;
+    if (!f || child.vectorMask || child.vectorStroke) return null;
+    if (f.type === 'color') return { fill: { type: 'color', values: { color: colorHex(f.color) } } };
+    if (f.type === 'solid' && f.colorStops?.length >= 2 && ['linear', 'radial'].includes(f.style || 'linear')) {
+      const stops = f.colorStops, alpha = f.opacityStops || [];
+      return {
+        fill: {
+          type: 'gradient',
+          values: {
+            from: colorHex(stops[0].color), to: colorHex(stops[stops.length - 1].color),
+            transparent: alpha.length >= 2 && alpha[alpha.length - 1].opacity < 0.5,
+            style: f.style || 'linear', angle: Math.round(f.angle ?? 90), scale: Math.round(f.scale ?? 100), reverse: !!f.reverse,
+          },
+        },
+      };
+    }
+    return null;
+  }
+
   function fromPsd(bytes, name, path) {
     const psd = agPsd.readPsd(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength), { skipThumbnail: true, skipLinkedFilesData: true });
     const layers = [];
@@ -48,14 +76,19 @@ const IO = (() => {
           base = null;
           continue;
         }
+        const common = { visible: visible && !child.hidden, opacity: opacity * (child.opacity ?? 1), blend: PSD_BLENDS[child.blendMode] || 'source-over' };
+        const special = specialFromPsd(child);
+        if (special) {
+          layers.push(createLayer(`${prefix}${child.name || 'Réglage'}`, Adjust.maskFromPsd(psd, child.mask), { ...common, ...special }));
+          base = null;
+          continue;
+        }
         if (!child.canvas || !child.canvas.width) { ignored++; continue; }
         let canvas = applyMask(child.canvas, child);
         const layer = createLayer(`${prefix}${child.name || 'Calque'}`, canvas, {
           x: child.left ?? 0,
           y: child.top ?? 0,
-          visible: visible && !child.hidden,
-          opacity: opacity * (child.opacity ?? 1),
-          blend: PSD_BLENDS[child.blendMode] || 'source-over',
+          ...common,
         });
         if (child.clipping && base) {
           canvas = cloneCanvas(canvas);
@@ -176,20 +209,30 @@ const IO = (() => {
     return out;
   }
 
+  const rgb = (hex) => { const [r, g, b] = hexToRgb(hex); return { r, g, b }; };
+  function psdFill(fill) {
+    const v = fill.values;
+    if (fill.type === 'color') return { type: 'color', color: rgb(v.color) };
+    return {
+      type: 'solid', name: 'Skald', style: v.style, angle: v.angle, scale: v.scale, reverse: v.reverse, align: true,
+      colorStops: [{ color: rgb(v.from), location: 0, midpoint: 0.5 }, { color: rgb(v.to), location: 1, midpoint: 0.5 }],
+      opacityStops: [{ opacity: 1, location: 0, midpoint: 0.5 }, { opacity: v.transparent ? 0 : 1, location: 1, midpoint: 0.5 }],
+    };
+  }
+
   function writePsd(doc) {
     const psd = {
       width: doc.width,
       height: doc.height,
       canvas: flatten(doc), // l'image fusionnée, pour les logiciels qui ne lisent pas les calques
-      children: doc.layers.map((l) => ({
-        name: l.name,
-        left: l.x,
-        top: l.y,
-        canvas: l.canvas,
-        hidden: !l.visible,
-        opacity: l.opacity,
-        blendMode: toPsdBlend(l.blend),
-      })),
+      children: doc.layers.map((l) => {
+        const common = { name: l.name, hidden: !l.visible, opacity: l.opacity, blendMode: toPsdBlend(l.blend) };
+        // Calque de réglage : pas de pixels, seulement ses réglages et son masque.
+        if (l.adjust) return { ...common, adjustment: Adjust.toPsd(l.adjust), mask: Adjust.psdMask(l) };
+        // Calque de remplissage : ses réglages, son masque, et le remplissage en pixels pour les autres logiciels.
+        if (l.fill) return { ...common, left: 0, top: 0, canvas: Adjust.fillCanvas(doc, l.fill), vectorFill: psdFill(l.fill), mask: Adjust.psdMask(l) };
+        return { ...common, left: l.x, top: l.y, canvas: l.canvas };
+      }),
     };
     return new Uint8Array(agPsd.writePsd(psd, { generateThumbnail: true }));
   }

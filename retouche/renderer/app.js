@@ -90,7 +90,18 @@ const App = (() => {
     const scale = Math.min(c.width / d.width, c.height / d.height);
     const ox = (c.width - d.width * scale) / 2, oy = (c.height - d.height * scale) / 2;
     g.imageSmoothingQuality = 'high';
-    g.drawImage(layer.canvas, ox + layer.x * scale, oy + layer.y * scale, layer.canvas.width * scale, layer.canvas.height * scale);
+    if (Adjust.isSpecial(layer)) {
+      // Calque de réglage ou de remplissage : on montre son masque, comme Photoshop (noir = caché, blanc = visible).
+      g.fillStyle = '#000';
+      g.fillRect(ox, oy, d.width * scale, d.height * scale);
+      const white = newCanvas(c.width, c.height);
+      const wg = white.getContext('2d');
+      wg.drawImage(layer.canvas, ox + layer.x * scale, oy + layer.y * scale, layer.canvas.width * scale, layer.canvas.height * scale);
+      wg.globalCompositeOperation = 'source-in';
+      wg.fillStyle = '#fff';
+      wg.fillRect(0, 0, white.width, white.height);
+      g.drawImage(white, 0, 0);
+    } else g.drawImage(layer.canvas, ox + layer.x * scale, oy + layer.y * scale, layer.canvas.width * scale, layer.canvas.height * scale);
     c.className = 'thumb';
     return c;
   }
@@ -116,6 +127,15 @@ const App = (() => {
       row.innerHTML = `<button class="icon-button eye" title="Afficher / masquer"><i class="codicon codicon-${layer.visible ? 'eye' : 'eye-closed'}"></i></button>
         <span class="layer-name"></span>${layer.text ? '<span class="layer-badge" title="Texte modifiable avec l\'outil Texte">T</span>' : ''}`;
       row.insertBefore(thumbnail(current, layer), row.querySelector('.layer-name'));
+      if (Adjust.isSpecial(layer)) {
+        // Pastille devant le masque : la couleur du remplissage, ou l'icône des réglages.
+        const kind = document.createElement('span');
+        kind.className = 'layer-kind';
+        kind.title = `${Adjust.definition(layer).name} : double-clic pour régler. Peins le masque en noir pour cacher l'effet, en blanc pour le montrer.`;
+        if (layer.fill?.type === 'color') kind.style.background = layer.fill.values.color;
+        else kind.innerHTML = `<i class="codicon codicon-${layer.fill ? 'symbol-color' : 'color-mode'}"></i>`;
+        row.insertBefore(kind, row.querySelector('.thumb'));
+      }
       row.querySelector('.layer-name').textContent = layer.name;
       row.onclick = (e) => {
         current.activeId = layer.id;
@@ -128,7 +148,12 @@ const App = (() => {
         e.stopPropagation();
         change(current, layer.visible ? 'Masquer le calque' : 'Afficher le calque', () => { layer.visible = !layer.visible; });
       };
-      row.ondblclick = (e) => { if (!e.target.closest('.eye')) renameLayer(row, layer); };
+      row.ondblclick = (e) => {
+        if (e.target.closest('.eye')) return;
+        // Double-clic sur la vignette d'un calque de réglage : ses réglages. Sur le nom : renommer.
+        if (Adjust.isSpecial(layer) && e.target.closest('.thumb, .layer-kind')) return Adjust.edit(layer);
+        renameLayer(row, layer);
+      };
       row.ondragstart = (e) => { dragLayer = layer; e.dataTransfer.effectAllowed = 'move'; row.classList.add('dragging'); };
       row.ondragend = () => { dragLayer = null; row.classList.remove('dragging'); };
       row.ondragover = (e) => {
@@ -417,6 +442,8 @@ const App = (() => {
       ['Dupliquer (ou copier la sélection)', 'Ctrl+J', Ops.layerFromSelection],
       ['Supprimer le calque', '', () => Ops.deleteLayer()],
       ['Fusionner avec le calque inférieur', 'Ctrl+E', Ops.mergeDown],
+      ['Nouveau calque de remplissage ou de réglage…', '', () => showMenu($('#layer-special'), Adjust.menuItems())],
+      ['Pixelliser le calque de remplissage', '', Ops.rasterizeLayer],
       '-',
       ['Transformation libre (poignées)', 'Ctrl+T', Ops.transformLayer],
       ['Transformer avec des valeurs…', '', Ops.transformNumeric],
@@ -468,12 +495,13 @@ const App = (() => {
     openMenu = null;
     $$('#menus button').forEach((b) => b.classList.remove('open'));
   }
+  // name : un menu de la barre (« Fichier »…), ou directement la liste de ses lignes.
   function showMenu(button, name) {
     closeMenu();
     button.classList.add('open');
     const menu = document.createElement('div');
     menu.className = 'menu';
-    for (const item of menus[name]()) {
+    for (const item of Array.isArray(name) ? name : menus[name]()) {
       if (item === '-') { menu.appendChild(Object.assign(document.createElement('div'), { className: 'menu-sep' })); continue; }
       const [label, keys, run, title] = item;
       const row = document.createElement('button');
@@ -489,8 +517,11 @@ const App = (() => {
     menu.style.left = `${r.left}px`;
     menu.style.top = `${r.bottom + 4}px`;
     document.body.appendChild(menu);
+    // Ne pas déborder à droite de la fenêtre (menus ouverts depuis le panneau des calques).
+    const overflow = menu.getBoundingClientRect().right - (window.innerWidth - 8);
+    if (overflow > 0) menu.style.left = `${Math.max(8, r.left - overflow)}px`;
     openMenu = menu;
-    openMenu.dataset.name = name;
+    openMenu.dataset.name = Array.isArray(name) ? '' : name;
   }
   for (const name of Object.keys(menus)) {
     const b = document.createElement('button');
@@ -529,6 +560,8 @@ const App = (() => {
     }
     if (e.key === 'Escape' && openMenu) return closeMenu();
     if (isTyping(e)) return;
+    // Un outil peut garder une touche pour lui (Retour arrière du lasso polygonal, par exemple).
+    if (current && Tools.current.keydown?.(current, e)) return e.preventDefault();
     for (const name of Object.keys(menus)) {
       for (const item of menus[name]()) {
         if (item !== '-' && item[1] && matches(e, item[1])) {
@@ -723,6 +756,7 @@ const App = (() => {
   $('#btn-save').onclick = () => IO.save();
   $('#btn-settings').onclick = openSettings;
   $('#layer-new').onclick = Ops.newLayer;
+  $('#layer-special').onclick = (e) => { e.stopPropagation(); showMenu(e.currentTarget, Adjust.menuItems()); };
   $('#layer-duplicate').onclick = Ops.duplicateLayer;
   $('#layer-merge').onclick = Ops.mergeDown;
   $('#layer-delete').onclick = () => Ops.deleteLayer();

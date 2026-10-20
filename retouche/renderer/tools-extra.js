@@ -200,8 +200,17 @@
   // Poignées aux coins et au milieu des côtés : agrandir / réduire (proportions gardées aux coins,
   // Maj pour les libérer). Glisser à l'intérieur : déplacer. Glisser à l'extérieur : tourner
   // (Maj : par pas de 15°). Entrée pour valider, Échap pour annuler.
+  // Avec une sélection, seuls les pixels sélectionnés sont transformés (comme dans Photoshop).
+  //
+  // Pour rester fluide, rien n'est recalculé pixel par pixel pendant le glisser : le morceau
+  // transformé est simplement dessiné tourné / agrandi par la carte graphique au moment de
+  // composer l'image (doc.live). Le calcul de qualité ne se fait qu'une fois, en validant.
   const HANDLE = 6;
   const rot = (x, y, a) => ({ x: x * Math.cos(a) - y * Math.sin(a), y: x * Math.sin(a) + y * Math.cos(a) });
+
+  // Curseur « tourner » : une flèche courbe, dessinée en SVG.
+  const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 3 5.7" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/><path d="M5 12a7 7 0 1 1 3 5.7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><path d="M2 9l3 4 3-4z" fill="#fff" stroke="#000"/></svg>')}") 12 12, crosshair`;
+  const RESIZE_CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
 
   Tools.register({
     id: 'transform', name: 'Transformation libre', key: '', hidden: true, icon: ICONS.move, cursor: 'default',
@@ -213,56 +222,62 @@
     start(doc, previous) {
       const layer = activeLayer(doc);
       if (!layer) return notify('Choisis d\'abord un calque.', 'warning');
-      const b = opaqueBounds(layer.canvas);
-      if (!b) return notify('Ce calque est vide : rien à transformer.', 'warning');
-      // On travaille sur la partie visible du calque (pas son cadre vide).
+      const sel = doc.selection;
+      // Le morceau à transformer : tout le calque, ou seulement l'intérieur de la sélection.
+      const piece = sel ? Sel.clip(layer.canvas, sel, layer.x, layer.y) : layer.canvas;
+      const b = opaqueBounds(piece);
+      if (!b) return notify(sel ? 'La sélection est vide sur ce calque : rien à transformer.' : 'Ce calque est vide : rien à transformer.', 'warning');
       const src = newCanvas(b.w, b.h);
-      src.getContext('2d').drawImage(layer.canvas, -b.x, -b.y);
-      this.t = { doc, layer, src, previous, cx: layer.x + b.x + b.w / 2, cy: layer.y + b.y + b.h / 2, sx: 1, sy: 1, angle: 0 };
+      src.getContext('2d').drawImage(piece, -b.x, -b.y);
+      // Le reste du calque (sans le morceau), calculé une seule fois.
+      const base = cloneCanvas(layer.canvas);
+      if (sel) Sel.erase(base.getContext('2d'), sel, layer.x, layer.y);
+      else base.getContext('2d').clearRect(b.x, b.y, b.w, b.h);
+      this.t = {
+        doc, layer, src, base, previous, sel, ox: layer.x + b.x, oy: layer.y + b.y,
+        cx: layer.x + b.x + b.w / 2, cy: layer.y + b.y + b.h / 2, sx: 1, sy: 1, angle: 0,
+      };
+      // La sélection suit la transformation : on cache ses pointillés pendant ce temps.
+      doc.selection = null;
+      doc.preview = { layerId: layer.id, canvas: base, x: layer.x, y: layer.y };
+      doc.live = { layerId: layer.id, draw: (ctx) => this.drawLive(ctx) };
       Tools.select('transform');
-      this.preview(true);
+      View.request(true);
     },
     deactivate(doc) {
       if (this.t && !this.leaving) this.escape(doc, true);
+    },
+    // Le morceau transformé, dessiné directement dans la composition (rapide, sans recalcul).
+    drawLive(ctx) {
+      const t = this.t;
+      if (!t) return;
+      ctx.save();
+      ctx.translate(t.cx, t.cy);
+      ctx.rotate(t.angle);
+      ctx.scale(t.sx, t.sy);
+      ctx.imageSmoothingQuality = 'medium';
+      ctx.drawImage(t.src, -t.src.width / 2, -t.src.height / 2);
+      ctx.restore();
     },
     corners(t) {
       const w = (t.src.width * t.sx) / 2, h = (t.src.height * t.sy) / 2;
       return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => { const r = rot(i * w, j * h, t.angle); return { x: t.cx + r.x, y: t.cy + r.y }; });
     },
-    render(t, quality) {
+    // Calcul final, en qualité : une réduction passe par le redimensionnement de qualité.
+    render(t, source = t.src, smooth = true) {
       const pts = this.corners(t);
       const minX = Math.floor(Math.min(...pts.map((p) => p.x))), minY = Math.floor(Math.min(...pts.map((p) => p.y)));
       const maxX = Math.ceil(Math.max(...pts.map((p) => p.x))), maxY = Math.ceil(Math.max(...pts.map((p) => p.y)));
       const out = newCanvas(maxX - minX, maxY - minY);
       const g = out.getContext('2d');
       g.imageSmoothingQuality = 'high';
-      let src = t.src, sx = t.sx, sy = t.sy;
-      // Pour le résultat final, une réduction passe par le redimensionnement de qualité.
-      if (quality && (sx < 1 || sy < 1)) { src = Ops.resample(t.src, t.src.width * sx, t.src.height * sy); sx = (t.src.width * t.sx) / src.width; sy = (t.src.height * t.sy) / src.height; }
+      let src = source, sx = t.sx, sy = t.sy;
+      if (smooth && (sx < 1 || sy < 1)) { src = Ops.resample(source, source.width * sx, source.height * sy); sx = (source.width * t.sx) / src.width; sy = (source.height * t.sy) / src.height; }
       g.translate(t.cx - minX, t.cy - minY);
       g.rotate(t.angle);
       g.scale(sx, sy);
       g.drawImage(src, -src.width / 2, -src.height / 2);
       return { canvas: out, x: minX, y: minY };
-    },
-    preview(quality = false) {
-      const t = this.t;
-      const r = this.render(t, quality);
-      // Aperçu : le calque sans la partie transformée, puis la partie transformée par-dessus.
-      const b = opaqueBounds(t.layer.canvas);
-      const cover = covering(t.doc, { ...t.layer, canvas: t.layer.canvas });
-      const base = cover.canvas;
-      const bg = base.getContext('2d');
-      bg.clearRect(t.layer.x + b.x - cover.x, t.layer.y + b.y - cover.y, b.w, b.h);
-      const left = Math.min(cover.x, r.x), top = Math.min(cover.y, r.y);
-      const right = Math.max(cover.x + base.width, r.x + r.canvas.width), bottom = Math.max(cover.y + base.height, r.y + r.canvas.height);
-      const out = newCanvas(right - left, bottom - top);
-      const og = out.getContext('2d');
-      og.drawImage(base, cover.x - left, cover.y - top);
-      og.drawImage(r.canvas, r.x - left, r.y - top);
-      t.doc.preview = { layerId: t.layer.id, canvas: out, x: left, y: top };
-      View.request(true);
-      App.updateStatus();
     },
     handles(doc, t) {
       const w = (t.src.width * t.sx) / 2, h = (t.src.height * t.sy) / 2;
@@ -274,14 +289,33 @@
       }
       return list;
     },
-    down(doc, p, e) {
+    // Ce que ferait un clic à cet endroit : redimensionner (et par quelle poignée), déplacer ou tourner.
+    hit(doc, p) {
+      const t = this.t;
+      const handle = this.handles(doc, t).find((h) => Math.abs(h.sx - p.sx) <= HANDLE + 3 && Math.abs(h.sy - p.sy) <= HANDLE + 3);
+      if (handle) return { mode: 'scale', handle };
+      const local = rot(p.x - t.cx, p.y - t.cy, -t.angle);
+      const inside = Math.abs(local.x) <= (t.src.width * t.sx) / 2 && Math.abs(local.y) <= (t.src.height * t.sy) / 2;
+      return { mode: inside ? 'move' : 'rotate' };
+    },
+    // Le curseur annonce ce qui va se passer, comme dans Photoshop.
+    hover(doc, p) {
+      const t = this.t;
+      if (!t || this.drag) return;
+      const h = this.hit(doc, p);
+      let cursor = h.mode === 'move' ? 'move' : ROTATE_CURSOR;
+      if (h.mode === 'scale') {
+        // Direction de la poignée, en tenant compte de la rotation.
+        const a = Math.atan2(h.handle.j, h.handle.i) + t.angle;
+        cursor = RESIZE_CURSORS[((Math.round(a / (Math.PI / 4)) % 4) + 4) % 4];
+      }
+      $('#stage').style.cursor = cursor;
+    },
+    down(doc, p) {
       const t = this.t;
       if (!t) return Tools.select('move'); // transformation annulée entre-temps (changement d'onglet)
-      const hit = this.handles(doc, t).find((h) => Math.abs(h.sx - p.sx) <= HANDLE + 3 && Math.abs(h.sy - p.sy) <= HANDLE + 3);
-      const local = rot(p.x - t.cx, p.y - t.cy, -t.angle);
-      const insideBox = Math.abs(local.x) <= (t.src.width * t.sx) / 2 && Math.abs(local.y) <= (t.src.height * t.sy) / 2;
-      const mode = hit ? 'scale' : insideBox ? 'move' : 'rotate';
-      this.drag = { mode, hit, start: { ...p }, from: { ...t } };
+      const h = this.hit(doc, p);
+      this.drag = { mode: h.mode, hit: h.handle, start: { ...p }, from: { ...t } };
     },
     move(doc, p, e) {
       const d = this.drag, t = this.t;
@@ -313,30 +347,54 @@
         t.sy = nh / f.src.height;
       }
       t.changed = true;
-      this.preview();
+      View.request(true);
+      App.updateStatus();
     },
     up() { this.drag = null; },
     enter(doc) {
       const t = this.t;
       if (!t || t.doc !== doc) return;
-      this.preview(true);
-      const p = doc.preview;
-      doc.preview = null;
-      this.t = null;
+      this.finish(t);
       if (!t.changed) {
+        doc.selection = t.sel;
         this.leave(t);
         return View.request(true);
       }
-      change(doc, 'Transformer', () => replacePixels(t.layer, p.canvas, p.x, p.y));
+      change(doc, 'Transformer', () => {
+        const r = this.render(t);
+        const left = Math.min(t.layer.x, r.x), top = Math.min(t.layer.y, r.y);
+        const right = Math.max(t.layer.x + t.base.width, r.x + r.canvas.width), bottom = Math.max(t.layer.y + t.base.height, r.y + r.canvas.height);
+        const out = newCanvas(right - left, bottom - top);
+        const g = out.getContext('2d');
+        g.drawImage(t.base, t.layer.x - left, t.layer.y - top);
+        g.drawImage(r.canvas, r.x - left, r.y - top);
+        replacePixels(t.layer, out, left, top);
+        // La sélection a subi la même transformation que les pixels.
+        if (t.sel) {
+          const ts = { ...t, src: newCanvas(t.src.width, t.src.height) };
+          const m = ts.src.getContext('2d');
+          m.drawImage(t.sel.mask, t.sel.x - t.ox, t.sel.y - t.oy); // le masque, à la place d'origine du morceau
+          const rs = this.render(ts, ts.src, false);
+          const full = newCanvas(doc.width, doc.height);
+          full.getContext('2d').drawImage(rs.canvas, rs.x, rs.y);
+          doc.selection = Sel.fromMask(full);
+        }
+      });
       this.leave(t);
     },
     escape(doc, silent = false) {
       const t = this.t;
       if (!t) return;
-      t.doc.preview = null;
-      this.t = null;
+      this.finish(t);
+      t.doc.selection = t.sel;
       View.request(true);
       if (!silent) this.leave(t);
+    },
+    finish(t) {
+      t.doc.preview = null;
+      t.doc.live = null;
+      this.t = null;
+      this.drag = null;
     },
     leave(t) {
       this.leaving = true;
@@ -348,18 +406,31 @@
       if (!t || t.doc !== doc) return;
       const pts = this.corners(t).map((p) => View.toScreen(doc, p.x, p.y));
       ctx.save();
-      ctx.strokeStyle = 'rgba(94, 200, 255, 0.95)';
+      // Cadre en deux traits (sombre + clair) pour rester visible sur n'importe quelle image.
+      for (const [color, width] of [['rgba(0,0,0,0.6)', 3], ['rgba(94, 200, 255, 1)', 1]]) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        pts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
+        ctx.closePath();
+        ctx.stroke();
+      }
       ctx.lineWidth = 1;
-      ctx.beginPath();
-      pts.forEach((p, i) => (i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy)));
-      ctx.closePath();
-      ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       for (const h of this.handles(doc, t)) {
         ctx.fillStyle = '#fff';
         ctx.fillRect(h.sx - HANDLE, h.sy - HANDLE, HANDLE * 2, HANDLE * 2);
         ctx.strokeRect(h.sx - HANDLE + 0.5, h.sy - HANDLE + 0.5, HANDLE * 2 - 1, HANDLE * 2 - 1);
       }
-      const label = `${Math.round(t.src.width * t.sx)} × ${Math.round(t.src.height * t.sy)} px · ${Math.round((t.sx * 1000)) / 10} % · ${Math.round((t.angle * 180) / Math.PI * 10) / 10}°`;
+      // Le centre de rotation.
+      const c = View.toScreen(doc, t.cx, t.cy);
+      ctx.strokeStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(c.sx, c.sy, 4, 0, Math.PI * 2);
+      ctx.moveTo(c.sx - 8, c.sy); ctx.lineTo(c.sx + 8, c.sy);
+      ctx.moveTo(c.sx, c.sy - 8); ctx.lineTo(c.sx, c.sy + 8);
+      ctx.stroke();
+      const label = `${Math.round(t.src.width * t.sx)} × ${Math.round(t.src.height * t.sy)} px · L ${Math.round(t.sx * 1000) / 10} % · H ${Math.round(t.sy * 1000) / 10} % · ${Math.round((t.angle * 180) / Math.PI * 10) / 10}°`;
       ctx.font = '12px "Segoe UI", system-ui, sans-serif';
       const bottom = pts.reduce((a, b) => (b.sy > a.sy ? b : a));
       const tw = ctx.measureText(label).width + 14;

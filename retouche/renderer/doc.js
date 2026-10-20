@@ -50,8 +50,9 @@ const BLEND_MODES = [
 let nextId = 1;
 const uid = () => nextId++;
 
+// fill / adjust : réglages d'un calque de remplissage ou de réglage (voir adjustments.js), sinon null.
 function createLayer(name, canvas, options = {}) {
-  return { id: uid(), name, canvas, x: 0, y: 0, visible: true, opacity: 1, blend: 'source-over', text: null, ...options };
+  return { id: uid(), name, canvas, x: 0, y: 0, visible: true, opacity: 1, blend: 'source-over', text: null, fill: null, adjust: null, ...options };
 }
 
 function createDocument({ name, width, height, layers = [], path = null }) {
@@ -71,6 +72,7 @@ function createDocument({ name, width, height, layers = [], path = null }) {
     stroke: null,         // coup de pinceau en cours (tools.js)
     float: null,          // pixels sélectionnés en train d'être déplacés (outil Déplacement)
     preview: null,        // { layerId, canvas, x, y } : aperçu d'un réglage pas encore validé
+    live: null,           // { layerId, draw(ctx) } : dessin en direct par-dessus un calque (transformation libre)
   };
   return doc;
 }
@@ -117,6 +119,7 @@ function commit(doc, snap) {
   App.refresh();
 }
 function undo(doc) {
+  if (doc?.live) return Tools.current.escape?.(doc); // Ctrl+Z pendant une transformation : on l'annule seulement
   if (!doc?.undo.length) return;
   const snap = doc.undo.pop();
   doc.redo.push(snapshot(doc, snap.label));
@@ -126,6 +129,7 @@ function undo(doc) {
   notify(`Annulé : ${snap.label}`, 'info', 1200);
 }
 function redo(doc) {
+  if (doc?.live) return Tools.current.escape?.(doc); // Ctrl+Z pendant une transformation : on l'annule seulement
   if (!doc?.redo.length) return;
   const snap = doc.redo.pop();
   doc.undo.push(snapshot(doc, snap.label));
@@ -199,8 +203,11 @@ function composite(doc, target) {
     const look = layerAppearance(doc, layer);
     ctx.globalAlpha = layer.opacity;
     ctx.globalCompositeOperation = layer.blend || 'source-over';
+    // Calque de remplissage ou de réglage : son canvas est un masque (voir adjustments.js).
+    if (Adjust.isSpecial(layer)) { Adjust.drawLayer(doc, ctx, out, layer, look); continue; }
     ctx.drawImage(look.canvas, look.x, look.y);
     if (doc.float && doc.float.layerId === layer.id) ctx.drawImage(doc.float.canvas, doc.float.x, doc.float.y);
+    if (doc.live && doc.live.layerId === layer.id) doc.live.draw(ctx);
   }
   ctx.restore();
   return out;
