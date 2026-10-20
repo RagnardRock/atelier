@@ -10,6 +10,10 @@
 //   ({ type: "control_request", subtype: "can_use_tool" }) : l'IDE t'affiche la demande et
 //   lui renvoie ta réponse. C'est le même mécanisme que celui du SDK officiel (Agent SDK).
 //
+// Claude connaît aussi ce que sait celui d'Atelier (le hub) : la mémoire du projet ouvert et tes
+// notes, dans le dossier partagé %APPDATA%\atelier-commun. Il y accède par un petit serveur MCP,
+// mcp-commun.js, qui peut aussi y retenir une info (avec ta permission, comme pour un fichier).
+//
 // Un seul processus par fenêtre, gardé ouvert entre les messages pour que Claude se souvienne
 // de la conversation. "Nouvelle conversation" l'arrête.
 
@@ -69,12 +73,50 @@ function spawnClaude(command, args, cwd) {
     }
     // Un .exe se lance directement. Un .cmd ou .bat (installation npm) a besoin de cmd.exe.
     if (path.extname(file).toLowerCase() === '.exe') return spawn(file, args, { cwd, env, windowsHide: true });
-    return spawn(`"${file}"`, args, { cwd, env, shell: true, windowsHide: true });
+    // Avec cmd.exe, un argument qui contient un espace (un chemin) doit être entre guillemets.
+    const quoted = args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '')}"` : a));
+    return spawn(`"${file}"`, quoted, { cwd, env, shell: true, windowsHide: true });
   }
   return spawn(command, args, { cwd, env });
 }
 
-function start({ command, model, permissionMode, cwd, log, resume }) {
+// --- Dossier partagé de l'Atelier ---
+// Le serveur MCP est lancé avec le Node intégré à Electron (process.execPath + ELECTRON_RUN_AS_NODE).
+let communDir = null;     // %APPDATA%\atelier-commun
+let mcpFile = null;       // %APPDATA%\atelier-ide\mcp-atelier.json
+// Lire ne demande jamais la permission ; retenir ou oublier passe par la carte habituelle.
+const LECTURE = ['mcp__atelier__lire_contexte', 'mcp__atelier__lire_notes'];
+
+async function ecrireConfigMcp(cwd) {
+  const config = {
+    mcpServers: {
+      atelier: {
+        command: process.execPath,
+        args: [path.join(__dirname, 'mcp-commun.js')],
+        env: { ELECTRON_RUN_AS_NODE: '1', ATELIER_COMMUN: communDir, ATELIER_PROJET: path.basename(cwd) },
+      },
+    },
+  };
+  await fsp.writeFile(mcpFile, JSON.stringify(config, null, 2), 'utf8');
+  return mcpFile;
+}
+
+// Glissé avant ton premier message de chaque lancement (tu ne le vois pas dans le panneau) :
+// Claude sait ainsi qu'il a une mémoire du projet et des notes à sa disposition.
+function introAtelier(cwd) {
+  return [
+    `(Rune : tu travailles dans le projet « ${path.basename(cwd)} ». Ragna utilise aussi Atelier, son hub, dont le Claude`,
+    'garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :',
+    'lire_contexte (la mémoire de ce projet : décisions, client, hébergement… ; lis-la avant de répondre à ce premier message,',
+    'puis relis-la si Ragna parle de ce qui a été décidé), lire_notes (ses notes, quand la question s\'y rapporte),',
+    'retenir_projet et oublier_projet (garde une info courte et utile plus tard quand Ragna te la demande ou te l\'apprend ;',
+    'elle sera visible dans Atelier et dans les autres outils).)',
+    '',
+    '',
+  ].join('\n');
+}
+
+function start({ command, model, permissionMode, cwd, log, resume, mcpConfig }) {
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -86,6 +128,7 @@ function start({ command, model, permissionMode, cwd, log, resume }) {
   if (model) args.push('--model', model);
   if (permissionMode === 'acceptEdits') args.push('--permission-mode', 'acceptEdits');
   if (resume) args.push('--resume', resume);
+  if (mcpConfig) args.push('--mcp-config', mcpConfig, '--allowedTools', ...LECTURE);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}`);
   try {
@@ -218,6 +261,8 @@ async function writeHistory(list) {
 
 function register({ handle, getRoot, readConfig, log, dataDir }) {
   historyFile = path.join(dataDir, 'claude-conversations.json');
+  communDir = path.join(path.dirname(dataDir), 'atelier-commun');
+  mcpFile = path.join(dataDir, 'mcp-atelier.json');
 
   // Les conversations du dossier ouvert, la plus récente d'abord (sans leur contenu).
   handle('claude:history', async () => {
@@ -250,13 +295,23 @@ function register({ handle, getRoot, readConfig, log, dataDir }) {
     sender = event.sender;
     // Le projet a changé depuis le lancement : on repart sur une conversation neuve dans le bon dossier.
     if (proc && procCwd !== root) stop();
+    let intro = '';
     if (!proc) {
       const config = await readConfig();
       // Claude Code s'était arrêté en cours de conversation (plantage, mise en veille…) : on la reprend.
       const resume = lastSession && lastSession.cwd === root && /^[\w-]+$/.test(lastSession.id) ? lastSession.id : null;
-      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, permissionMode: config.claudePermissionMode, cwd: root, log, resume })) return;
+      let mcpConfig = null;
+      if (config.claudeAtelier !== false) {
+        try {
+          mcpConfig = await ecrireConfigMcp(root);
+          intro = introAtelier(root);
+        } catch (err) {
+          log('ERREUR', `Claude : dossier partagé de l'Atelier indisponible : ${err.message}`);
+        }
+      }
+      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, permissionMode: config.claudePermissionMode, cwd: root, log, resume, mcpConfig })) return;
     }
-    write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' });
+    write({ type: 'user', message: { role: 'user', content: intro + text }, parent_tool_use_id: null, session_id: '' });
   });
 
   // Ta réponse à une demande de permission.
