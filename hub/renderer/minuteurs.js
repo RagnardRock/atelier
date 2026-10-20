@@ -178,5 +178,13 @@ const Minuteurs = (() => {
     render();
   }
 
-  return { start };
+  // Pour les actions de Claude (widget Claude).
+  function lancer(nom, minutes) {
+    const duree = Math.round(Number(minutes) * MIN);
+    if (!(duree > 0) || duree > 24 * 60 * MIN) throw new Error('Durée invalide (entre quelques secondes et 24 h)');
+    creer(String(nom || '').trim() || 'Minuteur', duree);
+    return `Minuteur « ${String(nom || '').trim() || 'Minuteur'} » lancé pour ${format(duree)}.`;
+  }
+
+  return { start, lancer };
 })();

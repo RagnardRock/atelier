@@ -145,5 +145,47 @@ const Calendrier = (() => {
     rappels();
   }
 
-  return { start };
+  // --- Pour les actions de Claude (widget Claude) ---
+  function verifier({ date, heure }) {
+    if (date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`Date invalide : ${date} (format AAAA-MM-JJ)`);
+    if (heure && !/^\d{2}:\d{2}$/.test(heure)) throw new Error(`Heure invalide : ${heure} (format HH:MM)`);
+  }
+  function montrer(date) {
+    choisi = date;
+    const d = depuisCle(date);
+    mois = new Date(d.getFullYear(), d.getMonth(), 1);
+    render();
+  }
+  const trouver = (id) => {
+    const e = evenements.find((x) => x.id === id);
+    if (!e) throw new Error(`Aucun évènement n'a l'id ${id}`);
+    return e;
+  };
+  async function ajouter({ titre, date, heure = '', note = '' }) {
+    if (!String(titre || '').trim()) throw new Error('Il faut un titre');
+    verifier({ date, heure });
+    const e = { id: crypto.randomUUID(), titre: String(titre).trim(), date, heure: heure || '', note: String(note || '').trim() };
+    evenements.push(e);
+    montrer(date);
+    await enregistrer();
+    return `Évènement « ${e.titre} » ajouté le ${date}${e.heure ? ` à ${e.heure}` : ''} (id : ${e.id}).`;
+  }
+  async function modifier(id, champs) {
+    const e = trouver(id);
+    verifier(champs);
+    for (const k of ['titre', 'date', 'heure', 'note']) if (champs[k] !== undefined) e[k] = String(champs[k]).trim();
+    montrer(e.date);
+    await enregistrer();
+    return `Évènement « ${e.titre} » modifié.`;
+  }
+  async function supprimer(id) {
+    const e = trouver(id);
+    evenements = evenements.filter((x) => x !== e);
+    render();
+    await enregistrer();
+    return `Évènement « ${e.titre} » supprimé.`;
+  }
+  const decrire = (id) => { const e = evenements.find((x) => x.id === id); return e ? `« ${e.titre} » (${e.date}${e.heure ? ` ${e.heure}` : ''})` : null; };
+
+  return { start, ajouter, modifier, supprimer, decrire };
 })();

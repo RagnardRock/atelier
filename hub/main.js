@@ -99,6 +99,10 @@ const DEFAULT_CONFIG = {
   claudeCommand: 'claude',
   claudeModel: '',
   claudeLitProjets: true,
+  // Actions de Claude dans Atelier (notes, calendrier, minuteurs, projets) : permises ou non, et
+  // les familles pour lesquelles il ne demande plus (sinon : une carte Autoriser / Refuser à chaque fois).
+  claudeActions: true,
+  claudeSansDemander: { notes: false, calendrier: false, minuteurs: false, projets: false },
 };
 const readConfig = async () => {
   const config = { ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) };
@@ -585,6 +589,13 @@ handle('projets:choisirDossier', async (event) => {
 
 // --- Widget Claude (voir claude.js) ---
 claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, readJson, notesPath, donneesPath, listeProjets, run });
+// « Toujours autoriser » sur une carte du widget : cette famille d'actions ne demande plus
+// (Réglages › Sans me demander la permission, pour décocher).
+handle('claude:toujours', async (_event, famille) => {
+  if (!['notes', 'calendrier', 'minuteurs', 'projets'].includes(famille)) throw new Error(`Famille d'actions inconnue : ${famille}`);
+  const config = await readConfig();
+  await writeJson(configPath(), { ...config, claudeSansDemander: { ...config.claudeSansDemander, [famille]: true } });
+});
 handle('claude:ouvrirDossier', async () => {
   const err = await shell.openPath(await claude.dossier());
   if (err) throw new Error(err);

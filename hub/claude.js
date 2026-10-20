@@ -4,17 +4,25 @@
 // Claude Code est lancé en mode "headless" : il lit et écrit des messages JSON, un par ligne
 // (stream-json). Atelier lui envoie tes messages, il renvoie sa réponse au fil de l'eau.
 //
-// Ce qui change par rapport à Rune : ici Claude ne fait que LIRE.
+// Ce qui change par rapport à Rune :
 // - Il travaille dans %APPDATA%\atelier-hub\claude. Avant chacun de tes messages, Atelier y écrit
 //   tes notes (notes.md), ton calendrier (calendrier.md) et l'état de tes projets récents avec leurs
 //   derniers commits (projets.md). Claude les lit avec son outil Read.
-// - Il n'a que les outils de lecture (Read, Glob, Grep) : il ne peut ni modifier un fichier ni
-//   lancer une commande. S'il demande quand même une permission, Atelier la refuse tout seul.
+// - Ses seuls outils « fichiers » sont ceux de lecture (Read, Glob, Grep) : il ne peut ni modifier
+//   un fichier ni lancer une commande.
 // - Il peut aussi lire les fichiers de ton dossier de projets (--add-dir), si le réglage est coché.
-// - Pas de serveurs MCP (--strict-mcp-config) : rien d'autre que ces outils de lecture.
+// - Ses actions dans Atelier (ajouter une note, un évènement, lancer un minuteur, ouvrir un projet…)
+//   passent par un petit serveur MCP, mcp-atelier.js, le seul qu'il voit (--strict-mcp-config).
+//   Avant chaque action, Claude Code demande la permission : le widget t'affiche une carte
+//   Autoriser / Refuser / Toujours autoriser. « Toujours » vaut pour toute la famille d'actions
+//   (notes, calendrier, minuteurs, projets) et se change dans les réglages d'Atelier.
+//   Toute autre demande de permission est refusée d'office.
 // Le presse-papiers n'est jamais donné à Claude (il peut contenir un mot de passe).
 
 const { spawn, execFile } = require('node:child_process');
+const crypto = require('node:crypto');
+const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -25,6 +33,16 @@ let buffer = '';          // morceau de ligne pas encore complet
 let nextRequestId = 1;
 let lastSessionId = null; // pour reprendre la conversation (après un arrêt, ou au redémarrage d'Atelier)
 let procOptions = '';     // réglages avec lesquels il a été lancé : s'ils changent, on le relance
+let lireConfig = null;     // readConfig de main.js
+const PREFIXE_ACTIONS = 'mcp__atelier__'; // nom des outils du serveur MCP d'Atelier vus par Claude Code
+// Les familles d'actions : chacune peut être autorisée une fois pour toutes (config.claudeSansDemander).
+const FAMILLES = {
+  ajouter_note: 'notes', modifier_note: 'notes', supprimer_note: 'notes',
+  ajouter_evenement: 'calendrier', modifier_evenement: 'calendrier', supprimer_evenement: 'calendrier',
+  lancer_minuteur: 'minuteurs',
+  ouvrir_projet: 'projets', lancer_outil: 'projets',
+};
+const actionsActives = (config) => config.claudeActions !== false;
 
 function emit(event) {
   if (sender && !sender.isDestroyed()) sender.send('claude:event', event);
@@ -75,7 +93,7 @@ function spawnClaude(command, args, cwd) {
   return spawn(command, args, { cwd, env });
 }
 
-function start({ command, model, cwd, addDir, log }) {
+function start({ command, model, cwd, addDir, mcpConfig, log }) {
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -88,6 +106,7 @@ function start({ command, model, cwd, addDir, log }) {
   ];
   if (model) args.push('--model', model);
   if (addDir) args.push('--add-dir', addDir);
+  if (mcpConfig) args.push('--mcp-config', mcpConfig);
   if (lastSessionId) args.push('--resume', lastSessionId);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}${lastSessionId ? ' (reprise de la conversation)' : ''}`);
@@ -164,22 +183,105 @@ function handleMessage(m, log) {
     }
     return;
   }
-  // Demande de permission : le widget ne fait que lire, on refuse sans te déranger.
+  // Demande de permission.
   if (m.type === 'control_request' && m.request?.subtype === 'can_use_tool') {
-    log('INFO', `Claude : permission refusée pour ${m.request.tool_name}`);
-    write({
-      type: 'control_response',
-      response: {
-        subtype: 'success',
-        request_id: m.request_id,
-        response: { behavior: 'deny', message: 'Dans Atelier, Claude ne peut que lire les fichiers de contexte et ceux des projets.', toolUseID: m.request.tool_use_id },
-      },
+    const { tool_name: nom, tool_use_id: toolUseId, input } = m.request;
+    const action = nom.startsWith(PREFIXE_ACTIONS) ? nom.slice(PREFIXE_ACTIONS.length) : null;
+    const famille = FAMILLES[action];
+    // Pas une action d'Atelier (modifier un fichier, lancer une commande…) : refusée sans te déranger.
+    if (!famille) {
+      repondrePermission(m.request_id, toolUseId, false, input);
+      log('INFO', `Claude : permission refusée pour ${nom}`);
+      return emit({ kind: 'denied', toolName: nom, input });
+    }
+    // Une action d'Atelier : autorisée d'office si sa famille est en « sans demander »,
+    // sinon la carte Autoriser / Refuser du widget.
+    lireConfig().then((config) => {
+      if (!actionsActives(config)) return repondrePermission(m.request_id, toolUseId, false, input);
+      if (config.claudeSansDemander?.[famille]) return repondrePermission(m.request_id, toolUseId, true, input);
+      emit({ kind: 'permission', requestId: m.request_id, toolUseId, action, famille, input });
     });
-    return emit({ kind: 'denied', toolName: m.request.tool_name, input: m.request.input });
+    return;
   }
   if (m.type === 'result') {
     return emit({ kind: 'result', isError: Boolean(m.is_error) || m.subtype !== 'success', text: m.result, sessionId: m.session_id });
   }
+}
+
+function repondrePermission(requestId, toolUseId, autoriser, input) {
+  const response = autoriser
+    ? { behavior: 'allow', updatedInput: input, toolUseID: toolUseId }
+    : { behavior: 'deny', message: 'Refusé : dans Atelier, Claude peut lire, et agir seulement avec les actions d\'Atelier autorisées par Ragna.', toolUseID: toolUseId };
+  write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
+}
+
+// --- Canal entre le serveur MCP (mcp-atelier.js) et Atelier ---
+// Un « named pipe » de Windows (un fichier socket ailleurs), ouvert seulement sur ce PC, avec un nom
+// et un jeton tirés au hasard à chaque démarrage d'Atelier. Chaque action reçue est confiée à
+// l'interface (les widgets), qui renvoie le résultat.
+let canal = null;              // { chemin, jeton }
+const enAttente = new Map();   // id d'action -> resolve
+
+function ouvrirCanal(log) {
+  if (canal) return Promise.resolve(canal);
+  const nom = `atelier-claude-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  const chemin = process.platform === 'win32' ? `\\\\.\\pipe\\${nom}` : path.join(os.tmpdir(), `${nom}.sock`);
+  const jeton = crypto.randomBytes(24).toString('hex');
+  const serveur = net.createServer((socket) => {
+    let recu = '';
+    socket.setEncoding('utf8');
+    socket.on('error', () => {});
+    socket.on('data', async (chunk) => {
+      recu += chunk;
+      const i = recu.indexOf('\n');
+      if (i < 0) return;
+      let demande;
+      try { demande = JSON.parse(recu.slice(0, i)); } catch { return socket.end(); }
+      // Comparaison à durée constante : on ne laisse pas deviner le jeton.
+      const ok = typeof demande.jeton === 'string' && demande.jeton.length === jeton.length
+        && crypto.timingSafeEqual(Buffer.from(demande.jeton), Buffer.from(jeton));
+      if (!ok) return socket.end(`${JSON.stringify({ erreur: 'Jeton refusé' })}\n`);
+      const reponse = await executerAction(demande.outil, demande.args || {}, log);
+      socket.end(`${JSON.stringify(reponse)}\n`);
+    });
+  });
+  return new Promise((resolve, reject) => {
+    serveur.once('error', reject);
+    serveur.listen(chemin, () => {
+      canal = { chemin, jeton };
+      resolve(canal);
+    });
+  });
+}
+
+function executerAction(outil, args, log) {
+  if (!sender || sender.isDestroyed()) return Promise.resolve({ erreur: 'La fenêtre d\'Atelier est fermée' });
+  const id = crypto.randomUUID();
+  log('INFO', `Claude : action ${outil} ${JSON.stringify(args).slice(0, 200)}`);
+  return new Promise((resolve) => {
+    const delai = setTimeout(() => { enAttente.delete(id); resolve({ erreur: 'Atelier n\'a pas répondu à temps' }); }, 60_000);
+    enAttente.set(id, (r) => { clearTimeout(delai); enAttente.delete(id); resolve(r); });
+    sender.send('claude:action', { id, outil, args });
+  });
+}
+
+// Le fichier qui dit à Claude Code comment lancer le serveur MCP d'Atelier : avec Electron lui-même,
+// en mode Node. Dans Atelier installé, le script est hors de l'archive app.asar (build › asarUnpack).
+async function ecrireConfigMcp(cwd, log) {
+  const { chemin, jeton } = await ouvrirCanal(log);
+  const script = path.join(__dirname, 'mcp-atelier.js').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+  const config = {
+    mcpServers: {
+      atelier: {
+        command: process.execPath,
+        args: [script],
+        env: { ELECTRON_RUN_AS_NODE: '1', ATELIER_CANAL: chemin, ATELIER_JETON: jeton },
+      },
+    },
+  };
+  const fichier = path.join(cwd, 'mcp.json');
+  await fsp.writeFile(fichier, JSON.stringify(config, null, 2), 'utf8');
+  return fichier;
 }
 
 function stop() {
@@ -205,7 +307,7 @@ function notesMd(notes) {
   const lignes = [`# Notes de Ragna (${notes.length})`, '', 'Écrites dans le widget Notes d\'Atelier. La première ligne de chaque note est son titre.', ''];
   for (const n of triees) {
     const titre = n.texte.split('\n').find((l) => l.trim())?.trim().replace(/^#+\s*/, '') || 'Sans titre';
-    lignes.push('---', '', `## ${titre}`, '', `_${n.epinglee ? 'Épinglée · ' : ''}modifiée le ${dateHeure(n.modifiee)}_`, '', n.texte.trim(), '');
+    lignes.push('---', '', `## ${titre}`, '', `_id : ${n.id} · ${n.epinglee ? 'épinglée · ' : ''}modifiée le ${dateHeure(n.modifiee)}_`, '', n.texte.trim(), '');
   }
   if (!notes.length) lignes.push('(aucune note pour l\'instant)');
   return lignes.join('\n');
@@ -215,7 +317,7 @@ function calendrierMd(evenements, maintenant) {
   const auj = new Date(maintenant);
   const cleAuj = `${auj.getFullYear()}-${String(auj.getMonth() + 1).padStart(2, '0')}-${String(auj.getDate()).padStart(2, '0')}`;
   const tries = [...evenements].sort((a, b) => (a.date + (a.heure || '')).localeCompare(b.date + (b.heure || '')));
-  const ligne = (e) => `- ${e.date}${e.heure ? ` ${e.heure}` : ' (journée)'} : ${e.titre}${e.note ? ` (note : ${e.note.replace(/\n/g, ' ')})` : ''}`;
+  const ligne = (e) => `- ${e.date}${e.heure ? ` ${e.heure}` : ' (journée)'} : ${e.titre}${e.note ? ` (note : ${e.note.replace(/\n/g, ' ')})` : ''} [id : ${e.id}]`;
   const passes = tries.filter((e) => e.date < cleAuj);
   const lignes = [
     '# Calendrier de Ragna',
@@ -290,7 +392,7 @@ async function projetsMd(liste, run) {
 }
 
 // Instructions pour Claude, lues par Claude Code au lancement (CLAUDE.md du dossier de travail).
-function claudeMd(addDir) {
+function claudeMd(addDir, actions) {
   return [
     '# Assistant d\'Atelier',
     '',
@@ -307,18 +409,30 @@ function claudeMd(addDir) {
     addDir
       ? `Tu peux aussi lire les fichiers des projets eux-mêmes, dans ${addDir}, si la question le demande.`
       : 'Tu ne peux pas lire les fichiers des projets eux-mêmes : seulement ces trois fichiers.',
-    'Tu ne peux rien modifier ni lancer de commande : si Ragna te demande d\'ajouter une note ou un évènement,',
-    'propose-lui le texte à copier dans le widget correspondant.',
+    ...(actions
+      ? [
+        'Tu ne peux ni modifier de fichier ni lancer de commande. Mais tu peux agir dans Atelier avec ses outils',
+        '(mcp__atelier__…) : ajouter, modifier ou supprimer une note ou un évènement (avec leur id, donné dans',
+        'notes.md et calendrier.md), lancer un minuteur, ouvrir un projet, lancer Rune ou Skald.',
+        'Atelier demande à Ragna de valider tes actions (sauf celles autorisées pour toujours) : quand Ragna',
+        'te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
+        'Pour modifier une note, envoie son texte complet. Les dates sont au format AAAA-MM-JJ.',
+      ]
+      : [
+        'Tu ne peux rien modifier ni lancer de commande : si Ragna te demande d\'ajouter une note ou un évènement,',
+        'propose-lui le texte à copier dans le widget correspondant.',
+      ]),
     '',
   ].join('\n');
 }
 
 function register({ handle, log, dataDir, readConfig, readJson, notesPath, donneesPath, listeProjets, run }) {
   const cwd = path.join(dataDir, 'claude');
+  lireConfig = readConfig;
   const empreintes = {}; // contenu de chaque fichier au dernier message, pour dire à Claude ce qui a changé
 
   // Réécrit les fichiers de contexte. Renvoie les noms de ceux qui ont changé depuis le dernier message.
-  async function preparerContexte(addDir) {
+  async function preparerContexte(addDir, actions) {
     await fsp.mkdir(cwd, { recursive: true });
     const maintenant = Date.now();
     const [notes, evenements, projets] = await Promise.all([
@@ -327,7 +441,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
       listeProjets(),
     ]);
     const fichiers = {
-      'CLAUDE.md': claudeMd(addDir),
+      'CLAUDE.md': claudeMd(addDir, actions),
       'notes.md': notesMd(Array.isArray(notes) ? notes : []),
       'calendrier.md': calendrierMd(Array.isArray(evenements) ? evenements : [], maintenant),
       'projets.md': await projetsMd(projets, run),
@@ -346,19 +460,36 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
     const config = await readConfig();
     const projetsDir = config.dossierProjets && fs.existsSync(config.dossierProjets) ? path.resolve(config.dossierProjets) : null;
     const addDir = config.claudeLitProjets !== false ? projetsDir : null;
-    const changes = await preparerContexte(addDir);
-    // Réglages changés depuis le lancement (commande, modèle, accès aux projets) : on relance,
+    const actions = actionsActives(config);
+    const changes = await preparerContexte(addDir, actions);
+    // Réglages changés depuis le lancement (commande, modèle, accès aux projets, actions) : on relance,
     // la conversation reprend là où elle en était (--resume).
-    const options = JSON.stringify([config.claudeCommand, config.claudeModel, addDir]);
+    const options = JSON.stringify([config.claudeCommand, config.claudeModel, addDir, actions]);
     if (proc && options !== procOptions) stop();
     if (!proc) {
       procOptions = options;
-      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd, addDir, log })) return;
+      let mcpConfig = null;
+      if (actions) {
+        try {
+          mcpConfig = await ecrireConfigMcp(cwd, log);
+        } catch (err) {
+          log('ERREUR', `Claude : canal des actions impossible à ouvrir : ${err.message}`);
+          emit({ kind: 'notice', message: `Les actions dans Atelier sont indisponibles (${err.message}) : Claude pourra seulement lire.` });
+        }
+      }
+      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd, addDir, mcpConfig, log })) return;
     }
     // Petite précision invisible pour toi : ce qui a changé depuis ton message précédent.
     const prefixe = changes.length ? `(Atelier : ${changes.join(', ')} ${changes.length > 1 ? 'ont changé' : 'a changé'} depuis mon message précédent.)\n\n` : '';
     write({ type: 'user', message: { role: 'user', content: prefixe + text }, parent_tool_use_id: null, session_id: '' });
   });
+
+  // Ta réponse sur la carte Autoriser / Refuser.
+  handle('claude:permission', async (_event, { requestId, toolUseId, autoriser, input }) => {
+    repondrePermission(String(requestId), String(toolUseId), Boolean(autoriser), input);
+  });
+  // Résultat d'une action, exécutée par les widgets.
+  handle('claude:actionFaite', async (_event, id, resultat) => enAttente.get(id)?.(resultat));
 
   // Bouton stop : Claude arrête ce qu'il est en train de faire, la conversation continue.
   handle('claude:interrupt', async () => {

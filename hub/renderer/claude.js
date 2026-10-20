@@ -1,7 +1,9 @@
 // Widget « Claude » : une conversation avec Claude Code, qui tourne dans main.js (voir ../claude.js).
 // - Claude connaît tes notes, ton calendrier et tes projets récents (avec leurs derniers commits) :
 //   Atelier les lui prépare avant chacun de tes messages.
-// - Il ne fait que lire : rien n'est modifié, aucune commande n'est lancée.
+// - Il ne modifie aucun fichier et ne lance aucune commande. Il peut agir dans Atelier (ajouter une
+//   note, un évènement, lancer un minuteur, ouvrir un projet…) : une carte te demande d'abord ton accord
+//   (réglage « Actions » de Claude). L'action est faite ici, par les widgets, qui se mettent à jour.
 // - La réponse s'affiche au fil de l'eau, en Markdown. Chaque fichier qu'il lit apparaît sur une ligne.
 // - La conversation est gardée dans %APPDATA%\atelier-hub\claude.json : elle est toujours là au
 //   prochain démarrage d'Atelier, et Claude s'en souvient (--resume). « + » en commence une nouvelle.
@@ -24,6 +26,7 @@ const ClaudeWidget = (() => {
     'Quels projets ont avancé ces derniers jours ?',
     'Résume mes notes épinglées',
     'Qu\'est-ce que j\'ai laissé en cours (pas commité, pas poussé) ?',
+    'Lance un Pomodoro',
   ];
 
   const enregistrer = () => window.atelier.ecrireDonnees('claude', conv).catch(() => {});
@@ -49,7 +52,7 @@ const ClaudeWidget = (() => {
     liste.replaceChildren(el('div', { className: 'claude-accueil' },
       el('i', { className: 'codicon codicon-sparkle' }),
       el('p', { textContent: 'Demande-moi ce que tu veux sur tes notes, ton calendrier ou tes projets.' }),
-      el('p', { className: 'discret', textContent: 'Je ne fais que lire : je ne modifie rien et ne lance aucune commande.' }),
+      el('p', { className: 'discret', textContent: 'Je peux aussi ajouter une note, un évènement, lancer un minuteur ou ouvrir un projet : tu valides chaque action.' }),
       el('div', { className: 'claude-suggestions' }, ...chips)));
   }
 
@@ -109,8 +112,98 @@ const ClaudeWidget = (() => {
     bulle = null;
   }
 
-  // Ce que Claude lit, dit simplement.
+  // --- Actions dans Atelier ---
+  const NOMS_OUTILS = { rune: 'Rune', skald: 'Skald', explorateur: 'l\'Explorateur' };
+  const debut = (t) => { const l = String(t || '').split('\n').find((x) => x.trim()) || ''; return l.length > 60 ? `${l.slice(0, 60)}…` : l; };
+  // [icône, phrase, détail à montrer sur la carte]
+  function decrireAction(action, a = {}) {
+    switch (action) {
+      case 'ajouter_note': return ['note', `Ajouter une note${a.epinglee ? ' épinglée' : ''} : « ${debut(a.texte)} »`, a.texte];
+      case 'modifier_note': return ['edit', `Modifier la note « ${Notes.titreDe(a.id) || a.id} »${a.epinglee === true ? ' (l\'épingler)' : a.epinglee === false ? ' (la désépingler)' : ''}`, a.texte];
+      case 'supprimer_note': return ['trash', `Supprimer la note « ${Notes.titreDe(a.id) || a.id} »`];
+      case 'ajouter_evenement': return ['calendar', `Ajouter au calendrier : « ${a.titre} », ${a.date}${a.heure ? ` à ${a.heure}` : ''}`, a.note];
+      case 'modifier_evenement': return ['edit', `Modifier l'évènement ${Calendrier.decrire(a.id) || a.id} : ${['titre', 'date', 'heure', 'note'].filter((k) => a[k] !== undefined).map((k) => `${k} → ${a[k] || '(vide)'}`).join(', ')}`];
+      case 'supprimer_evenement': return ['trash', `Supprimer l'évènement ${Calendrier.decrire(a.id) || a.id}`];
+      case 'lancer_minuteur': return ['watch', `Lancer un minuteur${a.nom ? ` « ${a.nom} »` : ''} de ${a.minutes} min`];
+      case 'ouvrir_projet': return ['folder-opened', `Ouvrir le projet ${a.nom}${a.outil ? ` dans ${NOMS_OUTILS[a.outil] || a.outil}` : ''}`];
+      case 'lancer_outil': return ['rocket', `Lancer ${NOMS_OUTILS[a.outil] || a.outil}`];
+      default: return ['tools', action];
+    }
+  }
+
+  // Les actions, exécutées par les widgets. Renvoie le texte que Claude recevra.
+  const ACTIONS = {
+    ajouter_note: (a) => Notes.ajouter(a.texte, a.epinglee),
+    modifier_note: (a) => Notes.modifier(a.id, a),
+    supprimer_note: (a) => Notes.supprimer(a.id),
+    ajouter_evenement: (a) => Calendrier.ajouter(a),
+    modifier_evenement: (a) => Calendrier.modifier(a.id, a),
+    supprimer_evenement: (a) => Calendrier.supprimer(a.id),
+    lancer_minuteur: (a) => Minuteurs.lancer(a.nom, a.minutes),
+    async ouvrir_projet(a) {
+      const { projets } = await window.atelier.projets();
+      const p = projets.find((x) => x.nom.toLowerCase() === String(a.nom || '').toLowerCase());
+      if (!p) throw new Error(`Aucun projet récent ne s'appelle ${a.nom}`);
+      const outil = a.outil || p.outil;
+      await window.atelier.ouvrirProjet(p.dossier, outil);
+      return `${p.nom} s'ouvre dans ${NOMS_OUTILS[outil] || outil}.`;
+    },
+    async lancer_outil(a) {
+      if (!NOMS_OUTILS[a.outil] || a.outil === 'explorateur') throw new Error(`Outil inconnu : ${a.outil}`);
+      await window.atelier.lancer(a.outil);
+      return `${NOMS_OUTILS[a.outil]} se lance.`;
+    },
+  };
+  window.atelier.onClaudeAction(async ({ id, outil, args }) => {
+    let resultat;
+    try {
+      if (!ACTIONS[outil]) throw new Error(`Action inconnue : ${outil}`);
+      resultat = { texte: await ACTIONS[outil](args) };
+    } catch (err) {
+      resultat = { erreur: cleanError(err) };
+    }
+    window.atelier.claudeActionFaite(id, resultat);
+  });
+
+  // La carte Autoriser / Refuser.
+  function carteAction(e) {
+    finTexte();
+    const [icone, phrase, detail] = decrireAction(e.action, e.input);
+    const refuser = el('button', { className: 'button small', textContent: 'Refuser' });
+    const autoriser = el('button', { className: 'button small primary', textContent: 'Autoriser' });
+    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils' };
+    const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Claude ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
+    const carte = el('div', { className: 'claude-carte' },
+      el('div', { className: 'claude-carte-titre' }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: phrase })),
+      detail ? el('pre', { className: 'claude-carte-detail', textContent: detail }) : null,
+      el('div', { className: 'claude-carte-boutons' }, el('span', { className: 'spacer' }), refuser, autoriser),
+      toujours);
+    const repondre = (oui) => {
+      window.atelier.claudePermission({ requestId: e.requestId, toolUseId: e.toolUseId, autoriser: oui, input: e.input });
+      // La carte s'efface : la ligne de l'action, juste au-dessus, montre la suite (✓ fait, ✗ refusé).
+      carte.remove();
+      setOccupe(true);
+    };
+    refuser.onclick = () => repondre(false);
+    toujours.onclick = async () => {
+      try {
+        await window.atelier.claudeToujours(e.famille);
+        notify(`Claude ne te demandera plus pour ${LIBELLES[e.famille]}. Tu peux changer ça dans les réglages (Ctrl+,).`, 'success', 5000);
+      } catch (err) {
+        notify(cleanError(err), 'error');
+      }
+      repondre(true);
+    };
+    autoriser.onclick = () => repondre(true);
+    liste.append(carte);
+    setOccupe(true, 'Claude attend ton accord');
+    liste.scrollTop = liste.scrollHeight;
+    autoriser.focus();
+  }
+
+  // Ce que Claude lit ou fait, dit simplement.
   function decrireOutil(nom, inp = {}) {
+    if (nom.startsWith('mcp__atelier__')) return decrireAction(nom.slice('mcp__atelier__'.length), inp).slice(0, 2);
     const fichier = String(inp.file_path || '').split(/[\\/]/).pop();
     const CONTEXTE = { 'notes.md': 'Lit tes notes', 'calendrier.md': 'Lit ton calendrier', 'projets.md': 'Lit l\'état de tes projets', 'CLAUDE.md': 'Relit ses consignes' };
     switch (nom) {
@@ -162,7 +255,9 @@ const ClaudeWidget = (() => {
       case 'text': texte(e.text); break;
       case 'tool': outil(e); break;
       case 'tool-result': outilFini(e); break;
-      case 'denied': avis('info', `Claude voulait utiliser ${e.toolName} : refusé, il ne peut que lire.`); break;
+      case 'denied': avis('info', `Claude voulait utiliser ${e.toolName} : refusé (il ne peut pas modifier de fichier ni lancer de commande).`); break;
+      case 'permission': carteAction(e); break;
+      case 'notice': avis('info', e.message); break;
       case 'result':
         finTexte();
         arreterOutils();
@@ -197,6 +292,7 @@ const ClaudeWidget = (() => {
     conv.items.push({ t: 'user', text: t });
     setOccupe(true, 'Atelier prépare tes notes, ton calendrier et tes projets…');
     try {
+      await Notes.enregistrer(); // la note en cours de frappe doit être dans notes.md
       await window.atelier.claudeEnvoyer(t);
     } catch (err) {
       avis('erreur', cleanError(err));

@@ -17,6 +17,9 @@
       "output": "dist",
       "buildResources": "build"
     },
+    "asarUnpack": [
+      "mcp-atelier.js"
+    ],
     "files": [
       "**/*",
       "!dist/**",
