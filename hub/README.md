@@ -1,6 +1,6 @@
 # Atelier ᚨ
 
-Le hub de mes outils : il **lance, installe et met à jour** Rune, Skald et les suivants, et réunit des **widgets** pour le quotidien (notes, projets, presse-papiers, minuteurs, calendrier).
+Le hub de mes outils : il **lance, installe et met à jour** Rune, Skald et les suivants, et réunit des **widgets** pour le quotidien (notes, projets, presse-papiers, minuteurs, calendrier, et Claude).
 
 Tout reste sur ton PC, dans `%APPDATA%\atelier-hub` : réglages (`config.json`), notes, couleurs, minuteurs, calendrier, et le journal `atelier.log`. La désinstallation ne les efface pas.
 
@@ -42,6 +42,7 @@ Chaque widget s'affiche ou se cache dans les réglages (`Ctrl+,`). Sur un écran
 - **Presse-papiers et couleurs** : l'historique de ce que tu copies (texte seulement, 40 éléments) ; un clic le recopie. En haut, ta palette : clic sur une pastille = copier en HEX, clic droit = copier en RGB ou HSL. La pipette prend une couleur n'importe où sur l'écran. Un code couleur copié s'affiche avec sa pastille et le bouton ⊕ l'ajoute à la palette. Par défaut, l'historique est oublié à la fermeture (un mot de passe copié ne doit pas finir dans un fichier) ; un réglage permet de le garder.
 - **Minuteurs** : 5, 15, 25 minutes, Pomodoro (25 min de travail, 5 min de pause, grande pause de 15 min toutes les 4 séances, enchaînés tout seuls), ou durée au choix avec `+`. À la fin : un carillon, une notification de Windows, et l'icône d'Atelier clignote dans la barre des tâches. Ils continuent de compter si tu fermes Atelier.
 - **Calendrier** : double-clic sur un jour pour ajouter un évènement (heure facultative), clic pour le modifier ou le supprimer. Sous la grille : le jour choisi puis les 14 prochains jours. Si Atelier est ouvert, il te prévient 10 minutes avant un évènement qui a une heure.
+- **Claude** : une conversation avec Claude Code (celui installé sur ton PC, avec ton compte : pas de clé API). Il connaît tes notes, ton calendrier et tes projets récents avec leurs commits des 30 derniers jours : avant chacun de tes messages, Atelier les écrit en Markdown dans `%APPDATA%\atelier-hub\claude` (bouton dossier du widget), et Claude les lit. Il ne fait **que lire** (outils Read, Glob, Grep, aucun serveur MCP) : il ne modifie rien, ne lance aucune commande, et ne voit jamais le presse-papiers. Dans les réglages : le modèle, la commande `claude`, et s'il peut aussi lire les fichiers de tes projets. La conversation est gardée et reprise au prochain démarrage ; `+` en commence une nouvelle.
 
 ## Mettre Atelier à jour
 
@@ -73,8 +74,9 @@ npm start
 | `main.js` | Processus principal : fenêtre, registre de Windows, GitHub, téléchargement et lancement des installeurs, presse-papiers, fichiers de données, mise à jour d'Atelier |
 | `preload.js` | Le pont : la liste des fonctions que l'interface a le droit d'appeler (`window.atelier`) |
 | `outils.js` | La liste des outils gérés par Atelier |
+| `claude.js` | Widget Claude côté processus principal : lance Claude Code en lecture seule et lui prépare les fichiers de contexte (notes, calendrier, projets) |
 | `renderer/index.html`, `style.css` | L'interface et son style (verre sombre, comme Rune et Skald) |
 | `renderer/app.js` | Démarrage, thème, réglages, widgets affichés |
 | `renderer/outils.js` | La colonne Outils |
-| `renderer/notes.js`, `projets.js`, `presse-papiers.js`, `minuteurs.js`, `calendrier.js` | Un fichier par widget |
+| `renderer/notes.js`, `projets.js`, `presse-papiers.js`, `minuteurs.js`, `calendrier.js`, `claude.js` | Un fichier par widget |
 | `renderer/base.js`, `notify.js`, `dialogs.js`, `update.js` | Petits outils communs : raccourcis, notifications, fenêtres de dialogue, bouton de mise à jour |

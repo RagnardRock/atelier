@@ -14,6 +14,7 @@ const os = require('node:os');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const OUTILS = require('./outils');
+const claude = require('./claude');
 
 // Réglages, notes et journal dans %APPDATA%\atelier-hub, qu'Atelier soit lancé depuis le clone
 // (npm start) ou installé avec Atelier-Setup.exe.
@@ -92,9 +93,19 @@ const DEFAULT_CONFIG = {
   surveillerPressePapiers: true,
   garderPressePapiers: false,
   // Widgets affichés (Réglages › Widgets).
-  widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true },
+  widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true, claude: true },
+  // Widget Claude : la commande de Claude Code, le modèle ('' = celui de Claude Code) et le droit de
+  // lire les fichiers du dossier des projets (en plus des notes, du calendrier et de l'état des projets).
+  claudeCommand: 'claude',
+  claudeModel: '',
+  claudeLitProjets: true,
 };
-const readConfig = async () => ({ ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) });
+const readConfig = async () => {
+  const config = { ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) };
+  // Un widget ajouté dans une nouvelle version est affiché, même si config.json date d'avant.
+  config.widgets = { ...DEFAULT_CONFIG.widgets, ...config.widgets };
+  return config;
+};
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
@@ -116,7 +127,7 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 
 // --- Petits fichiers de données des widgets (couleurs, calendrier…) ---
 // Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs'];
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   return path.join(app.getPath('userData'), `${nom}.json`);
@@ -505,7 +516,8 @@ async function derniereActivite(folder) {
 }
 
 const MAX_PROJETS = 40;
-handle('projets:liste', async () => {
+// (Aussi utilisé par le widget Claude, pour lui décrire tes projets.)
+async function listeProjets() {
   const racine = await dossierProjets();
   if (!racine || !fsSync.existsSync(racine)) return { racine, existe: false, projets: [] };
   const entries = (await fs.readdir(racine, { withFileTypes: true }))
@@ -526,7 +538,8 @@ handle('projets:liste', async () => {
     p.outil = outilsProjets[p.nom] || p.outilAuto;
   }));
   return { racine, existe: true, projets: garder, total: projets.length };
-});
+}
+handle('projets:liste', listeProjets);
 
 // Un projet ne peut être ouvert que s'il est bien dans le dossier des projets.
 async function projetAutorise(folder) {
@@ -568,6 +581,13 @@ handle('projets:choisirDossier', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, { title: 'Dossier de mes projets', defaultPath: (await dossierProjets()) || os.homedir(), properties: ['openDirectory'] });
   return result.canceled ? null : result.filePaths[0];
+});
+
+// --- Widget Claude (voir claude.js) ---
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, readJson, notesPath, donneesPath, listeProjets, run });
+handle('claude:ouvrirDossier', async () => {
+  const err = await shell.openPath(await claude.dossier());
+  if (err) throw new Error(err);
 });
 
 // --- Mise à jour d'Atelier lui-même ---
@@ -732,4 +752,5 @@ if (!app.requestSingleInstanceLock()) {
     demarrerSurveillance();
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => claude.stop());
 }
