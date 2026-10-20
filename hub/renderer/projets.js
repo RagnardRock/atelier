@@ -49,7 +49,7 @@ const Projets = (() => {
     $('#projets-racine').textContent = donnees.racine ? `${donnees.racine}${donnees.total > donnees.projets.length ? ` · ${donnees.projets.length} plus récents sur ${donnees.total}` : ''}` : '';
   }
 
-  const NOMS = { rune: 'Rune', skald: 'Skald', explorateur: 'l\'Explorateur' };
+  const NOMS = { rune: 'Rune', skald: 'Skald', brokk: 'Brokk', explorateur: 'l\'Explorateur' };
   const ICONES = { rune: 'outils/rune.svg', skald: 'outils/skald.svg' };
 
   async function ouvrir(p, outil) {
@@ -75,6 +75,8 @@ const Projets = (() => {
       ['Ouvrir dans Rune', () => ouvrir(p, 'rune')],
       ['Ouvrir dans Skald', () => ouvrir(p, 'skald')],
       ['Ouvrir dans l\'Explorateur', () => ouvrir(p, 'explorateur')],
+      // Brokk ne remplace pas l'outil du projet : il s'ouvre sur le projet pour en exporter les images.
+      ['Exporter les assets avec Brokk', () => ouvrir(p, 'brokk')],
       null,
       'Toujours ouvrir ce projet avec',
       [auto, () => choix(null), !choisi],

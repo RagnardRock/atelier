@@ -31,4 +31,14 @@ module.exports = [
     icone: 'skald.svg',
     ouvreDossier: '0.3.0',
   },
+  {
+    id: 'brokk',
+    nom: 'Brokk',
+    glyphe: 'ᛒ',
+    description: 'Export d\'assets : un PSD ou un logo vers toutes les tailles web',
+    prefixe: 'brokk-v',
+    exe: 'Brokk.exe',
+    icone: 'brokk.svg',
+    ouvreDossier: '0.1.0',
+  },
 ];
