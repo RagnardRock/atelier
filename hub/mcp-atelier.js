@@ -57,13 +57,23 @@ const OUTILS = [
   },
   {
     name: 'ouvrir_projet',
-    description: 'Ouvre un projet du dossier des projets (nom du dossier, voir projets.md) dans Rune, Skald ou l\'Explorateur. Sans outil : celui choisi pour ce projet.',
-    inputSchema: { type: 'object', properties: { nom: { type: 'string' }, outil: { type: 'string', enum: ['rune', 'skald', 'explorateur'] } }, required: ['nom'] },
+    description: 'Ouvre un projet du dossier des projets (nom du dossier, voir projets.md) dans un outil d\'Atelier (rune, skald, brokk…) ou l\'Explorateur (explorateur). Sans outil : celui choisi pour ce projet.',
+    inputSchema: { type: 'object', properties: { nom: { type: 'string' }, outil: { type: 'string', description: 'rune, skald, brokk… ou explorateur' } }, required: ['nom'] },
   },
   {
     name: 'lancer_outil',
-    description: 'Lance un des outils de Ragna : rune (l\'IDE) ou skald (retouche d\'images).',
-    inputSchema: { type: 'object', properties: { outil: { type: 'string', enum: ['rune', 'skald'] } }, required: ['outil'] },
+    description: 'Lance un des outils d\'Atelier par son id : rune (l\'IDE), skald (retouche d\'images), brokk (export d\'assets)…',
+    inputSchema: { type: 'object', properties: { outil: { type: 'string' } }, required: ['outil'] },
+  },
+  {
+    name: 'retenir_projet',
+    description: 'Retient une info sur un projet (nom du dossier), gardée d\'une conversation à l\'autre et recopiée dans projets.md.',
+    inputSchema: { type: 'object', properties: { projet: { type: 'string' }, texte: { type: 'string', description: 'Une info courte' } }, required: ['projet', 'texte'] },
+  },
+  {
+    name: 'oublier_projet',
+    description: 'Oublie une info retenue sur un projet (son id est dans projets.md).',
+    inputSchema: { type: 'object', properties: { projet: { type: 'string' }, id: { type: 'string' } }, required: ['projet', 'id'] },
   },
 ];
 

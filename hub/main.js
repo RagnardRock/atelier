@@ -131,7 +131,8 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 
 // --- Petits fichiers de données des widgets (couleurs, calendrier…) ---
 // Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude'];
+// projets-memoire : ce que Claude retient sur chaque projet, { nomDuProjet: [{ id, texte, quand }] }.
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'projets-memoire'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   return path.join(app.getPath('userData'), `${nom}.json`);
@@ -523,7 +524,7 @@ const MAX_PROJETS = 40;
 // (Aussi utilisé par le widget Claude, pour lui décrire tes projets.)
 async function listeProjets() {
   const racine = await dossierProjets();
-  if (!racine || !fsSync.existsSync(racine)) return { racine, existe: false, projets: [] };
+  if (!racine || !fsSync.existsSync(racine)) return { racine, existe: false, projets: [], noms: [], memoire: {} };
   const entries = (await fs.readdir(racine, { withFileTypes: true }))
     .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules');
   const projets = await Promise.all(entries.map(async (e) => {
@@ -533,6 +534,8 @@ async function listeProjets() {
   projets.sort((a, b) => b.activite - a.activite);
   const garder = projets.slice(0, MAX_PROJETS);
   const { outilsProjets = {} } = await readConfig();
+  // Ce que Claude retient sur chaque projet (widget Claude), affiché aussi dans Projets récents.
+  const memoire = await readJson(donneesPath('projets-memoire'), {});
   // Type, catégorie et état git en parallèle pour tous les projets gardés.
   await Promise.all(garder.map(async (p) => {
     [p.type, p.categorie, p.git] = await Promise.all([typeProjet(p.dossier), categorieProjet(p.dossier), etatGit(p.dossier)]);
@@ -540,8 +543,9 @@ async function listeProjets() {
     // L'outil qui l'ouvre : ton choix s'il y en a un, sinon Skald pour les images et Rune pour le reste.
     p.outilAuto = p.categorie === 'images' ? 'skald' : 'rune';
     p.outil = outilsProjets[p.nom] || p.outilAuto;
+    p.memoire = Array.isArray(memoire[p.nom]) ? memoire[p.nom] : [];
   }));
-  return { racine, existe: true, projets: garder, total: projets.length };
+  return { racine, existe: true, projets: garder, total: projets.length, noms: projets.map((p) => p.nom), memoire };
 }
 handle('projets:liste', listeProjets);
 
@@ -592,7 +596,7 @@ claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, rea
 // « Toujours autoriser » sur une carte du widget : cette famille d'actions ne demande plus
 // (Réglages › Sans me demander la permission, pour décocher).
 handle('claude:toujours', async (_event, famille) => {
-  if (!['notes', 'calendrier', 'minuteurs', 'projets'].includes(famille)) throw new Error(`Famille d'actions inconnue : ${famille}`);
+  if (!['notes', 'calendrier', 'minuteurs', 'projets', 'memoire'].includes(famille)) throw new Error(`Famille d'actions inconnue : ${famille}`);
   const config = await readConfig();
   await writeJson(configPath(), { ...config, claudeSansDemander: { ...config.claudeSansDemander, [famille]: true } });
 });

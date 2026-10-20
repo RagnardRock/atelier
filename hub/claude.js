@@ -41,6 +41,7 @@ const FAMILLES = {
   ajouter_evenement: 'calendrier', modifier_evenement: 'calendrier', supprimer_evenement: 'calendrier',
   lancer_minuteur: 'minuteurs',
   ouvrir_projet: 'projets', lancer_outil: 'projets',
+  retenir_projet: 'memoire', oublier_projet: 'memoire',
 };
 const actionsActives = (config) => config.claudeActions !== false;
 
@@ -364,8 +365,15 @@ async function projetsMd(liste, run) {
     'Pour chaque projet : type, outil qui l\'ouvre (Rune = IDE, Skald = retouche d\'images), dernière activité,',
     'état Git (branche, fichiers modifiés pas encore commités, commits pas encore poussés / à récupérer)',
     'et les commits des 30 derniers jours, toutes branches confondues.',
+    '« Mémoire » : ce que tu as retenu toi-même sur le projet (actions retenir_projet / oublier_projet),',
+    'gardé d\'une conversation à l\'autre. Ragna peut aussi le modifier dans le widget Projets récents.',
     '',
   ];
+  const memoireMd = (infos) => {
+    if (!infos?.length) return;
+    lignes.push('- Mémoire :');
+    for (const m of infos) lignes.push(`  - ${m.texte.replace(/\n/g, ' ')} [id : ${m.id}, ${new Date(m.quand).toLocaleDateString('fr-FR')}]`);
+  };
   liste.projets.forEach((p, i) => {
     const d = details[i];
     lignes.push(`## ${p.nom}`, '');
@@ -386,8 +394,20 @@ async function projetsMd(liste, run) {
     } else if (d) {
       lignes.push('- Aucun commit ces 30 derniers jours');
     }
+    memoireMd(p.memoire);
     lignes.push('');
   });
+  // Projets plus anciens (hors des plus récents) dont tu as retenu quelque chose.
+  const affiches = new Set(liste.projets.map((p) => p.nom));
+  const autres = Object.entries(liste.memoire || {}).filter(([nom, infos]) => !affiches.has(nom) && infos?.length);
+  if (autres.length) {
+    lignes.push('# Projets plus anciens avec une mémoire', '');
+    for (const [nom, infos] of autres) {
+      lignes.push(`## ${nom}${liste.noms?.includes(nom) ? '' : ' (dossier introuvable)'}`, '');
+      memoireMd(infos);
+      lignes.push('');
+    }
+  }
   return lignes.join('\n');
 }
 
@@ -413,7 +433,10 @@ function claudeMd(addDir, actions) {
       ? [
         'Tu ne peux ni modifier de fichier ni lancer de commande. Mais tu peux agir dans Atelier avec ses outils',
         '(mcp__atelier__…) : ajouter, modifier ou supprimer une note ou un évènement (avec leur id, donné dans',
-        'notes.md et calendrier.md), lancer un minuteur, ouvrir un projet, lancer Rune ou Skald.',
+        'notes.md et calendrier.md), lancer un minuteur, ouvrir un projet, lancer un des outils d\'Atelier.',
+        'Tu as aussi une mémoire par projet (retenir_projet, oublier_projet), recopiée dans projets.md :',
+        'retiens-y ce qui sera utile plus tard (décisions, client, hébergement, étapes restantes…) quand',
+        'Ragna te le demande ou te l\'apprend. Une info courte et datée par élément ; oublie ce qui n\'est plus vrai.',
         'Atelier demande à Ragna de valider tes actions (sauf celles autorisées pour toujours) : quand Ragna',
         'te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
         'Pour modifier une note, envoie son texte complet. Les dates sont au format AAAA-MM-JJ.',

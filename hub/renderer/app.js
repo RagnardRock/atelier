@@ -25,7 +25,7 @@ const App = (() => {
     ['calendrier', 'Calendrier', 'widget-calendrier'],
     ['claude', 'Claude', 'widget-claude'],
   ];
-  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer Rune ou Skald']];
+  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets']];
   const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
