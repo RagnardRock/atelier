@@ -7,6 +7,9 @@
 // - Chaque outil utilisé par Claude (lire, modifier, retenir…) apparaît sur une ligne.
 // - Avant une modification, une commande ou une info à retenir, une carte te demande Autoriser / Refuser.
 // - Les conversations sont gardées par projet (bouton horloge), comme dans Rune.
+// - Les actions propres à l'outil (renderer/claude-actions.js) : ClaudePanneau.actions({ nom: {
+//     description, schema, lecture, icone, libelle(args), faire(args) } }). faire() renvoie un texte,
+//   ou { texte, image: canvas } pour montrer une capture à Claude. lecture: true = sans permission.
 //
 // Pour l'utiliser : <link rel="stylesheet" href="../commun/claude-panneau.css"> et, en dernier,
 // <script src="../commun/claude-panneau.js" data-outil="Skald" data-bienvenue="…"></script>.
@@ -23,6 +26,7 @@ const ClaudePanneau = (() => {
   let renderQueued = false;
   const tools = new Map(); // id d'outil -> { name, input, row, item }
   let projetActuel = null; // { dossier, nom, source } ou null
+  const mesActions = {};   // nom -> { description, schema, lecture, icone, libelle, faire }
 
   // --- Conversation affichée (enregistrée dans l'historique pour y revenir) ---
   const newConversation = () => ({ id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, title: '', sessionId: null, items: [] });
@@ -42,6 +46,7 @@ const ClaudePanneau = (() => {
       if (e.ctrlKey && e.shiftKey && !e.altKey && e.code === 'KeyK') { e.preventDefault(); toggle(); }
     }, true);
     api().onEvent(onEvent);
+    api().onAction(faireAction);
     try { if (localStorage.getItem('claude-panneau-ouvert') === '1') toggle(true); } catch { /* stockage indisponible */ }
   }
 
@@ -335,6 +340,44 @@ const ClaudePanneau = (() => {
     }
   }
 
+  // --- Actions de l'outil ---
+  function actions(liste) {
+    Object.assign(mesActions, liste);
+    api().declarerActions(Object.entries(mesActions).map(([name, a]) => ({
+      name, description: a.description, inputSchema: a.schema || { type: 'object', properties: {} }, lecture: Boolean(a.lecture),
+    })));
+  }
+
+  // Une capture plus petite que 1024 px de côté (Claude n'a pas besoin de plus), en PNG base64.
+  function versImage(canvas, max = 1024) {
+    const k = Math.min(1, max / Math.max(canvas.width, canvas.height));
+    let source = canvas;
+    if (k < 1) {
+      source = document.createElement('canvas');
+      source.width = Math.max(1, Math.round(canvas.width * k));
+      source.height = Math.max(1, Math.round(canvas.height * k));
+      const g = source.getContext('2d');
+      g.imageSmoothingEnabled = canvas.pixelArt ? false : true;
+      g.drawImage(canvas, 0, 0, source.width, source.height);
+    }
+    return { data: source.toDataURL('image/png').split(',')[1], mimeType: 'image/png' };
+  }
+
+  async function faireAction({ id, nom, args }) {
+    const action = mesActions[nom];
+    let resultat;
+    try {
+      if (!action) throw new Error(`Action inconnue : ${nom}`);
+      const r = await action.faire(args || {});
+      resultat = typeof r === 'string' || r == null
+        ? { texte: r || 'Fait.' }
+        : { texte: r.texte || 'Fait.', ...(r.image ? { image: versImage(r.image, r.max) } : {}) };
+    } catch (err) {
+      resultat = { erreur: String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '') };
+    }
+    api().actionFaite(id, resultat);
+  }
+
   // --- Outils utilisés par Claude ---
   const court = (p) => {
     const s = String(p || '');
@@ -357,7 +400,11 @@ const ClaudePanneau = (() => {
       case 'mcp__atelier__lire_notes': return ['note', 'Lit tes notes (Atelier)'];
       case 'mcp__atelier__retenir_projet': return ['bookmark', `Retient : ${inp.texte || ''}`];
       case 'mcp__atelier__oublier_projet': return ['bookmark', `Oublie l'info ${inp.id || ''} du projet`];
-      default: return ['tools', name];
+      default: {
+        const action = mesActions[name.replace(/^mcp__atelier__/, '')];
+        if (action) return [action.icone || 'tools', action.libelle ? action.libelle(inp) : name];
+        return ['tools', name];
+      }
     }
   }
 
@@ -409,7 +456,7 @@ const ClaudePanneau = (() => {
       if (inp.description) { const d = document.createElement('p'); d.textContent = inp.description; box.appendChild(d); }
       pre('command', inp.command || '');
     } else if (name === 'mcp__atelier__retenir_projet') pre('diff-new', inp.texte || '');
-    else pre('command', JSON.stringify(inp, null, 2));
+    else if (Object.keys(inp || {}).length) pre('command', JSON.stringify(inp, null, 2));
     return box;
   }
 
@@ -556,5 +603,5 @@ const ClaudePanneau = (() => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
   else demarrer();
 
-  return { init, toggle, isOpen, refreshProjet };
+  return { init, toggle, isOpen, refreshProjet, actions };
 })();

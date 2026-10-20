@@ -12,8 +12,16 @@
 // Atelier (dossier partagé %APPDATA%\atelier-commun). Claude travaille dans son dossier, et connaît
 // sa mémoire (ce que le Claude d'Atelier ou de Rune a retenu) et tes notes, grâce au petit serveur
 // MCP mcp-commun.js.
+//
+// Les actions dans l'outil (voir l'image, la redimensionner, poser des tuiles…) : chaque outil les
+// décrit dans renderer/claude-actions.js. Claude Code les appelle par mcp-commun.js, qui les transmet
+// ici par un canal local (un « named pipe » de Windows, protégé par un jeton secret) ; on les passe
+// à la fenêtre, qui les fait sous tes yeux, et la réponse repart par le même chemin.
 
 const { spawn, execFile } = require('node:child_process');
+const crypto = require('node:crypto');
+const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -72,8 +80,58 @@ function spawnClaude(command, args, cwd) {
   return spawn(command, args, { cwd, env });
 }
 
-// Lire ne demande jamais la permission ; retenir ou oublier passe par la carte.
+// Lire ne demande jamais la permission ; retenir, oublier et les actions qui changent quelque chose
+// passent par la carte.
 const LECTURE = ['mcp__atelier__lire_contexte', 'mcp__atelier__lire_notes'];
+let actions = [];          // actions de l'outil : [{ name, description, inputSchema, lecture }]
+const enAttente = new Map(); // id d'action -> fonction qui reçoit la réponse de la fenêtre
+let canal = null;          // { chemin, jeton }
+
+// Le canal local entre mcp-commun.js et l'outil. Ouvert une fois, au premier message.
+function ouvrirCanal(log) {
+  if (canal) return Promise.resolve(canal);
+  const nom = `atelier-outil-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  const chemin = process.platform === 'win32' ? `\\\\.\\pipe\\${nom}` : path.join(os.tmpdir(), `${nom}.sock`);
+  const jeton = crypto.randomBytes(24).toString('hex');
+  const serveur = net.createServer((socket) => {
+    let recu = '';
+    socket.setEncoding('utf8');
+    socket.on('error', () => {});
+    socket.on('data', async (chunk) => {
+      recu += chunk;
+      const i = recu.indexOf('\n');
+      if (i < 0) return;
+      let demande;
+      try { demande = JSON.parse(recu.slice(0, i)); } catch { return socket.end(); }
+      // Comparaison à durée constante : on ne laisse pas deviner le jeton.
+      const ok = typeof demande.jeton === 'string' && demande.jeton.length === jeton.length
+        && crypto.timingSafeEqual(Buffer.from(demande.jeton), Buffer.from(jeton));
+      if (!ok) return socket.end(`${JSON.stringify({ erreur: 'Jeton refusé' })}\n`);
+      const reponse = await executerAction(String(demande.outil), demande.args || {}, log);
+      socket.end(`${JSON.stringify(reponse)}\n`);
+    });
+  });
+  return new Promise((resolve, reject) => {
+    serveur.once('error', reject);
+    serveur.listen(chemin, () => {
+      canal = { chemin, jeton };
+      resolve(canal);
+    });
+  });
+}
+
+// La fenêtre fait l'action (renderer/claude-actions.js) et renvoie { texte, image } ou { erreur }.
+function executerAction(nom, args, log) {
+  if (!actions.some((a) => a.name === nom)) return Promise.resolve({ erreur: `Action inconnue : ${nom}` });
+  if (!sender || sender.isDestroyed()) return Promise.resolve({ erreur: 'La fenêtre de l\'outil est fermée' });
+  const id = crypto.randomUUID();
+  log('INFO', `Claude : action ${nom} ${JSON.stringify(args).slice(0, 200)}`);
+  return new Promise((resolve) => {
+    const delai = setTimeout(() => { enAttente.delete(id); resolve({ erreur: 'L\'outil n\'a pas répondu à temps' }); }, 120_000);
+    enAttente.set(id, (r) => { clearTimeout(delai); enAttente.delete(id); resolve(r); });
+    sender.send('claude:action', { id, nom, args });
+  });
+}
 
 function start({ command, model, cwd, log, resume, mcpConfig }) {
   const args = [
@@ -86,7 +144,8 @@ function start({ command, model, cwd, log, resume, mcpConfig }) {
   ];
   if (model) args.push('--model', model);
   if (resume) args.push('--resume', resume);
-  if (mcpConfig) args.push('--mcp-config', mcpConfig, '--allowedTools', ...LECTURE);
+  const lecture = [...LECTURE, ...actions.filter((a) => a.lecture).map((a) => `mcp__atelier__${a.name}`)];
+  if (mcpConfig) args.push('--mcp-config', mcpConfig, '--allowedTools', ...lecture);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}`);
   try {
@@ -219,6 +278,7 @@ function register({ handle, log, dataDir, readConfig, outil }) {
   historyFile = path.join(dataDir, 'claude-conversations.json');
   communDir = path.join(path.dirname(dataDir), 'atelier-commun');
   const mcpFile = path.join(dataDir, 'mcp-atelier.json');
+  const actionsFile = path.join(dataDir, 'mcp-actions.json');
   // Sans projet, Claude travaille dans un dossier à lui (rien à y casser).
   const dossierSansProjet = path.join(dataDir, 'claude');
 
@@ -230,15 +290,20 @@ function register({ handle, log, dataDir, readConfig, outil }) {
   }
 
   async function ecrireConfigMcp(nom) {
-    const config = {
-      mcpServers: {
-        atelier: {
-          command: process.execPath,
-          args: [path.join(__dirname, 'mcp-commun.js')],
-          env: { ELECTRON_RUN_AS_NODE: '1', ATELIER_COMMUN: communDir, ATELIER_PROJET: nom },
-        },
-      },
-    };
+    const env = { ELECTRON_RUN_AS_NODE: '1', ATELIER_COMMUN: communDir, ATELIER_PROJET: nom };
+    if (actions.length) {
+      try {
+        const { chemin, jeton } = await ouvrirCanal(log);
+        await fsp.writeFile(actionsFile, JSON.stringify(actions, null, 2), 'utf8');
+        Object.assign(env, { ATELIER_CANAL: chemin, ATELIER_JETON: jeton, ATELIER_ACTIONS: actionsFile });
+      } catch (err) {
+        log('ERREUR', `Claude : canal des actions impossible à ouvrir : ${err.message}`);
+      }
+    }
+    // Dans l'outil installé, le script est hors de l'archive app.asar (package.json › build › asarUnpack) :
+    // Electron en mode Node ne lance pas un script rangé dans l'archive.
+    const script = path.join(__dirname, 'mcp-commun.js').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
+    const config = { mcpServers: { atelier: { command: process.execPath, args: [script], env } } };
     await fsp.writeFile(mcpFile, JSON.stringify(config, null, 2), 'utf8');
     return mcpFile;
   }
@@ -253,13 +318,48 @@ function register({ handle, log, dataDir, readConfig, outil }) {
       'Le Claude d\'Atelier (le hub) garde une mémoire par projet et voit les notes de Ragna. Tu y as accès avec',
       'les outils mcp__atelier__ : lire_contexte (la mémoire du projet ; lis-la avant de répondre à ce premier message),',
       'lire_notes (quand la question s\'y rapporte), retenir_projet et oublier_projet (garde une info courte et utile',
-      'plus tard quand Ragna te la demande ou te l\'apprend ; elle sera visible dans Atelier et les autres outils).)',
+      'plus tard quand Ragna te la demande ou te l\'apprend ; elle sera visible dans Atelier et les autres outils).',
+      ...(actions.length ? [
+        `Tu peux aussi agir dans ${outil.nom} avec ses propres outils mcp__atelier__ (${actions.map((a) => a.name).join(', ')}) :`,
+        'ils agissent sur ce qui est ouvert dans la fenêtre, sous les yeux de Ragna, et s\'annulent avec Ctrl+Z.',
+        'Regarde avant d\'agir (les outils « voir » montrent une capture) et vérifie après. Ragna valide chaque',
+        'modification sur une carte : quand Ragna te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
+      ] : []),
+      ')',
       '',
       '',
     ].join('\n');
   }
 
   handle('claude:projet', async () => projet());
+
+  // Les actions de l'outil, décrites par sa fenêtre (renderer/claude-actions.js) au démarrage.
+  handle('claude:actions', async (_event, liste) => {
+    if (!Array.isArray(liste)) return;
+    actions = liste.filter((a) => /^[a-z_]{1,40}$/.test(a?.name)).map(({ name, description, inputSchema, lecture }) => ({
+      name, description: String(description || ''), inputSchema: inputSchema || { type: 'object', properties: {} }, lecture: Boolean(lecture),
+    }));
+  });
+  handle('claude:actionFaite', async (_event, id, resultat) => enAttente.get(id)?.(resultat));
+
+  // Fichier écrit par une action (un export) : seulement dans le dossier du projet en cours.
+  handle('claude:ecrireFichier', async (_event, chemin, bytes) => {
+    const { cwd } = await cwdActuel();
+    const full = path.resolve(cwd, String(chemin));
+    const rel = path.relative(cwd, full);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Claude ne peut écrire que dans le dossier du projet (${cwd})`);
+    await fsp.mkdir(path.dirname(full), { recursive: true });
+    await fsp.writeFile(full, Buffer.from(bytes));
+    return full;
+  });
+  // Fichier lu par une action (ouvrir une image du projet) : aussi seulement dans ce dossier.
+  handle('claude:lireFichier', async (_event, chemin) => {
+    const { cwd } = await cwdActuel();
+    const full = path.resolve(cwd, String(chemin));
+    const rel = path.relative(cwd, full);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Claude ne peut ouvrir que des fichiers du projet (${cwd})`);
+    return { path: full, name: path.basename(full), bytes: await fsp.readFile(full) };
+  });
 
   handle('claude:history', async () => {
     const { cwd } = await cwdActuel();
