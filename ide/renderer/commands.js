@@ -28,6 +28,7 @@ const commandPalette = (() => {
     ['Affichage', "Diviser l'éditeur", { shortcut: 'splitEditor' }, () => splitEditor()],
     ['Affichage', 'Fermer la colonne', { shortcut: 'closeColumn' }, () => mergeColumn(state.activeGroup)],
     ['Affichage', 'Aperçu dans le navigateur', { shortcut: 'togglePreview' }, () => previewPanel.toggle()],
+    ['Affichage', 'Go Live : ouvrir le site dans mon navigateur', null, () => previewPanel.goLive()],
     ['Affichage', 'Afficher les fichiers', null, () => showView('tree')],
     ['Affichage', 'Afficher les scripts npm', null, () => showView('scripts')],
     ['Affichage', 'Afficher Git', null, () => showView('git')],
