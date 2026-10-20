@@ -14,6 +14,8 @@
   "reopenLastFolder": true,
   "restoreTabs": true,
   "projectsFolder": "D:\\Projets",
+  "previewLive": true,
+  "previewPort": 5500,
   "claudeCommand": "claude",
   "claudeModel": "",
   "claudePermissionMode": "ask",

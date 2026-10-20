@@ -8,6 +8,15 @@
 // feuilles de style, sans perdre la position dans la page. Tes fichiers ne sont jamais modifiés :
 // le script n'existe que dans la réponse du serveur.
 //
+// Mise à jour pendant la frappe : l'interface envoie ici le texte des fichiers modifiés mais pas
+// encore enregistrés (les "brouillons"). Le serveur les sert à la place de la version du disque,
+// donc la page change sans attendre Ctrl+S. À l'enregistrement, le brouillon disparaît et c'est de
+// nouveau le fichier du disque qui est servi (il est alors identique).
+//
+// Port fixe : le serveur essaie le port réglé (5500 par défaut, comme Live Server), pour que
+// l'onglet de ton navigateur reste valable d'une session à l'autre. S'il est déjà pris par un autre
+// programme, un port libre est choisi à la place.
+//
 // Le serveur n'écoute que sur 127.0.0.1 : il n'est pas visible depuis les autres ordinateurs.
 
 const http = require('node:http');
@@ -51,7 +60,9 @@ const RELOAD_SCRIPT = `<script>/* Rune : rechargement automatique (ajouté par l
 
 let server = null;
 let port = null;
+let startedFor = null;       // port demandé au dernier démarrage (pour redémarrer s'il change dans les réglages)
 let getRoot = () => null;
+const drafts = new Map();    // chemin complet -> texte pas encore enregistré
 const clients = new Set();   // pages ouvertes, à prévenir quand un fichier change
 let watcher = null;
 let watchedRoot = null;
@@ -123,6 +134,8 @@ async function serve(req, res) {
   }
   let stat = await fsp.stat(file).catch(() => null);
   let target = file;
+  // Un brouillon pour un fichier pas encore créé sur le disque reste servi.
+  if (!stat && drafts.has(file)) stat = { isFile: () => true, isDirectory: () => false };
   if (stat?.isDirectory()) {
     if (!url.pathname.endsWith('/')) {
       res.writeHead(301, { Location: `${url.pathname}/${url.search}` });
@@ -148,50 +161,79 @@ async function serve(req, res) {
   }
   const type = TYPES[path.extname(target).toLowerCase()] || 'application/octet-stream';
   const headers = { 'Content-Type': type, 'Cache-Control': 'no-store' }; // toujours la dernière version
+  const draft = drafts.get(target);
   if (type.startsWith('text/html')) {
-    let html = await fsp.readFile(target, 'utf8');
+    let html = draft ?? await fsp.readFile(target, 'utf8');
     html = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${RELOAD_SCRIPT}</body>`) : html + RELOAD_SCRIPT;
     res.writeHead(200, headers);
     return res.end(html);
+  }
+  if (draft !== undefined) {
+    const body = Buffer.from(draft, 'utf8');
+    res.writeHead(200, { ...headers, 'Content-Length': body.length });
+    return res.end(body);
   }
   res.writeHead(200, { ...headers, 'Content-Length': stat.size });
   fs.createReadStream(target).pipe(res);
 }
 
-function start() {
-  if (server) return Promise.resolve(port);
+// Port réglé dans config.json ("previewPort", envoyé par l'interface). 0 ou une valeur invalide = un port libre au hasard.
+function wantedPort(setting) {
+  const p = Number(setting);
+  return Number.isInteger(p) && p >= 1024 && p <= 65535 ? p : 0;
+}
+
+function listen(wanted) {
   return new Promise((resolve, reject) => {
-    server = http.createServer((req, res) => {
+    const s = http.createServer((req, res) => {
       serve(req, res).catch((err) => {
         if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end(`Erreur de l'aperçu : ${err.message}`);
       });
     });
-    server.on('error', (err) => { server = null; reject(err); });
-    server.listen(0, '127.0.0.1', () => { // port 0 = un port libre choisi par le système
-      port = server.address().port;
-      resolve(port);
-    });
+    s.once('error', reject);
+    s.listen(wanted, '127.0.0.1', () => resolve(s)); // port 0 = un port libre choisi par le système
   });
 }
 
-function stop() {
+async function start(setting) {
+  const wanted = wantedPort(setting);
+  if (server && startedFor === wanted) return port;
+  if (server) closeServer(); // le port a changé dans les réglages : on redémarre dessus
+  try {
+    server = await listen(wanted);
+  } catch (err) {
+    if (err.code !== 'EADDRINUSE' || !wanted) throw err;
+    server = await listen(0); // port déjà pris par un autre programme : un autre, libre
+  }
+  startedFor = wanted;
+  port = server.address().port;
+  return port;
+}
+
+function closeServer() {
   for (const res of clients) res.end();
   clients.clear();
+  server?.close();
+  server = null;
+  port = null;
+}
+
+function stop() {
+  closeServer();
   watcher?.close();
   watcher = null;
   watchedRoot = null;
-  server?.close();
-  server = null;
+  drafts.clear();
 }
 
 function register({ handle, getRoot: rootGetter, openExternal }) {
   getRoot = rootGetter;
   // Adresse de l'aperçu pour un fichier du projet (ou la racine du site).
-  handle('preview:url', async (_event, file) => {
+  handle('preview:url', async (_event, file, portSetting) => {
     const root = getRoot();
     if (!root) throw new Error("Ouvre d'abord un dossier.");
-    const p = await start();
+    const p = await start(portSetting);
     watch(root);
     let rel = '';
     if (file) {
@@ -204,6 +246,23 @@ function register({ handle, getRoot: rootGetter, openExternal }) {
   handle('preview:external', async (_event, url) => {
     if (!port || !String(url).startsWith(`http://127.0.0.1:${port}/`)) throw new Error('Adresse refusée');
     await openExternal(url);
+  });
+  // Brouillon d'un fichier (texte pas encore enregistré), ou null pour revenir au fichier du disque.
+  // quiet : ne pas recharger les pages (après un enregistrement, la surveillance du dossier s'en charge).
+  handle('preview:draft', async (_event, file, text, quiet = false) => {
+    const root = getRoot();
+    if (!root || typeof file !== 'string') return;
+    const full = path.resolve(file);
+    if (!full.startsWith(root + path.sep)) return; // seulement les fichiers du dossier ouvert
+    if (typeof text === 'string') drafts.set(full, text);
+    else if (!drafts.delete(full)) return;
+    if (!quiet) notifyChange(path.relative(root, full));
+  });
+  handle('preview:clearDrafts', async () => {
+    const files = [...drafts.keys()];
+    drafts.clear();
+    const root = getRoot();
+    for (const f of files) if (root) notifyChange(path.relative(root, f));
   });
 }
 

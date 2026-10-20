@@ -50,6 +50,10 @@ contextBridge.exposeInMainWorld('atelier', {
   onClaudeAction: (callback) => ipcRenderer.on('claude:action', (_event, data) => callback(data)),
   onClaude: (callback) => ipcRenderer.on('claude:event', (_event, data) => callback(data)),
 
+  // Clic droit dans une zone de texte (orthographe, couper, copier, coller)
+  onMenuEdition: (callback) => ipcRenderer.on('menu:edition', (_event, data) => callback(data)),
+  edition: (commande, mot) => ipcRenderer.invoke('edition:commande', commande, mot),
+
   // Réglages, fenêtre, mise à jour d'Atelier
   readConfig: () => ipcRenderer.invoke('config:read'),
   writeConfig: (changes) => ipcRenderer.invoke('config:write', changes),

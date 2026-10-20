@@ -33,13 +33,38 @@ function ouvrirMenu(x, y, items) {
     if (!item) { menuOuvert.append(el('div', { className: 'menu-sep' })); continue; }
     if (typeof item === 'string') { menuOuvert.append(el('div', { className: 'menu-titre', textContent: item })); continue; }
     const [label, run, coche] = item;
-    const b = el('button', { className: `menu-item${coche ? ' coche' : ''}`, textContent: label });
+    // Sans action : ligne grisée (ex. « Coller » quand le presse-papiers est vide).
+    const b = el('button', { className: `menu-item${coche ? ' coche' : ''}`, textContent: label, disabled: !run });
     b.onclick = () => { fermerMenu(); run(); };
     menuOuvert.append(b);
   }
+  // Le menu ne prend pas le focus : la zone de texte garde sa sélection (pour corriger un mot, coller…).
+  menuOuvert.addEventListener('mousedown', (e) => e.preventDefault());
   document.body.append(menuOuvert);
   menuOuvert.style.left = `${Math.min(x, innerWidth - menuOuvert.offsetWidth - 8)}px`;
   menuOuvert.style.top = `${Math.min(y, innerHeight - menuOuvert.offsetHeight - 8)}px`;
 }
 document.addEventListener('pointerdown', (e) => { if (menuOuvert && !menuOuvert.contains(e.target)) fermerMenu(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenu(); });
+
+// Clic droit dans une zone de texte (notes, message à Claude…) : les corrections proposées pour un
+// mot souligné en rouge, « Ajouter au dictionnaire », puis couper, copier, coller.
+window.atelier.onMenuEdition(({ x, y, mot, suggestions, peutCouper, peutCopier, peutColler }) => {
+  const commande = (c, m) => () => window.atelier.edition(c, m).catch((err) => notify(cleanError(err), 'error'));
+  const items = [];
+  if (mot) {
+    if (suggestions.length) items.push(...suggestions.slice(0, 6).map((s) => [s, commande('remplacer', s)]));
+    else items.push('Aucune correction proposée');
+    items.push([`Ajouter « ${mot} » au dictionnaire`, commande('dictionnaire', mot)], null);
+  }
+  items.push(
+    ['Couper', peutCouper ? commande('cut') : null],
+    ['Copier', peutCopier ? commande('copy') : null],
+    ['Coller', peutColler ? commande('paste') : null],
+    null,
+    ['Tout sélectionner', commande('selectAll')],
+  );
+  ouvrirMenu(x, y, items);
+  // Les corrections, en tête du menu, ressortent un peu.
+  if (mot && suggestions.length) for (const b of [...menuOuvert.querySelectorAll('.menu-item')].slice(0, Math.min(6, suggestions.length))) b.classList.add('correction');
+});
