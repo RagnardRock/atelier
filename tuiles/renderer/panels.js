@@ -1,4 +1,5 @@
-// Le panneau de droite : couleurs, palette, tuiles du jeu et aperçu en mosaïque.
+// Le panneau de droite : couleurs, palette, tuiles du jeu et aperçu en mosaïque (mode Tuile),
+// cartes et calques (mode Carte).
 
 const Panels = (() => {
   // --- Couleurs principale / secondaire ---
@@ -136,7 +137,7 @@ const Panels = (() => {
     if (!doc) return;
     tilesEl.style.setProperty('--cols', doc.columns);
     doc.tiles.forEach((tile, i) => {
-      const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}`, title: `${i}. ${tile.name}${Doc.animated(tile) ? ` (animée, ${tile.frames.length} images)` : ''}\nClic : choisir · double-clic : renommer · glisser : changer l'ordre`, draggable: true }, [thumb(tile, doc.tileSize), Doc.animated(tile) ? el('span', { className: 'tile-anim', textContent: tile.frames.length }) : null]);
+      const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}`, title: `${i}. ${tile.name}${Doc.animated(tile) ? ` (animée, ${tile.frames.length} images)` : ''}\nClic : choisir · double-clic : renommer · glisser : changer l'ordre`, draggable: true }, [thumb(tile, doc.tileSize), Doc.animated(tile) ? el('span', { className: 'tile-anim', textContent: tile.frames.length }) : null, tile.passage && tile.passage !== 'auto' ? el('span', { className: `tile-pass ${tile.passage}`, title: tile.passage === 'bloque' ? 'Bloque le joueur' : 'Laisse passer le joueur' }) : null]);
       item.dataset.index = i;
       item.onclick = () => App.selectTile(i);
       item.ondblclick = () => App.renameTile(i);
@@ -237,11 +238,91 @@ const Panels = (() => {
     renderPreview();
   }
 
+  // --- Cartes du jeu ---
+  const mapsEl = $('#maps');
+  function renderMaps() {
+    const doc = App.doc;
+    mapsEl.innerHTML = '';
+    if (!doc) return;
+    doc.maps.forEach((m, i) => {
+      const row = el('button', { className: `row${i === doc.mapIndex ? ' active' : ''}`, title: `${m.name} (fichier cartes/${m.id}.json)\nClic : l'afficher · double-clic : renommer · clic droit : plus d'actions` }, [
+        el('i', { className: 'codicon codicon-map lead' }),
+        el('span', { className: 'row-name', textContent: m.name }),
+        doc.depart?.carte === m.id ? el('span', { className: 'badge start', textContent: 'départ', title: 'Le joueur commence le jeu sur cette carte' }) : null,
+        el('span', { className: 'row-meta', textContent: `${m.width}×${m.height}` }),
+      ]);
+      row.onclick = () => App.selectMap(i);
+      row.ondblclick = () => App.renameMap(i);
+      row.oncontextmenu = (e) => {
+        e.preventDefault();
+        App.selectMap(i);
+        Menus.open(App.mapMenuItems(), e.clientX, e.clientY);
+      };
+      mapsEl.append(row);
+    });
+    $('#maps-count').textContent = doc.maps.length;
+    $('#map-delete').disabled = doc.maps.length < 2;
+  }
+
+  // --- Calques de la carte affichée ---
+  // Comme dans Photoshop : le calque du haut de la liste est dessiné par-dessus les autres.
+  // Tout en haut, la ligne Passage : la choisir fait peindre où le joueur peut marcher.
+  const layersEl = $('#layers');
+  const DEPTH_LABELS = { dessous: 'sous', joueur: 'joueur', dessus: 'dessus' };
+  function renderLayers() {
+    const doc = App.doc;
+    layersEl.innerHTML = '';
+    if (!doc) return;
+    const { map } = doc;
+    const eye = (visible, title, onclick) => {
+      const b = el('button', { className: 'icon-button', title }, [icon(visible ? 'eye' : 'eye-closed')]);
+      b.onclick = (e) => { e.stopPropagation(); onclick(); };
+      return b;
+    };
+    const passage = el('button', { className: `row passage-row${App.options.layer < 0 ? ' active' : ''}`, title: 'Passage : où le joueur peut marcher (libre, bloqué, rebords). Choisis-le pour le peindre avec le crayon, le pot ou le rectangle.' }, [
+      eye(App.options.showPassage || App.options.layer < 0, 'Montrer le passage par-dessus la carte', () => App.toggleOption('showPassage')),
+      el('i', { className: 'codicon codicon-shield lead' }),
+      el('span', { className: 'row-name', textContent: 'Passage' }),
+      el('span', { className: 'row-meta', textContent: `${map.passage.reduce((n, v) => n + (v > 0), 0)} case(s) peinte(s)` }),
+    ]);
+    passage.onclick = () => App.selectLayer(-1);
+    layersEl.append(passage);
+    for (let i = map.layers.length - 1; i >= 0; i--) {
+      const l = map.layers[i];
+      const extras = [];
+      if ((l.opacite ?? 1) < 1) extras.push(`${Math.round(l.opacite * 100)} %`);
+      if (l.fusion && l.fusion !== 'normal') extras.push(Doc.FUSIONS.find(([k]) => k === l.fusion)?.[1].split(' ')[0] || l.fusion);
+      if (l.parallaxe && (l.parallaxe.x !== 1 || l.parallaxe.y !== 1)) extras.push('parallaxe');
+      const row = el('button', { className: `row${i === App.options.layer ? ' active' : ''}${l.visible ? '' : ' hidden-layer'}`, title: `${l.name} : ${Doc.PROFONDEURS.find(([k]) => k === l.profondeur)?.[1] || ''}${extras.length ? ` · ${extras.join(' · ')}` : ''}\nClic : poser les tuiles sur ce calque · double-clic : réglages` }, [
+        eye(l.visible, `${l.visible ? 'Masquer' : 'Afficher'} le calque`, () => App.toggleLayerVisible(i)),
+        el('span', { className: 'row-name', textContent: l.name }),
+        extras.length ? el('span', { className: 'row-meta', textContent: extras.join(' · ') }) : null,
+        el('span', { className: `badge ${l.profondeur}`, textContent: DEPTH_LABELS[l.profondeur] || l.profondeur }),
+      ]);
+      row.onclick = () => App.selectLayer(i);
+      row.ondblclick = () => App.layerProperties(i);
+      row.oncontextmenu = (e) => {
+        e.preventDefault();
+        App.selectLayer(i);
+        Menus.open(App.layerMenuItems(), e.clientX, e.clientY);
+      };
+      layersEl.append(row);
+    }
+    $('#layers-count').textContent = map.layers.length;
+    const li = App.options.layer;
+    $('#layer-up').disabled = li < 0 || li >= map.layers.length - 1;
+    $('#layer-down').disabled = li <= 0;
+    $('#layer-props').disabled = li < 0;
+    $('#layer-delete').disabled = li < 0 || map.layers.length < 2;
+  }
+
   function render() {
     renderPalette();
     renderTiles();
     renderFrames();
     renderPreview();
+    renderMaps();
+    renderLayers();
   }
   function renderLive() {
     refreshCurrentThumb();
@@ -254,5 +335,5 @@ const Panels = (() => {
     }
   }
 
-  return { render, renderLive, renderColors, renderTiles, renderFrames, tick, usedColors };
+  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, tick, usedColors };
 })();

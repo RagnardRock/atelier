@@ -1,6 +1,6 @@
 # Tafl ᛏ : tuiles et cartes en pixel art, façon Pokémon
 
-Tafl est le quatrième outil d'Atelier, à côté de Rune, Skald et Brokk. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à les essayer sur une **carte**, puis à tout exporter dans les formats que lisent les moteurs de jeu. Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
+Tafl est le quatrième outil d'Atelier, à côté de Rune, Skald et Brokk. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à construire les **cartes** du jeu, puis à tout exporter dans les formats que lisent les moteurs de jeu. Depuis Tafl 0.6, c'est aussi l'**éditeur du jeu** : il décrit tout ce que contient le jeu (cartes, passage, zones, téléporteurs…) dans un **dossier de jeu** que le futur moteur lira (voir [FORMAT.md](FORMAT.md)). Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
 
 Le nom vient du *tafl* (hnefatafl), le jeu de plateau des Vikings, qui se joue case par case sur une grille. Sa rune est ᛏ (Tiwaz, le « T »).
 
@@ -37,7 +37,7 @@ Le bouton nuage en haut à droite, comme dans Rune et Skald. Installé, Tafl che
 - **Tuile** : la tuile choisie, très agrandie, pixel par pixel, avec sa grille et des repères au milieu.
   - **Mosaïque** (`Ctrl+M`) : la tuile est répétée tout autour. Dessiner sur une copie dessine sur la tuile, et un trait qui sort d'un côté revient de l'autre. C'est ce qu'il faut pour des tuiles qui se raccordent sans couture (l'herbe, l'eau, les chemins).
   - **Miroir ↔ / ↕** : ce que tu dessines d'un côté se dessine aussi de l'autre (arbres, rochers, bâtiments symétriques).
-- **Carte** : tu poses les tuiles sur une carte pour voir ce qu'elles donnent ensemble. Deux calques : **Sol** (herbe, chemins, eau) et **Décor** par-dessus (fleurs, panneaux, arbres), chacun masquable, avec l'option d'atténuer celui sur lequel tu ne travailles pas. Taille réglable jusqu'à 256 × 256 cases.
+- **Carte** : tu poses les tuiles sur les cartes du jeu, sur autant de **calques** que tu veux (voir Tafl 0.6 plus bas). Taille réglable jusqu'à 256 × 256 cases.
 
 **Outils** (les mêmes dans les deux modes ; en mode Carte, une case vaut une tuile) :
 
@@ -84,6 +84,47 @@ Molette : zoom autour de la souris. Espace ou bouton du milieu : déplacer la vu
 
 **Réglages** (`Ctrl+,` ou l'engrenage) : couleur d'accent, verre dépoli, flou de Windows 11, taille de tuile et palette par défaut, grilles, nombre d'annulations gardées.
 
+## L'éditeur de jeu (Tafl 0.6)
+
+Tafl **décrit** le jeu, le futur moteur le **fera tourner**. Tout ce que Tafl enregistre est en JSON lisible, décrit dans [FORMAT.md](FORMAT.md) (copié dans chaque dossier de jeu).
+
+**Un dossier de jeu** (Fichier › Nouveau jeu, `Ctrl+Maj+J`, ou le bouton de l'accueil) : un titre, une taille de tuile (libre : 16 × 16 façon Pokémon, ou une autre) et une première carte. Au premier `Ctrl+S`, Tafl te demande le dossier du jeu, puis y écrit :
+
+```
+MonJeu/
+  jeu.json        le titre, la liste des cartes, le départ du joueur
+  tuiles.tafl     les tuiles, partagées par toutes les cartes
+  cartes/*.json   une carte par fichier (cartes/bourg-palette.json…)
+  FORMAT.md       la description de ces fichiers
+```
+
+- Pour l'ouvrir : Fichier › Ouvrir, puis son `jeu.json` (ou glisse le `jeu.json` sur la fenêtre). Il apparaît aussi dans les récents de l'accueil, avec le nom de son dossier. Quand Atelier ouvre Tafl sur un projet qui contient un `jeu.json`, le jeu s'ouvre directement.
+- Un jeu de tuiles `.tafl` existant devient un jeu avec Fichier › **Enregistrer comme dossier de jeu…**. Les `.tafl` gardent aussi toutes leurs cartes (Tafl 0.5 et plus ancien n'y voient que la première).
+
+En mode Carte, le panneau de droite montre les **Cartes** et les **Calques** (la palette et l'animation reviennent en mode Tuile).
+
+**Cartes** : une par lieu (une ville, une route, l'intérieur d'une maison…), toutes avec les mêmes tuiles. `+` en crée une, puis dupliquer, renommer (double-clic), changer la taille, l'ordre, supprimer (clic droit ou `…`). Chaque carte a un identifiant tiré de son premier nom (« Bourg Palette » → `bourg-palette`) qui ne change plus : c'est le nom de son fichier, et ce que les téléporteurs utilisent. L'étiquette « départ » montre la carte où commence le joueur.
+
+**Calques** : autant que tu veux. `+` ajoute un calque au-dessus de celui choisi ; flèches pour l'ordre ; l'œil pour masquer. Le calque du haut de la liste est dessiné par-dessus les autres, comme dans Photoshop. Une nouvelle carte en a trois : Sol, Décor, Au-dessus. Double-clic (ou l'icône réglages) pour les **réglages du calque**, avec aperçu en direct :
+- **Profondeur** : sous le joueur (sol, chemins), au niveau du joueur (arbres, rochers, maisons) ou **au-dessus du joueur** (toits, cimes des arbres : il passe derrière). L'étiquette de couleur de chaque calque la rappelle.
+- **Opacité** et **mode de fusion** (normal, produit pour les ombres, superposition claire, incrustation, lumière douce, addition pour les lueurs, couleur pour teinter) : Tafl les montre sur la carte, et le moteur fera pareil. De quoi poser une ombre douce sous les arbres, un halo autour des lampadaires, une teinte de soir sur toute la carte…
+- **Parallaxe** : 1 = le calque défile avec la carte, 0,5 = deux fois plus lentement (un fond lointain), 0 = immobile à l'écran (brume). Tafl la garde dans le fichier ; c'est le moteur qui la fera bouger.
+
+**Passage** (où le joueur peut marcher), en deux temps :
+- **Par tuile** : menu Tuile › Passage (« laisse passer » ou « bloque »). Partout où un arbre est posé, sa case bloque. Un petit carré rouge (ou vert) le rappelle sur la vignette.
+- **Case par case** : choisis la ligne **Passage** en haut du panneau Calques, puis peins avec le crayon, le pot, la ligne ou le rectangle. La barre du haut choisit ce qu'on peint : **Libre**, **Bloqué**, ou un **rebord** ↓ ↑ ← → (on le saute dans ce sens, sans pouvoir remonter, comme dans Pokémon). Clic droit (ou la gomme) remet « auto ». Ce qui est peint l'emporte sur les tuiles.
+- Sur la carte : rouge = bloqué (plus marqué et barré quand c'est peint à la main), vert = libre peint, flèche jaune = rebord. Case « Passage » de la barre du haut pour le voir en permanence. Les calques « au-dessus du joueur » ne bloquent jamais.
+
+**Zones** (outil Zone, `Z`) : glisse pour tracer un rectangle, puis choisis son type (**herbes hautes**, eau, grotte, autre), son nom, et un **objet requis** pour y entrer (par exemple `planche-de-surf` pour l'eau : c'est ce qui remplace les CS). Clic sur une zone pour la modifier ou la supprimer. Les tables de rencontres arriveront avec Tafl 0.8.
+
+**Téléporteurs** (outil Téléporteur, `T`) : clic sur une case (une porte, un escalier, le bord d'une route), puis la carte d'arrivée, la case d'arrivée et la direction du joueur. « Créer aussi le téléporteur du retour » pose tout seul celui qui ramène, juste derrière l'arrivée. Survoler un téléporteur montre où il mène. Clic dessus pour le modifier ou le supprimer.
+
+**Départ du joueur** (outil `J`) : clic sur la case où commence le jeu ; la barre du haut choisit où il regarde. Menu Jeu › Aller au départ du joueur.
+
+**Menu Jeu** : le titre du jeu, aller au départ, afficher le dossier du jeu.
+
+Les exports pour Tiled gardent l'opacité, la parallaxe, la profondeur et la fusion des calques (ces deux dernières en propriétés), pour la carte affichée. Tout s'annule avec `Ctrl+Z`.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -102,11 +143,18 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - **Agir** (avec ta permission) : créer un jeu, dessiner une tuile pixel par pixel, dupliquer, retourner, tourner, renommer une tuile, poser des tuiles ou écrire une zone de la carte, changer la taille de la carte, ajouter des couleurs à la palette, exporter la planche ou la carte en PNG, enregistrer, annuler.
 - Les pixels s'échangent en texte, une ligne par rangée : `.` = transparent, puis un caractère par couleur de la palette (`0` à `9`, `a` à `z`…). C'est ce qui lui permet de dessiner une tuile précise.
 - `Ctrl+Z` annule ce qu'il a fait.
+- **Depuis Tafl 0.6, il construit aussi le jeu** : créer un dossier de jeu et l'enregistrer dans le projet, les cartes (nouvelle, dupliquer, renommer, supprimer, ordre), les calques (ajouter, supprimer, ordre, profondeur, opacité, fusion, parallaxe), peindre le passage, le passage des tuiles, les zones, les téléporteurs (avec le retour) et le départ du joueur. Il voit le passage final de chaque case dans `voir_carte`. Il peut ainsi relier toutes les maisons d'une ville à leur intérieur en une demande.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
-## Pas encore
+## La suite
 
-Tuiles automatiques (bords de chemin et de mare posés tout seuls), calques supplémentaires, collisions et zones (hautes herbes = rencontres), sélection et copier-coller de zones, lien direct avec Skald.
+Le plan (validé avec Ragna le 20/10/2026) :
+
+1. **Tafl 0.7, les événements** : PNJ, panneaux, coffres posés sur la carte, avec leurs dialogues (portraits par expression, le héros qui parle) et des scripts simples (dire, donner, choix, si un interrupteur est allumé, téléporter, combat de dresseur), les personnages récurrents et les quêtes.
+2. **Tafl 0.8, les bases de données** : types, attaques, créatures, objets, dresseurs, boutiques (débloquées par des compteurs : captures, dresseurs battus…), tables de rencontres des zones, réglages du niveau maximum.
+3. **Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl.
+
+Et toujours : tuiles automatiques (bords de chemin et de mare posés tout seuls), sélection et copier-coller sur la carte, lien direct avec Skald.
 
 ## Comment c'est construit
 
@@ -114,12 +162,13 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 
 | Fichier | Rôle |
 |---|---|
-| `main.js` | Processus principal : fenêtre, fichiers (Tafl n'écrit que là où tu as choisi d'enregistrer), réglages, journal `tafl.log`, mise à jour. |
+| `main.js` | Processus principal : fenêtre, fichiers (Tafl n'écrit que là où tu as choisi d'enregistrer, et dans un dossier de jeu seulement ses fichiers à lui), réglages, journal `tafl.log`, mise à jour. |
 | `preload.js` | Le pont : les seules fonctions accessibles à l'interface, sous `window.tafl`. |
-| `renderer/doc.js` | Le jeu de tuiles en mémoire et l'historique d'annulation (copie à l'écriture : annuler remet simplement les anciens tableaux de pixels). |
-| `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile ou cases de la carte). |
-| `renderer/panels.js` | Palette, tuiles, aperçu. |
-| `renderer/io.js` | Le format `.tafl`, l'import de planches et les exports (PNG, Tiled). |
+| `renderer/doc.js` | Le jeu en mémoire (tuiles, cartes, calques, passage, zones, téléporteurs, départ) et l'historique d'annulation (copie à l'écriture : annuler remet simplement les anciens tableaux). |
+| `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur et Départ. |
+| `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques. |
+| `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json), l'import de planches et les exports (PNG, Tiled). |
+| `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |
 | `renderer/palettes.js` | Les palettes proposées : une ligne par palette, facile à compléter. |
 | `renderer/samples.js` | Les tuiles d'exemple, dessinées en texte (une lettre par pixel). |
 | `renderer/app.js` | L'état, les menus, les raccourcis, les réglages et l'accueil. |

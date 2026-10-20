@@ -32,6 +32,21 @@
     if (i < 0) throw new Error(`Pas de calque « ${calque} » : ${doc.map.layers.map((l) => l.name).join(', ')}.`);
     return i;
   };
+  // La carte nommée par Claude (id, nom ou numéro) devient la carte affichée ; sans carte, celle affichée.
+  const carteNumero = (doc, carte) => {
+    if (carte === undefined || carte === null || carte === '') return doc.mapIndex;
+    const t = String(carte).toLowerCase();
+    const i = /^\d+$/.test(t) && doc.maps[Number(t)] ? Number(t) : doc.maps.findIndex((m) => m.id === t || m.name.toLowerCase() === t);
+    if (i < 0) throw new Error(`Pas de carte « ${carte} » : ${doc.maps.map((m, k) => `${k} = ${m.id} (« ${m.name} »)`).join(', ')}.`);
+    return i;
+  };
+  const choisirCarte = (doc, carte) => {
+    const i = carteNumero(doc, carte);
+    if (i !== doc.mapIndex) App.selectMap(i);
+    if (App.mode !== 'map') App.setMode('map');
+    return doc.map;
+  };
+  const PASSAGE_CARS = ['?', '.', '#', 'v', '^', '<', '>'];
   const legende = (doc) => `Légende des pixels : « . » = transparent, ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} = ${c}`).join(', ')}.`;
 
   // Pixels d'une image de tuile -> lignes de texte.
@@ -78,7 +93,15 @@
     g.drawImage(canvas, 0, 0, out.width, out.height);
     return out;
   }
-  const decrireCarte = (doc) => `Carte : ${doc.map.width} × ${doc.map.height} cases de ${doc.tileSize} px. Calques : ${doc.map.layers.map((l, i) => `${i} = ${l.name}${l.visible ? '' : ' (masqué)'}`).join(', ')}.`;
+  const decrireCarte = (doc) => {
+    const m = doc.map;
+    return [
+      `Carte affichée : ${doc.mapIndex} = ${m.id} « ${m.name} », ${m.width} × ${m.height} cases de ${doc.tileSize} px.`,
+      `Calques (du dessous au dessus) : ${m.layers.map((l, i) => `${i} = ${l.name} [${l.profondeur}${(l.opacite ?? 1) < 1 ? `, opacité ${l.opacite}` : ''}${l.fusion !== 'normal' ? `, fusion ${l.fusion}` : ''}${l.parallaxe.x !== 1 || l.parallaxe.y !== 1 ? `, parallaxe ${l.parallaxe.x}/${l.parallaxe.y}` : ''}${l.visible ? '' : ', masqué'}]`).join(', ')}.`,
+      `Zones : ${m.zones.length ? m.zones.map((z) => `${z.id} « ${z.name} » ${z.type} (${z.x}, ${z.y}) ${z.w} × ${z.h}${z.objet ? `, objet requis ${z.objet}` : ''}`).join(' ; ') : 'aucune'}.`,
+      `Téléporteurs : ${m.warps.length ? m.warps.map((w) => `${w.id} (${w.x}, ${w.y}) → ${w.carte} (${w.tx}, ${w.ty}) regard ${w.direction}`).join(' ; ') : 'aucun'}.`,
+    ].join('\n');
+  };
   const nombre = { type: 'number' };
   const lignesSchema = { type: 'array', items: { type: 'string' } };
 
@@ -87,12 +110,13 @@
       lecture: true,
       icone: 'info',
       libelle: () => 'Regarde le jeu de tuiles',
-      description: 'Décrit le jeu de tuiles ouvert : taille des tuiles, liste des tuiles (numéro, nom, nombre d\'images), palette, carte et calques.',
+      description: 'Décrit le jeu ouvert : dossier de jeu ou simple jeu de tuiles, taille des tuiles, liste des tuiles (numéro, nom, images, passage), palette, cartes, départ du joueur, et pour la carte affichée ses calques (profondeur, opacité, fusion, parallaxe), zones et téléporteurs.',
       faire: () => {
         const doc = besoinJeu();
         return [
-          `Jeu « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
-          `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
+          `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
+          `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
+          `Cartes (${doc.maps.length}) : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
           `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
           decrireCarte(doc),
         ].join('\n');
@@ -130,32 +154,38 @@
       lecture: true,
       icone: 'eye',
       libelle: () => 'Regarde la carte',
-      description: 'Montre la carte (calques visibles), et pour une carte de 40 × 40 cases au plus, le numéro de tuile de chaque case par calque (« . » = vide).',
-      faire: () => {
+      description: 'Montre une carte (calques visibles ; carte : id, nom ou numéro, sinon la carte affichée, qui devient affichée), et pour une carte de 40 × 40 cases au plus, le numéro de tuile de chaque case par calque (« . » = vide) et le passage final (. libre, # bloqué, v ^ < > rebords).',
+      schema: { type: 'object', properties: { carte: { type: ['string', 'number'] } } },
+      faire: (a) => {
         const doc = besoinJeu();
-        const { map } = doc;
+        const map = choisirCarte(doc, a.carte);
         const lignes = [decrireCarte(doc)];
         if (map.width <= 40 && map.height <= 40) {
           for (const layer of map.layers) {
             lignes.push('', `Calque ${layer.name} (numéros séparés par des espaces, une ligne par rangée) :`);
             for (let y = 0; y < map.height; y++) lignes.push(Array.from(layer.cells.subarray(y * map.width, (y + 1) * map.width), (c) => (c < 0 ? '.' : String(c))).join(' '));
           }
+          const final = Doc.collisions(doc, map);
+          lignes.push('', 'Passage final (. libre, # bloqué, v ^ < > rebord à sauter dans ce sens) :');
+          for (let y = 0; y < map.height; y++) lignes.push(Array.from(final.subarray(y * map.width, (y + 1) * map.width), (c) => PASSAGE_CARS[c]).join(''));
         }
         return { texte: lignes.join('\n'), image: agrandir(IO.mapCanvas(doc, 1), 1024), max: 1024 };
       },
     },
     nouveau_jeu: {
       icone: 'new-file',
-      libelle: (a) => `Crée un jeu de tuiles de ${a.taille_tuile || 16} px`,
-      description: 'Crée un nouveau jeu de tuiles (remplace celui ouvert, Tafl propose d\'abord de l\'enregistrer). taille_tuile : 8 à 64 px (16 par défaut) ; carte : largeur et hauteur en cases.',
-      schema: { type: 'object', properties: { nom: { type: 'string' }, taille_tuile: nombre, largeur_carte: nombre, hauteur_carte: nombre } },
+      libelle: (a) => (a.dossier_de_jeu ? `Crée le jeu « ${a.nom || 'Sans titre'} » (tuiles de ${a.taille_tuile || 16} px)` : `Crée un jeu de tuiles de ${a.taille_tuile || 16} px`),
+      description: 'Crée un nouveau jeu (remplace celui ouvert, Tafl propose d\'abord de l\'enregistrer). dossier_de_jeu : true pour un dossier de jeu (plusieurs cartes, lu par le futur moteur ; enregistre-le ensuite avec enregistrer_jeu), false pour un simple jeu de tuiles .tafl. taille_tuile : 4 à 128 px (16 par défaut) ; nom_carte, largeur_carte, hauteur_carte : la première carte ; exemples : true pour partir des tuiles d\'exemple.',
+      schema: { type: 'object', properties: { nom: { type: 'string' }, dossier_de_jeu: { type: 'boolean' }, taille_tuile: nombre, nom_carte: { type: 'string' }, largeur_carte: nombre, hauteur_carte: nombre, exemples: { type: 'boolean' } } },
       faire: async (a) => {
         const tileSize = clamp(Math.round(a.taille_tuile || App.config.tileSize || 16), 4, 128);
         const palette = (PALETTES.find((p) => p.id === App.config.palette) || PALETTES[0]).couleurs;
-        const doc = Doc.create({ name: a.nom || 'Sans titre', tileSize, palette, mapWidth: clamp(Math.round(a.largeur_carte || 20), 1, 256), mapHeight: clamp(Math.round(a.hauteur_carte || 15), 1, 256) });
+        const doc = Doc.create({ name: a.nom || 'Sans titre', tileSize, palette, mapWidth: clamp(Math.round(a.largeur_carte || 20), 1, 256), mapHeight: clamp(Math.round(a.hauteur_carte || 15), 1, 256), mapName: a.nom_carte || 'Carte 1' });
+        if (a.exemples && tileSize === 16) Samples.fill(doc);
+        if (a.dossier_de_jeu) doc.game = { folder: null, fichiers: [] };
         await App.setDocument(doc);
         if (App.doc !== doc) throw new Error('Ragna a gardé le jeu ouvert.');
-        return `Jeu « ${doc.name} » créé : tuiles de ${tileSize} px, carte de ${doc.map.width} × ${doc.map.height} cases.`;
+        return `${a.dossier_de_jeu ? 'Dossier de jeu' : 'Jeu de tuiles'} « ${doc.name} » créé : tuiles de ${tileSize} px, carte ${doc.map.id} de ${doc.map.width} × ${doc.map.height} cases.`;
       },
     },
     dessiner_tuile: {
@@ -218,10 +248,11 @@
     poser_tuiles: {
       icone: 'symbol-array',
       libelle: (a) => `Pose la tuile ${a.tuile} sur la carte (${a.largeur || 1} × ${a.hauteur || 1} cases)`,
-      description: 'Remplit un rectangle de cases de la carte avec une tuile. x, y : case en haut à gauche (0, 0 = coin en haut à gauche) ; largeur, hauteur en cases (1 par défaut) ; tuile : numéro (-1 pour effacer) ; calque : numéro ou nom (Sol, Décor), sinon le calque choisi.',
-      schema: { type: 'object', properties: { tuile: nombre, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, calque: { type: ['string', 'number'] } }, required: ['tuile', 'x', 'y'] },
+      description: 'Remplit un rectangle de cases d\'une carte avec une tuile. x, y : case en haut à gauche (0, 0 = coin en haut à gauche) ; largeur, hauteur en cases (1 par défaut) ; tuile : numéro (-1 pour effacer) ; calque : numéro ou nom (Sol, Décor…), sinon le calque choisi ; carte : id, nom ou numéro, sinon la carte affichée.',
+      schema: { type: 'object', properties: { tuile: nombre, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, calque: { type: ['string', 'number'] }, carte: { type: ['string', 'number'] } }, required: ['tuile', 'x', 'y'] },
       faire: (a) => {
         const doc = besoinJeu();
+        choisirCarte(doc, a.carte);
         const t = Math.round(a.tuile);
         if (t !== -1) tuileNumero(doc, t);
         const li = calqueNumero(doc, a.calque);
@@ -239,10 +270,11 @@
     ecrire_carte: {
       icone: 'symbol-array',
       libelle: (a) => `Écrit ${a.lignes?.length || 0} rangée(s) de la carte`,
-      description: 'Écrit plusieurs cases d\'un coup : lignes = une chaîne par rangée, avec les numéros de tuile séparés par des espaces (« . » = vide, « _ » = ne pas toucher). x, y : où commence la première case (0, 0 par défaut) ; calque : numéro ou nom, sinon le calque choisi.',
-      schema: { type: 'object', properties: { lignes: lignesSchema, x: nombre, y: nombre, calque: { type: ['string', 'number'] } }, required: ['lignes'] },
+      description: 'Écrit plusieurs cases d\'un coup : lignes = une chaîne par rangée, avec les numéros de tuile séparés par des espaces (« . » = vide, « _ » = ne pas toucher). x, y : où commence la première case (0, 0 par défaut) ; calque : numéro ou nom, sinon le calque choisi ; carte : id, nom ou numéro, sinon la carte affichée.',
+      schema: { type: 'object', properties: { lignes: lignesSchema, x: nombre, y: nombre, calque: { type: ['string', 'number'] }, carte: { type: ['string', 'number'] } }, required: ['lignes'] },
       faire: (a) => {
         const doc = besoinJeu();
+        choisirCarte(doc, a.carte);
         const li = calqueNumero(doc, a.calque);
         const { map } = doc;
         const x0 = Math.round(a.x || 0), y0 = Math.round(a.y || 0);
@@ -267,10 +299,11 @@
     taille_carte: {
       icone: 'screen-full',
       libelle: (a) => `Passe la carte à ${a.largeur} × ${a.hauteur} cases`,
-      description: 'Change la taille de la carte (en cases). Les cases existantes restent en place, depuis le coin en haut à gauche.',
-      schema: { type: 'object', properties: { largeur: nombre, hauteur: nombre }, required: ['largeur', 'hauteur'] },
+      description: 'Change la taille d\'une carte (en cases ; carte : id, nom ou numéro, sinon la carte affichée). Les cases existantes restent en place, depuis le coin en haut à gauche.',
+      schema: { type: 'object', properties: { largeur: nombre, hauteur: nombre, carte: { type: ['string', 'number'] } }, required: ['largeur', 'hauteur'] },
       faire: (a) => {
         const doc = besoinJeu();
+        choisirCarte(doc, a.carte);
         const w = clamp(Math.round(a.largeur), 1, 256), h = clamp(Math.round(a.hauteur), 1, 256);
         Doc.change(doc, 'Taille de la carte', () => Doc.resizeMap(doc, w, h));
         return `Carte : ${w} × ${h} cases.`;
@@ -313,10 +346,11 @@
     exporter_carte: {
       icone: 'export',
       libelle: (a) => `Exporte la carte en image vers ${a.chemin}`,
-      description: 'Exporte la carte en image PNG dans le dossier du projet (chemin relatif, en .png ; echelle 1 à 4).',
-      schema: { type: 'object', properties: { chemin: { type: 'string' }, echelle: nombre }, required: ['chemin'] },
+      description: 'Exporte une carte (carte : sinon celle affichée) en image PNG dans le dossier du projet (chemin relatif, en .png ; echelle 1 à 4).',
+      schema: { type: 'object', properties: { chemin: { type: 'string' }, echelle: nombre, carte: { type: ['string', 'number'] } }, required: ['chemin'] },
       faire: async (a) => {
         const doc = besoinJeu();
+        choisirCarte(doc, a.carte);
         if (!/\.png$/i.test(a.chemin)) throw new Error('Le fichier doit finir par .png.');
         const c = IO.mapCanvas(doc, clamp(Math.round(a.echelle || 1), 1, 4));
         const chemin = await window.claude.ecrireFichier(a.chemin, await IO.canvasBytes(c));
@@ -325,8 +359,8 @@
     },
     enregistrer: {
       icone: 'save',
-      libelle: () => 'Enregistre le jeu de tuiles',
-      description: 'Enregistre le jeu de tuiles (comme Ctrl+S). Si le jeu n\'a pas encore de fichier, Tafl demande à Ragna où l\'enregistrer.',
+      libelle: () => 'Enregistre le jeu',
+      description: 'Enregistre le jeu (comme Ctrl+S) : un dossier de jeu réécrit jeu.json, tuiles.tafl et cartes/*.json ; un jeu de tuiles son .tafl. S\'il n\'a pas encore d\'emplacement, Tafl demande à Ragna où l\'enregistrer (préfère enregistrer_jeu ou enregistrer_sous, qui écrivent dans le projet).',
       faire: async () => {
         const doc = besoinJeu();
         return (await IO.save(doc)) ? `Enregistré : ${doc.path}.` : 'Ragna a annulé l\'enregistrement.';
@@ -372,7 +406,7 @@
       lecture: true,
       icone: 'list-flat',
       libelle: () => 'Regarde les menus de Tafl',
-      description: 'Liste les commandes des menus de Tafl (Fichier, Tuile, Carte, Affichage) possibles en ce moment, avec leur raccourci. Une commande qui finit par « … » ouvre une fenêtre : champs_menu en donne les champs. Lance-les avec l\'action menu.',
+      description: 'Liste les commandes des menus de Tafl (Fichier, Tuile, Carte, Jeu, Affichage) possibles en ce moment, avec leur raccourci. Une commande qui finit par « … » ouvre une fenêtre : champs_menu en donne les champs. Lance-les avec l\'action menu.',
       faire: () => {
         const parMenu = {};
         for (const l of lignesMenus()) (parMenu[l.menu] ||= []).push(`${l.libelle}${l.touches ? ` (${l.touches})` : ''}`);
@@ -472,31 +506,195 @@
     calque_carte: {
       icone: 'layers',
       libelle: (a) => `Calque ${a.calque ?? 'choisi'} de la carte : ${a.action}`,
-      description: 'Les calques de la carte (Sol, Décor). action : choisir (celui où poser les tuiles), afficher, masquer, remplir (avec la tuile tuile, sinon la tuile choisie), vider.',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'afficher', 'masquer', 'remplir', 'vider'] }, calque: { type: ['string', 'number'] }, tuile: nombre }, required: ['action'] },
+      description: `Les calques de la carte affichée (autant qu'on veut ; le n° 0 est tout en dessous). action : choisir (celui où poser les tuiles ; « passage » pour peindre le passage), afficher, masquer, remplir (avec la tuile tuile, sinon la tuile choisie), vider, ajouter (nom, profondeur ; placé juste au-dessus du calque calque, sinon tout en haut), dupliquer, supprimer, monter, descendre, regler (nom, profondeur, opacite de 0 à 1, fusion, parallaxe_x, parallaxe_y). profondeur : ${Doc.PROFONDEURS.map(([k, l]) => `${k} (${l})`).join(', ')} ; un calque « dessus » passe devant le joueur et ne bloque jamais. fusion : ${Doc.FUSIONS.map(([k, l]) => `${k} (${l})`).join(', ')}. parallaxe : 1 = suit la carte, 0,5 = fond lointain, 0 = fixe à l'écran (appliquée par le moteur).`,
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'afficher', 'masquer', 'remplir', 'vider', 'ajouter', 'dupliquer', 'supprimer', 'monter', 'descendre', 'regler'] }, calque: { type: ['string', 'number'] }, tuile: nombre, nom: { type: 'string' }, profondeur: { type: 'string', enum: Doc.PROFONDEURS.map(([k]) => k) }, opacite: nombre, fusion: { type: 'string', enum: Doc.FUSIONS.map(([k]) => k) }, parallaxe_x: nombre, parallaxe_y: nombre, carte: { type: ['string', 'number'] } }, required: ['action'] },
       faire: (a) => {
         const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        if (a.action === 'choisir' && String(a.calque).toLowerCase() === 'passage') {
+          App.selectLayer(-1);
+          return 'Ligne Passage choisie : le crayon peint maintenant le passage.';
+        }
+        if (a.action === 'ajouter') {
+          const at = a.calque === undefined || a.calque === null ? map.layers.length : calqueNumero(doc, a.calque) + 1;
+          Doc.change(doc, 'Nouveau calque (Claude)', () => Doc.addLayer(doc, at, { name: a.nom || `Calque ${map.layers.length + 1}`, profondeur: Doc.PROFONDEURS.some(([k]) => k === a.profondeur) ? a.profondeur : 'dessous' }));
+          App.selectLayer(at);
+          return `Calque ${at} « ${doc.map.layers[at].name} » ajouté.\n${decrireCarte(doc)}`;
+        }
         const li = calqueNumero(doc, a.calque);
-        const l = doc.map.layers[li];
-        if (a.action === 'choisir') App.options.layer = li;
-        else if (a.action === 'afficher' || a.action === 'masquer') l.visible = a.action === 'afficher';
+        const l = map.layers[li];
+        if (a.action === 'choisir') App.selectLayer(li);
+        else if (a.action === 'afficher' || a.action === 'masquer') { if (l.visible !== (a.action === 'afficher')) App.toggleLayerVisible(li); }
         else if (a.action === 'remplir' || a.action === 'vider') {
           const t = a.action === 'vider' ? -1 : tuileNumero(doc, a.tuile);
           Doc.change(doc, a.action === 'vider' ? 'Vider le calque' : 'Remplir le calque', () => Doc.layerForEdit(doc, li).cells.fill(t));
+        } else if (a.action === 'dupliquer') {
+          Doc.change(doc, 'Dupliquer le calque (Claude)', () => Doc.addLayer(doc, li + 1, { ...l, name: a.nom || `${l.name} (copie)`, cells: l.cells.slice(), parallaxe: { ...l.parallaxe } }));
+          App.selectLayer(li + 1);
+        } else if (a.action === 'supprimer') {
+          if (map.layers.length < 2) throw new Error('C\'est le dernier calque de la carte.');
+          Doc.change(doc, 'Supprimer le calque (Claude)', () => Doc.removeLayer(doc, li));
+          App.selectLayer(clamp(li - 1, 0, doc.map.layers.length - 1));
+        } else if (a.action === 'monter' || a.action === 'descendre') {
+          const to = li + (a.action === 'monter' ? 1 : -1);
+          if (to < 0 || to >= map.layers.length) throw new Error(`Le calque est déjà tout ${a.action === 'monter' ? 'en haut' : 'en bas'}.`);
+          Doc.change(doc, 'Déplacer le calque (Claude)', () => Doc.moveLayer(doc, li, to));
+          App.selectLayer(to);
+        } else if (a.action === 'regler') {
+          const props = {};
+          if (a.nom) props.name = String(a.nom);
+          if (a.profondeur) {
+            if (!Doc.PROFONDEURS.some(([k]) => k === a.profondeur)) throw new Error(`profondeur : ${Doc.PROFONDEURS.map(([k]) => k).join(', ')}.`);
+            props.profondeur = a.profondeur;
+          }
+          if (a.opacite !== undefined) props.opacite = clamp(Number(a.opacite) > 1 ? Number(a.opacite) / 100 : Number(a.opacite), 0, 1);
+          if (a.fusion) {
+            if (!Doc.FUSIONS.some(([k]) => k === a.fusion)) throw new Error(`fusion : ${Doc.FUSIONS.map(([k]) => k).join(', ')}.`);
+            props.fusion = a.fusion;
+          }
+          if (a.parallaxe_x !== undefined || a.parallaxe_y !== undefined) props.parallaxe = { x: Number(a.parallaxe_x ?? l.parallaxe.x), y: Number(a.parallaxe_y ?? l.parallaxe.y) };
+          Doc.change(doc, 'Réglages du calque (Claude)', () => Doc.setLayer(doc, li, props));
         } else throw new Error(`Action inconnue : ${a.action}`);
-        if (App.mode !== 'map') App.setMode('map');
         App.refresh();
-        return `Calque ${li} « ${l.name} » : ${l.visible ? 'visible' : 'masqué'}${App.options.layer === li ? ', choisi' : ''}.`;
+        return decrireCarte(doc);
+      },
+    },
+    cartes: {
+      icone: 'map',
+      libelle: (a) => `Cartes : ${a.action}${a.nom ? ` « ${a.nom} »` : ''}`,
+      description: 'Les cartes du jeu (une ville, une route, une maison… ; elles partagent les tuiles). carte : id, nom ou numéro (sinon la carte affichée). action : choisir (l\'afficher), nouvelle (nom, largeur, hauteur : elle devient la carte affichée), dupliquer (nom), renommer (nom ; l\'id et le fichier ne changent pas), supprimer (les téléporteurs qui y mènent sont retirés), deplacer (position dans la liste).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'nouvelle', 'dupliquer', 'renommer', 'supprimer', 'deplacer'] }, carte: { type: ['string', 'number'] }, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, position: nombre }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        if (a.action === 'nouvelle' || a.action === 'dupliquer') {
+          const name = String(a.nom || (a.action === 'dupliquer' ? `${map.name} (copie)` : `Carte ${doc.maps.length + 1}`));
+          Doc.change(doc, a.action === 'nouvelle' ? 'Nouvelle carte (Claude)' : 'Dupliquer la carte (Claude)', () => Doc.addMap(doc, a.action === 'dupliquer' ? { name, copyOf: map } : { name, width: clamp(Math.round(a.largeur || map.width), 1, 256), height: clamp(Math.round(a.hauteur || map.height), 1, 256) }));
+          Stage.reset();
+        } else if (a.action === 'renommer') {
+          if (!a.nom) throw new Error('nom : le nouveau nom de la carte.');
+          Doc.change(doc, 'Renommer la carte (Claude)', () => { doc.maps[doc.mapIndex] = { ...map, name: String(a.nom) }; Doc.selectMap(doc, doc.mapIndex); });
+        } else if (a.action === 'supprimer') {
+          if (doc.maps.length < 2) throw new Error('C\'est la seule carte du jeu.');
+          Doc.change(doc, 'Supprimer la carte (Claude)', () => Doc.removeMap(doc, doc.mapIndex));
+          Stage.reset();
+        } else if (a.action === 'deplacer') {
+          const to = Math.round(a.position);
+          if (!(to >= 0 && to < doc.maps.length)) throw new Error(`position : de 0 à ${doc.maps.length - 1}.`);
+          Doc.change(doc, 'Déplacer la carte (Claude)', () => Doc.moveMap(doc, doc.mapIndex, to));
+        } else if (a.action !== 'choisir') throw new Error(`Action inconnue : ${a.action}`);
+        App.refresh();
+        return `Cartes : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}.\n${decrireCarte(doc)}`;
+      },
+    },
+    peindre_passage: {
+      icone: 'shield',
+      libelle: (a) => `Passage « ${a.valeur} » sur ${a.largeur || 1} × ${a.hauteur || 1} case(s)`,
+      description: 'Peint le passage (où le joueur peut marcher) sur un rectangle de cases de la carte (carte : sinon celle affichée). valeur : auto (la case suit ses tuiles), libre, bloque, rebord_bas, rebord_haut, rebord_gauche, rebord_droite (le joueur saute le rebord dans ce sens sans pouvoir remonter). Le passage peint l\'emporte sur celui des tuiles (voir passage_tuile).',
+      schema: { type: 'object', properties: { valeur: { type: 'string', enum: Object.keys(Doc.PASSAGE) }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, carte: { type: ['string', 'number'] } }, required: ['valeur', 'x', 'y'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        const code = Doc.PASSAGE[a.valeur];
+        if (code === undefined) throw new Error(`valeur : ${Object.keys(Doc.PASSAGE).join(', ')}.`);
+        const x0 = clamp(Math.round(a.x), 0, map.width - 1), y0 = clamp(Math.round(a.y), 0, map.height - 1);
+        const x1 = clamp(x0 + Math.round(a.largeur || 1), 1, map.width), y1 = clamp(y0 + Math.round(a.hauteur || 1), 1, map.height);
+        Doc.change(doc, 'Peindre le passage (Claude)', () => {
+          const p = Doc.passageForEdit(doc);
+          for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) p[y * map.width + x] = code;
+        });
+        if (!App.options.showPassage) App.toggleOption('showPassage');
+        return `${(x1 - x0) * (y1 - y0)} case(s) : passage ${a.valeur}.`;
+      },
+    },
+    passage_tuile: {
+      icone: 'shield',
+      libelle: (a) => `Tuile ${a.index ?? 'choisie'} : passage ${a.valeur}`,
+      description: 'Le passage par défaut d\'une tuile (index, sinon la tuile choisie), partout où elle est posée : auto (ne décide rien), libre, bloque (arbre, mur, eau…). Une case prend la décision de sa tuile la plus haute qui n\'est pas « auto », en ignorant les calques au-dessus du joueur.',
+      schema: { type: 'object', properties: { index: nombre, valeur: { type: 'string', enum: ['auto', 'libre', 'bloque'] } }, required: ['valeur'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const i = tuileNumero(doc, a.index);
+        if (!['auto', 'libre', 'bloque'].includes(a.valeur)) throw new Error('valeur : auto, libre ou bloque.');
+        App.setTilePassage(a.valeur, i);
+        return `Tuile ${i} « ${doc.tiles[i].name} » : passage ${a.valeur}.`;
+      },
+    },
+    zone: {
+      icone: 'symbol-namespace',
+      libelle: (a) => `Zone : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
+      description: `Les zones d'une carte (carte : sinon celle affichée) : des rectangles de cases. action : ajouter (nom, type, x, y, largeur, hauteur, objet_requis), modifier (id + les champs à changer), supprimer (id). type : ${Doc.ZONES.map(([k, l]) => `${k} (${l})`).join(', ')}. objet_requis : l'objet qu'il faut pour y entrer (par exemple « planche-de-surf » pour l'eau, à la place des CS).`,
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, nom: { type: 'string' }, type: { type: 'string', enum: Doc.ZONES.map(([k]) => k) }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, objet_requis: { type: 'string' }, carte: { type: ['string', 'number'] } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        const z0 = a.id ? map.zones.find((z) => z.id === a.id) : null;
+        if (a.action !== 'ajouter' && !z0) throw new Error(`Pas de zone « ${a.id} » sur ${map.id} : ${map.zones.map((z) => z.id).join(', ') || 'aucune zone'}.`);
+        if (a.action === 'supprimer') {
+          Doc.change(doc, 'Supprimer la zone (Claude)', () => { map.zones = map.zones.filter((z) => z !== z0); });
+          return decrireCarte(doc);
+        }
+        const base = z0 || { id: (() => { let n = map.zones.length + 1; while (map.zones.some((z) => z.id === `zone-${n}`)) n++; return `zone-${n}`; })(), name: '', type: 'herbes', objet: '', x: 0, y: 0, w: 1, h: 1 };
+        const x = clamp(Math.round(a.x ?? base.x), 0, map.width - 1), y = clamp(Math.round(a.y ?? base.y), 0, map.height - 1);
+        const type = a.type ?? base.type;
+        if (!Doc.ZONES.some(([k]) => k === type)) throw new Error(`type : ${Doc.ZONES.map(([k]) => k).join(', ')}.`);
+        const zone = { ...base, name: String(a.nom ?? base.name), type, objet: String(a.objet_requis ?? base.objet ?? ''), x, y, w: clamp(Math.round(a.largeur ?? base.w), 1, map.width - x), h: clamp(Math.round(a.hauteur ?? base.h), 1, map.height - y) };
+        Doc.change(doc, z0 ? 'Modifier la zone (Claude)' : 'Nouvelle zone (Claude)', () => { map.zones = z0 ? map.zones.map((z) => (z === z0 ? zone : z)) : [...map.zones, zone]; });
+        return decrireCarte(doc);
+      },
+    },
+    teleporteur: {
+      icone: 'debug-step-into',
+      libelle: (a) => `Téléporteur : ${a.action}${a.vers_carte ? ` vers ${a.vers_carte}` : ''}`,
+      description: 'Les téléporteurs d\'une carte (carte : sinon celle affichée) : marcher sur la case (x, y) mène à la case (vers_x, vers_y) de la carte vers_carte, le joueur regardant direction (bas, haut, gauche, droite). action : ajouter (x, y, vers_carte, vers_x, vers_y, direction ; retour: true crée aussi le téléporteur du retour, juste derrière l\'arrivée), modifier (id, ou x et y, + les champs à changer), supprimer (id, ou x et y).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, x: nombre, y: nombre, vers_carte: { type: ['string', 'number'] }, vers_x: nombre, vers_y: nombre, direction: { type: 'string', enum: Doc.DIRECTIONS.map(([k]) => k) }, retour: { type: 'boolean' }, carte: { type: ['string', 'number'] } }, required: ['action'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        const w0 = a.id ? map.warps.find((w) => w.id === a.id) : map.warps.find((w) => w.x === Math.round(a.x) && w.y === Math.round(a.y));
+        if (a.action !== 'ajouter' && !w0) throw new Error(`Pas de téléporteur ${a.id || `en (${a.x}, ${a.y})`} sur ${map.id}.`);
+        if (a.action === 'supprimer') {
+          Doc.change(doc, 'Supprimer le téléporteur (Claude)', () => { map.warps = map.warps.filter((w) => w !== w0); });
+          return decrireCarte(doc);
+        }
+        const x = clamp(Math.round(a.x ?? w0?.x ?? 0), 0, map.width - 1), y = clamp(Math.round(a.y ?? w0?.y ?? 0), 0, map.height - 1);
+        if (a.action === 'ajouter' && map.warps.some((w) => w.x === x && w.y === y)) throw new Error(`Il y a déjà un téléporteur en (${x}, ${y}) : utilise modifier.`);
+        const dest = a.vers_carte === undefined ? Doc.mapById(doc, w0?.carte) : doc.maps[carteNumero(doc, a.vers_carte)];
+        if (!dest) throw new Error('vers_carte : la carte d\'arrivée (id, nom ou numéro).');
+        // Même fenêtre que l'outil Téléporteur, remplie et validée toute seule.
+        const valeurs = { carte: dest.id, tx: Math.round(a.vers_x ?? w0?.tx ?? 0), ty: Math.round(a.vers_y ?? w0?.ty ?? 0), direction: a.direction ?? w0?.direction ?? 'bas' };
+        if (!w0) valeurs.retour = Boolean(a.retour);
+        if (w0 && (w0.x !== x || w0.y !== y)) Doc.change(doc, 'Déplacer le téléporteur (Claude)', () => { map.warps = map.warps.map((w) => (w === w0 ? { ...w, x, y } : w)); });
+        await Dialogs.automatique({ valeurs }, () => App.editWarpAt(x, y));
+        App.selectMap(doc.maps.indexOf(map));
+        return decrireCarte(doc);
+      },
+    },
+    depart: {
+      icone: 'location',
+      libelle: (a) => `Départ du joueur en (${a.x}, ${a.y})`,
+      description: 'Place le départ du joueur : la case (x, y) de la carte carte (sinon celle affichée), le joueur regardant direction (bas par défaut).',
+      schema: { type: 'object', properties: { x: nombre, y: nombre, direction: { type: 'string', enum: Doc.DIRECTIONS.map(([k]) => k) }, carte: { type: ['string', 'number'] } }, required: ['x', 'y'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        App.options.direction = a.direction || 'bas';
+        App.setStart(clamp(Math.round(a.x), 0, map.width - 1), clamp(Math.round(a.y), 0, map.height - 1), map.id);
+        return `Départ : ${map.id} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}.`;
       },
     },
     ouvrir: {
       icone: 'folder-opened',
       libelle: (a) => `Ouvre ${a.chemin}`,
-      description: 'Ouvre un jeu de tuiles .tafl du dossier du projet (chemin relatif). Une image PNG s\'importe comme une planche (voir importer_planche). Si le jeu ouvert a des modifications non enregistrées, Tafl demande d\'abord à Ragna.',
+      description: 'Ouvre un jeu du dossier du projet (chemin relatif) : un jeu de tuiles .tafl, ou le jeu.json d\'un dossier de jeu. Une image PNG s\'importe comme une planche (voir importer_planche). Si le jeu ouvert a des modifications non enregistrées, Tafl demande d\'abord à Ragna.',
       schema: { type: 'object', properties: { chemin: { type: 'string' } }, required: ['chemin'] },
       faire: async (a) => {
         const fichier = await window.claude.lireFichier(a.chemin);
-        if (!/\.tafl$/i.test(fichier.name)) throw new Error('Il faut un fichier .tafl (pour une image, utilise importer_planche).');
+        if (/^jeu\.json$/i.test(fichier.name)) {
+          await IO.openGame(fichier.path);
+          return App.doc?.path === fichier.path ? `Jeu « ${App.doc.name} » ouvert : ${App.doc.maps.length} carte(s), ${App.doc.tiles.length} tuile(s).` : 'Le jeu n\'a pas été ouvert (Ragna a peut-être gardé celui en cours).';
+        }
+        if (!/\.tafl$/i.test(fichier.name)) throw new Error('Il faut un fichier .tafl ou un jeu.json (pour une image, utilise importer_planche).');
         await IO.openLoaded(fichier);
         return App.doc?.path === fichier.path ? `${fichier.name} ouvert : ${App.doc.tiles.length} tuile(s).` : 'Le jeu n\'a pas été ouvert (Ragna a peut-être gardé celui en cours).';
       },
@@ -519,6 +717,7 @@
       schema: { type: 'object', properties: { chemin: { type: 'string' } }, required: ['chemin'] },
       faire: async (a) => {
         const doc = besoinJeu();
+        if (doc.game) throw new Error('C\'est un dossier de jeu : utilise enregistrer_jeu.');
         if (!/\.tafl$/i.test(a.chemin)) throw new Error('Le fichier doit finir par .tafl.');
         const chemin = await window.claude.ecrireFichier(a.chemin, IO.textBytes(IO.serialize(doc)));
         doc.path = chemin;
@@ -526,6 +725,26 @@
         doc.dirty = false;
         App.refresh();
         return `Enregistré : ${chemin}.`;
+      },
+    },
+    enregistrer_jeu: {
+      icone: 'save-as',
+      libelle: (a) => `Enregistre le jeu dans ${a.dossier || 'le projet'}`,
+      description: 'Enregistre le jeu comme dossier de jeu dans un dossier du projet (relatif, "" = la racine du projet) : jeu.json, tuiles.tafl, cartes/<id>.json et FORMAT.md. Un simple jeu de tuiles devient un dossier de jeu. Ensuite, Ctrl+S réenregistre au même endroit.',
+      schema: { type: 'object', properties: { dossier: { type: 'string' } } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const d = dossierRel(a.dossier);
+        const ecrits = [];
+        for (const [nom, bytes] of IO.gameFiles(doc)) ecrits.push(await window.claude.ecrireFichier(`${d ? `${d}/` : ''}${nom}`, bytes));
+        const jeu = ecrits[ecrits.length - 1];
+        await window.tafl.registerGame(jeu);
+        const folder = jeu.replace(/[\\/]jeu\.json$/i, '');
+        // Tafl l'enregistre une 2e fois lui-même : il retire les cartes supprimées et y copie FORMAT.md.
+        const before = doc.game;
+        doc.game = { folder, fichiers: before?.folder === folder ? before.fichiers : [] };
+        await IO.save(doc);
+        return `Jeu enregistré dans ${folder} :\n${ecrits.join('\n')}\nFORMAT.md (la description des fichiers) y est aussi.`;
       },
     },
     exporter_tuiles: {
@@ -544,10 +763,11 @@
     exporter_tiled: {
       icone: 'export',
       libelle: (a) => `Exporte la carte pour Tiled dans ${a.dossier || 'le projet'}`,
-      description: 'Exporte la carte au format de Tiled (lu aussi par Phaser et Godot) dans un dossier du projet : <nom>.tmj, la planche <nom>-tuiles.png et <nom>-carte.png.',
-      schema: { type: 'object', properties: { dossier: { type: 'string' } } },
+      description: 'Exporte une carte (carte : sinon celle affichée) au format de Tiled (lu aussi par Phaser et Godot) dans un dossier du projet : <nom>.tmj, la planche <nom>-tuiles.png et <nom>-carte.png.',
+      schema: { type: 'object', properties: { dossier: { type: 'string' }, carte: { type: ['string', 'number'] } } },
       faire: async (a) => {
         const doc = besoinJeu();
+        choisirCarte(doc, a.carte);
         const d = dossierRel(a.dossier);
         const ecrits = [];
         for (const [nom, bytes] of await IO.mapFiles(doc)) ecrits.push(await window.claude.ecrireFichier(`${d ? `${d}/` : ''}${nom}`, bytes));

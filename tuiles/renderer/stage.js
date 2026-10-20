@@ -2,12 +2,14 @@
 // - « Tuile » : la tuile choisie, très agrandie, pixel par pixel. Option Mosaïque : la tuile est
 //   répétée tout autour, et dessiner sur une copie dessine sur la tuile (pour des raccords parfaits,
 //   indispensable pour l'herbe, l'eau, les chemins…).
-// - « Carte » : une petite carte où l'on pose les tuiles, pour voir ce qu'elles donnent ensemble,
-//   avec deux calques (Sol, puis Décor par-dessus : arbres, panneaux, fleurs…).
+// - « Carte » : les cartes du jeu, où l'on pose les tuiles sur autant de calques qu'on veut (Sol, Décor,
+//   Au-dessus du joueur…). On y peint aussi le passage (où le joueur peut marcher), et on y place les
+//   zones (herbes hautes, eau…), les téléporteurs (portes, sorties) et le départ du joueur.
 //
 // Les outils (crayon, gomme, pot, pipette, ligne, rectangle) marchent pareil dans les deux modes :
 // ils travaillent sur une « grille » de cases. En mode Tuile, une case est un pixel et sa valeur
-// une couleur ; en mode Carte, une case est un emplacement de la carte et sa valeur un numéro de tuile.
+// une couleur ; en mode Carte, une case est un emplacement de la carte et sa valeur un numéro de tuile
+// (ou, sur la ligne Passage du panneau Calques, un code de passage : libre, bloqué, rebord…).
 
 const TOOLS = [
   { id: 'pencil', nom: 'Crayon', key: 'B', icone: 'edit', modes: ['tile', 'map'], aide: 'Clic gauche : couleur principale, clic droit : couleur secondaire. Maj+clic : ligne droite depuis le dernier point. Alt+clic : pipette.', aideCarte: 'Clic gauche : pose la tuile choisie, clic droit : efface. Alt+clic : reprend la tuile de la case.' },
@@ -16,6 +18,9 @@ const TOOLS = [
   { id: 'picker', nom: 'Pipette', key: 'I', icone: 'eye', modes: ['tile', 'map'], aide: 'Clic gauche : prend la couleur principale, clic droit : la secondaire.', aideCarte: 'Reprend la tuile d\'une case.' },
   { id: 'line', nom: 'Ligne', key: 'L', icone: 'dash', modes: ['tile', 'map'], aide: 'Glisser pour tracer une ligne droite.', aideCarte: 'Glisser pour poser une ligne de tuiles.' },
   { id: 'rect', nom: 'Rectangle', key: 'U', icone: 'primitive-square', modes: ['tile', 'map'], aide: 'Glisser pour tracer un rectangle (plein ou contour, dans la barre d\'options).', aideCarte: 'Glisser pour couvrir un rectangle de tuiles.' },
+  { id: 'zone', nom: 'Zone', key: 'Z', icone: 'symbol-namespace', modes: ['map'], aideCarte: 'Glisser pour tracer une zone (herbes hautes, eau, grotte…). Clic sur une zone : la modifier ou la supprimer.' },
+  { id: 'warp', nom: 'Téléporteur', key: 'T', icone: 'debug-step-into', modes: ['map'], aideCarte: 'Clic sur une case : elle mène vers une autre carte (porte, escalier, sortie de route). Clic sur un téléporteur : le modifier.' },
+  { id: 'start', nom: 'Départ du joueur', key: 'J', icone: 'location', modes: ['map'], aideCarte: 'Clic : le joueur commence le jeu sur cette case, tourné dans la direction choisie.' },
   { id: 'shift', nom: 'Décalage', key: 'M', icone: 'move', modes: ['tile'], aide: 'Glisser pour faire glisser toute la tuile en boucle : ce qui sort d\'un côté revient de l\'autre. Idéal pour vérifier et retoucher les raccords.' },
 ];
 
@@ -56,6 +61,14 @@ const Stage = (() => {
       };
     }
     const { map } = doc, li = App.options.layer;
+    // La ligne Passage du panneau Calques : on peint des codes de passage (0 = auto).
+    if (li < 0) {
+      return {
+        w: map.width, h: map.height, wrap: false, empty: 0,
+        get: (x, y) => map.passage[y * map.width + x],
+        set(x, y, v) { Doc.passageForEdit(doc)[y * map.width + x] = v; },
+      };
+    }
     return {
       w: map.width, h: map.height, wrap: false, empty: -1,
       get: (x, y) => map.layers[li].cells[y * map.width + x],
@@ -71,6 +84,7 @@ const Stage = (() => {
 
   // Valeur posée par le bouton de la souris : gauche = principale, droit = secondaire.
   function valueFor(button, tool) {
+    if (App.mode === 'map' && App.options.layer < 0) return tool === 'eraser' || button === 2 ? 0 : App.options.passage;
     if (App.mode === 'map') return tool === 'eraser' || button === 2 ? -1 : App.doc.current;
     if (tool === 'eraser') return 0;
     return packHex(button === 2 ? App.colors.secondary : App.colors.primary);
@@ -135,6 +149,10 @@ const Stage = (() => {
     const p = inside(g, x, y);
     if (!p) return;
     const v = g.get(p.x, p.y);
+    if (App.mode === 'map' && App.options.layer < 0) {
+      if (v > 0) App.setPassageValue(v);
+      return;
+    }
     if (App.mode === 'map') {
       if (v >= 0) App.selectTile(v);
       return;
@@ -305,8 +323,10 @@ const Stage = (() => {
     const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s, Doc.frameAt(t, now)));
     map.layers.forEach((layer, li) => {
       if (!layer.visible) return;
-      // Le calque qu'on ne modifie pas est un peu atténué quand on travaille sur le Décor.
-      ctx.globalAlpha = App.options.dimOther && li !== App.options.layer ? 0.45 : 1;
+      // Opacité et mode de fusion du calque (comme dans le jeu). Les autres calques sont un peu
+      // atténués quand l'option « Atténuer les autres calques » est cochée.
+      ctx.globalAlpha = (layer.opacite ?? 1) * (App.options.dimOther && App.options.layer >= 0 && li !== App.options.layer ? 0.45 : 1);
+      ctx.globalCompositeOperation = layer.fusion && layer.fusion !== 'normal' ? layer.fusion : 'source-over';
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const t = layer.cells[y * map.width + x];
@@ -314,6 +334,7 @@ const Stage = (() => {
         }
       }
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     });
     // Aperçu de la ligne ou du rectangle en cours, et de la tuile sous la souris.
     const ghost = (x, y, value) => {
@@ -326,7 +347,24 @@ const Stage = (() => {
         ctx.fillRect(v.x + x * cell, v.y + y * cell, cell, cell);
       }
     };
-    if (preview) for (const [x, y] of preview.points) if (x >= 0 && y >= 0 && x < map.width && y < map.height) ghost(x, y, preview.value);
+    const passageMode = App.options.layer < 0;
+    if (passageMode || App.options.showPassage) drawPassage(cell);
+    if (preview?.points) {
+      for (const [x, y] of preview.points) {
+        if (x < 0 || y < 0 || x >= map.width || y >= map.height) continue;
+        if (passageMode) passageCell(x, y, preview.value, cell, true);
+        else ghost(x, y, preview.value);
+      }
+    }
+    if (App.options.showObjects || ['zone', 'warp', 'start'].includes(App.tool)) drawObjects(cell);
+    if (preview?.rect) {
+      const r = preview.rect;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(v.x + r.x * cell + 1, v.y + r.y * cell + 1, r.w * cell - 2, r.h * cell - 2);
+      ctx.setLineDash([]);
+    }
     if (App.options.tileGrid && cell >= 6) {
       ctx.strokeStyle = 'rgba(255,255,255,0.10)';
       ctx.lineWidth = 1;
@@ -338,12 +376,125 @@ const Stage = (() => {
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.strokeRect(v.x - 0.5, v.y - 0.5, mw + 1, mh + 1);
     if (hover && !action && !preview && hover.x >= 0 && hover.y >= 0 && hover.x < map.width && hover.y < map.height) {
-      if (App.tool === 'pencil') ghost(hover.x, hover.y, doc.current);
+      if (App.tool === 'pencil' && passageMode) passageCell(hover.x, hover.y, App.options.passage, cell, true);
+      else if (App.tool === 'pencil') ghost(hover.x, hover.y, doc.current);
       ctx.strokeStyle = accent();
       ctx.lineWidth = 2;
       ctx.strokeRect(v.x + hover.x * cell, v.y + hover.y * cell, cell, cell);
     }
   }
+
+  // --- Passage, zones, téléporteurs et départ, dessinés par-dessus la carte ---
+  const ZONE_COLORS = { herbes: '#3fb950', eau: '#4aa8ff', grotte: '#c08a50', autre: '#b9a8ff' };
+  const WARP_COLOR = '#d27bff';
+  const START_COLOR = '#ffd040';
+  // Une case de passage : rouge = bloqué, vert = libre, flèche jaune = rebord (on saute dans ce sens).
+  // painted : passage peint à la main (plus marqué que celui qui vient des tuiles).
+  function passageCell(x, y, code, cell, painted) {
+    const v = view();
+    const px = v.x + x * cell, py = v.y + y * cell;
+    if (code === Doc.PASSAGE.bloque) {
+      ctx.fillStyle = painted ? 'rgba(241, 76, 76, 0.5)' : 'rgba(241, 76, 76, 0.28)';
+      ctx.fillRect(px, py, cell, cell);
+      if (painted && cell >= 10) {
+        ctx.strokeStyle = 'rgba(255, 140, 140, 0.9)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(px + cell * 0.3, py + cell * 0.3); ctx.lineTo(px + cell * 0.7, py + cell * 0.7);
+        ctx.moveTo(px + cell * 0.7, py + cell * 0.3); ctx.lineTo(px + cell * 0.3, py + cell * 0.7);
+        ctx.stroke();
+      }
+    } else if (code === Doc.PASSAGE.libre) {
+      if (!painted) return;
+      ctx.fillStyle = 'rgba(63, 185, 80, 0.35)';
+      ctx.fillRect(px, py, cell, cell);
+    } else if (code >= Doc.PASSAGE.rebord_bas) {
+      ctx.fillStyle = 'rgba(255, 208, 64, 0.22)';
+      ctx.fillRect(px, py, cell, cell);
+      // La flèche du rebord.
+      const [dx, dy] = [[0, 1], [0, -1], [-1, 0], [1, 0]][code - Doc.PASSAGE.rebord_bas];
+      const cx = px + cell / 2, cy = py + cell / 2, r = cell * 0.3;
+      ctx.fillStyle = 'rgba(255, 208, 64, 0.95)';
+      ctx.beginPath();
+      ctx.moveTo(cx + dx * r, cy + dy * r);
+      ctx.lineTo(cx - dx * r * 0.6 - dy * r, cy - dy * r * 0.6 - dx * r);
+      ctx.lineTo(cx - dx * r * 0.6 + dy * r, cy - dy * r * 0.6 + dx * r);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  function drawPassage(cell) {
+    const doc = App.doc, { map } = doc;
+    const final = Doc.collisions(doc, map);
+    for (let y = 0; y < map.height; y++) {
+      for (let x = 0; x < map.width; x++) {
+        const i = y * map.width + x;
+        passageCell(x, y, final[i], cell, map.passage[i] > 0);
+      }
+    }
+  }
+  function label(text, x, y, color, cell) {
+    if (cell < 12) return;
+    ctx.font = `600 ${clamp(Math.round(cell * 0.32), 10, 14)}px "Segoe UI", system-ui, sans-serif`;
+    const w = ctx.measureText(text).width + 8;
+    ctx.fillStyle = 'rgba(10, 10, 14, 0.78)';
+    ctx.fillRect(x, y, w, 18);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x + 4, y + 13);
+  }
+  function drawObjects(cell) {
+    const doc = App.doc, { map } = doc, v = view();
+    for (const z of map.zones) {
+      const color = ZONE_COLORS[z.type] || ZONE_COLORS.autre;
+      const px = v.x + z.x * cell, py = v.y + z.y * cell;
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = color;
+      ctx.fillRect(px, py, z.w * cell, z.h * cell);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + 1, py + 1, z.w * cell - 2, z.h * cell - 2);
+      label(z.name || Doc.ZONES.find(([k]) => k === z.type)?.[1] || z.type, px + 3, py + 3, color, cell);
+    }
+    for (const w of map.warps) {
+      const px = v.x + w.x * cell, py = v.y + w.y * cell, m = Math.max(1, cell * 0.12);
+      ctx.fillStyle = 'rgba(210, 123, 255, 0.28)';
+      ctx.fillRect(px + m, py + m, cell - 2 * m, cell - 2 * m);
+      ctx.strokeStyle = WARP_COLOR;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + m, py + m, cell - 2 * m, cell - 2 * m);
+      // Une petite flèche « on entre ici ».
+      ctx.fillStyle = WARP_COLOR;
+      ctx.beginPath();
+      ctx.moveTo(px + cell * 0.35, py + cell * 0.3);
+      ctx.lineTo(px + cell * 0.7, py + cell * 0.5);
+      ctx.lineTo(px + cell * 0.35, py + cell * 0.7);
+      ctx.closePath();
+      ctx.fill();
+      if (hover && hover.x === w.x && hover.y === w.y) label(`→ ${Doc.mapById(doc, w.carte)?.name || w.carte} (${w.tx}, ${w.ty})`, px, py - 20, WARP_COLOR, Math.max(cell, 12));
+    }
+    if (doc.depart && doc.depart.carte === map.id) {
+      const { x, y, direction } = doc.depart;
+      const cx = v.x + (x + 0.5) * cell, cy = v.y + (y + 0.5) * cell, r = cell * 0.34;
+      ctx.fillStyle = START_COLOR;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      const [dx, dy] = { bas: [0, 1], haut: [0, -1], gauche: [-1, 0], droite: [1, 0] }[direction] || [0, 1];
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.moveTo(cx + dx * r * 0.75, cy + dy * r * 0.75);
+      ctx.lineTo(cx - dy * r * 0.45, cy - dx * r * 0.45);
+      ctx.lineTo(cx + dy * r * 0.45, cy + dx * r * 0.45);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  const zoneAt = (map, x, y) => [...map.zones].reverse().find((z) => x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h) || null;
+  const normRect = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x) + 1, h: Math.abs(a.y - b.y) + 1 });
 
   // --- Souris ---
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -364,9 +515,25 @@ const Stage = (() => {
     let tool = App.tool;
     if (e.altKey && (tool === 'pencil' || tool === 'fill')) tool = 'picker';
     if (tool === 'picker') { pick(g, c.x, c.y, e.button); action = { tool, button: e.button }; return; }
+    const map = doc.map;
+    const onMap = (p) => p.x >= 0 && p.y >= 0 && p.x < map.width && p.y < map.height;
+    if (tool === 'zone') {
+      const p = { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
+      action = { tool, start: p, button: e.button };
+      preview = { rect: normRect(p, p) };
+      render();
+      return;
+    }
+    if (tool === 'warp' || tool === 'start') {
+      if (onMap(c)) {
+        if (tool === 'warp') App.editWarpAt(c.x, c.y);
+        else App.setStart(c.x, c.y);
+      }
+      return;
+    }
 
     const value = valueFor(e.button, tool);
-    const label = App.mode === 'map' ? 'Modifier la carte' : `${TOOLS.find((t) => t.id === tool).nom}`;
+    const label = App.mode === 'map' ? (App.options.layer < 0 ? 'Peindre le passage' : 'Modifier la carte') : `${TOOLS.find((t) => t.id === tool).nom}`;
     if (tool === 'pencil' || tool === 'eraser') {
       Doc.begin(doc, label);
       const from = e.shiftKey && lastPoint ? lastPoint : c;
@@ -417,6 +584,10 @@ const Stage = (() => {
     } else if (action.tool === 'rect') {
       preview.points = rectPoints(action.start.x, action.start.y, c.x, c.y, App.options.filled);
       render();
+    } else if (action.tool === 'zone') {
+      const { map } = App.doc;
+      preview.rect = normRect(action.start, { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) });
+      render();
     } else if (action.tool === 'shift') {
       // Toute la tuile glisse, en boucle.
       const s = App.doc.tileSize, dx = c.x - action.start.x, dy = c.y - action.start.y;
@@ -439,6 +610,17 @@ const Stage = (() => {
     action = null;
     canvas.classList.remove('panning');
     if (done.pan || done.tool === 'picker') { render(); return; }
+    if (done.tool === 'zone') {
+      const r = preview?.rect;
+      preview = null;
+      render();
+      if (!r) return;
+      // Un simple clic sur une zone existante l'ouvre ; sinon on crée la zone tracée.
+      const existing = r.w === 1 && r.h === 1 ? zoneAt(App.doc.map, r.x, r.y) : null;
+      if (existing) App.editZone(existing.id);
+      else App.createZone(r);
+      return;
+    }
     if ((done.tool === 'line' || done.tool === 'rect') && preview) {
       Doc.begin(App.doc, done.label);
       plot(grid(), preview.points, done.value);
@@ -485,5 +667,5 @@ const Stage = (() => {
     render();
   }
 
-  return { init, render, fit, zoomBy, reset, get zoom() { return view().zoom; } };
+  return { init, render, fit, zoomBy, reset, zoneAt, get zoom() { return view().zoom; } };
 })();

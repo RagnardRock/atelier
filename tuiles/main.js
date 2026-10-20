@@ -89,12 +89,14 @@ async function writeConfig(config) {
 const OPEN_EXTENSIONS = ['tafl', 'png', 'gif', 'webp', 'bmp'];
 const writable = new Set();
 const writableFolders = new Set();
-const canOpen = (file) => OPEN_EXTENSIONS.includes(path.extname(file).slice(1).toLowerCase());
+const gameFolders = new Set(); // dossiers de jeu ouverts ou choisis : Tafl peut y écrire ses fichiers
+const isGameFile = (file) => path.basename(file).toLowerCase() === 'jeu.json';
+const canOpen = (file) => OPEN_EXTENSIONS.includes(path.extname(file).slice(1).toLowerCase()) || isGameFile(file);
 
 async function rememberRecent(file) {
   const config = await readConfig();
   // Seuls les jeux de tuiles (.tafl) vont dans les récents : les PNG importés n'en sont qu'une source.
-  if (path.extname(file).toLowerCase() === '.tafl') config.recentFiles = [file, ...config.recentFiles.filter((f) => f !== file)].slice(0, 12);
+  if (path.extname(file).toLowerCase() === '.tafl' || isGameFile(file)) config.recentFiles = [file, ...config.recentFiles.filter((f) => f !== file)].slice(0, 12);
   config.lastFolder = path.dirname(file);
   await writeConfig(config);
 }
@@ -115,7 +117,7 @@ handle('file:open', async (event, { kind = 'tafl', dossier } = {}) => {
   const ici = typeof dossier === 'string' && fsSync.existsSync(dossier) ? dossier : null;
   const filters = kind === 'image'
     ? [{ name: 'Images (planche de tuiles)', extensions: ['png', 'gif', 'webp', 'bmp'] }]
-    : [{ name: 'Jeu de tuiles Tafl', extensions: ['tafl'] }, { name: 'Images (planche de tuiles)', extensions: ['png', 'gif', 'webp', 'bmp'] }];
+    : [{ name: 'Jeu de tuiles Tafl, ou jeu.json d\'un dossier de jeu', extensions: ['tafl', 'json'] }, { name: 'Images (planche de tuiles)', extensions: ['png', 'gif', 'webp', 'bmp'] }];
   const result = await dialog.showOpenDialog(win, {
     title: kind === 'image' ? 'Importer une planche de tuiles' : 'Ouvrir un jeu de tuiles',
     defaultPath: ici || config.lastFolder || app.getPath('documents'),
@@ -170,6 +172,87 @@ handle('file:write', async (_event, file, bytes) => {
   await fs.rename(temp, full);
   await rememberRecent(full);
   return { path: full, name: path.basename(full), size: bytes.byteLength };
+});
+
+// --- Dossier de jeu (Tafl 0.6, voir FORMAT.md) ---
+// MonJeu/jeu.json, MonJeu/tuiles.tafl, MonJeu/cartes/*.json et MonJeu/FORMAT.md. Tafl n'écrit dans un
+// dossier de jeu que si tu l'as ouvert ou choisi, et seulement ces fichiers-là.
+const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json)$/;
+const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
+const relGame = (rel) => String(rel).replace(/\\/g, '/');
+async function mapFilesIn(folder) {
+  const names = await fs.readdir(path.join(folder, 'cartes')).catch(() => []);
+  return names.map((n) => `cartes/${n}`).filter((f) => MAP_FILE.test(f));
+}
+
+handle('game:pick', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const config = await readConfig();
+  const result = await dialog.showOpenDialog(win, { title: 'Dossier du jeu (crée-le s\'il n\'existe pas encore)', defaultPath: config.lastFolder || app.getPath('documents'), properties: ['openDirectory', 'createDirectory'] });
+  if (result.canceled || !result.filePaths[0]) return null;
+  const folder = path.resolve(result.filePaths[0]);
+  gameFolders.add(folder);
+  const exists = fsSync.existsSync(path.join(folder, 'jeu.json'));
+  return { folder, exists, fichiers: exists ? await mapFilesIn(folder) : [] };
+});
+
+// Ouvrir un jeu : le chemin de son jeu.json, ou son dossier.
+handle('game:open', async (_event, target) => {
+  let file = path.resolve(String(target));
+  if (fsSync.existsSync(file) && fsSync.statSync(file).isDirectory()) file = path.join(file, 'jeu.json');
+  if (!isGameFile(file)) throw new Error(`${path.basename(file)} n'est pas le jeu.json d'un dossier de jeu`);
+  const folder = path.dirname(file);
+  const jeu = await fs.readFile(file, 'utf8');
+  let data = {};
+  try { data = JSON.parse(jeu); } catch { /* l'interface dira que le fichier est abîmé */ }
+  const tuilesName = typeof data.tuiles === 'string' && GAME_FILE.test(data.tuiles) && data.tuiles.endsWith('.tafl') ? data.tuiles : 'tuiles.tafl';
+  const tuiles = await fs.readFile(path.join(folder, tuilesName), 'utf8').catch(() => null);
+  const cartes = {};
+  for (const c of Array.isArray(data.cartes) ? data.cartes : []) {
+    const rel = relGame(c?.fichier || '');
+    if (!MAP_FILE.test(rel)) continue;
+    const text = await fs.readFile(path.join(folder, rel), 'utf8').catch(() => null);
+    if (text !== null) cartes[rel] = text;
+  }
+  gameFolders.add(folder);
+  await rememberRecent(file);
+  return { folder, path: file, jeu, tuiles, cartes };
+});
+
+// Le jeu.json d'un dossier de jeu, s'il y en a un (Atelier ouvre Tafl sur un dossier de projet).
+handle('game:find', async (_event, folder) => {
+  const file = path.join(path.resolve(String(folder || '')), 'jeu.json');
+  return folder && fsSync.existsSync(file) ? file : null;
+});
+// Un jeu que Claude vient d'écrire dans le projet : Tafl pourra le réenregistrer.
+handle('game:register', async (_event, file) => {
+  const full = path.resolve(String(file));
+  if (!isGameFile(full) || !fsSync.existsSync(full)) throw new Error('Pas de jeu.json à cet endroit');
+  gameFolders.add(path.dirname(full));
+});
+
+// Enregistrer : files = [[chemin relatif, octets]], remove = cartes supprimées depuis l'ouverture.
+handle('game:write', async (_event, folder, files, remove = []) => {
+  const root = path.resolve(String(folder));
+  if (!gameFolders.has(root)) throw new Error(`Écriture refusée : ${root} n'est pas un dossier de jeu ouvert`);
+  await fs.mkdir(path.join(root, 'cartes'), { recursive: true });
+  for (const [rel, bytes] of files) {
+    const r = relGame(rel);
+    if (!GAME_FILE.test(r)) throw new Error(`Fichier refusé dans le dossier de jeu : ${rel}`);
+    const full = path.join(root, r);
+    const temp = `${full}.tafl-tmp`;
+    await fs.writeFile(temp, Buffer.from(bytes));
+    await fs.rename(temp, full);
+  }
+  for (const rel of remove) {
+    const r = relGame(rel);
+    if (MAP_FILE.test(r)) await fs.rm(path.join(root, r), { force: true });
+  }
+  // La description du format, toujours celle de cette version de Tafl.
+  await fs.copyFile(path.join(__dirname, 'FORMAT.md'), path.join(root, 'FORMAT.md')).catch((err) => log('ERREUR', `FORMAT.md : ${err.message}`));
+  const file = path.join(root, 'jeu.json');
+  await rememberRecent(file);
+  return { path: file, folder: root };
 });
 
 handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file)));

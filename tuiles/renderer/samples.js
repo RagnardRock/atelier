@@ -75,6 +75,12 @@ const Samples = (() => {
     for (let y = midY + 2; y < midY + 6; y++) for (let x = 2; x < 7; x++) set(sol.cells, x, y, 1);
     for (let y = midY + 2; y < midY + 6; y++) for (let x = W - 7; x < W - 2; x++) set(sol.cells, x, y, 3);
     for (const [x, y] of [[3, 2], [5, 4], [14, 2], [16, 4], [12, 5], [2, 5], [17, 1]]) set(decor.cells, x, y, 4);
+    // Pour essayer l'éditeur de jeu : l'eau bloque le joueur, les hautes herbes et la mare sont des
+    // zones, et le joueur part du croisement des chemins.
+    water.passage = 'bloque';
+    const zone = (id, name, type, x, w, objet = '') => ({ id, name, type, x: clamp(x, 0, W - 1), y: clamp(midY + 2, 0, H - 1), w: Math.max(1, Math.min(w, W - x)), h: Math.max(1, Math.min(4, H - midY - 2)), objet });
+    if (midY + 2 < H && W >= 9) doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', 2, 5), zone('zone-2', 'Mare', 'eau', W - 7, 5, 'planche-de-surf')];
+    doc.depart = { carte: doc.map.id, x: clamp(midX, 0, W - 1), y: clamp(midY, 0, H - 1), direction: 'bas' };
     // Les nouvelles couleurs rejoignent la palette, pour pouvoir retoucher les exemples.
     for (const hex of Object.values(COLORS)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
   }

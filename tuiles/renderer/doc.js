@@ -2,59 +2,126 @@
 //
 // doc = {
 //   name, path,              nom affiché, fichier .tafl (null tant qu'il n'est pas enregistré)
+//   game,                    null pour un simple jeu de tuiles ; pour un dossier de jeu (Tafl 0.6) :
+//                            { folder, fichiers } = le dossier, et les fichiers de cartes lus à l'ouverture
+//                            (pour retirer ceux des cartes supprimées). Voir ../FORMAT.md.
 //   tileSize,                taille d'une tuile en pixels (16 pour un jeu façon Pokémon GBA)
 //   columns,                 nombre de colonnes de la planche exportée (et du panneau Tuiles)
 //   palette: ['#rrggbb'],    les couleurs du panneau Palette
-//   tiles: [{ id, name, frames, duration }],
+//   tiles: [{ id, name, frames, duration, passage }],
 //                            frames = les images de la tuile : une seule pour une tuile fixe,
 //                            plusieurs pour une tuile animée (eau, fleurs…). Chaque image est un
 //                            tableau de pixels (Uint8ClampedArray, 4 octets par pixel).
 //                            duration = durée d'une image de l'animation, en millisecondes.
-//   map: { width, height, layers: [{ name, visible, cells }] },  cells = numéro de tuile par case (-1 = vide)
+//                            passage = 'auto' | 'libre' | 'bloque' : si la tuile laisse passer le joueur.
+//   maps: [carte],           les cartes du jeu (une ville, une route, l'intérieur d'une maison…)
+//   mapIndex, map,           la carte affichée (map = maps[mapIndex], toujours tenu à jour)
+//   depart,                  { carte, x, y, direction } : où le joueur commence le jeu (ou null)
 //   current,                 la tuile choisie (celle qu'on dessine, ou qu'on pose sur la carte)
 //   dirty,                   modifié depuis le dernier enregistrement
 // }
 //
+// carte = {
+//   id, name, width, height,
+//   layers: [{ name, visible, cells, profondeur, opacite, fusion, parallaxe }],
+//            cells = numéro de tuile par case (-1 = vide) ; profondeur = 'dessous' | 'joueur' | 'dessus'
+//            (sous le joueur, à sa hauteur, ou devant lui comme un toit) ; opacite de 0 à 1 ;
+//            fusion = mode de fusion du canvas ('normal', 'multiply'…) ; parallaxe = { x, y } (1 = suit la carte)
+//   passage,  Uint8Array, un code par case (PASSAGE plus bas) ; 0 = « auto » : la case suit ses tuiles
+//   zones: [{ id, name, type, x, y, w, h, objet }],   herbes hautes, eau, grotte… (objet = objet requis)
+//   warps: [{ id, x, y, carte, tx, ty, direction }],  téléporteurs : la case (x, y) mène à (tx, ty) de la carte « carte »
+// }
+//
 // Règle importante (la même que dans Skald) : on ne modifie JAMAIS un tableau de pixels, la liste
 // des images d'une tuile ou les cases d'un calque directement. On passe par Doc.pixelsForEdit(),
-// Doc.tileForEdit() ou Doc.layerForEdit(), qui en font une copie au début de chaque action. Ainsi,
-// l'historique garde les anciens tableaux tels quels, sans recopier tout le jeu de tuiles à chaque
-// coup de crayon : annuler revient juste à remettre l'ancien tableau.
+// Doc.tileForEdit(), Doc.layerForEdit() ou Doc.passageForEdit(), qui en font une copie au début de
+// chaque action. Ainsi, l'historique garde les anciens tableaux tels quels, sans recopier tout le jeu
+// à chaque coup de crayon : annuler revient juste à remettre l'ancien tableau. Les zones et les
+// téléporteurs, eux, sont remplacés en entier (map.zones = [...]), jamais modifiés sur place.
 
 const Doc = (() => {
   let nextId = 1;
   const newId = () => nextId++;
   const DEFAULT_DURATION = 250;
 
+  // Codes du passage, case par case (les mêmes dans les fichiers de cartes, voir ../FORMAT.md).
+  const PASSAGE = { auto: 0, libre: 1, bloque: 2, rebord_bas: 3, rebord_haut: 4, rebord_gauche: 5, rebord_droite: 6 };
+  const PASSAGE_NOMS = ['Auto (selon les tuiles)', 'Libre', 'Bloqué', 'Rebord ↓', 'Rebord ↑', 'Rebord ←', 'Rebord →'];
+  const PROFONDEURS = [['dessous', 'Sous le joueur'], ['joueur', 'Au niveau du joueur'], ['dessus', 'Au-dessus du joueur']];
+  const FUSIONS = [['normal', 'Normal'], ['multiply', 'Produit (ombres)'], ['screen', 'Superposition claire (lumières)'], ['overlay', 'Incrustation'], ['soft-light', 'Lumière douce'], ['lighter', 'Addition (lueurs)'], ['color', 'Couleur (teinte)']];
+  const ZONES = [['herbes', 'Herbes hautes'], ['eau', 'Eau'], ['grotte', 'Grotte'], ['autre', 'Autre']];
+  const DIRECTIONS = [['bas', 'Vers le bas'], ['haut', 'Vers le haut'], ['gauche', 'Vers la gauche'], ['droite', 'Vers la droite']];
+
   function emptyTile(size, name) {
-    return { id: newId(), name, frames: [new Uint8ClampedArray(size * size * 4)], duration: DEFAULT_DURATION };
+    return { id: newId(), name, frames: [new Uint8ClampedArray(size * size * 4)], duration: DEFAULT_DURATION, passage: 'auto' };
   }
 
-  function create({ name = 'Sans titre', tileSize = 16, palette = PALETTES[0].couleurs, tiles = 1, columns = 8, mapWidth = 20, mapHeight = 15 } = {}) {
+  function newLayer(name, width, height, props = {}) {
+    return { name, visible: true, cells: new Int32Array(width * height).fill(-1), profondeur: 'dessous', opacite: 1, fusion: 'normal', parallaxe: { x: 1, y: 1 }, ...props };
+  }
+  // Une carte neuve : Sol et Décor sous le joueur, et un calque devant lui (haut des arbres, toits).
+  function newMap({ id, name = 'Carte', width = 20, height = 15 } = {}) {
+    return {
+      id: id || 'carte',
+      name,
+      width,
+      height,
+      layers: [
+        newLayer('Sol', width, height),
+        newLayer('Décor', width, height, { profondeur: 'joueur' }),
+        newLayer('Au-dessus', width, height, { profondeur: 'dessus' }),
+      ],
+      passage: new Uint8Array(width * height),
+      zones: [],
+      warps: [],
+    };
+  }
+  // Identifiant d'une carte : son nom en minuscules sans accents (« Bourg Palette » → bourg-palette).
+  // Il sert de nom de fichier (cartes/bourg-palette.json) et ne change plus ensuite.
+  const slug = (name) => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'carte';
+  function uniqueMapId(doc, name) {
+    const base = slug(name);
+    const ids = new Set(doc.maps.map((m) => m.id));
+    if (!ids.has(base)) return base;
+    let n = 2;
+    while (ids.has(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+  }
+
+  function create({ name = 'Sans titre', tileSize = 16, palette = PALETTES[0].couleurs, tiles = 1, columns = 8, mapWidth = 20, mapHeight = 15, mapName = 'Carte 1', maps = null } = {}) {
     const doc = {
       name,
       path: null,
+      game: null,
       tileSize,
       columns,
       palette: [...palette],
       tiles: [],
-      map: { width: mapWidth, height: mapHeight, layers: [] },
+      maps: maps || [newMap({ id: slug(mapName), name: mapName, width: mapWidth, height: mapHeight })],
+      mapIndex: 0,
+      map: null,
+      depart: null,
       current: 0,
       dirty: false,
       undo: [],
       redo: [],
       editing: null,
     };
+    doc.map = doc.maps[0];
     for (let i = 0; i < tiles; i++) doc.tiles.push(emptyTile(tileSize, `tuile-${i + 1}`));
-    doc.map.layers = [
-      { name: 'Sol', visible: true, cells: new Int32Array(mapWidth * mapHeight).fill(-1) },
-      { name: 'Décor', visible: true, cells: new Int32Array(mapWidth * mapHeight).fill(-1) },
-    ];
     return doc;
   }
 
+  // --- Cartes ---
+  function selectMap(doc, index) {
+    doc.mapIndex = clamp(index, 0, doc.maps.length - 1);
+    doc.map = doc.maps[doc.mapIndex];
+  }
+  const mapById = (doc, id) => doc.maps.find((m) => m.id === id) || null;
+
   // --- Historique ---
   // Une photo de l'état : les références vers les tableaux (pas de copie, voir la règle plus haut).
+  const copyMap = (m) => ({ ...m, layers: m.layers.map((l) => ({ ...l })) });
   function snapshot(doc, label) {
     return {
       label,
@@ -62,7 +129,9 @@ const Doc = (() => {
       columns: doc.columns,
       palette: [...doc.palette],
       tiles: doc.tiles.map((t) => ({ ...t })),
-      map: { width: doc.map.width, height: doc.map.height, layers: doc.map.layers.map((l) => ({ ...l })) },
+      maps: doc.maps.map(copyMap),
+      mapIndex: doc.mapIndex,
+      depart: doc.depart,
       current: doc.current,
     };
   }
@@ -71,7 +140,9 @@ const Doc = (() => {
     doc.columns = s.columns;
     doc.palette = [...s.palette];
     doc.tiles = s.tiles.map((t) => ({ ...t }));
-    doc.map = { width: s.map.width, height: s.map.height, layers: s.map.layers.map((l) => ({ ...l })) };
+    doc.maps = s.maps.map(copyMap);
+    selectMap(doc, s.mapIndex);
+    doc.depart = s.depart;
     doc.current = clamp(s.current, 0, Math.max(0, doc.tiles.length - 1));
   }
 
@@ -81,7 +152,7 @@ const Doc = (() => {
     const max = App.config?.historySteps || 60;
     while (doc.undo.length > max) doc.undo.shift();
     doc.redo = [];
-    doc.editing = { tiles: new Set(), frames: new Set(), layers: new Set() };
+    doc.editing = { tiles: new Set(), frames: new Set(), layers: new Set(), passages: new Set() };
     doc.dirty = true;
   }
   // Action faite d'un bloc : begin + la modification + rafraîchir.
@@ -135,14 +206,46 @@ const Doc = (() => {
     }
     return tile.frames[k];
   }
-  function layerForEdit(doc, index) {
-    const layer = doc.map.layers[index];
+  // Le calque n° index d'une carte (la carte affichée, sinon), avec ses cases prêtes à être modifiées.
+  function layerForEdit(doc, index, map = doc.map) {
     if (!doc.editing) begin(doc, 'Modifier la carte');
-    if (!doc.editing.layers.has(index)) {
+    const key = `${map.id}:${index}`;
+    const layer = map.layers[index];
+    if (!doc.editing.layers.has(key)) {
       layer.cells = layer.cells.slice();
-      doc.editing.layers.add(index);
+      doc.editing.layers.add(key);
     }
     return layer;
+  }
+  // Le passage d'une carte, prêt à être modifié.
+  function passageForEdit(doc, map = doc.map) {
+    if (!doc.editing) begin(doc, 'Modifier le passage');
+    if (!doc.editing.passages.has(map.id)) {
+      map.passage = map.passage.slice();
+      doc.editing.passages.add(map.id);
+    }
+    return map.passage;
+  }
+
+  // Le passage final de chaque case (ce que le moteur du jeu utilise) : un code de 1 à 6, jamais « auto ».
+  // - si la case a un passage peint (pinceau Passage), c'est lui ;
+  // - sinon, on regarde ses tuiles du calque le plus haut au plus bas, en sautant les calques au-dessus
+  //   du joueur (un toit ne bloque pas) : la première tuile qui dit « libre » ou « bloque » décide ;
+  // - sinon la case est libre.
+  function collisions(doc, map = doc.map) {
+    const out = new Uint8Array(map.width * map.height);
+    const layers = map.layers.filter((l) => l.profondeur !== 'dessus').reverse();
+    for (let i = 0; i < out.length; i++) {
+      let v = map.passage[i];
+      if (!v) {
+        for (const l of layers) {
+          const t = doc.tiles[l.cells[i]];
+          if (t && t.passage && t.passage !== 'auto') { v = PASSAGE[t.passage]; break; }
+        }
+      }
+      out[i] = v || PASSAGE.libre;
+    }
+    return out;
   }
 
   // --- Animation ---
@@ -209,12 +312,16 @@ const Doc = (() => {
     doc.current = to;
   }
   function remapCells(doc, fn) {
-    doc.map.layers.forEach((layer, li) => {
-      if (!layer.cells.some((c) => c >= 0)) return;
-      const cells = layerForEdit(doc, li).cells;
-      for (let i = 0; i < cells.length; i++) if (cells[i] >= 0) cells[i] = fn(cells[i]);
-    });
+    for (const map of doc.maps) {
+      map.layers.forEach((layer, li) => {
+        if (!layer.cells.some((c) => c >= 0)) return;
+        const cells = layerForEdit(doc, li, map).cells;
+        for (let i = 0; i < cells.length; i++) if (cells[i] >= 0) cells[i] = fn(cells[i]);
+      });
+    }
   }
+  // Combien de cases (toutes cartes confondues) utilisent la tuile n° index.
+  const tileUses = (doc, index) => doc.maps.reduce((n, m) => n + m.layers.reduce((k, l) => k + l.cells.filter((c) => c === index).length, 0), 0);
 
   // Images d'une tuile animée.
   function addFrame(doc, index, at, data) {
@@ -288,20 +395,75 @@ const Doc = (() => {
     doc.tileSize = size;
   }
 
-  // Changer la taille de la carte (le contenu reste en haut à gauche).
-  function resizeMap(doc, width, height) {
-    const { map } = doc;
-    map.layers = map.layers.map((layer) => {
-      const cells = new Int32Array(width * height).fill(-1);
+  // Changer la taille de la carte (le contenu reste en haut à gauche). Les zones sont recoupées, les
+  // téléporteurs sortis de la carte retirés.
+  function resizeMap(doc, width, height, map = doc.map) {
+    const copy = (src, Type, empty) => {
+      const out = new Type(width * height).fill(empty);
       for (let y = 0; y < Math.min(height, map.height); y++) {
-        for (let x = 0; x < Math.min(width, map.width); x++) cells[y * width + x] = layer.cells[y * map.width + x];
+        for (let x = 0; x < Math.min(width, map.width); x++) out[y * width + x] = src[y * map.width + x];
       }
-      return { ...layer, cells };
-    });
+      return out;
+    };
+    map.layers = map.layers.map((layer) => ({ ...layer, cells: copy(layer.cells, Int32Array, -1) }));
+    map.passage = copy(map.passage, Uint8Array, 0);
+    map.zones = map.zones
+      .map((z) => ({ ...z, w: Math.min(z.w, width - z.x), h: Math.min(z.h, height - z.y) }))
+      .filter((z) => z.x < width && z.y < height && z.w > 0 && z.h > 0);
+    map.warps = map.warps.filter((w) => w.x < width && w.y < height);
     map.width = width;
     map.height = height;
-    // Les calques viennent d'être remplacés : ils sont déjà des copies pour cette action.
-    if (doc.editing) map.layers.forEach((_l, i) => doc.editing.layers.add(i));
+    // Les calques et le passage viennent d'être remplacés : ils sont déjà des copies pour cette action.
+    if (doc.editing) {
+      map.layers.forEach((_l, i) => doc.editing.layers.add(`${map.id}:${i}`));
+      doc.editing.passages.add(map.id);
+    }
+  }
+
+  // Ajouter une carte (vide, ou la copie d'une autre) juste après la carte affichée ; elle devient la carte affichée.
+  function addMap(doc, { name, width = doc.map.width, height = doc.map.height, copyOf = null } = {}) {
+    const id = uniqueMapId(doc, name);
+    const map = copyOf
+      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z })), warps: copyOf.warps.map((w) => ({ ...w })) }
+      : newMap({ id, name, width, height });
+    doc.maps.splice(doc.mapIndex + 1, 0, map);
+    selectMap(doc, doc.mapIndex + 1);
+    return map;
+  }
+  // Supprimer une carte : les téléporteurs qui y menaient sont retirés, le départ aussi s'il y était.
+  function removeMap(doc, index) {
+    const [gone] = doc.maps.splice(index, 1);
+    for (const m of doc.maps) if (m.warps.some((w) => w.carte === gone.id)) m.warps = m.warps.filter((w) => w.carte !== gone.id);
+    if (doc.depart?.carte === gone.id) doc.depart = null;
+    selectMap(doc, Math.min(index, doc.maps.length - 1));
+  }
+  function moveMap(doc, from, to) {
+    const [m] = doc.maps.splice(from, 1);
+    doc.maps.splice(to, 0, m);
+    selectMap(doc, to);
+  }
+
+  // Calques de la carte affichée. at = place dans la liste (0 = tout en dessous).
+  function addLayer(doc, at, props = {}) {
+    const map = doc.map;
+    map.layers = [...map.layers];
+    map.layers.splice(at, 0, newLayer(props.name || `Calque ${map.layers.length + 1}`, map.width, map.height, props));
+    return at;
+  }
+  function removeLayer(doc, index) {
+    const map = doc.map;
+    map.layers = map.layers.filter((_l, i) => i !== index);
+  }
+  function moveLayer(doc, from, to) {
+    const map = doc.map;
+    map.layers = [...map.layers];
+    const [l] = map.layers.splice(from, 1);
+    map.layers.splice(to, 0, l);
+  }
+  function setLayer(doc, index, props) {
+    const map = doc.map;
+    map.layers = [...map.layers];
+    map.layers[index] = { ...map.layers[index], ...props };
   }
 
   // Remplacer une couleur par une autre dans toutes les tuiles (modifier une couleur de la palette).
@@ -323,5 +485,5 @@ const Doc = (() => {
     });
   }
 
-  return { create, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
+  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
 })();
