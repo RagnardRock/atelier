@@ -105,10 +105,14 @@ async function start() {
   $('#btn-config').onclick = () => settings.open();
   setupSplitDropzone();
 
-  // Dossiers récents sur l'écran d'accueil, et réouverture du dernier dossier.
+  // Dossiers récents sur l'écran d'accueil, et réouverture du dernier dossier
+  // (ou du dossier demandé en ligne de commande, par exemple depuis Atelier).
+  const startup = await window.atelier.startupFolder().catch(() => null);
   const recents = await window.atelier.recentFolders().catch(() => []);
   renderRecents(recents);
-  if (state.config.reopenLastFolder && recents.length > 0) {
+  if (startup) {
+    await openRecent(startup);
+  } else if (state.config.reopenLastFolder && recents.length > 0) {
     await openRecent(recents[0]);
   }
 }

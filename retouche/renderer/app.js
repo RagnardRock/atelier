@@ -806,6 +806,10 @@ const App = (() => {
       await renderWelcome();
       window.skald.onExternalFile((file) => IO.openPath(file));
       for (const file of await window.skald.startupFiles()) await IO.openPath(file);
+      // Projet d'images ouvert depuis Atelier : la fenêtre « Ouvrir » s'ouvre dans son dossier.
+      window.skald.onExternalFolder((folder) => IO.openFiles(folder));
+      const folder = await window.skald.startupFolder();
+      if (folder) IO.openFiles(folder);
     },
   };
   return api;

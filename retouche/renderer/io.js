@@ -140,8 +140,9 @@ const IO = (() => {
     }
   }
 
-  async function openFiles() {
-    const files = await window.skald.openFiles();
+  // dossier (facultatif) : où ouvrir la fenêtre « Ouvrir ».
+  async function openFiles(dossier) {
+    const files = await window.skald.openFiles(dossier);
     for (const f of files) App.openDocument(await decode(f));
   }
   async function openPath(file) {

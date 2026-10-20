@@ -26,6 +26,8 @@ Sur chaque pull request qui touche `retouche/`, GitHub fabrique `Skald-Setup-<ve
    ```
 3. GitHub publie l'installeur dans les **Releases**, sans la marquer « Latest » (Rune utilise la Release « Latest » pour ses propres mises à jour).
 
+**Ouvrir un dossier.** `Skald.exe D:\Projets\logos` ouvre Skald avec la fenêtre « Ouvrir » placée dans ce dossier (c'est ce que fait le widget Projets récents d'Atelier pour un projet d'images). Depuis le clone : `npm start -- D:\Projets\logos`.
+
 ## Mettre Skald à jour
 
 Le bouton nuage en haut à droite (comme dans Rune) cherche une nouvelle version. Au démarrage, Skald vérifie aussi discrètement et affiche une notification si une version plus récente existe.

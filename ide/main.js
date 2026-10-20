@@ -223,6 +223,20 @@ handle('folder:open', async (event) => {
 
 handle('folder:recents', async () => existingRecents());
 
+// Dossier passé en ligne de commande : « Rune.exe D:\Projets\mon-site » (c'est ainsi qu'Atelier ouvre
+// un projet dans Rune). Il rejoint les récents, puis l'interface l'ouvre au démarrage à la place du
+// dernier dossier. On ne le donne qu'une fois : Ctrl+R ne le rouvre pas.
+let startupFolder = process.argv.slice(app.isPackaged ? 1 : 2)
+  .filter((a) => !a.startsWith('-') && a !== '.')
+  .map((a) => path.resolve(a))
+  .find((a) => a !== app.getAppPath() && fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
+handle('folder:startup', async () => {
+  const folder = startupFolder;
+  startupFolder = null;
+  if (folder) await updateState((state) => { state.recentFolders = [folder, ...state.recentFolders.filter((f) => f !== folder)].slice(0, MAX_RECENTS); });
+  return folder;
+});
+
 handle('folder:openRecent', async (_event, folder) => {
   if (!(await existingRecents()).includes(folder)) throw new Error(`Ce dossier n'existe plus : ${folder}`);
   return setRoot(folder);

@@ -2,6 +2,7 @@
 
 Mes outils perso, réunis dans un seul dépôt :
 
+- **Atelier** ᚨ, le hub qui lance, installe et met à jour les outils, avec ses widgets (`hub/`) : voir [hub/README.md](hub/README.md).
 - **Rune** ᚱ, mon IDE (`ide/`), décrit ci-dessous.
 - **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
 
@@ -16,6 +17,8 @@ Rune s'installe comme n'importe quel logiciel, avec **`Rune-Setup-<version>.exe`
 3. Choisis le dossier d'installation (par défaut `%LOCALAPPDATA%\Programs\Rune`, sans droits administrateur), et c'est tout : Rune a son icône ᚱ sur le bureau et dans le menu Démarrer, et se désinstalle depuis Paramètres › Applications.
 
 Rune garde tes réglages, ta session et tes serveurs dans `%APPDATA%\atelier-ide` : ils sont communs à la version installée et à la version lancée depuis le clone, et la désinstallation ne les efface pas.
+
+**Ouvrir un dossier directement.** `Rune.exe D:\Projets\mon-site` ouvre Rune sur ce dossier (c'est ce que fait le widget Projets récents d'Atelier). Depuis le clone : `npm start -- D:\Projets\mon-site`.
 
 **Mises à jour.** Au démarrage, Rune regarde s'il existe une version plus récente dans les Releases. Si oui, une notification le signale et le bouton « Mise à jour » (en haut) affiche un `●`. Un clic montre ce qui a changé et demande confirmation : Rune télécharge le nouvel installeur, se ferme, s'installe en silence et se relance. Il prévient avant si des fichiers ne sont pas enregistrés.
 
@@ -35,7 +38,7 @@ Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, s
 
 Tu peux aussi le fabriquer sur ton PC : `cd ide`, puis `npm run dist`. L'installeur arrive dans `ide/dist/` (ignoré par git).
 
-> Les autres outils d'Atelier ne devront pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
+> Les autres outils (Skald, le hub Atelier…) ne doivent pas publier leurs propres Releases marquées « Latest » : Rune cherche ses mises à jour dans la dernière Release du dépôt.
 
 ## Lancer Rune depuis le clone (pour le développer)
 
