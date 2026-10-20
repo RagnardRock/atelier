@@ -34,6 +34,11 @@ let nextRequestId = 1;
 let lastSessionId = null; // pour reprendre la conversation (après un arrêt, ou au redémarrage d'Atelier)
 let procOptions = '';     // réglages avec lesquels il a été lancé : s'ils changent, on le relance
 let lireConfig = null;     // readConfig de main.js
+// Reprise d'une conversation que Claude Code a oubliée (il efface les plus anciennes, par défaut au
+// bout de 30 jours) : on relance sans --resume et on renvoie le message en attente.
+let lancement = null;      // options du dernier lancement
+let initRecu = false;      // Claude Code a démarré la conversation
+let messageEnAttente = null;
 const PREFIXE_ACTIONS = 'mcp__atelier__'; // nom des outils du serveur MCP d'Atelier vus par Claude Code
 // Les familles d'actions : chacune peut être autorisée une fois pour toutes (config.claudeSansDemander).
 const FAMILLES = {
@@ -94,7 +99,11 @@ function spawnClaude(command, args, cwd) {
   return spawn(command, args, { cwd, env });
 }
 
-function start({ command, model, cwd, addDir, mcpConfig, log }) {
+function start(options) {
+  const { command, model, cwd, addDir, mcpConfig, log } = options;
+  lancement = options;
+  initRecu = false;
+  const reprise = Boolean(lastSessionId);
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -135,7 +144,8 @@ function start({ command, model, cwd, addDir, mcpConfig, log }) {
       try {
         message = JSON.parse(line);
       } catch {
-        continue; // ligne qui n'est pas du JSON (avertissement…) : ignorée
+        stderr = (stderr + line).slice(-2000); // ligne qui n'est pas du JSON (avertissement…) : gardée pour le journal
+        continue;
       }
       handleMessage(message, log);
     }
@@ -149,6 +159,13 @@ function start({ command, model, cwd, addDir, mcpConfig, log }) {
   current.on('exit', (code) => {
     if (proc !== current) return; // arrêté exprès (nouvelle conversation, réglages changés)
     proc = null;
+    if (reprise && !initRecu && /no conversation found/i.test(stderr)) {
+      log('INFO', `Claude : conversation ${lastSessionId} introuvable, nouvelle conversation`);
+      lastSessionId = null;
+      emit({ kind: 'oubliee' });
+      if (start(lancement) && messageEnAttente) write(messageEnAttente);
+      return;
+    }
     // Sous Windows, une commande introuvable ne déclenche pas "error" mais un code 1 du shell.
     const notFound = process.platform === 'win32' && /n.est pas reconnu|is not recognized/i.test(stderr);
     if (code !== 0 && code !== null) log('ERREUR', `Claude s'est arrêté (code ${code}) : ${stderr.trim()}`);
@@ -164,6 +181,8 @@ function start({ command, model, cwd, addDir, mcpConfig, log }) {
 function handleMessage(m, log) {
   if (m.type === 'system' && m.subtype === 'init') {
     lastSessionId = m.session_id;
+    initRecu = true;
+    messageEnAttente = null;
     return emit({ kind: 'init', model: m.model, sessionId: m.session_id });
   }
   if (m.type === 'stream_event') {
@@ -504,7 +523,9 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
     }
     // Petite précision invisible pour toi : ce qui a changé depuis ton message précédent.
     const prefixe = changes.length ? `(Atelier : ${changes.join(', ')} ${changes.length > 1 ? 'ont changé' : 'a changé'} depuis mon message précédent.)\n\n` : '';
-    write({ type: 'user', message: { role: 'user', content: prefixe + text }, parent_tool_use_id: null, session_id: '' });
+    const message = { type: 'user', message: { role: 'user', content: prefixe + text }, parent_tool_use_id: null, session_id: '' };
+    if (!initRecu) messageEnAttente = message;
+    write(message);
   });
 
   // Ta réponse sur la carte Autoriser / Refuser.
@@ -520,9 +541,9 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
   });
 
   // Nouvelle conversation.
-  handle('claude:reset', async () => { lastSessionId = null; stop(); });
+  handle('claude:reset', async () => { lastSessionId = null; messageEnAttente = null; stop(); });
 
-  // Au démarrage d'Atelier : la conversation affichée reprend au prochain message.
+  // Au démarrage d'Atelier, ou en rouvrant une conversation de la liste : elle reprend au prochain message.
   handle('claude:reprendre', async (_event, sessionId) => {
     if (!proc) lastSessionId = typeof sessionId === 'string' && /^[\w-]+$/.test(sessionId) ? sessionId : null;
   });
