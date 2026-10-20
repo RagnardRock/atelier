@@ -1,6 +1,6 @@
 # Tafl ᛏ : tuiles et cartes en pixel art, façon Pokémon
 
-Tafl est le troisième outil d'Atelier, à côté de Rune et Skald. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à les essayer sur une **carte**, puis à tout exporter dans les formats que lisent les moteurs de jeu. Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
+Tafl est le quatrième outil d'Atelier, à côté de Rune, Skald et Brokk. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à les essayer sur une **carte**, puis à tout exporter dans les formats que lisent les moteurs de jeu. Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
 
 Le nom vient du *tafl* (hnefatafl), le jeu de plateau des Vikings, qui se joue case par case sur une grille. Sa rune est ᛏ (Tiwaz, le « T »).
 
