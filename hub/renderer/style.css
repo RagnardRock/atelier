@@ -463,3 +463,73 @@ input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px s
 .menu-titre { padding: 6px 10px 2px 22px; color: var(--muted); font-size: 11px; }
 /* Icône de l'outil qui ouvre le projet */
 .projet-outil { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ---------- Claude ---------- */
+#claude-modele { font-weight: 400; }
+#claude-messages { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 16px; overflow-y: auto; user-select: text; }
+.claude-accueil { margin: auto 0; padding: 10px; text-align: center; color: var(--text); }
+.claude-accueil > .codicon { font-size: 30px; color: var(--accent); }
+.claude-accueil p { margin: 10px 0 0; line-height: 1.5; }
+.claude-suggestions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 16px; }
+.claude-suggestion { padding: 6px 12px; border: 1px solid var(--plate-border); border-radius: 14px; background: rgba(255, 255, 255, 0.04); font-size: 12px; cursor: pointer; }
+.claude-suggestion:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); color: var(--text-strong); }
+/* Tes messages à droite, ceux de Claude en pleine largeur */
+.claude-msg { display: flex; flex-direction: column; min-width: 0; }
+.claude-msg.user { align-items: flex-end; }
+.claude-msg.user .bulle {
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 12px 12px 4px 12px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.markdown { line-height: 1.55; color: var(--text); word-break: break-word; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote { margin: 0 0 8px; }
+.markdown ul, .markdown ol { padding-left: 20px; }
+.markdown li { margin: 2px 0; }
+.markdown h3, .markdown h4, .markdown h5, .markdown h6 { margin: 12px 0 6px; color: var(--text-strong); font-size: 13px; }
+.markdown h3 { font-size: 15px; }
+.markdown strong { color: var(--text-strong); }
+.markdown blockquote { padding-left: 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.markdown code { padding: 1px 5px; border-radius: 4px; background: var(--active); font-family: "Cascadia Code", Consolas, monospace; font-size: 0.92em; }
+.markdown pre { margin: 0 0 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: rgba(0, 0, 0, 0.25); overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.markdown pre code { padding: 0; background: none; }
+.markdown .link { color: var(--accent); text-decoration: underline dotted; cursor: help; }
+/* Une ligne par fichier lu */
+.claude-outil { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
+.claude-outil .libelle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.claude-outil.fait .etat { color: var(--success); }
+.claude-outil.echec .etat { color: var(--error); }
+.claude-outil.echec .libelle, .claude-outil.arrete .libelle { text-decoration: line-through; }
+.claude-avis { display: flex; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--hover); line-height: 1.5; font-size: 12px; }
+.claude-avis > .codicon { margin-top: 2px; color: var(--accent); }
+.claude-avis.erreur { background: color-mix(in srgb, var(--error) 10%, transparent); }
+.claude-avis.erreur > .codicon { color: var(--error); }
+/* Zone de saisie */
+#claude-formulaire { display: flex; flex-direction: column; gap: 6px; margin: 0 10px 10px; padding: 8px; border: 1px solid var(--plate-border); border-radius: 10px; background: rgba(0, 0, 0, 0.2); flex-shrink: 0; }
+#claude-formulaire:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+#claude-saisie { height: auto; max-height: 160px; padding: 0 2px; border: none; background: transparent; resize: none; line-height: 1.45; user-select: text; }
+#claude-saisie:focus { border: none; }
+.claude-actions { display: flex; align-items: center; gap: 4px; }
+#claude-etat { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--muted); font-size: 12px; }
+#btn-claude-envoyer { color: var(--accent); }
+#btn-claude-envoyer.stop { color: var(--error); }
+/* Écran ultralarge : des colonnes un peu plus étroites, pour que les six widgets tiennent sur une ligne. */
+@media (min-width: 2400px) {
+  #widgets { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+}
+.plaque-titre > span { white-space: nowrap; }
+/* Carte Autoriser / Refuser d'une action de Claude */
+.claude-carte { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.claude-carte-titre { display: flex; align-items: center; gap: 8px; color: var(--text-strong); line-height: 1.4; }
+.claude-carte-titre > .codicon { color: var(--accent); flex-shrink: 0; }
+.claude-carte-detail { margin: 0; padding: 8px 10px; max-height: 140px; overflow: auto; border-radius: 6px; background: rgba(0, 0, 0, 0.25); font: 12px/1.5 var(--ui-font); white-space: pre-wrap; word-break: break-word; }
+.claude-carte-boutons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.claude-carte-toujours { align-self: flex-end; padding: 0; border: none; background: none; color: var(--muted); font-size: 12px; text-align: left; text-decoration: underline dotted; cursor: pointer; }
+.claude-carte-toujours:hover { color: var(--text-strong); }

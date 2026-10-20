@@ -38,6 +38,18 @@ contextBridge.exposeInMainWorld('atelier', {
   reglagesPressePapiers: () => ipcRenderer.invoke('presse:reglages'),
   onPressePapiers: (callback) => ipcRenderer.on('presse:change', (_event, historique) => callback(historique)),
 
+  // Widget Claude
+  claudeEnvoyer: (texte) => ipcRenderer.invoke('claude:send', texte),
+  claudeInterrompre: () => ipcRenderer.invoke('claude:interrupt'),
+  claudeNouvelle: () => ipcRenderer.invoke('claude:reset'),
+  claudeReprendre: (sessionId) => ipcRenderer.invoke('claude:reprendre', sessionId),
+  claudeOuvrirDossier: () => ipcRenderer.invoke('claude:ouvrirDossier'),
+  claudePermission: (reponse) => ipcRenderer.invoke('claude:permission', reponse),
+  claudeToujours: (famille) => ipcRenderer.invoke('claude:toujours', famille),
+  claudeActionFaite: (id, resultat) => ipcRenderer.invoke('claude:actionFaite', id, resultat),
+  onClaudeAction: (callback) => ipcRenderer.on('claude:action', (_event, data) => callback(data)),
+  onClaude: (callback) => ipcRenderer.on('claude:event', (_event, data) => callback(data)),
+
   // Réglages, fenêtre, mise à jour d'Atelier
   readConfig: () => ipcRenderer.invoke('config:read'),
   writeConfig: (changes) => ipcRenderer.invoke('config:write', changes),

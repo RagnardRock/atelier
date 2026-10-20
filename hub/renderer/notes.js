@@ -152,5 +152,46 @@ const Notes = (() => {
     etat.textContent = '';
   }
 
-  return { start, enregistrer };
+  // --- Pour les actions de Claude (widget Claude) ---
+  const trouver = (id) => {
+    const n = notes.find((x) => x.id === id);
+    if (!n) throw new Error(`Aucune note n'a l'id ${id}`);
+    return n;
+  };
+  // n : la note ajoutée ou modifiée (null après une suppression). L'éditeur n'est redessiné que si la
+  // note ouverte est concernée, pour ne pas te déranger si tu es en train d'écrire dans une autre.
+  function apresChangement(n) {
+    if (n) n.modifiee = Date.now();
+    const ouverteSupprimee = courante && !notes.includes(courante);
+    if (ouverteSupprimee) courante = triees()[0] || null;
+    renderListe();
+    if (ouverteSupprimee || (n && n === courante)) renderEditeur();
+    return enregistrer();
+  }
+  async function ajouter(texteNote, epinglee = false) {
+    if (!String(texteNote || '').trim()) throw new Error('La note est vide');
+    const n = { id: crypto.randomUUID(), texte: String(texteNote), epinglee: Boolean(epinglee), creee: Date.now(), modifiee: Date.now() };
+    notes.push(n);
+    await apresChangement(n);
+    return `Note « ${titre(n)} » ajoutée (id : ${n.id}).`;
+  }
+  async function modifier(id, { texte: nouveau, epinglee } = {}) {
+    const n = trouver(id);
+    if (nouveau !== undefined) {
+      if (!String(nouveau).trim()) throw new Error('Le nouveau texte est vide (pour supprimer la note, utilise supprimer_note)');
+      n.texte = String(nouveau);
+    }
+    if (epinglee !== undefined) n.epinglee = Boolean(epinglee);
+    await apresChangement(n);
+    return `Note « ${titre(n)} » modifiée.`;
+  }
+  async function supprimer(id) {
+    const n = trouver(id);
+    notes = notes.filter((x) => x !== n);
+    await apresChangement(null);
+    return `Note « ${titre(n)} » supprimée.`;
+  }
+  const titreDe = (id) => { const n = notes.find((x) => x.id === id); return n ? titre(n) : null; };
+
+  return { start, enregistrer, ajouter, modifier, supprimer, titreDe };
 })();
