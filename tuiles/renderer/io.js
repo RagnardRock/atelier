@@ -61,6 +61,8 @@ const IO = (() => {
       collisions: [...Doc.collisions(doc, map)],
       zones: map.zones.map((z) => ({ id: z.id, nom: z.name, type: z.type, x: z.x, y: z.y, largeur: z.w, hauteur: z.h, objetRequis: z.objet || null })),
       teleporteurs: map.warps.map((w) => ({ id: w.id, x: w.x, y: w.y, vers: { carte: w.carte, x: w.tx, y: w.ty, direction: w.direction } })),
+      // Tafl 0.7 : personnages, panneaux, coffres… avec leur script (déjà au format du fichier, voir events.js).
+      evenements: map.events,
     };
   }
   const oneOf = (v, list, fallback) => (list.some(([k]) => k === v) ? v : fallback);
@@ -88,6 +90,7 @@ const IO = (() => {
       id: String(w.id || `tp-${i + 1}`), x: clamp(int(w.x), 0, width - 1), y: clamp(int(w.y), 0, height - 1),
       carte: String(w.vers.carte), tx: int(w.vers.x), ty: int(w.vers.y), direction: oneOf(w.vers.direction, Doc.DIRECTIONS, 'bas'),
     }));
+    map.events = Events.normEvents(data.evenements, width, height, tileCount);
     return map;
   }
 
@@ -115,6 +118,7 @@ const IO = (() => {
     data.map = { width: first.width, height: first.height, layers: first.layers.map((l) => ({ name: l.name, visible: l.visible, cells: [...l.cells] })) };
     data.maps = doc.maps.map((m) => mapToJSON(doc, m));
     data.depart = doc.depart;
+    data.donnees = doc.data;
     return JSON.stringify(data);
   }
 
@@ -155,6 +159,7 @@ const IO = (() => {
         cells: Int32Array.from({ length: map.width * map.height }, (_v, k) => (Number.isInteger(l.cells?.[k]) && l.cells[k] < doc.tiles.length ? l.cells[k] : -1)),
       }));
     }
+    doc.data = Events.normData(data.donnees, doc.tiles.length);
     doc.path = file.path;
     return doc;
   }
@@ -198,6 +203,7 @@ const IO = (() => {
   //   jeu.json        le titre, la liste des cartes, le départ du joueur
   //   tuiles.tafl     les tuiles, partagées par toutes les cartes
   //   cartes/*.json   une carte par fichier
+  //   donnees/*.json  personnages, quêtes, interrupteurs (Tafl 0.7)
   //   FORMAT.md       la description de ces fichiers (copiée par Tafl à chaque enregistrement)
   async function openGame(path) {
     if (!path) throw new Error('Ce jeu.json n\'a pas de chemin sur le disque : ouvre-le avec Fichier › Ouvrir.');
@@ -224,6 +230,17 @@ const IO = (() => {
     });
     if (maps.length) setMaps(doc, maps);
     doc.depart = cleanDepart(doc, jeu.depart);
+    // Les données du jeu : un fichier par sorte (donnees/personnages.json…).
+    const donnees = {};
+    for (const [kind, fichier] of Object.entries(jeu.donnees || {})) {
+      if (!DATA_KINDS.includes(kind) || typeof g.donnees?.[fichier] !== 'string') continue;
+      try {
+        donnees[kind] = JSON.parse(g.donnees[fichier])[kind];
+      } catch {
+        throw new Error(`${fichier} n'est pas lisible (JSON abîmé).`);
+      }
+    }
+    doc.data = Events.normData(donnees, doc.tiles.length);
     doc.name = String(jeu.titre || g.folder.split(/[\\/]/).pop());
     doc.path = g.path;
     doc.game = { folder: g.folder, fichiers: Object.keys(g.cartes) };
@@ -231,6 +248,8 @@ const IO = (() => {
   }
 
   const mapFile = (m) => `cartes/${m.id}.json`;
+  const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs'];
+  const dataFile = (kind) => `donnees/${kind}.json`;
   function gameFiles(doc) {
     const jeu = {
       format: 'tafl-jeu',
@@ -240,10 +259,12 @@ const IO = (() => {
       tuiles: 'tuiles.tafl',
       cartes: doc.maps.map((m) => ({ id: m.id, nom: m.name, fichier: mapFile(m) })),
       depart: doc.depart,
+      donnees: Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
     };
     return [
       ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],
       ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify(mapToJSON(doc, m)))]),
+      ...DATA_KINDS.map((k) => [dataFile(k), textBytes(JSON.stringify({ format: `tafl-${k}`, version: 1, [k]: doc.data[k] }, null, 1))]),
       // jeu.json en dernier : s'il manque, le jeu ne s'ouvre pas à moitié.
       ['jeu.json', textBytes(JSON.stringify(jeu, null, 2))],
     ];

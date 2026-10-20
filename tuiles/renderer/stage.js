@@ -4,7 +4,8 @@
 //   indispensable pour l'herbe, l'eau, les chemins…).
 // - « Carte » : les cartes du jeu, où l'on pose les tuiles sur autant de calques qu'on veut (Sol, Décor,
 //   Au-dessus du joueur…). On y peint aussi le passage (où le joueur peut marcher), et on y place les
-//   zones (herbes hautes, eau…), les téléporteurs (portes, sorties) et le départ du joueur.
+//   zones (herbes hautes, eau…), les téléporteurs (portes, sorties), le départ du joueur, et les
+//   événements (personnages, panneaux, coffres… avec leur script, voir events.js).
 //
 // Les outils (crayon, gomme, pot, pipette, ligne, rectangle) marchent pareil dans les deux modes :
 // ils travaillent sur une « grille » de cases. En mode Tuile, une case est un pixel et sa valeur
@@ -20,6 +21,7 @@ const TOOLS = [
   { id: 'rect', nom: 'Rectangle', key: 'U', icone: 'primitive-square', modes: ['tile', 'map'], aide: 'Glisser pour tracer un rectangle (plein ou contour, dans la barre d\'options).', aideCarte: 'Glisser pour couvrir un rectangle de tuiles.' },
   { id: 'zone', nom: 'Zone', key: 'Z', icone: 'symbol-namespace', modes: ['map'], aideCarte: 'Glisser pour tracer une zone (herbes hautes, eau, grotte…). Clic sur une zone : la modifier ou la supprimer.' },
   { id: 'warp', nom: 'Téléporteur', key: 'T', icone: 'debug-step-into', modes: ['map'], aideCarte: 'Clic sur une case : elle mène vers une autre carte (porte, escalier, sortie de route). Clic sur un téléporteur : le modifier.' },
+  { id: 'event', nom: 'Événement', key: 'N', icone: 'person', modes: ['map'], aideCarte: 'Clic sur une case vide : nouveau personnage, panneau, coffre, objet ou déclencheur. Clic sur un événement : modifier son script. Glisser : le déplacer. Clic droit : dupliquer, supprimer.' },
   { id: 'start', nom: 'Départ du joueur', key: 'J', icone: 'location', modes: ['map'], aideCarte: 'Clic : le joueur commence le jeu sur cette case, tourné dans la direction choisie.' },
   { id: 'shift', nom: 'Décalage', key: 'M', icone: 'move', modes: ['tile'], aide: 'Glisser pour faire glisser toute la tuile en boucle : ce qui sort d\'un côté revient de l\'autre. Idéal pour vérifier et retoucher les raccords.' },
 ];
@@ -356,7 +358,10 @@ const Stage = (() => {
         else ghost(x, y, preview.value);
       }
     }
-    if (App.options.showObjects || ['zone', 'warp', 'start'].includes(App.tool)) drawObjects(cell);
+    if (App.options.showObjects || ['zone', 'warp', 'start', 'event'].includes(App.tool)) {
+      drawObjects(cell);
+      drawEvents(cell, canvases);
+    }
     if (preview?.rect) {
       const r = preview.rect;
       ctx.setLineDash([6, 4]);
@@ -493,6 +498,86 @@ const Stage = (() => {
       ctx.fill();
     }
   }
+  // Les événements : leur tuile (ou celle de leur personnage), sinon un petit symbole par type.
+  const EVENT_COLORS = { pnj: '#ff9e4a', panneau: '#d8b27a', coffre: '#ffd040', objet: '#ff6b6b', declencheur: '#b9a8ff' };
+  function drawEvents(cell, canvases) {
+    const doc = App.doc, { map } = doc, v = view();
+    for (const ev of map.events) {
+      const moving = preview?.event === ev.id;
+      const x = moving ? preview.x : ev.x, y = moving ? preview.y : ev.y;
+      const px = v.x + x * cell, py = v.y + y * cell;
+      const color = EVENT_COLORS[ev.type] || EVENT_COLORS.pnj;
+      const tile = ev.apparence.tuile >= 0 ? ev.apparence.tuile : Events.perso(doc, ev.apparence.personnage)?.tuile ?? -1;
+      ctx.globalAlpha = moving ? 0.7 : 1;
+      if (tile >= 0 && canvases[tile]) ctx.drawImage(canvases[tile], px, py, cell, cell);
+      else eventSymbol(ev.type, px, py, cell, color);
+      ctx.globalAlpha = 1;
+      // Un liseré de la couleur du type ; pointillé pour une case invisible (déclencheur).
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      if (ev.type === 'declencheur') ctx.setLineDash([4, 3]);
+      ctx.strokeRect(px + 1, py + 1, cell - 2, cell - 2);
+      ctx.setLineDash([]);
+      // Où il regarde (pour un personnage).
+      if (ev.type === 'pnj' && cell >= 12) {
+        const [dx, dy] = { bas: [0, 1], haut: [0, -1], gauche: [-1, 0], droite: [1, 0] }[ev.direction] || [0, 1];
+        const cx = px + cell / 2 + dx * cell * 0.42, cy = py + cell / 2 + dy * cell * 0.42, r = cell * 0.09;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(cx + dx * r * 1.4, cy + dy * r * 1.4);
+        ctx.lineTo(cx - dy * r * 1.6, cy - dx * r * 1.6);
+        ctx.lineTo(cx + dy * r * 1.6, cy + dx * r * 1.6);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if ((hover && hover.x === x && hover.y === y) || moving) label(ev.nom || Events.TYPES.find(([k]) => k === ev.type)?.[1], px, py - 20, color, Math.max(cell, 12));
+    }
+  }
+  function eventSymbol(type, px, py, cell, color) {
+    const c = cell, cx = px + c / 2;
+    ctx.fillStyle = 'rgba(10, 10, 14, 0.55)';
+    ctx.fillRect(px + 2, py + 2, c - 4, c - 4);
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, c * 0.06);
+    ctx.beginPath();
+    if (type === 'pnj') {
+      // Une tête et des épaules.
+      ctx.arc(cx, py + c * 0.36, c * 0.14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx, py + c * 0.8, c * 0.26, c * 0.2, 0, Math.PI, 0);
+      ctx.fill();
+    } else if (type === 'panneau') {
+      ctx.fillRect(px + c * 0.2, py + c * 0.24, c * 0.6, c * 0.34);
+      ctx.fillRect(cx - c * 0.05, py + c * 0.58, c * 0.1, c * 0.24);
+    } else if (type === 'coffre') {
+      ctx.fillRect(px + c * 0.2, py + c * 0.34, c * 0.6, c * 0.42);
+      ctx.fillStyle = 'rgba(10, 10, 14, 0.7)';
+      ctx.fillRect(px + c * 0.2, py + c * 0.48, c * 0.6, c * 0.05);
+      ctx.fillRect(cx - c * 0.05, py + c * 0.46, c * 0.1, c * 0.12);
+    } else if (type === 'objet') {
+      // Une balle : rouge en haut, blanche en bas.
+      ctx.arc(cx, py + c / 2, c * 0.24, Math.PI, 0);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.fillStyle = '#f0f0f0';
+      ctx.arc(cx, py + c / 2, c * 0.24, 0, Math.PI);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a1a';
+      ctx.fillRect(cx - c * 0.24, py + c / 2 - c * 0.025, c * 0.48, c * 0.05);
+    } else {
+      // Un éclair : la case déclenche une scène.
+      ctx.moveTo(px + c * 0.56, py + c * 0.18);
+      ctx.lineTo(px + c * 0.3, py + c * 0.54);
+      ctx.lineTo(px + c * 0.5, py + c * 0.54);
+      ctx.lineTo(px + c * 0.42, py + c * 0.84);
+      ctx.lineTo(px + c * 0.72, py + c * 0.44);
+      ctx.lineTo(px + c * 0.52, py + c * 0.44);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
   const zoneAt = (map, x, y) => [...map.zones].reverse().find((z) => x >= z.x && y >= z.y && x < z.x + z.w && y < z.y + z.h) || null;
   const normRect = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x) + 1, h: Math.abs(a.y - b.y) + 1 });
 
@@ -522,6 +607,15 @@ const Stage = (() => {
       action = { tool, start: p, button: e.button };
       preview = { rect: normRect(p, p) };
       render();
+      return;
+    }
+    if (tool === 'event') {
+      if (!onMap(c)) return;
+      if (e.button === 2) { App.eventMenu(c.x, c.y, e.clientX, e.clientY); return; }
+      const ev = Doc.eventAt(map, c.x, c.y);
+      // Un événement se déplace en le glissant ; un simple clic l'ouvre (ou en crée un sur une case vide).
+      action = { tool, id: ev?.id || null, start: c, cx: e.clientX, cy: e.clientY };
+      if (ev) preview = { event: ev.id, x: c.x, y: c.y };
       return;
     }
     if (tool === 'warp' || tool === 'start') {
@@ -584,6 +678,11 @@ const Stage = (() => {
     } else if (action.tool === 'rect') {
       preview.points = rectPoints(action.start.x, action.start.y, c.x, c.y, App.options.filled);
       render();
+    } else if (action.tool === 'event') {
+      if (!action.id) return;
+      const { map } = App.doc;
+      preview = { event: action.id, x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
+      render();
     } else if (action.tool === 'zone') {
       const { map } = App.doc;
       preview.rect = normRect(action.start, { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) });
@@ -610,6 +709,14 @@ const Stage = (() => {
     action = null;
     canvas.classList.remove('panning');
     if (done.pan || done.tool === 'picker') { render(); return; }
+    if (done.tool === 'event') {
+      const p = preview;
+      preview = null;
+      render();
+      if (!done.id) return App.eventMenu(done.start.x, done.start.y, done.cx, done.cy);
+      if (p && (p.x !== done.start.x || p.y !== done.start.y)) return App.moveEvent(done.id, p.x, p.y);
+      return App.editEvent(done.id);
+    }
     if (done.tool === 'zone') {
       const r = preview?.rect;
       preview = null;

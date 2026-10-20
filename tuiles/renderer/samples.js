@@ -81,6 +81,18 @@ const Samples = (() => {
     const zone = (id, name, type, x, w, objet = '') => ({ id, name, type, x: clamp(x, 0, W - 1), y: clamp(midY + 2, 0, H - 1), w: Math.max(1, Math.min(w, W - x)), h: Math.max(1, Math.min(4, H - midY - 2)), objet });
     if (midY + 2 < H && W >= 9) doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', 2, 5), zone('zone-2', 'Mare', 'eau', W - 7, 5, 'planche-de-surf')];
     doc.depart = { carte: doc.map.id, x: clamp(midX, 0, W - 1), y: clamp(midY, 0, H - 1), direction: 'bas' };
+    // Deux événements pour essayer les scripts (Tafl 0.7) : un panneau au croisement, et un habitant.
+    if (W >= 6 && midY >= 1) {
+      const sign = Events.create(doc, 'panneau', clamp(midX + 1, 0, W - 1), midY - 1, 'ev-1');
+      const pnj = Events.create(doc, 'pnj', clamp(midX - 3, 0, W - 1), clamp(midY - 2, 0, H - 1), 'ev-2');
+      doc.map.events = [sign, { ...pnj, pages: [{ conditions: [], cache: false, commandes: [
+        { type: 'dire', qui: '@evenement', expression: 'normal', texte: 'Bonjour ! Les hautes herbes, au sud, sont pleines de créatures sauvages.' },
+        { type: 'choix', options: [
+          { texte: 'Merci !', commandes: [{ type: 'dire', qui: '@evenement', expression: 'normal', texte: 'Bonne route, {joueur} !' }] },
+          { texte: 'Même pas peur.', commandes: [{ type: 'dire', qui: '@evenement', expression: 'normal', texte: 'Ha ! On verra bien.' }] },
+        ] },
+      ] }] }];
+    }
     // Les nouvelles couleurs rejoignent la palette, pour pouvoir retoucher les exemples.
     for (const hex of Object.values(COLORS)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
   }

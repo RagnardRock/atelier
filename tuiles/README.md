@@ -1,6 +1,6 @@
 # Tafl ᛏ : tuiles et cartes en pixel art, façon Pokémon
 
-Tafl est le quatrième outil d'Atelier, à côté de Rune, Skald et Brokk. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à construire les **cartes** du jeu, puis à tout exporter dans les formats que lisent les moteurs de jeu. Depuis Tafl 0.6, c'est aussi l'**éditeur du jeu** : il décrit tout ce que contient le jeu (cartes, passage, zones, téléporteurs…) dans un **dossier de jeu** que le futur moteur lira (voir [FORMAT.md](FORMAT.md)). Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
+Tafl est le quatrième outil d'Atelier, à côté de Rune, Skald et Brokk. Il sert à dessiner les **tuiles** d'un jeu en vue de dessus façon Pokémon (herbe, hautes herbes, chemins, eau, arbres…), à les ranger dans un **jeu de tuiles**, à construire les **cartes** du jeu, puis à tout exporter dans les formats que lisent les moteurs de jeu. Depuis Tafl 0.6, c'est aussi l'**éditeur du jeu** : il décrit tout ce que contient le jeu (cartes, passage, zones, téléporteurs, et depuis 0.7 les personnages, leurs dialogues, les scripts et les quêtes) dans un **dossier de jeu** que le futur moteur lira (voir [FORMAT.md](FORMAT.md)). Il reprend la direction artistique des autres outils (mode sombre, verre dépoli, mêmes icônes).
 
 Le nom vient du *tafl* (hnefatafl), le jeu de plateau des Vikings, qui se joue case par case sur une grille. Sa rune est ᛏ (Tiwaz, le « T »).
 
@@ -94,7 +94,8 @@ Tafl **décrit** le jeu, le futur moteur le **fera tourner**. Tout ce que Tafl e
 MonJeu/
   jeu.json        le titre, la liste des cartes, le départ du joueur
   tuiles.tafl     les tuiles, partagées par toutes les cartes
-  cartes/*.json   une carte par fichier (cartes/bourg-palette.json…)
+  cartes/*.json   une carte par fichier (cartes/bourg-palette.json…), avec ses événements
+  donnees/*.json  personnages, quêtes, interrupteurs (Tafl 0.7)
   FORMAT.md       la description de ces fichiers
 ```
 
@@ -125,6 +126,32 @@ En mode Carte, le panneau de droite montre les **Cartes** et les **Calques** (la
 
 Les exports pour Tiled gardent l'opacité, la parallaxe, la profondeur et la fusion des calques (ces deux dernières en propriétés), pour la carte affichée. Tout s'annule avec `Ctrl+Z`.
 
+## Les événements et l'histoire (Tafl 0.7)
+
+**Événements** (outil Événement, `N`) : tout ce qui vit sur une case. Clic sur une case vide : un menu propose un **personnage**, un **panneau**, un **coffre**, un **objet au sol** ou un **déclencheur** (une case invisible qui lance une scène quand le joueur marche dessus). Chacun arrive avec un script de départ (le coffre sait déjà dire « vide » une fois ouvert). Clic sur un événement pour l'ouvrir, glisser pour le déplacer, clic droit pour le dupliquer ou le supprimer. Sur la carte : sa tuile, ou un petit symbole par type, et son nom au survol. Le panneau **Événements** (mode Carte) les liste tous, même les invisibles.
+
+**L'éditeur d'un événement**, une grande fenêtre :
+- **À gauche**, ce qu'il est : nom, type, case, personnage (son nom et ses portraits pour les dialogues), tuile qui le montre, direction, s'il bouge, comment il se lance (on lui parle, on le touche, ou tout seul à l'arrivée sur la carte), si on passe à travers.
+- **À droite**, ses **pages**. Chaque page a des **conditions** et un **script**. Le jeu joue la **dernière page dont toutes les conditions sont vraies** : la page 1 sans condition, c'est d'habitude ; les pages suivantes prennent le relais quand l'histoire avance (« quête finie », « rival battu », « déjà fait »…). Une page peut aussi rendre l'événement **absent** (l'objet ramassé disparaît).
+- **Le script** se lit de haut en bas. `+ Ajouter une commande` ouvre la liste : dialogue (avec l'aperçu de la boîte, le portrait et le nom en couleur), choix (chaque réponse a ses propres commandes, en retrait), si… sinon, interrupteurs, objets, créatures, combats, téléporter, quêtes, soigner, boutique, écran des EV, attendre, fin, note. Au survol d'une ligne : monter, descendre, modifier (ou double-clic), dupliquer, supprimer.
+- `Ctrl+Entrée` valide, `Échap` ferme (Tafl demande avant de jeter des changements). Valider s'annule d'un seul `Ctrl+Z`.
+
+**Jeu › Données du jeu** (`Ctrl+Maj+D`, ou l'icône du panneau Événements), avec trois onglets :
+- **Personnages** : nom, description (rôle et personnalité : pour toi, et pour Claude quand il écrit les dialogues), le **héros** (un seul : le joueur, qui parle et a sa personnalité), la couleur de son nom dans les dialogues, et ses **portraits, un par expression** (normal, content, triste, colère, surpris…). Dessine-les dans Skald ou Photoshop, puis « Importer un portrait… » : un fichier `maman-triste.png` devient tout seul l'expression « triste ».
+- **Quêtes** : titre, description, histoire principale ou **secondaire**, la **suite** (la quête qui suit, pour le fil rouge), les **personnages** qu'on y croise (les personnages récurrents), et les **étapes** dans l'ordre.
+- **Interrupteurs** : les faits que retient l'histoire (« rival battu au labo »). Ils se créent aussi tout seuls quand un script en nomme un nouveau.
+- Chaque fiche dit **où elle est utilisée** dans les scripts. L'identifiant d'une fiche suit son nom tant qu'elle est neuve, puis ne change plus.
+
+Ta liste d'envies, et comment le faire avec Tafl 0.7 :
+- **Le héros qui parle** : un personnage coché « héros », que les dialogues font parler comme les autres.
+- **Des légendaires au bout des quêtes** : une page avec la condition « quête finie », et la commande « Combat contre une créature ».
+- **Des boutiques débloquées par la progression** : la condition « compteur » (captures, dresseurs battus, évolutions, badges) devant la commande « Ouvrir une boutique ».
+- **Les EV au centre de soins** : la commande « Écran des EV » dans le script de l'infirmière.
+- **Pas de CS** : les zones ont un objet requis, et la condition « le joueur a un objet » ouvre le reste (un arbre coupé avec une scie, par exemple).
+- **Deux rivaux, des personnages récurrents, des quêtes reliées** : des personnages, des quêtes avec leur suite et leurs personnages.
+
+Tout est décrit pour le futur moteur dans [FORMAT.md](FORMAT.md) (« Événements » et « Données du jeu »).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -144,13 +171,14 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - Les pixels s'échangent en texte, une ligne par rangée : `.` = transparent, puis un caractère par couleur de la palette (`0` à `9`, `a` à `z`…). C'est ce qui lui permet de dessiner une tuile précise.
 - `Ctrl+Z` annule ce qu'il a fait.
 - **Depuis Tafl 0.6, il construit aussi le jeu** : créer un dossier de jeu et l'enregistrer dans le projet, les cartes (nouvelle, dupliquer, renommer, supprimer, ordre), les calques (ajouter, supprimer, ordre, profondeur, opacité, fusion, parallaxe), peindre le passage, le passage des tuiles, les zones, les téléporteurs (avec le retour) et le départ du joueur. Il voit le passage final de chaque case dans `voir_carte`. Il peut ainsi relier toutes les maisons d'une ville à leur intérieur en une demande.
+- **Depuis Tafl 0.7, il écrit l'histoire** : il crée les personnages (avec leurs portraits, depuis une image du projet), les quêtes et leurs étapes, les interrupteurs, et pose les événements avec leur script complet (dialogues, choix, conditions, objets, combats, quêtes…). Tafl vérifie chaque script avant de l'accepter et lui dit précisément ce qui ne va pas. Il relit tout avec `donnees` et `evenement` (voir), et voit les portraits.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
 ## La suite
 
 Le plan (validé avec Ragna le 20/10/2026) :
 
-1. **Tafl 0.7, les événements** : PNJ, panneaux, coffres posés sur la carte, avec leurs dialogues (portraits par expression, le héros qui parle) et des scripts simples (dire, donner, choix, si un interrupteur est allumé, téléporter, combat de dresseur), les personnages récurrents et les quêtes.
+1. ~~**Tafl 0.7, les événements**~~ : fait (voir plus haut).
 2. **Tafl 0.8, les bases de données** : types, attaques, créatures, objets, dresseurs, boutiques (débloquées par des compteurs : captures, dresseurs battus…), tables de rencontres des zones, réglages du niveau maximum.
 3. **Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl.
 
@@ -165,9 +193,10 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `main.js` | Processus principal : fenêtre, fichiers (Tafl n'écrit que là où tu as choisi d'enregistrer, et dans un dossier de jeu seulement ses fichiers à lui), réglages, journal `tafl.log`, mise à jour. |
 | `preload.js` | Le pont : les seules fonctions accessibles à l'interface, sous `window.tafl`. |
 | `renderer/doc.js` | Le jeu en mémoire (tuiles, cartes, calques, passage, zones, téléporteurs, départ) et l'historique d'annulation (copie à l'écriture : annuler remet simplement les anciens tableaux). |
-| `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur et Départ. |
-| `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques. |
-| `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json), l'import de planches et les exports (PNG, Tiled). |
+| `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur, Événement et Départ. |
+| `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques, événements. |
+| `renderer/events.js` | Les événements et leurs scripts (commandes, conditions, vérification), l'éditeur d'un événement et la fenêtre Données du jeu (personnages, quêtes, interrupteurs). |
+| `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), l'import de planches et les exports (PNG, Tiled). |
 | `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |
 | `renderer/palettes.js` | Les palettes proposées : une ligne par palette, facile à compléter. |
 | `renderer/samples.js` | Les tuiles d'exemple, dessinées en texte (une lettre par pixel). |

@@ -13,12 +13,16 @@ MonJeu/
   jeu.json              le jeu : titre, liste des cartes, départ du joueur
   tuiles.tafl           les tuiles, partagées par toutes les cartes
   cartes/
-    bourg-palette.json  une carte par fichier, nommé par l'id de la carte
+    bourg-palette.json  une carte par fichier, nommé par l'id de la carte (avec ses événements)
     route-1.json
+  donnees/
+    personnages.json    les personnages, avec leurs portraits (Tafl 0.7)
+    quetes.json         les quêtes et leurs étapes
+    interrupteurs.json  les faits de l'histoire que retiennent les scripts
   FORMAT.md             ce fichier
 ```
 
-Prévus pour la suite (Tafl 0.7 et 0.8) : `donnees/` (personnages, quêtes, créatures, attaques, objets, dresseurs, boutiques) et `sprites/` (images des personnages et des créatures).
+Prévus pour Tafl 0.8 : d'autres fichiers dans `donnees/` (créatures, attaques, objets, dresseurs, boutiques) et `sprites/` (images des personnages et des créatures).
 
 Chaque fichier a un champ `format` (son type) et un champ `version` (sa version). Si un jour le format change, la version augmente. Le moteur doit refuser poliment une version plus grande que celle qu'il connaît.
 
@@ -42,7 +46,12 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
     { "id": "bourg-palette", "nom": "Bourg Palette", "fichier": "cartes/bourg-palette.json" },
     { "id": "maison", "nom": "Maison", "fichier": "cartes/maison.json" }
   ],
-  "depart": { "carte": "bourg-palette", "x": 9, "y": 7, "direction": "bas" }
+  "depart": { "carte": "bourg-palette", "x": 9, "y": 7, "direction": "bas" },
+  "donnees": {
+    "personnages": "donnees/personnages.json",
+    "quetes": "donnees/quetes.json",
+    "interrupteurs": "donnees/interrupteurs.json"
+  }
 }
 ```
 
@@ -53,6 +62,7 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
 | `tuiles` | Le fichier des tuiles, à côté de `jeu.json`. |
 | `cartes` | Les cartes, dans l'ordre du panneau Cartes de Tafl. `id` ne change jamais (même si tu renommes la carte) : c'est lui que les téléporteurs utilisent. |
 | `depart` | Où le joueur commence une nouvelle partie, ou `null` s'il n'est pas encore placé. |
+| `donnees` | Les fichiers des données du jeu, par sorte (voir « Données du jeu »). Absent dans un jeu enregistré par Tafl 0.6 : pas encore de données. |
 
 ## `tuiles.tafl`
 
@@ -103,6 +113,9 @@ Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme
   ],
   "teleporteurs": [
     { "id": "tp-1", "x": 4, "y": 3, "vers": { "carte": "maison", "x": 5, "y": 6, "direction": "haut" } }
+  ],
+  "evenements": [
+    { "id": "ev-1", "nom": "Maman", "type": "pnj", "x": 6, "y": 4, "...": "voir « Événements »" }
   ]
 }
 ```
@@ -166,6 +179,168 @@ Une case `(x, y)` qui mène ailleurs : marcher dessus emmène le joueur sur la c
 
 Conseil pour une porte : l'arrivée sur le paillasson à l'intérieur, et le téléporteur du retour juste derrière lui (Tafl peut le créer tout seul : case « Créer aussi le téléporteur du retour »). Ainsi, le joueur qui arrive ne repart pas aussitôt.
 
+### Événements
+
+Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un objet au sol, ou une case invisible qui lance une scène. **Un événement par case.** Ce qu'il fait est écrit dans ses **pages**.
+
+```json
+{
+  "id": "ev-1",
+  "nom": "Prof. Chêne",
+  "type": "pnj",
+  "x": 3, "y": 3,
+  "apparence": { "personnage": "prof-chene", "tuile": -1 },
+  "direction": "bas",
+  "deplacement": "regarde",
+  "traversable": false,
+  "declenchement": "parler",
+  "pages": [
+    {
+      "conditions": [],
+      "cache": false,
+      "commandes": [
+        { "type": "dire", "qui": "@evenement", "expression": "normal", "texte": "Ah, {joueur} ! Tu tombes bien." },
+        { "type": "choix", "options": [
+          { "texte": "Je veux un compagnon !", "commandes": [
+            { "type": "creature", "creature": "starter-feu", "niveau": 5 },
+            { "type": "quete", "quete": "le-premier-compagnon", "action": "etape", "etape": 2 },
+            { "type": "local", "valeur": true }
+          ] },
+          { "texte": "Plus tard.", "commandes": [] }
+        ] }
+      ]
+    },
+    {
+      "conditions": [{ "type": "local", "valeur": true }],
+      "cache": false,
+      "commandes": [
+        { "type": "dire", "qui": "@evenement", "expression": "content", "texte": "Prends bien soin de lui !" }
+      ]
+    }
+  ]
+}
+```
+
+| Champ | Sens |
+|---|---|
+| `id` | Unique **dans la carte** (`ev-1`, `ev-2`…). Avec l'id de la carte, il désigne l'événement dans tout le jeu (pour son interrupteur « déjà fait »). |
+| `type` | `"pnj"` (personnage), `"panneau"`, `"coffre"`, `"objet"` (objet au sol), `"declencheur"` (case invisible). Il sert surtout à Tafl ; le moteur suit les autres champs. |
+| `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon celle du personnage (en attendant ses sprites, Tafl 0.8), sinon rien (un déclencheur est invisible). |
+| `direction` | Où il regarde au départ. |
+| `deplacement` | `"fixe"`, `"regarde"` (se tourne vers le joueur qui lui parle), `"aleatoire"` (marche au hasard autour de sa case), `"tourne"` (regarde autour de lui). |
+| `traversable` | `false` : il bloque sa case comme un mur. `true` : on passe à travers (un déclencheur). |
+| `declenchement` | `"parler"` : le joueur, devant lui et tourné vers lui, appuie sur A. `"toucher"` : le joueur marche sur sa case (ou se cogne contre lui s'il n'est pas traversable). `"auto"` : la page se joue toute seule dès que le joueur arrive sur la carte (une scène d'arrivée : pense à une condition pour qu'elle ne se rejoue pas). |
+| `pages` | Au moins une. **Le moteur prend la DERNIÈRE page dont toutes les conditions sont vraies** (une page sans condition est toujours vraie). Si aucune ne l'est, l'événement est absent. `cache: true` : sur cette page, l'événement est absent (invisible, on ne peut ni lui parler ni le toucher, il ne bloque pas). Le moteur refait ce choix après chaque script et à chaque changement de carte. |
+
+Le moteur joue les `commandes` de la page dans l'ordre. Pendant un script, le joueur ne bouge pas.
+
+#### Commandes
+
+| `type` | Champs | Ce que fait le moteur |
+|---|---|---|
+| `dire` | `qui`, `expression`, `texte` | Une boîte de dialogue. `qui` : l'id d'un personnage (son nom s'affiche, dans sa `couleur`, avec son portrait pour `expression`) ; `"@evenement"` : le personnage de l'événement ; `""` : texte seul (panneau, narration). Dans `texte`, `{joueur}` est remplacé par le nom du joueur ; une ligne vide coupe le texte en plusieurs boîtes. Sans portrait pour cette expression, prendre `normal`, sinon le premier. |
+| `choix` | `options: [{ texte, commandes }]` | 2 à 4 réponses ; le joueur en choisit une, le moteur joue ses `commandes`, puis continue après le choix. |
+| `si` | `condition`, `alors`, `sinon` | Une condition (mêmes formes que celles des pages) : joue `alors` si elle est vraie, sinon `sinon`. |
+| `commentaire` | `texte` | Rien : une note pour l'auteur. |
+| `fin` | | Arrête le script ici. |
+| `interrupteur` | `id`, `valeur` | Allume (`true`) ou éteint (`false`) un interrupteur du jeu. |
+| `local` | `valeur` | L'interrupteur « déjà fait » **de cet événement** (coffre ouvert, objet ramassé, dresseur battu). |
+| `attendre` | `ms` | Une pause. |
+| `objet` | `action` (`"donner"` ou `"retirer"`), `objet`, `nombre` | Ajoute ou retire des objets du sac (`objet` : un identifiant, la liste des objets arrive avec Tafl 0.8). |
+| `creature` | `creature`, `niveau` | Donne une créature au joueur (le starter, un cadeau). |
+| `combat_sauvage` | `creature`, `niveau` | Un combat contre une créature précise, qu'on peut capturer (un légendaire au bout d'une quête). |
+| `combat_dresseur` | `dresseur` | Un combat contre un dresseur (son équipe arrive avec Tafl 0.8). |
+| `teleporter` | `carte`, `x`, `y`, `direction` | Emmène le joueur ailleurs. |
+| `quete` | `quete`, `action` (`"commencer"`, `"etape"`, `"finir"`), `etape` | Fait avancer une quête. `etape` : le numéro de l'étape (à partir de 1), pour `"etape"`. Commencer met la quête à l'étape 1. |
+| `soigner` | | Soigne toute l'équipe (le centre de soins). |
+| `boutique` | `boutique` | Ouvre une boutique (son contenu, et ce qui débloque chaque article, arrive avec Tafl 0.8). |
+| `ecran_ev` | | Ouvre l'écran où le joueur répartit les points d'effort (EV) de ses créatures. |
+
+Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
+
+#### Conditions
+
+| `type` | Champs | Vraie quand |
+|---|---|---|
+| `interrupteur` | `id`, `valeur` | l'interrupteur vaut `valeur`. Au début d'une partie, tous les interrupteurs sont éteints. |
+| `local` | `valeur` | l'interrupteur « déjà fait » de l'événement vaut `valeur`. |
+| `objet` | `objet`, `min` | le joueur a au moins `min` fois cet objet. |
+| `quete` | `quete`, `etat`, `etape` | la quête est `"pas_commencee"`, `"en_cours"` ou `"finie"`. Pour `"en_cours"`, `etape` > 0 demande en plus d'être au moins à cette étape. |
+| `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"evolutions"` (évolutions vues), `"badges"`, `"pas"`. Pour débloquer des boutiques ou des personnages au fil de la progression. |
+
+#### Ce que le moteur garde dans une sauvegarde
+
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, la carte et la case du joueur.
+
+## Données du jeu (`donnees/`)
+
+Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` sont en minuscules, sans accents ni espaces (`prof-chene`), et ne changent jamais : les scripts s'en servent.
+
+### `donnees/personnages.json`
+
+```json
+{
+  "format": "tafl-personnages",
+  "version": 1,
+  "personnages": [
+    {
+      "id": "prof-chene",
+      "nom": "Prof. Chêne",
+      "description": "Le professeur du bourg, bavard et distrait.",
+      "heros": false,
+      "couleur": "#5ec8ff",
+      "tuile": -1,
+      "portraits": [
+        { "expression": "normal", "png": "data:image/png;base64,..." },
+        { "expression": "content", "png": "data:image/png;base64,..." }
+      ]
+    }
+  ]
+}
+```
+
+- `heros` : le personnage que joue le joueur (un seul). Il parle dans les dialogues comme les autres ; `{joueur}` reste le nom choisi par le joueur.
+- `couleur` : la couleur de son nom dans les boîtes de dialogue (`""` = celle par défaut).
+- `tuile` : la tuile qui le montre sur la carte en attendant ses sprites (`-1` = aucune).
+- `portraits` : un visage par expression (`normal`, `content`, `rire`, `triste`, `colere`, `surpris`, `inquiet`, `gene`, `determine`, ou d'autres noms), en image encodée en texte comme les tuiles. Taille libre.
+
+### `donnees/quetes.json`
+
+```json
+{
+  "format": "tafl-quetes",
+  "version": 1,
+  "quetes": [
+    {
+      "id": "le-premier-compagnon",
+      "titre": "Le premier compagnon",
+      "description": "Le prof confie un compagnon au héros.",
+      "secondaire": false,
+      "suivante": "legende-du-lac",
+      "personnages": ["prof-chene"],
+      "etapes": [{ "texte": "Aller au labo" }, { "texte": "Choisir un compagnon" }, { "texte": "Battre le rival" }]
+    }
+  ]
+}
+```
+
+- `secondaire` : `false` pour l'histoire principale, `true` pour une quête secondaire.
+- `suivante` : l'id de la quête qui suit (le fil rouge), ou `""`. Le moteur peut la montrer comme « nouvelle quête » quand celle-ci finit ; c'est un script qui la commence vraiment.
+- `personnages` : les personnages qu'on y croise (pour suivre les personnages récurrents).
+- `etapes` : dans l'ordre ; l'étape n° 1 est la première. Le journal des quêtes du jeu montre le texte de l'étape en cours.
+
+### `donnees/interrupteurs.json`
+
+```json
+{
+  "format": "tafl-interrupteurs",
+  "version": 1,
+  "interrupteurs": [{ "id": "rival-battu-au-labo", "nom": "Rival battu au labo", "description": "" }]
+}
+```
+
+La liste sert à Tafl (des noms lisibles) ; le moteur accepte aussi un interrupteur qui n'y est pas (il est éteint au départ).
+
 ## Exemple de lecture (JavaScript)
 
 ```js
@@ -173,8 +348,12 @@ const jeu = await (await fetch('MonJeu/jeu.json')).json();
 const carte = await (await fetch(`MonJeu/${jeu.cartes.find((c) => c.id === jeu.depart.carte).fichier}`)).json();
 const bloque = (x, y) => x < 0 || y < 0 || x >= carte.largeur || y >= carte.hauteur || carte.collisions[y * carte.largeur + x] === 2;
 const teleporteur = (x, y) => carte.teleporteurs.find((t) => t.x === x && t.y === y);
+
+// La page active d'un événement : la dernière dont toutes les conditions sont vraies.
+const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditions.every(vraie)) || null;
 ```
 
 ## Historique du format
 
 - **Version 1** (Tafl 0.6) : dossier de jeu, plusieurs cartes, calques avec profondeur, opacité, fusion et parallaxe, passage et collisions, zones, téléporteurs, départ du joueur.
+- **Version 1, ajouts de Tafl 0.7** : `evenements` dans les cartes (pages, conditions, commandes), `donnees` dans `jeu.json`, et le dossier `donnees/` (personnages avec portraits, quêtes, interrupteurs). Ce sont des champs en plus : un fichier de Tafl 0.6 se lit pareil (sans événements ni données), donc la version reste 1.

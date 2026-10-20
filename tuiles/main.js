@@ -111,7 +111,8 @@ async function loadFile(file) {
 
 // kind : 'tafl' (ouvrir un jeu de tuiles) ou 'image' (importer une planche de tuiles en PNG…).
 // dossier : où ouvrir la fenêtre (un projet ouvert depuis Atelier) ; sinon le dernier dossier utilisé.
-handle('file:open', async (event, { kind = 'tafl', dossier } = {}) => {
+// titre : le titre de la fenêtre (« Portrait de Maman »…).
+handle('file:open', async (event, { kind = 'tafl', dossier, titre } = {}) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const config = await readConfig();
   const ici = typeof dossier === 'string' && fsSync.existsSync(dossier) ? dossier : null;
@@ -119,7 +120,7 @@ handle('file:open', async (event, { kind = 'tafl', dossier } = {}) => {
     ? [{ name: 'Images (planche de tuiles)', extensions: ['png', 'gif', 'webp', 'bmp'] }]
     : [{ name: 'Jeu de tuiles Tafl, ou jeu.json d\'un dossier de jeu', extensions: ['tafl', 'json'] }, { name: 'Images (planche de tuiles)', extensions: ['png', 'gif', 'webp', 'bmp'] }];
   const result = await dialog.showOpenDialog(win, {
-    title: kind === 'image' ? 'Importer une planche de tuiles' : 'Ouvrir un jeu de tuiles',
+    title: titre ? String(titre) : kind === 'image' ? 'Importer une planche de tuiles' : 'Ouvrir un jeu de tuiles',
     defaultPath: ici || config.lastFolder || app.getPath('documents'),
     properties: ['openFile'],
     filters: [...filters, { name: 'Tous les fichiers', extensions: ['*'] }],
@@ -175,10 +176,12 @@ handle('file:write', async (_event, file, bytes) => {
 });
 
 // --- Dossier de jeu (Tafl 0.6, voir FORMAT.md) ---
-// MonJeu/jeu.json, MonJeu/tuiles.tafl, MonJeu/cartes/*.json et MonJeu/FORMAT.md. Tafl n'écrit dans un
-// dossier de jeu que si tu l'as ouvert ou choisi, et seulement ces fichiers-là.
-const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json)$/;
+// MonJeu/jeu.json, MonJeu/tuiles.tafl, MonJeu/cartes/*.json, MonJeu/donnees/*.json (Tafl 0.7) et
+// MonJeu/FORMAT.md. Tafl n'écrit dans un dossier de jeu que si tu l'as ouvert ou choisi, et seulement
+// ces fichiers-là.
+const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json|donnees\/[a-z0-9-]+\.json)$/;
 const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
+const DATA_FILE = /^donnees\/[a-z0-9-]+\.json$/;
 const relGame = (rel) => String(rel).replace(/\\/g, '/');
 async function mapFilesIn(folder) {
   const names = await fs.readdir(path.join(folder, 'cartes')).catch(() => []);
@@ -214,9 +217,16 @@ handle('game:open', async (_event, target) => {
     const text = await fs.readFile(path.join(folder, rel), 'utf8').catch(() => null);
     if (text !== null) cartes[rel] = text;
   }
+  const donnees = {};
+  for (const f of Object.values(data.donnees && typeof data.donnees === 'object' ? data.donnees : {})) {
+    const rel = relGame(f || '');
+    if (!DATA_FILE.test(rel)) continue;
+    const text = await fs.readFile(path.join(folder, rel), 'utf8').catch(() => null);
+    if (text !== null) donnees[rel] = text;
+  }
   gameFolders.add(folder);
   await rememberRecent(file);
-  return { folder, path: file, jeu, tuiles, cartes };
+  return { folder, path: file, jeu, tuiles, cartes, donnees };
 });
 
 // Le jeu.json d'un dossier de jeu, s'il y en a un (Atelier ouvre Tafl sur un dossier de projet).
@@ -236,6 +246,7 @@ handle('game:write', async (_event, folder, files, remove = []) => {
   const root = path.resolve(String(folder));
   if (!gameFolders.has(root)) throw new Error(`Écriture refusée : ${root} n'est pas un dossier de jeu ouvert`);
   await fs.mkdir(path.join(root, 'cartes'), { recursive: true });
+  await fs.mkdir(path.join(root, 'donnees'), { recursive: true });
   for (const [rel, bytes] of files) {
     const r = relGame(rel);
     if (!GAME_FILE.test(r)) throw new Error(`Fichier refusé dans le dossier de jeu : ${rel}`);

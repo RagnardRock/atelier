@@ -133,7 +133,7 @@ const App = (() => {
       }
       bar.append(el('span', { className: 'option-sep' }));
       bar.append(check('Passage', 'showPassage', 'Montre où le joueur peut marcher (rouge = bloqué, flèche = rebord)'));
-      bar.append(check('Zones et téléporteurs', 'showObjects'));
+      bar.append(check('Zones, téléporteurs et événements', 'showObjects'));
       bar.append(check('Atténuer les autres calques', 'dimOther'));
       bar.append(check('Grille', 'tileGrid'));
       const size = el('button', { className: 'button small', textContent: `${map.name} : ${map.width} × ${map.height}`, title: 'Changer la taille de la carte' });
@@ -664,6 +664,78 @@ const App = (() => {
     selectMap(i);
   }
 
+  // --- Événements : personnages, panneaux, coffres, objets, déclencheurs (Tafl 0.7) ---
+  // L'éditeur (events.js) travaille sur une copie ; on remet le résultat d'un bloc (un seul Ctrl+Z).
+  function applyEvent(map, r, old) {
+    const doc = api.doc;
+    if (!r) return;
+    if (r === 'supprimer') {
+      Doc.change(doc, 'Supprimer l\'événement', () => { map.events = map.events.filter((o) => o.id !== old.id); });
+      return;
+    }
+    Doc.change(doc, old ? 'Modifier l\'événement' : 'Nouvel événement', () => {
+      map.events = old ? map.events.map((o) => (o.id === old.id ? r.event : o)) : [...map.events, r.event];
+      // Les interrupteurs nommés dans le script qui n'existaient pas encore.
+      if (r.interrupteurs?.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...r.interrupteurs] };
+    });
+  }
+  async function editEvent(id) {
+    const map = api.doc.map;
+    const ev = map.events.find((o) => o.id === id);
+    if (!ev) return;
+    applyEvent(map, await Events.editEvent(api.doc, ev), ev);
+  }
+  async function createEvent(type, x, y) {
+    const doc = api.doc, map = doc.map;
+    const there = Doc.eventAt(map, x, y);
+    if (there) return editEvent(there.id);
+    const ev = Events.create(doc, type, x, y, Events.nextId('ev', map.events));
+    applyEvent(map, await Events.editEvent(doc, ev, { nouveau: true }), null);
+    return null;
+  }
+  function moveEvent(id, x, y) {
+    const map = api.doc.map;
+    if (Doc.eventAt(map, x, y)) return notify(`La case (${x}, ${y}) a déjà un événement.`, 'warning', 3000);
+    Doc.change(api.doc, 'Déplacer l\'événement', () => { map.events = map.events.map((o) => (o.id === id ? { ...o, x, y } : o)); });
+    return null;
+  }
+  // La première case libre à côté (pour une copie).
+  function freeCellNear(map, x, y) {
+    for (let r = 1; r < Math.max(map.width, map.height); r++) {
+      for (const [dx, dy] of [[r, 0], [0, r], [-r, 0], [0, -r], [r, r], [-r, r], [r, -r], [-r, -r]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && ny >= 0 && nx < map.width && ny < map.height && !Doc.eventAt(map, nx, ny)) return { x: nx, y: ny };
+      }
+    }
+    return null;
+  }
+  function duplicateEvent(id) {
+    const map = api.doc.map;
+    const ev = map.events.find((o) => o.id === id);
+    const p = ev && freeCellNear(map, ev.x, ev.y);
+    if (!p) return;
+    Doc.change(api.doc, 'Dupliquer l\'événement', () => { map.events = [...map.events, { ...structuredClone(ev), id: Events.nextId('ev', map.events), ...p }]; });
+  }
+  function deleteEvent(id) {
+    const map = api.doc.map;
+    Doc.change(api.doc, 'Supprimer l\'événement', () => { map.events = map.events.filter((o) => o.id !== id); });
+  }
+  // Clic sur une case avec l'outil Événement : le menu des types (case vide) ou des actions.
+  function eventMenu(x, y, cx, cy) {
+    const ev = Doc.eventAt(api.doc.map, x, y);
+    const items = ev ? [
+      { label: 'Modifier l\'événement…', run: () => run(() => editEvent(ev.id)) },
+      { label: 'Dupliquer à côté', run: () => duplicateEvent(ev.id) },
+      { label: 'Supprimer', run: () => deleteEvent(ev.id) },
+    ] : Events.TYPES.map(([type, label]) => ({ label: `Nouveau : ${label.toLowerCase()}…`, run: () => run(() => createEvent(type, x, y)) }));
+    Menus.open(items, cx, cy);
+  }
+  async function openData(tab) {
+    const doc = api.doc;
+    const data = await Events.editData(doc, tab);
+    if (data) Doc.change(doc, 'Données du jeu', () => { doc.data = data; });
+  }
+
   // --- Historique ---
   function undo() {
     if (!api.doc) return;
@@ -779,13 +851,15 @@ const App = (() => {
       ...layerMenuItems(),
       null,
       { label: 'Montrer le passage', checked: api.options.showPassage, run: () => toggleOption('showPassage') },
-      { label: 'Montrer les zones et téléporteurs', checked: api.options.showObjects, run: () => toggleOption('showObjects') },
+      { label: 'Montrer les zones, téléporteurs et événements', checked: api.options.showObjects, run: () => toggleOption('showObjects') },
       null,
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', run: needDoc(IO.exportMapImage) },
     ] : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
     Jeu: () => (api.doc ? [
       { label: 'Titre du jeu…', run: () => run(renameGame) },
+      // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
+      { label: 'Données du jeu (personnages, quêtes, interrupteurs)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
       { label: 'Aller au départ du joueur', run: goToStart },
       { label: 'Afficher le dossier du jeu', disabled: !api.doc.game?.folder, run: () => window.tafl.revealFile(api.doc.path) },
       null,
@@ -883,6 +957,8 @@ const App = (() => {
         if (z) bits.push(`zone ${z.name || z.type}`);
         const w = map.warps.find((o) => o.x === hover.x && o.y === hover.y);
         if (w) bits.push(`→ ${Doc.mapById(doc, w.carte)?.name || w.carte} (${w.tx}, ${w.ty})`);
+        const ev = Doc.eventAt(map, hover.x, hover.y);
+        if (ev) bits.push(`${ev.nom || ev.type} (${ev.pages.length} page${ev.pages.length > 1 ? 's' : ''})`);
         pos = bits.join('  ·  ');
       }
     }
@@ -897,6 +973,8 @@ const App = (() => {
       if (e.key === 'Escape') Dialogs.close(null);
       return;
     }
+    // L'éditeur d'événement ou les données du jeu : Échap ferme, le reste est pour la fenêtre.
+    if (Events.handleKey(e)) return;
     if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
     const k = e.key.toLowerCase();
     const ctrl = e.ctrlKey || e.metaKey;
@@ -912,6 +990,7 @@ const App = (() => {
       if (k === 'z' && e.shiftKey) return go(redo);
       if (k === 'z') return go(undo);
       if (k === 'y') return go(redo);
+      if (k === 'd' && e.shiftKey) return go(needDoc(() => openData()));
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
@@ -1054,7 +1133,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData });
   return api;
 })();
 

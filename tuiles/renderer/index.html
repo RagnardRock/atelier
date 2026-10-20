@@ -96,6 +96,16 @@
         <div id="layers" class="rows"></div>
       </section>
 
+      <!-- Les événements de la carte affichée : personnages, panneaux, coffres… (outil Événement, N) -->
+      <section class="panel map-only" id="events-panel">
+        <div class="panel-header"><span class="panel-title">Événements</span><span id="events-count" class="panel-count"></span>
+          <div class="panel-actions">
+            <button id="data-open" class="icon-button" title="Données du jeu : personnages, quêtes, interrupteurs (Ctrl+Maj+D)"><i class="codicon codicon-database"></i></button>
+          </div>
+        </div>
+        <div id="events" class="rows"></div>
+      </section>
+
       <section class="panel tile-only" id="color-panel">
         <div class="panel-header"><span class="panel-title">Palette</span>
           <div class="panel-actions">
@@ -162,6 +172,7 @@
   <script src="dialogs.js"></script>
   <script src="palettes.js"></script>
   <script src="doc.js"></script>
+  <script src="events.js"></script>
   <script src="samples.js"></script>
   <script src="stage.js"></script>
   <script src="panels.js"></script>
@@ -169,7 +180,7 @@
   <script src="app.js"></script>
   <script src="update.js"></script>
   <!-- Panneau Claude, commun à Skald, Tafl et Brokk (../commun/LISEZMOI.md) -->
-  <script src="../commun/claude-panneau.js" data-outil="Tafl" data-bienvenue="Demande une idée de tuiles, de palette ou de carte, ou de l'aide sur un fichier du projet."></script>
+  <script src="../commun/claude-panneau.js" data-outil="Tafl" data-bienvenue="Demande une idée de tuiles, de carte, de personnage ou de quête, un dialogue à écrire, ou de l'aide sur un fichier du projet."></script>
   <script src="claude-actions.js"></script>
 </body>
 </html>
