@@ -53,10 +53,12 @@ const Panels = (() => {
   function usedColors(doc) {
     const seen = new Set();
     for (const t of doc.tiles) {
-      for (let o = 0; o < t.data.length; o += 4) {
-        if (t.data[o + 3] === 0) continue;
-        seen.add(rgbaToHex(t.data[o], t.data[o + 1], t.data[o + 2], t.data[o + 3]));
-        if (seen.size >= 256) break;
+      for (const d of t.frames) {
+        for (let o = 0; o < d.length; o += 4) {
+          if (d[o + 3] === 0) continue;
+          seen.add(rgbaToHex(d[o], d[o + 1], d[o + 2], d[o + 3]));
+          if (seen.size >= 256) return [...seen];
+        }
       }
     }
     return [...seen];
@@ -120,9 +122,11 @@ const Panels = (() => {
   const tilesEl = $('#tiles');
   let dragFrom = null;
 
+  // Image montrée dans les vignettes : celle de l'horloge d'animation (ou la première, à l'arrêt).
+  const shownFrame = (tile) => Doc.frameAt(tile, App.playing ? performance.now() : 0);
   function thumb(tile, size) {
     const c = el('canvas', { width: size, height: size, className: 'tile-canvas' });
-    c.getContext('2d').drawImage(Doc.tileCanvas(tile, size), 0, 0);
+    c.getContext('2d').drawImage(Doc.tileCanvas(tile, size, shownFrame(tile)), 0, 0);
     return c;
   }
 
@@ -132,7 +136,7 @@ const Panels = (() => {
     if (!doc) return;
     tilesEl.style.setProperty('--cols', doc.columns);
     doc.tiles.forEach((tile, i) => {
-      const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}`, title: `${i}. ${tile.name}\nClic : choisir · double-clic : renommer · glisser : changer l'ordre`, draggable: true }, [thumb(tile, doc.tileSize)]);
+      const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}`, title: `${i}. ${tile.name}${Doc.animated(tile) ? ` (animée, ${tile.frames.length} images)` : ''}\nClic : choisir · double-clic : renommer · glisser : changer l'ordre`, draggable: true }, [thumb(tile, doc.tileSize), Doc.animated(tile) ? el('span', { className: 'tile-anim', textContent: tile.frames.length }) : null]);
       item.dataset.index = i;
       item.onclick = () => App.selectTile(i);
       item.ondblclick = () => App.renameTile(i);
@@ -158,16 +162,17 @@ const Panels = (() => {
     $('#tiles-count').textContent = `${doc.tiles.length} · ${doc.tileSize}×${doc.tileSize}`;
   }
 
-  // Pendant un coup de crayon : seule la vignette de la tuile en cours est refaite.
-  function refreshCurrentThumb() {
+  // Pendant un coup de crayon (ou à chaque image de l'animation) : seule une vignette est refaite.
+  function refreshThumb(i, frame) {
     const doc = App.doc;
-    const item = tilesEl.children[doc.current];
-    if (!item) return;
+    const item = tilesEl.children[i];
+    if (!item || !doc.tiles[i]) return;
     const c = item.querySelector('canvas');
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
-    g.drawImage(Doc.tileCanvas(doc.tiles[doc.current], doc.tileSize), 0, 0);
+    g.drawImage(Doc.tileCanvas(doc.tiles[i], doc.tileSize, frame), 0, 0);
   }
+  const refreshCurrentThumb = () => refreshThumb(App.doc.current, App.playing ? shownFrame(App.doc.tiles[App.doc.current]) : App.frame);
 
   // --- Aperçu : la tuile répétée en 3 × 3, à taille ×2 ou ×3 (comme dans le jeu) ---
   const previewCanvas = $('#preview');
@@ -180,20 +185,74 @@ const Panels = (() => {
     const g = previewCanvas.getContext('2d');
     g.imageSmoothingEnabled = false;
     drawChecker(g, 0, 0, previewCanvas.width, previewCanvas.height, 6);
-    const tile = Doc.tileCanvas(doc.tiles[doc.current], s);
+    const t = doc.tiles[doc.current];
+    const tile = Doc.tileCanvas(t, s, App.playing ? shownFrame(t) : App.frame);
     for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) g.drawImage(tile, i * s * scale, j * s * scale, s * scale, s * scale);
     $('#preview-scale').textContent = `×${scale}`;
+  }
+
+  // --- Animation : les images de la tuile choisie ---
+  const framesEl = $('#frames');
+  function renderFrames() {
+    const doc = App.doc;
+    framesEl.innerHTML = '';
+    if (!doc) return;
+    const tile = doc.tiles[doc.current];
+    const s = doc.tileSize;
+    tile.frames.forEach((_f, k) => {
+      const c = el('canvas', { width: s, height: s, className: 'tile-canvas' });
+      c.getContext('2d').drawImage(Doc.tileCanvas(tile, s, k), 0, 0);
+      const b = el('button', { className: `frame-item${k === App.frame ? ' active' : ''}`, title: `Image ${k + 1} sur ${tile.frames.length}\nClic : la dessiner · glisser : changer l'ordre`, draggable: true }, [c, el('span', { className: 'frame-num', textContent: k + 1 })]);
+      b.onclick = () => App.selectFrame(k);
+      b.ondragstart = (e) => { e.dataTransfer.effectAllowed = 'move'; b.dataset.dragging = '1'; framesEl.dataset.from = k; };
+      b.ondragover = (e) => { if (framesEl.dataset.from !== undefined) e.preventDefault(); };
+      b.ondrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const from = Number(framesEl.dataset.from);
+        delete framesEl.dataset.from;
+        if (Number.isNaN(from) || from === k) return;
+        Doc.change(doc, 'Déplacer une image', () => Doc.moveFrame(doc, doc.current, from, k));
+        App.selectFrame(k);
+      };
+      b.ondragend = () => { delete framesEl.dataset.from; };
+      framesEl.append(b);
+    });
+    const duration = $('#frame-duration');
+    if (document.activeElement !== duration) duration.value = tile.duration;
+    duration.disabled = tile.frames.length < 2;
+    $('#frame-delete').disabled = tile.frames.length < 2;
+    $('#anim-play').classList.toggle('active', App.playing);
+    $('#anim-play').innerHTML = '';
+    $('#anim-play').append(icon(App.playing ? 'debug-pause' : 'play'));
+    $('#anim-play').title = App.playing ? 'Arrêter l\'animation (P)' : 'Lancer l\'animation dans l\'aperçu, les vignettes et la carte (P)';
+    $('#frames-count').textContent = tile.frames.length > 1 ? `${tile.frames.length} images` : 'fixe';
+  }
+
+  // À chaque instant de l'animation : les vignettes des tuiles animées et l'aperçu.
+  function tick() {
+    const doc = App.doc;
+    if (!doc) return;
+    doc.tiles.forEach((t, i) => { if (Doc.animated(t)) refreshThumb(i, shownFrame(t)); });
+    renderPreview();
   }
 
   function render() {
     renderPalette();
     renderTiles();
+    renderFrames();
     renderPreview();
   }
   function renderLive() {
     refreshCurrentThumb();
     renderPreview();
+    const c = framesEl.children[App.frame]?.querySelector('canvas');
+    if (c) {
+      const g = c.getContext('2d');
+      g.clearRect(0, 0, c.width, c.height);
+      g.drawImage(Doc.tileCanvas(App.doc.tiles[App.doc.current], App.doc.tileSize, App.frame), 0, 0);
+    }
   }
 
-  return { render, renderLive, renderColors, renderTiles, usedColors };
+  return { render, renderLive, renderColors, renderTiles, renderFrames, tick, usedColors };
 })();

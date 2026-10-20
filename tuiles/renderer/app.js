@@ -7,7 +7,9 @@ const App = (() => {
     mode: 'tile',          // 'tile' (dessiner une tuile) ou 'map' (poser les tuiles sur la carte)
     tool: 'pencil',
     colors: { primary: '#38a048', secondary: null }, // null = transparent
-    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true },
+    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true },
+    frame: 0,              // l'image de l'animation qu'on dessine (0 pour une tuile fixe)
+    playing: true,         // les tuiles animées bougent dans l'aperçu, les vignettes et la carte
     config: null,
     configPath: '',
   };
@@ -15,6 +17,7 @@ const App = (() => {
   // --- Rafraîchir l'affichage ---
   function refresh() {
     const doc = api.doc;
+    if (doc) api.frame = clamp(api.frame, 0, doc.tiles[doc.current].frames.length - 1);
     $('#welcome').hidden = Boolean(doc);
     $('#stage').hidden = !doc;
     $('#modes').hidden = !doc;
@@ -94,6 +97,7 @@ const App = (() => {
       }
       if (api.tool === 'rect') bar.append(check('Plein', 'filled'));
       bar.append(el('span', { className: 'option-sep' }));
+      if (Doc.animated(api.doc.tiles[api.doc.current])) bar.append(check('Pelure d\'oignon', 'onion', 'Montre l\'image précédente de l\'animation en transparence, pour dessiner la suivante'));
       bar.append(check('Mosaïque', 'mosaic', 'Répète la tuile tout autour pour voir et dessiner les raccords (Ctrl+M)'));
       bar.append(check('Grille', 'pixelGrid'));
     } else {
@@ -130,9 +134,13 @@ const App = (() => {
   // --- Tuiles ---
   function selectTile(i) {
     if (!api.doc) return;
+    const changed = api.doc.current !== clamp(i, 0, api.doc.tiles.length - 1);
     api.doc.current = clamp(i, 0, api.doc.tiles.length - 1);
+    if (changed) api.frame = 0;
     Panels.renderTiles();
+    Panels.renderFrames();
     Panels.renderLive();
+    renderOptions();
     Stage.render();
     const item = $('#tiles').children[api.doc.current];
     item?.scrollIntoView({ block: 'nearest' });
@@ -144,7 +152,8 @@ const App = (() => {
   function duplicateTile() {
     const doc = api.doc;
     const src = doc.tiles[doc.current];
-    Doc.change(doc, 'Dupliquer la tuile', () => { doc.current = Doc.addTile(doc, src.data.slice(), Doc.uniqueName(doc, src.name.replace(/-\d+$/, '')), doc.current + 1); });
+    Doc.change(doc, 'Dupliquer la tuile', () => { doc.current = Doc.addTile(doc, src.frames.map((f) => f.slice()), Doc.uniqueName(doc, src.name.replace(/-\d+$/, '')), doc.current + 1, src.duration); });
+    api.frame = 0;
   }
   async function deleteTile() {
     const doc = api.doc;
@@ -179,10 +188,9 @@ const App = (() => {
   }
   function clearTile() {
     const doc = api.doc;
-    Doc.change(doc, 'Effacer la tuile', () => {
-      const tile = Doc.tileForEdit(doc, doc.current);
-      tile.data.fill(0);
-      Doc.touch(tile);
+    Doc.change(doc, Doc.animated(doc.tiles[doc.current]) ? 'Effacer l\'image' : 'Effacer la tuile', () => {
+      Doc.pixelsForEdit(doc, doc.current, api.frame).fill(0);
+      Doc.touch(doc.tiles[doc.current]);
     });
   }
   function tileMenuItems() {
@@ -197,8 +205,91 @@ const App = (() => {
       { label: 'Miroir vertical', keys: 'Maj+V', run: () => transform('flipV', 'Miroir vertical') },
       { label: 'Pivoter d\'un quart de tour', keys: 'Maj+R', run: () => transform('rotate', 'Pivoter') },
       { label: 'Décaler d\'une demi-tuile (voir les raccords)', keys: 'Maj+D', run: () => transform('half', 'Décaler d\'une demi-tuile') },
-      { label: 'Effacer la tuile', run: clearTile },
+      { label: Doc.animated(doc.tiles[doc.current]) ? 'Effacer l\'image en cours' : 'Effacer la tuile', run: clearTile },
+      null,
+      { label: 'Ajouter une image d\'animation', keys: 'Ctrl+Maj+A', run: addFrame },
+      { label: 'Supprimer l\'image d\'animation', disabled: !Doc.animated(doc.tiles[doc.current]), run: deleteFrame },
+      { label: api.playing ? 'Arrêter l\'animation' : 'Lancer l\'animation', keys: 'P', run: togglePlay },
+      null,
+      { label: 'Taille des tuiles du jeu…', run: resizeTiles },
     ];
+  }
+
+  // --- Animation ---
+  function selectFrame(k) {
+    const tile = api.doc.tiles[api.doc.current];
+    api.frame = clamp(k, 0, tile.frames.length - 1);
+    Panels.renderFrames();
+    Panels.renderLive();
+    Stage.render();
+  }
+  // Nouvelle image : une copie de celle en cours, juste après (on la retouche ensuite).
+  function addFrame() {
+    const doc = api.doc;
+    const tile = doc.tiles[doc.current];
+    if (tile.frames.length >= 16) return notify('16 images au plus par tuile.', 'warning');
+    const src = tile.frames[clamp(api.frame, 0, tile.frames.length - 1)].slice();
+    Doc.change(doc, 'Ajouter une image', () => { api.frame = Doc.addFrame(doc, doc.current, api.frame + 1, src); });
+  }
+  function deleteFrame() {
+    const doc = api.doc;
+    if (doc.tiles[doc.current].frames.length < 2) return;
+    Doc.change(doc, 'Supprimer l\'image', () => { api.frame = Doc.removeFrame(doc, doc.current, api.frame); });
+  }
+  function setDuration(ms) {
+    const doc = api.doc;
+    const value = clamp(Math.round(ms) || Doc.DEFAULT_DURATION, 30, 5000);
+    const tile = doc.tiles[doc.current];
+    if (tile.duration === value) return;
+    Doc.change(doc, 'Vitesse de l\'animation', () => { Doc.tileForEdit(doc, doc.current).duration = value; });
+  }
+  function togglePlay() {
+    api.playing = !api.playing;
+    Panels.renderFrames();
+    Panels.render();
+    Stage.render();
+  }
+  $('#frame-add').onclick = () => { if (api.doc) addFrame(); };
+  $('#frame-delete').onclick = () => { if (api.doc) deleteFrame(); };
+  $('#anim-play').onclick = () => { if (api.doc) togglePlay(); };
+  $('#frame-duration').onchange = (e) => { if (api.doc) setDuration(Number(e.target.value)); };
+
+  // Horloge de l'animation : environ 30 fois par seconde, seulement s'il y a des tuiles animées.
+  let lastTick = 0;
+  function animate(now) {
+    requestAnimationFrame(animate);
+    if (!api.playing || !api.doc || now - lastTick < 33 || document.hidden) return;
+    if (!api.doc.tiles.some(Doc.animated)) return;
+    lastTick = now;
+    Panels.tick();
+    if (api.mode === 'map') Stage.render();
+  }
+
+  // --- Taille des tuiles ---
+  async function resizeTiles() {
+    const doc = api.doc;
+    const old = doc.tileSize;
+    const v = await Dialogs.form({
+      title: 'Taille des tuiles',
+      okLabel: 'Appliquer',
+      width: 480,
+      fields: [
+        { type: 'info', text: `Les tuiles font aujourd'hui ${old} × ${old} pixels. La nouvelle taille s'applique à toutes les tuiles et à toutes leurs images (Ctrl+Z annule).` },
+        { key: 'size', label: 'Nouvelle taille', type: 'select', value: String(old * 2 <= 64 ? old * 2 : old), choices: [['8', '8 × 8'], ['16', '16 × 16'], ['24', '24 × 24'], ['32', '32 × 32'], ['48', '48 × 48'], ['64', '64 × 64']] },
+        { key: 'how', label: 'Méthode', type: 'select', value: 'scale', choices: [['scale', 'Agrandir ou réduire les pixels'], ['canvas', 'Ajouter ou couper des bords']] },
+      ],
+      onInput(values, f) {
+        const size = Number(values.size);
+        const ratio = size / old;
+        f.card.querySelector('.modal-extra').textContent = values.how === 'scale'
+          ? (Number.isInteger(ratio) ? `Chaque pixel devient un carré de ${ratio} × ${ratio}.` : ratio < 1 && Number.isInteger(1 / ratio) ? `Un pixel sur ${1 / ratio} est gardé.` : 'Rapport non entier : certains pixels seront doublés et d\'autres non.')
+          : size > old ? `${Math.floor((size - old) / 2)} px de bord transparent autour.` : size < old ? `${Math.ceil((old - size) / 2)} px coupés de chaque côté.` : '';
+      },
+    });
+    if (!v || Number(v.size) === old) return;
+    Doc.change(doc, 'Taille des tuiles', () => Doc.resizeTiles(doc, Number(v.size), v.how));
+    Stage.reset();
+    notify(`Tuiles passées de ${old} × ${old} à ${v.size} × ${v.size} pixels.`, 'success', 3500);
   }
 
   // --- Carte ---
@@ -261,6 +352,7 @@ const App = (() => {
     if (api.doc && api.doc !== doc && !(await confirmDiscard())) return;
     api.doc = doc;
     api.options.layer = 0;
+    api.frame = 0;
     if (!doc.tiles.length) Doc.addTile(doc);
     doc.current = clamp(doc.current, 0, doc.tiles.length - 1);
     // Couleur principale : la première de la palette qui n'est ni noire ni blanche, si possible.
@@ -435,6 +527,7 @@ const App = (() => {
       if (k === 'y') return go(redo);
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
+      if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
       if (k === ',') return go(() => run(openSettings));
       if (k === '0' || e.code === 'Digit0' || e.code === 'Numpad0') return go(() => Stage.fit());
       if (k === '+' || k === '=' || e.code === 'NumpadAdd') return go(() => Stage.zoomBy(1));
@@ -455,6 +548,12 @@ const App = (() => {
     if (e.key === 'ArrowUp') return go(() => selectTile(api.doc.current - cols));
     if (e.key === 'ArrowDown') return go(() => selectTile(api.doc.current + cols));
     if (k === 'x') return go(swapColors);
+    if (k === 'p') return go(togglePlay);
+    // , et ; : image précédente / suivante de l'animation (touches voisines sur un clavier AZERTY).
+    if (e.key === ',' || e.key === ';') return go(() => {
+      const n = api.doc.tiles[api.doc.current].frames.length;
+      selectFrame((api.frame + (e.key === ';' ? 1 : n - 1)) % n);
+    });
     const tool = TOOLS.find((t) => t.key.toLowerCase() === k);
     if (tool && !e.altKey) return go(() => setTool(tool.id));
   });
@@ -547,6 +646,7 @@ const App = (() => {
     api.configPath = path;
     await applyTheme(config);
     Stage.init();
+    requestAnimationFrame(animate);
     refresh();
     await renderWelcome();
     // Un .tafl double-cliqué, ou un dossier passé par Atelier.
@@ -558,7 +658,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => IO.open(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init });
   return api;
 })();
 

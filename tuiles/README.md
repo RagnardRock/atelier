@@ -28,7 +28,7 @@ L'installeur associe les fichiers `.tafl` à Tafl : un double-clic sur un jeu de
 
 Le bouton nuage en haut à droite, comme dans Rune et Skald. Installé, Tafl cherche la Release `tafl-vX.Y.Z` la plus récente, télécharge son installeur, se ferme, s'installe sans fenêtre et se relance. Lancé depuis le clone, il lance `tuiles/mettre-a-jour.bat` (git pull, puis npm install). Il propose d'enregistrer avant de fermer. Réglages et journal dans `%APPDATA%\atelier-tuiles`.
 
-## Ce que fait Tafl (v0.1)
+## Ce que fait Tafl (v0.2)
 
 **Un jeu de tuiles** (`Ctrl+N`) : un nom, une taille de tuile (8 × 8 façon Game Boy, **16 × 16 façon Pokémon GBA et DS**, 32 × 32 façon RPG Maker…), une palette et une taille de carte. Tu peux partir de **tuiles d'exemple** (herbe, hautes herbes, chemin, eau, fleur) et d'une petite carte qui les utilise, pour voir tout de suite comment ça marche.
 
@@ -59,21 +59,34 @@ Molette : zoom autour de la souris. Espace ou bouton du milieu : déplacer la vu
 
 **Aperçu 3 × 3** : la tuile en cours répétée, agrandie comme dans le jeu, mise à jour pendant que tu dessines.
 
+**Animation** (panneau sous les tuiles, nouveau en v0.2) : une tuile peut avoir **jusqu'à 16 images**, pour l'eau qui ondule, les fleurs qui bougent, les torches… La tuile d'exemple « eau » en a déjà 4.
+- `+` (ou `Ctrl+Maj+A`) ajoute une image, copie de celle en cours : tu n'as plus qu'à la retoucher. La corbeille retire l'image en cours.
+- Clic sur une image pour la dessiner, glisser pour changer l'ordre. `,` et `;` passent à l'image précédente ou suivante.
+- **Durée d'une image** en millisecondes (250 par défaut, de 30 à 5000), la même pour toutes les images de la tuile.
+- **Pelure d'oignon** (barre d'options, visible quand la tuile est animée) : l'image précédente apparaît en transparence sous celle que tu dessines.
+- Lecture / pause (`P`) : les vignettes, l'aperçu 3 × 3 et la carte s'animent comme dans le jeu. En pause, la carte montre la première image.
+- Les outils de la tuile (miroir, pivoter, décaler, remplacer une couleur de la palette) s'appliquent à **toutes les images**. Effacer n'efface que l'image en cours.
+
+**Taille des tuiles** (menu Tuile, « Taille des tuiles du jeu… », nouveau en v0.2) : passe tout le jeu de tuiles à une autre taille (8, 16, 24, 32, 48 ou 64 px), images des animations comprises. Deux méthodes :
+- **Agrandir ou réduire les pixels** : le dessin garde son allure (16 → 32 : chaque pixel devient un carré de 2 × 2).
+- **Ajouter ou couper des bords** : les pixels gardent leur taille, le dessin reste centré, avec du transparent autour ou des bords coupés.
+`Ctrl+Z` annule.
+
 **Annuler / rétablir** : `Ctrl+Z`, `Ctrl+Y`, pour tout (dessin, carte, palette, ajout, suppression ou ordre des tuiles).
 
 **Fichiers**
-- **Enregistrer** (`Ctrl+S`) : un fichier `.tafl`. C'est du JSON lisible (taille, palette, chaque tuile en petite image PNG avec son nom, la carte), que tu peux ouvrir dans Rune.
-- **Importer une planche** (`Ctrl+I`, ou glisser un PNG sur la fenêtre) : une image est découpée en tuiles. Options : ignorer les cases vides, ne garder qu'une fois chaque tuile identique, et **refaire l'image en carte** (pratique pour reprendre une capture d'écran de carte : Tafl en tire les tuiles uniques et la carte qui les utilise).
-- **Exporter la planche** (`Ctrl+E`) : toutes les tuiles dans un seul PNG, en grille (nombre de colonnes, agrandissement, espace entre tuiles). C'est le format que lisent Tiled, Godot, Phaser, Unity, RPG Maker…
-- **Exporter les tuiles séparées** : un PNG par tuile (`00-herbe.png`, `01-hautes-herbes.png`…).
-- **Exporter la carte pour Tiled** (`Ctrl+Maj+E`) : dans un dossier, `<nom>.tmj` (la carte au format de [Tiled](https://www.mapeditor.org), avec ses deux calques), `<nom>-tuiles.png` (la planche) et `<nom>-carte.png` (l'image de la carte). Phaser et Godot savent charger ce `.tmj` directement : c'est la passerelle vers le futur jeu.
+- **Enregistrer** (`Ctrl+S`) : un fichier `.tafl`. C'est du JSON lisible (taille, palette, chaque tuile en petite image PNG avec son nom, ses images d'animation et leur durée, la carte), que tu peux ouvrir dans Rune. Les fichiers de la v0.1 s'ouvrent toujours.
+- **Importer une planche** (`Ctrl+I`, ou glisser un PNG sur la fenêtre) : une image est découpée en tuiles. C'est ainsi qu'on reprend des tuiles dessinées dans **Skald** (ou Photoshop) : exporter en PNG, puis importer. Une image de la taille d'une tuile donne une seule tuile. Options : ignorer les cases vides, ne garder qu'une fois chaque tuile identique, et **refaire l'image en carte** (pratique pour reprendre une capture d'écran de carte : Tafl en tire les tuiles uniques et la carte qui les utilise).
+- **Exporter la planche** (`Ctrl+E`) : toutes les tuiles dans un seul PNG, en grille (nombre de colonnes, agrandissement, espace entre tuiles). Une case à cocher ajoute à la fin les images des tuiles animées. C'est le format que lisent Tiled, Godot, Phaser, Unity, RPG Maker…
+- **Exporter les tuiles séparées** : un PNG par tuile (`00-herbe.png`, `01-hautes-herbes.png`…), et un par image pour les tuiles animées (`03-eau-1.png`, `03-eau-2.png`…).
+- **Exporter la carte pour Tiled** (`Ctrl+Maj+E`) : dans un dossier, `<nom>.tmj` (la carte au format de [Tiled](https://www.mapeditor.org), avec ses deux calques et les animations des tuiles, que Tiled, Phaser et Godot savent jouer), `<nom>-tuiles.png` (la planche) et `<nom>-carte.png` (l'image de la carte). Phaser et Godot savent charger ce `.tmj` directement : c'est la passerelle vers le futur jeu.
 - **Exporter la carte en image** : un PNG, agrandi ×1 à ×4.
 
 **Réglages** (`Ctrl+,` ou l'engrenage) : couleur d'accent, verre dépoli, flou de Windows 11, taille de tuile et palette par défaut, grilles, nombre d'annulations gardées.
 
 ## Pas encore
 
-Tuiles animées (eau qui ondule, fleurs qui bougent), tuiles automatiques (bords de chemin et de mare posés tout seuls), calques supplémentaires, collisions et zones (hautes herbes = rencontres), sélection et copier-coller de zones, lien direct avec Skald.
+Tuiles automatiques (bords de chemin et de mare posés tout seuls), calques supplémentaires, collisions et zones (hautes herbes = rencontres), sélection et copier-coller de zones, lien direct avec Skald.
 
 ## Comment c'est construit
 

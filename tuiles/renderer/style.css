@@ -649,3 +649,27 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 #color-secondary { right: 0; bottom: 0; }
 /* Sans jeu de tuiles ouvert, l'accueil prend toute la place. */
 body.no-doc #sidepanel { display: none; }
+
+/* Animation : les images de la tuile choisie */
+#frames-panel { flex-shrink: 0; }
+#frames-count { margin-left: 8px; color: var(--muted); font-size: 11px; }
+#frames { display: flex; gap: 4px; padding: 0 12px 8px; overflow-x: auto; }
+.frame-item {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  position: relative;
+}
+.frame-item:hover { border-color: rgba(255, 255, 255, 0.2); }
+.frame-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.frame-num { position: absolute; right: 2px; bottom: 1px; font-size: 9px; color: var(--text-strong); text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.frame-speed { display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; color: var(--muted); }
+.frame-speed input { width: 76px; }
+#anim-play.active { color: var(--accent); }
+.tile-item { position: relative; }
+.tile-anim { position: absolute; right: 3px; bottom: 2px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 7px; background: var(--accent); color: var(--accent-text); font-size: 9px; font-weight: 700; line-height: 14px; }

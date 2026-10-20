@@ -96,6 +96,22 @@
         <div id="tiles"></div>
       </section>
 
+      <!-- Animation : les images de la tuile choisie (une seule pour une tuile fixe) -->
+      <section class="panel" id="frames-panel">
+        <div class="panel-header"><span class="panel-title">Animation</span><span id="frames-count"></span>
+          <div class="panel-actions">
+            <button id="anim-play" class="icon-button" title="Lancer ou arrêter l'animation (P)"><i class="codicon codicon-play"></i></button>
+            <button id="frame-add" class="icon-button" title="Ajouter une image : copie de l'image en cours (Ctrl+Maj+A)"><i class="codicon codicon-add"></i></button>
+            <button id="frame-delete" class="icon-button" title="Supprimer l'image en cours"><i class="codicon codicon-trash"></i></button>
+          </div>
+        </div>
+        <div id="frames"></div>
+        <label class="frame-speed" title="Durée de chaque image de l'animation">
+          <span>Durée d'une image</span>
+          <input id="frame-duration" type="number" min="30" max="5000" step="10"><span class="unit">ms</span>
+        </label>
+      </section>
+
       <section class="panel" id="preview-panel">
         <div class="panel-header"><span class="panel-title">Aperçu 3 × 3</span><span id="preview-scale"></span></div>
         <div class="preview-box checker-bg"><canvas id="preview"></canvas></div>

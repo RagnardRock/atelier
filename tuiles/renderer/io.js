@@ -1,8 +1,10 @@
 // Ouvrir, enregistrer, importer et exporter.
 //
 // Le fichier .tafl est du JSON lisible : la taille des tuiles, la palette, chaque tuile en petite image
-// PNG (encodée en texte, « data URL ») avec son nom, et la carte (un numéro de tuile par case,
-// -1 = vide). Tu peux l'ouvrir dans Rune pour voir ce qu'il contient.
+// PNG (encodée en texte, « data URL ») avec son nom (et, pour une tuile animée, ses autres images et
+// leur durée), et la carte (un numéro de tuile par case, -1 = vide). Tu peux l'ouvrir dans Rune.
+// « png » garde toujours la première image : un fichier enregistré par Tafl 0.2 s'ouvre aussi dans
+// Tafl 0.1 (sans l'animation).
 //
 // Les exports sont faits pour un jeu :
 // - la planche de tuiles (tileset) : toutes les tuiles dans une seule image PNG, en grille,
@@ -51,7 +53,10 @@ const IO = (() => {
       tileSize: s,
       columns: doc.columns,
       palette: doc.palette,
-      tiles: doc.tiles.map((t) => ({ name: t.name, png: Doc.tileCanvas(t, s).toDataURL('image/png') })),
+      tiles: doc.tiles.map((t) => {
+        const pngs = t.frames.map((_f, k) => Doc.tileCanvas(t, s, k).toDataURL('image/png'));
+        return Doc.animated(t) ? { name: t.name, png: pngs[0], frames: pngs, duration: t.duration } : { name: t.name, png: pngs[0] };
+      }),
       map: { width: doc.map.width, height: doc.map.height, layers: doc.map.layers.map((l) => ({ name: l.name, visible: l.visible, cells: [...l.cells] })) },
     });
   }
@@ -67,12 +72,18 @@ const IO = (() => {
     if (data.version > 1) throw new Error(`${file.name} vient d'une version plus récente de Tafl : mets Tafl à jour pour l'ouvrir`);
     const s = Number(data.tileSize) || 16;
     const doc = Doc.create({ name: data.name || file.name.replace(/\.tafl$/i, ''), tileSize: s, palette: data.palette || [], tiles: 0, columns: data.columns || 8, mapWidth: data.map?.width || 20, mapHeight: data.map?.height || 15 });
+    const c = el('canvas', { width: s, height: s });
+    const g = c.getContext('2d', { willReadFrequently: true });
+    const pixels = async (src) => {
+      g.clearRect(0, 0, s, s);
+      g.drawImage(await loadImage(src), 0, 0);
+      return g.getImageData(0, 0, s, s).data;
+    };
     for (const t of data.tiles || []) {
-      const img = await loadImage(t.png);
-      const c = el('canvas', { width: s, height: s });
-      const g = c.getContext('2d', { willReadFrequently: true });
-      g.drawImage(img, 0, 0);
-      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), data: g.getImageData(0, 0, s, s).data });
+      const sources = Array.isArray(t.frames) && t.frames.length ? t.frames.slice(0, 16) : [t.png];
+      const frames = [];
+      for (const src of sources) frames.push(await pixels(src));
+      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION });
     }
     if (!doc.tiles.length) Doc.addTile(doc);
     if (Array.isArray(data.map?.layers)) {
@@ -157,7 +168,7 @@ const IO = (() => {
       : doc;
     const add = () => {
       const known = new Map(); // empreinte des pixels → numéro de tuile (pour les doublons)
-      if (v.dedupe) target.tiles.forEach((t, i) => known.set(t.data.join(','), i));
+      if (v.dedupe) target.tiles.forEach((t, i) => { if (!Doc.animated(t)) known.set(t.frames[0].join(','), i); });
       let added = 0;
       for (let cy = 0; cy < rows; cy++) {
         for (let cx = 0; cx < cols; cx++) {
@@ -201,14 +212,33 @@ const IO = (() => {
   }
 
   // --- Exports ---
-  function sheetCanvas(doc, columns, scale, spacing = 0) {
-    const s = doc.tileSize, n = doc.tiles.length;
+  // Les cases de la planche : d'abord chaque tuile (sa première image), dans l'ordre ; puis, si on les
+  // inclut, les autres images des tuiles animées. Ainsi le numéro d'une tuile dans la planche reste
+  // celui de la carte, et Tiled retrouve les images de chaque animation par leur numéro.
+  function sheetCells(doc, withFrames) {
+    const cells = doc.tiles.map((t) => ({ tile: t, frame: 0 }));
+    const anims = [];
+    if (withFrames) {
+      doc.tiles.forEach((t, i) => {
+        if (!Doc.animated(t)) return;
+        const ids = [i];
+        for (let k = 1; k < t.frames.length; k++) { ids.push(cells.length); cells.push({ tile: t, frame: k }); }
+        anims.push({ id: i, ids, duration: t.duration });
+      });
+    }
+    return { cells, anims };
+  }
+
+  function sheetCanvas(doc, columns, scale, spacing = 0, withFrames = true) {
+    const s = doc.tileSize;
+    const { cells } = sheetCells(doc, withFrames);
+    const n = cells.length;
     const cols = Math.max(1, Math.min(columns, n)), rows = Math.ceil(n / cols);
     const step = s * scale + spacing;
     const c = el('canvas', { width: cols * step - spacing, height: rows * step - spacing });
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
-    doc.tiles.forEach((t, i) => g.drawImage(Doc.tileCanvas(t, s), (i % cols) * step, Math.floor(i / cols) * step, s * scale, s * scale));
+    cells.forEach(({ tile, frame }, i) => g.drawImage(Doc.tileCanvas(tile, s, frame), (i % cols) * step, Math.floor(i / cols) * step, s * scale, s * scale));
     return c;
   }
 
@@ -240,16 +270,17 @@ const IO = (() => {
         { key: 'columns', label: 'Colonnes', type: 'number', value: doc.columns, min: 1, max: 64 },
         { key: 'scale', label: 'Agrandissement', type: 'select', value: String(App.config.exportScale || 1), choices: [['1', '×1 (taille réelle, pour un moteur de jeu)'], ['2', '×2'], ['3', '×3'], ['4', '×4'], ['8', '×8 (pour montrer)']] },
         { key: 'spacing', label: 'Espace entre tuiles', type: 'number', value: 0, min: 0, max: 8, unit: 'px' },
+        { key: 'frames', label: 'Ajouter les images des tuiles animées (après les tuiles)', type: 'checkbox', value: true, hidden: !doc.tiles.some(Doc.animated) },
       ],
       onInput(values, f) {
-        const c = sheetCanvas(doc, values.columns, Number(values.scale), values.spacing);
-        f.card.querySelector('.modal-extra').textContent = `${c.width} × ${c.height} px, ${doc.tiles.length} tuile(s)`;
+        const c = sheetCanvas(doc, values.columns, Number(values.scale), values.spacing, values.frames);
+        f.card.querySelector('.modal-extra').textContent = `${c.width} × ${c.height} px, ${sheetCells(doc, values.frames).cells.length} case(s)`;
       },
     });
     if (!v) return;
     const path = await window.tafl.saveDialog({ defaultName: `${safeName(doc.name)}.png`, format: 'png' });
     if (!path) return;
-    const saved = await window.tafl.writeFile(path, await canvasBytes(sheetCanvas(doc, v.columns, Number(v.scale), v.spacing)));
+    const saved = await window.tafl.writeFile(path, await canvasBytes(sheetCanvas(doc, v.columns, Number(v.scale), v.spacing, v.frames)));
     if (v.columns !== doc.columns) { doc.columns = v.columns; doc.dirty = true; App.refresh(); }
     window.tafl.writeConfig({ exportScale: Number(v.scale) }).then((c) => { App.config = c; });
     notify(`Planche exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
@@ -260,7 +291,7 @@ const IO = (() => {
       title: 'Exporter les tuiles séparées',
       okLabel: 'Choisir le dossier…',
       fields: [
-        { type: 'info', text: 'Un fichier PNG par tuile, nommé avec son numéro et son nom (00-herbe.png, 01-chemin.png…).' },
+        { type: 'info', text: 'Un fichier PNG par tuile, nommé avec son numéro et son nom (00-herbe.png, 01-chemin.png…). Une tuile animée donne un fichier par image (03-eau-1.png, 03-eau-2.png…).' },
         { key: 'scale', label: 'Agrandissement', type: 'select', value: String(App.config.exportScale || 1), choices: [['1', '×1'], ['2', '×2'], ['3', '×3'], ['4', '×4'], ['8', '×8']] },
       ],
     });
@@ -270,11 +301,15 @@ const IO = (() => {
     const scale = Number(v.scale), s = doc.tileSize, sep = window.tafl.platform === 'win32' ? '\\' : '/';
     const digits = String(doc.tiles.length - 1).length;
     for (const [i, t] of doc.tiles.entries()) {
-      const c = el('canvas', { width: s * scale, height: s * scale });
-      const g = c.getContext('2d');
-      g.imageSmoothingEnabled = false;
-      g.drawImage(Doc.tileCanvas(t, s), 0, 0, s * scale, s * scale);
-      await window.tafl.writeFile(`${folder}${sep}${String(i).padStart(Math.max(2, digits), '0')}-${safeName(t.name)}.png`, await canvasBytes(c));
+      // Une tuile animée donne un fichier par image : 03-eau-1.png, 03-eau-2.png…
+      for (let k = 0; k < t.frames.length; k++) {
+        const c = el('canvas', { width: s * scale, height: s * scale });
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        g.drawImage(Doc.tileCanvas(t, s, k), 0, 0, s * scale, s * scale);
+        const suffix = Doc.animated(t) ? `-${k + 1}` : '';
+        await window.tafl.writeFile(`${folder}${sep}${String(i).padStart(Math.max(2, digits), '0')}-${safeName(t.name)}${suffix}.png`, await canvasBytes(c));
+      }
     }
     notify(`${doc.tiles.length} tuile(s) exportée(s) dans ${folder}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(folder) }]);
   }
@@ -288,7 +323,8 @@ const IO = (() => {
     const base = safeName(doc.name);
     const s = doc.tileSize, { map } = doc;
     const sheet = sheetCanvas(doc, doc.columns, 1);
-    const cols = Math.max(1, Math.min(doc.columns, doc.tiles.length));
+    const { cells, anims } = sheetCells(doc, true);
+    const cols = Math.max(1, Math.min(doc.columns, cells.length));
     const tmj = {
       compressionlevel: -1,
       type: 'map',
@@ -305,7 +341,11 @@ const IO = (() => {
       nextobjectid: 1,
       // Dans Tiled, 0 = case vide et la première tuile vaut 1 (d'où le +1).
       layers: map.layers.map((l, i) => ({ id: i + 1, name: l.name, type: 'tilelayer', x: 0, y: 0, width: map.width, height: map.height, opacity: 1, visible: l.visible, data: [...l.cells].map((c) => c + 1) })),
-      tilesets: [{ firstgid: 1, name: base, image: `${base}-tuiles.png`, imagewidth: sheet.width, imageheight: sheet.height, tilewidth: s, tileheight: s, tilecount: doc.tiles.length, columns: cols, margin: 0, spacing: 0 }],
+      tilesets: [{
+        firstgid: 1, name: base, image: `${base}-tuiles.png`, imagewidth: sheet.width, imageheight: sheet.height, tilewidth: s, tileheight: s, tilecount: cells.length, columns: cols, margin: 0, spacing: 0,
+        // Les tuiles animées : la suite de leurs images dans la planche, avec la durée de chacune (format de Tiled).
+        ...(anims.length ? { tiles: anims.map((a) => ({ id: a.id, animation: a.ids.map((tileid) => ({ tileid, duration: a.duration })) })) } : {}),
+      }],
     };
     await window.tafl.writeFile(`${folder}${sep}${base}-tuiles.png`, await canvasBytes(sheet));
     await window.tafl.writeFile(`${folder}${sep}${base}.tmj`, textBytes(JSON.stringify(tmj, null, 2)));
