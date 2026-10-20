@@ -17,6 +17,8 @@
 //   maps: [carte],           les cartes du jeu (une ville, une route, l'intérieur d'une maison…)
 //   mapIndex, map,           la carte affichée (map = maps[mapIndex], toujours tenu à jour)
 //   depart,                  { carte, x, y, direction } : où le joueur commence le jeu (ou null)
+//   data,                    les données du jeu (Tafl 0.7) : { personnages, quetes, interrupteurs },
+//                            utilisées par les scripts des événements (voir events.js)
 //   current,                 la tuile choisie (celle qu'on dessine, ou qu'on pose sur la carte)
 //   dirty,                   modifié depuis le dernier enregistrement
 // }
@@ -30,14 +32,16 @@
 //   passage,  Uint8Array, un code par case (PASSAGE plus bas) ; 0 = « auto » : la case suit ses tuiles
 //   zones: [{ id, name, type, x, y, w, h, objet }],   herbes hautes, eau, grotte… (objet = objet requis)
 //   warps: [{ id, x, y, carte, tx, ty, direction }],  téléporteurs : la case (x, y) mène à (tx, ty) de la carte « carte »
+//   events: [événement],  personnages, panneaux, coffres… avec leur script (Tafl 0.7, voir events.js)
 // }
 //
 // Règle importante (la même que dans Skald) : on ne modifie JAMAIS un tableau de pixels, la liste
 // des images d'une tuile ou les cases d'un calque directement. On passe par Doc.pixelsForEdit(),
 // Doc.tileForEdit(), Doc.layerForEdit() ou Doc.passageForEdit(), qui en font une copie au début de
 // chaque action. Ainsi, l'historique garde les anciens tableaux tels quels, sans recopier tout le jeu
-// à chaque coup de crayon : annuler revient juste à remettre l'ancien tableau. Les zones et les
-// téléporteurs, eux, sont remplacés en entier (map.zones = [...]), jamais modifiés sur place.
+// à chaque coup de crayon : annuler revient juste à remettre l'ancien tableau. Les zones, les
+// téléporteurs, les événements et les données du jeu, eux, sont remplacés en entier
+// (map.zones = [...], doc.data = {...}), jamais modifiés sur place.
 
 const Doc = (() => {
   let nextId = 1;
@@ -74,11 +78,12 @@ const Doc = (() => {
       passage: new Uint8Array(width * height),
       zones: [],
       warps: [],
+      events: [],
     };
   }
   // Identifiant d'une carte : son nom en minuscules sans accents (« Bourg Palette » → bourg-palette).
   // Il sert de nom de fichier (cartes/bourg-palette.json) et ne change plus ensuite.
-  const slug = (name) => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'carte';
+  const slug = (name, fallback = 'carte') => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
   function uniqueMapId(doc, name) {
     const base = slug(name);
     const ids = new Set(doc.maps.map((m) => m.id));
@@ -101,6 +106,7 @@ const Doc = (() => {
       mapIndex: 0,
       map: null,
       depart: null,
+      data: { personnages: [], quetes: [], interrupteurs: [] },
       current: 0,
       dirty: false,
       undo: [],
@@ -118,6 +124,7 @@ const Doc = (() => {
     doc.map = doc.maps[doc.mapIndex];
   }
   const mapById = (doc, id) => doc.maps.find((m) => m.id === id) || null;
+  const eventAt = (map, x, y) => map.events.find((e) => e.x === x && e.y === y) || null;
 
   // --- Historique ---
   // Une photo de l'état : les références vers les tableaux (pas de copie, voir la règle plus haut).
@@ -132,6 +139,7 @@ const Doc = (() => {
       maps: doc.maps.map(copyMap),
       mapIndex: doc.mapIndex,
       depart: doc.depart,
+      data: doc.data,
       current: doc.current,
     };
   }
@@ -143,6 +151,7 @@ const Doc = (() => {
     doc.maps = s.maps.map(copyMap);
     selectMap(doc, s.mapIndex);
     doc.depart = s.depart;
+    doc.data = s.data;
     doc.current = clamp(s.current, 0, Math.max(0, doc.tiles.length - 1));
   }
 
@@ -318,7 +327,10 @@ const Doc = (() => {
         const cells = layerForEdit(doc, li, map).cells;
         for (let i = 0; i < cells.length; i++) if (cells[i] >= 0) cells[i] = fn(cells[i]);
       });
+      // L'apparence des événements montre aussi une tuile.
+      if (map.events.some((e) => e.apparence.tuile >= 0)) map.events = map.events.map((e) => (e.apparence.tuile >= 0 ? { ...e, apparence: { ...e.apparence, tuile: fn(e.apparence.tuile) } } : e));
     }
+    if (doc.data.personnages.some((p) => p.tuile >= 0)) doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.tuile >= 0 ? { ...p, tuile: fn(p.tuile) } : p)) };
   }
   // Combien de cases (toutes cartes confondues) utilisent la tuile n° index.
   const tileUses = (doc, index) => doc.maps.reduce((n, m) => n + m.layers.reduce((k, l) => k + l.cells.filter((c) => c === index).length, 0), 0);
@@ -396,7 +408,7 @@ const Doc = (() => {
   }
 
   // Changer la taille de la carte (le contenu reste en haut à gauche). Les zones sont recoupées, les
-  // téléporteurs sortis de la carte retirés.
+  // téléporteurs et les événements sortis de la carte retirés.
   function resizeMap(doc, width, height, map = doc.map) {
     const copy = (src, Type, empty) => {
       const out = new Type(width * height).fill(empty);
@@ -411,6 +423,7 @@ const Doc = (() => {
       .map((z) => ({ ...z, w: Math.min(z.w, width - z.x), h: Math.min(z.h, height - z.y) }))
       .filter((z) => z.x < width && z.y < height && z.w > 0 && z.h > 0);
     map.warps = map.warps.filter((w) => w.x < width && w.y < height);
+    map.events = map.events.filter((e) => e.x < width && e.y < height);
     map.width = width;
     map.height = height;
     // Les calques et le passage viennent d'être remplacés : ils sont déjà des copies pour cette action.
@@ -424,7 +437,7 @@ const Doc = (() => {
   function addMap(doc, { name, width = doc.map.width, height = doc.map.height, copyOf = null } = {}) {
     const id = uniqueMapId(doc, name);
     const map = copyOf
-      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z })), warps: copyOf.warps.map((w) => ({ ...w })) }
+      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z })), warps: copyOf.warps.map((w) => ({ ...w })), events: structuredClone(copyOf.events) }
       : newMap({ id, name, width, height });
     doc.maps.splice(doc.mapIndex + 1, 0, map);
     selectMap(doc, doc.mapIndex + 1);
@@ -485,5 +498,5 @@ const Doc = (() => {
     });
   }
 
-  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
+  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
 })();

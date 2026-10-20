@@ -1,5 +1,5 @@
 // Le panneau de droite : couleurs, palette, tuiles du jeu et aperçu en mosaïque (mode Tuile),
-// cartes et calques (mode Carte).
+// cartes, calques et événements (mode Carte).
 
 const Panels = (() => {
   // --- Couleurs principale / secondaire ---
@@ -316,7 +316,31 @@ const Panels = (() => {
     $('#layer-delete').disabled = li < 0 || map.layers.length < 2;
   }
 
+  // Les événements de la carte affichée. Clic : l'ouvrir ; clic droit : dupliquer, supprimer.
+  const eventsEl = $('#events');
+  function renderEvents() {
+    const doc = App.doc;
+    eventsEl.innerHTML = '';
+    if (!doc) return;
+    const { map } = doc;
+    for (const ev of map.events) {
+      const row = el('button', { className: 'row', title: `${Events.decrire(doc, ev)}\nClic : modifier son script · clic droit : plus d'actions` }, [
+        el('i', { className: `codicon codicon-${Events.TYPE_ICONS[ev.type]} lead` }),
+        el('span', { className: 'row-name', textContent: ev.nom || ev.type }),
+        ev.pages.length > 1 ? el('span', { className: 'badge', textContent: `${ev.pages.length} pages` }) : null,
+        el('span', { className: 'row-meta', textContent: `${ev.x}, ${ev.y}` }),
+      ]);
+      row.onclick = () => App.editEvent(ev.id);
+      row.oncontextmenu = (e) => { e.preventDefault(); App.eventMenu(ev.x, ev.y, e.clientX, e.clientY); };
+      eventsEl.append(row);
+    }
+    if (!map.events.length) eventsEl.append(el('p', { className: 'rows-empty', textContent: 'Aucun événement sur cette carte. Outil Événement (N) : clic sur une case.' }));
+    $('#events-count').textContent = map.events.length || '';
+  }
+  $('#data-open').onclick = () => { if (App.doc) App.openData(); };
+
   function render() {
+    renderEvents();
     renderPalette();
     renderTiles();
     renderFrames();
@@ -335,5 +359,5 @@ const Panels = (() => {
     }
   }
 
-  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, tick, usedColors };
+  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, tick, usedColors };
 })();

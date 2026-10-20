@@ -100,6 +100,7 @@
       `Calques (du dessous au dessus) : ${m.layers.map((l, i) => `${i} = ${l.name} [${l.profondeur}${(l.opacite ?? 1) < 1 ? `, opacité ${l.opacite}` : ''}${l.fusion !== 'normal' ? `, fusion ${l.fusion}` : ''}${l.parallaxe.x !== 1 || l.parallaxe.y !== 1 ? `, parallaxe ${l.parallaxe.x}/${l.parallaxe.y}` : ''}${l.visible ? '' : ', masqué'}]`).join(', ')}.`,
       `Zones : ${m.zones.length ? m.zones.map((z) => `${z.id} « ${z.name} » ${z.type} (${z.x}, ${z.y}) ${z.w} × ${z.h}${z.objet ? `, objet requis ${z.objet}` : ''}`).join(' ; ') : 'aucune'}.`,
       `Téléporteurs : ${m.warps.length ? m.warps.map((w) => `${w.id} (${w.x}, ${w.y}) → ${w.carte} (${w.tx}, ${w.ty}) regard ${w.direction}`).join(' ; ') : 'aucun'}.`,
+      `Événements : ${m.events.length ? m.events.map((e) => Events.decrire(doc, e)).join(' ; ') : 'aucun'}.`,
     ].join('\n');
   };
   const nombre = { type: 'number' };
@@ -110,7 +111,7 @@
       lecture: true,
       icone: 'info',
       libelle: () => 'Regarde le jeu de tuiles',
-      description: 'Décrit le jeu ouvert : dossier de jeu ou simple jeu de tuiles, taille des tuiles, liste des tuiles (numéro, nom, images, passage), palette, cartes, départ du joueur, et pour la carte affichée ses calques (profondeur, opacité, fusion, parallaxe), zones et téléporteurs.',
+      description: 'Décrit le jeu ouvert : dossier de jeu ou simple jeu de tuiles, taille des tuiles, liste des tuiles (numéro, nom, images, passage), palette, cartes, départ du joueur, nombre de personnages, quêtes et interrupteurs, et pour la carte affichée ses calques (profondeur, opacité, fusion, parallaxe), zones, téléporteurs et événements.',
       faire: () => {
         const doc = besoinJeu();
         return [
@@ -118,6 +119,7 @@
           `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
           `Cartes (${doc.maps.length}) : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
           `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
+          `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
           decrireCarte(doc),
         ].join('\n');
       },
@@ -154,7 +156,7 @@
       lecture: true,
       icone: 'eye',
       libelle: () => 'Regarde la carte',
-      description: 'Montre une carte (calques visibles ; carte : id, nom ou numéro, sinon la carte affichée, qui devient affichée), et pour une carte de 40 × 40 cases au plus, le numéro de tuile de chaque case par calque (« . » = vide) et le passage final (. libre, # bloqué, v ^ < > rebords).',
+      description: 'Montre une carte (calques visibles ; carte : id, nom ou numéro, sinon la carte affichée, qui devient affichée), la liste de ses zones, téléporteurs et événements, et pour une carte de 40 × 40 cases au plus, le numéro de tuile de chaque case par calque (« . » = vide) et le passage final (. libre, # bloqué, v ^ < > rebords).',
       schema: { type: 'object', properties: { carte: { type: ['string', 'number'] } } },
       faire: (a) => {
         const doc = besoinJeu();
@@ -783,6 +785,265 @@
         if (!doc.redo.length) return 'Rien à rétablir.';
         App.redo();
         return 'Rétabli.';
+      },
+    },
+  });
+  // --- Événements et données du jeu (Tafl 0.7) ---
+  const CMDS_AIDE = 'Commandes ({ "type": …, champs }) : dire {qui: id d\'un personnage, "@evenement" (le personnage de l\'événement) ou "" (texte seul : panneau, narration), expression (normal, content, triste…), texte ({joueur} = nom du joueur ; une ligne vide = boîte suivante)} ; choix {options: [{texte, commandes: [...]}], 2 à 4} ; si {condition, alors: [...], sinon: [...]} ; commentaire {texte} ; fin {} ; interrupteur {id, valeur: true|false} (un nom nouveau crée l\'interrupteur) ; local {valeur} (l\'interrupteur « déjà fait » propre à l\'événement) ; attendre {ms} ; objet {action: donner|retirer, objet, nombre} ; creature {creature, niveau} (la donner) ; combat_sauvage {creature, niveau} ; combat_dresseur {dresseur} ; teleporter {carte, x, y, direction} ; quete {quete, action: commencer|etape|finir, etape (numéro, à partir de 1)} ; soigner {} ; boutique {boutique} ; ecran_ev {}. Conditions : interrupteur {id, valeur} ; local {valeur} ; objet {objet, min} ; quete {quete, etat: pas_commencee|en_cours|finie, etape (au moins, 0 = peu importe)} ; compteur {compteur: captures|dresseurs_battus|evolutions|badges|pas, min}.';
+  const evenementSchema = {
+    type: 'object',
+    properties: {
+      action: { type: 'string', enum: ['liste', 'voir', 'ajouter', 'modifier', 'supprimer', 'deplacer'] },
+      carte: { type: ['string', 'number'] }, id: { type: 'string' }, x: nombre, y: nombre,
+      type: { type: 'string', enum: Events.TYPES.map(([k]) => k) }, nom: { type: 'string' },
+      personnage: { type: 'string' }, tuile: nombre,
+      direction: { type: 'string', enum: Doc.DIRECTIONS.map(([k]) => k) },
+      deplacement: { type: 'string', enum: Events.DEPLACEMENTS.map(([k]) => k) },
+      declenchement: { type: 'string', enum: Events.DECLENCHEMENTS.map(([k]) => k) },
+      traversable: { type: 'boolean' },
+      pages: { type: 'array', items: { type: 'object' } },
+      vers_x: nombre, vers_y: nombre,
+    },
+    required: ['action'],
+  };
+  const trouverEvenement = (map, a) => {
+    const ev = a.id ? map.events.find((e) => e.id === a.id) : map.events.find((e) => e.x === Math.round(a.x) && e.y === Math.round(a.y));
+    if (!ev) throw new Error(`Pas d'événement ${a.id || `en (${a.x}, ${a.y})`} sur ${map.id} : ${map.events.map((e) => `${e.id} (${e.x}, ${e.y})`).join(', ') || 'aucun événement'}.`);
+    return ev;
+  };
+  // Les champs simples d'un événement donnés par Claude, vérifiés.
+  function champsEvenement(doc, map, ev, a) {
+    const out = { ...ev, apparence: { ...ev.apparence } };
+    if (a.nom !== undefined) out.nom = String(a.nom);
+    if (a.type !== undefined) out.type = a.type;
+    if (a.x !== undefined && a.id) out.x = clamp(Math.round(a.x), 0, map.width - 1);
+    if (a.y !== undefined && a.id) out.y = clamp(Math.round(a.y), 0, map.height - 1);
+    if (a.personnage !== undefined) {
+      if (a.personnage && !Events.perso(doc, a.personnage)) throw new Error(`Pas de personnage « ${a.personnage} » : ${doc.data.personnages.map((p) => p.id).join(', ') || 'aucun (crée-le avec l\'action personnage)'}.`);
+      out.apparence.personnage = a.personnage;
+    }
+    if (a.tuile !== undefined) out.apparence.tuile = Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile);
+    for (const k of ['direction', 'deplacement', 'declenchement']) if (a[k] !== undefined) out[k] = a[k];
+    if (a.traversable !== undefined) out.traversable = Boolean(a.traversable);
+    if (a.pages !== undefined) {
+      const { erreurs, pages } = Events.verifierPages(doc, a.pages);
+      if (erreurs.length) throw new Error(`Script refusé :\n- ${erreurs.slice(0, 20).join('\n- ')}${erreurs.length > 20 ? `\n(et ${erreurs.length - 20} autres)` : ''}`);
+      out.pages = pages;
+    }
+    return Events.normEvent(out, ev.id, map.width, map.height, doc.tiles.length);
+  }
+  const voirEvenement = (doc, ev) => `${Events.decrire(doc, ev)}\n\nScript :\n${Events.texte(doc, ev)}\n\nJSON (le format des fichiers, réutilisable dans pages) :\n${JSON.stringify(ev)}`;
+  const decrireDonnees = (doc) => {
+    const d = doc.data;
+    return [
+      `Personnages (${d.personnages.length}) :`,
+      ...d.personnages.map((p) => `- ${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}${p.couleur ? `, couleur ${p.couleur}` : ''}${p.tuile >= 0 ? `, tuile ${p.tuile}` : ''}, portraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}${p.description ? `\n  ${p.description.replace(/\n/g, '\n  ')}` : ''}`),
+      '',
+      `Quêtes (${d.quetes.length}) :`,
+      ...d.quetes.map((q) => `- ${q.id} « ${q.titre} » (${q.secondaire ? 'secondaire' : 'principale'})${q.suivante ? `, suite : ${q.suivante}` : ''}${q.personnages.length ? `, personnages : ${q.personnages.join(', ')}` : ''}${q.description ? `\n  ${q.description.replace(/\n/g, '\n  ')}` : ''}\n${q.etapes.map((e, i) => `  ${i + 1}. ${e.texte}`).join('\n')}`),
+      '',
+      `Interrupteurs (${d.interrupteurs.length}) :`,
+      ...d.interrupteurs.map((s) => `- ${s.id} « ${s.nom} »${s.description ? ` : ${s.description}` : ''}${(() => { const u = Events.utilisations(doc, 'interrupteur', s.id); return u.length ? ` (utilisé par ${u.join(', ')})` : ''; })()}`),
+    ].join('\n');
+  };
+  // Les portraits d'un personnage côte à côte (pour que Claude les voie).
+  async function planchePortraits(p) {
+    const imgs = await Promise.all(p.portraits.map((x) => new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => resolve(null); i.src = x.png; })));
+    const side = 160;
+    const c = el('canvas', { width: Math.max(1, imgs.length) * (side + 8), height: side + 24 });
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = '#202028';
+    g.fillRect(0, 0, c.width, c.height);
+    imgs.forEach((img, k) => {
+      if (img) {
+        const s = Math.min(side / img.naturalWidth, side / img.naturalHeight);
+        g.drawImage(img, k * (side + 8) + (side - img.naturalWidth * s) / 2, (side - img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s);
+      }
+      g.fillStyle = '#ffffff';
+      g.font = '13px sans-serif';
+      g.fillText(p.portraits[k].expression, k * (side + 8) + 4, side + 17);
+    });
+    return c;
+  }
+  const changerDonnees = (doc, label, fn) => Doc.change(doc, label, () => { doc.data = fn(structuredClone(doc.data)); });
+
+  ClaudePanneau.actions({
+    evenement: {
+      icone: 'person',
+      libelle: (a) => `Événement : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
+      description: `Les événements d'une carte (carte : id, nom ou numéro, sinon celle affichée) : personnages, panneaux, coffres, objets au sol, déclencheurs (case invisible), un par case. action : liste (tous les événements du jeu, ou de carte), voir (id, ou x et y : son script et son JSON), ajouter (type, x, y, nom, personnage, tuile, direction, deplacement, declenchement, traversable, pages ; sans pages, le modèle du type : un coffre a déjà sa page « vide »), modifier (id + les champs à changer ; pages remplace tout le script), supprimer (id), deplacer (id, vers_x, vers_y). type : ${Events.TYPES.map(([k, l]) => `${k} (${l})`).join(', ')}. deplacement : ${Events.DEPLACEMENTS.map(([k]) => k).join(', ')}. declenchement : parler (touche A), toucher (marcher dessus ou contre), auto (à l'arrivée sur la carte). pages : [{ conditions: [...], cache: false, commandes: [...] }] ; le moteur joue la DERNIÈRE page dont toutes les conditions sont vraies (page 1 sans condition = d'habitude ; cache: true = l'événement est absent sur cette page). ${CMDS_AIDE}`,
+      schema: evenementSchema,
+      faire: (a) => {
+        const doc = besoinJeu();
+        if (a.action === 'liste') {
+          const maps = a.carte === undefined ? doc.maps : [doc.maps[carteNumero(doc, a.carte)]];
+          return maps.map((m) => `${m.id} « ${m.name} » : ${m.events.length ? `\n${m.events.map((e) => `- ${Events.decrire(doc, e)}`).join('\n')}` : 'aucun événement'}`).join('\n');
+        }
+        const map = choisirCarte(doc, a.carte);
+        if (a.action === 'voir') return voirEvenement(doc, trouverEvenement(map, a));
+        if (a.action === 'ajouter') {
+          if (a.x === undefined || a.y === undefined) throw new Error('x et y : la case de l\'événement.');
+          const x = clamp(Math.round(a.x), 0, map.width - 1), y = clamp(Math.round(a.y), 0, map.height - 1);
+          if (Doc.eventAt(map, x, y)) throw new Error(`La case (${x}, ${y}) a déjà un événement (${Doc.eventAt(map, x, y).id}) : modifie-le, ou choisis une autre case.`);
+          const base = Events.create(doc, a.type || 'pnj', x, y, Events.nextId('ev', map.events));
+          const ev = champsEvenement(doc, map, base, { ...a, x: undefined, y: undefined });
+          Doc.change(doc, 'Nouvel événement (Claude)', () => {
+            map.events = [...map.events, ev];
+            const nouveaux = Events.interrupteursManquants(doc, ev);
+            if (nouveaux.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...nouveaux] };
+          });
+          if (!App.options.showObjects) App.toggleOption('showObjects');
+          return `Ajouté :\n${voirEvenement(doc, ev)}`;
+        }
+        const ev0 = trouverEvenement(map, a);
+        if (a.action === 'supprimer') {
+          Doc.change(doc, 'Supprimer l\'événement (Claude)', () => { map.events = map.events.filter((e) => e !== ev0); });
+          return `${ev0.id} supprimé.\n${decrireCarte(doc)}`;
+        }
+        if (a.action === 'deplacer') {
+          const x = clamp(Math.round(a.vers_x ?? ev0.x), 0, map.width - 1), y = clamp(Math.round(a.vers_y ?? ev0.y), 0, map.height - 1);
+          const autre = Doc.eventAt(map, x, y);
+          if (autre && autre !== ev0) throw new Error(`La case (${x}, ${y}) a déjà un événement (${autre.id}).`);
+          Doc.change(doc, 'Déplacer l\'événement (Claude)', () => { map.events = map.events.map((e) => (e === ev0 ? { ...e, x, y } : e)); });
+          return `${ev0.id} est maintenant en (${x}, ${y}).`;
+        }
+        if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+        const ev = champsEvenement(doc, map, ev0, a);
+        const autre = Doc.eventAt(map, ev.x, ev.y);
+        if (autre && autre !== ev0) throw new Error(`La case (${ev.x}, ${ev.y}) a déjà un événement (${autre.id}).`);
+        Doc.change(doc, 'Modifier l\'événement (Claude)', () => {
+          map.events = map.events.map((e) => (e === ev0 ? ev : e));
+          const nouveaux = Events.interrupteursManquants(doc, ev);
+          if (nouveaux.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...nouveaux] };
+        });
+        return `Modifié :\n${voirEvenement(doc, ev)}`;
+      },
+    },
+    personnage: {
+      icone: 'person',
+      libelle: (a) => `Personnage : ${String(a.action || '').replace(/_/g, ' ')}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
+      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression). Pour voir les portraits : action donnees avec personnage.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait'] }, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' } }, required: ['action'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const liste = doc.data.personnages;
+        if (a.action === 'ajouter') {
+          if (!a.nom) throw new Error('nom : le nom du personnage.');
+          const id = Events.ident(a.id || a.nom, liste, 'personnage');
+          const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [] };
+          changerDonnees(doc, 'Nouveau personnage (Claude)', (d) => ({ ...d, personnages: [...d.personnages.map((o) => (p.heros ? { ...o, heros: false } : o)), p] }));
+          return `Personnage ${id} « ${p.nom} » ajouté.`;
+        }
+        const p0 = liste.find((p) => p.id === a.id);
+        if (!p0) throw new Error(`Pas de personnage « ${a.id} » : ${liste.map((p) => p.id).join(', ') || 'aucun'}.`);
+        if (a.action === 'supprimer') {
+          const u = Events.utilisations(doc, 'personnage', p0.id);
+          changerDonnees(doc, 'Supprimer le personnage (Claude)', (d) => ({ ...d, personnages: d.personnages.filter((p) => p.id !== p0.id) }));
+          return `${p0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.join(', ')}.` : ''}`;
+        }
+        if (a.action === 'portrait') {
+          if (!a.chemin) throw new Error('chemin : l\'image du portrait, dans le projet.');
+          const expression = Doc.slug(a.expression, 'normal');
+          const { png, largeur, hauteur } = await Events.imagePortrait(await window.claude.lireFichier(a.chemin));
+          changerDonnees(doc, 'Portrait (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: [...p.portraits.filter((x) => x.expression !== expression), { expression, png }] } : p)) }));
+          return `Portrait « ${expression} » de ${p0.nom} : ${largeur} × ${hauteur} px.`;
+        }
+        if (a.action === 'retirer_portrait') {
+          const expression = Doc.slug(a.expression, 'normal');
+          if (!p0.portraits.some((x) => x.expression === expression)) throw new Error(`${p0.nom} n'a pas de portrait « ${expression} » (${p0.portraits.map((x) => x.expression).join(', ') || 'aucun'}).`);
+          changerDonnees(doc, 'Retirer un portrait (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: p.portraits.filter((x) => x.expression !== expression) } : p)) }));
+          return `Portrait « ${expression} » retiré.`;
+        }
+        if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+        const p = { ...p0 };
+        if (a.nom !== undefined) p.nom = String(a.nom);
+        if (a.description !== undefined) p.description = String(a.description);
+        if (a.heros !== undefined) p.heros = Boolean(a.heros);
+        if (a.couleur !== undefined) p.couleur = normalizeHex(a.couleur) || '';
+        if (a.tuile !== undefined) p.tuile = Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile);
+        changerDonnees(doc, 'Modifier le personnage (Claude)', (d) => ({ ...d, personnages: d.personnages.map((o) => (o.id === p.id ? p : p.heros ? { ...o, heros: false } : o)) }));
+        return `Personnage ${p.id} modifié.`;
+      },
+    },
+    quete: {
+      icone: 'book',
+      libelle: (a) => `Quête : ${a.action}${a.titre ? ` « ${a.titre} »` : a.id ? ` ${a.id}` : ''}`,
+      description: 'Les quêtes du jeu (histoire principale et quêtes secondaires, avec leurs étapes). Les scripts les font avancer (commande quete) et testent leur état (condition quete). action : ajouter (titre, id facultatif tiré du titre, description, secondaire, suivante : l\'id de la quête qui suit, pour le fil rouge, personnages : ids des personnages qu\'on y croise, etapes : liste de textes dans l\'ordre), modifier (id + les champs à changer ; etapes remplace toutes les étapes), supprimer (id).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, titre: { type: 'string' }, description: { type: 'string' }, secondaire: { type: 'boolean' }, suivante: { type: 'string' }, personnages: { type: 'array', items: { type: 'string' } }, etapes: { type: 'array', items: { type: 'string' } } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const liste = doc.data.quetes;
+        const verifier = (q) => {
+          if (q.suivante && !liste.some((o) => o.id === q.suivante) && q.suivante !== q.id) throw new Error(`suivante : pas de quête « ${q.suivante} » (${liste.map((o) => o.id).join(', ') || 'aucune'}).`);
+          const inconnus = q.personnages.filter((id) => !Events.perso(doc, id));
+          if (inconnus.length) throw new Error(`personnages inconnus : ${inconnus.join(', ')} (${doc.data.personnages.map((p) => p.id).join(', ') || 'aucun'}).`);
+          return q;
+        };
+        if (a.action === 'ajouter') {
+          if (!a.titre) throw new Error('titre : le titre de la quête.');
+          const q = verifier({ id: Events.ident(a.id || a.titre, liste, 'quete'), titre: String(a.titre), description: String(a.description || ''), secondaire: Boolean(a.secondaire), suivante: String(a.suivante || ''), personnages: (a.personnages || []).map(String), etapes: (a.etapes || []).map((t) => ({ texte: String(t) })) });
+          changerDonnees(doc, 'Nouvelle quête (Claude)', (d) => ({ ...d, quetes: [...d.quetes, q] }));
+          return `Quête ${q.id} « ${q.titre} » ajoutée (${q.etapes.length} étape(s)).`;
+        }
+        const q0 = liste.find((q) => q.id === a.id);
+        if (!q0) throw new Error(`Pas de quête « ${a.id} » : ${liste.map((q) => q.id).join(', ') || 'aucune'}.`);
+        if (a.action === 'supprimer') {
+          const u = Events.utilisations(doc, 'quete', q0.id);
+          changerDonnees(doc, 'Supprimer la quête (Claude)', (d) => ({ ...d, quetes: d.quetes.filter((q) => q.id !== q0.id) }));
+          return `${q0.id} supprimée.${u.length ? ` Attention, elle était utilisée par : ${u.join(', ')}.` : ''}`;
+        }
+        if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+        const q = { ...q0 };
+        for (const k of ['titre', 'description', 'suivante']) if (a[k] !== undefined) q[k] = String(a[k]);
+        if (a.secondaire !== undefined) q.secondaire = Boolean(a.secondaire);
+        if (a.personnages !== undefined) q.personnages = a.personnages.map(String);
+        if (a.etapes !== undefined) q.etapes = a.etapes.map((t) => ({ texte: String(t) }));
+        verifier(q);
+        changerDonnees(doc, 'Modifier la quête (Claude)', (d) => ({ ...d, quetes: d.quetes.map((o) => (o.id === q.id ? q : o)) }));
+        return `Quête ${q.id} modifiée.`;
+      },
+    },
+    interrupteur: {
+      icone: 'symbol-boolean',
+      libelle: (a) => `Interrupteur : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
+      description: 'Les interrupteurs du jeu : chacun retient un fait de l\'histoire (« rival battu au labo »), éteint au début d\'une partie. Les scripts les allument (commande interrupteur) et les pages les testent (condition interrupteur). action : ajouter (nom, id facultatif tiré du nom, description), modifier (id + nom, description ; l\'id ne change pas), supprimer (id).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const liste = doc.data.interrupteurs;
+        if (a.action === 'ajouter') {
+          if (!a.nom) throw new Error('nom : ce que retient l\'interrupteur.');
+          const s0 = { id: Events.ident(a.id || a.nom, liste, 'interrupteur'), nom: String(a.nom), description: String(a.description || '') };
+          changerDonnees(doc, 'Nouvel interrupteur (Claude)', (d) => ({ ...d, interrupteurs: [...d.interrupteurs, s0] }));
+          return `Interrupteur ${s0.id} « ${s0.nom} » ajouté.`;
+        }
+        const s0 = liste.find((s) => s.id === a.id);
+        if (!s0) throw new Error(`Pas d'interrupteur « ${a.id} » : ${liste.map((s) => s.id).join(', ') || 'aucun'}.`);
+        if (a.action === 'supprimer') {
+          const u = Events.utilisations(doc, 'interrupteur', s0.id);
+          changerDonnees(doc, 'Supprimer l\'interrupteur (Claude)', (d) => ({ ...d, interrupteurs: d.interrupteurs.filter((s) => s.id !== s0.id) }));
+          return `${s0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.join(', ')}.` : ''}`;
+        }
+        if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+        const s = { ...s0, ...(a.nom !== undefined ? { nom: String(a.nom) } : {}), ...(a.description !== undefined ? { description: String(a.description) } : {}) };
+        changerDonnees(doc, 'Modifier l\'interrupteur (Claude)', (d) => ({ ...d, interrupteurs: d.interrupteurs.map((o) => (o.id === s.id ? s : o)) }));
+        return `Interrupteur ${s.id} modifié.`;
+      },
+    },
+    donnees: {
+      lecture: true,
+      icone: 'database',
+      libelle: (a) => (a.personnage ? `Regarde le personnage ${a.personnage}` : 'Regarde les données du jeu'),
+      description: 'Décrit les données du jeu : personnages (id, nom, héros, description, expressions des portraits), quêtes (étapes numérotées, suite, personnages) et interrupteurs (avec où ils servent). personnage : un id, pour voir aussi ses portraits.',
+      schema: { type: 'object', properties: { personnage: { type: 'string' } } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        if (!a.personnage) return decrireDonnees(doc);
+        const p = Events.perso(doc, a.personnage);
+        if (!p) throw new Error(`Pas de personnage « ${a.personnage} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+        const texte = `${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}\n${p.description || '(pas de description)'}\nPortraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}.\nUtilisé par : ${Events.utilisations(doc, 'personnage', p.id).join(', ') || 'rien encore'}.`;
+        return p.portraits.length ? { texte, image: await planchePortraits(p) } : texte;
       },
     },
   });

@@ -1,0 +1,1137 @@
+// Les événements des cartes et les données du jeu (Tafl 0.7).
+//
+// Un événement est ce qui vit sur une case de la carte : un personnage à qui parler, un panneau, un
+// coffre, un objet au sol, ou une case invisible qui déclenche une scène quand le joueur marche dessus.
+// Ce qu'il fait est écrit dans ses « pages » : chaque page a des conditions et une liste de commandes
+// (son script : dialogues, choix, objets donnés, combats, quêtes…). Le moteur du jeu joue la DERNIÈRE
+// page dont toutes les conditions sont vraies, comme dans RPG Maker : un coffre a une page « fermé »,
+// puis une page « déjà ouvert » qui prend le relais.
+//
+// Un événement est un objet tout simple, avec les mêmes clés que dans les fichiers des cartes
+// (voir ../FORMAT.md, « Événements ») :
+//   { id, nom, type, x, y, apparence: { personnage, tuile }, direction, deplacement, traversable,
+//     declenchement, pages: [{ conditions: [...], cache, commandes: [...] }] }
+// Comme les zones, on ne le modifie jamais sur place : on remplace la liste (map.events = [...]).
+//
+// doc.data, les données du jeu, suit la même règle (on remplace doc.data en entier) :
+//   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }] }],
+//     quetes: [{ id, titre, description, secondaire, suivante, personnages, etapes: [{ texte }] }],
+//     interrupteurs: [{ id, nom, description }] }
+//
+// Les deux grandes fenêtres (l'éditeur d'un événement, et Jeu › Données du jeu) travaillent sur une
+// copie et la rendent d'un bloc quand on valide : App la remet dans le jeu avec Doc.change(), ce qui
+// s'annule en un seul Ctrl+Z.
+
+const Events = (() => {
+  // --- Listes de choix ---
+  const TYPES = [['pnj', 'Personnage'], ['panneau', 'Panneau'], ['coffre', 'Coffre'], ['objet', 'Objet au sol'], ['declencheur', 'Déclencheur (case invisible)']];
+  const TYPE_ICONS = { pnj: 'person', panneau: 'note', coffre: 'package', objet: 'gift', declencheur: 'zap' };
+  const DEPLACEMENTS = [['fixe', 'Immobile'], ['regarde', 'Se tourne vers le joueur qui lui parle'], ['aleatoire', 'Marche au hasard'], ['tourne', 'Regarde autour de lui']];
+  const DECLENCHEMENTS = [['parler', 'Le joueur lui parle (touche A)'], ['toucher', 'Le joueur marche dessus ou le touche'], ['auto', 'Tout seul, dès l\'arrivée sur la carte']];
+  const EXPRESSIONS = ['normal', 'content', 'rire', 'triste', 'colere', 'surpris', 'inquiet', 'gene', 'determine'];
+  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['evolutions', 'Évolutions vues'], ['badges', 'Badges'], ['pas', 'Pas du joueur']];
+  const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
+  const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
+
+  // --- Petites aides ---
+  const str = (v, d = '') => (v === undefined || v === null ? d : String(v));
+  const int = (v, d = 0) => (Number.isFinite(Number(v)) && v !== '' && v !== null ? Math.round(Number(v)) : d);
+  const pick = (v, list, d) => (list.some(([k]) => k === v) ? v : d);
+  const vrai = (v) => v !== false && v !== 'false';
+  const court = (t, n = 60) => {
+    const s = String(t || '').replace(/\s+/g, ' ').trim();
+    return s.length > n ? `${s.slice(0, n - 1)}…` : s;
+  };
+  const libelle = (list, k) => list.find(([x]) => x === k)?.[1] || k;
+  // Identifiant tiré d'un nom (« Prof. Chêne » → prof-chene), unique dans la liste.
+  function ident(nom, liste, fallback) {
+    const base = Doc.slug(nom, fallback);
+    const ids = new Set(liste.map((o) => o.id));
+    if (!ids.has(base)) return base;
+    let n = 2;
+    while (ids.has(`${base}-${n}`)) n++;
+    return `${base}-${n}`;
+  }
+  // ev-1, ev-2… : le premier libre.
+  function nextId(prefix, list) {
+    let n = list.length + 1;
+    while (list.some((o) => o.id === `${prefix}-${n}`)) n++;
+    return `${prefix}-${n}`;
+  }
+
+  const perso = (doc, id) => doc.data.personnages.find((p) => p.id === id) || null;
+  const quete = (doc, id) => doc.data.quetes.find((q) => q.id === id) || null;
+  // Le portrait d'un personnage pour une expression (sinon « normal », sinon le premier).
+  function portrait(doc, id, expression) {
+    const p = perso(doc, id);
+    if (!p || !p.portraits.length) return null;
+    return p.portraits.find((x) => x.expression === expression) || p.portraits.find((x) => x.expression === 'normal') || p.portraits[0];
+  }
+  // « @evenement » : celui qui parle est le personnage de l'événement (pratique pour dupliquer un PNJ).
+  const quiReel = (qui, ev) => (qui === '@evenement' ? ev?.apparence?.personnage || '' : qui);
+  function nomQui(doc, qui, ev) {
+    if (!qui) return 'Texte';
+    const id = quiReel(qui, ev);
+    return perso(doc, id)?.nom || (qui === '@evenement' ? ev?.nom || 'L\'événement' : qui);
+  }
+  const choixQui = (doc) => [['', 'Personne (texte seul : panneau, narration)'], ['@evenement', 'L\'événement lui-même (son personnage)'], ...doc.data.personnages.map((p) => [p.id, `${p.nom}${p.heros ? ' (le héros)' : ''}`])];
+  const choixQuetes = (doc, actuelle) => {
+    const list = doc.data.quetes.map((q) => [q.id, q.titre || q.id]);
+    if (actuelle && !list.some(([k]) => k === actuelle)) list.unshift([actuelle, `${actuelle} (n'existe plus)`]);
+    return list.length ? list : [['', 'Aucune quête : crée-la dans Jeu › Données du jeu']];
+  };
+  const choixTuiles = (doc) => [['-1', 'Aucune'], ...doc.tiles.map((t, i) => [String(i), `${i}. ${t.name}`])];
+
+  // Parcourt toutes les commandes d'une liste, y compris celles rangées dans un choix ou un « si ».
+  function parcourir(liste, fn) {
+    for (const c of liste || []) {
+      fn(c);
+      if (c.type === 'choix') for (const o of c.options || []) parcourir(o.commandes, fn);
+      if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
+    }
+  }
+  function parcourirJeu(doc, fn) {
+    for (const map of doc.maps) {
+      for (const ev of map.events) {
+        ev.pages.forEach((p, k) => {
+          for (const c of p.conditions) fn({ condition: c, ev, map, page: k });
+          parcourir(p.commandes, (c) => { fn({ commande: c, ev, map, page: k }); if (c.type === 'si') fn({ condition: c.condition, ev, map, page: k }); });
+        });
+      }
+    }
+  }
+  // Où une donnée (personnage, quête, interrupteur) est utilisée : [« Bourg › Maman (page 1) », …].
+  function utilisations(doc, kind, id) {
+    const out = new Set();
+    const at = ({ ev, map, page }) => out.add(`${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`);
+    for (const map of doc.maps) for (const ev of map.events) if (kind === 'personnage' && ev.apparence.personnage === id) out.add(`${map.name} › ${ev.nom || ev.id} (apparence)`);
+    parcourirJeu(doc, (u) => {
+      const c = u.commande || u.condition;
+      if (kind === 'personnage' && u.commande?.type === 'dire' && quiReel(c.qui, u.ev) === id) at(u);
+      if (kind === 'quete' && c.type === 'quete' && c.quete === id) at(u);
+      if (kind === 'interrupteur' && c.type === 'interrupteur' && c.id === id) at(u);
+    });
+    if (kind === 'quete') for (const q of doc.data.quetes) if (q.suivante === id) out.add(`Quête « ${q.titre} » (suite)`);
+    return [...out];
+  }
+  // Les identifiants d'objets déjà utilisés (proposés quand on en tape un).
+  function objetsUtilises(doc) {
+    const out = new Set(['potion', 'super-potion', 'poke-ball', 'planche-de-surf', 'velo', 'canne-a-peche']);
+    for (const m of doc.maps) for (const z of m.zones) if (z.objet) out.add(z.objet);
+    parcourirJeu(doc, (u) => { const c = u.commande || u.condition; if (c.type === 'objet' && c.objet) out.add(c.objet); });
+    return out;
+  }
+  // Les listes proposées sous les champs de texte (expressions, interrupteurs, objets).
+  function listes(doc) {
+    const set = (id, values) => {
+      let dl = document.getElementById(id);
+      if (!dl) { dl = el('datalist', { id }); document.body.append(dl); }
+      dl.replaceChildren(...[...new Set(values)].filter(Boolean).map((v) => el('option', { value: v })));
+    };
+    set('tafl-expressions', [...EXPRESSIONS, ...doc.data.personnages.flatMap((p) => p.portraits.map((x) => x.expression))]);
+    set('tafl-interrupteurs', doc.data.interrupteurs.map((i) => i.id));
+    set('tafl-objets', [...objetsUtilises(doc)]);
+  }
+
+  // --- Les commandes d'un script ---
+  // Pour chaque type : son nom, son icône, son groupe (dans le menu « Ajouter une commande »), la
+  // commande neuve, les champs de sa fenêtre (Dialogs.form), comment la refaire depuis la fenêtre, et
+  // une phrase qui la résume dans la liste. Une commande sans champs s'ajoute directement.
+  const COMMANDES = {
+    dire: {
+      nom: 'Dialogue', icone: 'comment', groupe: 'Dialogue', largeur: 520,
+      nouveau: () => ({ type: 'dire', qui: '@evenement', expression: 'normal', texte: '' }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui parle', type: 'select', value: c.qui, choices: choixQui(doc) },
+        { key: 'expression', label: 'Expression', type: 'text', value: c.expression, list: 'tafl-expressions', placeholder: 'normal' },
+        { key: 'texte', label: 'Texte', type: 'textarea', rows: 5, value: c.texte, placeholder: 'Bonjour {joueur} ! Belle journée pour partir à l\'aventure.' },
+        { type: 'element', element: el('div', { className: 'dialogue-apercu' }) },
+        { type: 'info', text: '{joueur} est remplacé par le nom du joueur. Une ligne vide coupe le texte en plusieurs boîtes de dialogue. Le portrait vient de Jeu › Données du jeu › Personnages.' },
+      ],
+      onInput: (v, f, doc, ev) => apercuDialogue(f.card.querySelector('.dialogue-apercu'), doc, { qui: v.qui, expression: v.expression || 'normal', texte: v.texte }, ev),
+      depuis: (v) => ({ type: 'dire', qui: v.qui, expression: v.expression.trim() || 'normal', texte: v.texte.trim() }),
+      valide: (c) => (c.texte ? null : 'Le dialogue n\'a pas de texte.'),
+      resume: (doc, c, ev) => `${nomQui(doc, c.qui, ev)}${c.qui && c.expression && c.expression !== 'normal' ? ` (${c.expression})` : ''} : « ${court(c.texte)} »`,
+    },
+    choix: {
+      nom: 'Choix (question au joueur)', icone: 'question', groupe: 'Dialogue',
+      nouveau: () => ({ type: 'choix', options: [{ texte: 'Oui', commandes: [] }, { texte: 'Non', commandes: [] }] }),
+      champs: (doc, c) => [
+        { key: 'options', label: 'Réponses', type: 'textarea', rows: 4, value: c.options.map((o) => o.texte).join('\n') },
+        { type: 'info', text: 'Une réponse par ligne, de 2 à 4. Chaque réponse a ensuite ses propres commandes dans le script. Pose la question juste avant, avec un dialogue.' },
+      ],
+      depuis: (v, c) => ({ type: 'choix', options: v.options.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 4).map((texte, i) => ({ texte, commandes: c.options[i]?.commandes || [] })) }),
+      valide: (c) => (c.options.length >= 2 ? null : 'Il faut au moins deux réponses.'),
+      resume: (doc, c) => `Choix : ${c.options.map((o) => `« ${o.texte} »`).join(' / ')}`,
+    },
+    commentaire: {
+      nom: 'Note (ignorée par le jeu)', icone: 'edit', groupe: 'Dialogue',
+      nouveau: () => ({ type: 'commentaire', texte: '' }),
+      champs: (doc, c) => [{ key: 'texte', label: 'Note', type: 'textarea', rows: 3, value: c.texte }],
+      depuis: (v) => ({ type: 'commentaire', texte: v.texte.trim() }),
+      resume: (doc, c) => `// ${court(c.texte) || '…'}`,
+    },
+    si: {
+      nom: 'Si… sinon (condition)', icone: 'git-compare', groupe: 'Logique',
+      resume: (doc, c) => `Si ${resumeCondition(doc, c.condition)}`,
+    },
+    interrupteur: {
+      nom: 'Interrupteur du jeu', icone: 'symbol-boolean', groupe: 'Logique',
+      nouveau: () => ({ type: 'interrupteur', id: '', valeur: true }),
+      champs: (doc, c) => [
+        { key: 'id', label: 'Interrupteur', type: 'text', value: c.id, list: 'tafl-interrupteurs', placeholder: 'a-recu-son-starter' },
+        { key: 'valeur', label: 'Le mettre', type: 'select', value: String(c.valeur), choices: VRAI_FAUX },
+        { type: 'info', text: 'Un interrupteur retient un fait de l\'histoire (« le rival est battu », « le pont est réparé ») pour tout le jeu. Un nom qui n\'existe pas encore crée l\'interrupteur.' },
+      ],
+      depuis: (v) => ({ type: 'interrupteur', id: Doc.slug(v.id, ''), valeur: v.valeur === 'true' }),
+      valide: (c) => (c.id ? null : 'Donne un nom à l\'interrupteur.'),
+      resume: (doc, c) => `Interrupteur « ${nomInterrupteur(doc, c.id)} » ${c.valeur ? 'allumé' : 'éteint'}`,
+    },
+    local: {
+      nom: 'Interrupteur « déjà fait » de l\'événement', icone: 'pass', groupe: 'Logique',
+      nouveau: () => ({ type: 'local', valeur: true }),
+      champs: (doc, c) => [
+        { key: 'valeur', label: 'Le mettre', type: 'select', value: String(c.valeur), choices: VRAI_FAUX },
+        { type: 'info', text: 'Chaque événement a son propre interrupteur « déjà fait » : le coffre est ouvert, l\'objet ramassé, le dresseur battu. Une page avec la condition « déjà fait » prend alors le relais.' },
+      ],
+      depuis: (v) => ({ type: 'local', valeur: v.valeur === 'true' }),
+      resume: (doc, c) => (c.valeur ? 'Marquer comme déjà fait' : 'Marquer comme pas encore fait'),
+    },
+    attendre: {
+      nom: 'Attendre', icone: 'watch', groupe: 'Logique',
+      nouveau: () => ({ type: 'attendre', ms: 500 }),
+      champs: (doc, c) => [{ key: 'ms', label: 'Durée', type: 'number', value: c.ms, min: 0, max: 60000, step: 100, unit: 'ms' }],
+      depuis: (v) => ({ type: 'attendre', ms: clamp(Math.round(v.ms) || 0, 0, 60000) }),
+      resume: (doc, c) => `Attendre ${c.ms} ms`,
+    },
+    fin: {
+      nom: 'Arrêter le script ici', icone: 'debug-stop', groupe: 'Logique',
+      nouveau: () => ({ type: 'fin' }),
+      resume: () => 'Fin du script',
+    },
+    objet: {
+      nom: 'Donner ou retirer un objet', icone: 'gift', groupe: 'Objets et créatures',
+      nouveau: () => ({ type: 'objet', action: 'donner', objet: '', nombre: 1 }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['donner', 'Donner au joueur'], ['retirer', 'Retirer au joueur']] },
+        { key: 'objet', label: 'Objet', type: 'text', value: c.objet, list: 'tafl-objets', placeholder: 'potion' },
+        { key: 'nombre', label: 'Combien', type: 'number', value: c.nombre, min: 1, max: 999 },
+        { type: 'info', text: 'L\'identifiant de l\'objet (potion, planche-de-surf…). La liste des objets, avec leurs effets et leurs prix, arrive avec Tafl 0.8.' },
+      ],
+      depuis: (v) => ({ type: 'objet', action: v.action, objet: Doc.slug(v.objet, ''), nombre: clamp(Math.round(v.nombre) || 1, 1, 999) }),
+      valide: (c) => (c.objet ? null : 'Quel objet ?'),
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Donner'} ${c.nombre} × ${c.objet}`,
+    },
+    creature: {
+      nom: 'Donner une créature', icone: 'heart', groupe: 'Objets et créatures',
+      nouveau: () => ({ type: 'creature', creature: '', niveau: 5 }),
+      champs: (doc, c) => [
+        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, placeholder: 'starter-feu' },
+        { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
+        { type: 'info', text: 'Le starter, un cadeau, un échange… L\'identifiant de la créature : la liste des créatures arrive avec Tafl 0.8.' },
+      ],
+      depuis: (v) => ({ type: 'creature', creature: Doc.slug(v.creature, ''), niveau: clamp(Math.round(v.niveau) || 5, 1, 100) }),
+      valide: (c) => (c.creature ? null : 'Quelle créature ?'),
+      resume: (doc, c) => `Donner ${c.creature} (niveau ${c.niveau})`,
+    },
+    combat_sauvage: {
+      nom: 'Combat contre une créature', icone: 'flame', groupe: 'Objets et créatures',
+      nouveau: () => ({ type: 'combat_sauvage', creature: '', niveau: 50 }),
+      champs: (doc, c) => [
+        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, placeholder: 'legendaire-du-lac' },
+        { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
+        { type: 'info', text: 'Un combat contre une créature précise, qu\'on peut capturer : un légendaire au bout d\'une quête, un gardien qui bloque la route…' },
+      ],
+      depuis: (v) => ({ type: 'combat_sauvage', creature: Doc.slug(v.creature, ''), niveau: clamp(Math.round(v.niveau) || 5, 1, 100) }),
+      valide: (c) => (c.creature ? null : 'Quelle créature ?'),
+      resume: (doc, c) => `Combat contre ${c.creature} (niveau ${c.niveau})`,
+    },
+    combat_dresseur: {
+      nom: 'Combat contre un dresseur', icone: 'person', groupe: 'Objets et créatures',
+      nouveau: () => ({ type: 'combat_dresseur', dresseur: '' }),
+      champs: (doc, c) => [
+        { key: 'dresseur', label: 'Dresseur', type: 'text', value: c.dresseur, placeholder: 'rival-1' },
+        { type: 'info', text: 'L\'identifiant du dresseur (son équipe arrive avec Tafl 0.8, avec le niveau qui suit la progression du joueur).' },
+      ],
+      depuis: (v) => ({ type: 'combat_dresseur', dresseur: Doc.slug(v.dresseur, '') }),
+      valide: (c) => (c.dresseur ? null : 'Quel dresseur ?'),
+      resume: (doc, c) => `Combat contre le dresseur ${c.dresseur}`,
+    },
+    teleporter: {
+      nom: 'Téléporter le joueur', icone: 'debug-step-into', groupe: 'Déplacements',
+      nouveau: () => ({ type: 'teleporter', carte: '', x: 0, y: 0, direction: 'bas' }),
+      champs: (doc, c) => [
+        { key: 'carte', label: 'Carte', type: 'select', value: c.carte || doc.map.id, choices: doc.maps.map((m) => [m.id, m.name]) },
+        { key: 'x', label: 'Colonne (x)', type: 'number', value: c.x, min: 0, max: 255 },
+        { key: 'y', label: 'Rangée (y)', type: 'number', value: c.y, min: 0, max: 255 },
+        { key: 'direction', label: 'Le joueur regarde', type: 'select', value: c.direction, choices: Doc.DIRECTIONS },
+      ],
+      depuis: (v) => {
+        const m = Doc.mapById(App.doc, v.carte);
+        return { type: 'teleporter', carte: v.carte, x: clamp(Math.round(v.x), 0, (m?.width || 256) - 1), y: clamp(Math.round(v.y), 0, (m?.height || 256) - 1), direction: v.direction };
+      },
+      resume: (doc, c) => `Téléporter vers ${Doc.mapById(doc, c.carte)?.name || c.carte} (${c.x}, ${c.y})`,
+    },
+    quete: {
+      nom: 'Avancer une quête', icone: 'book', groupe: 'Quêtes',
+      nouveau: () => ({ type: 'quete', quete: '', action: 'commencer', etape: 1 }),
+      champs: (doc, c) => [
+        { key: 'quete', label: 'Quête', type: 'select', value: c.quete || doc.data.quetes[0]?.id || '', choices: choixQuetes(doc, c.quete) },
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['commencer', 'La commencer'], ['etape', 'Passer à l\'étape…'], ['finir', 'La finir']] },
+        { key: 'etape', label: 'Étape', type: 'number', value: c.etape, min: 1, max: 99 },
+      ],
+      onInput: (v, f) => { f.inputs.etape.row.hidden = v.action !== 'etape'; },
+      depuis: (v) => ({ type: 'quete', quete: v.quete, action: v.action, etape: clamp(Math.round(v.etape) || 1, 1, 99) }),
+      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Jeu › Données du jeu.'),
+      resume: (doc, c) => {
+        const q = quete(doc, c.quete);
+        const t = q?.titre || c.quete;
+        if (c.action === 'etape') return `Quête « ${t} » : étape ${c.etape}${q?.etapes[c.etape - 1] ? ` (${court(q.etapes[c.etape - 1].texte, 40)})` : ''}`;
+        return `${c.action === 'finir' ? 'Finir' : 'Commencer'} la quête « ${t} »`;
+      },
+    },
+    soigner: {
+      nom: 'Soigner l\'équipe', icone: 'heart-filled', groupe: 'Services',
+      nouveau: () => ({ type: 'soigner' }),
+      resume: () => 'Soigner toute l\'équipe',
+    },
+    boutique: {
+      nom: 'Ouvrir une boutique', icone: 'tag', groupe: 'Services',
+      nouveau: () => ({ type: 'boutique', boutique: '' }),
+      champs: (doc, c) => [
+        { key: 'boutique', label: 'Boutique', type: 'text', value: c.boutique, placeholder: 'boutique-bourg' },
+        { type: 'info', text: 'L\'identifiant de la boutique. Son contenu, et ce qui débloque chaque article (captures, dresseurs battus, évolutions…), arrive avec Tafl 0.8.' },
+      ],
+      depuis: (v) => ({ type: 'boutique', boutique: Doc.slug(v.boutique, '') }),
+      valide: (c) => (c.boutique ? null : 'Quelle boutique ?'),
+      resume: (doc, c) => `Ouvrir la boutique ${c.boutique}`,
+    },
+    ecran_ev: {
+      nom: 'Écran des EV (centre de soins)', icone: 'settings', groupe: 'Services',
+      nouveau: () => ({ type: 'ecran_ev' }),
+      resume: () => 'Ouvrir l\'écran des EV (répartir les points d\'effort)',
+    },
+  };
+
+  // --- Les conditions (d'une page, ou d'un « si ») ---
+  const CONDITIONS = {
+    interrupteur: {
+      nom: 'Un interrupteur du jeu',
+      nouveau: () => ({ type: 'interrupteur', id: '', valeur: true }),
+      champs: (doc, c) => [
+        { key: 'id', label: 'Interrupteur', type: 'text', value: c.id, list: 'tafl-interrupteurs', placeholder: 'rival-battu' },
+        { key: 'valeur', label: 'Est', type: 'select', value: String(c.valeur), choices: VRAI_FAUX },
+      ],
+      depuis: (v) => ({ type: 'interrupteur', id: Doc.slug(v.id, ''), valeur: v.valeur === 'true' }),
+      valide: (c) => (c.id ? null : 'Donne le nom de l\'interrupteur.'),
+    },
+    local: {
+      nom: 'L\'événement est « déjà fait »',
+      nouveau: () => ({ type: 'local', valeur: true }),
+      champs: (doc, c) => [{ key: 'valeur', label: 'Déjà fait', type: 'select', value: String(c.valeur), choices: [['true', 'Oui'], ['false', 'Non']] }],
+      depuis: (v) => ({ type: 'local', valeur: v.valeur === 'true' }),
+    },
+    objet: {
+      nom: 'Le joueur a un objet',
+      nouveau: () => ({ type: 'objet', objet: '', min: 1 }),
+      champs: (doc, c) => [
+        { key: 'objet', label: 'Objet', type: 'text', value: c.objet, list: 'tafl-objets', placeholder: 'planche-de-surf' },
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 1, max: 999 },
+      ],
+      depuis: (v) => ({ type: 'objet', objet: Doc.slug(v.objet, ''), min: clamp(Math.round(v.min) || 1, 1, 999) }),
+      valide: (c) => (c.objet ? null : 'Quel objet ?'),
+    },
+    quete: {
+      nom: 'L\'état d\'une quête',
+      nouveau: () => ({ type: 'quete', quete: '', etat: 'en_cours', etape: 0 }),
+      champs: (doc, c) => [
+        { key: 'quete', label: 'Quête', type: 'select', value: c.quete || doc.data.quetes[0]?.id || '', choices: choixQuetes(doc, c.quete) },
+        { key: 'etat', label: 'Est', type: 'select', value: c.etat, choices: ETATS_QUETE },
+        { key: 'etape', label: 'Au moins à l\'étape', type: 'number', value: c.etape, min: 0, max: 99 },
+        { type: 'info', text: 'Étape : 0 = peu importe. Par exemple « en cours, au moins à l\'étape 2 » : le joueur a déjà parlé au pêcheur.' },
+      ],
+      onInput: (v, f) => { f.inputs.etape.row.hidden = v.etat !== 'en_cours'; },
+      depuis: (v) => ({ type: 'quete', quete: v.quete, etat: v.etat, etape: v.etat === 'en_cours' ? clamp(Math.round(v.etape) || 0, 0, 99) : 0 }),
+      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Jeu › Données du jeu.'),
+    },
+    compteur: {
+      nom: 'Un compteur du joueur (captures, badges…)',
+      nouveau: () => ({ type: 'compteur', compteur: 'captures', min: 10 }),
+      champs: (doc, c) => [
+        { key: 'compteur', label: 'Compteur', type: 'select', value: c.compteur, choices: COMPTEURS },
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 99999 },
+        { type: 'info', text: 'Pour débloquer une boutique, un personnage ou une quête au fil de la progression : 10 créatures capturées, 5 dresseurs battus, 3 évolutions…' },
+      ],
+      depuis: (v) => ({ type: 'compteur', compteur: v.compteur, min: clamp(Math.round(v.min) || 0, 0, 99999) }),
+    },
+  };
+  const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
+  function resumeCondition(doc, c) {
+    if (!c) return '…';
+    if (c.type === 'interrupteur') return `« ${nomInterrupteur(doc, c.id)} » ${c.valeur ? 'allumé' : 'éteint'}`;
+    if (c.type === 'local') return c.valeur ? 'déjà fait' : 'pas encore fait';
+    if (c.type === 'objet') return `a ${c.min > 1 ? `au moins ${c.min} × ` : ''}${c.objet}`;
+    if (c.type === 'quete') return `quête « ${quete(doc, c.quete)?.titre || c.quete} » ${libelle(ETATS_QUETE, c.etat).toLowerCase()}${c.etat === 'en_cours' && c.etape ? `, étape ${c.etape} ou plus` : ''}`;
+    if (c.type === 'compteur') return `${libelle(COMPTEURS, c.compteur).toLowerCase()} ≥ ${c.min}`;
+    return `condition inconnue (${c.type})`;
+  }
+  const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
+
+  // --- Lire un événement (fichier, Claude) : on complète et on corrige ce qui manque ---
+  function normCondition(c) {
+    if (!c || typeof c !== 'object') return null;
+    switch (c.type) {
+      case 'interrupteur': return { type: 'interrupteur', id: str(c.id), valeur: vrai(c.valeur) };
+      case 'local': return { type: 'local', valeur: vrai(c.valeur) };
+      case 'objet': return { type: 'objet', objet: str(c.objet), min: Math.max(1, int(c.min, 1)) };
+      case 'quete': return { type: 'quete', quete: str(c.quete), etat: pick(c.etat, ETATS_QUETE, 'en_cours'), etape: Math.max(0, int(c.etape, 0)) };
+      case 'compteur': return { type: 'compteur', compteur: pick(c.compteur, COMPTEURS, 'captures'), min: Math.max(0, int(c.min, 1)) };
+      default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
+    }
+  }
+  const normListe = (liste) => (Array.isArray(liste) ? liste.map(normCommande).filter(Boolean) : []);
+  function normCommande(c) {
+    if (!c || typeof c !== 'object') return null;
+    switch (c.type) {
+      case 'dire': return { type: 'dire', qui: str(c.qui), expression: str(c.expression) || 'normal', texte: str(c.texte) };
+      case 'choix': return { type: 'choix', options: (Array.isArray(c.options) ? c.options : []).slice(0, 4).map((o) => ({ texte: str(o?.texte ?? o), commandes: normListe(o?.commandes) })) };
+      case 'si': return { type: 'si', condition: normCondition(c.condition) || { type: 'local', valeur: true }, alors: normListe(c.alors), sinon: normListe(c.sinon) };
+      case 'commentaire': return { type: 'commentaire', texte: str(c.texte) };
+      case 'fin': case 'soigner': case 'ecran_ev': return { type: c.type };
+      case 'interrupteur': return { type: 'interrupteur', id: str(c.id), valeur: vrai(c.valeur) };
+      case 'local': return { type: 'local', valeur: vrai(c.valeur) };
+      case 'attendre': return { type: 'attendre', ms: clamp(int(c.ms, 500), 0, 60000) };
+      case 'objet': return { type: 'objet', action: c.action === 'retirer' ? 'retirer' : 'donner', objet: str(c.objet), nombre: clamp(int(c.nombre, 1), 1, 999) };
+      case 'creature': case 'combat_sauvage': return { type: c.type, creature: str(c.creature), niveau: clamp(int(c.niveau, 5), 1, 100) };
+      case 'combat_dresseur': return { type: 'combat_dresseur', dresseur: str(c.dresseur) };
+      case 'teleporter': return { type: 'teleporter', carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)), direction: pick(c.direction, Doc.DIRECTIONS, 'bas') };
+      case 'quete': return { type: 'quete', quete: str(c.quete), action: pick(c.action, [['commencer'], ['etape'], ['finir']], 'commencer'), etape: Math.max(1, int(c.etape, 1)) };
+      case 'boutique': return { type: 'boutique', boutique: str(c.boutique) };
+      default: return { ...c };
+    }
+  }
+  const normPage = (p) => ({ conditions: (Array.isArray(p?.conditions) ? p.conditions : []).map(normCondition).filter(Boolean), cache: Boolean(p?.cache), commandes: normListe(p?.commandes) });
+  function normEvent(e, fallbackId, width, height, tileCount = Infinity) {
+    const tuile = int(e?.apparence?.tuile, -1);
+    return {
+      id: str(e?.id) || fallbackId,
+      nom: str(e?.nom),
+      type: pick(e?.type, TYPES, 'pnj'),
+      x: clamp(int(e?.x), 0, width - 1),
+      y: clamp(int(e?.y), 0, height - 1),
+      apparence: { personnage: str(e?.apparence?.personnage), tuile: tuile >= 0 && tuile < tileCount ? tuile : -1 },
+      direction: pick(e?.direction, Doc.DIRECTIONS, 'bas'),
+      deplacement: pick(e?.deplacement, DEPLACEMENTS, 'fixe'),
+      traversable: Boolean(e?.traversable),
+      declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
+      pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map(normPage),
+    };
+  }
+  function normEvents(list, width, height, tileCount) {
+    const out = [];
+    (Array.isArray(list) ? list : []).forEach((raw, i) => {
+      const e = normEvent(raw, `ev-${i + 1}`, width, height, tileCount);
+      let id = e.id, n = 2;
+      while (out.some((o) => o.id === id)) id = `${e.id}-${n++}`;
+      e.id = id;
+      out.push(e);
+    });
+    return out;
+  }
+
+  const emptyData = () => ({ personnages: [], quetes: [], interrupteurs: [] });
+  // Les données du jeu, lues d'un fichier (ou données par Claude) : identifiants uniques, valeurs sûres.
+  function normData(d, tileCount = Infinity) {
+    const uniques = (list) => {
+      const out = [];
+      for (const o of list) { o.id = ident(o.id, out, o.id || 'x'); out.push(o); }
+      return out;
+    };
+    const arr = (v) => (Array.isArray(v) ? v : []);
+    return {
+      personnages: uniques(arr(d?.personnages).map((p, i) => {
+        const tuile = int(p?.tuile, -1);
+        return {
+          id: Doc.slug(p?.id || p?.nom, `personnage-${i + 1}`),
+          nom: str(p?.nom || p?.id, `Personnage ${i + 1}`),
+          description: str(p?.description),
+          heros: Boolean(p?.heros),
+          couleur: normalizeHex(p?.couleur) || '',
+          tuile: tuile >= 0 && tuile < tileCount ? tuile : -1,
+          portraits: arr(p?.portraits).filter((x) => /^data:image\/(png|gif|webp|jpeg|bmp);base64,/.test(x?.png)).map((x) => ({ expression: Doc.slug(x.expression, 'normal'), png: x.png })),
+        };
+      })),
+      quetes: uniques(arr(d?.quetes).map((q, i) => ({
+        id: Doc.slug(q?.id || q?.titre, `quete-${i + 1}`),
+        titre: str(q?.titre || q?.id, `Quête ${i + 1}`),
+        description: str(q?.description),
+        secondaire: Boolean(q?.secondaire),
+        suivante: str(q?.suivante),
+        personnages: arr(q?.personnages).map((p) => str(p)).filter(Boolean),
+        etapes: arr(q?.etapes).map((s) => ({ texte: str(typeof s === 'string' ? s : s?.texte) })),
+      }))),
+      interrupteurs: uniques(arr(d?.interrupteurs).map((s, i) => ({
+        id: Doc.slug(s?.id || s?.nom, `interrupteur-${i + 1}`),
+        nom: str(s?.nom || s?.id, `Interrupteur ${i + 1}`),
+        description: str(s?.description),
+      }))),
+    };
+  }
+
+  // Les interrupteurs utilisés par un événement mais pas encore dans les données : ils sont créés.
+  function interrupteursManquants(doc, ev) {
+    const connus = new Set(doc.data.interrupteurs.map((i) => i.id));
+    const out = [];
+    const voir = (c) => { if (c?.type === 'interrupteur' && c.id && !connus.has(c.id)) { connus.add(c.id); const nom = c.id.replace(/-/g, ' ');
+        out.push({ id: c.id, nom: nom[0].toUpperCase() + nom.slice(1), description: '' }); } };
+    for (const p of ev.pages) {
+      p.conditions.forEach(voir);
+      parcourir(p.commandes, (c) => { voir(c); if (c.type === 'si') voir(c.condition); });
+    }
+    return out;
+  }
+
+  // --- Vérifier un script donné par Claude (les erreurs sont dites, rien n'est deviné) ---
+  function verifierPages(doc, pages) {
+    const erreurs = [];
+    if (!Array.isArray(pages) || !pages.length) return { erreurs: ['pages : une liste d\'au moins une page { conditions, cache, commandes }.'], pages: [] };
+    const verifCondition = (c, ou) => {
+      if (!c || !CONDITIONS[c.type]) return erreurs.push(`${ou} : condition inconnue (${c?.type}) ; possibles : ${Object.keys(CONDITIONS).join(', ')}.`);
+      if (c.type === 'interrupteur' && !c.id) erreurs.push(`${ou} : id de l'interrupteur manquant.`);
+      if (c.type === 'objet' && !c.objet) erreurs.push(`${ou} : objet manquant.`);
+      if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ou} : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune quête : crée-la avec l\'action quete'}).`);
+      return null;
+    };
+    const verifListe = (liste, ou) => {
+      if (!Array.isArray(liste)) { erreurs.push(`${ou} : il faut une liste de commandes.`); return; }
+      liste.forEach((c, i) => {
+        const ici = `${ou}, commande ${i + 1}`;
+        if (!c || !COMMANDES[c.type]) { erreurs.push(`${ici} : type inconnu (${c?.type}) ; possibles : ${Object.keys(COMMANDES).join(', ')}.`); return; }
+        if (c.type === 'dire') {
+          if (!str(c.texte).trim()) erreurs.push(`${ici} (dire) : texte vide.`);
+          if (c.qui && c.qui !== '@evenement' && !perso(doc, c.qui)) erreurs.push(`${ici} (dire) : pas de personnage « ${c.qui} » (${doc.data.personnages.map((p) => p.id).join(', ') || 'aucun : crée-le avec l\'action personnage'} ; "" = texte seul, "@evenement" = le personnage de l'événement).`);
+        }
+        if (c.type === 'choix') {
+          if (!Array.isArray(c.options) || c.options.length < 2 || c.options.length > 4) erreurs.push(`${ici} (choix) : options = 2 à 4 réponses { texte, commandes }.`);
+          else c.options.forEach((o, k) => { if (!str(o?.texte).trim()) erreurs.push(`${ici} (choix) : réponse ${k + 1} sans texte.`); if (o?.commandes !== undefined) verifListe(o.commandes, `${ici}, réponse ${k + 1}`); });
+        }
+        if (c.type === 'si') {
+          verifCondition(c.condition, `${ici} (si)`);
+          if (c.alors !== undefined) verifListe(c.alors, `${ici}, alors`);
+          if (c.sinon !== undefined) verifListe(c.sinon, `${ici}, sinon`);
+        }
+        for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique']]) {
+          if (c.type === type && !str(c[champ]).trim()) erreurs.push(`${ici} (${type}) : ${champ} manquant.`);
+        }
+        if (c.type === 'teleporter' && !Doc.mapById(doc, c.carte)) erreurs.push(`${ici} (teleporter) : pas de carte « ${c.carte} » (${doc.maps.map((m) => m.id).join(', ')}).`);
+        if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ici} (quete) : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune : crée-la avec l\'action quete'}).`);
+      });
+    };
+    pages.forEach((p, k) => {
+      if (!p || typeof p !== 'object') return erreurs.push(`page ${k + 1} : il faut un objet { conditions, cache, commandes }.`);
+      if (p.conditions !== undefined && !Array.isArray(p.conditions)) erreurs.push(`page ${k + 1} : conditions doit être une liste.`);
+      (Array.isArray(p.conditions) ? p.conditions : []).forEach((c, i) => verifCondition(c, `page ${k + 1}, condition ${i + 1}`));
+      verifListe(p.commandes ?? [], `page ${k + 1}`);
+      return null;
+    });
+    return { erreurs, pages: pages.map(normPage) };
+  }
+
+  // Le script d'un événement en texte (pour Claude, et pour s'y retrouver).
+  function texte(doc, ev) {
+    const lignes = [];
+    const liste = (l, n) => {
+      for (const c of l) {
+        lignes.push(`${'  '.repeat(n)}- ${resumeCommande(doc, c, ev)}`);
+        if (c.type === 'choix') c.options.forEach((o) => { lignes.push(`${'  '.repeat(n + 1)}« ${o.texte} » :`); liste(o.commandes, n + 2); });
+        if (c.type === 'si') { lignes.push(`${'  '.repeat(n + 1)}alors :`); liste(c.alors, n + 2); if (c.sinon.length) { lignes.push(`${'  '.repeat(n + 1)}sinon :`); liste(c.sinon, n + 2); } }
+      }
+    };
+    ev.pages.forEach((p, k) => {
+      lignes.push(`Page ${k + 1}${p.conditions.length ? ` (si ${p.conditions.map((c) => resumeCondition(doc, c)).join(' et ')})` : ''}${p.cache ? ' : événement absent' : ''}`);
+      liste(p.commandes, 1);
+    });
+    return lignes.join('\n');
+  }
+  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}, ${ev.pages.length} page(s)`;
+
+  // --- Un événement neuf, selon son type ---
+  function create(doc, type, x, y, id) {
+    const dire = (texte, qui = '') => ({ type: 'dire', qui, expression: 'normal', texte });
+    const base = { id, nom: libelle(TYPES, type), type, x, y, apparence: { personnage: '', tuile: -1 }, direction: 'bas', deplacement: 'fixe', traversable: false, declenchement: 'parler', pages: [{ conditions: [], cache: false, commandes: [] }] };
+    if (type === 'pnj') return { ...base, nom: 'Habitant', deplacement: 'regarde', pages: [{ conditions: [], cache: false, commandes: [dire('Bonjour ! Belle journée, pas vrai ?', '@evenement')] }] };
+    if (type === 'panneau') return { ...base, nom: 'Panneau', pages: [{ conditions: [], cache: false, commandes: [dire(`${doc.map.name} : là où tout commence.`)] }] };
+    if (type === 'coffre') {
+      return { ...base, nom: 'Coffre', pages: [
+        { conditions: [], cache: false, commandes: [dire('Tu as trouvé une potion !'), { type: 'objet', action: 'donner', objet: 'potion', nombre: 1 }, { type: 'local', valeur: true }] },
+        { conditions: [{ type: 'local', valeur: true }], cache: false, commandes: [dire('Le coffre est vide.')] },
+      ] };
+    }
+    if (type === 'objet') {
+      return { ...base, nom: 'Potion', pages: [
+        { conditions: [], cache: false, commandes: [dire('Tu ramasses une potion.'), { type: 'objet', action: 'donner', objet: 'potion', nombre: 1 }, { type: 'local', valeur: true }] },
+        { conditions: [{ type: 'local', valeur: true }], cache: true, commandes: [] },
+      ] };
+    }
+    return { ...base, nom: 'Déclencheur', traversable: true, declenchement: 'toucher' };
+  }
+
+  // --- L'aperçu d'un dialogue : portrait, nom en couleur, texte (comme dans le jeu) ---
+  function apercuDialogue(box, doc, c, ev) {
+    if (!box) return;
+    box.replaceChildren();
+    const id = quiReel(c.qui, ev);
+    const p = perso(doc, id);
+    const img = portrait(doc, id, c.expression);
+    if (img) box.append(el('img', { className: 'dialogue-portrait', src: img.png, alt: '' }));
+    const bulle = el('div', { className: 'dialogue-bulle' });
+    if (c.qui) bulle.append(el('div', { className: 'dialogue-nom', textContent: p?.nom || nomQui(doc, c.qui, ev), style: { color: p?.couleur || '' } }));
+    const premier = String(c.texte || '').split(/\n\s*\n/)[0].replace(/\{joueur\}/g, 'Ragna');
+    bulle.append(el('div', { className: 'dialogue-texte', textContent: premier || '…' }));
+    box.append(bulle);
+    if (p && !img && c.qui) box.append(el('div', { className: 'dialogue-note', textContent: `${p.nom} n'a pas encore de portrait « ${c.expression} ».` }));
+  }
+
+  // --- Fenêtres de commande et de condition ---
+  async function formCommande(doc, c, ev) {
+    const def = COMMANDES[c.type];
+    if (!def?.champs) return c;
+    listes(doc);
+    const v = await Dialogs.form({ title: def.nom, okLabel: 'OK', width: def.largeur || 470, fields: def.champs(doc, c, ev), onInput: def.onInput ? (values, f) => def.onInput(values, f, doc, ev) : undefined });
+    if (!v) return null;
+    const out = { ...c, ...def.depuis(v, c) };
+    const err = def.valide?.(out);
+    if (err) { notify(err, 'warning', 3500); return null; }
+    return out;
+  }
+  async function formCondition(doc, c) {
+    const def = CONDITIONS[c.type];
+    if (!def) { notify(`Condition inconnue (${c.type}) : elle vient d'une version plus récente de Tafl.`, 'warning'); return null; }
+    listes(doc);
+    const v = await Dialogs.form({ title: `Condition : ${def.nom.toLowerCase()}`, okLabel: 'OK', width: 470, fields: def.champs(doc, c), onInput: def.onInput });
+    if (!v) return null;
+    const out = def.depuis(v, c);
+    const err = def.valide?.(out);
+    if (err) { notify(err, 'warning', 3500); return null; }
+    return out;
+  }
+  // Un menu dont on attend le choix.
+  const choisir = (items, x, y) => new Promise((resolve) => Menus.open(items.map((it) => it && { ...it, run: () => resolve(it.value) }), x, y));
+  const menuConditions = () => Object.entries(CONDITIONS).map(([k, d]) => ({ label: d.nom, value: k }));
+  function menuCommandes() {
+    const items = [];
+    let groupe = null;
+    for (const [k, d] of Object.entries(COMMANDES)) {
+      if (d.groupe !== groupe) { if (groupe) items.push(null); groupe = d.groupe; }
+      items.push({ label: d.nom, value: k });
+    }
+    return items;
+  }
+
+  // --- Les grandes fenêtres (au-dessus de Tafl, sous les petites fenêtres et les menus) ---
+  let courant = null; // la fenêtre ouverte : { fermer() }
+  const isOpen = () => Boolean(courant);
+  // Échap ferme d'abord un menu ouvert : on regarde avant que le menu ne se ferme.
+  let menuOuvert = false;
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuOuvert = Menus.isOpen(); }, true);
+  // Appelé par les raccourcis de Tafl : true si la touche est pour la fenêtre ouverte.
+  function handleKey(e) {
+    if (!courant) return false;
+    if (e.key === 'Escape' && !menuOuvert) courant.fermer();
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') courant.valider?.();
+    return true;
+  }
+  function fenetre({ titre, icone: ic, largeur = 1180 }) {
+    const root = el('div', { className: 'editor-overlay' });
+    const card = el('div', { className: 'editor', style: { width: `min(${largeur}px, calc(100vw - 48px))` } });
+    const headIcon = icon(ic);
+    const title = el('span', { className: 'editor-title', textContent: titre });
+    const close = el('button', { className: 'icon-button', title: 'Fermer (Échap)' }, [icon('close')]);
+    const head = el('header', {}, [headIcon, title]);
+    const tabs = el('nav', { className: 'editor-tabs' });
+    head.append(tabs, close);
+    const body = el('div', { className: 'editor-body' });
+    const hint = el('span', { className: 'editor-hint' });
+    const foot = el('footer', {}, [hint]);
+    card.append(head, body, foot);
+    root.append(card);
+    document.body.append(root);
+    const bouton = (label, run, primary = false) => {
+      const b = el('button', { className: `button${primary ? ' primary' : ''}`, textContent: label });
+      b.onclick = run;
+      foot.append(b);
+      return b;
+    };
+    return { root, card, body, tabs, close, hint, bouton, setTitle: (t) => { title.textContent = t; }, setIcon: (n) => { headIcon.className = `codicon codicon-${n}`; } };
+  }
+  const champ = (label, input, title = '') => el('label', { className: `field${input.type === 'checkbox' ? ' checkbox-row' : ''}`, title }, [el('span', { className: 'field-label', textContent: label }), input]);
+  function selectEl(choices, value, onchange) {
+    const s = el('select');
+    for (const [k, l] of choices) s.add(new Option(l, k));
+    s.value = String(value);
+    s.onchange = () => onchange(s.value);
+    return s;
+  }
+  const section = (text, ...extra) => el('div', { className: 'editor-section' }, [el('span', { textContent: text }), ...extra]);
+  const petitBouton = (ic, title, run) => {
+    const b = el('button', { className: 'icon-button', title }, [icon(ic)]);
+    b.onclick = (e) => { e.stopPropagation(); run(e); };
+    return b;
+  };
+  // Confirme avant de jeter des modifications.
+  async function abandonner(change) {
+    if (!change) return true;
+    return Dialogs.ask('Modifications non validées', 'Fermer sans garder ce que tu as changé dans cette fenêtre ?', [
+      { label: 'Continuer à modifier', value: false },
+      { label: 'Fermer sans garder', value: true, primary: true },
+    ]);
+  }
+
+  // --- L'éditeur d'un événement ---
+  // Rend { event, interrupteurs } (les interrupteurs à créer), 'supprimer', ou null (annulé).
+  function editEvent(doc, ev, { nouveau = false } = {}) {
+    if (courant) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const map = doc.map;
+      const work = structuredClone(ev);
+      const avant = JSON.stringify(work);
+      let page = 0;
+      const w = fenetre({ titre: '', icone: TYPE_ICONS[work.type] });
+      const majTitre = () => { w.setTitle(`${nouveau ? 'Nouvel événement' : 'Événement'} « ${work.nom || libelle(TYPES, work.type)} » sur ${map.name}`); w.setIcon(TYPE_ICONS[work.type]); };
+      majTitre();
+      const side = el('div', { className: 'editor-side' });
+      const main = el('div', { className: 'editor-main' });
+      w.body.append(side, main);
+
+      // Colonne de gauche : ce qu'est l'événement.
+      const nom = el('input', { type: 'text', value: work.nom, placeholder: 'Maman, Prof. Chêne, Panneau du bourg…' });
+      nom.oninput = () => { work.nom = nom.value; majTitre(); };
+      const num = (key, max) => {
+        const i = el('input', { type: 'number', min: 0, max, value: work[key] });
+        i.oninput = () => { work[key] = clamp(Math.round(Number(i.value)) || 0, 0, max); };
+        return i;
+      };
+      const apercuTuile = el('canvas', { className: 'tile-apercu', width: doc.tileSize, height: doc.tileSize });
+      const majApercu = () => {
+        const g = apercuTuile.getContext('2d');
+        g.clearRect(0, 0, apercuTuile.width, apercuTuile.height);
+        const t = doc.tiles[work.apparence.tuile >= 0 ? work.apparence.tuile : perso(doc, work.apparence.personnage)?.tuile ?? -1];
+        if (t) g.drawImage(Doc.tileCanvas(t, doc.tileSize), 0, 0);
+        apercuTuile.hidden = !t;
+      };
+      const traversable = el('input', { type: 'checkbox', checked: work.traversable });
+      traversable.onchange = () => { work.traversable = traversable.checked; };
+      const aide = el('p', { className: 'modal-info' });
+      const majAide = () => {
+        aide.textContent = {
+          pnj: 'Un habitant, un dresseur, le prof… Choisis son personnage (Jeu › Données du jeu) : ses dialogues prennent son nom et ses portraits.',
+          panneau: 'Le joueur le lit en se plaçant devant et en appuyant sur A.',
+          coffre: 'La page 2 (« déjà fait ») prend le relais une fois le coffre ouvert.',
+          objet: 'Une fois ramassé, la page 2 le fait disparaître (case « absent »).',
+          declencheur: 'Une case invisible : une scène se lance quand le joueur marche dessus. Mets une condition pour qu\'elle ne se joue qu\'une fois (déjà fait, ou un interrupteur).',
+        }[work.type];
+      };
+      side.append(
+        champ('Nom', nom),
+        champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); })),
+        champ('Colonne (x)', num('x', map.width - 1)),
+        champ('Rangée (y)', num('y', map.height - 1)),
+        section('Apparence'),
+        champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits, et plus tard son sprite'),
+        el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
+        champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
+        champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
+        section('Déclenchement'),
+        champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
+        champ('Le joueur peut passer à travers', traversable),
+        aide,
+      );
+      majApercu();
+      majAide();
+
+      // Colonne de droite : les pages, leurs conditions et leur script.
+      function renderPage() {
+        page = clamp(page, 0, work.pages.length - 1);
+        const p = work.pages[page];
+        main.replaceChildren();
+        const tabs = el('div', { className: 'page-tabs' });
+        work.pages.forEach((pg, k) => {
+          const b = el('button', { className: `page-tab${k === page ? ' active' : ''}`, title: pg.conditions.length ? `Si ${pg.conditions.map((c) => resumeCondition(doc, c)).join(' et ')}` : 'Toujours valable' }, [`Page ${k + 1}`, pg.conditions.length ? el('span', { className: 'page-cond', textContent: '•' }) : null]);
+          b.onclick = () => { page = k; renderPage(); };
+          tabs.append(b);
+        });
+        tabs.append(petitBouton('add', 'Nouvelle page (vide)', () => { work.pages.push({ conditions: [], cache: false, commandes: [] }); page = work.pages.length - 1; renderPage(); }));
+        tabs.append(el('span', { className: 'spacer' }));
+        tabs.append(petitBouton('ellipsis', 'Dupliquer, déplacer, supprimer la page', (e) => Menus.open([
+          { label: 'Dupliquer la page', run: () => { work.pages.splice(page + 1, 0, structuredClone(p)); page++; renderPage(); } },
+          { label: 'Déplacer vers la gauche', disabled: page === 0, run: () => { work.pages.splice(page - 1, 0, ...work.pages.splice(page, 1)); page--; renderPage(); } },
+          { label: 'Déplacer vers la droite', disabled: page >= work.pages.length - 1, run: () => { work.pages.splice(page + 1, 0, ...work.pages.splice(page, 1)); page++; renderPage(); } },
+          { label: 'Supprimer la page', disabled: work.pages.length < 2, run: () => { work.pages.splice(page, 1); renderPage(); } },
+        ], e.clientX, e.clientY)));
+        main.append(tabs);
+        main.append(el('p', { className: 'modal-info', textContent: 'Le jeu joue la dernière page dont toutes les conditions sont vraies. Page 1 sans condition = ce qui se passe d\'habitude ; les pages suivantes prennent le relais quand l\'histoire avance.' }));
+
+        // Conditions.
+        main.append(section('Conditions de la page'));
+        const chips = el('div', { className: 'chips' });
+        p.conditions.forEach((c, i) => {
+          const chip = el('button', { className: 'chip', title: 'Modifier la condition' }, [el('span', { textContent: resumeCondition(doc, c) })]);
+          chip.append(petitBouton('close', 'Retirer la condition', () => { p.conditions.splice(i, 1); renderPage(); }));
+          chip.onclick = async () => { const n = await formCondition(doc, c); if (n) { p.conditions[i] = n; renderPage(); } };
+          chips.append(chip);
+        });
+        if (!p.conditions.length) chips.append(el('span', { className: 'chips-empty', textContent: 'Aucune : la page est toujours valable.' }));
+        const addCond = el('button', { className: 'cmd-add', textContent: '+ Condition' });
+        addCond.onclick = async (e) => {
+          const r = addCond.getBoundingClientRect();
+          const type = await choisir(menuConditions(), r.left, r.bottom + 4);
+          const c = await formCondition(doc, CONDITIONS[type].nouveau());
+          if (c) { p.conditions.push(c); renderPage(); }
+          e.stopPropagation();
+        };
+        chips.append(addCond);
+        main.append(chips);
+        const cache = el('input', { type: 'checkbox', checked: p.cache });
+        cache.onchange = () => { p.cache = cache.checked; };
+        main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Sur cette page, l\'événement est absent (invisible : on ne peut ni lui parler ni le toucher)' }), cache]));
+
+        // Le script.
+        main.append(section('Script : ce qui se passe, dans l\'ordre'));
+        const tree = el('div', { className: 'cmd-tree' });
+        renderListe(tree, p.commandes, 0);
+        main.append(tree);
+      }
+
+      // Une liste de commandes (le script de la page, ou celles d'une réponse, d'un « alors »…).
+      function renderListe(box, liste, n) {
+        liste.forEach((c, i) => {
+          const def = COMMANDES[c.type];
+          const row = el('div', { className: `cmd${c.type === 'commentaire' ? ' comment' : ''}${def ? '' : ' unknown'}`, style: { paddingLeft: `${8 + n * 22}px` }, title: def?.champs || c.type === 'si' ? 'Double-clic : modifier' : '' }, [
+            icon(def?.icone || 'question'),
+            el('span', { className: 'cmd-text', textContent: resumeCommande(doc, c, work) }),
+          ]);
+          row.firstChild.classList.add('lead');
+          const edit = async () => {
+            if (c.type === 'si') { const cond = await formCondition(doc, c.condition); if (cond) { liste[i] = { ...c, condition: cond }; renderPage(); } return; }
+            if (!def?.champs) return;
+            const out = await formCommande(doc, c, work);
+            if (out) { liste[i] = out; renderPage(); }
+          };
+          const actions = el('span', { className: 'cmd-actions' }, [
+            petitBouton('arrow-up', 'Monter', () => { if (i > 0) { liste.splice(i - 1, 0, ...liste.splice(i, 1)); renderPage(); } }),
+            petitBouton('arrow-down', 'Descendre', () => { if (i < liste.length - 1) { liste.splice(i + 1, 0, ...liste.splice(i, 1)); renderPage(); } }),
+            def?.champs || c.type === 'si' ? petitBouton('edit', 'Modifier', edit) : null,
+            petitBouton('copy', 'Dupliquer', () => { liste.splice(i + 1, 0, structuredClone(c)); renderPage(); }),
+            petitBouton('trash', 'Supprimer', () => { liste.splice(i, 1); renderPage(); }),
+          ]);
+          row.append(actions);
+          row.ondblclick = edit;
+          box.append(row);
+          const sous = (text) => box.append(el('div', { className: 'cmd-sub', style: { paddingLeft: `${8 + (n + 1) * 22}px` }, textContent: text }));
+          if (c.type === 'choix') c.options.forEach((o) => { sous(`Si le joueur répond « ${o.texte} »`); renderListe(box, o.commandes, n + 2); });
+          if (c.type === 'si') { sous('Alors'); renderListe(box, c.alors, n + 2); sous('Sinon'); renderListe(box, c.sinon, n + 2); }
+        });
+        const add = el('button', { className: 'cmd-add', style: { marginLeft: `${8 + n * 22}px` }, textContent: '+ Ajouter une commande' });
+        add.onclick = async () => {
+          const r = add.getBoundingClientRect();
+          const type = await choisir(menuCommandes(), r.left, r.bottom + 4);
+          let c;
+          if (type === 'si') {
+            const ct = await choisir(menuConditions(), r.left, r.bottom + 4);
+            const cond = await formCondition(doc, CONDITIONS[ct].nouveau());
+            if (cond) c = { type: 'si', condition: cond, alors: [], sinon: [] };
+          } else {
+            const neuf = COMMANDES[type].nouveau();
+            c = COMMANDES[type].champs ? await formCommande(doc, neuf, work) : neuf;
+          }
+          if (c) { liste.push(c); renderPage(); }
+        };
+        box.append(add);
+      }
+      renderPage();
+
+      const finir = (r) => { w.root.remove(); courant = null; resolve(r); };
+      const fermer = async () => { if (await abandonner(!nouveau && JSON.stringify(work) !== avant)) finir(null); };
+      const valider = () => {
+        if (map.events.some((o) => o.id !== work.id && o.x === work.x && o.y === work.y)) return notify(`La case (${work.x}, ${work.y}) a déjà un événement.`, 'warning', 3500);
+        const event = normEvent(work, work.id, map.width, map.height, doc.tiles.length);
+        finir({ event, interrupteurs: interrupteursManquants(doc, event) });
+        return null;
+      };
+      w.close.onclick = fermer;
+      w.hint.textContent = 'Ctrl+Entrée : valider · Échap : fermer';
+      if (!nouveau) w.bouton('Supprimer l\'événement', () => finir('supprimer'));
+      w.bouton('Annuler', fermer);
+      w.bouton(nouveau ? 'Créer' : 'Valider', valider, true);
+      courant = { fermer, valider };
+      nom.focus();
+      nom.select();
+    });
+  }
+
+  // --- Jeu › Données du jeu : personnages, quêtes, interrupteurs ---
+  const ONGLETS = [['personnages', 'Personnages', 'person'], ['quetes', 'Quêtes', 'book'], ['interrupteurs', 'Interrupteurs', 'symbol-boolean']];
+  const readDataURL = (bytes, name) => new Promise((resolve, reject) => {
+    const type = /\.gif$/i.test(name) ? 'image/gif' : /\.webp$/i.test(name) ? 'image/webp' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : /\.bmp$/i.test(name) ? 'image/bmp' : 'image/png';
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Image illisible'));
+    r.readAsDataURL(new Blob([bytes], { type }));
+  });
+  // Une image du disque → { png, largeur, hauteur } (vérifiée : elle doit se charger).
+  async function imagePortrait(file) {
+    const png = await readDataURL(file.bytes, file.name);
+    const img = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error(`${file.name} n'est pas une image lisible.`)); i.src = png; });
+    return { png, largeur: img.naturalWidth, hauteur: img.naturalHeight };
+  }
+
+  // Rend les nouvelles données, ou null (annulé).
+  function editData(doc, onglet = 'personnages') {
+    if (courant) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const work = structuredClone(doc.data);
+      const avant = JSON.stringify(work);
+      const nouveaux = new Set(); // créés dans cette fenêtre : leur identifiant suit encore leur nom
+      const choisis = { personnages: 0, quetes: 0, interrupteurs: 0 };
+      let tab = onglet;
+      const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1100 });
+      const liste = el('div', { className: 'data-list' });
+      const form = el('div', { className: 'editor-main data-form' });
+      w.body.append(liste, form);
+
+      function renderTabs() {
+        w.tabs.replaceChildren(...ONGLETS.map(([k, l, ic]) => {
+          const b = el('button', { className: k === tab ? 'active' : '' }, [icon(ic), `${l} `, el('span', { className: 'panel-count', textContent: work[k].length })]);
+          b.onclick = () => { tab = k; render(); };
+          return b;
+        }));
+      }
+      const libelleItem = (o) => (tab === 'quetes' ? o.titre : o.nom) || o.id;
+      function renderListe() {
+        const items = work[tab];
+        choisis[tab] = clamp(choisis[tab], 0, Math.max(0, items.length - 1));
+        const ajouter = el('button', { className: 'button small', title: 'Ajouter' }, [icon('add'), { personnages: ' Personnage', quetes: ' Quête', interrupteurs: ' Interrupteur' }[tab]]);
+        ajouter.onclick = () => {
+          const base = { personnages: 'Nouveau personnage', quetes: 'Nouvelle quête', interrupteurs: 'Nouvel interrupteur' }[tab];
+          const id = ident(base, items, 'x');
+          const o = tab === 'personnages' ? { id, nom: base, description: '', heros: false, couleur: '', tuile: -1, portraits: [] }
+            : tab === 'quetes' ? { id, titre: base, description: '', secondaire: false, suivante: '', personnages: [], etapes: [{ texte: '' }] }
+              : { id, nom: base, description: '' };
+          items.push(o);
+          nouveaux.add(o);
+          choisis[tab] = items.length - 1;
+          render();
+          form.querySelector('input[type=text]')?.select();
+        };
+        const rows = el('div', { className: 'rows' });
+        items.forEach((o, i) => {
+          const lead = tab === 'personnages' && o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : el('i', { className: `codicon codicon-${ONGLETS.find(([k]) => k === tab)[2]} lead` });
+          const meta = tab === 'personnages' ? (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`) : tab === 'quetes' ? (o.secondaire ? 'secondaire' : 'principale') : '';
+          const row = el('button', { className: `row${i === choisis[tab] ? ' active' : ''}` }, [lead, el('span', { className: 'row-name', textContent: libelleItem(o) }), meta ? el('span', { className: 'badge', textContent: meta }) : null]);
+          row.onclick = () => { choisis[tab] = i; render(); };
+          rows.append(row);
+        });
+        if (!items.length) rows.append(el('p', { className: 'modal-info', textContent: { personnages: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…', quetes: 'Aucune quête. Une quête a des étapes ; les scripts des événements la commencent, la font avancer et la finissent.', interrupteurs: 'Aucun interrupteur. Ils se créent aussi tout seuls quand un script en utilise un nouveau.' }[tab] }));
+        liste.replaceChildren(el('div', { className: 'data-list-head' }, [ajouter]), rows);
+      }
+
+      const input = (o, key, placeholder = '', after = null) => {
+        const i = el('input', { type: 'text', value: o[key], placeholder });
+        i.oninput = () => { o[key] = i.value; after?.(); };
+        return i;
+      };
+      const zone = (o, key, rows, placeholder = '') => {
+        const t = el('textarea', { rows, value: o[key], placeholder });
+        t.oninput = () => { o[key] = t.value; };
+        return t;
+      };
+      const coche = (o, key) => {
+        const c = el('input', { type: 'checkbox', checked: Boolean(o[key]) });
+        c.onchange = () => { o[key] = c.checked; renderListe(); };
+        return c;
+      };
+      // L'identifiant d'un élément tout neuf suit son nom ; ensuite, il ne change plus (les scripts s'en servent).
+      const idLigne = (o, items) => {
+        const span = el('code', { className: 'data-id', textContent: o.id });
+        const maj = () => {
+          if (nouveaux.has(o)) o.id = ident((tab === 'quetes' ? o.titre : o.nom) || 'x', items.filter((x) => x !== o), 'x');
+          span.textContent = o.id;
+          renderListe();
+        };
+        return { el: el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Identifiant' }), span, el('span', { className: 'unit', textContent: nouveaux.has(o) ? 'suit le nom (ensuite il ne change plus)' : 'utilisé par les scripts' })]), maj };
+      };
+      const usages = (kind, id) => {
+        const u = utilisations(doc, kind, id);
+        return el('p', { className: 'modal-info', textContent: u.length ? `Utilisé par : ${u.slice(0, 12).join(' · ')}${u.length > 12 ? ` (et ${u.length - 12} autres)` : ''}` : 'Pas encore utilisé dans les scripts.' });
+      };
+      async function supprimer(items, i, kind) {
+        const o = items[i];
+        const u = utilisations(doc, kind, o.id);
+        if (u.length) {
+          const go = await Dialogs.ask('Supprimer', `« ${libelleItem(o)} » est utilisé par ${u.length} endroit(s) : ${u.slice(0, 6).join(', ')}${u.length > 6 ? '…' : ''}. Les scripts garderont son identifiant (${o.id}) sans le retrouver.`, [
+            { label: 'Annuler', value: false },
+            { label: 'Supprimer', value: true, primary: true },
+          ]);
+          if (!go) return;
+        }
+        items.splice(i, 1);
+        render();
+      }
+
+      function formPersonnage(p, items, i) {
+        const idl = idLigne(p, items);
+        const couleur = el('input', { type: 'color', value: p.couleur || '#ffffff' });
+        couleur.oninput = () => { p.couleur = couleur.value; };
+        const sansCouleur = petitBouton('discard', 'Couleur par défaut', () => { p.couleur = ''; couleur.value = '#ffffff'; });
+        const portraits = el('div', { className: 'portraits' });
+        p.portraits.forEach((x, k) => {
+          const expr = el('input', { type: 'text', value: x.expression, list: 'tafl-expressions', title: 'Expression : normal, content, triste, colere…' });
+          expr.oninput = () => { x.expression = Doc.slug(expr.value, 'normal'); };
+          const img = el('img', { src: x.png, alt: x.expression });
+          const dim = el('span', { className: 'portrait-size' });
+          img.onload = () => { dim.textContent = `${img.naturalWidth} × ${img.naturalHeight}`; };
+          portraits.append(el('div', { className: 'portrait' }, [
+            el('div', { className: 'portrait-img checker' }, [img, dim]),
+            el('div', { className: 'portrait-bar' }, [
+              expr,
+              petitBouton('refresh', 'Remplacer l\'image', async () => {
+                const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait « ${x.expression} » de ${p.nom}` });
+                if (!f) return;
+                try { x.png = (await imagePortrait(f)).png; } catch (err) { notify(cleanError(err), 'error'); }
+                render();
+              }),
+              petitBouton('trash', 'Supprimer ce portrait', () => { p.portraits.splice(k, 1); render(); }),
+            ]),
+          ]));
+        });
+        const importer = el('button', { className: 'portrait-add' }, [icon('add'), el('span', { textContent: 'Importer un portrait…' })]);
+        importer.onclick = async () => {
+          const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait de ${p.nom}` });
+          if (!f) return;
+          try {
+            const { png } = await imagePortrait(f);
+            const pris = new Set(p.portraits.map((x) => x.expression));
+            // L'expression : celle du nom du fichier (maman-triste.png → triste), sinon la première libre.
+            const nomFichier = Doc.slug(f.name.replace(/\.[^.]+$/, ''), '');
+            const expression = EXPRESSIONS.find((e) => nomFichier.endsWith(e) && !pris.has(e)) || EXPRESSIONS.find((e) => !pris.has(e)) || `expression-${p.portraits.length + 1}`;
+            p.portraits.push({ expression, png });
+            render();
+          } catch (err) { notify(cleanError(err), 'error'); }
+        };
+        portraits.append(importer);
+        form.append(
+          champ('Nom', input(p, 'nom', 'Maman, Prof. Chêne, Léo (rival)…', idl.maj)),
+          idl.el,
+          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(p, 'description', 3, 'Son rôle et sa personnalité : pour t\'en souvenir, et pour Claude quand il écrit ses dialogues.')]),
+          champ('C\'est le héros (le joueur, qui parle et a sa personnalité)', (() => {
+            // Un seul héros : le cocher ici le retire aux autres.
+            const c = coche(p, 'heros');
+            c.addEventListener('change', () => { if (c.checked) for (const o of items) if (o !== p) o.heros = false; renderListe(); });
+            return c;
+          })()),
+          el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur du nom' }), couleur, sansCouleur, el('span', { className: 'unit', textContent: 'dans les boîtes de dialogue' })]),
+          champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'En attendant ses sprites (Tafl 0.8) : la tuile qui le montre sur la carte'),
+          section('Portraits, un par expression'),
+          el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
+          portraits,
+          section('Utilisation'),
+          usages('personnage', p.id),
+        );
+        w.bouton.supprimer = () => supprimer(items, i, 'personnage');
+      }
+
+      function formQuete(q, items, i) {
+        const idl = idLigne(q, items);
+        const etapes = el('div', { className: 'etapes' });
+        const renderEtapes = () => {
+          etapes.replaceChildren();
+          q.etapes.forEach((s, k) => {
+            const t = el('input', { type: 'text', value: s.texte, placeholder: k ? 'Puis…' : 'Parler au pêcheur du lac' });
+            t.oninput = () => { s.texte = t.value; };
+            etapes.append(el('div', { className: 'etape' }, [
+              el('span', { className: 'etape-num', textContent: k + 1 }), t,
+              petitBouton('arrow-up', 'Monter', () => { if (k > 0) { q.etapes.splice(k - 1, 0, ...q.etapes.splice(k, 1)); renderEtapes(); } }),
+              petitBouton('arrow-down', 'Descendre', () => { if (k < q.etapes.length - 1) { q.etapes.splice(k + 1, 0, ...q.etapes.splice(k, 1)); renderEtapes(); } }),
+              petitBouton('trash', 'Supprimer l\'étape', () => { q.etapes.splice(k, 1); renderEtapes(); }),
+            ]));
+          });
+          const add = el('button', { className: 'cmd-add', textContent: '+ Étape' });
+          add.onclick = () => { q.etapes.push({ texte: '' }); renderEtapes(); etapes.querySelectorAll('input')[q.etapes.length - 1]?.focus(); };
+          etapes.append(add);
+        };
+        renderEtapes();
+        const persos = el('div', { className: 'chips' });
+        for (const p of work.personnages) {
+          const c = el('input', { type: 'checkbox', checked: q.personnages.includes(p.id) });
+          c.onchange = () => { q.personnages = c.checked ? [...q.personnages, p.id] : q.personnages.filter((x) => x !== p.id); };
+          persos.append(el('label', { className: 'chip chip-check' }, [c, el('span', { textContent: p.nom })]));
+        }
+        if (!work.personnages.length) persos.append(el('span', { className: 'chips-empty', textContent: 'Aucun personnage pour l\'instant (onglet Personnages).' }));
+        form.append(
+          champ('Titre', input(q, 'titre', 'Le trésor du lac', idl.maj)),
+          idl.el,
+          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(q, 'description', 3, 'Ce que vit le joueur, et comment elle se rattache au fil rouge de l\'histoire.')]),
+          champ('Quête secondaire (sinon : histoire principale)', coche(q, 'secondaire')),
+          champ('Suite', selectEl([['', 'Aucune'], ...work.quetes.filter((o) => o !== q).map((o) => [o.id, o.titre])], q.suivante, (v) => { q.suivante = v; }), 'La quête qui commence quand celle-ci finit (le fil rouge)'),
+          section('Personnages de la quête'),
+          el('p', { className: 'modal-info', textContent: 'Les personnages qu\'on y croise : pratique pour suivre les personnages récurrents d\'une quête à l\'autre.' }),
+          persos,
+          section('Étapes'),
+          el('p', { className: 'modal-info', textContent: 'Les scripts font avancer la quête (commande « Avancer une quête ») et testent où elle en est (condition « L\'état d\'une quête »). Un légendaire au bout d\'une quête : une page avec la condition « quête finie », et la commande « Combat contre une créature ».' }),
+          etapes,
+          section('Utilisation'),
+          usages('quete', q.id),
+        );
+        w.bouton.supprimer = () => supprimer(items, i, 'quete');
+      }
+
+      function formInterrupteur(s, items, i) {
+        const idl = idLigne(s, items);
+        form.append(
+          champ('Nom', input(s, 'nom', 'Rival battu au labo', idl.maj)),
+          idl.el,
+          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(s, 'description', 3, 'Ce qu\'il veut dire dans l\'histoire.')]),
+          el('p', { className: 'modal-info', textContent: 'Un interrupteur est allumé ou éteint, pour tout le jeu : il retient un fait de l\'histoire. Les scripts l\'allument (commande « Interrupteur du jeu ») et les pages le testent (condition « Un interrupteur du jeu »). Au début d\'une partie, ils sont tous éteints.' }),
+          section('Utilisation'),
+          usages('interrupteur', s.id),
+        );
+        w.bouton.supprimer = () => supprimer(items, i, 'interrupteur');
+      }
+
+      function renderForm() {
+        form.replaceChildren();
+        const items = work[tab];
+        const o = items[choisis[tab]];
+        supprimerBtn.hidden = !o;
+        if (!o) return;
+        if (tab === 'personnages') formPersonnage(o, items, choisis[tab]);
+        else if (tab === 'quetes') formQuete(o, items, choisis[tab]);
+        else formInterrupteur(o, items, choisis[tab]);
+      }
+      function render() {
+        listes({ ...doc, data: work });
+        renderTabs();
+        renderListe();
+        renderForm();
+      }
+
+      const finir = (r) => { w.root.remove(); courant = null; resolve(r); };
+      const fermer = async () => { if (await abandonner(JSON.stringify(work) !== avant)) finir(null); };
+      const valider = () => finir(JSON.stringify(work) === avant ? null : normData(work, doc.tiles.length));
+      w.close.onclick = fermer;
+      w.hint.textContent = 'Les personnages, quêtes et interrupteurs servent dans les scripts des événements (outil Événement, N).';
+      const supprimerBtn = w.bouton('Supprimer', () => w.bouton.supprimer?.());
+      w.bouton('Annuler', fermer);
+      w.bouton('Valider', valider, true);
+      courant = { fermer, valider };
+      render();
+    });
+  }
+
+  return {
+    TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
+    create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
+    texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
+    editEvent, editData, isOpen, handleKey,
+  };
+})();
