@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:">
+  <title>Atelier</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune et Skald) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="atelier.svg" alt="">Atelier</span>
+    <span id="salut"></span>
+    <div class="title-actions">
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
+      <button id="btn-settings" class="icon-button" title="Réglages d'Atelier (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <!-- Colonne de gauche : les outils (Rune, Skald…) -->
+    <section id="outils" class="plaque">
+      <header class="plaque-titre">
+        <i class="codicon codicon-tools"></i><span>Outils</span>
+        <span class="spacer"></span>
+        <button id="btn-actualiser" class="icon-button" title="Regarder à nouveau sur GitHub s'il y a des nouvelles versions"><i class="codicon codicon-refresh"></i></button>
+      </header>
+      <div id="liste-outils"></div>
+      <p id="outils-info" class="discret"></p>
+    </section>
+
+    <!-- Le reste : les widgets. Pour l'instant, Notes. -->
+    <section id="widgets">
+      <article id="widget-notes" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-note"></i><span>Notes</span>
+          <span class="spacer"></span>
+          <input id="notes-recherche" type="text" placeholder="Rechercher (Ctrl+F)" spellcheck="false">
+          <button id="btn-nouvelle-note" class="icon-button" title="Nouvelle note (Ctrl+N)"><i class="codicon codicon-add"></i></button>
+        </header>
+        <div class="notes-corps">
+          <ul id="notes-liste"></ul>
+          <div class="notes-editeur">
+            <div class="notes-barre">
+              <span id="note-date" class="discret"></span>
+              <span class="spacer"></span>
+              <span id="note-etat" class="discret"></span>
+              <button id="btn-epingler" class="icon-button" title="Épingler en haut de la liste"><i class="codicon codicon-pinned"></i></button>
+              <button id="btn-supprimer-note" class="icon-button" title="Supprimer cette note"><i class="codicon codicon-trash"></i></button>
+            </div>
+            <textarea id="note-texte" placeholder="Écris ici. La première ligne devient le titre de la note. Tout s'enregistre tout seul." spellcheck="true"></textarea>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <div id="modal-root"></div>
+
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="outils.js"></script>
+  <script src="notes.js"></script>
+  <script src="update.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
