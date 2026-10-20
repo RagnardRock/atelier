@@ -63,7 +63,7 @@ function createDocument({ name, width, height, layers = [], path = null }) {
     height,
     layers,
     activeId: layers.length ? layers[layers.length - 1].id : null,
-    selection: null,      // { x, y, w, h } en pixels du document, ou null
+    selection: null,      // { x, y, w, h, mask } en pixels du document (voir selection.js), ou null
     dirty: false,         // modifié depuis le dernier enregistrement
     undo: [],
     redo: [],

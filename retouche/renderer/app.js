@@ -117,7 +117,13 @@ const App = (() => {
         <span class="layer-name"></span>${layer.text ? '<span class="layer-badge" title="Texte modifiable avec l\'outil Texte">T</span>' : ''}`;
       row.insertBefore(thumbnail(current, layer), row.querySelector('.layer-name'));
       row.querySelector('.layer-name').textContent = layer.name;
-      row.onclick = () => { current.activeId = layer.id; refreshPanels(); View.request(); };
+      row.onclick = (e) => {
+        current.activeId = layer.id;
+        // Ctrl + clic : sélectionner le contenu du calque, comme dans Photoshop.
+        if (e.ctrlKey) return Ops.selectLayerPixels();
+        refreshPanels();
+        View.request();
+      };
       row.querySelector('.eye').onclick = (e) => {
         e.stopPropagation();
         change(current, layer.visible ? 'Masquer le calque' : 'Afficher le calque', () => { layer.visible = !layer.visible; });
@@ -267,9 +273,11 @@ const App = (() => {
     const bar = $('#tool-buttons');
     bar.innerHTML = '';
     for (const tool of Tools.list) {
+      if (tool.hidden) continue;
       const b = document.createElement('button');
       b.className = `tool${tool === Tools.current ? ' active' : ''}`;
-      b.title = `${tool.name} (${tool.key.toUpperCase()})`;
+      const shared = Tools.list.filter((t) => t.key === tool.key).length > 1;
+      b.title = `${tool.name} (${tool.key.toUpperCase()}${shared ? ', Maj+' + tool.key.toUpperCase() + ' pour alterner' : ''})`;
       b.innerHTML = tool.icon;
       b.onclick = () => Tools.select(tool.id);
       bar.appendChild(b);
@@ -374,10 +382,20 @@ const App = (() => {
       ['Copier l\'image fusionnée', 'Ctrl+Maj+C', () => Ops.copy(true)],
       ['Coller', 'Ctrl+V', () => Ops.paste()],
       '-',
-      ['Tout sélectionner', 'Ctrl+A', Ops.selectAll],
-      ['Désélectionner', 'Ctrl+D', Ops.deselect],
       ['Effacer la sélection', 'Suppr', Ops.clearSelection],
       ['Remplir avec la couleur principale', 'Alt+Retour', Ops.fillSelection],
+    ],
+    Sélection: () => [
+      ['Tout sélectionner', 'Ctrl+A', Ops.selectAll],
+      ['Désélectionner', 'Ctrl+D', Ops.deselect],
+      ['Intervertir', 'Ctrl+Maj+I', Ops.invertSelection],
+      ['Sélectionner le contenu du calque', '', Ops.selectLayerPixels],
+      '-',
+      ['Contour progressif…', 'Maj+F6', Ops.featherSelection],
+      ['Étendre ou réduire…', '', Ops.growSelection],
+      '-',
+      ['Recadrer à la sélection', '', Ops.cropToSelection],
+      ['Nouveau calque avec la sélection', 'Ctrl+J', Ops.layerFromSelection],
     ],
     Image: () => [
       ['Taille de l\'image…', 'Ctrl+Alt+I', Ops.imageSize],
@@ -400,7 +418,8 @@ const App = (() => {
       ['Supprimer le calque', '', () => Ops.deleteLayer()],
       ['Fusionner avec le calque inférieur', 'Ctrl+E', Ops.mergeDown],
       '-',
-      ['Transformer (échelle, rotation)…', 'Ctrl+T', Ops.transformLayer],
+      ['Transformation libre (poignées)', 'Ctrl+T', Ops.transformLayer],
+      ['Transformer avec des valeurs…', '', Ops.transformNumeric],
       ['Centrer dans l\'image', '', () => Ops.centerLayer()],
       ['Centrer horizontalement', '', () => Ops.centerLayer('h')],
       ['Centrer verticalement', '', () => Ops.centerLayer('v')],
@@ -412,6 +431,8 @@ const App = (() => {
     ],
     Couleurs: () => [
       ['Luminosité, contraste et couleurs…', 'Ctrl+U', Ops.colors],
+      ['Niveaux…', 'Ctrl+L', Ops.levels],
+      ['Exposition et vibrance…', '', Ops.exposure],
       ['Noir et blanc', 'Ctrl+Maj+U', Ops.grayscale],
       ['Inverser', 'Ctrl+I', Ops.invert],
       '-',
@@ -500,6 +521,7 @@ const App = (() => {
     return e.key.toLowerCase() === key.toLowerCase();
   }
 
+  const lastInGroup = {};
   window.addEventListener('keydown', (e) => {
     if (Dialogs.isOpen()) {
       if (e.key === 'Escape') Dialogs.close(null);
@@ -518,14 +540,22 @@ const App = (() => {
     }
     if (e.ctrlKey || e.altKey || e.metaKey) return;
     const d = current;
-    // Outils : une lettre, comme dans Photoshop.
-    const tool = Tools.list.find((t) => t.key === e.key.toLowerCase());
-    if (tool) return Tools.select(tool.id);
+    // Outils : une lettre, comme dans Photoshop. Plusieurs outils sur la même lettre (G : dégradé
+    // et pot de peinture) : la lettre reprend le dernier utilisé, Maj + lettre passe au suivant.
+    const group = Tools.list.filter((t) => t.key && t.key === e.key.toLowerCase());
+    if (group.length) {
+      const here = group.indexOf(Tools.current);
+      const next = here >= 0 && e.shiftKey ? group[(here + 1) % group.length] : group.find((t) => t.id === lastInGroup[e.key.toLowerCase()]) || group[0];
+      lastInGroup[e.key.toLowerCase()] = next.id;
+      return Tools.select(next.id);
+    }
     if (e.key.toLowerCase() === 'x') return swapColors();
     if (e.key.toLowerCase() === 'd') return resetColors();
     if (!d) return;
+    if (e.key === 'Enter' && Tools.current.enter) return Tools.current.enter(d);
     if (e.key === 'Enter' && Tools.current.id === 'crop') return Tools.applyCrop(d);
     if (e.key === 'Escape') {
+      if (Tools.current.escape) return Tools.current.escape(d);
       if (Tools.current.id === 'crop') { Tools.current.activate(d); return View.request(); }
       return Ops.deselect();
     }
@@ -726,6 +756,7 @@ const App = (() => {
       api.config = config;
       api.configPath = path;
       await applyTheme(config);
+      View.init();
       renderColors();
       refreshTool();
       refresh();

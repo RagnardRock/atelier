@@ -27,17 +27,7 @@ const Ops = (() => {
   // Si une sélection existe, le réglage ne touche que l'intérieur de la sélection.
   function limitToSelection(doc, layer, src, result) {
     if (!doc.selection || result.dx || result.dy || result.canvas.width !== src.width || result.canvas.height !== src.height) return result;
-    const s = doc.selection;
-    const out = cloneCanvas(src);
-    const g = out.getContext('2d');
-    g.clearRect(s.x - layer.x, s.y - layer.y, s.w, s.h);
-    g.save();
-    g.beginPath();
-    g.rect(s.x - layer.x, s.y - layer.y, s.w, s.h);
-    g.clip();
-    g.drawImage(result.canvas, 0, 0);
-    g.restore();
-    return { canvas: out };
+    return { canvas: Sel.within(src, result.canvas, doc.selection, layer.x, layer.y) };
   }
 
   // Réglage avec aperçu en direct : la fenêtre s'ouvre, chaque curseur bougé recalcule l'aperçu,
@@ -88,6 +78,51 @@ const Ops = (() => {
     { key: 'saturation', label: 'Saturation', type: 'range', min: -100, max: 100, value: 0 },
     { key: 'hue', label: 'Teinte', type: 'range', min: -180, max: 180, value: 0, unit: '°' },
   ], (src, v) => ({ canvas: filtered(src, `brightness(${100 + v.brightness}%) contrast(${100 + v.contrast}%) saturate(${100 + v.saturation}%) hue-rotate(${v.hue}deg)`) }));
+
+  // Niveaux : on choisit quel gris devient le noir, le blanc, et le gris moyen (gamma).
+  const levels = () => adjust('Niveaux', [
+    { type: 'info', text: 'Noir et blanc d\'entrée : les tons plus sombres / plus clairs deviennent du noir / blanc pur. Gamma : éclaircit (> 1) ou assombrit (< 1) les tons moyens.' },
+    { key: 'inBlack', label: 'Noir d\'entrée', type: 'range', min: 0, max: 254, value: 0 },
+    { key: 'gamma', label: 'Gamma', type: 'range', min: 0.1, max: 3, step: 0.01, value: 1 },
+    { key: 'inWhite', label: 'Blanc d\'entrée', type: 'range', min: 1, max: 255, value: 255 },
+    { key: 'outBlack', label: 'Noir de sortie', type: 'range', min: 0, max: 255, value: 0 },
+    { key: 'outWhite', label: 'Blanc de sortie', type: 'range', min: 0, max: 255, value: 255 },
+  ], (src, v) => {
+    const lut = new Uint8ClampedArray(256);
+    const lo = Math.min(v.inBlack, v.inWhite - 1), hi = Math.max(v.inWhite, lo + 1);
+    for (let i = 0; i < 256; i++) {
+      const t = Math.min(1, Math.max(0, (i - lo) / (hi - lo)));
+      lut[i] = v.outBlack + Math.pow(t, 1 / v.gamma) * (v.outWhite - v.outBlack);
+    }
+    const out = cloneCanvas(src);
+    const g = out.getContext('2d');
+    const img = g.getImageData(0, 0, out.width, out.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) { d[i] = lut[d[i]]; d[i + 1] = lut[d[i + 1]]; d[i + 2] = lut[d[i + 2]]; }
+    g.putImageData(img, 0, 0);
+    return { canvas: out };
+  });
+
+  // Vibrance et exposition, deux réglages photo courants.
+  const exposure = () => adjust('Exposition et vibrance', [
+    { key: 'exposure', label: 'Exposition', type: 'range', min: -3, max: 3, step: 0.05, value: 0, unit: 'IL' },
+    { key: 'vibrance', label: 'Vibrance', type: 'range', min: -100, max: 100, value: 0 },
+  ], (src, v) => {
+    const out = cloneCanvas(src);
+    const g = out.getContext('2d');
+    const img = g.getImageData(0, 0, out.width, out.height);
+    const d = img.data, k = Math.pow(2, v.exposure), vib = v.vibrance / 100;
+    for (let i = 0; i < d.length; i += 4) {
+      let r = d[i] * k, gr = d[i + 1] * k, b = d[i + 2] * k;
+      // Vibrance : sature davantage les couleurs ternes que les couleurs déjà vives.
+      const max = Math.max(r, gr, b), avg = (r + gr + b) / 3;
+      const amount = vib * (1 - (max - Math.min(r, gr, b)) / 255);
+      r += (r - avg) * amount; gr += (gr - avg) * amount; b += (b - avg) * amount;
+      d[i] = r; d[i + 1] = gr; d[i + 2] = b;
+    }
+    g.putImageData(img, 0, 0);
+    return { canvas: out };
+  });
 
   const blur = () => adjust('Flou', [
     { key: 'radius', label: 'Rayon', type: 'range', min: 0, max: 100, step: 0.5, value: 4, unit: 'px' },
@@ -492,7 +527,13 @@ const Ops = (() => {
   }
 
   // Transformer le calque : échelle et rotation libres, avec aperçu.
+  // Ctrl+T : poignées à la souris sur le calque (tools-extra.js).
   function transformLayer() {
+    const doc = needDoc();
+    if (doc && Tools.current.id !== 'transform') Tools.byId.transform.start(doc, Tools.current.id);
+  }
+  // La même chose avec des valeurs précises, dans une fenêtre.
+  function transformNumeric() {
     const { layer } = needLayer();
     if (!layer) return;
     return adjust('Transformer le calque', [
@@ -518,7 +559,39 @@ const Ops = (() => {
 
   function selectAll() {
     const doc = needDoc();
-    if (doc) change(doc, 'Tout sélectionner', (d) => { d.selection = { x: 0, y: 0, w: d.width, h: d.height }; });
+    if (doc) change(doc, 'Tout sélectionner', (d) => { d.selection = Sel.rect(0, 0, d.width, d.height); });
+  }
+  function invertSelection() {
+    const doc = needDoc();
+    if (doc) change(doc, 'Intervertir la sélection', (d) => { d.selection = Sel.invert(d, d.selection); });
+  }
+  // Sélectionner les pixels non transparents du calque actif (Ctrl + clic sur la vignette dans Photoshop).
+  function selectLayerPixels() {
+    const { doc, layer } = needLayer();
+    if (!layer) return;
+    const full = newCanvas(doc.width, doc.height);
+    full.getContext('2d').drawImage(layer.canvas, layer.x, layer.y);
+    change(doc, 'Sélectionner le calque', (d) => { d.selection = Sel.fromMask(full); });
+  }
+  async function featherSelection() {
+    const doc = needDoc();
+    if (!doc) return;
+    if (!doc.selection) return notify('Fais d\'abord une sélection.', 'warning');
+    const v = await Dialogs.form({ title: 'Contour progressif', okLabel: 'Appliquer', fields: [
+      { type: 'info', text: 'Adoucit les bords de la sélection : ce que tu peins, effaces ou règles dedans se fond progressivement.' },
+      { key: 'radius', label: 'Rayon', type: 'range', min: 0.5, max: 100, step: 0.5, value: 8, unit: 'px' },
+    ] });
+    if (v) change(doc, 'Contour progressif', (d) => { d.selection = Sel.feather(d, d.selection, v.radius); });
+  }
+  async function growSelection() {
+    const doc = needDoc();
+    if (!doc) return;
+    if (!doc.selection) return notify('Fais d\'abord une sélection.', 'warning');
+    const v = await Dialogs.form({ title: 'Étendre ou réduire la sélection', okLabel: 'Appliquer', fields: [
+      { type: 'info', text: 'Un nombre positif agrandit la sélection, un nombre négatif la rétrécit.' },
+      { key: 'pixels', label: 'De', type: 'number', min: -200, max: 200, value: 4, unit: 'px' },
+    ] });
+    if (v && v.pixels) change(doc, v.pixels > 0 ? 'Étendre la sélection' : 'Réduire la sélection', (d) => { d.selection = Sel.grow(d, d.selection, v.pixels); });
   }
   function deselect() {
     const doc = App.doc();
@@ -528,17 +601,19 @@ const Ops = (() => {
     const { doc, layer } = needLayer();
     if (!layer) return;
     if (!doc.selection) return notify('Rien n\'est sélectionné. Pour supprimer le calque entier, utilise la corbeille du panneau Calques.', 'info');
-    const s = doc.selection;
-    change(doc, 'Effacer la sélection', () => editPixels(layer, doc).clearRect(s.x - layer.x, s.y - layer.y, s.w, s.h));
+    change(doc, 'Effacer la sélection', () => Sel.erase(editPixels(layer, doc), doc.selection, layer.x, layer.y));
   }
   function fillSelection() {
     const { doc, layer } = needLayer();
     if (!layer) return;
-    const s = doc.selection || { x: 0, y: 0, w: doc.width, h: doc.height };
+    const s = doc.selection || Sel.rect(0, 0, doc.width, doc.height);
     change(doc, 'Remplir', () => {
       const g = editPixels(layer, doc, true);
-      g.fillStyle = App.colors.primary;
-      g.fillRect(s.x - layer.x, s.y - layer.y, s.w, s.h);
+      const color = newCanvas(layer.canvas.width, layer.canvas.height);
+      const cg = color.getContext('2d');
+      cg.fillStyle = App.colors.primary;
+      cg.fillRect(0, 0, color.width, color.height);
+      g.drawImage(Sel.clip(color, s, layer.x, layer.y), 0, 0);
     });
   }
 
@@ -550,13 +625,13 @@ const Ops = (() => {
       if (!s) return { canvas: flat, x: 0, y: 0 };
       const piece = newCanvas(s.w, s.h);
       piece.getContext('2d').drawImage(flat, -s.x, -s.y);
-      return { canvas: piece, x: s.x, y: s.y };
+      return { canvas: Sel.clip(piece, s, s.x, s.y), x: s.x, y: s.y };
     }
     const layer = activeLayer(doc);
     if (!s) return { canvas: cloneCanvas(layer.canvas), x: layer.x, y: layer.y };
     const piece = newCanvas(s.w, s.h);
     piece.getContext('2d').drawImage(layer.canvas, layer.x - s.x, layer.y - s.y);
-    return { canvas: piece, x: s.x, y: s.y };
+    return { canvas: Sel.clip(piece, s, s.x, s.y), x: s.x, y: s.y };
   }
 
   // Ctrl+J : la sélection devient un nouveau calque (sans sélection : duplique le calque).
@@ -611,7 +686,7 @@ const Ops = (() => {
   }
 
   return {
-    colors, blur, sharpen, grayscale, invert, removeColor, recolor, outline, shadow,
+    colors, levels, exposure, blur, sharpen, invertSelection, selectLayerPixels, featherSelection, growSelection, transformNumeric, grayscale, invert, removeColor, recolor, outline, shadow,
     imageSize, canvasSize, rotateImage, flipLayer, trim, cropToSelection, resample, scaleDocument,
     newLayer, duplicateLayer, deleteLayer, moveLayer, mergeDown, flattenImage, centerLayer, transformLayer,
     selectAll, deselect, clearSelection, fillSelection, layerFromSelection, copy, paste, clipboardSize, canvasToPng,

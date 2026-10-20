@@ -36,7 +36,6 @@ const View = (() => {
     if (doc?.view?.fitted) fit(doc);
     request();
   }
-  new ResizeObserver(resize).observe(stage);
 
   // Demande un nouvel affichage (au prochain rafraîchissement de l'écran, une seule fois).
   function request(withComposite = false) {
@@ -84,6 +83,7 @@ const View = (() => {
   function eventPoint(doc, e) {
     const r = stage.getBoundingClientRect();
     const sx = e.clientX - r.left, sy = e.clientY - r.top;
+    if (doc && !doc.view) fit(doc); // image tout juste ouverte, pas encore affichée
     return { sx, sy, ...(doc ? toDoc(doc, sx, sy) : { x: 0, y: 0 }) };
   }
 
@@ -143,25 +143,36 @@ const View = (() => {
     Tools.current.overlay?.(ctx, doc, pointer);
   }
 
-  // « Fourmis » de la sélection : pointillés noir et blanc qui défilent.
-  function drawAnts(doc, r) {
-    const a = toScreen(doc, r.x, r.y);
-    const rect = [Math.round(a.sx) + 0.5, Math.round(a.sy) + 0.5, Math.round(r.w * doc.view.zoom), Math.round(r.h * doc.view.zoom)];
+  // « Fourmis » de la sélection : pointillés noir et blanc qui défilent le long de son contour.
+  function drawAnts(doc, sel) {
+    const { zoom } = doc.view;
+    const a = toScreen(doc, sel.x, sel.y);
     ctx.save();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = '#000';
-    ctx.strokeRect(...rect);
-    ctx.strokeStyle = '#fff';
-    ctx.setLineDash([5, 5]);
-    ctx.lineDashOffset = -antsOffset;
-    ctx.strokeRect(...rect);
+    const passes = [['#000', []], ['#fff', [5, 5]]];
+    if (sel.rect) {
+      const rect = [Math.round(a.sx) + 0.5, Math.round(a.sy) + 0.5, Math.round(sel.w * zoom), Math.round(sel.h * zoom)];
+      for (const [color, dash] of passes) { ctx.strokeStyle = color; ctx.setLineDash(dash); ctx.lineDashOffset = -antsOffset; ctx.strokeRect(...rect); }
+    } else {
+      // Contour quelconque : on le trace à l'échelle du zoom, avec un trait d'un pixel d'écran.
+      ctx.translate(Math.round(a.sx) + 0.5, Math.round(a.sy) + 0.5);
+      ctx.scale(zoom, zoom);
+      ctx.lineWidth = 1 / zoom;
+      const path = Sel.outline(sel);
+      for (const [color, dash] of passes) { ctx.strokeStyle = color; ctx.setLineDash(dash.map((d) => d / zoom)); ctx.lineDashOffset = -antsOffset / zoom; ctx.stroke(path); }
+    }
     ctx.restore();
   }
-  setInterval(() => {
-    if (!App.doc()?.selection) return;
-    antsOffset = (antsOffset + 1) % 10;
-    request();
-  }, 90);
+
+  // Démarré par App.start, une fois que toute l'interface est chargée.
+  function init() {
+    new ResizeObserver(resize).observe(stage);
+    setInterval(() => {
+      if (!App.doc()?.selection) return;
+      antsOffset = (antsOffset + 1) % 10;
+      request();
+    }, 90);
+  }
 
   // --- Souris ---
   const panning = (e) => e.button === 1 || spaceDown || Tools.current.id === 'hand';
@@ -238,7 +249,7 @@ const View = (() => {
     if (e.code === 'Space') { spaceDown = false; stage.classList.remove('space'); }
   });
 
-  return { request, fit, setZoom, zoomStep, toScreen, toDoc, get pointer() { return pointer; }, get size() { return { width, height }; }, get dragging() { return Boolean(drag); } };
+  return { init, request, fit, setZoom, zoomStep, toScreen, toDoc, get pointer() { return pointer; }, get size() { return { width, height }; }, get dragging() { return Boolean(drag); } };
 })();
 
 // Vrai si on est en train d'écrire dans un champ (les raccourcis ne doivent pas s'y déclencher).

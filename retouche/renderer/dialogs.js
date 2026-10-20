@@ -50,9 +50,10 @@ const Dialogs = (() => {
         } else {
           input = document.createElement('input');
           input.type = f.type === 'range' ? 'range' : f.type;
+          // Bornes d'abord : un curseur limite sa valeur à 0–100 tant qu'il ne connaît pas min et max.
+          for (const k of ['min', 'max', 'step', 'placeholder', 'list']) if (f[k] !== undefined) input.setAttribute(k, f[k]);
           if (f.type === 'checkbox') input.checked = Boolean(f.value);
           else input.value = f.value ?? '';
-          for (const k of ['min', 'max', 'step', 'placeholder', 'list']) if (f[k] !== undefined) input.setAttribute(k, f[k]);
         }
         input.name = f.key;
         row.appendChild(input);

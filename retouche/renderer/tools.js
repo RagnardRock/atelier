@@ -40,21 +40,34 @@ const Tools = (() => {
     return c;
   }
 
-  function paintTool(id, name, key, erase) {
+  function paintTool(id, name, key, erase, clone = false) {
+    const hints = {
+      brush: 'Glisse pour peindre. Maj + clic : ligne droite. Alt + clic : prélever une couleur.',
+      eraser: 'Glisse pour effacer. Maj + clic : ligne droite depuis le dernier point.',
+      clone: 'Alt + clic : choisir l\'endroit à recopier. Puis peins ailleurs pour le reproduire.',
+    };
     return {
       id, name, key, icon: ICONS[id], cursor: 'none', erase,
-      hint: erase ? 'Glisse pour effacer. Maj + clic : ligne droite depuis le dernier point.' : 'Glisse pour peindre. Maj + clic : ligne droite. Alt + clic : prélever une couleur.',
+      hint: hints[id],
       options: [
-        { key: 'size', label: 'Taille', type: 'range', min: 1, max: 500, value: erase ? 40 : 12, unit: 'px' },
-        { key: 'hardness', label: 'Dureté', type: 'range', min: 0, max: 100, value: erase ? 100 : 80, unit: '%' },
+        { key: 'size', label: 'Taille', type: 'range', min: 1, max: 500, value: erase ? 40 : clone ? 40 : 12, unit: 'px' },
+        { key: 'hardness', label: 'Dureté', type: 'range', min: 0, max: 100, value: erase ? 100 : clone ? 50 : 80, unit: '%' },
         { key: 'opacity', label: 'Opacité', type: 'range', min: 1, max: 100, value: 100, unit: '%' },
+        ...(clone ? [
+          { key: 'aligned', label: 'Aligné', type: 'checkbox', value: true },
+          { key: 'sampleAll', label: 'Tous les calques', type: 'checkbox', value: true },
+        ] : []),
       ],
       down(doc, p, e) {
-        if (!erase && e.altKey) return Tools.byId.eyedropper.down(doc, p, e);
+        if (clone && e.altKey) {
+          doc.cloneSource = { x: p.x, y: p.y, fresh: true };
+          return notify('Source choisie. Peins maintenant là où tu veux la recopier.', 'info', 2000);
+        }
+        if (!erase && !clone && e.altKey) return Tools.byId.eyedropper.down(doc, p, e);
         const layer = activeLayer(doc);
         if (!layer) return notify('Ajoute d\'abord un calque.', 'warning');
         if (!layer.visible) return notify('Le calque actif est masqué : affiche-le (œil) pour peindre dessus.', 'warning');
-        const snap = snapshot(doc, erase ? 'Gomme' : 'Pinceau');
+        const snap = snapshot(doc, name);
         editPixels(layer, doc, true);
         const s = settings[id];
         const sel = doc.selection;
@@ -62,13 +75,24 @@ const Tools = (() => {
           snap, layer, erase,
           buffer: newCanvas(layer.canvas.width, layer.canvas.height),
           temp: newCanvas(layer.canvas.width, layer.canvas.height),
-          stamp: makeStamp(s.size, s.hardness / 100, erase ? '#000000' : App.colors.primary),
+          stamp: makeStamp(s.size, s.hardness / 100, erase || clone ? '#000000' : App.colors.primary),
           spacing: Math.max(0.5, s.size * 0.1),
           opacity: s.opacity / 100,
-          clip: sel && { x: sel.x - layer.x, y: sel.y - layer.y, w: sel.w, h: sel.h },
+          sel,
           last: null,
         };
-        const from = e.shiftKey && doc.lastPaint ? doc.lastPaint : null;
+        if (clone) {
+          // Tampon : on recopie une autre partie de l'image (l'image telle qu'au début du trait).
+          if (!doc.cloneSource) { doc.stroke = null; return notify('Alt + clic d\'abord sur l\'endroit à recopier.', 'warning'); }
+          if (!s.aligned || !doc.cloneOffset || doc.cloneSource.fresh) {
+            doc.cloneOffset = { x: doc.cloneSource.x - p.x, y: doc.cloneSource.y - p.y };
+            doc.cloneSource.fresh = false;
+          }
+          doc.stroke.source = s.sampleAll ? flatten(doc) : (() => { const c = newCanvas(doc.width, doc.height); c.getContext('2d').drawImage(layer.canvas, layer.x, layer.y); return c; })();
+          doc.stroke.offset = doc.cloneOffset;
+          doc.stroke.piece = newCanvas(doc.stroke.stamp.width, doc.stroke.stamp.height);
+        }
+        const from = e.shiftKey && doc.lastPaint && !clone ? doc.lastPaint : null;
         if (from) { doc.stroke.last = { x: from.x - layer.x, y: from.y - layer.y }; this.move(doc, p); } else this.move(doc, p);
       },
       move(doc, p) {
@@ -77,7 +101,16 @@ const Tools = (() => {
         const x = p.x - s.layer.x, y = p.y - s.layer.y;
         const g = s.buffer.getContext('2d');
         const half = s.stamp.width / 2;
-        const dab = (px, py) => g.drawImage(s.stamp, px - half, py - half);
+        const dab = s.source ? (px, py) => {
+          // Un morceau de la source, découpé à la forme du pinceau.
+          const pg = s.piece.getContext('2d');
+          pg.globalCompositeOperation = 'source-over';
+          pg.clearRect(0, 0, s.piece.width, s.piece.height);
+          pg.drawImage(s.source, -(px + s.layer.x + s.offset.x - half), -(py + s.layer.y + s.offset.y - half));
+          pg.globalCompositeOperation = 'destination-in';
+          pg.drawImage(s.stamp, 0, 0);
+          g.drawImage(s.piece, px - half, py - half);
+        } : (px, py) => g.drawImage(s.stamp, px - half, py - half);
         if (!s.last) dab(x, y);
         else {
           const dist = Math.hypot(x - s.last.x, y - s.last.y);
@@ -110,6 +143,16 @@ const Tools = (() => {
           } else ctx.arc(pointer.sx, pointer.sy, r + offset, 0, Math.PI * 2);
           ctx.stroke();
         }
+        // Tampon : une croix montre l'endroit recopié.
+        const src = clone && (doc.stroke?.offset ? { x: pointer.x + doc.stroke.offset.x, y: pointer.y + doc.stroke.offset.y } : doc.cloneSource);
+        if (src) {
+          const c = View.toScreen(doc, src.x, src.y);
+          ctx.strokeStyle = '#fff';
+          ctx.beginPath();
+          ctx.moveTo(c.sx - 7, c.sy); ctx.lineTo(c.sx + 7, c.sy);
+          ctx.moveTo(c.sx, c.sy - 7); ctx.lineTo(c.sx, c.sy + 7);
+          ctx.stroke();
+        }
         ctx.restore();
       },
     };
@@ -118,10 +161,10 @@ const Tools = (() => {
   // Pose le tampon du trait sur un canvas (le calque, ou sa copie d'aperçu).
   function applyStroke(s, g) {
     g.save();
-    if (s.clip) { g.beginPath(); g.rect(s.clip.x, s.clip.y, s.clip.w, s.clip.h); g.clip(); }
     g.globalAlpha = s.opacity;
     g.globalCompositeOperation = s.erase ? 'destination-out' : 'source-over';
-    g.drawImage(s.buffer, 0, 0);
+    // Avec une sélection, seule la partie du trait qui tombe dedans est posée.
+    g.drawImage(s.sel ? Sel.clip(s.buffer, s.sel, s.layer.x, s.layer.y) : s.buffer, 0, 0);
     g.restore();
   }
   function strokeAppearance(doc) {
@@ -152,6 +195,10 @@ const Tools = (() => {
     const [r, gr, b] = hexToRgb(App.colors.primary);
     const alpha = Math.round((s.opacity / 100) * 255);
     const mask = new Uint8Array(width * height);
+    // Sélection de forme quelconque : on ne remplit que ses pixels.
+    let selData = null;
+    if (doc.selection && !doc.selection.rect) selData = doc.selection.mask.getContext('2d').getImageData(0, 0, area.w, area.h).data;
+    const allowed = (x, y) => !selData || selData[((y - ay0) * area.w + (x - ax0)) * 4 + 3] > 127;
     const paint = (i) => {
       // Mélange de la couleur avec ce qui est déjà là, selon l'opacité.
       const a = alpha / 255, under = data[i + 3] / 255, out = a + under * (1 - a);
@@ -181,7 +228,7 @@ const Tools = (() => {
     } else {
       for (let y = Math.max(0, ay0); y < Math.min(height, ay1); y++) for (let x = Math.max(0, ax0); x < Math.min(width, ax1); x++) if (matches((y * width + x) * 4)) mask[y * width + x] = 1;
     }
-    for (let i = 0; i < mask.length; i++) if (mask[i]) paint(i * 4);
+    for (let i = 0; i < mask.length; i++) if (mask[i] && allowed(i % width, (i / width) | 0)) paint(i * 4);
     g.putImageData(img, 0, 0);
   }
 
@@ -276,6 +323,41 @@ const Tools = (() => {
 
   const inside = (r, p) => r && p.x >= r.x && p.y >= r.y && p.x <= r.x + r.w && p.y <= r.y + r.h;
 
+  // Réglage commun aux outils de sélection (les touches Maj / Alt au clic passent devant).
+  const SELECT_MODE = { key: 'mode', label: 'Mode', type: 'select', value: 'new', choices: [['new', 'Nouvelle sélection'], ['add', 'Ajouter (Maj)'], ['subtract', 'Retirer (Alt)'], ['intersect', 'Intersection (Maj+Alt)']] };
+
+  // Zone de couleur proche du pixel (sx, sy), pour la baguette magique : renvoie une sélection.
+  function colorRegion(source, sx, sy, tolerance, contiguous) {
+    const { width, height } = source;
+    const data = source.getContext('2d').getImageData(0, 0, width, height).data;
+    const start = (sy * width + sx) * 4;
+    const target = [data[start], data[start + 1], data[start + 2], data[start + 3]];
+    const tol = (tolerance / 100) * 255;
+    const matches = (p) => {
+      const i = p * 4;
+      return Math.abs(data[i] - target[0]) <= tol && Math.abs(data[i + 1] - target[1]) <= tol && Math.abs(data[i + 2] - target[2]) <= tol && Math.abs(data[i + 3] - target[3]) <= tol;
+    };
+    const picked = new Uint8Array(width * height);
+    if (contiguous) {
+      const stack = [sy * width + sx];
+      picked[stack[0]] = 1;
+      while (stack.length) {
+        const p = stack.pop(), x = p % width;
+        for (const q of [x > 0 ? p - 1 : -1, x < width - 1 ? p + 1 : -1, p - width, p + width]) {
+          if (q >= 0 && q < picked.length && !picked[q] && matches(q)) { picked[q] = 1; stack.push(q); }
+        }
+      }
+    } else {
+      for (let p = 0; p < picked.length; p++) if (matches(p)) picked[p] = 1;
+    }
+    const full = newCanvas(width, height);
+    const g = full.getContext('2d');
+    const img = g.createImageData(width, height);
+    for (let p = 0; p < picked.length; p++) if (picked[p]) { const i = p * 4; img.data[i] = img.data[i + 1] = img.data[i + 2] = img.data[i + 3] = 255; }
+    g.putImageData(img, 0, 0);
+    return Sel.fromMask(full);
+  }
+
   const list = [
     {
       id: 'move', name: 'Déplacement', key: 'v', icon: ICONS.move, cursor: 'move',
@@ -290,12 +372,13 @@ const Tools = (() => {
         if (!layer) return;
         this.drag = { snap: snapshot(doc, 'Déplacer'), start: p, x: layer.x, y: layer.y, moved: false };
         // Une sélection autour du clic : on soulève ces pixels-là, pas tout le calque.
-        if (doc.selection && inside(doc.selection, p)) {
+        if (doc.selection && Sel.contains(doc.selection, p)) {
           const sel = doc.selection;
           const g = editPixels(layer, doc, true);
-          const piece = newCanvas(sel.w, sel.h);
+          let piece = newCanvas(sel.w, sel.h);
           piece.getContext('2d').drawImage(layer.canvas, layer.x - sel.x, layer.y - sel.y);
-          g.clearRect(sel.x - layer.x, sel.y - layer.y, sel.w, sel.h);
+          piece = Sel.clip(piece, sel, sel.x, sel.y);
+          Sel.erase(g, sel, layer.x, layer.y);
           doc.float = { layerId: layer.id, canvas: piece, x: sel.x, y: sel.y };
           this.drag.x = sel.x;
           this.drag.y = sel.y;
@@ -341,21 +424,35 @@ const Tools = (() => {
       },
     },
     {
-      id: 'select', name: 'Sélection rectangulaire', key: 'm', icon: ICONS.select, cursor: 'crosshair',
-      hint: 'Glisse pour sélectionner. Maj : carré. Glisse dans la sélection pour la déplacer. Ctrl+D : tout désélectionner.',
-      options: [],
-      down(doc, p) {
-        this.drag = { snap: snapshot(doc, 'Sélection'), start: { x: Math.round(p.x), y: Math.round(p.y) }, moving: inside(doc.selection, p), from: doc.selection && { ...doc.selection } };
+      id: 'select', name: 'Sélection rectangle / ellipse', key: 'm', icon: ICONS.select, cursor: 'crosshair',
+      hint: 'Glisse pour sélectionner (Maj pendant le glisser : carré / cercle). Au clic : Maj ajoute, Alt retire. Glisse dans la sélection pour la déplacer.',
+      options: [
+        { key: 'shape', label: 'Forme', type: 'select', value: 'rect', choices: [['rect', 'Rectangle'], ['ellipse', 'Ellipse']] },
+        SELECT_MODE,
+      ],
+      down(doc, p, e) {
+        const mode = Sel.modeFrom(e, settings.select.mode);
+        this.drag = {
+          snap: snapshot(doc, 'Sélection'),
+          start: { x: Math.round(p.x), y: Math.round(p.y) },
+          moving: mode === 'new' && Sel.contains(doc.selection, p),
+          before: doc.selection,
+          mode,
+          constrain: !e.shiftKey, // Maj tenu dès le clic = ajouter, pas « carré »
+        };
       },
       move(doc, p, e) {
         const d = this.drag;
         if (!d) return;
         if (d.moving) {
-          doc.selection = { ...d.from, x: d.from.x + Math.round(p.x - d.start.x), y: d.from.y + Math.round(p.y - d.start.y) };
+          doc.selection = { ...d.before, x: d.before.x + Math.round(p.x - d.start.x), y: d.before.y + Math.round(p.y - d.start.y) };
         } else {
           let w = Math.round(p.x) - d.start.x, h = Math.round(p.y) - d.start.y;
-          if (e.shiftKey) { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
-          doc.selection = clampRect(doc, { x: d.start.x, y: d.start.y, w, h });
+          if (e.shiftKey && d.constrain) { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
+          const r = clampRect(doc, { x: d.start.x, y: d.start.y, w, h });
+          d.shape = r && (settings.select.shape === 'ellipse' ? Sel.ellipse(r.x, r.y, r.w, r.h) : Sel.rect(r.x, r.y, r.w, r.h));
+          d.preview = d.shape;
+          doc.selection = d.mode === 'new' ? d.shape : (d.shape ? d.shape : d.before);
         }
         App.updateStatus();
       },
@@ -363,8 +460,77 @@ const Tools = (() => {
         const d = this.drag;
         this.drag = null;
         if (!d) return;
-        if (!d.moving && doc.selection && (doc.selection.w < 2 && doc.selection.h < 2)) doc.selection = null;
-        if (JSON.stringify(d.from) !== JSON.stringify(doc.selection)) commit(doc, d.snap); else App.refresh();
+        if (!d.moving) {
+          const tiny = !d.shape || (d.shape.w < 2 && d.shape.h < 2);
+          doc.selection = tiny ? (d.mode === 'new' ? null : d.before) : Sel.combine(doc, d.before, d.shape, d.mode);
+        }
+        if (doc.selection !== d.before) commit(doc, d.snap); else App.refresh();
+      },
+    },
+    {
+      id: 'lasso', name: 'Lasso', key: 'l', icon: ICONS.lasso, cursor: 'crosshair',
+      hint: 'Dessine le contour à main levée ; il se ferme en relâchant. Au clic : Maj ajoute, Alt retire.',
+      options: [SELECT_MODE],
+      down(doc, p, e) {
+        this.drag = { snap: snapshot(doc, 'Lasso'), before: doc.selection, mode: Sel.modeFrom(e, settings.lasso.mode), points: [{ x: p.x, y: p.y }] };
+      },
+      move(doc, p) {
+        const d = this.drag;
+        if (!d) return;
+        const last = d.points[d.points.length - 1];
+        if (Math.hypot(p.x - last.x, p.y - last.y) * doc.view.zoom >= 2) d.points.push({ x: p.x, y: p.y });
+        View.request();
+      },
+      up(doc) {
+        const d = this.drag;
+        this.drag = null;
+        if (!d) return;
+        const shape = Sel.polygon(doc, d.points);
+        doc.selection = shape ? Sel.combine(doc, d.before, shape, d.mode) : d.mode === 'new' ? null : d.before;
+        if (doc.selection !== d.before) commit(doc, d.snap); else App.refresh();
+      },
+      overlay(ctx, doc) {
+        const d = this.drag;
+        if (!d || d.points.length < 2) return;
+        ctx.save();
+        ctx.beginPath();
+        d.points.forEach((pt, i) => { const c = View.toScreen(doc, pt.x, pt.y); if (i) ctx.lineTo(c.sx, c.sy); else ctx.moveTo(c.sx, c.sy); });
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      },
+    },
+    {
+      id: 'wand', name: 'Baguette magique', key: 'w', icon: ICONS.wand, cursor: 'crosshair',
+      hint: 'Clique sur une couleur pour sélectionner la zone qui lui ressemble. Maj ajoute, Alt retire.',
+      options: [
+        { key: 'tolerance', label: 'Tolérance', type: 'range', min: 0, max: 100, value: 12, unit: '%' },
+        { key: 'contiguous', label: 'Zone continue seulement', type: 'checkbox', value: true },
+        { key: 'sampleAll', label: 'Tous les calques', type: 'checkbox', value: false },
+        SELECT_MODE,
+      ],
+      down(doc, p, e) {
+        if (p.x < 0 || p.y < 0 || p.x >= doc.width || p.y >= doc.height) return;
+        const o = settings.wand;
+        // Image analysée : tout ce qu'on voit, ou seulement le calque actif (posé dans le document).
+        let source;
+        if (o.sampleAll) source = flatten(doc);
+        else {
+          const layer = activeLayer(doc);
+          if (!layer) return;
+          source = newCanvas(doc.width, doc.height);
+          source.getContext('2d').drawImage(layer.canvas, layer.x, layer.y);
+        }
+        const region = colorRegion(source, Math.floor(p.x), Math.floor(p.y), o.tolerance, o.contiguous);
+        const before = doc.selection;
+        change(doc, 'Baguette magique', (d) => {
+          d.selection = Sel.combine(d, before, region, Sel.modeFrom(e, o.mode));
+          return d.selection !== before;
+        });
       },
     },
     {
@@ -426,7 +592,7 @@ const Tools = (() => {
       up(doc) {
         this.drag = null;
         if (doc.crop) doc.crop = normRect(doc.crop);
-        if (!doc.crop.w || !doc.crop.h) doc.crop = { x: 0, y: 0, w: doc.width, h: doc.height };
+        if (!doc.crop || !doc.crop.w || !doc.crop.h) doc.crop = { x: 0, y: 0, w: doc.width, h: doc.height };
         App.updateStatus();
       },
       dblclick(doc) { applyCrop(doc); },
@@ -473,6 +639,7 @@ const Tools = (() => {
     },
     paintTool('brush', 'Pinceau', 'b', false),
     paintTool('eraser', 'Gomme', 'e', true),
+    paintTool('clone', 'Tampon de duplication', 's', false, true),
     {
       id: 'fill', name: 'Pot de peinture', key: 'g', icon: ICONS.fill, cursor: 'crosshair',
       hint: 'Clique pour remplir une zone de couleur proche avec la couleur principale (dans la sélection s\'il y en a une).',
@@ -533,7 +700,15 @@ const Tools = (() => {
   const byId = Object.fromEntries(list.map((t) => [t.id, t]));
 
   const api = {
-    list, byId, settings, value, save, applyCrop, renderText, editText,
+    list, byId, settings, value, save, applyCrop, renderText, editText, makeStamp, inside,
+    // Ajoute un outil (défini dans un autre fichier), juste après l'outil « after ».
+    register(tool, after) {
+      const index = after ? list.findIndex((t) => t.id === after) + 1 : list.length;
+      list.splice(index, 0, tool);
+      byId[tool.id] = tool;
+      settings[tool.id] = {};
+      for (const o of tool.options) if (o.type !== 'button') settings[tool.id][o.key] = saved[tool.id]?.[o.key] ?? o.value;
+    },
     current: byId.brush,
     strokeAppearance,
     select(id) {

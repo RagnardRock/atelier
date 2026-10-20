@@ -2,7 +2,7 @@
 
 Skald est le deuxième outil d'Atelier, à côté de Rune. Il fait le travail courant de Photoshop : ouvrir un PSD ou une image, retoucher, travailler en calques, recadrer, préparer un logo et l'exporter pour le web. Il reprend la direction artistique de Rune (mode sombre, verre dépoli, même couleur d'accent, mêmes icônes).
 
-Ce n'est pas un clone complet de Photoshop : la version 0.1 couvre ce qui sert tous les jours. La liste « Pas encore » en bas dit ce qui manque.
+Ce n'est pas un clone complet de Photoshop : la version 0.2 couvre ce qui sert tous les jours. La liste « Pas encore » en bas dit ce qui manque.
 
 ## Lancer Skald depuis le clone
 
@@ -21,14 +21,14 @@ Sur chaque pull request qui touche `retouche/`, GitHub fabrique `Skald-Setup-<ve
 1. Monte la version dans `retouche/package.json`, fusionne sur `main`.
 2. Pose l'étiquette et pousse-la :
    ```bat
-   git tag skald-v0.1.0
-   git push origin skald-v0.1.0
+   git tag skald-v0.2.0
+   git push origin skald-v0.2.0
    ```
 3. GitHub publie l'installeur dans les **Releases**, sans la marquer « Latest » (Rune utilise la Release « Latest » pour ses propres mises à jour).
 
 Skald n'a pas encore de mise à jour automatique : pour l'instant on réinstalle la nouvelle version par-dessus. Ses réglages vivent dans `%APPDATA%\atelier-retouche` et ne sont pas effacés.
 
-## Ce que fait Skald (v0.1)
+## Ce que fait Skald (v0.2)
 
 **Fichiers**
 - Ouvre PSD (avec ses calques), PNG, JPEG, WebP, GIF, BMP, ICO, AVIF et SVG (dessiné en au moins 1024 px pour rester net).
@@ -44,23 +44,32 @@ Skald n'a pas encore de mise à jour automatique : pour l'instant on réinstalle
 | Outil | Touche | Ce qu'il fait |
 |---|---|---|
 | Déplacement | V | Déplace le calque ; avec une sélection, soulève et déplace ces pixels. Choisit le calque sous la souris. Flèches : 1 px (Maj : 10 px). |
-| Sélection | M | Rectangle (Maj : carré). Glisser dedans la déplace. |
+| Sélection | M | Rectangle ou ellipse (Maj pendant le glisser : carré / cercle). Glisser dedans la déplace. |
+| Lasso | L | Sélection à main levée : glisser autour de la zone. |
+| Baguette magique | W | Sélectionne la zone d'une couleur proche (tolérance, zone continue, tous les calques). |
 | Recadrage | C | Cadre à poignées, proportions libres ou fixes (1:1, 16:9…), peut dépasser pour agrandir. Entrée pour valider. |
 | Pinceau | B | Taille, dureté, opacité. Maj + clic : ligne droite. Alt + clic : pipette. |
 | Gomme | E | Comme le pinceau, mais efface. |
-| Pot de peinture | G | Tolérance, opacité, zone continue ou toute la couleur. |
+| Tampon de duplication | S | Alt + clic : point source, puis peindre pour recopier cette zone ailleurs (aligné ou non, un calque ou tous). |
+| Dégradé | G | Linéaire ou radial, couleur principale → secondaire ou → transparent. |
+| Pot de peinture | G (Maj+G) | Tolérance, opacité, zone continue ou toute la couleur. |
 | Pipette | I | Prend la couleur de l'image (Alt : couleur secondaire). |
 | Texte | T | Police, taille, couleur, gras, italique, alignement, interligne, espacement. Le texte reste modifiable (clic dessus avec l'outil). |
+| Formes | U | Rectangle, rectangle arrondi, ellipse, ligne, flèche, polygone, étoile ; remplissage et contour. Chaque forme va dans son propre calque. |
 | Main | H | Déplace la vue (aussi : barre d'espace maintenue, ou clic molette). |
 | Zoom | Z | Clic : zoom, Alt + clic : dézoom. La molette zoome autour de la souris. |
 
+Pour toutes les sélections : Maj au clic ajoute, Alt retire, Maj+Alt garde l'intersection (ou le menu « Mode »). Quand deux outils partagent une lettre, Maj + la lettre passe de l'un à l'autre.
+
 Taille du pinceau au clavier : `[` et `]` (ou `ù` et `*` en AZERTY). `X` échange les couleurs, `D` remet noir et blanc.
 
-**Calques** : nouveau, dupliquer, supprimer, fusionner vers le bas, aplatir, monter/descendre (ou glisser dans la liste), renommer (double-clic), masquer (œil), opacité, 17 modes de fusion, transformer (échelle et rotation, `Ctrl+T`), centrer dans l'image, miroir.
+**Calques** : nouveau, dupliquer, supprimer, fusionner vers le bas, aplatir, monter/descendre (ou glisser dans la liste), renommer (double-clic), masquer (œil), opacité, 17 modes de fusion, transformation libre à la souris (`Ctrl+T` : poignées aux coins pour agrandir, glisser dedans pour déplacer, dehors pour tourner, Entrée pour valider, Échap pour annuler) ou avec des valeurs précises, centrer dans l'image, miroir.
+
+**Sélection** : tout (`Ctrl+A`), désélectionner (`Ctrl+D`), intervertir (`Ctrl+Maj+I`), contenu d'un calque (`Ctrl` + clic sur le calque), contour progressif (`Maj+F6`), étendre ou réduire, nouveau calque avec la sélection (`Ctrl+J`).
 
 **Image** : taille de l'image (en %, en px, proportions gardées), taille de la zone de travail (avec position de l'image), rotations 90°/180°, miroirs, recadrer à la sélection, rogner le vide.
 
-**Couleurs** : luminosité / contraste / saturation / teinte (`Ctrl+U`), noir et blanc, inverser, flou, netteté. Chaque réglage a un aperçu en direct et ne touche que la sélection s'il y en a une.
+**Couleurs** : luminosité / contraste / saturation / teinte (`Ctrl+U`), niveaux (`Ctrl+L`), exposition et vibrance, noir et blanc, inverser, flou, netteté. Chaque réglage a un aperçu en direct et ne touche que la sélection s'il y en a une.
 
 **Logo** : rendre une couleur transparente (retire le fond blanc d'un logo en JPG, en gardant l'intérieur et sans liseré blanc), teinte unie (décliner un logo en blanc, noir…), contour, ombre portée.
 
@@ -77,8 +86,10 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 | `main.js` | Fenêtre, ouverture/enregistrement des fichiers, presse-papiers, réglages (`config.json`). L'interface ne peut écrire que là où tu as choisi d'enregistrer. |
 | `preload.js` | Les seules fonctions de `main.js` accessibles à l'interface (`window.skald`). |
 | `renderer/doc.js` | Le modèle : document, calques, composition, historique (annuler/rétablir). |
+| `renderer/selection.js` | Les sélections de toutes formes (masques), et les calculs dessus : ajouter, retirer, intervertir, adoucir. |
 | `renderer/view.js` | La zone de travail : zoom, déplacement de la vue, damier, sélection, souris. |
 | `renderer/tools.js` | Les outils de la barre de gauche. |
+| `renderer/tools-extra.js` | Dégradé, formes et transformation libre. |
 | `renderer/ops.js` | Les opérations des menus (réglages, effets de logo, taille, calques, presse-papiers). |
 | `renderer/io.js` | Lecture et écriture PSD/images, export, ICO, pack d'icônes. |
 | `renderer/dialogs.js` | Les fenêtres de dialogue. |
@@ -86,8 +97,9 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 
 ## Pas encore
 
-- Transformation à la souris (poignées sur le calque) : pour l'instant c'est une fenêtre avec échelle et rotation.
-- Sélections lasso et baguette magique, masques de calque non destructifs.
+- Masques de calque non destructifs.
+- Correcteur / pièce (retouche « intelligente »), densité / netteté locale au pinceau, doigt.
+- Courbes, repères et règles.
 - Calques de réglage, styles de calque modifiables après coup (l'ombre et le contour sont appliqués aux pixels).
 - Ouvrir les textes d'un PSD comme textes modifiables (ils arrivent en pixels).
 - Mise à jour automatique de Skald.
