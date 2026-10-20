@@ -55,13 +55,14 @@
         <div id="welcome">
           <img class="welcome-logo" src="tafl.svg" alt="">
           <h1>Tafl</h1>
-          <p class="welcome-sub">Tuiles et cartes en pixel art, façon Pokémon</p>
+          <p class="welcome-sub">Tuiles, cartes et jeux en pixel art, façon Pokémon</p>
           <div class="welcome-actions">
-            <button id="welcome-new" class="button primary"><i class="codicon codicon-new-file"></i> Nouveau jeu de tuiles <kbd>Ctrl+N</kbd></button>
+            <button id="welcome-game" class="button primary"><i class="codicon codicon-game"></i> Nouveau jeu <kbd>Ctrl+Maj+J</kbd></button>
+            <button id="welcome-new" class="button"><i class="codicon codicon-new-file"></i> Nouveau jeu de tuiles <kbd>Ctrl+N</kbd></button>
             <button id="welcome-open" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
             <button id="welcome-import" class="button"><i class="codicon codicon-file-media"></i> Importer une planche <kbd>Ctrl+I</kbd></button>
           </div>
-          <p class="welcome-hint">Jeux de tuiles .tafl, ou une planche en PNG à découper. Tu peux aussi les glisser ici.</p>
+          <p class="welcome-hint">Un dossier de jeu (son jeu.json), un jeu de tuiles .tafl, ou une planche en PNG à découper. Tu peux aussi les glisser ici.</p>
           <h2 id="welcome-recents-title" hidden>Récents</h2>
           <div id="welcome-recents"></div>
         </div>
@@ -69,7 +70,33 @@
     </section>
 
     <aside id="sidepanel">
-      <section class="panel" id="color-panel">
+      <!-- Mode Carte : les cartes du jeu (ville, route, maison…) et les calques de la carte affichée -->
+      <section class="panel map-only" id="maps-panel">
+        <div class="panel-header"><span class="panel-title">Cartes</span><span id="maps-count" class="panel-count"></span>
+          <div class="panel-actions">
+            <button id="map-add" class="icon-button" title="Nouvelle carte"><i class="codicon codicon-add"></i></button>
+            <button id="map-duplicate" class="icon-button" title="Dupliquer la carte"><i class="codicon codicon-copy"></i></button>
+            <button id="map-delete" class="icon-button" title="Supprimer la carte"><i class="codicon codicon-trash"></i></button>
+            <button id="map-more" class="icon-button" title="Renommer, taille, ordre…"><i class="codicon codicon-ellipsis"></i></button>
+          </div>
+        </div>
+        <div id="maps" class="rows"></div>
+      </section>
+
+      <section class="panel map-only" id="layers-panel">
+        <div class="panel-header"><span class="panel-title">Calques</span><span id="layers-count" class="panel-count"></span>
+          <div class="panel-actions">
+            <button id="layer-add" class="icon-button" title="Nouveau calque, au-dessus du calque choisi"><i class="codicon codicon-add"></i></button>
+            <button id="layer-up" class="icon-button" title="Monter le calque"><i class="codicon codicon-arrow-up"></i></button>
+            <button id="layer-down" class="icon-button" title="Descendre le calque"><i class="codicon codicon-arrow-down"></i></button>
+            <button id="layer-props" class="icon-button" title="Réglages du calque : profondeur, opacité, fusion, parallaxe"><i class="codicon codicon-settings"></i></button>
+            <button id="layer-delete" class="icon-button" title="Supprimer le calque"><i class="codicon codicon-trash"></i></button>
+          </div>
+        </div>
+        <div id="layers" class="rows"></div>
+      </section>
+
+      <section class="panel tile-only" id="color-panel">
         <div class="panel-header"><span class="panel-title">Palette</span>
           <div class="panel-actions">
             <select id="palette-preset" title="Remplacer la palette (tes tuiles ne changent pas)">
@@ -98,7 +125,7 @@
       </section>
 
       <!-- Animation : les images de la tuile choisie (une seule pour une tuile fixe) -->
-      <section class="panel" id="frames-panel">
+      <section class="panel tile-only" id="frames-panel">
         <div class="panel-header"><span class="panel-title">Animation</span><span id="frames-count"></span>
           <div class="panel-actions">
             <button id="anim-play" class="icon-button" title="Lancer ou arrêter l'animation (P)"><i class="codicon codicon-play"></i></button>
@@ -113,7 +140,7 @@
         </label>
       </section>
 
-      <section class="panel" id="preview-panel">
+      <section class="panel tile-only" id="preview-panel">
         <div class="panel-header"><span class="panel-title">Aperçu 3 × 3</span><span id="preview-scale"></span></div>
         <div class="preview-box checker-bg"><canvas id="preview"></canvas></div>
       </section>

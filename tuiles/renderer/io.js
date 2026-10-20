@@ -43,10 +43,59 @@ const IO = (() => {
   const textBytes = (text) => new TextEncoder().encode(text);
   const safeName = (name) => String(name || 'tuiles').replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').trim() || 'tuiles';
 
+  // --- Cartes en JSON ---
+  // Le même format sert dans le .tafl (champ maps) et dans les fichiers cartes/*.json d'un dossier de
+  // jeu : c'est celui que lira le moteur du jeu. Il est décrit en détail dans ../FORMAT.md.
+  function mapToJSON(doc, map) {
+    return {
+      format: 'tafl-carte',
+      version: 1,
+      id: map.id,
+      nom: map.name,
+      largeur: map.width,
+      hauteur: map.height,
+      tailleTuiles: doc.tileSize,
+      calques: map.layers.map((l) => ({ nom: l.name, visible: l.visible, profondeur: l.profondeur, opacite: l.opacite, fusion: l.fusion, parallaxe: { ...l.parallaxe }, cases: [...l.cells] })),
+      passage: [...map.passage],
+      // Le passage final de chaque case, recalculé à chaque enregistrement (le moteur lit celui-ci).
+      collisions: [...Doc.collisions(doc, map)],
+      zones: map.zones.map((z) => ({ id: z.id, nom: z.name, type: z.type, x: z.x, y: z.y, largeur: z.w, hauteur: z.h, objetRequis: z.objet || null })),
+      teleporteurs: map.warps.map((w) => ({ id: w.id, x: w.x, y: w.y, vers: { carte: w.carte, x: w.tx, y: w.ty, direction: w.direction } })),
+    };
+  }
+  const oneOf = (v, list, fallback) => (list.some(([k]) => k === v) ? v : fallback);
+  const int = (v, fallback = 0) => (Number.isFinite(Number(v)) ? Math.round(Number(v)) : fallback);
+  function mapFromJSON(data, tileCount, fallbackId) {
+    const width = clamp(int(data.largeur, 20), 1, 256), height = clamp(int(data.hauteur, 15), 1, 256), n = width * height;
+    const cells = (list) => Int32Array.from({ length: n }, (_v, i) => (Number.isInteger(list?.[i]) && list[i] >= 0 && list[i] < tileCount ? list[i] : -1));
+    const map = Doc.newMap({ id: Doc.slug(data.id || fallbackId), name: String(data.nom || data.id || fallbackId), width, height });
+    if (Array.isArray(data.calques)) {
+      map.layers = data.calques.map((l, i) => Doc.newLayer(String(l.nom || `Calque ${i + 1}`), width, height, {
+        visible: l.visible !== false,
+        cells: cells(l.cases),
+        profondeur: oneOf(l.profondeur, Doc.PROFONDEURS, 'dessous'),
+        opacite: clamp(Number(l.opacite ?? 1) || 0, 0, 1),
+        fusion: oneOf(l.fusion, Doc.FUSIONS, 'normal'),
+        parallaxe: { x: Number(l.parallaxe?.x ?? 1) || 0, y: Number(l.parallaxe?.y ?? 1) || 0 },
+      }));
+    }
+    map.passage = Uint8Array.from({ length: n }, (_v, i) => clamp(int(data.passage?.[i]), 0, 6));
+    map.zones = (Array.isArray(data.zones) ? data.zones : []).map((z, i) => ({
+      id: String(z.id || `zone-${i + 1}`), name: String(z.nom || ''), type: oneOf(z.type, Doc.ZONES, 'autre'),
+      x: clamp(int(z.x), 0, width - 1), y: clamp(int(z.y), 0, height - 1), w: Math.max(1, int(z.largeur, 1)), h: Math.max(1, int(z.hauteur, 1)), objet: z.objetRequis ? String(z.objetRequis) : '',
+    }));
+    map.warps = (Array.isArray(data.teleporteurs) ? data.teleporteurs : []).filter((w) => w?.vers?.carte).map((w, i) => ({
+      id: String(w.id || `tp-${i + 1}`), x: clamp(int(w.x), 0, width - 1), y: clamp(int(w.y), 0, height - 1),
+      carte: String(w.vers.carte), tx: int(w.vers.x), ty: int(w.vers.y), direction: oneOf(w.vers.direction, Doc.DIRECTIONS, 'bas'),
+    }));
+    return map;
+  }
+
   // --- Fichier .tafl ---
-  function serialize(doc) {
+  // tilesOnly : seulement les tuiles et la palette (le tuiles.tafl d'un dossier de jeu, les cartes étant à part).
+  function serialize(doc, { tilesOnly = false } = {}) {
     const s = doc.tileSize;
-    return JSON.stringify({
+    const data = {
       format: 'tafl',
       version: 1,
       name: doc.name,
@@ -55,10 +104,18 @@ const IO = (() => {
       palette: doc.palette,
       tiles: doc.tiles.map((t) => {
         const pngs = t.frames.map((_f, k) => Doc.tileCanvas(t, s, k).toDataURL('image/png'));
-        return Doc.animated(t) ? { name: t.name, png: pngs[0], frames: pngs, duration: t.duration } : { name: t.name, png: pngs[0] };
+        const tile = Doc.animated(t) ? { name: t.name, png: pngs[0], frames: pngs, duration: t.duration } : { name: t.name, png: pngs[0] };
+        if (t.passage && t.passage !== 'auto') tile.passage = t.passage;
+        return tile;
       }),
-      map: { width: doc.map.width, height: doc.map.height, layers: doc.map.layers.map((l) => ({ name: l.name, visible: l.visible, cells: [...l.cells] })) },
-    });
+    };
+    if (tilesOnly) return JSON.stringify(data);
+    // « map » : la première carte, comme avant (Tafl 0.5 et plus ancien ne lisent que celle-là).
+    const first = doc.maps[0];
+    data.map = { width: first.width, height: first.height, layers: first.layers.map((l) => ({ name: l.name, visible: l.visible, cells: [...l.cells] })) };
+    data.maps = doc.maps.map((m) => mapToJSON(doc, m));
+    data.depart = doc.depart;
+    return JSON.stringify(data);
   }
 
   async function deserialize(text, file) {
@@ -83,18 +140,46 @@ const IO = (() => {
       const sources = Array.isArray(t.frames) && t.frames.length ? t.frames.slice(0, 16) : [t.png];
       const frames = [];
       for (const src of sources) frames.push(await pixels(src));
-      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION });
+      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto' });
     }
     if (!doc.tiles.length) Doc.addTile(doc);
-    if (Array.isArray(data.map?.layers)) {
-      doc.map.layers = data.map.layers.map((l) => ({ name: l.name || 'Calque', visible: l.visible !== false, cells: Int32Array.from({ length: doc.map.width * doc.map.height }, (_v, i) => (Number.isInteger(l.cells?.[i]) && l.cells[i] < doc.tiles.length ? l.cells[i] : -1)) }));
+    if (Array.isArray(data.maps) && data.maps.length) {
+      setMaps(doc, data.maps.map((m, i) => mapFromJSON(m, doc.tiles.length, `carte-${i + 1}`)));
+      doc.depart = cleanDepart(doc, data.depart);
+    } else if (Array.isArray(data.map?.layers)) {
+      // Fichier d'avant Tafl 0.6 : une seule carte, avec ses calques (le 2e et les suivants au niveau du joueur).
+      const { map } = doc;
+      map.layers = data.map.layers.map((l, i) => Doc.newLayer(l.name || 'Calque', map.width, map.height, {
+        visible: l.visible !== false,
+        profondeur: i ? 'joueur' : 'dessous',
+        cells: Int32Array.from({ length: map.width * map.height }, (_v, k) => (Number.isInteger(l.cells?.[k]) && l.cells[k] < doc.tiles.length ? l.cells[k] : -1)),
+      }));
     }
     doc.path = file.path;
     return doc;
   }
+  // Les cartes lues, avec des identifiants uniques.
+  function setMaps(doc, maps) {
+    const seen = new Set();
+    for (const m of maps) {
+      let id = m.id, n = 2;
+      while (seen.has(id)) id = `${m.id}-${n++}`;
+      m.id = id;
+      seen.add(id);
+    }
+    doc.maps = maps;
+    Doc.selectMap(doc, 0);
+  }
+  function cleanDepart(doc, d) {
+    const map = d && Doc.mapById(doc, String(d.carte));
+    if (!map) return null;
+    return { carte: map.id, x: clamp(int(d.x), 0, map.width - 1), y: clamp(int(d.y), 0, map.height - 1), direction: oneOf(d.direction, Doc.DIRECTIONS, 'bas') };
+  }
 
-  // Ouvre un fichier choisi (ou glissé) : un .tafl s'ouvre, une image propose l'import.
+  // Ouvre un fichier choisi (ou glissé) : un .tafl s'ouvre, le jeu.json d'un dossier de jeu ouvre tout
+  // le jeu, une image propose l'import.
   async function openLoaded(file) {
+    if (/^jeu\.json$/i.test(file.name)) return openGame(file.path);
     if (/\.tafl$/i.test(file.name)) return App.setDocument(await deserialize(new TextDecoder().decode(file.bytes), file));
     return importSheet(file);
   }
@@ -104,10 +189,101 @@ const IO = (() => {
     if (file) await openLoaded(file);
   }
   async function openPath(path) {
+    if (/(^|[\\/])jeu\.json$/i.test(path)) return openGame(path);
     await openLoaded(await window.tafl.openPath(path));
   }
 
+  // --- Dossier de jeu (Tafl 0.6) ---
+  // MonJeu/
+  //   jeu.json        le titre, la liste des cartes, le départ du joueur
+  //   tuiles.tafl     les tuiles, partagées par toutes les cartes
+  //   cartes/*.json   une carte par fichier
+  //   FORMAT.md       la description de ces fichiers (copiée par Tafl à chaque enregistrement)
+  async function openGame(path) {
+    if (!path) throw new Error('Ce jeu.json n\'a pas de chemin sur le disque : ouvre-le avec Fichier › Ouvrir.');
+    const g = await window.tafl.openGame(path);
+    let jeu;
+    try {
+      jeu = JSON.parse(g.jeu);
+    } catch {
+      throw new Error(`${g.folder}\\jeu.json n'est pas lisible (JSON abîmé)`);
+    }
+    if (jeu.format !== 'tafl-jeu') throw new Error('Ce jeu.json n\'est pas un dossier de jeu Tafl.');
+    if (jeu.version > 1) throw new Error('Ce jeu vient d\'une version plus récente de Tafl : mets Tafl à jour pour l\'ouvrir');
+    const doc = g.tuiles
+      ? await deserialize(g.tuiles, { name: jeu.tuiles || 'tuiles.tafl', path: null })
+      : Doc.create({ tileSize: int(jeu.tailleTuiles, 16), tiles: 1 });
+    const maps = (jeu.cartes || []).filter((c) => g.cartes[c.fichier]).map((c, i) => {
+      let data;
+      try {
+        data = JSON.parse(g.cartes[c.fichier]);
+      } catch {
+        throw new Error(`La carte ${c.fichier} n'est pas lisible (JSON abîmé).`);
+      }
+      return mapFromJSON({ id: c.id, nom: c.nom, ...data }, doc.tiles.length, c.id || `carte-${i + 1}`);
+    });
+    if (maps.length) setMaps(doc, maps);
+    doc.depart = cleanDepart(doc, jeu.depart);
+    doc.name = String(jeu.titre || g.folder.split(/[\\/]/).pop());
+    doc.path = g.path;
+    doc.game = { folder: g.folder, fichiers: Object.keys(g.cartes) };
+    await App.setDocument(doc);
+  }
+
+  const mapFile = (m) => `cartes/${m.id}.json`;
+  function gameFiles(doc) {
+    const jeu = {
+      format: 'tafl-jeu',
+      version: 1,
+      titre: doc.name,
+      tailleTuiles: doc.tileSize,
+      tuiles: 'tuiles.tafl',
+      cartes: doc.maps.map((m) => ({ id: m.id, nom: m.name, fichier: mapFile(m) })),
+      depart: doc.depart,
+    };
+    return [
+      ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],
+      ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify(mapToJSON(doc, m)))]),
+      // jeu.json en dernier : s'il manque, le jeu ne s'ouvre pas à moitié.
+      ['jeu.json', textBytes(JSON.stringify(jeu, null, 2))],
+    ];
+  }
+  async function saveGame(doc, as) {
+    let folder = doc.game.folder;
+    if (!folder || as) {
+      const picked = await window.tafl.pickGameFolder();
+      if (!picked) return false;
+      if (picked.exists && picked.folder !== doc.game.folder) {
+        const go = await Dialogs.ask('Ce dossier contient déjà un jeu', `${picked.folder} a déjà un jeu.json. L'enregistrer ici remplace ce jeu par celui-ci.`, [
+          { label: 'Annuler', value: false },
+          { label: 'Remplacer', value: true, primary: true },
+        ]);
+        if (!go) return false;
+      }
+      folder = picked.folder;
+      if (folder !== doc.game.folder) doc.game = { folder, fichiers: picked.fichiers || [] };
+    }
+    const files = gameFiles(doc);
+    const kept = new Set(files.map(([f]) => f));
+    const saved = await window.tafl.writeGame(folder, files, doc.game.fichiers.filter((f) => !kept.has(f)));
+    doc.game.fichiers = files.map(([f]) => f).filter((f) => f.startsWith('cartes/'));
+    doc.path = saved.path;
+    doc.dirty = false;
+    App.refresh();
+    notify(`Jeu enregistré : ${doc.maps.length} carte(s) dans ${folder}`, 'success', 3000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
+    return true;
+  }
+  // Fichier › Enregistrer comme dossier de jeu… : un simple jeu de tuiles devient un dossier de jeu.
+  async function saveAsGame(doc) {
+    const before = doc.game;
+    doc.game = { folder: null, fichiers: [] };
+    const ok = await saveGame(doc, true);
+    if (!ok) doc.game = before;
+    return ok;
+  }
+
   async function save(doc, as = false) {
+    if (doc.game) return saveGame(doc, as);
     let path = doc.path;
     if (!path || as) {
       path = await window.tafl.saveDialog({ defaultName: `${safeName(doc.name)}.tafl`, format: 'tafl' });
@@ -250,6 +426,9 @@ const IO = (() => {
     const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s));
     for (const layer of map.layers) {
       if (!layer.visible) continue;
+      // Opacité et mode de fusion du calque : comme dans le jeu.
+      g.globalAlpha = layer.opacite ?? 1;
+      g.globalCompositeOperation = layer.fusion && layer.fusion !== 'normal' ? layer.fusion : 'source-over';
       for (let y = 0; y < map.height; y++) {
         for (let x = 0; x < map.width; x++) {
           const t = layer.cells[y * map.width + x];
@@ -257,6 +436,8 @@ const IO = (() => {
         }
       }
     }
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
     return c;
   }
 
@@ -322,8 +503,10 @@ const IO = (() => {
   }
 
   // Les fichiers de l'export pour Tiled : [[nom, octets], …].
+  // Avec plusieurs cartes, le nom de la carte affichée s'ajoute au nom des fichiers (mon-jeu-route-1.tmj).
+  const mapBase = (doc) => `${safeName(doc.name)}${doc.maps.length > 1 ? `-${doc.map.id}` : ''}`;
   async function mapFiles(doc) {
-    const base = safeName(doc.name);
+    const base = mapBase(doc);
     const s = doc.tileSize, { map } = doc;
     const sheet = sheetCanvas(doc, doc.columns, 1);
     const { cells, anims } = sheetCells(doc, true);
@@ -343,7 +526,7 @@ const IO = (() => {
       nextlayerid: map.layers.length + 1,
       nextobjectid: 1,
       // Dans Tiled, 0 = case vide et la première tuile vaut 1 (d'où le +1).
-      layers: map.layers.map((l, i) => ({ id: i + 1, name: l.name, type: 'tilelayer', x: 0, y: 0, width: map.width, height: map.height, opacity: 1, visible: l.visible, data: [...l.cells].map((c) => c + 1) })),
+      layers: map.layers.map((l, i) => ({ id: i + 1, name: l.name, type: 'tilelayer', x: 0, y: 0, width: map.width, height: map.height, opacity: l.opacite ?? 1, visible: l.visible, parallaxx: l.parallaxe?.x ?? 1, parallaxy: l.parallaxe?.y ?? 1, properties: [{ name: 'profondeur', type: 'string', value: l.profondeur || 'dessous' }, { name: 'fusion', type: 'string', value: l.fusion || 'normal' }], data: [...l.cells].map((c) => c + 1) })),
       tilesets: [{
         firstgid: 1, name: base, image: `${base}-tuiles.png`, imagewidth: sheet.width, imageheight: sheet.height, tilewidth: s, tileheight: s, tilecount: cells.length, columns: cols, margin: 0, spacing: 0,
         // Les tuiles animées : la suite de leurs images dans la planche, avec la durée de chacune (format de Tiled).
@@ -363,7 +546,7 @@ const IO = (() => {
     const folder = await window.tafl.pickFolder('Dossier où exporter la carte');
     if (!folder) return;
     const sep = window.tafl.platform === 'win32' ? '\\' : '/';
-    const base = safeName(doc.name);
+    const base = mapBase(doc);
     for (const [name, bytes] of await mapFiles(doc)) await window.tafl.writeFile(`${folder}${sep}${name}`, bytes);
     notify(`Carte exportée : ${base}.tmj (Tiled), ${base}-tuiles.png et ${base}-carte.png`, 'success', 8000, [{ label: 'Afficher', run: () => window.tafl.revealFile(`${folder}${sep}${base}.tmj`) }]);
   }
@@ -379,11 +562,11 @@ const IO = (() => {
       },
     });
     if (!v) return;
-    const path = await window.tafl.saveDialog({ defaultName: `${safeName(doc.name)}-carte.png`, format: 'png' });
+    const path = await window.tafl.saveDialog({ defaultName: `${mapBase(doc)}-carte.png`, format: 'png' });
     if (!path) return;
     const saved = await window.tafl.writeFile(path, await canvasBytes(mapCanvas(doc, Number(v.scale))));
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { open, openPath, openLoaded, save, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
+  return { open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
 })();

@@ -7,7 +7,9 @@ const App = (() => {
     mode: 'tile',          // 'tile' (dessiner une tuile) ou 'map' (poser les tuiles sur la carte)
     tool: 'pencil',
     colors: { primary: '#38a048', secondary: null }, // null = transparent
-    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true },
+    // layer : le calque où l'on pose les tuiles (-1 = la ligne Passage) ; passage : le code peint (2 = bloqué) ;
+    // showPassage / showObjects : montrer le passage, et les zones / téléporteurs / départ, sur la carte.
+    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, direction: 'bas' },
     frame: 0,              // l'image de l'animation qu'on dessine (0 pour une tuile fixe)
     playing: true,         // les tuiles animées bougent dans l'aperçu, les vignettes et la carte
     config: null,
@@ -22,6 +24,8 @@ const App = (() => {
     $('#stage').hidden = !doc;
     $('#modes').hidden = !doc;
     document.body.classList.toggle('no-doc', !doc);
+    document.body.classList.toggle('mode-map', Boolean(doc) && api.mode === 'map');
+    if (doc) api.options.layer = clamp(api.options.layer, -1, doc.map.layers.length - 1);
     const title = doc ? `${doc.dirty ? '● ' : ''}${doc.name} — Tafl` : 'Tafl';
     if (document.title !== title) document.title = title;
     $('#doc-name').textContent = doc ? `${doc.name}${doc.dirty ? ' ●' : ''}` : '';
@@ -46,7 +50,7 @@ const App = (() => {
   function setMode(mode) {
     if (!api.doc) return;
     api.mode = mode;
-    // Le Décalage n'existe qu'en mode Tuile.
+    // Le Décalage n'existe qu'en mode Tuile, les zones et téléporteurs qu'en mode Carte.
     if (!TOOLS.find((t) => t.id === api.tool).modes.includes(mode)) api.tool = 'pencil';
     refresh();
   }
@@ -58,7 +62,7 @@ const App = (() => {
     box.innerHTML = '';
     for (const t of TOOLS) {
       const ok = t.modes.includes(api.mode);
-      const b = el('button', { className: `tool${api.tool === t.id ? ' active' : ''}`, title: `${t.nom} (${t.key})${ok ? '' : ' : en mode Tuile seulement'}`, disabled: !ok }, [icon(t.icone)]);
+      const b = el('button', { className: `tool${api.tool === t.id ? ' active' : ''}`, title: `${t.nom} (${t.key})${ok ? '' : ` : en mode ${t.modes.includes('map') ? 'Carte' : 'Tuile'} seulement`}`, disabled: !ok }, [icon(t.icone)]);
       b.onclick = () => setTool(t.id);
       box.append(b);
     }
@@ -86,6 +90,7 @@ const App = (() => {
         api.options[key] = input.checked;
         if (key === 'mosaic') Stage.fit();
         if (key === 'pixelGrid' || key === 'tileGrid') window.tafl.writeConfig({ [key]: input.checked }).then((c) => { api.config = c; });
+        if (key === 'showPassage') Panels.renderLayers();
         Stage.render();
       };
       return el('label', { className: 'option option-checkbox', title }, [input, el('span', { textContent: label })]);
@@ -101,22 +106,38 @@ const App = (() => {
       bar.append(check('Mosaïque', 'mosaic', 'Répète la tuile tout autour pour voir et dessiner les raccords (Ctrl+M)'));
       bar.append(check('Grille', 'pixelGrid'));
     } else {
-      if (api.tool === 'rect') bar.append(check('Plein', 'filled'));
-      const select = el('select', { title: 'Le calque sur lequel tu poses les tuiles' });
-      api.doc.map.layers.forEach((l, i) => select.add(new Option(l.name, i)));
-      select.value = api.options.layer;
-      select.onchange = () => { api.options.layer = Number(select.value); Stage.render(); };
-      bar.append(el('label', { className: 'option' }, [el('span', { textContent: 'Calque' }), select]));
-      api.doc.map.layers.forEach((l, i) => {
-        const b = el('button', { className: 'icon-button', title: `${l.visible ? 'Masquer' : 'Afficher'} le calque ${l.name}` }, [icon(l.visible ? 'eye' : 'eye-closed')]);
-        b.onclick = () => { api.doc.map.layers[i].visible = !l.visible; renderOptions(); Stage.render(); };
-        bar.append(el('span', { className: 'option layer-eye' }, [b, el('span', { textContent: l.name })]));
-      });
-      bar.append(check('Atténuer l\'autre calque', 'dimOther'));
+      const map = api.doc.map;
+      if (['pencil', 'eraser', 'fill', 'line', 'rect'].includes(api.tool)) {
+        // Où vont les tuiles : le calque choisi dans le panneau Calques (ou le passage).
+        const target = api.options.layer < 0 ? 'Passage' : map.layers[api.options.layer]?.name;
+        bar.append(el('span', { className: 'option' }, [el('span', { textContent: 'Sur' }), el('strong', { textContent: target })]));
+        if (api.options.layer < 0 && api.tool !== 'eraser') {
+          // Le code de passage peint par le clic gauche (le clic droit remet « auto »).
+          const box = el('span', { className: 'pass-choice' });
+          const choices = [[1, 'Libre', '#3fb950'], [2, 'Bloqué', '#f14c4c'], [3, '↓'], [4, '↑'], [5, '←'], [6, '→']];
+          for (const [code, text, color] of choices) {
+            const b = el('button', { className: `button small${api.options.passage === code ? ' active' : ''}`, title: `${Doc.PASSAGE_NOMS[code]}${code >= 3 ? ' : le joueur saute ce rebord dans ce sens, sans pouvoir remonter' : ''}` }, [color ? el('span', { className: 'pass-dot', style: { background: color } }) : null, text]);
+            b.onclick = () => setPassageValue(code);
+            box.append(b);
+          }
+          bar.append(box);
+        }
+        if (api.tool === 'rect') bar.append(check('Plein', 'filled'));
+      }
+      if (api.tool === 'start') {
+        const select = el('select', { title: 'Où regarde le joueur au début du jeu' });
+        for (const [k, l] of Doc.DIRECTIONS) select.add(new Option(l, k));
+        select.value = api.options.direction;
+        select.onchange = () => { api.options.direction = select.value; if (api.doc.depart) setStart(api.doc.depart.x, api.doc.depart.y, api.doc.depart.carte); };
+        bar.append(el('label', { className: 'option' }, [el('span', { textContent: 'Regarde' }), select]));
+      }
       bar.append(el('span', { className: 'option-sep' }));
+      bar.append(check('Passage', 'showPassage', 'Montre où le joueur peut marcher (rouge = bloqué, flèche = rebord)'));
+      bar.append(check('Zones et téléporteurs', 'showObjects'));
+      bar.append(check('Atténuer les autres calques', 'dimOther'));
       bar.append(check('Grille', 'tileGrid'));
-      const size = el('button', { className: 'button small', textContent: `Carte ${api.doc.map.width} × ${api.doc.map.height}`, title: 'Changer la taille de la carte' });
-      size.onclick = resizeMap;
+      const size = el('button', { className: 'button small', textContent: `${map.name} : ${map.width} × ${map.height}`, title: 'Changer la taille de la carte' });
+      size.onclick = () => resizeMap();
       bar.append(size);
     }
   }
@@ -158,9 +179,9 @@ const App = (() => {
   async function deleteTile() {
     const doc = api.doc;
     const i = doc.current;
-    const used = doc.map.layers.reduce((n, l) => n + l.cells.filter((c) => c === i).length, 0);
+    const used = Doc.tileUses(doc, i);
     if (used) {
-      const go = await Dialogs.ask('Supprimer la tuile', `« ${doc.tiles[i].name} » est posée sur ${used} case(s) de la carte. Ces cases deviendront vides.\n\nCtrl+Z annule la suppression.`, [
+      const go = await Dialogs.ask('Supprimer la tuile', `« ${doc.tiles[i].name} » est posée sur ${used} case(s)${doc.maps.length > 1 ? ' de tes cartes' : ' de la carte'}. Ces cases deviendront vides.\n\nCtrl+Z annule la suppression.`, [
         { label: 'Annuler', value: false },
         { label: 'Supprimer', value: true, primary: true },
       ]);
@@ -211,8 +232,19 @@ const App = (() => {
       { label: 'Supprimer l\'image d\'animation', disabled: !Doc.animated(doc.tiles[doc.current]), run: deleteFrame },
       { label: api.playing ? 'Arrêter l\'animation' : 'Lancer l\'animation', keys: 'P', run: togglePlay },
       null,
+      { label: 'Passage : auto (ne décide rien)', checked: (doc.tiles[doc.current].passage || 'auto') === 'auto', run: () => setTilePassage('auto') },
+      { label: 'Passage : laisse passer le joueur', checked: doc.tiles[doc.current].passage === 'libre', run: () => setTilePassage('libre') },
+      { label: 'Passage : bloque le joueur (arbre, mur, eau…)', checked: doc.tiles[doc.current].passage === 'bloque', run: () => setTilePassage('bloque') },
+      null,
       { label: 'Taille des tuiles du jeu…', run: resizeTiles },
     ];
+  }
+  // Le passage par défaut d'une tuile : partout où elle est posée, la case est libre ou bloquée
+  // (sauf si le passage de la case a été peint à la main).
+  function setTilePassage(value, index = api.doc.current) {
+    const doc = api.doc;
+    if ((doc.tiles[index].passage || 'auto') === value) return;
+    Doc.change(doc, 'Passage de la tuile', () => { doc.tiles[index] = { ...doc.tiles[index], passage: value }; });
   }
 
   // --- Animation ---
@@ -292,11 +324,96 @@ const App = (() => {
     notify(`Tuiles passées de ${old} × ${old} à ${v.size} × ${v.size} pixels.`, 'success', 3500);
   }
 
-  // --- Carte ---
+  // --- Cartes ---
+  function selectMap(i) {
+    const doc = api.doc;
+    if (!doc || i === doc.mapIndex || !doc.maps[i]) return;
+    Doc.selectMap(doc, i);
+    api.options.layer = clamp(api.options.layer, -1, doc.map.layers.length - 1);
+    if (api.mode !== 'map') api.mode = 'map';
+    Stage.reset();
+    refresh();
+  }
+  async function newMap() {
+    const doc = api.doc;
+    const v = await Dialogs.form({
+      title: 'Nouvelle carte',
+      okLabel: 'Créer',
+      fields: [
+        { key: 'name', label: 'Nom', type: 'text', value: `Carte ${doc.maps.length + 1}` },
+        { key: 'width', label: 'Largeur', type: 'number', value: doc.map.width, min: 1, max: 256, unit: 'cases' },
+        { key: 'height', label: 'Hauteur', type: 'number', value: doc.map.height, min: 1, max: 256, unit: 'cases' },
+        { type: 'info', text: 'Une carte par lieu : une ville, une route, l\'intérieur d\'une maison… Elles partagent toutes les tuiles du jeu. Relie-les ensuite avec des téléporteurs (outil T).' },
+      ],
+    });
+    if (!v) return;
+    const name = v.name.trim() || `Carte ${doc.maps.length + 1}`;
+    Doc.change(doc, 'Nouvelle carte', () => Doc.addMap(doc, { name, width: clamp(Math.round(v.width), 1, 256), height: clamp(Math.round(v.height), 1, 256) }));
+    api.mode = 'map';
+    Stage.reset();
+    refresh();
+  }
+  function duplicateMap() {
+    const doc = api.doc;
+    const src = doc.map;
+    Doc.change(doc, 'Dupliquer la carte', () => Doc.addMap(doc, { name: `${src.name} (copie)`, copyOf: src }));
+    Stage.reset();
+  }
+  async function renameMap(i = api.doc.mapIndex) {
+    const doc = api.doc;
+    const m = doc.maps[i];
+    const v = await Dialogs.form({
+      title: 'Renommer la carte',
+      okLabel: 'Renommer',
+      fields: [
+        { key: 'name', label: 'Nom', type: 'text', value: m.name },
+        { type: 'info', text: `Son fichier reste cartes/${m.id}.json : les téléporteurs qui y mènent ne changent pas.` },
+      ],
+    });
+    const name = v?.name.trim();
+    if (!name || name === m.name) return;
+    Doc.change(doc, 'Renommer la carte', () => { doc.maps[i] = { ...m, name }; Doc.selectMap(doc, doc.mapIndex); });
+  }
+  async function deleteMap() {
+    const doc = api.doc;
+    if (doc.maps.length < 2) return notify('C\'est la seule carte du jeu.', 'info', 2500);
+    const m = doc.map;
+    const links = doc.maps.reduce((n, o) => n + o.warps.filter((w) => w.carte === m.id).length, 0);
+    const go = await Dialogs.ask('Supprimer la carte', `Supprimer « ${m.name} » ?${links ? ` ${links} téléporteur(s) y mènent : ils seront retirés.` : ''}${doc.depart?.carte === m.id ? ' Le départ du joueur y était : il faudra le replacer.' : ''}\n\nCtrl+Z annule la suppression.`, [
+      { label: 'Annuler', value: false },
+      { label: 'Supprimer', value: true, primary: true },
+    ]);
+    if (!go) return;
+    Doc.change(doc, 'Supprimer la carte', () => Doc.removeMap(doc, doc.mapIndex));
+    Stage.reset();
+  }
+  function moveMap(delta) {
+    const doc = api.doc;
+    const to = doc.mapIndex + delta;
+    if (to < 0 || to >= doc.maps.length) return;
+    Doc.change(doc, 'Déplacer la carte', () => Doc.moveMap(doc, doc.mapIndex, to));
+  }
+  function mapMenuItems() {
+    const doc = api.doc;
+    return [
+      { label: 'Nouvelle carte…', run: () => run(newMap) },
+      { label: 'Dupliquer la carte', run: duplicateMap },
+      { label: 'Renommer la carte…', run: () => run(() => renameMap()) },
+      { label: 'Taille de la carte…', run: () => run(resizeMap) },
+      { label: 'Monter la carte dans la liste', disabled: doc.mapIndex === 0, run: () => moveMap(-1) },
+      { label: 'Descendre la carte dans la liste', disabled: doc.mapIndex >= doc.maps.length - 1, run: () => moveMap(1) },
+      { label: 'Supprimer la carte', disabled: doc.maps.length < 2, run: () => run(deleteMap) },
+    ];
+  }
+  $('#map-add').onclick = () => { if (api.doc) run(newMap); };
+  $('#map-duplicate').onclick = () => { if (api.doc) duplicateMap(); };
+  $('#map-delete').onclick = () => { if (api.doc) run(deleteMap); };
+  $('#map-more').onclick = (e) => { if (api.doc) Menus.open(mapMenuItems(), e.clientX, e.clientY); };
+
   async function resizeMap() {
     const doc = api.doc;
     const v = await Dialogs.form({
-      title: 'Taille de la carte',
+      title: `Taille de la carte ${doc.map.name}`,
       okLabel: 'Appliquer',
       fields: [
         { type: 'info', text: 'En cases (tuiles). L\'écran d\'une Game Boy Advance montre 15 × 10 tuiles de 16 px. Agrandir ajoute des cases vides à droite et en bas ; réduire coupe à droite et en bas (Ctrl+Z annule).' },
@@ -311,15 +428,240 @@ const App = (() => {
     Doc.change(doc, 'Taille de la carte', () => Doc.resizeMap(doc, clamp(Math.round(v.width), 1, 256), clamp(Math.round(v.height), 1, 256)));
     Stage.fit();
   }
+
+  // --- Calques ---
+  function selectLayer(i) {
+    api.options.layer = clamp(i, -1, api.doc.map.layers.length - 1);
+    // Choisir le passage : on peint au crayon (les zones et téléporteurs n'y ont pas de sens).
+    if (i < 0 && !['pencil', 'eraser', 'fill', 'line', 'rect', 'picker'].includes(api.tool)) api.tool = 'pencil';
+    if (api.mode !== 'map') api.mode = 'map';
+    refresh();
+  }
+  function toggleLayerVisible(i) {
+    const l = api.doc.map.layers[i];
+    // Montrer ou cacher un calque n'est pas une modification du jeu (pas d'annulation), comme avant.
+    api.doc.map.layers[i] = { ...l, visible: !l.visible };
+    Panels.renderLayers();
+    Stage.render();
+  }
+  function toggleOption(key) {
+    api.options[key] = !api.options[key];
+    renderOptions();
+    Panels.renderLayers();
+    Stage.render();
+  }
+  function setPassageValue(code) {
+    api.options.passage = clamp(code, 1, 6);
+    if (api.tool === 'eraser') api.tool = 'pencil';
+    renderToolbar();
+    renderOptions();
+  }
+  function newLayer() {
+    const doc = api.doc;
+    const at = api.options.layer + 1;
+    const below = doc.map.layers[api.options.layer];
+    Doc.change(doc, 'Nouveau calque', () => Doc.addLayer(doc, Math.max(0, at), { name: `Calque ${doc.map.layers.length + 1}`, profondeur: below?.profondeur || 'dessous' }));
+    api.options.layer = Math.max(0, at);
+    refresh();
+  }
+  function duplicateLayer() {
+    const doc = api.doc;
+    const i = api.options.layer;
+    const l = doc.map.layers[i];
+    if (!l) return;
+    Doc.change(doc, 'Dupliquer le calque', () => Doc.addLayer(doc, i + 1, { ...l, name: `${l.name} (copie)`, cells: l.cells.slice(), parallaxe: { ...l.parallaxe } }));
+    api.options.layer = i + 1;
+    refresh();
+  }
+  async function deleteLayer() {
+    const doc = api.doc;
+    const i = api.options.layer;
+    const l = doc.map.layers[i];
+    if (!l || doc.map.layers.length < 2) return;
+    if (l.cells.some((c) => c >= 0)) {
+      const go = await Dialogs.ask('Supprimer le calque', `« ${l.name} » contient des tuiles. Le supprimer ?\n\nCtrl+Z annule la suppression.`, [
+        { label: 'Annuler', value: false },
+        { label: 'Supprimer', value: true, primary: true },
+      ]);
+      if (!go) return;
+    }
+    Doc.change(doc, 'Supprimer le calque', () => Doc.removeLayer(doc, i));
+    api.options.layer = clamp(i - 1, 0, doc.map.layers.length - 1);
+    refresh();
+  }
+  function moveLayer(delta) {
+    const doc = api.doc;
+    const i = api.options.layer, to = i + delta;
+    if (i < 0 || to < 0 || to >= doc.map.layers.length) return;
+    Doc.change(doc, delta > 0 ? 'Monter le calque' : 'Descendre le calque', () => Doc.moveLayer(doc, i, to));
+    api.options.layer = to;
+    refresh();
+  }
+  // Réglages d'un calque, avec aperçu en direct sur la carte (Annuler remet tout comme avant).
+  async function layerProperties(i = api.options.layer) {
+    const doc = api.doc;
+    const map = doc.map;
+    const orig = map.layers[i];
+    if (!orig) return;
+    const fromValues = (v) => ({
+      name: String(v.name || '').trim() || orig.name,
+      profondeur: v.profondeur,
+      opacite: clamp(Number(v.opacite) / 100, 0, 1),
+      fusion: v.fusion,
+      parallaxe: { x: Number(v.px) || 0, y: Number(v.py) || 0 },
+    });
+    const v = await Dialogs.form({
+      title: `Calque ${orig.name}`,
+      okLabel: 'Appliquer',
+      width: 500,
+      fields: [
+        { key: 'name', label: 'Nom', type: 'text', value: orig.name },
+        { key: 'profondeur', label: 'Profondeur', type: 'select', value: orig.profondeur, choices: Doc.PROFONDEURS },
+        { key: 'opacite', label: 'Opacité', type: 'range', value: Math.round((orig.opacite ?? 1) * 100), min: 0, max: 100, unit: '%' },
+        { key: 'fusion', label: 'Mode de fusion', type: 'select', value: orig.fusion || 'normal', choices: Doc.FUSIONS },
+        { key: 'px', label: 'Parallaxe horizontale', type: 'number', value: orig.parallaxe?.x ?? 1, min: -4, max: 4, step: 0.05 },
+        { key: 'py', label: 'Parallaxe verticale', type: 'number', value: orig.parallaxe?.y ?? 1, min: -4, max: 4, step: 0.05 },
+        { type: 'info', text: 'Profondeur : un calque « au-dessus du joueur » passe devant lui (toits, cimes des arbres) et ne bloque jamais le passage. Fusion : « Produit » pour des ombres, « Superposition claire » ou « Addition » pour des lumières. Parallaxe : 1 = défile avec la carte, 0,5 = deux fois plus lentement (un fond lointain), 0 = immobile à l\'écran. Le moteur du jeu applique la parallaxe ; Tafl la garde dans le fichier.' },
+      ],
+      onInput(values) {
+        map.layers[i] = { ...orig, ...fromValues(values) };
+        Stage.render();
+      },
+    });
+    map.layers[i] = orig;
+    if (!v) { Stage.render(); return; }
+    const props = fromValues(v);
+    Doc.change(doc, 'Réglages du calque', () => Doc.setLayer(doc, i, props));
+  }
   function clearLayer() {
     const doc = api.doc;
     const li = api.options.layer;
+    if (li < 0) return Doc.change(doc, 'Vider le passage peint', () => Doc.passageForEdit(doc).fill(0));
     Doc.change(doc, `Vider le calque ${doc.map.layers[li].name}`, () => Doc.layerForEdit(doc, li).cells.fill(-1));
   }
   function fillLayer() {
     const doc = api.doc;
     const li = api.options.layer;
+    if (li < 0) return Doc.change(doc, 'Remplir le passage', () => Doc.passageForEdit(doc).fill(api.options.passage));
     Doc.change(doc, `Remplir le calque ${doc.map.layers[li].name}`, () => Doc.layerForEdit(doc, li).cells.fill(doc.current));
+  }
+  function layerMenuItems() {
+    const doc = api.doc;
+    const li = api.options.layer;
+    return [
+      { label: 'Nouveau calque', run: newLayer },
+      { label: 'Dupliquer le calque', disabled: li < 0, run: duplicateLayer },
+      { label: 'Réglages du calque…', disabled: li < 0, run: () => run(() => layerProperties()) },
+      { label: 'Monter le calque', disabled: li < 0 || li >= doc.map.layers.length - 1, run: () => moveLayer(1) },
+      { label: 'Descendre le calque', disabled: li <= 0, run: () => moveLayer(-1) },
+      { label: li < 0 ? 'Remplir le passage avec la valeur choisie' : 'Remplir le calque avec la tuile choisie', run: fillLayer },
+      { label: li < 0 ? 'Vider le passage peint' : 'Vider le calque', run: clearLayer },
+      { label: 'Supprimer le calque', disabled: li < 0 || doc.map.layers.length < 2, run: () => run(deleteLayer) },
+    ];
+  }
+  $('#layer-add').onclick = () => { if (api.doc) newLayer(); };
+  $('#layer-up').onclick = () => { if (api.doc) moveLayer(1); };
+  $('#layer-down').onclick = () => { if (api.doc) moveLayer(-1); };
+  $('#layer-props').onclick = () => { if (api.doc) run(() => layerProperties()); };
+  $('#layer-delete').onclick = () => { if (api.doc) run(deleteLayer); };
+
+  // --- Zones (herbes hautes, eau, grotte…) ---
+  const nextObjectId = (prefix, list) => {
+    let n = list.length + 1;
+    while (list.some((o) => o.id === `${prefix}-${n}`)) n++;
+    return `${prefix}-${n}`;
+  };
+  function zoneFields(z, map) {
+    return [
+      { key: 'name', label: 'Nom', type: 'text', value: z.name, placeholder: 'Herbes de la route 1' },
+      { key: 'type', label: 'Type', type: 'select', value: z.type, choices: Doc.ZONES },
+      { key: 'objet', label: 'Objet requis', type: 'text', value: z.objet || '', placeholder: 'aucun' },
+      { key: 'x', label: 'Colonne (x)', type: 'number', value: z.x, min: 0, max: map.width - 1 },
+      { key: 'y', label: 'Rangée (y)', type: 'number', value: z.y, min: 0, max: map.height - 1 },
+      { key: 'w', label: 'Largeur', type: 'number', value: z.w, min: 1, max: map.width, unit: 'cases' },
+      { key: 'h', label: 'Hauteur', type: 'number', value: z.h, min: 1, max: map.height, unit: 'cases' },
+      { type: 'info', text: 'Herbes hautes : des créatures sauvages peuvent surgir (les tables de rencontres arrivent avec Tafl 0.8). Eau : on y navigue. Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
+    ];
+  }
+  const zoneFrom = (v, map, base) => {
+    const x = clamp(Math.round(v.x), 0, map.width - 1), y = clamp(Math.round(v.y), 0, map.height - 1);
+    return { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y) };
+  };
+  async function createZone(rect) {
+    const doc = api.doc, map = doc.map;
+    const v = await Dialogs.form({ title: 'Nouvelle zone', okLabel: 'Créer', width: 470, fields: zoneFields({ name: '', type: 'herbes', objet: '', ...rect }, map) });
+    if (!v) return;
+    Doc.change(doc, 'Nouvelle zone', () => { map.zones = [...map.zones, zoneFrom(v, map, { id: nextObjectId('zone', map.zones) })]; });
+  }
+  async function editZone(id) {
+    const doc = api.doc, map = doc.map;
+    const z = map.zones.find((o) => o.id === id);
+    if (!z) return;
+    const v = await Dialogs.form({ title: `Zone ${z.name || z.id}`, okLabel: 'Enregistrer', width: 470, fields: zoneFields(z, map), buttons: [{ label: 'Supprimer', run: () => Dialogs.close('supprimer') }] });
+    if (!v) return;
+    if (v === 'supprimer') return Doc.change(doc, 'Supprimer la zone', () => { map.zones = map.zones.filter((o) => o.id !== id); });
+    Doc.change(doc, 'Modifier la zone', () => { map.zones = map.zones.map((o) => (o.id === id ? zoneFrom(v, map, o) : o)); });
+  }
+
+  // --- Téléporteurs (portes, escaliers, sorties de route) ---
+  async function editWarpAt(x, y) {
+    const doc = api.doc, map = doc.map;
+    const w = map.warps.find((o) => o.x === x && o.y === y);
+    const target = (w && Doc.mapById(doc, w.carte)) || doc.maps.find((m) => m !== map) || map;
+    const v = await Dialogs.form({
+      title: w ? `Téléporteur (${x}, ${y})` : `Nouveau téléporteur en (${x}, ${y})`,
+      okLabel: w ? 'Enregistrer' : 'Créer',
+      width: 470,
+      fields: [
+        { key: 'carte', label: 'Mène à la carte', type: 'select', value: target.id, choices: doc.maps.map((m) => [m.id, m.name]) },
+        { key: 'tx', label: 'Arrivée : colonne (x)', type: 'number', value: w ? w.tx : x, min: 0, max: 255 },
+        { key: 'ty', label: 'Arrivée : rangée (y)', type: 'number', value: w ? w.ty : y, min: 0, max: 255 },
+        { key: 'direction', label: 'Le joueur regarde', type: 'select', value: w ? w.direction : 'bas', choices: Doc.DIRECTIONS },
+        { key: 'retour', label: 'Créer aussi le téléporteur du retour, juste à côté de l\'arrivée', type: 'checkbox', value: false, hidden: Boolean(w) },
+        { type: 'info', text: 'Quand le joueur marche sur cette case, il arrive sur la case choisie de l\'autre carte. Pour une porte : mets l\'arrivée sur le paillasson à l\'intérieur, et le téléporteur du retour juste en dessous.' },
+      ],
+      buttons: w ? [{ label: 'Supprimer', run: () => Dialogs.close('supprimer') }] : [],
+      onInput(values, f) {
+        const m = Doc.mapById(doc, values.carte);
+        f.card.querySelector('.modal-extra').textContent = m ? `${m.name} : ${m.width} × ${m.height} cases` : '';
+      },
+    });
+    if (!v) return;
+    if (v === 'supprimer') return Doc.change(doc, 'Supprimer le téléporteur', () => { map.warps = map.warps.filter((o) => o !== w); });
+    const dest = Doc.mapById(doc, v.carte);
+    const tx = clamp(Math.round(v.tx), 0, dest.width - 1), ty = clamp(Math.round(v.ty), 0, dest.height - 1);
+    const warp = { id: w?.id || nextObjectId('tp', map.warps), x, y, carte: dest.id, tx, ty, direction: v.direction };
+    Doc.change(doc, w ? 'Modifier le téléporteur' : 'Nouveau téléporteur', () => {
+      map.warps = w ? map.warps.map((o) => (o === w ? warp : o)) : [...map.warps, warp];
+      // Le retour : sur la carte d'arrivée, la case à côté de l'arrivée (dans le sens où regarde le
+      // joueur, à l'envers) ramène devant ce téléporteur-ci.
+      if (v.retour && !w) {
+        const [dx, dy] = { bas: [0, 1], haut: [0, -1], gauche: [-1, 0], droite: [1, 0] }[v.direction];
+        const rx = clamp(tx - dx, 0, dest.width - 1), ry = clamp(ty - dy, 0, dest.height - 1);
+        const back = { bas: 'haut', haut: 'bas', gauche: 'droite', droite: 'gauche' }[v.direction];
+        const [bx, by] = { bas: [0, 1], haut: [0, -1], gauche: [-1, 0], droite: [1, 0] }[back];
+        const home = Doc.mapById(doc, map.id);
+        if (!(rx === tx && ry === ty) && !dest.warps.some((o) => o.x === rx && o.y === ry)) {
+          dest.warps = [...dest.warps, { id: nextObjectId('tp', dest.warps), x: rx, y: ry, carte: map.id, tx: clamp(x + bx, 0, home.width - 1), ty: clamp(y + by, 0, home.height - 1), direction: back }];
+        }
+      }
+    });
+  }
+
+  // --- Départ du joueur ---
+  function setStart(x, y, carte = api.doc.map.id) {
+    const doc = api.doc;
+    const depart = { carte, x, y, direction: api.options.direction };
+    if (doc.depart && doc.depart.carte === carte && doc.depart.x === x && doc.depart.y === y && doc.depart.direction === depart.direction) return;
+    Doc.change(doc, 'Départ du joueur', () => { doc.depart = depart; });
+    setStatusHint(`Départ du joueur : ${Doc.mapById(doc, carte)?.name}, case ${x}, ${y}`);
+  }
+  function goToStart() {
+    const doc = api.doc;
+    const i = doc.depart ? doc.maps.findIndex((m) => m.id === doc.depart.carte) : -1;
+    if (i < 0) return notify('Pas encore de départ : choisis l\'outil Départ du joueur (J) et clique sur une case.', 'info', 4000);
+    if (api.mode !== 'map') setMode('map');
+    selectMap(i);
   }
 
   // --- Historique ---
@@ -340,7 +682,7 @@ const App = (() => {
   async function confirmDiscard() {
     const doc = api.doc;
     if (!doc?.dirty) return true;
-    const choice = await Dialogs.ask('Jeu de tuiles non enregistré', `« ${doc.name} » a des modifications qui ne sont pas enregistrées.`, [
+    const choice = await Dialogs.ask(doc.game ? 'Jeu non enregistré' : 'Jeu de tuiles non enregistré', `« ${doc.name} » a des modifications qui ne sont pas enregistrées.`, [
       { label: 'Annuler', value: 'cancel' },
       { label: 'Ne pas enregistrer', value: 'discard' },
       { label: 'Enregistrer', value: 'save', primary: true },
@@ -353,6 +695,8 @@ const App = (() => {
     api.doc = doc;
     api.options.layer = 0;
     api.frame = 0;
+    // Un dossier de jeu s'ouvre sur ses cartes ; un jeu de tuiles, sur la tuile.
+    if (doc.game) api.mode = 'map';
     if (!doc.tiles.length) Doc.addTile(doc);
     doc.current = clamp(doc.current, 0, doc.tiles.length - 1);
     // Couleur principale : la première de la palette qui n'est ni noire ni blanche, si possible.
@@ -363,29 +707,41 @@ const App = (() => {
     refresh();
   }
 
-  async function newDocument() {
+  // game : true pour un dossier de jeu (plusieurs cartes, lu par le moteur), false pour un simple .tafl.
+  async function newDocument(game = false) {
     if (!(await confirmDiscard())) return;
     const v = await Dialogs.form({
-      title: 'Nouveau jeu de tuiles',
+      title: game ? 'Nouveau jeu' : 'Nouveau jeu de tuiles',
       okLabel: 'Créer',
       width: 470,
       fields: [
-        { key: 'name', label: 'Nom', type: 'text', value: 'mon-jeu' },
+        { key: 'name', label: game ? 'Titre du jeu' : 'Nom', type: 'text', value: game ? 'Mon jeu' : 'mon-jeu' },
         { key: 'tileSize', label: 'Taille des tuiles', type: 'select', value: String(api.config.tileSize), choices: [['8', '8 × 8 (Game Boy)'], ['16', '16 × 16 (Pokémon GBA et DS, le plus courant)'], ['24', '24 × 24'], ['32', '32 × 32 (RPG Maker)'], ['48', '48 × 48'], ['64', '64 × 64']] },
         { key: 'palette', label: 'Palette', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]) },
+        { key: 'mapName', label: 'Première carte', type: 'text', value: game ? 'Bourg' : 'Carte 1', hidden: !game },
         { key: 'mapWidth', label: 'Carte : largeur', type: 'number', value: 20, min: 1, max: 256, unit: 'cases' },
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec des tuiles d\'exemple (herbe, hautes herbes, chemin, eau, fleur) et une petite carte', type: 'checkbox', value: true },
+        ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
     if (!v) return;
     const tileSize = Number(v.tileSize);
-    const doc = Doc.create({ name: v.name.trim() || 'mon-jeu', tileSize, palette: paletteById(v.palette).couleurs, mapWidth: clamp(Math.round(v.mapWidth), 1, 256), mapHeight: clamp(Math.round(v.mapHeight), 1, 256) });
+    const doc = Doc.create({ name: v.name.trim() || (game ? 'Mon jeu' : 'mon-jeu'), tileSize, palette: paletteById(v.palette).couleurs, mapWidth: clamp(Math.round(v.mapWidth), 1, 256), mapHeight: clamp(Math.round(v.mapHeight), 1, 256), mapName: (game && v.mapName.trim()) || 'Carte 1' });
     if (v.samples) Samples.fill(doc);
+    if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut
     await setDocument(doc);
     // On retient la taille et la palette choisies pour la prochaine fois.
     api.config = await window.tafl.writeConfig({ tileSize, palette: v.palette });
+  }
+
+  async function renameGame() {
+    const doc = api.doc;
+    const v = await Dialogs.form({ title: 'Titre du jeu', okLabel: 'Renommer', fields: [{ key: 'name', label: 'Titre', type: 'text', value: doc.name }] });
+    const name = v?.name.trim();
+    if (!name || name === doc.name) return;
+    Doc.change(doc, 'Titre du jeu', () => { doc.name = name; });
   }
 
   async function run(fn) {
@@ -400,12 +756,14 @@ const App = (() => {
   // --- Menus de la barre de titre ---
   const MENUS = {
     Fichier: () => [
-      { label: 'Nouveau jeu de tuiles…', keys: 'Ctrl+N', run: () => run(newDocument) },
+      { label: 'Nouveau jeu…', keys: 'Ctrl+Maj+J', run: () => run(() => newDocument(true)) },
+      { label: 'Nouveau jeu de tuiles…', keys: 'Ctrl+N', run: () => run(() => newDocument(false)) },
       { label: 'Ouvrir…', keys: 'Ctrl+O', run: () => run(() => IO.open()) },
       { label: 'Importer une planche (PNG)…', keys: 'Ctrl+I', run: () => run(IO.importDialog) },
       null,
       { label: 'Enregistrer', keys: 'Ctrl+S', disabled: !api.doc, run: needDoc((d) => IO.save(d)) },
-      { label: 'Enregistrer sous…', keys: 'Ctrl+Maj+S', disabled: !api.doc, run: needDoc((d) => IO.save(d, true)) },
+      { label: api.doc?.game ? 'Enregistrer le jeu dans un autre dossier…' : 'Enregistrer sous…', keys: 'Ctrl+Maj+S', disabled: !api.doc, run: needDoc((d) => IO.save(d, true)) },
+      { label: 'Enregistrer comme dossier de jeu…', disabled: !api.doc || Boolean(api.doc.game), run: needDoc(IO.saveAsGame) },
       null,
       { label: 'Exporter la planche de tuiles (PNG)…', keys: 'Ctrl+E', disabled: !api.doc, run: needDoc(IO.exportSheet) },
       { label: 'Exporter les tuiles séparées…', disabled: !api.doc, run: needDoc(IO.exportTiles) },
@@ -416,13 +774,23 @@ const App = (() => {
     ],
     Tuile: () => (api.doc ? tileMenuItems() : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
     Carte: () => (api.doc ? [
-      { label: 'Taille de la carte…', run: resizeMap },
-      { label: 'Remplir le calque avec la tuile choisie', run: fillLayer },
-      { label: 'Vider le calque', run: clearLayer },
+      ...mapMenuItems(),
+      null,
+      ...layerMenuItems(),
+      null,
+      { label: 'Montrer le passage', checked: api.options.showPassage, run: () => toggleOption('showPassage') },
+      { label: 'Montrer les zones et téléporteurs', checked: api.options.showObjects, run: () => toggleOption('showObjects') },
       null,
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', run: needDoc(IO.exportMapImage) },
     ] : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
+    Jeu: () => (api.doc ? [
+      { label: 'Titre du jeu…', run: () => run(renameGame) },
+      { label: 'Aller au départ du joueur', run: goToStart },
+      { label: 'Afficher le dossier du jeu', disabled: !api.doc.game?.folder, run: () => window.tafl.revealFile(api.doc.path) },
+      null,
+      { label: 'Enregistrer comme dossier de jeu…', disabled: Boolean(api.doc.game), run: needDoc(IO.saveAsGame) },
+    ] : [{ label: 'Ouvre ou crée d\'abord un jeu', disabled: true, run() {} }]),
     Affichage: () => [
       { label: 'Mode Tuile', keys: 'Tab', checked: api.mode === 'tile', disabled: !api.doc, run: () => setMode('tile') },
       { label: 'Mode Carte', keys: 'Tab', checked: api.mode === 'map', disabled: !api.doc, run: () => setMode('map') },
@@ -458,7 +826,8 @@ const App = (() => {
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
   $('#btn-export').onclick = needDoc(IO.exportSheet);
   $('#btn-settings').onclick = () => run(openSettings);
-  $('#welcome-new').onclick = () => run(newDocument);
+  $('#welcome-new').onclick = () => run(() => newDocument(false));
+  $('#welcome-game').onclick = () => run(() => newDocument(true));
   $('#welcome-open').onclick = () => run(() => IO.open());
   $('#welcome-import').onclick = () => run(IO.importDialog);
   $('#tile-add').onclick = needDoc(newTile);
@@ -472,8 +841,11 @@ const App = (() => {
     list.innerHTML = '';
     $('#welcome-recents-title').hidden = !recents.length;
     for (const f of recents.slice(0, 8)) {
-      const name = f.split(/[\\/]/).pop();
-      const b = el('button', { className: 'recent', title: f }, [icon('symbol-color'), el('span', { className: 'recent-name', textContent: name }), el('span', { className: 'recent-path', textContent: f })]);
+      const parts = f.split(/[\\/]/);
+      const game = /^jeu\.json$/i.test(parts[parts.length - 1]);
+      // Un dossier de jeu se montre par le nom de son dossier.
+      const name = game ? parts[parts.length - 2] || 'jeu' : parts.pop();
+      const b = el('button', { className: 'recent', title: f }, [icon(game ? 'game' : 'symbol-color'), el('span', { className: 'recent-name', textContent: name }), el('span', { className: 'recent-path', textContent: f })]);
       b.onclick = () => run(() => IO.openPath(f));
       list.append(b);
     }
@@ -489,15 +861,29 @@ const App = (() => {
   function updateStatus(hover) {
     const doc = api.doc;
     const t = TOOLS.find((x) => x.id === api.tool);
-    if (Date.now() >= hintUntil) $('#status-hint').textContent = !doc ? '' : api.mode === 'map' ? (t.aideCarte || t.aide) : t.aide;
+    const passageHelp = api.mode === 'map' && api.options.layer < 0 && ['pencil', 'eraser', 'fill', 'line', 'rect'].includes(api.tool)
+      ? 'Passage : clic gauche peint la valeur choisie (barre du haut), clic droit remet « auto » (la case suit alors ses tuiles). Alt+clic : reprend la valeur d\'une case.'
+      : null;
+    if (Date.now() >= hintUntil) $('#status-hint').textContent = !doc ? '' : api.mode === 'map' ? (passageHelp || t.aideCarte || t.aide) : t.aide;
     let pos = '';
     if (doc && hover) {
       if (api.mode === 'tile') {
         const s = doc.tileSize;
         pos = `x ${((hover.x % s) + s) % s}  y ${((hover.y % s) + s) % s}`;
       } else if (hover.x >= 0 && hover.y >= 0 && hover.x < doc.map.width && hover.y < doc.map.height) {
-        const c = doc.map.layers[api.options.layer].cells[hover.y * doc.map.width + hover.x];
-        pos = `case ${hover.x}, ${hover.y}  ·  ${c >= 0 ? `${c}. ${doc.tiles[c]?.name}` : 'vide'}`;
+        const { map } = doc;
+        const i = hover.y * map.width + hover.x;
+        const bits = [`case ${hover.x}, ${hover.y}`];
+        if (api.options.layer < 0) bits.push(`passage : ${Doc.PASSAGE_NOMS[Doc.collisions(doc, map)[i]]}${map.passage[i] ? ' (peint)' : ''}`);
+        else {
+          const c = map.layers[api.options.layer].cells[i];
+          bits.push(c >= 0 ? `${c}. ${doc.tiles[c]?.name}` : 'vide');
+        }
+        const z = Stage.zoneAt(map, hover.x, hover.y);
+        if (z) bits.push(`zone ${z.name || z.type}`);
+        const w = map.warps.find((o) => o.x === hover.x && o.y === hover.y);
+        if (w) bits.push(`→ ${Doc.mapById(doc, w.carte)?.name || w.carte} (${w.tx}, ${w.ty})`);
+        pos = bits.join('  ·  ');
       }
     }
     $('#status-pos').textContent = pos;
@@ -517,7 +903,8 @@ const App = (() => {
     const go = (fn) => { e.preventDefault(); fn(); };
     if (ctrl) {
       if (k === 'n' && e.shiftKey) return go(needDoc(newTile));
-      if (k === 'n') return go(() => run(newDocument));
+      if (k === 'n') return go(() => run(() => newDocument(false)));
+      if (k === 'j' && e.shiftKey) return go(() => run(() => newDocument(true)));
       if (k === 'o') return go(() => run(() => IO.open()));
       if (k === 'i') return go(() => run(IO.importDialog));
       if (k === 's') return go(needDoc((d) => IO.save(d, e.shiftKey)));
@@ -655,12 +1042,19 @@ const App = (() => {
     const file = await window.tafl.startupFile();
     if (file) await run(() => IO.openPath(file));
     startFolder = await window.tafl.startupFolder();
-    if (startFolder && !file) await run(() => IO.open(startFolder));
+    if (startFolder && !file) await run(() => openFolder(startFolder));
+  }
+  // Un projet ouvert depuis Atelier : si c'est un dossier de jeu, il s'ouvre directement ; sinon la
+  // fenêtre « Ouvrir » démarre dans ce dossier.
+  async function openFolder(folder) {
+    const game = await window.tafl.findGame(folder);
+    if (game) return IO.openGame(game);
+    return IO.open(folder);
   }
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
-  window.tafl.onExternalFolder((folder) => run(() => IO.open(folder)));
+  window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart });
   return api;
 })();
 

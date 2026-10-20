@@ -12,6 +12,12 @@ contextBridge.exposeInMainWorld('tafl', {
   pickFolder: (title) => ipcRenderer.invoke('folder:pick', title),
   writeFile: (file, bytes) => ipcRenderer.invoke('file:write', file, bytes),
   revealFile: (file) => ipcRenderer.invoke('file:reveal', file),
+  // Dossier de jeu (jeu.json, tuiles.tafl, cartes/*.json : voir FORMAT.md)
+  pickGameFolder: () => ipcRenderer.invoke('game:pick'),
+  openGame: (target) => ipcRenderer.invoke('game:open', target),
+  findGame: (folder) => ipcRenderer.invoke('game:find', folder),
+  registerGame: (file) => ipcRenderer.invoke('game:register', file),
+  writeGame: (folder, files, remove) => ipcRenderer.invoke('game:write', folder, files, remove),
   // Chemin d'un fichier glissé depuis l'Explorateur Windows sur la fenêtre.
   pathOfDropped: (file) => webUtils.getPathForFile(file),
   startupFile: () => ipcRenderer.invoke('file:startup'),
