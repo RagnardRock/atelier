@@ -9,7 +9,7 @@ const App = (() => {
     colors: { primary: '#38a048', secondary: null }, // null = transparent
     // layer : le calque où l'on pose les tuiles (-1 = la ligne Passage) ; passage : le code peint (2 = bloqué) ;
     // showPassage / showObjects : montrer le passage, et les zones / téléporteurs / départ, sur la carte.
-    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, direction: 'bas' },
+    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, showAmbiance: true, direction: 'bas' },
     frame: 0,              // l'image de l'animation qu'on dessine (0 pour une tuile fixe)
     playing: true,         // les tuiles animées bougent dans l'aperçu, les vignettes et la carte
     config: null,
@@ -134,6 +134,7 @@ const App = (() => {
       bar.append(el('span', { className: 'option-sep' }));
       bar.append(check('Passage', 'showPassage', 'Montre où le joueur peut marcher (rouge = bloqué, flèche = rebord)'));
       bar.append(check('Zones, téléporteurs et événements', 'showObjects'));
+      bar.append(check('Ambiance', 'showAmbiance'));
       bar.append(check('Atténuer les autres calques', 'dimOther'));
       bar.append(check('Grille', 'tileGrid'));
       const size = el('button', { className: 'button small', textContent: `${map.name} : ${map.width} × ${map.height}`, title: 'Changer la taille de la carte' });
@@ -291,7 +292,9 @@ const App = (() => {
   function animate(now) {
     requestAnimationFrame(animate);
     if (!api.playing || !api.doc || now - lastTick < 33 || document.hidden) return;
-    if (!api.doc.tiles.some(Doc.animated)) return;
+    // La météo de la carte bouge aussi (Tafl 0.8).
+    const meteo = api.mode === 'map' && api.options.showAmbiance && api.doc.map?.ambiance?.meteo !== 'aucune';
+    if (!meteo && !api.doc.tiles.some(Doc.animated)) return;
     lastTick = now;
     Panels.tick();
     if (api.mode === 'map') Stage.render();
@@ -374,6 +377,29 @@ const App = (() => {
     if (!name || name === m.name) return;
     Doc.change(doc, 'Renommer la carte', () => { doc.maps[i] = { ...m, name }; Doc.selectMap(doc, doc.mapIndex); });
   }
+  // Tafl 0.8 : la météo et la teinte de la carte (le moteur les jouera ; Tafl en montre un aperçu).
+  async function mapAmbiance(i = api.doc.mapIndex) {
+    const doc = api.doc;
+    const m = doc.maps[i];
+    const a = m.ambiance || Donnees.ambianceVide();
+    const v = await Dialogs.form({
+      title: `Ambiance de ${m.name}`,
+      okLabel: 'Appliquer',
+      width: 480,
+      fields: [
+        { key: 'meteo', label: 'Météo', type: 'select', value: a.meteo, choices: Donnees.METEOS },
+        { key: 'intensite', label: 'Intensité', type: 'range', value: a.intensite, min: 0, max: 100, unit: '%' },
+        { key: 'avecTeinte', label: 'Teinter la carte', type: 'checkbox', value: Boolean(a.teinte) },
+        { key: 'teinte', label: 'Teinte', type: 'color', value: a.teinte || '#5a6b8c' },
+        { key: 'force', label: 'Force de la teinte', type: 'range', value: a.force, min: 0, max: 100, unit: '%' },
+        { type: 'info', text: 'Une teinte bleu sombre et de la pluie pour un village sous l\'orage, orangée pour un coucher de soleil, verte pour une forêt profonde. Elle est appliquée en « produit » par-dessus les calques, comme une couche de lumière.' },
+      ],
+      onInput: (values, f) => { f.inputs.teinte.row.hidden = !values.avecTeinte; f.inputs.force.row.hidden = !values.avecTeinte; f.inputs.intensite.row.hidden = values.meteo === 'aucune'; },
+    });
+    if (!v) return;
+    const ambiance = Donnees.normAmbiance({ meteo: v.meteo, intensite: v.intensite, teinte: v.avecTeinte ? v.teinte : '', force: v.force });
+    Doc.change(doc, 'Ambiance de la carte', () => { doc.maps[i] = { ...m, ambiance }; Doc.selectMap(doc, doc.mapIndex); });
+  }
   async function deleteMap() {
     const doc = api.doc;
     if (doc.maps.length < 2) return notify('C\'est la seule carte du jeu.', 'info', 2500);
@@ -400,6 +426,7 @@ const App = (() => {
       { label: 'Dupliquer la carte', run: duplicateMap },
       { label: 'Renommer la carte…', run: () => run(() => renameMap()) },
       { label: 'Taille de la carte…', run: () => run(resizeMap) },
+      { label: 'Ambiance (météo, teinte)…', run: () => run(() => mapAmbiance()) },
       { label: 'Monter la carte dans la liste', disabled: doc.mapIndex === 0, run: () => moveMap(-1) },
       { label: 'Descendre la carte dans la liste', disabled: doc.mapIndex >= doc.maps.length - 1, run: () => moveMap(1) },
       { label: 'Supprimer la carte', disabled: doc.maps.length < 2, run: () => run(deleteMap) },
@@ -571,7 +598,7 @@ const App = (() => {
     while (list.some((o) => o.id === `${prefix}-${n}`)) n++;
     return `${prefix}-${n}`;
   };
-  function zoneFields(z, map) {
+  function zoneFields(z, map, rencontres) {
     return [
       { key: 'name', label: 'Nom', type: 'text', value: z.name, placeholder: 'Herbes de la route 1' },
       { key: 'type', label: 'Type', type: 'select', value: z.type, choices: Doc.ZONES },
@@ -580,27 +607,31 @@ const App = (() => {
       { key: 'y', label: 'Rangée (y)', type: 'number', value: z.y, min: 0, max: map.height - 1 },
       { key: 'w', label: 'Largeur', type: 'number', value: z.w, min: 1, max: map.width, unit: 'cases' },
       { key: 'h', label: 'Hauteur', type: 'number', value: z.h, min: 1, max: map.height, unit: 'cases' },
-      { type: 'info', text: 'Herbes hautes : des créatures sauvages peuvent surgir (les tables de rencontres arrivent avec Tafl 0.8). Eau : on y navigue. Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
+      { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
+      { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
+      { key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' },
     ];
   }
-  const zoneFrom = (v, map, base) => {
+  const zoneFrom = (v, map, base, rencontres) => {
     const x = clamp(Math.round(v.x), 0, map.width - 1), y = clamp(Math.round(v.y), 0, map.height - 1);
-    return { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y) };
+    return { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y), taux: clamp(Math.round(v.taux ?? 10), 0, 100), rencontres: Donnees.normRencontres(rencontres) };
   };
   async function createZone(rect) {
     const doc = api.doc, map = doc.map;
-    const v = await Dialogs.form({ title: 'Nouvelle zone', okLabel: 'Créer', width: 470, fields: zoneFields({ name: '', type: 'herbes', objet: '', ...rect }, map) });
+    const rencontres = [];
+    const v = await Dialogs.form({ title: 'Nouvelle zone', okLabel: 'Créer', width: 620, fields: zoneFields({ name: '', type: 'herbes', objet: '', ...rect }, map, rencontres) });
     if (!v) return;
-    Doc.change(doc, 'Nouvelle zone', () => { map.zones = [...map.zones, zoneFrom(v, map, { id: nextObjectId('zone', map.zones) })]; });
+    Doc.change(doc, 'Nouvelle zone', () => { map.zones = [...map.zones, zoneFrom(v, map, { id: nextObjectId('zone', map.zones) }, rencontres)]; });
   }
   async function editZone(id) {
     const doc = api.doc, map = doc.map;
     const z = map.zones.find((o) => o.id === id);
     if (!z) return;
-    const v = await Dialogs.form({ title: `Zone ${z.name || z.id}`, okLabel: 'Enregistrer', width: 470, fields: zoneFields(z, map), buttons: [{ label: 'Supprimer', run: () => Dialogs.close('supprimer') }] });
+    const rencontres = structuredClone(z.rencontres || []);
+    const v = await Dialogs.form({ title: `Zone ${z.name || z.id}`, okLabel: 'Enregistrer', width: 620, fields: zoneFields(z, map, rencontres), buttons: [{ label: 'Supprimer', run: () => Dialogs.close('supprimer') }] });
     if (!v) return;
     if (v === 'supprimer') return Doc.change(doc, 'Supprimer la zone', () => { map.zones = map.zones.filter((o) => o.id !== id); });
-    Doc.change(doc, 'Modifier la zone', () => { map.zones = map.zones.map((o) => (o.id === id ? zoneFrom(v, map, o) : o)); });
+    Doc.change(doc, 'Modifier la zone', () => { map.zones = map.zones.map((o) => (o.id === id ? zoneFrom(v, map, o, rencontres) : o)); });
   }
 
   // --- Téléporteurs (portes, escaliers, sorties de route) ---
@@ -852,6 +883,7 @@ const App = (() => {
       null,
       { label: 'Montrer le passage', checked: api.options.showPassage, run: () => toggleOption('showPassage') },
       { label: 'Montrer les zones, téléporteurs et événements', checked: api.options.showObjects, run: () => toggleOption('showObjects') },
+      { label: 'Montrer l\'ambiance (météo, teinte)', checked: api.options.showAmbiance, run: () => toggleOption('showAmbiance') },
       null,
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', run: needDoc(IO.exportMapImage) },
@@ -859,7 +891,8 @@ const App = (() => {
     Jeu: () => (api.doc ? [
       { label: 'Titre du jeu…', run: () => run(renameGame) },
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
-      { label: 'Données du jeu (personnages, quêtes, interrupteurs)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
+      { label: 'Données du jeu (personnages, créatures, objets…)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
+      { label: 'Créatures et Pokédex…', run: () => { run(() => openData('creatures')); } },
       { label: 'Aller au départ du joueur', run: goToStart },
       { label: 'Afficher le dossier du jeu', disabled: !api.doc.game?.folder, run: () => window.tafl.revealFile(api.doc.path) },
       null,
@@ -1133,7 +1166,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData });
   return api;
 })();
 

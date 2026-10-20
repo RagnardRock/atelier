@@ -98,7 +98,8 @@
     return [
       `Carte affichée : ${doc.mapIndex} = ${m.id} « ${m.name} », ${m.width} × ${m.height} cases de ${doc.tileSize} px.`,
       `Calques (du dessous au dessus) : ${m.layers.map((l, i) => `${i} = ${l.name} [${l.profondeur}${(l.opacite ?? 1) < 1 ? `, opacité ${l.opacite}` : ''}${l.fusion !== 'normal' ? `, fusion ${l.fusion}` : ''}${l.parallaxe.x !== 1 || l.parallaxe.y !== 1 ? `, parallaxe ${l.parallaxe.x}/${l.parallaxe.y}` : ''}${l.visible ? '' : ', masqué'}]`).join(', ')}.`,
-      `Zones : ${m.zones.length ? m.zones.map((z) => `${z.id} « ${z.name} » ${z.type} (${z.x}, ${z.y}) ${z.w} × ${z.h}${z.objet ? `, objet requis ${z.objet}` : ''}`).join(' ; ') : 'aucune'}.`,
+      `Zones : ${m.zones.length ? m.zones.map((z) => `${z.id} « ${z.name} » ${z.type} (${z.x}, ${z.y}) ${z.w} × ${z.h}${z.objet ? `, objet requis ${z.objet}` : ''}${z.rencontres?.length ? `, rencontres ${z.taux} % : ${z.rencontres.map((r) => `${r.creature} ${r.niveau_min}-${r.niveau_max} (${r.chance} %)`).join(', ')}` : ''}`).join(' ; ') : 'aucune'}.`,
+      `Ambiance : ${m.ambiance ? `${m.ambiance.meteo}${m.ambiance.meteo !== 'aucune' ? ` ${m.ambiance.intensite} %` : ''}${m.ambiance.teinte ? `, teinte ${m.ambiance.teinte} à ${m.ambiance.force} %` : ''}` : 'aucune'}.`,
       `Téléporteurs : ${m.warps.length ? m.warps.map((w) => `${w.id} (${w.x}, ${w.y}) → ${w.carte} (${w.tx}, ${w.ty}) regard ${w.direction}`).join(' ; ') : 'aucun'}.`,
       `Événements : ${m.events.length ? m.events.map((e) => Events.decrire(doc, e)).join(' ; ') : 'aucun'}.`,
     ].join('\n');
@@ -119,7 +120,7 @@
           `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
           `Cartes (${doc.maps.length}) : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
           `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
-          `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
+          `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees) ; ${Donnees.SORTES.filter((k) => k !== 'reglages').map((k) => `${doc.data[k].length} ${k}`).join(', ')} (action donnee). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
           decrireCarte(doc),
         ].join('\n');
       },
@@ -625,8 +626,8 @@
     zone: {
       icone: 'symbol-namespace',
       libelle: (a) => `Zone : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
-      description: `Les zones d'une carte (carte : sinon celle affichée) : des rectangles de cases. action : ajouter (nom, type, x, y, largeur, hauteur, objet_requis), modifier (id + les champs à changer), supprimer (id). type : ${Doc.ZONES.map(([k, l]) => `${k} (${l})`).join(', ')}. objet_requis : l'objet qu'il faut pour y entrer (par exemple « planche-de-surf » pour l'eau, à la place des CS).`,
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, nom: { type: 'string' }, type: { type: 'string', enum: Doc.ZONES.map(([k]) => k) }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, objet_requis: { type: 'string' }, carte: { type: ['string', 'number'] } }, required: ['action'] },
+      description: `Les zones d'une carte (carte : sinon celle affichée) : des rectangles de cases. action : ajouter (nom, type, x, y, largeur, hauteur, objet_requis, taux, rencontres), modifier (id + les champs à changer), supprimer (id). rencontres : les créatures sauvages qui surgissent [{ creature (id), niveau_min, niveau_max, chance (%) }] ; taux : % de chance de rencontre à chaque pas (10 par défaut). type : ${Doc.ZONES.map(([k, l]) => `${k} (${l})`).join(', ')}. objet_requis : l'objet qu'il faut pour y entrer (par exemple « planche-de-surf » pour l'eau, à la place des CS).`,
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, nom: { type: 'string' }, type: { type: 'string', enum: Doc.ZONES.map(([k]) => k) }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, objet_requis: { type: 'string' }, taux: nombre, rencontres: { type: 'array', items: { type: 'object' } }, carte: { type: ['string', 'number'] } }, required: ['action'] },
       faire: (a) => {
         const doc = besoinJeu();
         const map = choisirCarte(doc, a.carte);
@@ -640,7 +641,9 @@
         const x = clamp(Math.round(a.x ?? base.x), 0, map.width - 1), y = clamp(Math.round(a.y ?? base.y), 0, map.height - 1);
         const type = a.type ?? base.type;
         if (!Doc.ZONES.some(([k]) => k === type)) throw new Error(`type : ${Doc.ZONES.map(([k]) => k).join(', ')}.`);
-        const zone = { ...base, name: String(a.nom ?? base.name), type, objet: String(a.objet_requis ?? base.objet ?? ''), x, y, w: clamp(Math.round(a.largeur ?? base.w), 1, map.width - x), h: clamp(Math.round(a.hauteur ?? base.h), 1, map.height - y) };
+        const zone = { ...base, name: String(a.nom ?? base.name), type, objet: String(a.objet_requis ?? base.objet ?? ''), x, y, w: clamp(Math.round(a.largeur ?? base.w), 1, map.width - x), h: clamp(Math.round(a.hauteur ?? base.h), 1, map.height - y), taux: clamp(Math.round(a.taux ?? base.taux ?? 10), 0, 100), rencontres: a.rencontres !== undefined ? Donnees.normRencontres(a.rencontres) : base.rencontres || [] };
+        const inconnues = zone.rencontres.filter((r) => doc.data.creatures.length && !doc.data.creatures.some((c) => c.id === r.creature)).map((r) => r.creature);
+        if (inconnues.length) throw new Error(`Créatures inconnues : ${inconnues.join(', ')} (cherche avec voir_donnees, sorte creatures, action liste).`);
         Doc.change(doc, z0 ? 'Modifier la zone (Claude)' : 'Nouvelle zone (Claude)', () => { map.zones = z0 ? map.zones.map((z) => (z === z0 ? zone : z)) : [...map.zones, zone]; });
         return decrireCarte(doc);
       },
@@ -867,6 +870,54 @@
     return c;
   }
   const changerDonnees = (doc, label, fn) => Doc.change(doc, label, () => { doc.data = fn(structuredClone(doc.data)); });
+  // Tafl 0.8 : lire ou changer une base de données (actions voir_donnees et donnee).
+  async function faireDonnee(a) {
+    const doc = besoinJeu();
+    const sorte = a.sorte;
+    if (!Donnees.SORTES.includes(sorte)) throw new Error(`sorte : ${Donnees.SORTES.join(', ')}.`);
+    const sansImages = (o) => JSON.parse(JSON.stringify(o, (k, v) => (typeof v === 'string' && v.startsWith('data:image') ? '(image)' : v)));
+    if (sorte === 'reglages') {
+      if (a.action === 'voir' || a.action === 'liste') return JSON.stringify(doc.data.reglages, null, 1);
+      if (a.action !== 'modifier') throw new Error('reglages : voir ou modifier.');
+      const r = Donnees.normElement('reglages', { ...doc.data.reglages, ...(a.valeurs || {}) });
+      changerDonnees(doc, 'Réglages du jeu (Claude)', (d) => ({ ...d, reglages: r }));
+      return JSON.stringify(r, null, 1);
+    }
+    const liste = doc.data[sorte];
+    const kind = { types: 'type', talents: 'talent', attaques: 'attaque', creatures: 'creature', objets: 'objet', dresseurs: 'dresseur', boutiques: 'boutique' }[sorte];
+    if (a.action === 'liste') {
+      const q = Doc.slug(a.filtre || '', '');
+      const trouves = liste.filter((o) => !q || Doc.slug(`${o.nom} ${o.id} ${o.officiel || ''}`, '').includes(q));
+      const debut = clamp(Math.round(a.debut || 0), 0, Math.max(0, trouves.length - 1));
+      const page = trouves.slice(debut, debut + 80);
+      return `${trouves.length} ${sorte}${q ? ` pour « ${a.filtre} »` : ''}${trouves.length > 80 ? ` (de ${debut} à ${debut + page.length - 1} ; debut: ${debut + 80} pour la suite)` : ''} :\n${page.map((o) => Donnees.resumer(doc, sorte, o)).join('\n') || 'aucun'}`;
+    }
+    if (a.action === 'ajouter') {
+      const v = a.valeurs || {};
+      if (!v.nom) throw new Error('valeurs.nom : le nom de l\'élément.');
+      const o = Donnees.normElement(sorte, { ...v, officiel: undefined }, liste.length);
+      o.id = Events.ident(v.id || v.nom, liste, kind);
+      changerDonnees(doc, `Nouveau : ${o.nom} (Claude)`, (d) => ({ ...d, [sorte]: [...d[sorte], o] }));
+      return `Ajouté : ${Donnees.resumer(doc, sorte, o)}`;
+    }
+    const o0 = liste.find((o) => o.id === a.id);
+    if (!o0) throw new Error(`Pas de ${kind} « ${a.id} ». Cherche avec action liste et filtre.`);
+    if (a.action === 'voir') {
+      const texte = `${JSON.stringify(sansImages(o0), null, 1)}\nUtilisé par : ${Donnees.utilisations(doc, kind, o0.id).slice(0, 30).join(', ') || 'rien encore'}.`;
+      const images = [o0.sprites?.face, o0.sprites?.dos, o0.icone].filter(Boolean);
+      return images.length ? { texte, image: await planchePortraits({ portraits: images.map((png, k) => ({ png, expression: ['face', 'dos', 'icône'][o0.icone ? 2 : k] })) }) } : texte;
+    }
+    if (a.action === 'supprimer') {
+      const u = Donnees.utilisations(doc, kind, o0.id);
+      changerDonnees(doc, `Supprimer ${o0.nom} (Claude)`, (d) => ({ ...d, [sorte]: d[sorte].filter((o) => o.id !== o0.id) }));
+      return `${o0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.slice(0, 20).join(', ')}.` : ''}`;
+    }
+    if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+    const o = Donnees.normElement(sorte, { ...o0, ...(a.valeurs || {}), id: o0.id });
+    o.id = o0.id;
+    changerDonnees(doc, `Modifier ${o.nom} (Claude)`, (d) => ({ ...d, [sorte]: d[sorte].map((x) => (x.id === o.id ? o : x)) }));
+    return `Modifié : ${Donnees.resumer(doc, sorte, o)}`;
+  }
 
   ClaudePanneau.actions({
     evenement: {
@@ -1035,7 +1086,7 @@
       lecture: true,
       icone: 'database',
       libelle: (a) => (a.personnage ? `Regarde le personnage ${a.personnage}` : 'Regarde les données du jeu'),
-      description: 'Décrit les données du jeu : personnages (id, nom, héros, description, expressions des portraits), quêtes (étapes numérotées, suite, personnages) et interrupteurs (avec où ils servent). personnage : un id, pour voir aussi ses portraits.',
+      description: 'Décrit les données de l\'histoire : personnages (id, nom, héros, description, expressions des portraits), quêtes (étapes numérotées, suite, personnages) et interrupteurs (avec où ils servent). personnage : un id, pour voir aussi ses portraits. Types, attaques, créatures, objets, dresseurs, boutiques et réglages : action donnee.',
       schema: { type: 'object', properties: { personnage: { type: 'string' } } },
       faire: async (a) => {
         const doc = besoinJeu();
@@ -1044,6 +1095,67 @@
         if (!p) throw new Error(`Pas de personnage « ${a.personnage} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
         const texte = `${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}\n${p.description || '(pas de description)'}\nPortraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}.\nUtilisé par : ${Events.utilisations(doc, 'personnage', p.id).join(', ') || 'rien encore'}.`;
         return p.portraits.length ? { texte, image: await planchePortraits(p) } : texte;
+      },
+    },
+    // --- Tafl 0.8 : les bases de données (types, talents, attaques, créatures, objets, dresseurs, boutiques, réglages) ---
+    voir_donnees: {
+      lecture: true,
+      icone: 'database',
+      libelle: (a) => `Regarde ${a.sorte}${a.id ? ` ${a.id}` : a.filtre ? ` « ${a.filtre} »` : ''}`,
+      description: 'Lit les bases de données du jeu, sans rien changer. sorte : types, talents, attaques, creatures, objets, dresseurs, boutiques, reglages. action : liste (une ligne par élément ; filtre : texte cherché dans le nom ou l\'id ; debut : pour la suite, 80 lignes à la fois) ou voir (id : tout l\'élément en JSON, avec ses images et où il sert ; reglages : sans id). Pour changer : action donnee.',
+      schema: { type: 'object', properties: { sorte: { type: 'string', enum: Donnees.SORTES }, action: { type: 'string', enum: ['liste', 'voir'] }, id: { type: 'string' }, filtre: { type: 'string' }, debut: nombre }, required: ['sorte', 'action'] },
+      faire: (a) => faireDonnee({ ...a, action: a.action === 'voir' ? 'voir' : 'liste' }),
+    },
+    donnee: {
+      icone: 'database',
+      libelle: (a) => `${{ ajouter: 'Ajoute', modifier: 'Modifie', supprimer: 'Supprime' }[a.action] || a.action} ${a.sorte}${a.id ? ` ${a.id}` : a.valeurs?.nom ? ` « ${a.valeurs.nom} »` : ''}`,
+      description: `Les bases de données du jeu (Jeu › Données du jeu). sorte : ${Donnees.SORTES.join(', ')}. action : ajouter (valeurs : l'élément ; id facultatif tiré du nom), modifier (id + valeurs : seulement les champs à changer ; l'id ne change pas), supprimer (id). Pour reglages : modifier, sans id. Pour lire : voir_donnees. Les clés de chaque sorte sont celles de FORMAT.md (« Données du jeu ») : voir_donnees sur un élément existant en montre un exemple. Les éléments importés ont « officiel » (leur nom anglais PokeAPI) ; ceux que Ragna crée n'en ont pas. Références : une créature cite ses types, talents, attaques (attaques par niveau, ct) et ses évolutions (vers, objet) par leur id ; un dresseur ses créatures ; une boutique ses articles (sorte objet ou creature, condition de déblocage : une condition des événements, par exemple { type: "compteur", compteur: "captures", min: 10 }). Natures : ${Donnees.NATURES.map(([k]) => k).join(', ')}.`,
+      schema: { type: 'object', properties: { sorte: { type: 'string', enum: Donnees.SORTES }, action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, valeurs: { type: 'object' } }, required: ['sorte', 'action'] },
+      faire: (a) => {
+        if (!['ajouter', 'modifier', 'supprimer'].includes(a.action)) throw new Error('action : ajouter, modifier ou supprimer (pour lire : voir_donnees).');
+        return faireDonnee(a);
+      },
+    },
+    image_donnee: {
+      icone: 'file-media',
+      libelle: (a) => `Image de ${a.id} (${a.cle || 'face'})`,
+      description: 'Met une image du projet (chemin relatif, PNG à fond transparent) sur une créature (sorte creatures, cle face ou dos : ses sprites de combat) ou un objet (sorte objets, cle icone). Sans chemin : retire l\'image.',
+      schema: { type: 'object', properties: { sorte: { type: 'string', enum: ['creatures', 'objets'] }, id: { type: 'string' }, cle: { type: 'string', enum: ['face', 'dos', 'icone'] }, chemin: { type: 'string' } }, required: ['sorte', 'id'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const o0 = doc.data[a.sorte]?.find((o) => o.id === a.id);
+        if (!o0) throw new Error(`Pas de ${a.sorte} « ${a.id} ».`);
+        const png = a.chemin ? (await Events.imagePortrait(await window.claude.lireFichier(a.chemin))).png : '';
+        const o = a.sorte === 'objets' ? { ...o0, icone: png } : { ...o0, sprites: { ...o0.sprites, [a.cle === 'dos' ? 'dos' : 'face']: png } };
+        changerDonnees(doc, `Image de ${o0.nom} (Claude)`, (d) => ({ ...d, [a.sorte]: d[a.sorte].map((x) => (x.id === o.id ? o : x)) }));
+        return png ? `Image mise sur ${o0.id}.` : `Image retirée de ${o0.id}.`;
+      },
+    },
+    importer_officiel: {
+      icone: 'cloud-download',
+      libelle: () => 'Importe les données officielles Pokémon',
+      description: 'Importe depuis Internet (PokeAPI, en français) les données officielles : 18 types et leur table, talents, attaques, créatures (statistiques, évolutions, attaques par niveau et CT, talents, capture…), objets (soins, balles, menthes, capsules, pierres…). generations : liste de 1 à 9 (toutes par défaut) ; sprites : images de face et de dos ; icones : icônes des objets ; maj : false pour seulement ajouter ce qui manque (sinon les éléments déjà importés sont mis à jour). Les éléments créés par Ragna ne sont jamais touchés. Un seul Ctrl+Z annule tout.',
+      schema: { type: 'object', properties: { generations: { type: 'array', items: { type: 'number' } }, sprites: { type: 'boolean' }, icones: { type: 'boolean' }, maj: { type: 'boolean' } } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const imp = await Donnees.telechargerOfficiel({ generations: (a.generations || []).map(Number).filter((g) => g >= 1 && g <= 9), sprites: a.sprites !== false, icones: a.icones !== false });
+        const { data, bilan } = Donnees.fusionner(doc.data, imp, { maj: a.maj !== false });
+        Doc.change(doc, 'Importer les données officielles (Claude)', () => { doc.data = Events.normData(data, doc.tiles.length); });
+        return `Importé : ${Object.entries(bilan).map(([k, b]) => `${k} ${b.ajoutes} ajoutés, ${b.misAJour} mis à jour`).join(' ; ')}.`;
+      },
+    },
+    ambiance: {
+      icone: 'cloud',
+      libelle: (a) => `Ambiance : ${a.meteo || 'teinte'}`,
+      description: `La météo et la teinte d'une carte (carte : sinon celle affichée), jouées par le moteur ; Tafl en montre un aperçu. meteo : ${Donnees.METEOS.map(([k]) => k).join(', ')} ; intensite 0 à 100 ; teinte : #rrggbb (appliquée en produit sur la carte, "" = aucune) ; force 0 à 100.`,
+      schema: { type: 'object', properties: { carte: { type: ['string', 'number'] }, meteo: { type: 'string', enum: Donnees.METEOS.map(([k]) => k) }, intensite: nombre, teinte: { type: 'string' }, force: nombre } },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const map = choisirCarte(doc, a.carte);
+        const i = doc.maps.indexOf(map);
+        const ambiance = Donnees.normAmbiance({ ...map.ambiance, ...Object.fromEntries(['meteo', 'intensite', 'teinte', 'force'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) });
+        Doc.change(doc, 'Ambiance de la carte (Claude)', () => { doc.maps[i] = { ...map, ambiance }; Doc.selectMap(doc, doc.mapIndex); });
+        return `Ambiance de ${map.id} : ${JSON.stringify(ambiance)}.`;
       },
     },
   });

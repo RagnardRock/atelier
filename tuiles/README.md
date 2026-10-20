@@ -152,6 +152,29 @@ Ta liste d'envies, et comment le faire avec Tafl 0.7 :
 
 Tout est décrit pour le futur moteur dans [FORMAT.md](FORMAT.md) (« Événements » et « Données du jeu »).
 
+## Les bases de données du jeu (Tafl 0.8)
+
+**Jeu › Données du jeu** (`Ctrl+Maj+D`) a maintenant une colonne d'onglets : **Histoire** (personnages, quêtes, interrupteurs), **Combat** (types, talents, attaques, créatures, objets) et **Monde** (dresseurs, boutiques, réglages). Chaque liste a sa recherche (par nom, id ou numéro du Pokédex).
+
+**Importer les données officielles** (en bas de la colonne d'onglets) : les 18 types et leur table, les talents, les attaques, les 1025 créatures (statistiques, EV donnés, talents, taux de capture, croissance, évolutions, attaques par niveau et par CT, Pokédex), les objets (soins, balles, vitamines, menthes, capsules, baies, pierres…), en français, depuis [PokeAPI](https://pokeapi.co). Tu choisis les générations, et si tu veux les images de face et de dos des créatures et les icônes des objets. Il faut Internet, une minute environ. Rien n'est gardé tant que tu ne valides pas, et `Ctrl+Z` annule tout d'un coup.
+- **Tes créatures et objets à toi** se créent à côté (bouton `+`), avec leurs sprites importés depuis Skald ou Photoshop. Réimporter ne touche jamais à ce que tu as créé ; les éléments déjà importés sont mis à jour (ou pas, au choix) et gardent leur identifiant, que les scripts utilisent.
+- Les noms, images et créatures officiels appartiennent à Nintendo, Game Freak et The Pokémon Company : très bien pour ton jeu perso, à remplacer par les tiens avant de partager ou vendre le jeu.
+
+Les onglets :
+- **Types** : la couleur, et la **table des types** en entier (en ligne l'attaque, en colonne le défenseur) : un clic sur une case la fait passer de ×1 à ×2, ×½, ×0.
+- **Attaques** : type, catégorie, puissance, précision, PP, priorité, cible, et les effets : statut infligé et sa chance, peur, changements de statistiques (sur soi ou la cible), drain, soin, critique, coups multiples.
+- **Créatures** : sprites de face et de dos (en gros pixels), numéro, espèce, types, rareté (légendaire, fabuleuse), Pokédex, **statistiques de base avec leurs barres et leur total**, EV donnés, **faiblesses et résistances calculées** depuis la table des types, talents, capture, croissance, sexe, taille, poids, **évolutions** (niveau, objet, échange, amitié, quête…), **attaques par niveau** et **par CT**.
+- **Objets** : icône, catégorie, prix, description, et **ce qu'il fait** : soin, statut, rappel, PP, EV, niveau, **IV au maximum (capsule)**, **menthe** (l'effet d'une nature), balle, évolution, repousse, **ouvrir un passage** (à la place des CS).
+- **Dresseurs** : classe, personnage (son portrait), argent gagné, équipe de 6 (niveau, nature, objet tenu, attaques), si son niveau **suit la progression du joueur**, et ses trois dialogues.
+- **Boutiques** : les articles (objets ou **créatures**), leur prix, et **ce qui débloque chacun** : 10 captures, 5 dresseurs battus, une quête finie… Une boutique peut racheter les objets et **acheter et vendre des créatures**.
+- **Réglages** : monnaie, argent de départ, taille de l'équipe, **niveau maximum selon les badges**, comment les dresseurs **s'ajustent au niveau** du joueur, chance d'un chromatique, et le tableau des 25 natures.
+
+**Les zones** ont leurs **rencontres** : la table des créatures sauvages (niveaux et chance de chacune) et la chance d'une rencontre à chaque pas.
+
+**L'ambiance d'une carte** (panneau Cartes › `…` › Ambiance) : pluie, orage, neige, brouillard, feuilles qui tombent, lucioles, avec leur intensité, et une **teinte** posée sur toute la carte (bleu sombre pour la nuit ou l'orage, orangé pour un coucher de soleil). Tafl en montre l'aperçu, qui bouge quand l'animation est lancée (`P`) ; case « Ambiance » de la barre pour la cacher.
+
+Dans les scripts, les champs créature, objet, dresseur et boutique proposent la liste du jeu, et Tafl refuse un script de Claude qui en nomme un qui n'existe pas.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -172,6 +195,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - `Ctrl+Z` annule ce qu'il a fait.
 - **Depuis Tafl 0.6, il construit aussi le jeu** : créer un dossier de jeu et l'enregistrer dans le projet, les cartes (nouvelle, dupliquer, renommer, supprimer, ordre), les calques (ajouter, supprimer, ordre, profondeur, opacité, fusion, parallaxe), peindre le passage, le passage des tuiles, les zones, les téléporteurs (avec le retour) et le départ du joueur. Il voit le passage final de chaque case dans `voir_carte`. Il peut ainsi relier toutes les maisons d'une ville à leur intérieur en une demande.
 - **Depuis Tafl 0.7, il écrit l'histoire** : il crée les personnages (avec leurs portraits, depuis une image du projet), les quêtes et leurs étapes, les interrupteurs, et pose les événements avec leur script complet (dialogues, choix, conditions, objets, combats, quêtes…). Tafl vérifie chaque script avant de l'accepter et lui dit précisément ce qui ne va pas. Il relit tout avec `donnees` et `evenement` (voir), et voit les portraits.
+- **Depuis Tafl 0.8, il remplit les bases de données** : il cherche et lit les créatures, attaques, objets… (`voir_donnees`), en ajoute, modifie ou supprime (`donnee`), met un sprite ou une icône depuis une image du projet, lance l'import officiel, règle les rencontres des zones et l'ambiance des cartes.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
 ## La suite
@@ -179,7 +203,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 Le plan (validé avec Ragna le 20/10/2026) :
 
 1. ~~**Tafl 0.7, les événements**~~ : fait (voir plus haut).
-2. **Tafl 0.8, les bases de données** : types, attaques, créatures, objets, dresseurs, boutiques (débloquées par des compteurs : captures, dresseurs battus…), tables de rencontres des zones, réglages du niveau maximum.
+2. ~~**Tafl 0.8, les bases de données**~~ : fait (voir plus haut).
 3. **Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl.
 
 Et toujours : tuiles automatiques (bords de chemin et de mare posés tout seuls), sélection et copier-coller sur la carte, lien direct avec Skald.

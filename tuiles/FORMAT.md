@@ -19,10 +19,16 @@ MonJeu/
     personnages.json    les personnages, avec leurs portraits (Tafl 0.7)
     quetes.json         les quêtes et leurs étapes
     interrupteurs.json  les faits de l'histoire que retiennent les scripts
+    types.json          les types et leur table d'efficacité (Tafl 0.8)
+    talents.json        les talents
+    attaques.json       les attaques
+    creatures.json      les créatures (le Pokédex), avec leurs sprites
+    objets.json         les objets, avec leurs icônes
+    dresseurs.json      les dresseurs et leur équipe
+    boutiques.json      les boutiques et ce qui débloque leurs articles
+    reglages.json       argent, niveau maximum, niveau des dresseurs
   FORMAT.md             ce fichier
 ```
-
-Prévus pour Tafl 0.8 : d'autres fichiers dans `donnees/` (créatures, attaques, objets, dresseurs, boutiques) et `sprites/` (images des personnages et des créatures).
 
 Chaque fichier a un champ `format` (son type) et un champ `version` (sa version). Si un jour le format change, la version augmente. Le moteur doit refuser poliment une version plus grande que celle qu'il connaît.
 
@@ -50,7 +56,10 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
   "donnees": {
     "personnages": "donnees/personnages.json",
     "quetes": "donnees/quetes.json",
-    "interrupteurs": "donnees/interrupteurs.json"
+    "interrupteurs": "donnees/interrupteurs.json",
+    "types": "donnees/types.json",
+    "creatures": "donnees/creatures.json",
+    "...": "une entrée par fichier de donnees/"
   }
 }
 ```
@@ -108,9 +117,11 @@ Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme
   "passage": [0, 0, 2, 0, "..."],
   "collisions": [1, 1, 2, 1, "..."],
   "zones": [
-    { "id": "zone-1", "nom": "Herbes hautes", "type": "herbes", "x": 2, "y": 9, "largeur": 5, "hauteur": 4, "objetRequis": null },
-    { "id": "zone-2", "nom": "Mare", "type": "eau", "x": 13, "y": 9, "largeur": 5, "hauteur": 4, "objetRequis": "planche-de-surf" }
+    { "id": "zone-1", "nom": "Herbes hautes", "type": "herbes", "x": 2, "y": 9, "largeur": 5, "hauteur": 4, "objetRequis": null,
+      "taux": 10, "rencontres": [{ "creature": "roucool", "niveau_min": 2, "niveau_max": 4, "chance": 60 }, { "creature": "rattata", "niveau_min": 2, "niveau_max": 3, "chance": 40 }] },
+    { "id": "zone-2", "nom": "Mare", "type": "eau", "x": 13, "y": 9, "largeur": 5, "hauteur": 4, "objetRequis": "planche-de-surf", "taux": 10, "rencontres": [] }
   ],
+  "ambiance": { "meteo": "pluie", "intensite": 60, "teinte": "#4a5a7a", "force": 35 },
   "teleporteurs": [
     { "id": "tp-1", "x": 4, "y": 3, "vers": { "carte": "maison", "x": 5, "y": 6, "direction": "haut" } }
   ],
@@ -171,7 +182,18 @@ Des rectangles de cases (`x`, `y`, `largeur`, `hauteur`), qui peuvent se chevauc
 
 `objetRequis` : l'identifiant d'un objet qu'il faut posséder pour entrer dans la zone (par exemple `"planche-de-surf"` pour l'eau), ou `null`. C'est ce qui remplace les CS : pas de capacité à apprendre, un objet suffit. Avec un objet requis, le moteur laisse entrer dans la zone même si ses cases sont bloquées (l'eau est bloquée à pied).
 
-Prévu pour Tafl 0.8 : `rencontres`, la table des créatures qu'on y croise (créature, niveaux, chance).
+`rencontres` (Tafl 0.8) : les créatures sauvages qu'on y croise. Pour chacune, son `id` dans `creatures.json`, ses niveaux (`niveau_min` à `niveau_max`, tirés au hasard) et sa `chance` en %. Si les chances ne font pas 100, le moteur les ramène à 100 (ce sont des poids). `taux` : la chance, en %, qu'une rencontre arrive à chaque pas dans la zone (10 par défaut).
+
+### Ambiance
+
+`ambiance` (Tafl 0.8) : la météo et la lumière de la carte. Tafl en montre un aperçu (Affichage › Montrer l'ambiance) ; c'est le moteur qui la joue.
+
+| Champ | Sens |
+|---|---|
+| `meteo` | `"aucune"`, `"pluie"`, `"orage"` (pluie et éclairs), `"neige"`, `"brouillard"`, `"feuilles"` (feuilles qui tombent), `"lucioles"`. |
+| `intensite` | De 0 à 100 : combien de gouttes, de flocons… |
+| `teinte` | Une couleur `#rrggbb` posée en « produit » (`multiply`) sur toute la carte, comme une couche de lumière : bleu sombre pour la nuit ou l'orage, orangé pour un coucher de soleil. `""` = aucune. |
+| `force` | De 0 à 100 : l'opacité de la teinte. |
 
 ### Téléporteurs
 
@@ -225,7 +247,7 @@ Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un
 |---|---|
 | `id` | Unique **dans la carte** (`ev-1`, `ev-2`…). Avec l'id de la carte, il désigne l'événement dans tout le jeu (pour son interrupteur « déjà fait »). |
 | `type` | `"pnj"` (personnage), `"panneau"`, `"coffre"`, `"objet"` (objet au sol), `"declencheur"` (case invisible). Il sert surtout à Tafl ; le moteur suit les autres champs. |
-| `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon celle du personnage (en attendant ses sprites, Tafl 0.8), sinon rien (un déclencheur est invisible). |
+| `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon celle du personnage, sinon rien (un déclencheur est invisible). |
 | `direction` | Où il regarde au départ. |
 | `deplacement` | `"fixe"`, `"regarde"` (se tourne vers le joueur qui lui parle), `"aleatoire"` (marche au hasard autour de sa case), `"tourne"` (regarde autour de lui). |
 | `traversable` | `false` : il bloque sa case comme un mur. `true` : on passe à travers (un déclencheur). |
@@ -246,14 +268,14 @@ Le moteur joue les `commandes` de la page dans l'ordre. Pendant un script, le jo
 | `interrupteur` | `id`, `valeur` | Allume (`true`) ou éteint (`false`) un interrupteur du jeu. |
 | `local` | `valeur` | L'interrupteur « déjà fait » **de cet événement** (coffre ouvert, objet ramassé, dresseur battu). |
 | `attendre` | `ms` | Une pause. |
-| `objet` | `action` (`"donner"` ou `"retirer"`), `objet`, `nombre` | Ajoute ou retire des objets du sac (`objet` : un identifiant, la liste des objets arrive avec Tafl 0.8). |
+| `objet` | `action` (`"donner"` ou `"retirer"`), `objet`, `nombre` | Ajoute ou retire des objets du sac (`objet` : un id de `objets.json`). |
 | `creature` | `creature`, `niveau` | Donne une créature au joueur (le starter, un cadeau). |
 | `combat_sauvage` | `creature`, `niveau` | Un combat contre une créature précise, qu'on peut capturer (un légendaire au bout d'une quête). |
-| `combat_dresseur` | `dresseur` | Un combat contre un dresseur (son équipe arrive avec Tafl 0.8). |
+| `combat_dresseur` | `dresseur` | Un combat contre un dresseur de `dresseurs.json`. |
 | `teleporter` | `carte`, `x`, `y`, `direction` | Emmène le joueur ailleurs. |
 | `quete` | `quete`, `action` (`"commencer"`, `"etape"`, `"finir"`), `etape` | Fait avancer une quête. `etape` : le numéro de l'étape (à partir de 1), pour `"etape"`. Commencer met la quête à l'étape 1. |
 | `soigner` | | Soigne toute l'équipe (le centre de soins). |
-| `boutique` | `boutique` | Ouvre une boutique (son contenu, et ce qui débloque chaque article, arrive avec Tafl 0.8). |
+| `boutique` | `boutique` | Ouvre une boutique de `boutiques.json`. |
 | `ecran_ev` | | Ouvre l'écran où le joueur répartit les points d'effort (EV) de ses créatures. |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
@@ -341,6 +363,160 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
 
 La liste sert à Tafl (des noms lisibles) ; le moteur accepte aussi un interrupteur qui n'y est pas (il est éteint au départ).
 
+### Les bases de données de Tafl 0.8
+
+Elles peuvent venir de l'**import des données officielles** (Jeu › Données du jeu › Importer les données officielles, depuis [PokeAPI](https://pokeapi.co), en français), être créées à la main, ou les deux. Un élément importé a un champ `officiel` : son nom anglais dans PokeAPI (`"charmander"`). C'est lui qui retrouve l'élément quand on réimporte, même si tu l'as renommé ; les éléments sans `officiel` sont les tiens, et l'import n'y touche jamais. Le moteur peut ignorer ce champ.
+
+Les noms, les images et les créatures officiels appartiennent à Nintendo, Game Freak et The Pokémon Company : ils conviennent à un jeu perso, pas à un jeu partagé ou vendu.
+
+Les statistiques s'appellent partout `pv`, `attaque`, `defense`, `att_spe`, `def_spe`, `vitesse` (et `precision`, `esquive` pour les changements en combat).
+
+#### `donnees/types.json`
+
+```json
+{ "format": "tafl-types", "version": 1, "types": [
+  { "id": "feu", "nom": "Feu", "couleur": "#ee8130", "efficace": ["plante", "glace", "insecte", "acier"], "peu_efficace": ["feu", "eau", "roche", "dragon"], "sans_effet": [], "officiel": "fire" }
+] }
+```
+
+Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `efficace`, ×0,5 dans `peu_efficace`, ×0 dans `sans_effet`, ×1 sinon. Contre un défenseur à deux types, on multiplie les deux.
+
+#### `donnees/talents.json`
+
+`{ "id": "brasier", "nom": "Brasier", "description": "…", "officiel": "blaze" }`. Le moteur décide de leurs effets d'après leur `officiel` ou leur `id`.
+
+#### `donnees/attaques.json`
+
+```json
+{ "format": "tafl-attaques", "version": 1, "attaques": [
+  { "id": "flammeche", "nom": "Flammèche", "type": "feu", "categorie": "speciale", "puissance": 40, "precision": 100, "pp": 25, "priorite": 0,
+    "cible": "adversaire", "statut": "brulure", "chance_statut": 10, "peur": 0, "stats": [], "stats_cible": "adversaire", "chance_stats": 0,
+    "drain": 0, "soin": 0, "critique": 0, "coups_min": 1, "coups_max": 1, "effet": "A une chance de brûler la cible.", "description": "…", "officiel": "ember" }
+] }
+```
+
+| Champ | Sens |
+|---|---|
+| `categorie` | `"physique"` (Attaque contre Défense), `"speciale"` (Att. Spé. contre Déf. Spé.) ou `"statut"` (pas de dégâts). |
+| `puissance` | 0 = pas de dégâts directs. |
+| `precision` | En %, `0` = touche toujours. |
+| `priorite` | Plus elle est haute, plus l'attaque passe tôt dans le tour (+1 Vive-Attaque). |
+| `cible` | `"adversaire"`, `"adversaires"`, `"soi"`, `"allie"`, `"equipe"`, `"tous"`, `"terrain"`. |
+| `statut`, `chance_statut` | Le statut infligé (`"brulure"`, `"paralysie"`, `"poison"`, `"poison_grave"`, `"sommeil"`, `"gel"`, `"confusion"`, `"attraction"`, `"piege"`, `"baillement"`, `"vampigraine"`, ou `""`) et sa chance en % (0 = toujours). |
+| `peur` | Chance en % d'apeurer la cible. |
+| `stats`, `stats_cible`, `chance_stats` | Les changements de statistiques `[{ "stat": "attaque", "etages": -1 }]` (de −6 à +6), sur qui (`"soi"` ou `"adversaire"`), et leur chance en % (0 = toujours). |
+| `drain`, `soin` | En % : PV repris sur les dégâts infligés (négatif = contrecoup), PV du lanceur soignés. |
+| `critique` | Paliers de coup critique en plus. |
+| `coups_min`, `coups_max` | Nombre de coups (2 à 5 pour Combo-Griffe). |
+| `effet` | L'effet en une phrase (pour ce qui n'entre pas dans les champs). |
+
+#### `donnees/creatures.json`
+
+```json
+{ "format": "tafl-creatures", "version": 1, "creatures": [
+  { "id": "salameche", "nom": "Salamèche", "numero": 4, "espece": "Pokémon Lézard", "types": ["feu"],
+    "stats": { "pv": 39, "attaque": 52, "defense": 43, "att_spe": 60, "def_spe": 50, "vitesse": 65 }, "ev_donnes": { "vitesse": 1 },
+    "talents": ["brasier"], "talent_cache": "force-soleil", "taux_capture": 45, "xp_base": 62, "croissance": "parabolique", "bonheur": 70,
+    "male": 87.5, "legendaire": "", "taille": 0.6, "poids": 8.5,
+    "evolutions": [{ "vers": "reptincel", "mode": "niveau", "niveau": 16, "objet": "", "quete": "", "condition": "" }],
+    "attaques": [{ "niveau": 1, "attaque": "griffe" }, { "niveau": 4, "attaque": "flammeche" }], "ct": ["lance-flammes", "abri"],
+    "description": "Depuis sa naissance, une petite flamme brûle au bout de sa queue…",
+    "sprites": { "face": "data:image/png;base64,...", "dos": "data:image/png;base64,..." }, "generation": 1, "officiel": "charmander" }
+] }
+```
+
+| Champ | Sens |
+|---|---|
+| `numero` | Le numéro dans le Pokédex du jeu. |
+| `types` | Un ou deux types (ids de `types.json`). |
+| `stats` | Les statistiques de base (1 à 255). |
+| `ev_donnes` | Les EV que gagne le joueur en battant cette créature (seulement les stats non nulles). |
+| `talents`, `talent_cache` | Un ou deux talents possibles, et le talent caché (`""` = aucun). |
+| `taux_capture` | 1 (très dur) à 255 (facile). |
+| `croissance` | La courbe d'expérience : `"rapide"`, `"moyenne"`, `"parabolique"`, `"lente"`, `"erratique"`, `"fluctuante"` (les courbes officielles). |
+| `male` | % de mâles ; `-1` = asexué. |
+| `legendaire` | `""`, `"legendaire"` ou `"fabuleux"`. Un légendaire s'obtient d'habitude au bout d'une quête (commande `combat_sauvage`). |
+| `evolutions` | `mode` : `"niveau"` (au `niveau`), `"objet"` (avec l'`objet`, par exemple une pierre), `"echange"` (en tenant `objet` s'il y en a un), `"amitie"`, `"quete"` (quand la quête `quete` est finie), `"autre"` (`condition` dit laquelle). Le moteur peut aussi faire évoluer en plein combat. |
+| `attaques` | Apprises au niveau `niveau` (0 = en évoluant). |
+| `ct` | Les attaques qu'elle peut apprendre par CT ou par un maître des capacités. |
+| `sprites` | Face (vue par le joueur) et dos (sa propre créature en combat), en image encodée en texte. `""` = pas encore d'image. |
+
+#### `donnees/objets.json`
+
+```json
+{ "format": "tafl-objets", "version": 1, "objets": [
+  { "id": "potion", "nom": "Potion", "categorie": "soin", "prix": 200, "description": "…", "effet": { "type": "soin", "valeur": 20 }, "icone": "data:image/png;base64,...", "officiel": "potion" },
+  { "id": "aromate-solo", "nom": "Aromate Solo", "categorie": "menthe", "prix": 20, "effet": { "type": "menthe", "nature": "solo" }, "icone": "" },
+  { "id": "planche-de-surf", "nom": "Planche de surf", "categorie": "cle", "prix": 0, "effet": { "type": "passage" }, "icone": "" }
+] }
+```
+
+`categorie` : `soin`, `balle`, `vitamine`, `menthe`, `ivs`, `baie`, `tenu`, `combat`, `evolution`, `tresor`, `cle`, `autre`.
+
+| `effet.type` | Ce qu'il fait |
+|---|---|
+| `aucun` | Rien d'automatique (sa description dit ce qu'il fait). |
+| `soin` | Soigne `valeur` PV (9999 = tous) ; `statut` en plus s'il soigne aussi un statut. |
+| `soin_statut` | Soigne le `statut` (`"tous"` = tous). |
+| `rappel` | Ranime une créature K.O. avec `valeur` % de ses PV. |
+| `pp`, `pp_toutes`, `pp_max` | Rend `valeur` PP à une attaque, à toutes (99 = tous), ou augmente les PP max de `valeur` paliers. |
+| `ev` | Donne `valeur` EV en `stat`. |
+| `niveau` | Fait monter de `valeur` niveaux (Super Bonbon). |
+| `ivs` | Met les IV de `stat` (`"choix"` : au choix du joueur, `"tous"` : toutes) à `valeur` (31 = parfait) : la capsule. |
+| `menthe` | L'effet de la nature sur les statistiques devient celui de `nature` (la nature elle-même ne change pas). |
+| `balle` | Capture, avec `valeur` × la chance de base (255 = toujours, Master Ball). |
+| `evolution` | Fait évoluer les créatures dont une évolution a `mode: "objet"` et cet `objet`. |
+| `repousse` | Pas de rencontres pendant `valeur` pas. |
+| `passage` | Ouvre un passage : un objet requis de zone, à la place des CS. |
+
+Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, `mauvais`, `assure`, `docile`, `relax`, `malin`, `lache`, `timide`, `presse`, `serieux`, `jovial`, `naif`, `modeste`, `doux`, `discret`, `pudique`, `foufou`, `calme`, `gentil`, `malpoli`, `prudent`, `bizarre`) : +10 % sur une statistique, −10 % sur une autre (les cinq neutres ne changent rien).
+
+#### `donnees/dresseurs.json`
+
+```json
+{ "format": "tafl-dresseurs", "version": 1, "dresseurs": [
+  { "id": "mia", "nom": "Mia", "classe": "Rivale", "personnage": "mia", "argent": 300, "ajuste": true,
+    "equipe": [{ "creature": "carapuce", "niveau": 6, "nature": "", "objet": "", "attaques": [] }],
+    "dialogue_avant": "On se bat ?", "dialogue_victoire": "Bien joué…", "dialogue_defaite": "Reviens quand tu seras prêt !" }
+] }
+```
+
+- `personnage` : son id dans `personnages.json` (portrait, couleur), ou `""`.
+- `equipe` : 6 créatures au plus ; `nature` `""` = au hasard ; `attaques` vide = les dernières apprises à son niveau.
+- `ajuste` : son niveau suit la progression du joueur (voir `reglages.json`).
+- `argent` : ce que gagne le joueur. Chaque victoire compte dans le compteur `dresseurs_battus`.
+
+#### `donnees/boutiques.json`
+
+```json
+{ "format": "tafl-boutiques", "version": 1, "boutiques": [
+  { "id": "boutique-du-bourg", "nom": "Boutique du bourg", "description": "", "rachete": true, "achete_creatures": false,
+    "articles": [
+      { "sorte": "objet", "id": "potion", "prix": 0, "condition": null },
+      { "sorte": "objet", "id": "super-ball", "prix": 0, "condition": { "type": "compteur", "compteur": "captures", "min": 10 } },
+      { "sorte": "creature", "id": "evoli", "niveau": 10, "prix": 5000, "condition": { "type": "quete", "quete": "la-pension", "etat": "finie", "etape": 0 } }
+    ] }
+] }
+```
+
+- `prix` : `0` = le prix de l'objet dans `objets.json`.
+- `condition` : `null` = toujours en vente, sinon une condition des événements (voir « Conditions ») : un compteur (captures, dresseurs battus, évolutions, badges), une quête, un interrupteur, un objet. L'article apparaît quand elle est vraie.
+- `rachete` : le joueur peut y revendre ses objets (à moitié prix). `achete_creatures` : il peut y vendre ses créatures.
+
+#### `donnees/reglages.json`
+
+```json
+{ "format": "tafl-reglages", "version": 1, "reglages": {
+  "monnaie": "Pokédollars", "argent_depart": 3000, "equipe_max": 6,
+  "plafonds": [{ "badges": 0, "niveau": 15 }, { "badges": 1, "niveau": 20 }, { "badges": 8, "niveau": 100 }],
+  "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096
+} }
+```
+
+- `plafonds` : le niveau maximum des créatures du joueur selon ses badges.
+- `ajustement` : comment les dresseurs `ajuste: true` règlent leur niveau : `"aucun"`, `"equipe"` (le meilleur niveau de l'équipe du joueur), `"badges"` (le plafond des badges du joueur). Leur niveau devient cette référence plus `ecart`, sans descendre sous celui écrit dans leur équipe.
+- `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
+
 ## Exemple de lecture (JavaScript)
 
 ```js
@@ -357,3 +533,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 
 - **Version 1** (Tafl 0.6) : dossier de jeu, plusieurs cartes, calques avec profondeur, opacité, fusion et parallaxe, passage et collisions, zones, téléporteurs, départ du joueur.
 - **Version 1, ajouts de Tafl 0.7** : `evenements` dans les cartes (pages, conditions, commandes), `donnees` dans `jeu.json`, et le dossier `donnees/` (personnages avec portraits, quêtes, interrupteurs). Ce sont des champs en plus : un fichier de Tafl 0.6 se lit pareil (sans événements ni données), donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.8** : les bases de données (`types`, `talents`, `attaques`, `creatures`, `objets`, `dresseurs`, `boutiques`, `reglages` dans `donnees/`), `rencontres` et `taux` dans les zones, `ambiance` dans les cartes. Des champs en plus, donc la version reste 1.

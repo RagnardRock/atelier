@@ -79,11 +79,13 @@ const Doc = (() => {
       zones: [],
       warps: [],
       events: [],
+      // Tafl 0.8 : météo et teinte de la carte ({ meteo, intensite, teinte, force }, voir donnees.js).
+      ambiance: { meteo: 'aucune', intensite: 50, teinte: '', force: 30 },
     };
   }
   // Identifiant d'une carte : son nom en minuscules sans accents (« Bourg Palette » → bourg-palette).
   // Il sert de nom de fichier (cartes/bourg-palette.json) et ne change plus ensuite.
-  const slug = (name, fallback = 'carte') => String(name || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
+  const slug = (name, fallback = 'carte') => String(name || '').replace(/œ/g, 'oe').replace(/Œ/g, 'Oe').replace(/æ/g, 'ae').replace(/Æ/g, 'Ae').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
   function uniqueMapId(doc, name) {
     const base = slug(name);
     const ids = new Set(doc.maps.map((m) => m.id));
@@ -106,7 +108,7 @@ const Doc = (() => {
       mapIndex: 0,
       map: null,
       depart: null,
-      data: { personnages: [], quetes: [], interrupteurs: [] },
+      data: Events.emptyData(),
       current: 0,
       dirty: false,
       undo: [],
@@ -437,7 +439,7 @@ const Doc = (() => {
   function addMap(doc, { name, width = doc.map.width, height = doc.map.height, copyOf = null } = {}) {
     const id = uniqueMapId(doc, name);
     const map = copyOf
-      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z })), warps: copyOf.warps.map((w) => ({ ...w })), events: structuredClone(copyOf.events) }
+      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z, rencontres: (z.rencontres || []).map((r) => ({ ...r })) })), ambiance: { ...copyOf.ambiance }, warps: copyOf.warps.map((w) => ({ ...w })), events: structuredClone(copyOf.events) }
       : newMap({ id, name, width, height });
     doc.maps.splice(doc.mapIndex + 1, 0, map);
     selectMap(doc, doc.mapIndex + 1);
