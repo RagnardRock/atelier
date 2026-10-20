@@ -229,6 +229,24 @@ handle('game:open', async (_event, target) => {
   return { folder, path: file, jeu, tuiles, cartes, donnees };
 });
 
+// Tafl 0.8 : importer les données officielles Pokémon (PokeAPI, voir officiel.js), à la demande.
+// Seuls les fichiers de PokeAPI sur GitHub sont téléchargés.
+const officiel = require('./officiel');
+handle('officiel:importer', async (event, options) => {
+  const telecharger = async (url) => {
+    if (!url.startsWith('https://raw.githubusercontent.com/PokeAPI/')) throw new Error('Adresse refusée');
+    const r = await net.fetch(url);
+    if (!r.ok) throw new Error(`${url} : ${r.status}`);
+    return Buffer.from(await r.arrayBuffer());
+  };
+  const progres = (p) => { if (!event.sender.isDestroyed()) event.sender.send('officiel:progres', p); };
+  try {
+    return await officiel.importer(options || {}, progres, telecharger);
+  } catch (err) {
+    throw new Error(`Import impossible (es-tu connecté à Internet ?) : ${err.message}`);
+  }
+});
+
 // Le jeu.json d'un dossier de jeu, s'il y en a un (Atelier ouvre Tafl sur un dossier de projet).
 handle('game:find', async (_event, folder) => {
   const file = path.join(path.resolve(String(folder || '')), 'jeu.json');

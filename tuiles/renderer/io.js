@@ -59,7 +59,9 @@ const IO = (() => {
       passage: [...map.passage],
       // Le passage final de chaque case, recalculé à chaque enregistrement (le moteur lit celui-ci).
       collisions: [...Doc.collisions(doc, map)],
-      zones: map.zones.map((z) => ({ id: z.id, nom: z.name, type: z.type, x: z.x, y: z.y, largeur: z.w, hauteur: z.h, objetRequis: z.objet || null })),
+      zones: map.zones.map((z) => ({ id: z.id, nom: z.name, type: z.type, x: z.x, y: z.y, largeur: z.w, hauteur: z.h, objetRequis: z.objet || null, taux: z.taux ?? 10, rencontres: z.rencontres || [] })),
+      // Tafl 0.8 : la météo et la teinte de la carte.
+      ambiance: map.ambiance,
       teleporteurs: map.warps.map((w) => ({ id: w.id, x: w.x, y: w.y, vers: { carte: w.carte, x: w.tx, y: w.ty, direction: w.direction } })),
       // Tafl 0.7 : personnages, panneaux, coffres… avec leur script (déjà au format du fichier, voir events.js).
       evenements: map.events,
@@ -85,7 +87,9 @@ const IO = (() => {
     map.zones = (Array.isArray(data.zones) ? data.zones : []).map((z, i) => ({
       id: String(z.id || `zone-${i + 1}`), name: String(z.nom || ''), type: oneOf(z.type, Doc.ZONES, 'autre'),
       x: clamp(int(z.x), 0, width - 1), y: clamp(int(z.y), 0, height - 1), w: Math.max(1, int(z.largeur, 1)), h: Math.max(1, int(z.hauteur, 1)), objet: z.objetRequis ? String(z.objetRequis) : '',
+      taux: clamp(int(z.taux, 10), 0, 100), rencontres: Donnees.normRencontres(z.rencontres),
     }));
+    map.ambiance = Donnees.normAmbiance(data.ambiance);
     map.warps = (Array.isArray(data.teleporteurs) ? data.teleporteurs : []).filter((w) => w?.vers?.carte).map((w, i) => ({
       id: String(w.id || `tp-${i + 1}`), x: clamp(int(w.x), 0, width - 1), y: clamp(int(w.y), 0, height - 1),
       carte: String(w.vers.carte), tx: int(w.vers.x), ty: int(w.vers.y), direction: oneOf(w.vers.direction, Doc.DIRECTIONS, 'bas'),
@@ -203,7 +207,8 @@ const IO = (() => {
   //   jeu.json        le titre, la liste des cartes, le départ du joueur
   //   tuiles.tafl     les tuiles, partagées par toutes les cartes
   //   cartes/*.json   une carte par fichier
-  //   donnees/*.json  personnages, quêtes, interrupteurs (Tafl 0.7)
+  //   donnees/*.json  personnages, quêtes, interrupteurs (Tafl 0.7), types, attaques, créatures,
+  //                   objets, dresseurs, boutiques, réglages… (Tafl 0.8)
   //   FORMAT.md       la description de ces fichiers (copiée par Tafl à chaque enregistrement)
   async function openGame(path) {
     if (!path) throw new Error('Ce jeu.json n\'a pas de chemin sur le disque : ouvre-le avec Fichier › Ouvrir.');
@@ -248,7 +253,7 @@ const IO = (() => {
   }
 
   const mapFile = (m) => `cartes/${m.id}.json`;
-  const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs'];
+  const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs', ...Donnees.SORTES];
   const dataFile = (kind) => `donnees/${kind}.json`;
   function gameFiles(doc) {
     const jeu = {

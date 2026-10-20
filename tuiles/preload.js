@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld('tafl', {
   findGame: (folder) => ipcRenderer.invoke('game:find', folder),
   registerGame: (file) => ipcRenderer.invoke('game:register', file),
   writeGame: (folder, files, remove) => ipcRenderer.invoke('game:write', folder, files, remove),
+  // Données officielles Pokémon (Tafl 0.8, officiel.js)
+  importerOfficiel: (options) => ipcRenderer.invoke('officiel:importer', options),
+  onImportProgres: (callback) => ipcRenderer.on('officiel:progres', (_event, p) => callback(p)),
   // Chemin d'un fichier glissé depuis l'Explorateur Windows sur la fenêtre.
   pathOfDropped: (file) => webUtils.getPathForFile(file),
   startupFile: () => ipcRenderer.invoke('file:startup'),

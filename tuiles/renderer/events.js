@@ -59,6 +59,8 @@ const Events = (() => {
     return `${prefix}-${n}`;
   }
 
+  // Le nom d'une donnée de Tafl 0.8 (créature, objet, dresseur, boutique), sinon son identifiant.
+  const nomData = (doc, sorte, id) => (doc.data[sorte] || []).find((o) => o.id === id)?.nom || id;
   const perso = (doc, id) => doc.data.personnages.find((p) => p.id === id) || null;
   const quete = (doc, id) => doc.data.quetes.find((q) => q.id === id) || null;
   // Le portrait d'un personnage pour une expression (sinon « normal », sinon le premier).
@@ -116,7 +118,7 @@ const Events = (() => {
   }
   // Les identifiants d'objets déjà utilisés (proposés quand on en tape un).
   function objetsUtilises(doc) {
-    const out = new Set(['potion', 'super-potion', 'poke-ball', 'planche-de-surf', 'velo', 'canne-a-peche']);
+    const out = new Set(doc.data.objets?.length ? [] : ['potion', 'super-potion', 'poke-ball', 'planche-de-surf', 'velo', 'canne-a-peche']);
     for (const m of doc.maps) for (const z of m.zones) if (z.objet) out.add(z.objet);
     parcourirJeu(doc, (u) => { const c = u.commande || u.condition; if (c.type === 'objet' && c.objet) out.add(c.objet); });
     return out;
@@ -130,7 +132,8 @@ const Events = (() => {
     };
     set('tafl-expressions', [...EXPRESSIONS, ...doc.data.personnages.flatMap((p) => p.portraits.map((x) => x.expression))]);
     set('tafl-interrupteurs', doc.data.interrupteurs.map((i) => i.id));
-    set('tafl-objets', [...objetsUtilises(doc)]);
+    set('tafl-objets', [...(doc.data.objets || []).map((o) => o.id), ...objetsUtilises(doc)]);
+    if (typeof Donnees !== 'undefined' && doc.data.creatures) Donnees.listes(doc.data);
   }
 
   // --- Les commandes d'un script ---
@@ -216,46 +219,46 @@ const Events = (() => {
         { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['donner', 'Donner au joueur'], ['retirer', 'Retirer au joueur']] },
         { key: 'objet', label: 'Objet', type: 'text', value: c.objet, list: 'tafl-objets', placeholder: 'potion' },
         { key: 'nombre', label: 'Combien', type: 'number', value: c.nombre, min: 1, max: 999 },
-        { type: 'info', text: 'L\'identifiant de l\'objet (potion, planche-de-surf…). La liste des objets, avec leurs effets et leurs prix, arrive avec Tafl 0.8.' },
+        { type: 'info', text: 'L\'identifiant de l\'objet (potion, planche-de-surf…), parmi les objets de Jeu › Données du jeu.' },
       ],
       depuis: (v) => ({ type: 'objet', action: v.action, objet: Doc.slug(v.objet, ''), nombre: clamp(Math.round(v.nombre) || 1, 1, 999) }),
       valide: (c) => (c.objet ? null : 'Quel objet ?'),
-      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Donner'} ${c.nombre} × ${c.objet}`,
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Donner'} ${c.nombre} × ${nomData(doc, 'objets', c.objet)}`,
     },
     creature: {
       nom: 'Donner une créature', icone: 'heart', groupe: 'Objets et créatures',
       nouveau: () => ({ type: 'creature', creature: '', niveau: 5 }),
       champs: (doc, c) => [
-        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, placeholder: 'starter-feu' },
+        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, list: 'tafl-creatures', placeholder: 'salameche' },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
-        { type: 'info', text: 'Le starter, un cadeau, un échange… L\'identifiant de la créature : la liste des créatures arrive avec Tafl 0.8.' },
+        { type: 'info', text: 'Le starter, un cadeau, un échange… Une créature de Jeu › Données du jeu.' },
       ],
       depuis: (v) => ({ type: 'creature', creature: Doc.slug(v.creature, ''), niveau: clamp(Math.round(v.niveau) || 5, 1, 100) }),
       valide: (c) => (c.creature ? null : 'Quelle créature ?'),
-      resume: (doc, c) => `Donner ${c.creature} (niveau ${c.niveau})`,
+      resume: (doc, c) => `Donner ${nomData(doc, 'creatures', c.creature)} (niveau ${c.niveau})`,
     },
     combat_sauvage: {
       nom: 'Combat contre une créature', icone: 'flame', groupe: 'Objets et créatures',
       nouveau: () => ({ type: 'combat_sauvage', creature: '', niveau: 50 }),
       champs: (doc, c) => [
-        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, placeholder: 'legendaire-du-lac' },
+        { key: 'creature', label: 'Créature', type: 'text', value: c.creature, list: 'tafl-creatures', placeholder: 'legendaire-du-lac' },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
         { type: 'info', text: 'Un combat contre une créature précise, qu\'on peut capturer : un légendaire au bout d\'une quête, un gardien qui bloque la route…' },
       ],
       depuis: (v) => ({ type: 'combat_sauvage', creature: Doc.slug(v.creature, ''), niveau: clamp(Math.round(v.niveau) || 5, 1, 100) }),
       valide: (c) => (c.creature ? null : 'Quelle créature ?'),
-      resume: (doc, c) => `Combat contre ${c.creature} (niveau ${c.niveau})`,
+      resume: (doc, c) => `Combat contre ${nomData(doc, 'creatures', c.creature)} (niveau ${c.niveau})`,
     },
     combat_dresseur: {
       nom: 'Combat contre un dresseur', icone: 'person', groupe: 'Objets et créatures',
       nouveau: () => ({ type: 'combat_dresseur', dresseur: '' }),
       champs: (doc, c) => [
-        { key: 'dresseur', label: 'Dresseur', type: 'text', value: c.dresseur, placeholder: 'rival-1' },
-        { type: 'info', text: 'L\'identifiant du dresseur (son équipe arrive avec Tafl 0.8, avec le niveau qui suit la progression du joueur).' },
+        { key: 'dresseur', label: 'Dresseur', type: 'text', value: c.dresseur, list: 'tafl-dresseurs', placeholder: 'rival-1' },
+        { type: 'info', text: 'Un dresseur de Jeu › Données du jeu : son équipe, ses dialogues, l\'argent gagné, et son niveau qui peut suivre la progression du joueur (Réglages).' },
       ],
       depuis: (v) => ({ type: 'combat_dresseur', dresseur: Doc.slug(v.dresseur, '') }),
       valide: (c) => (c.dresseur ? null : 'Quel dresseur ?'),
-      resume: (doc, c) => `Combat contre le dresseur ${c.dresseur}`,
+      resume: (doc, c) => `Combat contre le dresseur ${nomData(doc, 'dresseurs', c.dresseur)}`,
     },
     teleporter: {
       nom: 'Téléporter le joueur', icone: 'debug-step-into', groupe: 'Déplacements',
@@ -299,12 +302,12 @@ const Events = (() => {
       nom: 'Ouvrir une boutique', icone: 'tag', groupe: 'Services',
       nouveau: () => ({ type: 'boutique', boutique: '' }),
       champs: (doc, c) => [
-        { key: 'boutique', label: 'Boutique', type: 'text', value: c.boutique, placeholder: 'boutique-bourg' },
-        { type: 'info', text: 'L\'identifiant de la boutique. Son contenu, et ce qui débloque chaque article (captures, dresseurs battus, évolutions…), arrive avec Tafl 0.8.' },
+        { key: 'boutique', label: 'Boutique', type: 'text', value: c.boutique, list: 'tafl-boutiques', placeholder: 'boutique-bourg' },
+        { type: 'info', text: 'Une boutique de Jeu › Données du jeu : ses articles, et ce qui débloque chacun (captures, dresseurs battus, évolutions, quêtes…).' },
       ],
       depuis: (v) => ({ type: 'boutique', boutique: Doc.slug(v.boutique, '') }),
       valide: (c) => (c.boutique ? null : 'Quelle boutique ?'),
-      resume: (doc, c) => `Ouvrir la boutique ${c.boutique}`,
+      resume: (doc, c) => `Ouvrir la boutique ${nomData(doc, 'boutiques', c.boutique)}`,
     },
     ecran_ev: {
       nom: 'Écran des EV (centre de soins)', icone: 'settings', groupe: 'Services',
@@ -439,7 +442,7 @@ const Events = (() => {
     return out;
   }
 
-  const emptyData = () => ({ personnages: [], quetes: [], interrupteurs: [] });
+  const emptyData = () => ({ personnages: [], quetes: [], interrupteurs: [], ...(typeof Donnees !== 'undefined' ? Donnees.vides() : {}) });
   // Les données du jeu, lues d'un fichier (ou données par Claude) : identifiants uniques, valeurs sûres.
   function normData(d, tileCount = Infinity) {
     const uniques = (list) => {
@@ -475,6 +478,8 @@ const Events = (() => {
         nom: str(s?.nom || s?.id, `Interrupteur ${i + 1}`),
         description: str(s?.description),
       }))),
+      // Tafl 0.8 : types, talents, attaques, créatures, objets, dresseurs, boutiques, réglages (donnees.js).
+      ...(typeof Donnees !== 'undefined' ? Donnees.normer(d) : {}),
     };
   }
 
@@ -522,6 +527,11 @@ const Events = (() => {
         }
         for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique']]) {
           if (c.type === type && !str(c[champ]).trim()) erreurs.push(`${ici} (${type}) : ${champ} manquant.`);
+        }
+        // Tafl 0.8 : si le jeu a une liste de cette sorte, la référence doit y être.
+        for (const [type, champ, sorte] of [['objet', 'objet', 'objets'], ['creature', 'creature', 'creatures'], ['combat_sauvage', 'creature', 'creatures'], ['combat_dresseur', 'dresseur', 'dresseurs'], ['boutique', 'boutique', 'boutiques']]) {
+          const l = doc.data[sorte] || [];
+          if (c.type === type && c[champ] && l.length && !l.some((o) => o.id === c[champ])) erreurs.push(`${ici} (${type}) : pas de ${sorte.replace(/s$/, '')} « ${c[champ]} » dans les données (voir_donnees pour chercher).`);
         }
         if (c.type === 'teleporter' && !Doc.mapById(doc, c.carte)) erreurs.push(`${ici} (teleporter) : pas de carte « ${c.carte} » (${doc.maps.map((m) => m.id).join(', ')}).`);
         if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ici} (quete) : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune : crée-la avec l\'action quete'}).`);
@@ -869,8 +879,25 @@ const Events = (() => {
     });
   }
 
-  // --- Jeu › Données du jeu : personnages, quêtes, interrupteurs ---
-  const ONGLETS = [['personnages', 'Personnages', 'person'], ['quetes', 'Quêtes', 'book'], ['interrupteurs', 'Interrupteurs', 'symbol-boolean']];
+  // --- Jeu › Données du jeu : personnages, quêtes, interrupteurs (0.7), et les bases de Tafl 0.8 ---
+  // Chaque onglet : { key, groupe, label, icon, kind (pour « Utilisé par »), base (nom d'un nouveau),
+  // nouveau(id, work), meta(o, work), lead(o), vide, form(o, ctx), unique (un seul objet, sans liste) }.
+  // Les onglets de Tafl 0.8 viennent de donnees.js (Donnees.ONGLETS).
+  const ONGLETS = [
+    { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
+      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [] }),
+      meta: (o) => (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
+      vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
+    { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
+      nouveau: (id) => ({ id, titre: 'Nouvelle quête', description: '', secondaire: false, suivante: '', personnages: [], etapes: [{ texte: '' }] }),
+      meta: (o) => (o.secondaire ? 'secondaire' : 'principale'),
+      vide: 'Aucune quête. Une quête a des étapes ; les scripts des événements la commencent, la font avancer et la finissent.' },
+    { key: 'interrupteurs', groupe: 'Histoire', label: 'Interrupteurs', icon: 'symbol-boolean', kind: 'interrupteur', base: 'Nouvel interrupteur',
+      nouveau: (id) => ({ id, nom: 'Nouvel interrupteur', description: '' }), meta: () => '',
+      vide: 'Aucun interrupteur. Ils se créent aussi tout seuls quand un script en utilise un nouveau.' },
+  ];
+  const onglets = () => [...ONGLETS, ...(typeof Donnees !== 'undefined' ? Donnees.ONGLETS : [])];
+  const MAX_LIGNES = 250; // au-delà, on cherche (1025 créatures, c'est long à faire défiler)
   const readDataURL = (bytes, name) => new Promise((resolve, reject) => {
     const type = /\.gif$/i.test(name) ? 'image/gif' : /\.webp$/i.test(name) ? 'image/webp' : /\.jpe?g$/i.test(name) ? 'image/jpeg' : /\.bmp$/i.test(name) ? 'image/bmp' : 'image/png';
     const r = new FileReader();
@@ -891,57 +918,100 @@ const Events = (() => {
     return new Promise((resolve) => {
       const work = structuredClone(doc.data);
       const avant = JSON.stringify(work);
+      let importe = false;
       const nouveaux = new Set(); // créés dans cette fenêtre : leur identifiant suit encore leur nom
-      const choisis = { personnages: 0, quetes: 0, interrupteurs: 0 };
-      let tab = onglet;
-      const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1100 });
+      const defs = onglets();
+      const choisis = Object.fromEntries(defs.map((d) => [d.key, 0]));
+      const recherches = Object.fromEntries(defs.map((d) => [d.key, '']));
+      let tab = defs.some((d) => d.key === onglet) ? onglet : 'personnages';
+      const def = () => defs.find((d) => d.key === tab);
+      const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1320 });
+      w.card.classList.add('data-editor');
+      const nav = el('nav', { className: 'data-nav' });
       const liste = el('div', { className: 'data-list' });
       const form = el('div', { className: 'editor-main data-form' });
-      w.body.append(liste, form);
+      w.body.append(nav, liste, form);
 
-      function renderTabs() {
-        w.tabs.replaceChildren(...ONGLETS.map(([k, l, ic]) => {
-          const b = el('button', { className: k === tab ? 'active' : '' }, [icon(ic), `${l} `, el('span', { className: 'panel-count', textContent: work[k].length })]);
-          b.onclick = () => { tab = k; render(); };
-          return b;
-        }));
+      function renderNav() {
+        const out = [];
+        let groupe = '';
+        for (const d of defs) {
+          if (d.groupe !== groupe) { groupe = d.groupe; out.push(el('div', { className: 'data-nav-group', textContent: groupe })); }
+          const b = el('button', { className: d.key === tab ? 'active' : '' }, [icon(d.icon), el('span', { className: 'data-nav-label', textContent: d.label }), d.unique ? null : el('span', { className: 'panel-count', textContent: work[d.key].length })]);
+          b.onclick = () => { tab = d.key; render(); };
+          out.push(b);
+        }
+        if (typeof Donnees !== 'undefined') {
+          const imp = el('button', { className: 'data-import', title: 'Types, talents, attaques, créatures, objets officiels, en français (PokeAPI)' }, [icon('cloud-download'), el('span', { textContent: 'Importer les données officielles…' })]);
+          imp.onclick = importer;
+          out.push(el('div', { className: 'data-nav-fill' }), imp);
+        }
+        nav.replaceChildren(...out);
       }
-      const libelleItem = (o) => (tab === 'quetes' ? o.titre : o.nom) || o.id;
+      async function importer() {
+        const options = await Donnees.demanderImport();
+        if (!options) return;
+        try {
+          const imp = await Donnees.telechargerOfficiel(options);
+          const { data, bilan } = Donnees.fusionner(work, imp, { maj: options.maj });
+          Object.assign(work, data);
+          importe = true;
+          render();
+          const n = (k) => bilan[k].ajoutes + bilan[k].misAJour;
+          notify(`Importé : ${n('types')} types, ${n('talents')} talents, ${n('attaques')} attaques, ${n('creatures')} créatures, ${n('objets')} objets. Valide pour les garder.`, 'success');
+        } catch (err) { notify(cleanError(err), 'error'); }
+      }
+      const nomDe = (o) => o[def().nomKey || 'nom'] || o.id;
       function renderListe() {
+        const d = def();
+        if (d.unique) { liste.hidden = true; return; }
+        liste.hidden = false;
         const items = work[tab];
         choisis[tab] = clamp(choisis[tab], 0, Math.max(0, items.length - 1));
-        const ajouter = el('button', { className: 'button small', title: 'Ajouter' }, [icon('add'), { personnages: ' Personnage', quetes: ' Quête', interrupteurs: ' Interrupteur' }[tab]]);
+        const ajouter = el('button', { className: 'button small', title: 'Ajouter' }, [icon('add'), ` ${d.label.replace(/s$/, '')}`]);
         ajouter.onclick = () => {
-          const base = { personnages: 'Nouveau personnage', quetes: 'Nouvelle quête', interrupteurs: 'Nouvel interrupteur' }[tab];
-          const id = ident(base, items, 'x');
-          const o = tab === 'personnages' ? { id, nom: base, description: '', heros: false, couleur: '', tuile: -1, portraits: [] }
-            : tab === 'quetes' ? { id, titre: base, description: '', secondaire: false, suivante: '', personnages: [], etapes: [{ texte: '' }] }
-              : { id, nom: base, description: '' };
+          const o = d.nouveau(ident(d.base, items, 'x'), work);
           items.push(o);
           nouveaux.add(o);
+          recherches[tab] = '';
           choisis[tab] = items.length - 1;
           render();
           form.querySelector('input[type=text]')?.select();
         };
+        const cherche = el('input', { type: 'search', className: 'data-search', placeholder: `Chercher (${items.length})`, value: recherches[tab] });
+        cherche.oninput = () => { recherches[tab] = cherche.value; lignes(); };
         const rows = el('div', { className: 'rows' });
-        items.forEach((o, i) => {
-          const lead = tab === 'personnages' && o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : el('i', { className: `codicon codicon-${ONGLETS.find(([k]) => k === tab)[2]} lead` });
-          const meta = tab === 'personnages' ? (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`) : tab === 'quetes' ? (o.secondaire ? 'secondaire' : 'principale') : '';
-          const row = el('button', { className: `row${i === choisis[tab] ? ' active' : ''}` }, [lead, el('span', { className: 'row-name', textContent: libelleItem(o) }), meta ? el('span', { className: 'badge', textContent: meta }) : null]);
-          row.onclick = () => { choisis[tab] = i; render(); };
-          rows.append(row);
-        });
-        if (!items.length) rows.append(el('p', { className: 'modal-info', textContent: { personnages: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…', quetes: 'Aucune quête. Une quête a des étapes ; les scripts des événements la commencent, la font avancer et la finissent.', interrupteurs: 'Aucun interrupteur. Ils se créent aussi tout seuls quand un script en utilise un nouveau.' }[tab] }));
-        liste.replaceChildren(el('div', { className: 'data-list-head' }, [ajouter]), rows);
+        const lignes = () => {
+          const q = Doc.slug(recherches[tab], '');
+          const chercher = d.chercher || ((o) => `${nomDe(o)} ${o.id}`);
+          const trouves = [];
+          items.forEach((o, i) => { if (!q || Doc.slug(chercher(o), '').includes(q)) trouves.push(i); });
+          rows.replaceChildren();
+          for (const i of trouves.slice(0, MAX_LIGNES)) {
+            const o = items[i];
+            const meta = d.meta(o, work);
+            const row = el('button', { className: `row${i === choisis[tab] ? ' active' : ''}` }, [d.lead?.(o) || el('i', { className: `codicon codicon-${d.icon} lead` }), el('span', { className: 'row-name', textContent: nomDe(o) }), meta ? el('span', { className: 'badge', textContent: meta }) : null]);
+            row.onclick = () => { choisis[tab] = i; renderListe(); renderForm(); };
+            rows.append(row);
+          }
+          if (trouves.length > MAX_LIGNES) rows.append(el('p', { className: 'modal-info', textContent: `… et ${trouves.length - MAX_LIGNES} autres : cherche par nom ou numéro.` }));
+          if (!items.length) rows.append(el('p', { className: 'modal-info', textContent: d.vide }));
+          else if (!trouves.length) rows.append(el('p', { className: 'modal-info', textContent: 'Rien ne correspond.' }));
+        };
+        lignes();
+        const focus = document.activeElement?.classList?.contains('data-search');
+        liste.replaceChildren(el('div', { className: 'data-list-head' }, [cherche, ajouter]), rows);
+        if (focus) { cherche.focus(); cherche.setSelectionRange(cherche.value.length, cherche.value.length); }
+        rows.querySelector('.row.active')?.scrollIntoView({ block: 'nearest' });
       }
 
       const input = (o, key, placeholder = '', after = null) => {
-        const i = el('input', { type: 'text', value: o[key], placeholder });
+        const i = el('input', { type: 'text', value: o[key] ?? '', placeholder });
         i.oninput = () => { o[key] = i.value; after?.(); };
         return i;
       };
       const zone = (o, key, rows, placeholder = '') => {
-        const t = el('textarea', { rows, value: o[key], placeholder });
+        const t = el('textarea', { rows, value: o[key] ?? '', placeholder });
         t.oninput = () => { o[key] = t.value; };
         return t;
       };
@@ -954,21 +1024,23 @@ const Events = (() => {
       const idLigne = (o, items) => {
         const span = el('code', { className: 'data-id', textContent: o.id });
         const maj = () => {
-          if (nouveaux.has(o)) o.id = ident((tab === 'quetes' ? o.titre : o.nom) || 'x', items.filter((x) => x !== o), 'x');
+          if (nouveaux.has(o)) o.id = ident(nomDe(o) || 'x', items.filter((x) => x !== o), 'x');
           span.textContent = o.id;
           renderListe();
         };
-        return { el: el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Identifiant' }), span, el('span', { className: 'unit', textContent: nouveaux.has(o) ? 'suit le nom (ensuite il ne change plus)' : 'utilisé par les scripts' })]), maj };
+        return { el: el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Identifiant' }), span, el('span', { className: 'unit', textContent: nouveaux.has(o) ? 'suit le nom (ensuite il ne change plus)' : o.officiel ? `officiel (${o.officiel}), utilisé par les scripts` : 'utilisé par les scripts' })]), maj };
       };
+      const vue = () => ({ ...doc, data: work });
+      const usagesDe = (kind, id) => (['personnage', 'quete', 'interrupteur'].includes(kind) ? utilisations(vue(), kind, id) : Donnees.utilisations(vue(), kind, id));
       const usages = (kind, id) => {
-        const u = utilisations(doc, kind, id);
-        return el('p', { className: 'modal-info', textContent: u.length ? `Utilisé par : ${u.slice(0, 12).join(' · ')}${u.length > 12 ? ` (et ${u.length - 12} autres)` : ''}` : 'Pas encore utilisé dans les scripts.' });
+        const u = usagesDe(kind, id);
+        return el('p', { className: 'modal-info', textContent: u.length ? `Utilisé par : ${u.slice(0, 12).join(' · ')}${u.length > 12 ? ` (et ${u.length - 12} autres)` : ''}` : 'Pas encore utilisé.' });
       };
       async function supprimer(items, i, kind) {
         const o = items[i];
-        const u = utilisations(doc, kind, o.id);
+        const u = usagesDe(kind, o.id);
         if (u.length) {
-          const go = await Dialogs.ask('Supprimer', `« ${libelleItem(o)} » est utilisé par ${u.length} endroit(s) : ${u.slice(0, 6).join(', ')}${u.length > 6 ? '…' : ''}. Les scripts garderont son identifiant (${o.id}) sans le retrouver.`, [
+          const go = await Dialogs.ask('Supprimer', `« ${nomDe(o)} » est utilisé par ${u.length} endroit(s) : ${u.slice(0, 6).join(', ')}${u.length > 6 ? '…' : ''}. Ils garderont son identifiant (${o.id}) sans le retrouver.`, [
             { label: 'Annuler', value: false },
             { label: 'Supprimer', value: true, primary: true },
           ]);
@@ -977,6 +1049,7 @@ const Events = (() => {
         items.splice(i, 1);
         render();
       }
+
 
       function formPersonnage(p, items, i) {
         const idl = idLigne(p, items);
@@ -1030,14 +1103,13 @@ const Events = (() => {
             return c;
           })()),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur du nom' }), couleur, sansCouleur, el('span', { className: 'unit', textContent: 'dans les boîtes de dialogue' })]),
-          champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'En attendant ses sprites (Tafl 0.8) : la tuile qui le montre sur la carte'),
+          champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'En attendant ses sprites de marche : la tuile qui le montre sur la carte'),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,
           section('Utilisation'),
           usages('personnage', p.id),
         );
-        w.bouton.supprimer = () => supprimer(items, i, 'personnage');
       }
 
       function formQuete(q, items, i) {
@@ -1082,7 +1154,6 @@ const Events = (() => {
           section('Utilisation'),
           usages('quete', q.id),
         );
-        w.bouton.supprimer = () => supprimer(items, i, 'quete');
       }
 
       function formInterrupteur(s, items, i) {
@@ -1095,31 +1166,44 @@ const Events = (() => {
           section('Utilisation'),
           usages('interrupteur', s.id),
         );
-        w.bouton.supprimer = () => supprimer(items, i, 'interrupteur');
       }
 
       function renderForm() {
         form.replaceChildren();
+        const d = def();
+        if (d.unique) {
+          supprimerBtn.hidden = true;
+          d.form(work[tab], ctx());
+          return;
+        }
         const items = work[tab];
-        const o = items[choisis[tab]];
+        const i = choisis[tab];
+        const o = items[i];
         supprimerBtn.hidden = !o;
+        w.bouton.supprimer = o ? () => supprimer(items, i, d.kind) : null;
         if (!o) return;
-        if (tab === 'personnages') formPersonnage(o, items, choisis[tab]);
-        else if (tab === 'quetes') formQuete(o, items, choisis[tab]);
-        else formInterrupteur(o, items, choisis[tab]);
+        if (tab === 'personnages') formPersonnage(o, items, i);
+        else if (tab === 'quetes') formQuete(o, items, i);
+        else if (tab === 'interrupteurs') formInterrupteur(o, items, i);
+        else d.form(o, ctx());
+        form.scrollTop = 0;
       }
+      // Ce que les onglets de donnees.js reçoivent pour construire leur formulaire.
+      const ctx = () => ({ doc, work, form, input, zone, coche, idLigne: (o) => idLigne(o, work[tab]), usages, render, renderListe });
       function render() {
-        listes({ ...doc, data: work });
-        renderTabs();
+        listes(vue());
+        if (typeof Donnees !== 'undefined') Donnees.listes(work);
+        renderNav();
         renderListe();
         renderForm();
       }
 
+      const change = () => importe || JSON.stringify(work) !== avant;
       const finir = (r) => { w.root.remove(); courant = null; resolve(r); };
-      const fermer = async () => { if (await abandonner(JSON.stringify(work) !== avant)) finir(null); };
-      const valider = () => finir(JSON.stringify(work) === avant ? null : normData(work, doc.tiles.length));
+      const fermer = async () => { if (await abandonner(change())) finir(null); };
+      const valider = () => finir(change() ? normData(work, doc.tiles.length) : null);
       w.close.onclick = fermer;
-      w.hint.textContent = 'Les personnages, quêtes et interrupteurs servent dans les scripts des événements (outil Événement, N).';
+      w.hint.textContent = 'Tout sert dans les scripts des événements (outil Événement, N), les zones et les combats.';
       const supprimerBtn = w.bouton('Supprimer', () => w.bouton.supprimer?.());
       w.bouton('Annuler', fermer);
       w.bouton('Valider', valider, true);
@@ -1132,6 +1216,6 @@ const Events = (() => {
     TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
-    editEvent, editData, isOpen, handleKey,
+    editEvent, editData, isOpen, handleKey, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
   };
 })();

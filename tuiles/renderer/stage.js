@@ -349,6 +349,7 @@ const Stage = (() => {
         ctx.fillRect(v.x + x * cell, v.y + y * cell, cell, cell);
       }
     };
+    if (App.options.showAmbiance && map.ambiance) drawAmbiance(map.ambiance, mw, mh, cell, now);
     const passageMode = App.options.layer < 0;
     if (passageMode || App.options.showPassage) drawPassage(cell);
     if (preview?.points) {
@@ -428,6 +429,72 @@ const Stage = (() => {
       ctx.fill();
     }
   }
+  // L'ambiance de la carte (Tafl 0.8) : la teinte en « produit », puis la météo, qui bouge quand
+  // l'animation est en marche. C'est un aperçu : le moteur du jeu fera la sienne.
+  const hasard = (n) => { const x = Math.sin(n * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  function drawAmbiance(a, mw, mh, cell, now) {
+    const v = view();
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(v.x, v.y, mw, mh);
+    ctx.clip();
+    if (a.teinte && a.force) {
+      ctx.globalAlpha = a.force / 100;
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = a.teinte;
+      ctx.fillRect(v.x, v.y, mw, mh);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
+    const t = now / 1000;
+    const surface = (mw / cell) * (mh / cell);
+    const n = Math.round(surface * (a.intensite / 100) * (a.meteo === 'brouillard' ? 0.04 : a.meteo === 'lucioles' ? 0.08 : 0.5));
+    for (let i = 0; i < n && a.meteo !== 'aucune'; i++) {
+      const bx = hasard(i + 1), by = hasard(i + 101), vit = 0.6 + hasard(i + 201) * 0.6;
+      if (a.meteo === 'pluie' || a.meteo === 'orage') {
+        const y = ((by + t * vit * 1.6) % 1) * (mh + cell * 2) - cell;
+        const x = ((bx - t * vit * 0.25) % 1 + 1) % 1 * mw;
+        ctx.strokeStyle = 'rgba(200, 220, 255, 0.45)';
+        ctx.lineWidth = Math.max(1, cell / 16);
+        ctx.beginPath();
+        ctx.moveTo(v.x + x, v.y + y);
+        ctx.lineTo(v.x + x - cell * 0.18, v.y + y + cell * 0.75);
+        ctx.stroke();
+      } else if (a.meteo === 'neige') {
+        const y = ((by + t * vit * 0.25) % 1) * mh;
+        const x = (((bx + Math.sin(t * vit + i) * 0.01) % 1) + 1) % 1 * mw;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillRect(v.x + x, v.y + y, Math.max(1, cell / 8), Math.max(1, cell / 8));
+      } else if (a.meteo === 'feuilles') {
+        const y = ((by + t * vit * 0.12) % 1) * mh;
+        const x = (((bx + Math.sin(t * vit * 1.5 + i) * 0.02) % 1) + 1) % 1 * mw;
+        ctx.fillStyle = hasard(i + 301) > 0.5 ? 'rgba(214, 120, 52, 0.9)' : 'rgba(186, 150, 60, 0.9)';
+        ctx.fillRect(v.x + x, v.y + y, Math.max(2, cell / 5), Math.max(1, cell / 8));
+      } else if (a.meteo === 'lucioles') {
+        const x = (bx + Math.sin(t * 0.3 * vit + i) * 0.01) * mw, y = (by + Math.cos(t * 0.25 * vit + i) * 0.01) * mh;
+        const r = Math.max(2, cell / 6);
+        const g = ctx.createRadialGradient(v.x + x, v.y + y, 0, v.x + x, v.y + y, r * 2);
+        g.addColorStop(0, `rgba(230, 255, 150, ${0.5 + 0.5 * Math.sin(t * 2 + i)})`);
+        g.addColorStop(1, 'rgba(230, 255, 150, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(v.x + x - r * 2, v.y + y - r * 2, r * 4, r * 4);
+      } else if (a.meteo === 'brouillard') {
+        const x = ((bx + t * 0.01 * vit) % 1) * mw, y = by * mh, r = cell * (3 + hasard(i + 401) * 4);
+        const g = ctx.createRadialGradient(v.x + x, v.y + y, 0, v.x + x, v.y + y, r);
+        g.addColorStop(0, 'rgba(220, 226, 235, 0.28)');
+        g.addColorStop(1, 'rgba(220, 226, 235, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(v.x + x - r, v.y + y - r, r * 2, r * 2);
+      }
+    }
+    // L'orage : un éclair de temps en temps.
+    if (a.meteo === 'orage' && now && (t % 7) < 0.12) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.fillRect(v.x, v.y, mw, mh);
+    }
+    ctx.restore();
+  }
+
   function drawPassage(cell) {
     const doc = App.doc, { map } = doc;
     const final = Doc.collisions(doc, map);
