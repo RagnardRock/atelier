@@ -8,7 +8,7 @@ Tout reste sur ton PC, dans `%APPDATA%\atelier-hub` : réglages (`config.json`),
 
 Comme Rune et Skald : télécharge le dernier `Atelier-Setup-….exe` dans l'onglet **Releases** du dépôt, double-clique-le (si Windows affiche « Windows a protégé votre ordinateur » : **Informations complémentaires**, puis **Exécuter quand même**). Atelier s'installe dans `%LOCALAPPDATA%\Programs\Atelier`, sans droits administrateur.
 
-Ensuite, Atelier installe lui-même Rune et Skald : plus besoin d'aller dans les Releases.
+Ensuite, Atelier installe lui-même Rune, Skald et Brokk : plus besoin d'aller dans les Releases.
 
 ## La colonne Outils
 
@@ -37,7 +37,7 @@ Chaque widget s'affiche ou se cache dans les réglages (`Ctrl+,`). Sur un écran
 - **Notes** : la première ligne devient le titre. Tout s'enregistre une demi-seconde après la dernière frappe. `Ctrl+N` nouvelle note, `Ctrl+F` chercher, l'épingle garde une note en haut.
 - **Projets récents** : les dossiers de ton dossier de projets (`D:\Projets` par défaut, réglable), du plus récent au plus ancien, avec leur type (Vue, Vite, Node, HTML, Images…), leur branche Git, les fichiers modifiés (● jaune), les commits à pousser (↑) ou à récupérer (↓).
   - **Un clic ouvre le projet avec son outil**, montré par la petite icône à gauche. Atelier le devine en comptant les fichiers : un projet surtout fait d'images (PSD, AI, PNG, SVG…) s'ouvre dans **Skald** (la fenêtre « Ouvrir » se place dans le dossier), le reste dans **Rune** (sur le dossier).
-  - **Clic droit** : ouvrir avec Rune, Skald ou l'Explorateur, et « Toujours ouvrir ce projet avec… » pour corriger la devinette. Ce choix est gardé dans les réglages d'Atelier, rien n'est ajouté au dossier du projet.
+  - **Clic droit** : ouvrir avec Rune, Skald ou l'Explorateur, **« Exporter les assets avec Brokk »** (Brokk s'ouvre avec ce projet comme destination), et « Toujours ouvrir ce projet avec… » pour corriger la devinette. Ce choix est gardé dans les réglages d'Atelier, rien n'est ajouté au dossier du projet.
   - Il faut Rune 0.12 et Skald 0.3 ou plus : une version plus ancienne s'ouvrirait sur son dernier dossier, alors Atelier te propose plutôt de la mettre à jour.
 - **Presse-papiers et couleurs** : l'historique de ce que tu copies (texte seulement, 40 éléments) ; un clic le recopie. En haut, ta palette : clic sur une pastille = copier en HEX, clic droit = copier en RGB ou HSL. La pipette prend une couleur n'importe où sur l'écran. Un code couleur copié s'affiche avec sa pastille et le bouton ⊕ l'ajoute à la palette. Par défaut, l'historique est oublié à la fermeture (un mot de passe copié ne doit pas finir dans un fichier) ; un réglage permet de le garder.
 - **Minuteurs** : 5, 15, 25 minutes, Pomodoro (25 min de travail, 5 min de pause, grande pause de 15 min toutes les 4 séances, enchaînés tout seuls), ou durée au choix avec `+`. À la fin : un carillon, une notification de Windows, et l'icône d'Atelier clignote dans la barre des tâches. Ils continuent de compter si tu fermes Atelier.
