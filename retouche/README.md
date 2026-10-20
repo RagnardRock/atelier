@@ -91,6 +91,14 @@ Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau C
 - **Conversations** : gardées par projet (bouton horloge), `+` en commence une nouvelle.
 - **Réglages** : le modèle de Claude et la commande `claude` si elle n'est pas trouvée toute seule.
 
+### Claude agit dans Skald (depuis Skald 0.5)
+
+Claude ne fait pas que conseiller : il **voit** l'image ouverte et **travaille dedans**, avec les mêmes fonctions que les menus.
+
+- **Regarder** (sans demander) : l'image entière ou un calque, et les infos du document (taille, calques, sélection).
+- **Agir** (avec ta permission à chaque fois, ou « toujours » pour la suite) : nouvelle image, ouvrir une image du projet, redimensionner, zone de travail, recadrer, rogner le vide, retouches (luminosité et couleurs, flou, netteté, noir et blanc, inverser, retirer une couleur, teinte unie, contour, ombre), calques (créer, dupliquer, fusionner, renommer, opacité, ordre…), sélections, exporter (PNG, WebP, JPEG, ICO) dans le dossier du projet, enregistrer, annuler.
+- Tout passe par l'historique : `Ctrl+Z` annule ce qu'il a fait, comme pour toi. Il n'écrit des fichiers que dans le dossier du projet.
+
 ## Comment c'est construit
 
 Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans des `<canvas>` du navigateur intégré.

@@ -81,6 +81,12 @@ Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau C
 - **Conversations** : gardées par projet (bouton horloge), `+` en commence une nouvelle.
 - **Réglages** : le modèle de Claude et la commande `claude` si elle n'est pas trouvée toute seule.
 
+### Claude agit dans Brokk (depuis Brokk 0.3)
+
+- **Regarder** (sans demander) : le projet, ses assets avec leurs réglages, les recettes et leurs options, et pour un asset la liste des fichiers produits (taille, poids réel), le code à coller et l'image.
+- **Agir** (avec ta permission) : ouvrir un projet, ajouter une image (PSD et calque compris) avec une recette, changer ses réglages, la retirer de la liste, exporter un ou tous les assets.
+- Par exemple : « prépare le favicon depuis logo.psd et l'image de partage » ; il choisit les recettes, règle les options, te montre le résultat, puis exporte quand tu acceptes.
+
 ## Lancer Brokk depuis le clone
 
 ```bat

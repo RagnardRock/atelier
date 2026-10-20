@@ -370,5 +370,5 @@ const IO = (() => {
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { open, openPath, openLoaded, save, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize };
+  return { open, openPath, openLoaded, save, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes };
 })();

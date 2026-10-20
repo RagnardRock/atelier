@@ -45,4 +45,10 @@ contextBridge.exposeInMainWorld('claude', {
   historySave: (conversation) => ipcRenderer.invoke('claude:history:save', conversation),
   historyDelete: (id) => ipcRenderer.invoke('claude:history:delete', id),
   onEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
+  // Actions de l'outil (renderer/claude-actions.js)
+  declarerActions: (liste) => ipcRenderer.invoke('claude:actions', liste),
+  onAction: (callback) => ipcRenderer.on('claude:action', (_event, a) => callback(a)),
+  actionFaite: (id, resultat) => ipcRenderer.invoke('claude:actionFaite', id, resultat),
+  ecrireFichier: (chemin, bytes) => ipcRenderer.invoke('claude:ecrireFichier', chemin, bytes),
+  lireFichier: (chemin) => ipcRenderer.invoke('claude:lireFichier', chemin),
 });

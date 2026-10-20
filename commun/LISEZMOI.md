@@ -1,6 +1,6 @@
 # Code commun aux outils de l'Atelier
 
-Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude**.
+Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude**, et le moyen pour Claude d'**agir dans l'outil**.
 
 | Fichier | Rôle |
 | --- | --- |
@@ -17,3 +17,19 @@ par git : on ne modifie que les fichiers de ce dossier-ci, puis `npm install` da
 
 Rune a son propre panneau Claude (`ide/`), plus riche (contexte de l'éditeur, rechargement des
 fichiers), et sa propre copie de `mcp-commun.js`.
+
+## Les actions de l'outil
+
+Chaque outil décrit ce que Claude peut y faire dans `renderer/claude-actions.js`, avec
+`ClaudePanneau.actions({ nom: { description, schema, lecture, icone, libelle, faire } })`.
+`faire(args)` tourne dans la fenêtre et renvoie un texte, ou `{ texte, image: <canvas> }` pour que
+Claude voie le résultat.
+
+Le chemin d'un appel : Claude Code → `mcp-commun.js` (qui annonce les actions comme des outils
+`mcp__atelier__<nom>`) → un canal privé (tube nommé sous Windows, protégé par un jeton) →
+`claude.js` dans le processus principal → la fenêtre → `faire()` → et retour. Les actions
+`lecture: true` ne demandent pas la permission ; les autres affichent la carte Autoriser / Refuser.
+
+Dans l'outil installé, `mcp-commun.js` est sorti de l'archive `app.asar` (`asarUnpack` dans le
+`package.json` de l'outil) : Claude Code le lance avec le Node d'Electron, qui ne peut pas lire un
+script resté dans l'archive.

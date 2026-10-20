@@ -627,7 +627,68 @@ const App = (() => {
     }
   }
 
+  // --- Pour Claude (claude-actions.js) : les mêmes fonctions que les boutons, sans les fenêtres ---
+  async function ajouterSansDialogue(chemin, { recette, nom, calque } = {}) {
+    if (!projet) throw new Error('Aucun projet ouvert dans Brokk.');
+    const source = await Sources.get(chemin);
+    if (calque && !(source.calques || []).some((c) => c.chemin === calque)) {
+      throw new Error(`Pas de calque « ${calque} » dans ${source.nom}${source.calques?.length ? ` : ${source.calques.map((c) => c.chemin).join(', ')}` : ''}.`);
+    }
+    const base = slug(source.nom.replace(/\.[^.]+$/, ''));
+    const asset = { id: nouvelId(), source: source.chemin, calque: calque || null, rogner: Boolean(calque), recette: null, nom: '', dossier: '', options: {}, memo: {} };
+    const ctx = contexteDe(asset, source);
+    asset.recette = recette || Recettes.deviner(ctx.image, source);
+    if (!Recettes.get(asset.recette)) throw new Error(`Recette inconnue : ${asset.recette} (${Recettes.liste.join(', ')}).`);
+    asset.nom = slug(nom || (calque ? calque.split(' / ').pop() : asset.recette === 'og' ? 'og-image' : base));
+    asset.options = Recettes.get(asset.recette).defauts(ctx);
+    asset.dossier = Recettes.get(asset.recette).dossier(projet);
+    assets.push(asset);
+    courantId = asset.id;
+    sauver();
+    rendreTout();
+    if (config.surveiller) surveiller(true);
+    return asset;
+  }
+  async function regler(asset, { recette, options, nom, dossier }) {
+    if (recette && recette !== asset.recette) {
+      if (!Recettes.get(recette)) throw new Error(`Recette inconnue : ${recette} (${Recettes.liste.join(', ')}).`);
+      changerRecette(asset, recette, contexteDe(asset, await Sources.get(asset.source)));
+    }
+    changer(asset, (a) => {
+      if (options) a.options = { ...a.options, ...options };
+      if (nom) a.nom = slug(nom);
+      if (dossier !== undefined) a.dossier = String(dossier).replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    }, { reglages: true });
+  }
+  function retirer(asset) {
+    const i = assets.indexOf(asset);
+    if (i < 0) return;
+    assets.splice(i, 1);
+    calculs.delete(asset.id);
+    if (courantId === asset.id) courantId = assets[Math.min(i, assets.length - 1)]?.id || null;
+    sauver();
+    rendreTout();
+    if (config.surveiller) surveiller(true);
+  }
+  function choisir(asset) {
+    courantId = asset.id;
+    rendreTout();
+  }
+
   return {
+    claude: {
+      projet: () => projet,
+      assets: () => assets,
+      courant,
+      calculer,
+      octets,
+      ouvrirProjet: (dossier) => window.brokk.ouvrirProjet(dossier).then(chargerProjet),
+      ajouter: ajouterSansDialogue,
+      regler,
+      retirer,
+      choisir,
+      exporter,
+    },
     async start() {
       const lu = await window.brokk.readConfig();
       config = lu.config;

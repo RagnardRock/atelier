@@ -13,11 +13,17 @@
 //
 // (Rune a sa propre copie de ce fichier, ide/mcp-commun.js.)
 //
+// En plus, les actions propres à l'outil (voir l'image, redimensionner, poser des tuiles…) : leur
+// liste est dans le fichier ATELIER_ACTIONS, et chaque appel est transmis à l'outil par le canal
+// local ATELIER_CANAL (avec le jeton ATELIER_JETON). C'est l'outil qui les fait, dans sa fenêtre.
+//
 // MCP (Model Context Protocol) : Claude Code lance ce script, lui demande la liste de ses outils,
 // puis l'appelle quand il veut en utiliser un. Du JSON, un message par ligne (JSON-RPC 2.0).
 // Il est lancé par Electron en mode Node (ELECTRON_RUN_AS_NODE=1), donc sans rien installer de plus.
 
 const crypto = require('node:crypto');
+const fsSync = require('node:fs');
+const net = require('node:net');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
@@ -48,6 +54,30 @@ const OUTILS = [
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
   },
 ];
+
+// Les actions de l'outil : [{ name, description, inputSchema }].
+let ACTIONS = [];
+try { ACTIONS = process.env.ATELIER_ACTIONS ? JSON.parse(fsSync.readFileSync(process.env.ATELIER_ACTIONS, 'utf8')) : []; } catch { ACTIONS = []; }
+const TOUS = [...OUTILS, ...ACTIONS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema }))];
+
+// Envoie une action à l'outil et attend sa réponse ({ texte, image } ou { erreur }).
+function demanderOutil(outil, args) {
+  return new Promise((resolve) => {
+    const socket = net.connect(process.env.ATELIER_CANAL);
+    let recu = '';
+    socket.setEncoding('utf8');
+    socket.on('connect', () => socket.write(`${JSON.stringify({ jeton: process.env.ATELIER_JETON, outil, args })}\n`));
+    socket.on('data', (chunk) => {
+      recu += chunk;
+      const i = recu.indexOf('\n');
+      if (i >= 0) {
+        socket.end();
+        try { resolve(JSON.parse(recu.slice(0, i))); } catch { resolve({ erreur: 'Réponse illisible de l\'outil' }); }
+      }
+    });
+    socket.on('error', (err) => resolve({ erreur: `L'outil ne répond pas (${err.code || err.message}). Est-il toujours ouvert ?` }));
+  });
+}
 
 async function lireJson(fichier, defaut) {
   try { return JSON.parse(await fs.readFile(fichier, 'utf8')); } catch { return defaut; }
@@ -114,7 +144,14 @@ async function recevoir(m) {
   }
   if (id === undefined) return; // notification (notifications/initialized…) : rien à répondre
   if (method === 'ping') return envoyer({ id, result: {} });
-  if (method === 'tools/list') return envoyer({ id, result: { tools: OUTILS } });
+  if (method === 'tools/list') return envoyer({ id, result: { tools: TOUS } });
+  if (method === 'tools/call' && ACTIONS.some((a) => a.name === params.name)) {
+    const r = await demanderOutil(params.name, params.arguments || {});
+    const content = [{ type: 'text', text: r.erreur || r.texte || 'Fait.' }];
+    // Une capture (l'image, la carte…) : Claude la voit comme une image.
+    if (!r.erreur && r.image?.data) content.push({ type: 'image', data: r.image.data, mimeType: r.image.mimeType || 'image/png' });
+    return envoyer({ id, result: { content, isError: Boolean(r.erreur) } });
+  }
   if (method === 'tools/call') {
     try {
       const texte = await appeler(params.name, params.arguments || {});

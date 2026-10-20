@@ -41,12 +41,27 @@ const Ops = (() => {
 
   // Réglage avec aperçu en direct : la fenêtre s'ouvre, chaque curseur bougé recalcule l'aperçu,
   // « Appliquer » le rend définitif (et annulable), « Annuler » remet tout comme avant.
+  // Valeurs données par Claude (claude-actions.js) : le réglage s'applique sans ouvrir sa fenêtre.
+  let imposees = null;
+  async function avecValeurs(valeurs, operation) {
+    imposees = valeurs || {};
+    try { return await operation(); } finally { imposees = null; }
+  }
+
   async function adjust(title, fields, apply) {
     const { doc, layer } = needPixels();
     if (!layer) return;
     const src = layer.canvas;
     let timer = null;
     const run = (v) => limitToSelection(doc, layer, src, apply(src, v, layer));
+    if (imposees) {
+      const values = Object.fromEntries(fields.filter((f) => f.key && f.type !== 'info').map((f) => [f.key, f.value]));
+      for (const [k, v] of Object.entries(imposees)) if (k in values) values[k] = typeof values[k] === 'number' ? Number(v) : v;
+      return change(doc, title, () => {
+        const r = run(values);
+        replacePixels(layer, r.canvas, layer.x + (r.dx || 0), layer.y + (r.dy || 0));
+      });
+    }
     const values = await Dialogs.form({
       title,
       fields,
@@ -675,5 +690,6 @@ const Ops = (() => {
     imageSize, canvasSize, rotateImage, flipLayer, trim, cropToSelection, resample, scaleDocument,
     newLayer, duplicateLayer, deleteLayer, moveLayer, mergeDown, flattenImage, rasterizeLayer, centerLayer, transformLayer,
     selectAll, deselect, clearSelection, fillSelection, layerFromSelection, copy, paste, clipboardSize, canvasToPng,
+    insertLayer, avecValeurs,
   };
 })();

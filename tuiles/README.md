@@ -94,6 +94,15 @@ Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau C
 - **Conversations** : gardées par projet (bouton horloge), `+` en commence une nouvelle.
 - **Réglages** : le modèle de Claude et la commande `claude` si elle n'est pas trouvée toute seule.
 
+### Claude agit dans Tafl (depuis Tafl 0.4)
+
+Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctions que les menus.
+
+- **Regarder** (sans demander) : la planche, une tuile (en image agrandie et pixel par pixel), la carte et ses calques.
+- **Agir** (avec ta permission) : créer un jeu, dessiner une tuile pixel par pixel, dupliquer, retourner, tourner, renommer une tuile, poser des tuiles ou écrire une zone de la carte, changer la taille de la carte, ajouter des couleurs à la palette, exporter la planche ou la carte en PNG, enregistrer, annuler.
+- Les pixels s'échangent en texte, une ligne par rangée : `.` = transparent, puis un caractère par couleur de la palette (`0` à `9`, `a` à `z`…). C'est ce qui lui permet de dessiner une tuile précise.
+- `Ctrl+Z` annule ce qu'il a fait.
+
 ## Pas encore
 
 Tuiles automatiques (bords de chemin et de mare posés tout seuls), calques supplémentaires, collisions et zones (hautes herbes = rencontres), sélection et copier-coller de zones, lien direct avec Skald.
