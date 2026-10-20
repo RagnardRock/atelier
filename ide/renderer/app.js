@@ -204,6 +204,7 @@ function applyConfig() {
   terminalPanel.applyConfig(c);
   applyEmmet(c.emmet, c.vueTools !== false);
   vueTools.applyConfig(c);
+  previewPanel.applyConfig(c);
   updateWelcome();
 }
 
@@ -497,6 +498,7 @@ async function loadFile(path, name) {
       if (isDirty(file)) pin(tab);
       refreshTab(tab);
     }
+    document.dispatchEvent(new CustomEvent('file-edited', { detail: file })); // l'aperçu se met à jour pendant la frappe
   });
   state.files.set(path, file);
   watchHtml(model);
@@ -548,6 +550,7 @@ function releaseIfUnused(file) {
   if (tabsOf(file).length > 0) return;
   file.model.dispose();
   state.files.delete(file.path);
+  document.dispatchEvent(new CustomEvent('file-released', { detail: file })); // son brouillon quitte l'aperçu
 }
 
 // --- Colonnes ---

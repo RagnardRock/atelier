@@ -4,7 +4,7 @@
 // que la fenêtre ne couvre pas.
 //
 // Pour ajouter un réglage : une ligne dans SECTIONS, avec sa clé de config et son type
-// (toggle, segmented, range, text, color, shortcut, profiles, htmlRules).
+// (toggle, segmented, range, text, number, color, shortcut, profiles, htmlRules).
 
 const settings = (() => {
   const ACCENTS = ['#e0a526', '#ff7a59', '#f25f8b', '#b18cff', '#6c8cff', '#38bdf8', '#2dd4bf', '#7ccf62'];
@@ -46,6 +46,10 @@ const settings = (() => {
       { key: 'claudeModel', label: 'Modèle', type: 'segmented', options: [['', 'Par défaut'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']], help: '« Par défaut » = celui choisi dans Claude Code. Opus est le plus fort, Haiku le plus rapide. Pris en compte à la prochaine conversation.' },
       { key: 'claudePermissionMode', label: 'Modifications de fichiers', type: 'segmented', options: [['ask', 'Demander à chaque fois'], ['acceptEdits', 'Accepter sans demander']], help: 'Les commandes demandent toujours ton accord. Pris en compte à la prochaine conversation.' },
       { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', help: '« claude » si Claude Code est installé avec npm. Sinon, son chemin complet.' },
+    ] },
+    { id: 'apercu', title: 'Aperçu', icon: 'open-preview', fields: [
+      { key: 'previewLive', label: 'Mise à jour pendant la frappe', type: 'toggle', help: 'La page de l\'aperçu (et Go Live) change dès que tu tapes, sans attendre Ctrl+S. Désactivé : seulement à l\'enregistrement, comme Live Server.' },
+      { key: 'previewPort', label: 'Port du serveur', type: 'number', min: 1024, max: 65535, help: 'L\'adresse devient http://127.0.0.1:<port>/. Un port fixe garde valable l\'onglet de ton navigateur d\'une session à l\'autre. S\'il est déjà pris, un port libre est choisi. 0 : un port au hasard.' },
     ] },
     { id: 'html', title: 'Vérification HTML', icon: 'checklist', fields: [
       { key: 'htmlRules', type: 'htmlRules', help: 'Règles de HTMLHint. Une règle cochée souligne le problème dans tes fichiers HTML.' },
@@ -260,6 +264,20 @@ const settings = (() => {
       input.value = value;
       input.spellcheck = false;
       input.onchange = () => set(field.key, input.value.trim());
+      input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
+      return input;
+    },
+
+    // Un nombre entier entre min et max (0 accepté : "au hasard"). Une valeur hors limites est refusée.
+    number(field, value) {
+      const input = el('input', 'text-input number-input');
+      Object.assign(input, { type: 'number', min: 0, max: field.max, step: 1, value });
+      input.onchange = () => {
+        const n = Number(input.value);
+        if (Number.isInteger(n) && (n === 0 || (n >= field.min && n <= field.max))) return set(field.key, n);
+        notify.warning(`${field.label} : un nombre entre ${field.min} et ${field.max}, ou 0.`);
+        input.value = state.config[field.key];
+      };
       input.onkeydown = (e) => { if (e.key === 'Enter') input.blur(); };
       return input;
     },

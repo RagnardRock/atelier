@@ -38,8 +38,10 @@ contextBridge.exposeInMainWorld('atelier', {
   searchText: (options, texts) => ipcRenderer.invoke('search:text', options, texts),
   renamePath: (from, to) => ipcRenderer.invoke('path:rename', from, to),
   trashPath: (target) => ipcRenderer.invoke('path:trash', target),
-  previewUrl: (file) => ipcRenderer.invoke('preview:url', file),
+  previewUrl: (file, port) => ipcRenderer.invoke('preview:url', file, port),
   previewExternal: (url) => ipcRenderer.invoke('preview:external', url),
+  previewDraft: (file, text, quiet) => ipcRenderer.invoke('preview:draft', file, text, quiet),
+  previewClearDrafts: () => ipcRenderer.invoke('preview:clearDrafts'),
   gitStatus: () => ipcRenderer.invoke('git:status'),
   // Nouveau projet (Vue, Vite, site HTML…)
   projectDefaults: () => ipcRenderer.invoke('project:defaults'),
