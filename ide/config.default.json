@@ -19,6 +19,7 @@
   "claudeCommand": "claude",
   "claudeModel": "",
   "claudePermissionMode": "ask",
+  "claudeAtelier": true,
   "terminalFontSize": 14,
   "terminalProfiles": [
     { "name": "PowerShell", "command": "default", "args": [] }

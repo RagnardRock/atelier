@@ -45,6 +45,7 @@ const settings = (() => {
     { id: 'claude', title: 'Claude', icon: 'sparkle', fields: [
       { key: 'claudeModel', label: 'Modèle', type: 'segmented', options: [['', 'Par défaut'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']], help: '« Par défaut » = celui choisi dans Claude Code. Opus est le plus fort, Haiku le plus rapide. Pris en compte à la prochaine conversation.' },
       { key: 'claudePermissionMode', label: 'Modifications de fichiers', type: 'segmented', options: [['ask', 'Demander à chaque fois'], ['acceptEdits', 'Accepter sans demander']], help: 'Les commandes demandent toujours ton accord. Pris en compte à la prochaine conversation.' },
+      { key: 'claudeAtelier', label: 'Mémoire partagée avec Atelier', type: 'toggle', help: 'Claude lit la mémoire du projet ouvert et tes notes (gardées par Atelier, dans %APPDATA%\\atelier-commun), et peut y retenir une info avec ta permission. Pris en compte à la prochaine conversation.' },
       { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', help: '« claude » si Claude Code est installé avec npm. Sinon, son chemin complet.' },
     ] },
     { id: 'apercu', title: 'Aperçu', icon: 'open-preview', fields: [

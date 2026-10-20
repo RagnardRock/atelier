@@ -345,6 +345,10 @@ const claudePanel = (() => {
       case 'WebFetch': return ['globe', `Lit la page ${inp.url || ''}`];
       case 'WebSearch': return ['globe', `Cherche sur le web « ${inp.query || ''} »`];
       case 'TodoWrite': return ['checklist', 'Met à jour sa liste de tâches'];
+      case 'mcp__atelier__lire_contexte': return ['bookmark', 'Lit la mémoire du projet (Atelier)'];
+      case 'mcp__atelier__lire_notes': return ['note', 'Lit tes notes (Atelier)'];
+      case 'mcp__atelier__retenir_projet': return ['bookmark', `Retient : ${inp.texte || ''}`];
+      case 'mcp__atelier__oublier_projet': return ['bookmark', `Oublie l'info ${inp.id || ''} du projet`];
       case 'Task': case 'Agent': return ['organization', `Confie une tâche à un sous-agent : ${inp.description || ''}`];
       default: return ['tools', name];
     }
