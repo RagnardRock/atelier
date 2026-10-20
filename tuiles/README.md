@@ -84,6 +84,16 @@ Molette : zoom autour de la souris. Espace ou bouton du milieu : déplacer la vu
 
 **Réglages** (`Ctrl+,` ou l'engrenage) : couleur d'accent, verre dépoli, flou de Windows 11, taille de tuile et palette par défaut, grilles, nombre d'annulations gardées.
 
+## Claude dans Tafl (depuis Tafl 0.3)
+
+Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
+
+- **Avec ton compte Claude, sans clé d'API** : Tafl fait tourner Claude Code, installé une fois sur ton PC (`npm install -g @anthropic-ai/claude-code`, puis `claude` pour te connecter).
+- **Il continue le projet commencé dans Atelier** : il travaille dans le dossier du projet avec lequel Atelier a ouvert Tafl (sinon le dernier projet ouvert depuis Atelier, affiché en haut du panneau). Il lit la mémoire de ce projet (ce que le Claude d'Atelier ou de Rune a retenu) et tes notes, grâce au dossier partagé `%APPDATA%\atelier-commun` (Atelier 0.8 ou plus).
+- **Toujours avec ta permission** : avant de modifier un fichier, de lancer une commande ou de retenir une info sur le projet, une carte te demande Autoriser ou Refuser. Ce qu'il retient apparaît aussitôt dans Atelier.
+- **Conversations** : gardées par projet (bouton horloge), `+` en commence une nouvelle.
+- **Réglages** : le modèle de Claude et la commande `claude` si elle n'est pas trouvée toute seule.
+
 ## Pas encore
 
 Tuiles automatiques (bords de chemin et de mare posés tout seuls), calques supplémentaires, collisions et zones (hautes herbes = rencontres), sélection et copier-coller de zones, lien direct avec Skald.

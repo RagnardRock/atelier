@@ -599,6 +599,8 @@ const App = (() => {
         { key: 'pixelGrid', label: 'Grille des pixels (mode Tuile)', type: 'checkbox', value: api.config.pixelGrid },
         { key: 'tileGrid', label: 'Grille des cases (mode Carte)', type: 'checkbox', value: api.config.tileGrid },
         { key: 'historySteps', label: 'Étapes d\'annulation gardées', type: 'number', value: api.config.historySteps, min: 5, max: 500 },
+        { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
+        { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude' },
         { type: 'info', text: `Tafl ${version}. Réglages enregistrés dans ${api.configPath}.` },
       ],
       onInput(values, f) {

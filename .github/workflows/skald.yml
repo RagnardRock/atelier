@@ -1,5 +1,5 @@
 # Fabrique l'installeur Windows de Skald (Skald-Setup-<version>.exe) sur un PC Windows de GitHub.
-# - Sur une pull request qui touche retouche/ : l'installeur est fabriqué pour vérifier que tout marche,
+# - Sur une pull request qui touche retouche/ (ou commun/, le panneau Claude) : l'installeur est fabriqué pour vérifier que tout marche,
 #   et se télécharge depuis l'onglet « Checks » de la PR (rubrique « Artifacts »).
 # - Sur main, quand la version de retouche/package.json change (par exemple après la fusion d'une PR) :
 #   GitHub crée lui-même l'étiquette skald-vX.Y.Z et publie l'installeur dans l'onglet « Releases ».
@@ -13,10 +13,10 @@ name: Skald (installeur Windows)
 
 on:
   pull_request:
-    paths: ['retouche/**', '.github/workflows/skald.yml']
+    paths: ['retouche/**', 'commun/**', '.github/workflows/skald.yml']
   push:
     branches: [main]
-    paths: ['retouche/**', '.github/workflows/skald.yml']
+    paths: ['retouche/**', 'commun/**', '.github/workflows/skald.yml']
     tags: ['skald-v*']
   workflow_dispatch:
 

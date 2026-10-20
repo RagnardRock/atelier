@@ -13,10 +13,10 @@ name: Brokk (installeur Windows)
 
 on:
   pull_request:
-    paths: ['export/**', '.github/workflows/brokk.yml']
+    paths: ['export/**', 'commun/**', '.github/workflows/brokk.yml']
   push:
     branches: [main]
-    paths: ['export/**', '.github/workflows/brokk.yml']
+    paths: ['export/**', 'commun/**', '.github/workflows/brokk.yml']
     tags: ['brokk-v*']
   workflow_dispatch:
 

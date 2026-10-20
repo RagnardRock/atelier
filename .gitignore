@@ -4,3 +4,6 @@ retouche/dist/
 hub/dist/
 export/dist/
 tuiles/dist/
+retouche/commun/
+tuiles/commun/
+export/commun/

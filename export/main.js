@@ -58,6 +58,8 @@ function handle(channel, fn) {
 // Elle est gardée ici plutôt que dans le projet : Brokk ne laisse aucun fichier à lui dans tes projets.
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CONFIG = {
+  claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
+  claudeModel: '',
   accentColor: '#ff7a3d',
   glass: true,
   windowBlur: false,
@@ -83,6 +85,10 @@ async function writeConfig(config) {
   await fs.writeFile(temp, JSON.stringify(config, null, 2), 'utf8');
   await fs.rename(temp, configPath());
 }
+
+// --- Panneau Claude (le même que dans Skald, Tafl : voir ../commun/LISEZMOI.md) ---
+const claude = require('./commun/claude');
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Brokk', role: "l'outil d'export d'assets web de Ragna (favicons, icônes, WebP, @2x, Open Graph)" } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 // Les modifications des réglages passent une par une (lire, changer, écrire) : deux modifications
@@ -434,6 +440,7 @@ const folderFromArgs = (argv) => argv.slice(app.isPackaged ? 1 : 2)
 const filesFromArgs = (argv) => argv.slice(1).filter((a) => !a.startsWith('-') && isImage(a) && fsSync.existsSync(a)).map((a) => path.resolve(a));
 
 let startupFolder = folderFromArgs(process.argv);
+claude.setProjet(startupFolder); // le projet avec lequel Atelier a ouvert l'outil
 if (startupFolder) projetsAutorises.add(startupFolder);
 let startupFiles = filesFromArgs(process.argv);
 handle('startup', async () => {
@@ -493,6 +500,7 @@ if (!app.requestSingleInstanceLock()) {
     if (win.isMinimized()) win.restore();
     win.focus();
     const folder = folderFromArgs(argv);
+    claude.setProjet(folder);
     if (folder) {
       projetsAutorises.add(folder);
       win.webContents.send('projet:externe', folder);
@@ -508,4 +516,5 @@ if (!app.requestSingleInstanceLock()) {
     createWindow(config);
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => claude.stop());
 }
