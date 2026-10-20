@@ -5,6 +5,7 @@ Mes outils perso, réunis dans un seul dépôt :
 - **Atelier** ᚨ, le hub qui lance, installe et met à jour les outils, avec ses widgets (`hub/`) : voir [hub/README.md](hub/README.md).
 - **Rune** ᚱ, mon IDE (`ide/`), décrit ci-dessous.
 - **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
+- **Tafl** ᛏ, mes tuiles et cartes en pixel art, façon Pokémon (`tuiles/`) : voir [tuiles/README.md](tuiles/README.md).
 
 Les prochains (panneau serveur…) viendront à côté.
 
