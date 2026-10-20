@@ -31,7 +31,13 @@ const $ = (sel) => document.querySelector(sel);
 
 require.config({ paths: { vs: `${MONACO_BASE}vs` } });
 // Interface de Monaco en français (menu clic droit, recherche…), puis l'éditeur lui-même.
-require(['vs/nls.messages.fr'], () => require(['vs/editor/editor.main'], start));
+// On attend aussi que tous les scripts de la page soient chargés (DOMContentLoaded) : Monaco peut
+// être prêt avant eux, et start() utilise previewPanel, terminalPanel… définis dans les suivants.
+const pageReady = new Promise((resolve) => {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', resolve, { once: true });
+  else resolve();
+});
+require(['vs/nls.messages.fr'], () => require(['vs/editor/editor.main'], () => pageReady.then(start)));
 
 // Fichiers .vue et .svelte : Monaco ne les connaît pas. Ce sont du HTML avec <script> et <style>,
 // donc on leur donne la coloration du HTML, sous leur propre nom (pour que la vérification HTML,
