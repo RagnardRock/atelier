@@ -113,7 +113,8 @@ const ClaudeWidget = (() => {
   }
 
   // --- Actions dans Atelier ---
-  const NOMS_OUTILS = { rune: 'Rune', skald: 'Skald', explorateur: 'l\'Explorateur' };
+  // Les outils d'Atelier (Rune, Skald, Brokk… : la colonne Outils), et l'Explorateur.
+  const nomOutil = (id) => (id === 'explorateur' ? 'l\'Explorateur' : Outils.liste.find((o) => o.id === id)?.nom || id);
   const debut = (t) => { const l = String(t || '').split('\n').find((x) => x.trim()) || ''; return l.length > 60 ? `${l.slice(0, 60)}…` : l; };
   // [icône, phrase, détail à montrer sur la carte]
   function decrireAction(action, a = {}) {
@@ -125,8 +126,10 @@ const ClaudeWidget = (() => {
       case 'modifier_evenement': return ['edit', `Modifier l'évènement ${Calendrier.decrire(a.id) || a.id} : ${['titre', 'date', 'heure', 'note'].filter((k) => a[k] !== undefined).map((k) => `${k} → ${a[k] || '(vide)'}`).join(', ')}`];
       case 'supprimer_evenement': return ['trash', `Supprimer l'évènement ${Calendrier.decrire(a.id) || a.id}`];
       case 'lancer_minuteur': return ['watch', `Lancer un minuteur${a.nom ? ` « ${a.nom} »` : ''} de ${a.minutes} min`];
-      case 'ouvrir_projet': return ['folder-opened', `Ouvrir le projet ${a.nom}${a.outil ? ` dans ${NOMS_OUTILS[a.outil] || a.outil}` : ''}`];
-      case 'lancer_outil': return ['rocket', `Lancer ${NOMS_OUTILS[a.outil] || a.outil}`];
+      case 'ouvrir_projet': return ['folder-opened', `Ouvrir le projet ${a.nom}${a.outil ? ` dans ${nomOutil(a.outil)}` : ''}`];
+      case 'lancer_outil': return ['rocket', `Lancer ${nomOutil(a.outil)}`];
+      case 'retenir_projet': return ['bookmark', `Retenir sur ${a.projet} : « ${debut(a.texte)} »`, a.texte];
+      case 'oublier_projet': return ['bookmark', `Oublier sur ${a.projet} : « ${debut(Projets.infoMemoire(a.projet, a.id)?.texte || a.id)} »`];
       default: return ['tools', action];
     }
   }
@@ -146,13 +149,15 @@ const ClaudeWidget = (() => {
       if (!p) throw new Error(`Aucun projet récent ne s'appelle ${a.nom}`);
       const outil = a.outil || p.outil;
       await window.atelier.ouvrirProjet(p.dossier, outil);
-      return `${p.nom} s'ouvre dans ${NOMS_OUTILS[outil] || outil}.`;
+      return `${p.nom} s'ouvre dans ${nomOutil(outil)}.`;
     },
     async lancer_outil(a) {
-      if (!NOMS_OUTILS[a.outil] || a.outil === 'explorateur') throw new Error(`Outil inconnu : ${a.outil}`);
+      if (!Outils.liste.some((o) => o.id === a.outil)) throw new Error(`Outil inconnu : ${a.outil} (outils : ${Outils.liste.map((o) => o.id).join(', ')})`);
       await window.atelier.lancer(a.outil);
-      return `${NOMS_OUTILS[a.outil]} se lance.`;
+      return `${nomOutil(a.outil)} se lance.`;
     },
+    retenir_projet: (a) => Projets.retenir(a.projet, a.texte),
+    oublier_projet: (a) => Projets.oublier(a.projet, a.id),
   };
   window.atelier.onClaudeAction(async ({ id, outil, args }) => {
     let resultat;
@@ -171,7 +176,7 @@ const ClaudeWidget = (() => {
     const [icone, phrase, detail] = decrireAction(e.action, e.input);
     const refuser = el('button', { className: 'button small', textContent: 'Refuser' });
     const autoriser = el('button', { className: 'button small primary', textContent: 'Autoriser' });
-    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils' };
+    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets' };
     const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Claude ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
     const carte = el('div', { className: 'claude-carte' },
       el('div', { className: 'claude-carte-titre' }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: phrase })),

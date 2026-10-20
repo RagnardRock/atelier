@@ -533,3 +533,5 @@ input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px s
 .claude-carte-boutons { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .claude-carte-toujours { align-self: flex-end; padding: 0; border: none; background: none; color: var(--muted); font-size: 12px; text-align: left; text-decoration: underline dotted; cursor: pointer; }
 .claude-carte-toujours:hover { color: var(--text-strong); }
+/* Projets récents : marque-page « Claude retient quelque chose sur ce projet » */
+.projet-memoire { font-size: 12px; color: var(--accent); flex-shrink: 0; }
