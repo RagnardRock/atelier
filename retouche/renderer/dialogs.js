@@ -4,10 +4,75 @@
 // Un champ : { key, label, type, value, ... } avec type parmi
 //   number, range (curseur + nombre), select, checkbox, color, text, textarea, info (texte seul).
 // onInput(values, form) est appelé à chaque modification (pour l'aperçu en direct).
+//
+// Quand Claude lance une commande d'un menu (claude-actions.js), la fenêtre s'ouvre pour de vrai,
+// se remplit avec les valeurs qu'il a données et se valide toute seule : voir automatique().
 
 const Dialogs = (() => {
   const root = $('#modal-root');
   let open = null;
+
+  // --- Fenêtres remplies par Claude ---
+  // automatique({ valeurs, choix, apercu }, fn) lance fn ; chaque fenêtre ouverte pendant ce temps
+  // prend ses valeurs dans « valeurs » (un objet, ou une liste : un objet par fenêtre, dans l'ordre),
+  // puis se valide (ou s'annule avec apercu: true, pour seulement connaître ses champs).
+  // Une question (ask) prend le bouton dont la valeur ou le libellé vaut « choix », sinon le bouton principal.
+  // Renvoie { resultat, fenetres } : ce que chaque fenêtre demandait et les valeurs utilisées.
+  let auto = null;
+  async function automatique(options, fn) {
+    const avant = auto;
+    const a = { ...options, fenetres: [], n: 0 };
+    auto = a;
+    try {
+      const resultat = await fn();
+      // Une fenêtre peut s'ouvrir un peu plus tard (après la lecture d'un fichier…) ou être encore en
+      // train de se valider : on attend que plus rien ne bouge.
+      let vues = -1;
+      for (let t = 0; t < 50 && (vues !== a.fenetres.length || open); t++) {
+        vues = a.fenetres.length;
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      return { resultat, fenetres: a.fenetres };
+    } finally {
+      auto = avant;
+    }
+  }
+  const decrireChamp = (f) => {
+    const d = { cle: f.key, libelle: f.label, type: f.type };
+    if (f.choices) d.choix = f.choices.map(([v, l]) => (v === l ? v : `${v} (${l})`));
+    if (f.min !== undefined) d.min = f.min;
+    if (f.max !== undefined) d.max = f.max;
+    if (f.unit) d.unite = f.unit;
+    return d;
+  };
+  function remplir(a, title, api, finish) {
+    const voulues = (Array.isArray(a.valeurs) ? a.valeurs[a.n] : a.valeurs) || {};
+    a.n++;
+    const fenetre = { titre: title, champs: Object.values(api.inputs).filter((i) => !i.row.hidden).map((i) => decrireChamp(i.field)) };
+    a.fenetres.push(fenetre);
+    const inconnues = Object.keys(voulues).filter((k) => !api.inputs[k]);
+    const erreurs = [];
+    if (inconnues.length && !a.apercu) erreurs.push(`champs inconnus : ${inconnues.join(', ')}`);
+    // Les listes d'abord : choisir un modèle peut changer les autres champs (nouvelle image…).
+    const cles = Object.keys(voulues).filter((k) => api.inputs[k]).sort((x, y) => (api.inputs[y].field.type === 'select') - (api.inputs[x].field.type === 'select'));
+    for (const k of cles) {
+      const { field } = api.inputs[k];
+      let v = voulues[k];
+      if (field.type === 'select' && !field.choices.some(([c]) => String(c) === String(v))) {
+        erreurs.push(`${k} : « ${v} » n'est pas un choix possible (${field.choices.map(([c]) => c).join(', ')})`);
+        continue;
+      }
+      if (field.type === 'checkbox') v = Boolean(v);
+      // Comme au clavier : certaines fenêtres regardent quel champ a le focus (proportions…).
+      api.inputs[k].input.focus();
+      api.setValue(k, v);
+    }
+    if (erreurs.length) fenetre.erreur = erreurs.join(' ; ');
+    setTimeout(() => {
+      fenetre.valeurs = api.values();
+      finish(a.apercu || erreurs.length ? null : fenetre.valeurs);
+    }, 0);
+  }
 
   function form({ title, fields, okLabel = 'OK', cancelLabel = 'Annuler', onInput, extra, width = 420, buttons = [] }) {
     close(null);
@@ -123,6 +188,7 @@ const Dialogs = (() => {
       root.appendChild(overlay);
       open = { overlay, finish };
       onInput?.(values(), api);
+      if (auto) return remplir(auto, title, api, finish);
       const first = card.querySelector('textarea, input:not([type=range]):not([type=checkbox]), select');
       (first || ok).focus();
       if (first?.select) first.select();
@@ -155,6 +221,12 @@ const Dialogs = (() => {
       overlay.appendChild(card);
       root.appendChild(overlay);
       open = { overlay, finish };
+      if (auto) {
+        const a = auto;
+        const c = choices.find((x) => a.choix !== undefined && (String(x.value) === String(a.choix) || x.label === a.choix)) || choices.find((x) => x.primary) || choices[choices.length - 1];
+        a.fenetres.push({ titre: title, question: message, boutons: choices.map((x) => x.label), reponse: a.apercu ? 'Annuler (aperçu)' : c.label });
+        return setTimeout(() => finish(a.apercu ? null : c.value), 0);
+      }
       card.querySelector('.button.primary')?.focus();
     });
   }
@@ -257,5 +329,5 @@ const Dialogs = (() => {
     });
   }
 
-  return { form, ask, close, isOpen, newImage, text };
+  return { form, ask, close, isOpen, newImage, text, automatique };
 })();

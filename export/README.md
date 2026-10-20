@@ -86,6 +86,7 @@ Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau C
 - **Regarder** (sans demander) : le projet, ses assets avec leurs réglages, les recettes et leurs options, et pour un asset la liste des fichiers produits (taille, poids réel), le code à coller et l'image.
 - **Agir** (avec ta permission) : ouvrir un projet, ajouter une image (PSD et calque compris) avec une recette, changer ses réglages, la retirer de la liste, exporter un ou tous les assets.
 - Par exemple : « prépare le favicon depuis logo.psd et l'image de partage » ; il choisit les recettes, règle les options, te montre le résultat, puis exporte quand tu acceptes.
+- **Depuis Brokk 0.4** : il voit les calques d'un PSD, change la source d'un asset, son calque et le rognage, duplique un asset et allume ou éteint la surveillance.
 
 ## Lancer Brokk depuis le clone
 

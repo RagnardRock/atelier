@@ -286,6 +286,24 @@ const IO = (() => {
     notify(`Planche exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
+  // Un PNG par tuile : [[nom du fichier, octets], …] (aussi pour Claude, qui écrit dans le projet).
+  async function tileFiles(doc, scale = 1) {
+    const s = doc.tileSize, files = [];
+    const digits = String(doc.tiles.length - 1).length;
+    for (const [i, t] of doc.tiles.entries()) {
+      // Une tuile animée donne un fichier par image : 03-eau-1.png, 03-eau-2.png…
+      for (let k = 0; k < t.frames.length; k++) {
+        const c = el('canvas', { width: s * scale, height: s * scale });
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        g.drawImage(Doc.tileCanvas(t, s, k), 0, 0, s * scale, s * scale);
+        const suffix = Doc.animated(t) ? `-${k + 1}` : '';
+        files.push([`${String(i).padStart(Math.max(2, digits), '0')}-${safeName(t.name)}${suffix}.png`, await canvasBytes(c)]);
+      }
+    }
+    return files;
+  }
+
   async function exportTiles(doc) {
     const v = await Dialogs.form({
       title: 'Exporter les tuiles séparées',
@@ -298,28 +316,13 @@ const IO = (() => {
     if (!v) return;
     const folder = await window.tafl.pickFolder('Dossier où exporter les tuiles');
     if (!folder) return;
-    const scale = Number(v.scale), s = doc.tileSize, sep = window.tafl.platform === 'win32' ? '\\' : '/';
-    const digits = String(doc.tiles.length - 1).length;
-    for (const [i, t] of doc.tiles.entries()) {
-      // Une tuile animée donne un fichier par image : 03-eau-1.png, 03-eau-2.png…
-      for (let k = 0; k < t.frames.length; k++) {
-        const c = el('canvas', { width: s * scale, height: s * scale });
-        const g = c.getContext('2d');
-        g.imageSmoothingEnabled = false;
-        g.drawImage(Doc.tileCanvas(t, s, k), 0, 0, s * scale, s * scale);
-        const suffix = Doc.animated(t) ? `-${k + 1}` : '';
-        await window.tafl.writeFile(`${folder}${sep}${String(i).padStart(Math.max(2, digits), '0')}-${safeName(t.name)}${suffix}.png`, await canvasBytes(c));
-      }
-    }
+    const sep = window.tafl.platform === 'win32' ? '\\' : '/';
+    for (const [name, bytes] of await tileFiles(doc, Number(v.scale))) await window.tafl.writeFile(`${folder}${sep}${name}`, bytes);
     notify(`${doc.tiles.length} tuile(s) exportée(s) dans ${folder}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(folder) }]);
   }
 
-  // La carte au format de Tiled (https://www.mapeditor.org) : un fichier .tmj (JSON) qui pointe vers
-  // la planche PNG posée à côté. Phaser et Godot savent le charger directement.
-  async function exportMap(doc) {
-    const folder = await window.tafl.pickFolder('Dossier où exporter la carte');
-    if (!folder) return;
-    const sep = window.tafl.platform === 'win32' ? '\\' : '/';
+  // Les fichiers de l'export pour Tiled : [[nom, octets], …].
+  async function mapFiles(doc) {
     const base = safeName(doc.name);
     const s = doc.tileSize, { map } = doc;
     const sheet = sheetCanvas(doc, doc.columns, 1);
@@ -347,9 +350,21 @@ const IO = (() => {
         ...(anims.length ? { tiles: anims.map((a) => ({ id: a.id, animation: a.ids.map((tileid) => ({ tileid, duration: a.duration })) })) } : {}),
       }],
     };
-    await window.tafl.writeFile(`${folder}${sep}${base}-tuiles.png`, await canvasBytes(sheet));
-    await window.tafl.writeFile(`${folder}${sep}${base}.tmj`, textBytes(JSON.stringify(tmj, null, 2)));
-    await window.tafl.writeFile(`${folder}${sep}${base}-carte.png`, await canvasBytes(mapCanvas(doc, 1)));
+    return [
+      [`${base}-tuiles.png`, await canvasBytes(sheet)],
+      [`${base}.tmj`, textBytes(JSON.stringify(tmj, null, 2))],
+      [`${base}-carte.png`, await canvasBytes(mapCanvas(doc, 1))],
+    ];
+  }
+
+  // La carte au format de Tiled (https://www.mapeditor.org) : un fichier .tmj (JSON) qui pointe vers
+  // la planche PNG posée à côté. Phaser et Godot savent le charger directement.
+  async function exportMap(doc) {
+    const folder = await window.tafl.pickFolder('Dossier où exporter la carte');
+    if (!folder) return;
+    const sep = window.tafl.platform === 'win32' ? '\\' : '/';
+    const base = safeName(doc.name);
+    for (const [name, bytes] of await mapFiles(doc)) await window.tafl.writeFile(`${folder}${sep}${name}`, bytes);
     notify(`Carte exportée : ${base}.tmj (Tiled), ${base}-tuiles.png et ${base}-carte.png`, 'success', 8000, [{ label: 'Afficher', run: () => window.tafl.revealFile(`${folder}${sep}${base}.tmj`) }]);
   }
 
@@ -370,5 +385,5 @@ const IO = (() => {
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { open, openPath, openLoaded, save, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes };
+  return { open, openPath, openLoaded, save, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
 })();

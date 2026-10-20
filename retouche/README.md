@@ -98,6 +98,11 @@ Claude ne fait pas que conseiller : il **voit** l'image ouverte et **travaille d
 - **Regarder** (sans demander) : l'image entière ou un calque, et les infos du document (taille, calques, sélection).
 - **Agir** (avec ta permission à chaque fois, ou « toujours » pour la suite) : nouvelle image, ouvrir une image du projet, redimensionner, zone de travail, recadrer, rogner le vide, retouches (luminosité et couleurs, flou, netteté, noir et blanc, inverser, retirer une couleur, teinte unie, contour, ombre), calques (créer, dupliquer, fusionner, renommer, opacité, ordre…), sélections, exporter (PNG, WebP, JPEG, ICO) dans le dossier du projet, enregistrer, annuler.
 - Tout passe par l'historique : `Ctrl+Z` annule ce qu'il a fait, comme pour toi. Il n'écrit des fichiers que dans le dossier du projet.
+- **Depuis Skald 0.6, il a accès à tout** :
+  - **Tous les menus** : il lance n'importe quelle commande (niveaux, exposition, rotations, transformer avec des valeurs, calques de remplissage et de réglage, contour progressif, copier-coller…). Quand une commande ouvre une fenêtre de réglages, la vraie fenêtre s'ouvre devant toi, se remplit avec ses valeurs et se valide toute seule.
+  - **Les outils de dessin** : pinceau, gomme, tampon, pot de peinture, dégradé, formes (rectangle, ellipse, ligne, flèche, polygone, étoile), texte, pipette.
+  - **Les sélections** : rectangle, ellipse, polygone (lasso), baguette magique, avec les modes ajouter, retirer et intersection.
+  - **Le reste** : couleurs principale et secondaire, mode de fusion et position d'un calque, réglages d'un calque de réglage, onglets, rétablir, enregistrer sous (PSD dans le projet), pack d'icônes dans le projet.
 
 ## Comment c'est construit
 

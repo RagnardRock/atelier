@@ -796,6 +796,8 @@ const App = (() => {
     refreshTool,
     updateStatus,
     setColor,
+    activate,
+    menus,
     async start() {
       const { config, path } = await window.skald.readConfig();
       api.config = config;
