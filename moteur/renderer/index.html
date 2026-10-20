@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Les images du jeu arrivent en data: (dans les fichiers de Tafl). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+  <title>Saga</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune, Skald et Tafl) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="jeu.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite.
+       En plein écran (F11), elle disparaît. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="saga.svg" alt="">Saga</span>
+    <span id="titre-jeu" hidden></span>
+    <div class="title-actions">
+      <button id="btn-recharger" class="icon-button" title="Recharger le jeu depuis le disque, sans bouger le joueur (F5)" hidden><i class="codicon codicon-refresh"></i></button>
+      <button id="btn-debug" class="icon-button" title="Montrer le passage, les zones et les téléporteurs (F3)" hidden><i class="codicon codicon-debug-alt"></i></button>
+      <button id="btn-plein" class="icon-button" title="Plein écran (F11)"><i class="codicon codicon-screen-full"></i></button>
+      <button id="btn-reglages" class="icon-button" title="Réglages de Saga (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Saga"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Accueil : aucun jeu ouvert -->
+  <section id="accueil">
+    <img class="welcome-logo" src="saga.svg" alt="">
+    <h1>Saga</h1>
+    <p class="welcome-sub">Le moteur de tes jeux : ouvre un jeu fait avec Tafl et joue-le.</p>
+    <div class="welcome-actions">
+      <button id="accueil-ouvrir" class="button primary"><i class="codicon codicon-folder-opened"></i> Ouvrir un jeu <kbd>Ctrl+O</kbd></button>
+    </div>
+    <p class="welcome-hint">Le dossier d'un jeu créé dans Tafl (Fichier › Nouveau jeu), ou son jeu.json. Dans Tafl, le bouton « Jouer » l'ouvre directement ici.</p>
+    <h2 id="accueil-recents-titre" hidden>Jeux récents</h2>
+    <div id="accueil-recents"></div>
+  </section>
+
+  <!-- Le jeu : un canvas à la résolution du jeu, agrandi d'un nombre entier de fois -->
+  <main id="scene" hidden>
+    <canvas id="ecran"></canvas>
+    <!-- Le nom de la carte, qui apparaît quand on y entre -->
+    <div id="bandeau"><span id="bandeau-nom"></span></div>
+    <!-- F3 : où est le joueur, et à quelle vitesse tourne le jeu -->
+    <div id="infos" hidden></div>
+    <!-- Échap : le menu de pause -->
+    <div id="pause" hidden>
+      <div class="pause-carte">
+        <div class="pause-titre"><img src="saga.svg" alt=""><span id="pause-jeu"></span></div>
+        <button class="pause-choix" data-action="reprendre"><i class="codicon codicon-play"></i>Reprendre<kbd>Échap</kbd></button>
+        <button class="pause-choix" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
+        <button class="pause-choix" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
+        <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Réglages</button>
+        <button class="pause-choix" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
+        <button class="pause-choix" data-action="quitter"><i class="codicon codicon-home"></i>Changer de jeu</button>
+        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Plein écran : F11</p>
+      </div>
+    </div>
+  </main>
+
+  <div id="modal-root"></div>
+
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="moteur/jeu.js"></script>
+  <script src="moteur/monde.js"></script>
+  <script src="moteur/sprites.js"></script>
+  <script src="moteur/ambiance.js"></script>
+  <script src="moteur/moteur.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>
