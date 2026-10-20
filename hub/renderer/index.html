@@ -68,6 +68,8 @@
         <footer class="widget-pied discret"><span id="projets-racine"></span></footer>
       </article>
 
+      <!-- Deux widgets plus petits, l'un au-dessus de l'autre dans la même colonne -->
+      <div class="widget-pile">
       <article id="widget-presse-papiers" class="widget plaque">
         <header class="plaque-titre">
           <i class="codicon codicon-clippy"></i><span>Presse-papiers et couleurs</span>
@@ -89,6 +91,23 @@
         <div id="minuteurs-raccourcis"></div>
         <div id="minuteurs-liste"></div>
       </article>
+      </div>
+
+      <article id="widget-calendrier" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-calendar"></i><span id="cal-mois">Calendrier</span>
+          <span class="spacer"></span>
+          <button id="btn-cal-prec" class="icon-button" title="Mois précédent"><i class="codicon codicon-chevron-left"></i></button>
+          <button id="btn-cal-auj" class="button small" title="Revenir à aujourd'hui">Aujourd'hui</button>
+          <button id="btn-cal-suiv" class="icon-button" title="Mois suivant"><i class="codicon codicon-chevron-right"></i></button>
+          <button id="btn-cal-ajout" class="icon-button" title="Nouvel évènement (ou double-clic sur un jour)"><i class="codicon codicon-add"></i></button>
+        </header>
+        <div id="cal-grille"></div>
+        <div id="cal-jour">
+          <div class="cal-jour-titre"><span id="cal-jour-nom"></span></div>
+          <ul id="cal-evenements" class="widget-liste"></ul>
+        </div>
+      </article>
     </section>
   </main>
 
@@ -102,6 +121,7 @@
   <script src="projets.js"></script>
   <script src="presse-papiers.js"></script>
   <script src="minuteurs.js"></script>
+  <script src="calendrier.js"></script>
   <script src="update.js"></script>
   <script src="app.js"></script>
 </body>
