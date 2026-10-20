@@ -558,4 +558,4 @@ async function dossier() {
   return dossierContexte;
 }
 
-module.exports = { register, stop, dossier };
+module.exports = { register, stop, dossier, notesMd };
