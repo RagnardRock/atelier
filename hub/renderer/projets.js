@@ -5,6 +5,8 @@
 // projet surtout fait d'images (PSD, PNG, SVG…), Rune pour le reste. Clic droit : ouvrir avec un
 // autre outil, ou choisir l'outil de ce projet pour de bon (gardé dans les réglages d'Atelier).
 // L'état Git est relu quand la fenêtre d'Atelier revient au premier plan (au plus une fois par minute).
+// Le petit marque-page à côté du nom : ce que Claude retient sur ce projet (survol pour le lire,
+// clic droit › « Ce que Claude retient… » pour le modifier). Gardé dans projets-memoire.json.
 
 const Projets = (() => {
   const liste = $('#projets-liste');
@@ -32,6 +34,7 @@ const Projets = (() => {
           ICONES[p.outil] ? el('img', { className: 'projet-outil', src: ICONES[p.outil], alt: NOMS[p.outil] })
             : el('i', { className: 'codicon codicon-folder projet-outil' }),
           el('span', { className: 'projet-nom', textContent: p.nom }),
+          p.memoire?.length ? el('i', { className: 'codicon codicon-bookmark projet-memoire', title: `Ce que Claude retient :\n${p.memoire.map((m) => `• ${m.texte}`).join('\n')}` }) : null,
           p.type ? el('span', { className: `type type-${p.type.toLowerCase()}`, textContent: p.type }) : null,
           el('span', { className: 'spacer' }),
           el('span', { className: 'discret', textContent: dateRelative(p.activite) }),
@@ -83,7 +86,70 @@ const Projets = (() => {
       ['Rune', () => choix('rune'), choisi && p.outil === 'rune'],
       ['Skald', () => choix('skald'), choisi && p.outil === 'skald'],
       ['L\'Explorateur', () => choix('explorateur'), choisi && p.outil === 'explorateur'],
+      null,
+      [`Ce que Claude retient…${p.memoire?.length ? ` (${p.memoire.length})` : ''}`, () => editerMemoire(p.nom)],
     ]);
+  }
+
+  // --- Mémoire de Claude sur les projets ---
+  // { nomDuProjet: [{ id, texte, quand }] }. On relit toujours le fichier avant d'écrire.
+  const lireMemoire = () => window.atelier.lireDonnees('projets-memoire', {});
+  async function ecrireMemoire(memoire) {
+    for (const nom of Object.keys(memoire)) if (!memoire[nom]?.length) delete memoire[nom];
+    await window.atelier.ecrireDonnees('projets-memoire', memoire);
+    donnees.memoire = memoire;
+    for (const p of donnees.projets) p.memoire = memoire[p.nom] || [];
+    render();
+  }
+  // Le nom exact du dossier (Claude peut se tromper de majuscules).
+  async function nomExact(nom) {
+    if (!donnees.noms) await refresh(); // projets pas encore lus
+    const n = String(nom || '').toLowerCase();
+    const trouve = (donnees.noms || []).find((x) => x.toLowerCase() === n) || Object.keys(donnees.memoire || {}).find((x) => x.toLowerCase() === n);
+    if (!trouve) throw new Error(`Aucun projet ne s'appelle ${nom} dans ${donnees.racine || 'le dossier des projets'}`);
+    return trouve;
+  }
+  async function retenir(nom, texte) {
+    const t = String(texte || '').trim();
+    if (!t) throw new Error('Rien à retenir');
+    const projet = await nomExact(nom);
+    const memoire = await lireMemoire();
+    const info = { id: crypto.randomUUID().slice(0, 8), texte: t, quand: Date.now() };
+    memoire[projet] = [...(memoire[projet] || []), info];
+    await ecrireMemoire(memoire);
+    return `Retenu sur ${projet} (id : ${info.id}).`;
+  }
+  async function oublier(nom, id) {
+    const projet = await nomExact(nom);
+    const memoire = await lireMemoire();
+    const info = (memoire[projet] || []).find((m) => m.id === id);
+    if (!info) throw new Error(`Aucune info ${id} retenue sur ${projet}`);
+    memoire[projet] = memoire[projet].filter((m) => m !== info);
+    await ecrireMemoire(memoire);
+    return `Oublié sur ${projet} : ${info.texte}`;
+  }
+  const infoMemoire = (nom, id) => Object.entries(donnees.memoire || {}).find(([n]) => n.toLowerCase() === String(nom).toLowerCase())?.[1]?.find((m) => m.id === id) || null;
+
+  // Fenêtre « Ce que Claude retient » : une info par ligne, modifiable.
+  async function editerMemoire(nom) {
+    const memoire = await lireMemoire();
+    const infos = memoire[nom] || [];
+    const v = await Dialogs.form({
+      title: `Ce que Claude retient sur ${nom}`,
+      okLabel: 'Enregistrer',
+      width: 560,
+      fields: [
+        { type: 'info', text: 'Une info par ligne. Claude les voit à chaque message, et peut en ajouter ou en oublier quand tu le lui demandes.' },
+        { key: 'texte', label: 'Infos', type: 'textarea', value: infos.map((m) => m.texte).join('\n'), rows: 10 },
+      ],
+    });
+    if (!v) return;
+    const frais = await lireMemoire();
+    // Une ligne inchangée garde son id et sa date.
+    frais[nom] = v.texte.split('\n').map((l) => l.trim()).filter(Boolean)
+      .map((texte) => infos.find((m) => m.texte === texte) || { id: crypto.randomUUID().slice(0, 8), texte, quand: Date.now() });
+    await ecrireMemoire(frais);
+    notify('Mémoire du projet enregistrée.', 'success', 2500);
   }
 
   async function refresh() {
@@ -108,5 +174,5 @@ const Projets = (() => {
   $('#btn-projets-actualiser').onclick = refresh;
   window.addEventListener('focus', () => { if (Date.now() - derniereLecture > 60_000) refresh(); });
 
-  return { refresh };
+  return { refresh, retenir, oublier, infoMemoire };
 })();
