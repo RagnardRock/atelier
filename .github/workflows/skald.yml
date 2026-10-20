@@ -6,6 +6,8 @@
 #   l'installeur est publié dans l'onglet « Releases » du dépôt.
 #   Important : cette Release n'est PAS marquée « Latest », car Rune cherche ses mises à jour
 #   dans la Release « Latest » du dépôt ; sinon Rune croirait que Skald est sa nouvelle version.
+#   Le bouton de mise à jour de Skald cherche donc lui-même la Release skald-v* la plus récente,
+#   puis y lit latest.yml (version et empreinte de l'installeur) pour télécharger Skald-Setup.
 name: Skald (installeur Windows)
 
 on:
@@ -47,6 +49,8 @@ jobs:
 
       - name: Fabriquer l'installeur
         run: npx electron-builder --win nsis --publish never
+      - name: Vérifier que latest.yml est fabriqué (le bouton de mise à jour en a besoin)
+        run: cat dist/latest.yml
       - uses: actions/upload-artifact@v4
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         with:
@@ -54,13 +58,13 @@ jobs:
           path: retouche/dist/Skald-Setup-*.exe
           retention-days: 14
 
-      - name: Publier la version (installeur et notes de version)
+      - name: Publier la version (installeur, latest.yml et notes de version)
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           PREVIOUS=$(git describe --tags --abbrev=0 --match 'skald-v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
           RANGE=${PREVIOUS:+$PREVIOUS..}$GITHUB_REF_NAME
           git log --no-merges --format='- %s' "$RANGE" -- . > notes.md
-          gh release create "$GITHUB_REF_NAME" dist/Skald-Setup-*.exe \
+          gh release create "$GITHUB_REF_NAME" dist/Skald-Setup-*.exe dist/Skald-Setup-*.exe.blockmap dist/latest.yml \
             --title "Skald ${GITHUB_REF_NAME#skald-v}" --notes-file notes.md --latest=false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

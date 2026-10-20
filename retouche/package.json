@@ -24,7 +24,8 @@
       "build/icon.ico",
       "build/icon.png",
       "!node_modules/ag-psd/{src,dist-es}/**",
-      "!node_modules/ag-psd/dist/*.map"
+      "!node_modules/ag-psd/dist/*.map",
+      "!mettre-a-jour.*"
     ],
     "win": {
       "target": "nsis",
@@ -43,7 +44,13 @@
       "uninstallerIcon": "build/icon.ico",
       "uninstallDisplayName": "Skald",
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "44.5.1",
@@ -51,7 +58,8 @@
   },
   "dependencies": {
     "@vscode/codicons": "0.0.45",
-    "ag-psd": "31.0.3"
+    "ag-psd": "31.0.3",
+    "electron-updater": "6.8.9"
   },
   "private": true
 }

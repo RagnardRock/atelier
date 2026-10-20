@@ -27,4 +27,7 @@ contextBridge.exposeInMainWorld('skald', {
   blurSupported: () => ipcRenderer.invoke('window:blurSupported'),
   relaunch: () => ipcRenderer.invoke('app:relaunch'),
   forceClose: () => ipcRenderer.invoke('window:forceClose'),
+  checkUpdate: () => ipcRenderer.invoke('update:check'),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
+  onUpdateProgress: (callback) => ipcRenderer.on('update:progress', (_event, percent) => callback(percent)),
 });

@@ -26,7 +26,14 @@ Sur chaque pull request qui touche `retouche/`, GitHub fabrique `Skald-Setup-<ve
    ```
 3. GitHub publie l'installeur dans les **Releases**, sans la marquer « Latest » (Rune utilise la Release « Latest » pour ses propres mises à jour).
 
-Skald n'a pas encore de mise à jour automatique : pour l'instant on réinstalle la nouvelle version par-dessus. Ses réglages vivent dans `%APPDATA%\atelier-retouche` et ne sont pas effacés.
+## Mettre Skald à jour
+
+Le bouton nuage en haut à droite (comme dans Rune) cherche une nouvelle version. Au démarrage, Skald vérifie aussi discrètement et affiche une notification si une version plus récente existe.
+
+- **Skald installé** : il cherche la Release `skald-vX.Y.Z` la plus récente sur GitHub, télécharge son installeur, se ferme, s'installe sans fenêtre et se relance. Il ne peut pas se fier à la Release « Latest » du dépôt (c'est celle de Rune) : il parcourt donc lui-même les Releases et ne garde que celles de Skald.
+- **Skald lancé depuis le clone** : il lance `retouche/mettre-a-jour.bat` (git pull, puis npm install) dans une fenêtre à part, puis se relance. Seules les nouveautés qui touchent `retouche/` comptent.
+
+Avant de fermer, Skald propose d'enregistrer les images modifiées. Ses réglages vivent dans `%APPDATA%\atelier-retouche` et ne sont pas effacés.
 
 ## Ce que fait Skald (v0.2)
 
@@ -94,6 +101,7 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 | `renderer/io.js` | Lecture et écriture PSD/images, export, ICO, pack d'icônes. |
 | `renderer/dialogs.js` | Les fenêtres de dialogue. |
 | `renderer/app.js` | Onglets, menus, raccourcis, panneaux, réglages. |
+| `renderer/update.js` | Le bouton de mise à jour. |
 
 ## Pas encore
 
@@ -102,4 +110,3 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 - Courbes, repères et règles.
 - Calques de réglage, styles de calque modifiables après coup (l'ombre et le contour sont appliqués aux pixels).
 - Ouvrir les textes d'un PSD comme textes modifiables (ils arrivent en pixels).
-- Mise à jour automatique de Skald.

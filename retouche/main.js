@@ -3,7 +3,8 @@
 // Toute la retouche (calques, pinceau, réglages…) se fait dans l'interface (renderer/), dans des
 // <canvas> : ici, on ne fait qu'ouvrir et enregistrer des fichiers, et garder les réglages.
 
-const { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, net, shell } = require('electron');
+const { execFile, spawn } = require('node:child_process');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
@@ -189,6 +190,109 @@ handle('config:write', async (_event, changes) => {
   return config;
 });
 handle('app:version', async () => app.getVersion());
+
+// --- Mise à jour ---
+// Comme Rune, Skald tourne de deux façons et se met à jour selon celle utilisée :
+// - Installé avec Skald-Setup.exe (app.isPackaged) : on cherche sur GitHub la Release skald-vX.Y.Z
+//   la plus récente. On ne peut pas demander « la dernière Release » du dépôt comme Rune le fait :
+//   celle-là est celle de Rune. Une fois la bonne Release trouvée, electron-updater y télécharge
+//   l'installeur (décrit par latest.yml), ferme Skald, l'installe sans rien demander et le relance.
+// - Lancé depuis le clone git (npm start) : git pull + npm install, confiés à
+//   retouche/mettre-a-jour.bat, lancé dans sa propre fenêtre APRÈS la fermeture de Skald
+//   (sous Windows, npm ne peut pas remplacer Electron tant que Skald l'utilise).
+
+const GITHUB_REPO = 'RagnardRock/atelier';
+const REPO = path.join(__dirname, '..');
+
+function git(args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, { cwd: REPO, windowsHide: true }, (err, stdout, stderr) => {
+      if (err) reject(Object.assign(new Error((stderr || err.message).trim()), { code: err.code }));
+      else resolve(stdout.trim());
+    });
+  });
+}
+
+// 1.10.0 > 1.9.3 : on compare nombre par nombre, pas comme du texte.
+function newer(a, b) {
+  const pa = a.split('.').map(Number), pb = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+
+// La Release de Skald la plus récente publiée sur GitHub (on ignore celles de Rune).
+async function latestSkaldRelease() {
+  const res = await net.fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=50`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Skald' } });
+  if (!res.ok) throw new Error(`GitHub a répondu ${res.status}`);
+  const releases = (await res.json()).filter((r) => !r.draft && !r.prerelease && /^skald-v\d+\.\d+\.\d+$/.test(r.tag_name));
+  let best = null;
+  for (const r of releases) {
+    const version = r.tag_name.slice('skald-v'.length);
+    if (!best || newer(version, best.version)) best = { version, tag: r.tag_name, notes: r.body || '' };
+  }
+  return best;
+}
+
+let autoUpdater = null;
+let pendingRelease = null;
+function installerUpdater() {
+  if (autoUpdater) return autoUpdater;
+  ({ autoUpdater } = require('electron-updater'));
+  autoUpdater.autoDownload = false; // on télécharge seulement quand tu cliques « Mettre à jour »
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.logger = { info: (m) => log('INFO', `Mise à jour : ${m}`), warn: (m) => log('INFO', `Mise à jour : ${m}`), error: (m) => log('ERREUR', `Mise à jour : ${m}`), debug: () => {} };
+  autoUpdater.on('download-progress', (p) => BrowserWindow.getAllWindows()[0]?.webContents.send('update:progress', Math.round(p.percent)));
+  return autoUpdater;
+}
+
+handle('update:check', async () => {
+  if (app.isPackaged) {
+    let release;
+    try {
+      release = await latestSkaldRelease();
+    } catch (err) {
+      throw new Error(`Impossible de contacter GitHub : ${err.message.split('\n')[0]}`);
+    }
+    if (!release || !newer(release.version, app.getVersion())) return { mode: 'installer', version: app.getVersion(), changes: [] };
+    pendingRelease = release;
+    const changes = release.notes.split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean);
+    return { mode: 'installer', version: release.version, changes: changes.length ? changes : [`Version ${release.version}`] };
+  }
+  try {
+    await git(['fetch', '--quiet']);
+  } catch (err) {
+    if (err.code === 'ENOENT' || /ENOENT/.test(err.message)) throw new Error('git est introuvable : installe Git pour Windows pour pouvoir mettre Skald à jour');
+    throw new Error(`Impossible de contacter GitHub : ${err.message}`);
+  }
+  const branch = await git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  const upstream = await git(['rev-parse', '--abbrev-ref', '@{u}']).catch(() => null);
+  if (!upstream) throw new Error(`La branche « ${branch} » n'est reliée à aucune branche GitHub`);
+  // Seulement ce qui touche Skald (les nouveautés de Rune ne comptent pas ici).
+  const changes = await git(['log', '--format=%s', 'HEAD..@{u}', '--', 'retouche']);
+  return { mode: 'git', branch, changes: changes ? changes.split('\n') : [] };
+});
+
+handle('update:install', async () => {
+  log('INFO', 'Mise à jour lancée depuis le bouton');
+  if (app.isPackaged) {
+    if (!pendingRelease) throw new Error('Cherche d\'abord la mise à jour');
+    const updater = installerUpdater();
+    // L'installeur et latest.yml sont dans les fichiers de la Release skald-vX.Y.Z trouvée plus haut.
+    updater.setFeedURL({ provider: 'generic', url: `https://github.com/${GITHUB_REPO}/releases/download/${pendingRelease.tag}` });
+    const result = await updater.checkForUpdates();
+    if (!result?.isUpdateAvailable) throw new Error(`La Release ${pendingRelease.tag} ne contient pas d'installeur utilisable`);
+    await updater.downloadUpdate();
+    // Installation silencieuse (pas de fenêtre d'installeur), puis Skald se relance tout seul.
+    setTimeout(() => updater.quitAndInstall(true, true), 300);
+    return;
+  }
+  const child = process.platform === 'win32'
+    ? spawn('cmd.exe', ['/c', 'start', '', path.join(__dirname, 'mettre-a-jour.bat')], { cwd: REPO, detached: true, stdio: 'ignore' })
+    : spawn('sh', [path.join(__dirname, 'mettre-a-jour.sh')], { cwd: REPO, detached: true, stdio: 'ignore' });
+  child.unref();
+  // Le script attend 2 secondes que Skald soit fermé avant de toucher aux fichiers.
+  setTimeout(() => app.quit(), 300);
+});
 
 // --- Fenêtre ---
 const TITLE_BAR = { color: '#101014', symbolColor: '#cccccc', height: 40 };

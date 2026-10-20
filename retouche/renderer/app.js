@@ -679,6 +679,14 @@ const App = (() => {
 
   // --- Fermeture de la fenêtre avec des images non enregistrées ---
   let closing = false;
+  // Avant une fermeture voulue (mise à jour) : propose d'enregistrer chaque image modifiée.
+  // Renvoie false si tu as annulé.
+  async function prepareQuit() {
+    for (const d of [...docs]) if (d.dirty && !(await closeDocument(d))) return false;
+    closing = true;
+    return true;
+  }
+
   window.addEventListener('beforeunload', (e) => {
     if (closing || !docs.some((d) => d.dirty)) return;
     e.preventDefault();
@@ -746,6 +754,7 @@ const App = (() => {
     docs,
     openDocument,
     closeDocument,
+    prepareQuit,
     refresh,
     refreshPanels,
     refreshTool,
