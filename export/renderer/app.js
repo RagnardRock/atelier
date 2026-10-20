@@ -53,6 +53,8 @@ const App = (() => {
         { key: 'windowBlur', label: blurOk ? 'Flou de Windows 11 derrière la fenêtre' : 'Flou de Windows 11 (non disponible ici)', type: 'checkbox', value: config.windowBlur },
         { key: 'webpQuality', label: 'Qualité WebP par défaut', type: 'range', value: config.webpQuality, min: 30, max: 100, unit: '%' },
         { key: 'jpegQuality', label: 'Qualité JPEG par défaut', type: 'range', value: config.jpegQuality, min: 30, max: 100, unit: '%' },
+        { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
+        { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: config.claudeCommand || 'claude' },
         { type: 'info', text: `Les qualités par défaut servent aux nouveaux assets ; chaque asset garde la sienne (panneau Réglages).\n\nBrokk ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
       onInput(values, f) {

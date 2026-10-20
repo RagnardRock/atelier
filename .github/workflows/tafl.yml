@@ -13,10 +13,10 @@ name: Tafl (installeur Windows)
 
 on:
   pull_request:
-    paths: ['tuiles/**', '.github/workflows/tafl.yml']
+    paths: ['tuiles/**', 'commun/**', '.github/workflows/tafl.yml']
   push:
     branches: [main]
-    paths: ['tuiles/**', '.github/workflows/tafl.yml']
+    paths: ['tuiles/**', 'commun/**', '.github/workflows/tafl.yml']
     tags: ['tafl-v*']
   workflow_dispatch:
 

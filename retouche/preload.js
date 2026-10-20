@@ -33,3 +33,18 @@ contextBridge.exposeInMainWorld('skald', {
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateProgress: (callback) => ipcRenderer.on('update:progress', (_event, percent) => callback(percent)),
 });
+
+// Panneau Claude (../commun/claude-panneau.js), sous `window.claude`.
+contextBridge.exposeInMainWorld('claude', {
+  send: (text) => ipcRenderer.invoke('claude:send', text),
+  permission: (answer) => ipcRenderer.invoke('claude:permission', answer),
+  interrupt: () => ipcRenderer.invoke('claude:interrupt'),
+  reset: () => ipcRenderer.invoke('claude:reset'),
+  resume: (sessionId) => ipcRenderer.invoke('claude:resume', sessionId),
+  projet: () => ipcRenderer.invoke('claude:projet'),
+  history: () => ipcRenderer.invoke('claude:history'),
+  historyGet: (id) => ipcRenderer.invoke('claude:history:get', id),
+  historySave: (conversation) => ipcRenderer.invoke('claude:history:save', conversation),
+  historyDelete: (id) => ipcRenderer.invoke('claude:history:delete', id),
+  onEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
+});

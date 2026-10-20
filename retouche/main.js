@@ -55,6 +55,8 @@ function handle(channel, fn) {
 // --- Réglages (config.json) ---
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CONFIG = {
+  claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
+  claudeModel: '',
   accentColor: '#e0a526',
   glass: true,
   windowBlur: false,
@@ -184,6 +186,10 @@ handle('clipboard:writeImage', async (_event, bytes) => {
 });
 
 handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file)));
+
+// --- Panneau Claude (le même que dans Tafl, Brokk : voir ../commun/LISEZMOI.md) ---
+const claude = require('./commun/claude');
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD, export web)" } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
@@ -346,6 +352,7 @@ const folderFromArgs = (argv) => argv.slice(app.isPackaged ? 1 : 2)
   .map((a) => path.resolve(a))
   .find((a) => a !== app.getAppPath() && fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
 let startupFolder = folderFromArgs(process.argv);
+claude.setProjet(startupFolder); // le projet avec lequel Atelier a ouvert l'outil
 handle('folder:startup', async () => {
   const folder = startupFolder;
   startupFolder = null;
@@ -403,6 +410,7 @@ if (!app.requestSingleInstanceLock()) {
     win.focus();
     for (const file of filesFromArgs(argv)) win.webContents.send('file:external', file);
     const folder = folderFromArgs(argv);
+    claude.setProjet(folder);
     if (folder) win.webContents.send('folder:external', folder);
   });
 
@@ -413,4 +421,5 @@ if (!app.requestSingleInstanceLock()) {
     createWindow(config);
   });
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => claude.stop());
 }

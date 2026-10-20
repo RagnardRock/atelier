@@ -1,11 +1,12 @@
 {
   "name": "atelier-retouche",
   "productName": "Skald",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Skald, mon logiciel de retouche d'images et de logos (Electron), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "postinstall": "node ../commun/copier.js",
     "dist": "electron-builder --win nsis --publish never"
   },
   "author": "Ragna",

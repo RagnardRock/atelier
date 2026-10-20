@@ -1,0 +1,172 @@
+/* Panneau « Claude » des outils de l'Atelier (claude-panneau.js), le même pour Skald, Tafl et Brokk.
+   Il utilise les couleurs de l'outil (--accent, --panel, --border…). Ouvert, il se place à droite,
+   sous la barre de titre, et le reste de la fenêtre se resserre pour lui laisser la place. */
+
+:root { --claude-largeur: 400px; }
+
+body.claude-ouvert > #optionsbar,
+body.claude-ouvert > #layout,
+body.claude-ouvert > #accueil,
+body.claude-ouvert > #statusbar { margin-right: var(--claude-largeur); }
+
+.claude-bouton-titre.active { color: var(--accent); }
+
+.claude-panneau {
+  position: fixed;
+  top: var(--titlebar-height);
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  width: var(--claude-largeur);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  color: var(--text);
+  font-family: var(--ui-font);
+  font-size: 13px;
+}
+.claude-panneau[hidden] { display: none; }
+body.glass .claude-panneau { background: rgba(255, 255, 255, 0.035); backdrop-filter: blur(30px) saturate(150%); }
+
+.cp-poignee { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 2; }
+.cp-poignee:hover, .cp-poignee.dragging { background: var(--accent); }
+
+.cp-entete { display: flex; align-items: center; gap: 4px; padding: 6px 8px 4px 14px; }
+.cp-titre { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-titre .codicon { color: var(--accent); font-size: 14px; }
+.cp-modele { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.cp-espace { flex: 1; }
+
+.cp-projet { display: flex; align-items: center; gap: 6px; margin: 0 14px 6px; font-size: 12px; color: var(--muted); }
+.cp-projet span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cp-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px 16px;
+  user-select: text;
+}
+
+.cp-bienvenue { margin: auto 0; padding: 20px 8px; text-align: center; color: var(--muted); }
+.cp-bienvenue > .codicon { font-size: 30px; color: var(--accent); }
+.cp-bienvenue p { margin: 10px 0 0; line-height: 1.5; color: var(--text); }
+.cp-bienvenue p.hint { color: var(--muted); font-size: 12px; }
+
+.cp-liste-historique {
+  position: absolute;
+  top: 60px;
+  left: 10px;
+  right: 10px;
+  z-index: 5;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--panel-2, var(--panel));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+body.glass .cp-liste-historique { background: rgba(22, 23, 30, 0.96); }
+.cp-liste-historique .hint { padding: 4px 8px; color: var(--muted); font-size: 12px; }
+.cp-historique-titre { padding: 6px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cp-historique-ligne { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 8px; border-radius: 6px; cursor: pointer; }
+.cp-historique-ligne:hover { background: var(--hover); }
+.cp-historique-ligne.current { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.cp-historique-texte { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cp-historique-texte .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-strong); }
+.cp-historique-texte .date { font-size: 11px; color: var(--muted); }
+.cp-historique-ligne .icon-button { visibility: hidden; }
+.cp-historique-ligne:hover .icon-button { visibility: visible; }
+
+/* Bulles : les tiennes à droite, celles de Claude en pleine largeur */
+.cp-msg { display: flex; flex-direction: column; min-width: 0; }
+.cp-msg.user { align-items: flex-end; }
+.cp-msg.user .bubble {
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 12px 12px 4px 12px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.cp-markdown { line-height: 1.55; word-break: break-word; }
+.cp-markdown > :first-child { margin-top: 0; }
+.cp-markdown > :last-child { margin-bottom: 0; }
+.cp-markdown p, .cp-markdown ul, .cp-markdown ol, .cp-markdown blockquote { margin: 0 0 8px; }
+.cp-markdown ul, .cp-markdown ol { padding-left: 20px; }
+.cp-markdown li { margin: 2px 0; }
+.cp-markdown h3, .cp-markdown h4, .cp-markdown h5, .cp-markdown h6 { margin: 12px 0 6px; color: var(--text-strong); font-size: 13px; }
+.cp-markdown h3 { font-size: 15px; }
+.cp-markdown strong { color: var(--text-strong); }
+.cp-markdown blockquote { padding-left: 10px; border-left: 3px solid var(--border); color: var(--muted); }
+.cp-markdown code, .cp-notice code { padding: 1px 5px; border-radius: 4px; background: var(--active); font-family: Consolas, monospace; font-size: 0.92em; }
+.cp-markdown .link { color: var(--accent); text-decoration: underline dotted; cursor: help; }
+.cp-markdown pre { position: relative; margin: 0 0 8px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); overflow-x: auto; font-size: 12px; line-height: 1.5; }
+.cp-markdown pre code { padding: 0; background: none; font-size: inherit; }
+.cp-markdown pre .copy { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; opacity: 0; transition: opacity 0.1s; }
+.cp-markdown pre:hover .copy { opacity: 1; }
+
+/* Une ligne par outil utilisé */
+.cp-outil { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: var(--hover); color: var(--muted); font-size: 12px; }
+.cp-outil .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-outil.done .state { color: var(--success); }
+.cp-outil.failed .state { color: var(--error); }
+.cp-outil.failed .label { text-decoration: line-through; }
+.cp-outil.stopped .state { color: var(--muted); }
+
+/* Demande de permission */
+.cp-permission {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel-2, var(--panel)));
+}
+.cp-perm-titre { display: flex; align-items: center; gap: 8px; color: var(--text-strong); font-weight: 600; }
+.cp-perm-titre .codicon { color: var(--accent); }
+.cp-perm-titre span { min-width: 0; overflow-wrap: anywhere; }
+.cp-details { display: flex; flex-direction: column; gap: 4px; }
+.cp-details p { margin: 0; color: var(--muted); }
+.cp-details pre { margin: 0; max-height: 220px; overflow: auto; padding: 6px 10px; border-radius: 6px; background: var(--bg); font-family: Consolas, monospace; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+.cp-details pre.diff-old { background: color-mix(in srgb, var(--error) 14%, transparent); border-left: 3px solid var(--error); }
+.cp-details pre.diff-new { background: color-mix(in srgb, var(--success) 14%, transparent); border-left: 3px solid var(--success); }
+.cp-perm-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cp-perm-actions button { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--hover); color: var(--text); font: inherit; cursor: pointer; }
+.cp-perm-actions button:hover { background: var(--active); }
+.cp-perm-actions button.primary-button { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.cp-perm-actions .deny:hover { border-color: var(--error); color: var(--error); }
+.cp-permission.answered { border-color: var(--border); background: var(--hover); }
+.cp-permission.answered .cp-details { display: none; }
+.cp-perm-reponse { font-size: 12px; color: var(--muted); }
+.cp-permission.allowed .cp-perm-reponse { color: var(--success); }
+.cp-permission.denied .cp-perm-reponse { color: var(--error); }
+
+/* Messages d'erreur ou d'information */
+.cp-notice { display: flex; gap: 8px; padding: 8px 10px; border-radius: 8px; background: var(--hover); line-height: 1.5; font-size: 12px; }
+.cp-notice > .codicon { margin-top: 2px; color: var(--accent); }
+.cp-notice.error { background: color-mix(in srgb, var(--error) 10%, transparent); }
+.cp-notice.error > .codicon { color: var(--error); }
+.cp-notice code { user-select: all; }
+
+/* Zone de saisie */
+.cp-formulaire { display: flex; flex-direction: column; gap: 6px; margin: 0 10px 10px; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.cp-formulaire:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.cp-saisie { resize: none; border: none; outline: none; background: transparent; color: var(--text-strong); font: inherit; line-height: 1.45; max-height: 200px; }
+.cp-saisie::placeholder { color: var(--muted); }
+.cp-actions { display: flex; align-items: center; gap: 4px; }
+.cp-statut { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.cp-envoyer:not(:disabled) { color: var(--accent); }
+.cp-envoyer:disabled { opacity: 0.4; cursor: default; }
+.cp-stop { color: var(--error); }
