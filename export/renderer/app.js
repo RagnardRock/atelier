@@ -649,7 +649,21 @@ const App = (() => {
     if (config.surveiller) surveiller(true);
     return asset;
   }
-  async function regler(asset, { recette, options, nom, dossier }) {
+  async function regler(asset, { recette, options, nom, dossier, source, calque, rogner }) {
+    if (source) {
+      const s = await Sources.get(source);
+      changer(asset, (a) => {
+        a.source = s.chemin;
+        if (a.calque && !(s.calques || []).some((c) => c.chemin === a.calque)) a.calque = null;
+      });
+      if (config.surveiller) surveiller(true);
+    }
+    if (calque !== undefined) {
+      const s = await Sources.get(asset.source);
+      if (calque && !(s.calques || []).some((c) => c.chemin === calque)) throw new Error(`Pas de calque « ${calque} » dans ${s.nom}${s.calques?.length ? ` : ${s.calques.map((c) => c.chemin).join(', ')}` : ' (ce n\'est pas un PSD)'}.`);
+      changer(asset, (a) => { a.calque = calque || null; a.rogner = Boolean(calque); });
+    }
+    if (rogner !== undefined) changer(asset, (a) => { a.rogner = Boolean(rogner); });
     if (recette && recette !== asset.recette) {
       if (!Recettes.get(recette)) throw new Error(`Recette inconnue : ${recette} (${Recettes.liste.join(', ')}).`);
       changerRecette(asset, recette, contexteDe(asset, await Sources.get(asset.source)));
@@ -674,6 +688,14 @@ const App = (() => {
     courantId = asset.id;
     rendreTout();
   }
+  function dupliquerAsset(asset) {
+    courantId = asset.id;
+    dupliquer();
+    return courant();
+  }
+  async function allumerSurveillance(actif) {
+    if (Boolean(config.surveiller) !== Boolean(actif)) await basculerSurveillance();
+  }
 
   return {
     claude: {
@@ -688,6 +710,10 @@ const App = (() => {
       retirer,
       choisir,
       exporter,
+      dupliquer: dupliquerAsset,
+      surveiller: allumerSurveillance,
+      surveillance: () => Boolean(config.surveiller),
+      source: (chemin) => Sources.get(chemin),
     },
     async start() {
       const lu = await window.brokk.readConfig();

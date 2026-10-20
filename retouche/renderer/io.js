@@ -378,5 +378,5 @@ const IO = (() => {
     }
   }
 
-  return { decode, openFiles, openPath, save, exportImage, exportIcons, encode, makeIco, writePsd, fromPsd, formatSize };
+  return { decode, openFiles, openPath, save, exportImage, exportIcons, encode, makeIco, writePsd, fromPsd, formatSize, prepareExport, squareAt };
 })();

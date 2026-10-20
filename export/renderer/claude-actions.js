@@ -70,6 +70,7 @@
           p.publicDir ? `Dossier public : ${p.publicDir}/` : 'Pas de dossier public.',
           p.indexHtml ? `Page : ${p.indexHtml}` : 'Pas d\'index.html trouvé.',
           `Asset choisi : ${choisi ? choisi.nom : 'aucun'}`,
+          `Surveillance : ${C.surveillance() ? 'allumée (une source enregistrée est ré-exportée toute seule)' : 'éteinte'}`,
           `Assets : ${JSON.stringify(C.assets().map((a, i) => decrireAsset(p, a, i)), null, 1)}`,
           `Recettes :\n${recettes}`,
         ].join('\n');
@@ -130,8 +131,8 @@
     regler_asset: {
       icone: 'settings',
       libelle: (a) => `Règle l'asset ${a.asset ?? 'choisi'}`,
-      description: 'Change un asset : recette, options (seulement les clés à changer, voir infos pour la liste), nom des fichiers, dossier (relatif au projet, "" = la racine).',
-      schema: { type: 'object', properties: { asset: refAsset, recette: { type: 'string', enum: Recettes.liste }, options: { type: 'object' }, nom: { type: 'string' }, dossier: { type: 'string' } } },
+      description: 'Change un asset : recette, options (seulement les clés à changer, voir infos pour la liste), nom des fichiers, dossier (relatif au projet, "" = la racine), source (une autre image : chemin relatif au projet ou absolu), calque (pour un PSD : le chemin du calque ou du groupe, voir calques ; "" = l\'image entière), rogner (true : retirer les bords transparents).',
+      schema: { type: 'object', properties: { asset: refAsset, recette: { type: 'string', enum: Recettes.liste }, options: { type: 'object' }, nom: { type: 'string' }, dossier: { type: 'string' }, source: { type: 'string' }, calque: { type: 'string' }, rogner: { type: 'boolean' } } },
       faire: async (a) => {
         const p = besoinProjet();
         const asset = assetDe(a.asset);
@@ -141,7 +142,7 @@
           const inconnues = Object.keys(a.options).filter((k) => !cles.has(k));
           if (inconnues.length) throw new Error(`Options inconnues pour ${recette.nom} : ${inconnues.join(', ')}. Possibles : ${[...cles].join(', ')}.`);
         }
-        await C.regler(asset, a);
+        await C.regler(asset, { ...a, source: a.source ? cheminDe(a.source) : undefined });
         return `Asset réglé : ${JSON.stringify(decrireAsset(p, asset, C.assets().indexOf(asset)))}`;
       },
     },
@@ -162,6 +163,40 @@
         const asset = assetDe(a.asset);
         C.retirer(asset);
         return `Retiré : ${asset.nom}.`;
+      },
+    },
+    calques: {
+      lecture: true,
+      icone: 'layers',
+      libelle: (a) => `Regarde les calques de ${a.source ?? 'l\'asset choisi'}`,
+      description: 'Liste les calques et groupes d\'un PSD (leur chemin, à donner comme calque à ajouter_asset ou regler_asset). source : chemin de l\'image (relatif au projet ou absolu) ; sans, la source de l\'asset choisi (ou asset).',
+      schema: { type: 'object', properties: { source: { type: 'string' }, asset: refAsset } },
+      faire: async (a) => {
+        const chemin = a.source ? cheminDe(a.source) : assetDe(a.asset).source;
+        const s = await C.source(chemin);
+        if (s.type !== 'psd') return `${s.nom} (${s.largeur} × ${s.hauteur} px) n'est pas un PSD : pas de calques.`;
+        return `${s.nom} (${s.largeur} × ${s.hauteur} px), ${s.calques.length} calque(s) et groupe(s) :\n${s.calques.map((c) => `${'  '.repeat(c.profondeur)}- ${c.chemin}${c.groupe ? ' (groupe)' : ''}${c.cache ? ' (caché)' : ''}`).join('\n')}`;
+      },
+    },
+    dupliquer_asset: {
+      icone: 'copy',
+      libelle: (a) => `Duplique l'asset ${a.asset ?? 'choisi'}`,
+      description: 'Duplique un asset (même source et réglages, nom suivi de -2), juste après lui. Pratique pour exporter la même image avec une autre recette.',
+      schema: { type: 'object', properties: { asset: refAsset } },
+      faire: (a) => {
+        const p = besoinProjet();
+        const copie = C.dupliquer(assetDe(a.asset));
+        return `Copie : ${JSON.stringify(decrireAsset(p, copie, C.assets().indexOf(copie)))}`;
+      },
+    },
+    surveillance: {
+      icone: 'eye-watch',
+      libelle: (a) => (a.allumer ? 'Allume la surveillance des sources' : 'Éteint la surveillance des sources'),
+      description: 'Surveillance : allumée, Brokk ré-exporte tout seul les assets d\'une image source dès qu\'elle est enregistrée (dans Photoshop, Skald…).',
+      schema: { type: 'object', properties: { allumer: { type: 'boolean' } }, required: ['allumer'] },
+      faire: async (a) => {
+        await C.surveiller(Boolean(a.allumer));
+        return `Surveillance ${C.surveillance() ? 'allumée' : 'éteinte'}.`;
       },
     },
     exporter: {

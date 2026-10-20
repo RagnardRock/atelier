@@ -102,6 +102,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - **Agir** (avec ta permission) : créer un jeu, dessiner une tuile pixel par pixel, dupliquer, retourner, tourner, renommer une tuile, poser des tuiles ou écrire une zone de la carte, changer la taille de la carte, ajouter des couleurs à la palette, exporter la planche ou la carte en PNG, enregistrer, annuler.
 - Les pixels s'échangent en texte, une ligne par rangée : `.` = transparent, puis un caractère par couleur de la palette (`0` à `9`, `a` à `z`…). C'est ce qui lui permet de dessiner une tuile précise.
 - `Ctrl+Z` annule ce qu'il a fait.
+- **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
 ## Pas encore
 

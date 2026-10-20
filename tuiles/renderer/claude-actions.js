@@ -189,20 +189,24 @@
     tuile: {
       icone: 'symbol-misc',
       libelle: (a) => `Tuile ${a.index ?? 'choisie'} : ${String(a.action || '').replace(/_/g, ' ')}`,
-      description: 'Agit sur une tuile (index, sinon la tuile choisie). action : choisir, renommer (nom), dupliquer, supprimer, vider, miroir_horizontal, miroir_vertical, tourner_droite, tourner_gauche.',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'renommer', 'dupliquer', 'supprimer', 'vider', 'miroir_horizontal', 'miroir_vertical', 'tourner_droite', 'tourner_gauche'] }, index: nombre, nom: { type: 'string' } }, required: ['action'] },
+      description: 'Agit sur une tuile (index, sinon la tuile choisie). action : choisir, renommer (nom), dupliquer, supprimer, vider, miroir_horizontal, miroir_vertical, tourner_droite, tourner_gauche, decaler (d\'une demi-tuile, pour voir les raccords ; refaire pour revenir), deplacer (vers la place position : la carte suit).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'renommer', 'dupliquer', 'supprimer', 'vider', 'miroir_horizontal', 'miroir_vertical', 'tourner_droite', 'tourner_gauche', 'decaler', 'deplacer'] }, index: nombre, nom: { type: 'string' }, position: nombre }, required: ['action'] },
       faire: (a) => {
         const doc = besoinJeu();
         const i = tuileNumero(doc, a.index);
         const t = doc.tiles[i];
         // Tourner à gauche = trois quarts de tour à droite.
-        const transform = { miroir_horizontal: ['flipH'], miroir_vertical: ['flipV'], tourner_droite: ['rotate'], tourner_gauche: ['rotate', 'rotate', 'rotate'] }[a.action];
+        const transform = { miroir_horizontal: ['flipH'], miroir_vertical: ['flipV'], tourner_droite: ['rotate'], tourner_gauche: ['rotate', 'rotate', 'rotate'], decaler: ['half'] }[a.action];
         if (a.action === 'choisir') App.selectTile(i);
         else if (a.action === 'renommer') Doc.change(doc, 'Renommer la tuile', () => { t.name = String(a.nom || t.name); });
         else if (a.action === 'dupliquer') Doc.change(doc, 'Dupliquer la tuile', () => { doc.current = Doc.addTile(doc, t.frames.map((f) => f.slice()), Doc.uniqueName(doc, t.name.replace(/-\d+$/, '')), i + 1, t.duration); });
         else if (a.action === 'supprimer') {
           if (doc.tiles.length === 1) throw new Error('C\'est la dernière tuile : un jeu en garde au moins une.');
           Doc.change(doc, 'Supprimer la tuile', () => { Doc.removeTile(doc, i); doc.current = clamp(i, 0, doc.tiles.length - 1); });
+        } else if (a.action === 'deplacer') {
+          const to = Math.round(a.position);
+          if (!(to >= 0 && to < doc.tiles.length)) throw new Error(`position : de 0 à ${doc.tiles.length - 1}.`);
+          Doc.change(doc, 'Déplacer la tuile', () => { Doc.moveTile(doc, i, to); doc.current = to; });
         } else if (a.action === 'vider') Doc.change(doc, 'Vider la tuile', () => { const tt = Doc.tileForEdit(doc, i); tt.frames = tt.frames.map((f) => new Uint8ClampedArray(f.length)); Doc.touch(tt); });
         else if (transform) {
           Doc.change(doc, a.action.replace(/_/g, ' '), () => { for (const kind of transform) Doc.transformTile(doc, i, Doc.TRANSFORMS[kind]); });
@@ -337,6 +341,228 @@
         const label = Doc.undo(doc);
         App.refresh();
         return label ? `Annulé : ${label}.` : 'Rien à annuler.';
+      },
+    },
+  });
+  // --- Le reste : menus, animation, palette, fichiers du projet ---
+  const normal = (t) => String(t).toLowerCase().replace(/…|\.\.\./g, '').replace(/\s+/g, ' ').trim();
+  function lignesMenus() {
+    const lignes = [];
+    for (const [menu, items] of Object.entries(App.MENUS)) {
+      for (const item of items()) if (item && !item.disabled) lignes.push({ menu, libelle: item.label, touches: item.keys || '', run: item.run });
+    }
+    return lignes;
+  }
+  function ligneMenu(chemin) {
+    const parts = String(chemin).split(/\s+[›>]\s+|\s*›\s*/).filter(Boolean);
+    const libelle = normal(parts.pop() || '');
+    const menu = parts.length ? normal(parts.join(' ')) : null;
+    const lignes = lignesMenus().filter((l) => !menu || normal(l.menu) === menu);
+    const ligne = lignes.find((l) => normal(l.libelle) === libelle) || (() => { const p = lignes.filter((l) => normal(l.libelle).includes(libelle)); return p.length === 1 ? p[0] : null; })();
+    if (!ligne) throw new Error(`Pas de commande « ${chemin} » dans les menus (ou elle n'est pas possible pour l'instant). Regarde la liste avec l'action menus.`);
+    return ligne;
+  }
+  const decrireFenetres = (fenetres) => fenetres.map((f) => (f.question
+    ? `Question « ${f.titre} » : ${f.question} → ${f.reponse}`
+    : `Fenêtre « ${f.titre} »${f.erreur ? ` (non validée : ${f.erreur})` : ''} :\n${f.champs.map((c) => `  - ${c.cle} : ${c.libelle} (${c.type}${c.choix ? ` : ${c.choix.join(', ')}` : ''}${c.min !== undefined ? `, ${c.min} à ${c.max}${c.unite ? ` ${c.unite}` : ''}` : ''})${f.valeurs ? ` = ${JSON.stringify(f.valeurs[c.cle])}` : ''}`).join('\n')}`)).join('\n');
+  const dossierRel = (d) => String(d || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+
+  ClaudePanneau.actions({
+    menus: {
+      lecture: true,
+      icone: 'list-flat',
+      libelle: () => 'Regarde les menus de Tafl',
+      description: 'Liste les commandes des menus de Tafl (Fichier, Tuile, Carte, Affichage) possibles en ce moment, avec leur raccourci. Une commande qui finit par « … » ouvre une fenêtre : champs_menu en donne les champs. Lance-les avec l\'action menu.',
+      faire: () => {
+        const parMenu = {};
+        for (const l of lignesMenus()) (parMenu[l.menu] ||= []).push(`${l.libelle}${l.touches ? ` (${l.touches})` : ''}`);
+        return Object.entries(parMenu).map(([m, items]) => `${m} :\n${items.map((i) => `  - ${i}`).join('\n')}`).join('\n');
+      },
+    },
+    champs_menu: {
+      lecture: true,
+      icone: 'list-flat',
+      libelle: (a) => `Regarde les réglages de « ${a.commande} »`,
+      description: 'Donne les champs de la fenêtre qu\'ouvre une commande de menu qui finit par « … » (hors menu Fichier), sans rien changer. commande : « Menu › Commande », par exemple « Tuile › Taille des tuiles du jeu… ».',
+      schema: { type: 'object', properties: { commande: { type: 'string' } }, required: ['commande'] },
+      faire: async (a) => {
+        const ligne = ligneMenu(a.commande);
+        if (!ligne.libelle.endsWith('…') || ligne.menu === 'Fichier') throw new Error(`« ${ligne.libelle} » n'a pas de fenêtre de réglages à lire ici : lance-la avec l'action menu.`);
+        const { fenetres } = await Dialogs.automatique({ apercu: true }, () => ligne.run());
+        return fenetres.length ? decrireFenetres(fenetres) : 'Cette commande n\'a pas ouvert de fenêtre.';
+      },
+    },
+    menu: {
+      icone: 'play',
+      libelle: (a) => `Lance « ${a.commande} »`,
+      description: 'Lance une commande des menus de Tafl, comme si Ragna cliquait dessus (liste : action menus), par exemple « Carte › Remplir le calque avec la tuile choisie » ou « Affichage › Mosaïque (raccords) ». Si elle ouvre une fenêtre, elle se remplit avec valeurs (les clés de champs_menu) et se valide toute seule ; choix : le bouton à prendre si une question s\'affiche. Les commandes qui demandent un fichier ou un dossier ouvrent la fenêtre de Windows pour Ragna : préfère ouvrir, importer_planche, enregistrer_sous, exporter_planche, exporter_tuiles, exporter_tiled et exporter_carte, qui écrivent dans le projet.',
+      schema: { type: 'object', properties: { commande: { type: 'string' }, valeurs: { type: ['object', 'array'] }, choix: { type: 'string' } }, required: ['commande'] },
+      faire: async (a) => {
+        const ligne = ligneMenu(a.commande);
+        const doc = App.doc;
+        const avant = doc?.undo.length;
+        const { fenetres } = await Dialogs.automatique({ valeurs: a.valeurs, choix: a.choix }, () => ligne.run());
+        const fait = App.doc !== doc || (App.doc && App.doc.undo.length !== avant);
+        const lignes = [`${ligne.menu} › ${ligne.libelle} : ${fenetres.some((f) => f.erreur) ? 'pas fait.' : fait ? 'fait.' : 'lancé.'}`];
+        if (fenetres.length) lignes.push(decrireFenetres(fenetres));
+        return lignes.join('\n');
+      },
+    },
+    animation: {
+      icone: 'play-circle',
+      libelle: (a) => `Animation de la tuile ${a.index ?? 'choisie'} : ${String(a.action || '').replace(/_/g, ' ')}`,
+      description: 'Les images d\'une tuile animée (eau, fleurs…). index : la tuile, sinon la tuile choisie. action : ajouter_image (copie de l\'image image, sinon de l\'image en cours, juste après ; ensuite dessine-la avec dessiner_tuile index + image), supprimer_image (image), choisir_image (image : celle qu\'on voit et qu\'on dessine), duree (ms : durée de chaque image, 30 à 5000), deplacer_image (image vers position), lancer, arreter. 16 images au plus.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter_image', 'supprimer_image', 'choisir_image', 'duree', 'deplacer_image', 'lancer', 'arreter'] }, index: nombre, image: nombre, ms: nombre, position: nombre }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const i = tuileNumero(doc, a.index);
+        if (i !== doc.current) App.selectTile(i);
+        const t = doc.tiles[i];
+        const k = a.image === undefined ? App.frame : Math.round(a.image);
+        if (!(k >= 0 && k < t.frames.length)) throw new Error(`Pas d'image n° ${a.image} (la tuile en a ${t.frames.length}, de 0 à ${t.frames.length - 1}).`);
+        App.selectFrame(k);
+        if (a.action === 'ajouter_image') { if (t.frames.length >= 16) throw new Error('16 images au plus par tuile.'); App.addFrame(); }
+        else if (a.action === 'supprimer_image') { if (t.frames.length < 2) throw new Error('La tuile n\'a qu\'une image.'); App.deleteFrame(); }
+        else if (a.action === 'duree') App.setDuration(Number(a.ms));
+        else if (a.action === 'deplacer_image') {
+          const to = Math.round(a.position);
+          if (!(to >= 0 && to < t.frames.length)) throw new Error(`position : de 0 à ${t.frames.length - 1}.`);
+          Doc.change(doc, 'Déplacer l\'image', () => Doc.moveFrame(doc, i, k, to));
+          App.selectFrame(to);
+        } else if (a.action === 'lancer' || a.action === 'arreter') { if (App.playing !== (a.action === 'lancer')) App.togglePlay(); }
+        else if (a.action !== 'choisir_image') throw new Error(`Action inconnue : ${a.action}`);
+        App.refresh();
+        const tt = doc.tiles[i];
+        return `Tuile ${i} « ${tt.name} » : ${tt.frames.length} image(s) de ${tt.duration || Doc.DEFAULT_DURATION} ms, image en cours ${App.frame}, animation ${App.playing ? 'lancée' : 'arrêtée'}.`;
+      },
+    },
+    palette: {
+      icone: 'symbol-color',
+      libelle: (a) => `Palette : ${String(a.action || '').replace(/_/g, ' ')}`,
+      description: `Change la palette. action : choisir (modele : ${PALETTES.map((p) => `${p.id} = ${p.nom}`).join(', ')}, ou utilisees = les couleurs déjà dans les tuiles ; les tuiles ne changent pas), remplacer (de #rrggbb vers #rrggbb : dans la palette ET dans toutes les tuiles), retirer (couleur, seulement de la palette), couleur_principale (couleur : celle du crayon de Ragna).`,
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'remplacer', 'retirer', 'couleur_principale'] }, modele: { type: 'string' }, de: { type: 'string' }, vers: { type: 'string' }, couleur: { type: 'string' } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        if (a.action === 'choisir') {
+          const couleurs = a.modele === 'utilisees' ? Panels.usedColors(doc) : PALETTES.find((p) => p.id === a.modele)?.couleurs;
+          if (!couleurs) throw new Error(`Modèle inconnu : ${a.modele}`);
+          Doc.change(doc, 'Changer de palette', () => { doc.palette = [...couleurs]; });
+        } else if (a.action === 'remplacer') {
+          const de = normalizeHex(a.de), vers = normalizeHex(a.vers);
+          if (!de || !vers) throw new Error('de et vers : des couleurs #rrggbb.');
+          Doc.change(doc, 'Modifier une couleur', () => {
+            const i = doc.palette.indexOf(de);
+            if (i >= 0) doc.palette[i] = vers;
+            Doc.replaceColor(doc, de, vers);
+          });
+        } else if (a.action === 'retirer') {
+          const c = normalizeHex(a.couleur);
+          const i = doc.palette.indexOf(c);
+          if (i < 0) throw new Error(`${a.couleur} n'est pas dans la palette.`);
+          Doc.change(doc, 'Retirer une couleur', () => doc.palette.splice(i, 1));
+        } else if (a.action === 'couleur_principale') {
+          const c = normalizeHex(a.couleur);
+          if (!c) throw new Error('couleur : #rrggbb.');
+          App.setColor('primary', c);
+        } else throw new Error(`Action inconnue : ${a.action}`);
+        App.refresh();
+        return legende(doc);
+      },
+    },
+    calque_carte: {
+      icone: 'layers',
+      libelle: (a) => `Calque ${a.calque ?? 'choisi'} de la carte : ${a.action}`,
+      description: 'Les calques de la carte (Sol, Décor). action : choisir (celui où poser les tuiles), afficher, masquer, remplir (avec la tuile tuile, sinon la tuile choisie), vider.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'afficher', 'masquer', 'remplir', 'vider'] }, calque: { type: ['string', 'number'] }, tuile: nombre }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const li = calqueNumero(doc, a.calque);
+        const l = doc.map.layers[li];
+        if (a.action === 'choisir') App.options.layer = li;
+        else if (a.action === 'afficher' || a.action === 'masquer') l.visible = a.action === 'afficher';
+        else if (a.action === 'remplir' || a.action === 'vider') {
+          const t = a.action === 'vider' ? -1 : tuileNumero(doc, a.tuile);
+          Doc.change(doc, a.action === 'vider' ? 'Vider le calque' : 'Remplir le calque', () => Doc.layerForEdit(doc, li).cells.fill(t));
+        } else throw new Error(`Action inconnue : ${a.action}`);
+        if (App.mode !== 'map') App.setMode('map');
+        App.refresh();
+        return `Calque ${li} « ${l.name} » : ${l.visible ? 'visible' : 'masqué'}${App.options.layer === li ? ', choisi' : ''}.`;
+      },
+    },
+    ouvrir: {
+      icone: 'folder-opened',
+      libelle: (a) => `Ouvre ${a.chemin}`,
+      description: 'Ouvre un jeu de tuiles .tafl du dossier du projet (chemin relatif). Une image PNG s\'importe comme une planche (voir importer_planche). Si le jeu ouvert a des modifications non enregistrées, Tafl demande d\'abord à Ragna.',
+      schema: { type: 'object', properties: { chemin: { type: 'string' } }, required: ['chemin'] },
+      faire: async (a) => {
+        const fichier = await window.claude.lireFichier(a.chemin);
+        if (!/\.tafl$/i.test(fichier.name)) throw new Error('Il faut un fichier .tafl (pour une image, utilise importer_planche).');
+        await IO.openLoaded(fichier);
+        return App.doc?.path === fichier.path ? `${fichier.name} ouvert : ${App.doc.tiles.length} tuile(s).` : 'Le jeu n\'a pas été ouvert (Ragna a peut-être gardé celui en cours).';
+      },
+    },
+    importer_planche: {
+      icone: 'cloud-download',
+      libelle: (a) => `Importe la planche ${a.chemin}`,
+      description: 'Découpe une image PNG du projet en tuiles (chemin relatif), comme Fichier › Importer une planche. valeurs : les réglages de la fenêtre d\'import (appelle d\'abord avec apercu: true pour les connaître, sans rien changer). Si le jeu en cours a des modifications non enregistrées, l\'import s\'arrête : enregistre-le d\'abord.',
+      schema: { type: 'object', properties: { chemin: { type: 'string' }, valeurs: { type: 'object' }, apercu: { type: 'boolean' } }, required: ['chemin'] },
+      faire: async (a) => {
+        const fichier = await window.claude.lireFichier(a.chemin);
+        const { fenetres } = await Dialogs.automatique({ valeurs: a.valeurs || {}, apercu: a.apercu, choix: 'cancel' }, () => IO.importSheet(fichier));
+        return `${decrireFenetres(fenetres)}${a.apercu ? '' : `\n\n${App.doc ? `Jeu « ${App.doc.name} » : ${App.doc.tiles.length} tuile(s).` : ''}`}`;
+      },
+    },
+    enregistrer_sous: {
+      icone: 'save-as',
+      libelle: (a) => `Enregistre le jeu sous ${a.chemin}`,
+      description: 'Enregistre le jeu de tuiles dans un fichier .tafl du dossier du projet (chemin relatif), qui devient son fichier.',
+      schema: { type: 'object', properties: { chemin: { type: 'string' } }, required: ['chemin'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        if (!/\.tafl$/i.test(a.chemin)) throw new Error('Le fichier doit finir par .tafl.');
+        const chemin = await window.claude.ecrireFichier(a.chemin, IO.textBytes(IO.serialize(doc)));
+        doc.path = chemin;
+        doc.name = chemin.split(/[\\/]/).pop().replace(/\.tafl$/i, '');
+        doc.dirty = false;
+        App.refresh();
+        return `Enregistré : ${chemin}.`;
+      },
+    },
+    exporter_tuiles: {
+      icone: 'export',
+      libelle: (a) => `Exporte les tuiles séparées dans ${a.dossier || 'le projet'}`,
+      description: 'Un PNG par tuile (00-herbe.png… ; une tuile animée donne un fichier par image) dans un dossier du projet (relatif, "" = la racine). echelle : 1 à 8.',
+      schema: { type: 'object', properties: { dossier: { type: 'string' }, echelle: nombre } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const d = dossierRel(a.dossier);
+        const ecrits = [];
+        for (const [nom, bytes] of await IO.tileFiles(doc, clamp(Math.round(a.echelle || 1), 1, 8))) ecrits.push(await window.claude.ecrireFichier(`${d ? `${d}/` : ''}${nom}`, bytes));
+        return `${ecrits.length} fichier(s) écrit(s) dans ${d || 'la racine du projet'}.`;
+      },
+    },
+    exporter_tiled: {
+      icone: 'export',
+      libelle: (a) => `Exporte la carte pour Tiled dans ${a.dossier || 'le projet'}`,
+      description: 'Exporte la carte au format de Tiled (lu aussi par Phaser et Godot) dans un dossier du projet : <nom>.tmj, la planche <nom>-tuiles.png et <nom>-carte.png.',
+      schema: { type: 'object', properties: { dossier: { type: 'string' } } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const d = dossierRel(a.dossier);
+        const ecrits = [];
+        for (const [nom, bytes] of await IO.mapFiles(doc)) ecrits.push(await window.claude.ecrireFichier(`${d ? `${d}/` : ''}${nom}`, bytes));
+        return `Écrit :\n${ecrits.join('\n')}`;
+      },
+    },
+    retablir: {
+      icone: 'redo',
+      libelle: () => 'Rétablit la modification annulée',
+      description: 'Rétablit la dernière modification annulée (comme Ctrl+Y).',
+      faire: () => {
+        const doc = besoinJeu();
+        if (!doc.redo.length) return 'Rien à rétablir.';
+        App.redo();
+        return 'Rétabli.';
       },
     },
   });
