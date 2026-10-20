@@ -31,4 +31,14 @@ module.exports = [
     icone: 'skald.svg',
     ouvreDossier: '0.3.0',
   },
+  {
+    id: 'tafl',
+    nom: 'Tafl',
+    glyphe: 'ᛏ',
+    description: 'Tuiles et cartes en pixel art, façon Pokémon',
+    prefixe: 'tafl-v',
+    exe: 'Tafl.exe',
+    icone: 'tafl.svg',
+    ouvreDossier: '0.1.0',
+  },
 ];
