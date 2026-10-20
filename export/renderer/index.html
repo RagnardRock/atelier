@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Les images passent par des adresses blob: et data:. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+  <title>Brokk</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune et Skald) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="brokk.svg" alt="">Brokk</span>
+    <button id="btn-projet" class="projet-bouton" title="Changer de projet (Ctrl+O)" hidden>
+      <i class="codicon codicon-folder"></i><span id="projet-nom"></span><span id="projet-type" class="badge"></span><i class="codicon codicon-chevron-down"></i>
+    </button>
+    <div class="title-actions">
+      <button id="btn-surveiller" class="bascule" title="Ré-exporter tout seul quand une source est enregistrée (dans Photoshop, Skald…)" hidden>
+        <i class="codicon codicon-eye"></i><span>Surveiller</span>
+      </button>
+      <button id="btn-tout" class="button primary small" title="Écrire les fichiers de tous les assets dans le projet (Ctrl+Maj+E)" hidden>
+        <i class="codicon codicon-export"></i> Tout exporter
+      </button>
+      <button id="btn-reglages" class="icon-button" title="Réglages de Brokk (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Brokk"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Accueil : aucun projet ouvert -->
+  <section id="accueil">
+    <img class="welcome-logo" src="brokk.svg" alt="">
+    <h1>Brokk</h1>
+    <p class="welcome-sub">Forge les assets de tes projets : un PSD, un logo ou une image devient d'un coup toutes ses tailles web.</p>
+    <div class="welcome-actions">
+      <button id="accueil-choisir" class="button primary"><i class="codicon codicon-folder-opened"></i> Choisir un projet <kbd>Ctrl+O</kbd></button>
+    </div>
+    <p class="welcome-hint">Le dossier d'un site (Vue, Vite, Nuxt, HTML…) ou n'importe quel dossier. Les fichiers produits y sont écrits.</p>
+    <h2 id="accueil-recents-titre" hidden>Projets récents</h2>
+    <div id="accueil-recents"></div>
+  </section>
+
+  <main id="layout" hidden>
+    <!-- Gauche : les assets du projet -->
+    <aside id="col-assets" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Assets</span>
+        <div class="panel-actions">
+          <button id="asset-ajouter" class="icon-button" title="Ajouter des images (Ctrl+N)"><i class="codicon codicon-add"></i></button>
+          <button id="asset-dupliquer" class="icon-button" title="Dupliquer (même image, autre recette)"><i class="codicon codicon-copy"></i></button>
+          <button id="asset-supprimer" class="icon-button" title="Retirer de la liste (Suppr). Les fichiers déjà exportés restent."><i class="codicon codicon-trash"></i></button>
+        </div>
+      </div>
+      <ul id="assets"></ul>
+      <p class="depot">Glisse des images ici<br><span>PSD, PNG, SVG, JPEG, WebP…</span></p>
+    </aside>
+
+    <!-- Centre : les fichiers que l'asset choisi va produire -->
+    <section id="centre" class="panel">
+      <div id="vide">
+        <i class="codicon codicon-file-media"></i>
+        <h2>Ajoute une première image</h2>
+        <p>Un PSD (entier, ou un seul de ses calques), un logo SVG, un PNG…<br>Brokk en tire le favicon, les icônes, les versions @2x en WebP, l'image de partage…</p>
+        <button id="vide-ajouter" class="button primary"><i class="codicon codicon-add"></i> Ajouter des images <kbd>Ctrl+N</kbd></button>
+      </div>
+      <div id="apercu" hidden>
+        <div class="apercu-tete">
+          <div class="apercu-titre">
+            <i id="apercu-icone" class="codicon"></i>
+            <div>
+              <div id="apercu-nom"></div>
+              <div id="apercu-resume"></div>
+            </div>
+          </div>
+          <button id="btn-dossier" class="button small" title="Ouvrir le dossier de destination dans l'Explorateur"><i class="codicon codicon-folder-opened"></i> Dossier</button>
+          <button id="btn-exporter" class="button primary small" title="Écrire les fichiers de cet asset (Ctrl+E)"><i class="codicon codicon-export"></i> Exporter</button>
+        </div>
+        <div id="sorties"></div>
+        <div id="code-bloc">
+          <div class="code-tete">
+            <span class="panel-title">Code à coller</span>
+            <span id="code-info"></span>
+            <button id="btn-copier" class="button small"><i class="codicon codicon-copy"></i> Copier</button>
+          </div>
+          <pre id="code"></pre>
+        </div>
+      </div>
+      <div id="drop-hint">Lâche pour ajouter ces images</div>
+    </section>
+
+    <!-- Droite : les réglages de l'asset choisi -->
+    <aside id="col-reglages" class="panel">
+      <div class="panel-header"><span class="panel-title">Réglages</span></div>
+      <div id="reglages"></div>
+    </aside>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-projet"></span>
+    <span class="spacer"></span>
+    <span id="status-export"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+
+  <script src="../node_modules/ag-psd/dist/bundle.js"></script>
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="sources.js"></script>
+  <script src="recettes.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>
