@@ -114,7 +114,7 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 
 // --- Petits fichiers de données des widgets (couleurs, calendrier…) ---
 // Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers'];
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   return path.join(app.getPath('userData'), `${nom}.json`);
@@ -617,6 +617,11 @@ handle('window:theme', async (event, { glass, blur }) => {
   return { blur: useBlur, needsRestart: wanted && !win.blurCapable };
 });
 handle('window:blurSupported', async () => blurSupported());
+// Un minuteur a sonné : l'icône d'Atelier clignote dans la barre des tâches jusqu'à ce que tu y reviennes.
+handle('window:attention', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win.isFocused()) win.flashFrame(true);
+});
 
 const WINDOW_ICON = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
 
@@ -642,6 +647,7 @@ function createWindow(config) {
     },
   });
   win.blurCapable = blur;
+  win.on('focus', () => win.flashFrame(false));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.webContents.on('will-navigate', (event, url) => {
     if (url !== win.webContents.getURL()) event.preventDefault();

@@ -21,6 +21,7 @@ const App = (() => {
     ['notes', 'Notes', 'widget-notes'],
     ['projets', 'Projets récents', 'widget-projets'],
     ['pressePapiers', 'Presse-papiers et couleurs', 'widget-presse-papiers'],
+    ['minuteurs', 'Minuteurs', 'widget-minuteurs'],
   ];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
@@ -109,6 +110,7 @@ const App = (() => {
     await Notes.start();
     Projets.refresh();
     await PressePapiers.start();
+    await Minuteurs.start();
     // Les versions installées s'affichent tout de suite ; GitHub n'est contacté au démarrage que si
     // le réglage est coché (sinon seulement quand tu cliques ↻).
     try {

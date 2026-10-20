@@ -44,6 +44,7 @@ contextBridge.exposeInMainWorld('atelier', {
   version: () => ipcRenderer.invoke('app:version'),
   setWindowTheme: (options) => ipcRenderer.invoke('window:theme', options),
   blurSupported: () => ipcRenderer.invoke('window:blurSupported'),
+  attention: () => ipcRenderer.invoke('window:attention'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   onUpdateProgress: (callback) => ipcRenderer.on('update:progress', (_event, percent) => callback(percent)),

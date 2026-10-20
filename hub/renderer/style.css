@@ -415,3 +415,21 @@ label.icon-button input[type=color] { position: absolute; inset: 0; opacity: 0; 
 }
 .menu-item { display: block; width: 100%; padding: 6px 10px; border: none; border-radius: 6px; background: none; text-align: left; cursor: pointer; }
 .menu-item:hover { background: var(--accent); color: var(--accent-text); }
+
+/* ---------- Minuteurs ---------- */
+#minuteurs-raccourcis { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px 4px; flex-shrink: 0; }
+#minuteurs-liste { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-content: start; gap: 10px; padding: 10px 14px 14px; overflow-y: auto; }
+.minuteur { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 8px 12px; border: 1px solid var(--plate-border); border-radius: 12px; background: rgba(255, 255, 255, 0.03); overflow: hidden; }
+.minuteur.en-marche { border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.minuteur.pause.en-marche { border-color: rgba(94, 200, 255, 0.45); }
+.minuteur.fini { border-color: var(--warning); animation: clignote 1s ease-in-out 3; }
+@keyframes clignote { 50% { background: color-mix(in srgb, var(--warning) 18%, transparent); } }
+.minuteur-haut { display: flex; flex-direction: column; min-width: 0; }
+.minuteur-nom { color: var(--text-strong); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.minuteur-temps { font-size: 30px; font-weight: 300; letter-spacing: 1px; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.minuteur:not(.en-marche) .minuteur-temps { color: var(--muted); }
+.minuteur-barre { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.minuteur-barre > div { height: 100%; width: 0; background: var(--accent); }
+.minuteur.pause .minuteur-barre > div { background: #5ec8ff; }
+.minuteur-actions { display: flex; align-items: center; margin: 2px -4px 0; }
+.vide-minuteurs { grid-column: 1 / -1; margin: 6px 0; }
