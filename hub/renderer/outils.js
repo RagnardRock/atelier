@@ -9,12 +9,22 @@ const Outils = (() => {
   const info = $('#outils-info');
   let outils = [];
   const enCours = new Map(); // id → { step, percent } pendant un téléchargement / une installation
+  // Outils que tu as choisi d'installer dès que leur nouvelle version, en cours de fabrication
+  // sur GitHub, sera publiée : id → version attendue.
+  const attente = new Map();
+  let suivi = null; // minuteur qui relit GitHub tant qu'une version est en fabrication
 
   function ligneVersion(o) {
     if (enCours.has(o.id)) {
       const { step, percent } = enCours.get(o.id);
       return step === 'telechargement' ? `Téléchargement de ${o.nom} ${o.derniere}… ${percent ?? 0} %` : 'Installation en cours…';
     }
+    if (attente.has(o.id)) return `En attente de ${o.nom} ${attente.get(o.id)} : installation dès sa publication…`;
+    if (o.enPreparation) return `${ligneVersionPubliee(o)} · ${o.enPreparation} en préparation sur GitHub…`;
+    return ligneVersionPubliee(o);
+  }
+
+  function ligneVersionPubliee(o) {
     if (o.installe && o.miseAJour) return `Installé : ${o.version} · Nouvelle version : ${o.derniere}`;
     if (o.installe) return o.version ? `Version ${o.version}${o.derniere && o.derniere === o.version ? ' · à jour' : ''}` : 'Installé';
     return o.derniere ? `Pas installé · Dernière version : ${o.derniere}` : 'Pas installé · Aucune version publiée';
@@ -28,7 +38,10 @@ const Outils = (() => {
       b.onclick = run;
       return b;
     };
-    if (o.installe) {
+    if (attente.has(o.id)) {
+      if (o.installe) actions.append(bouton('Lancer', 'play', () => lancer(o)));
+      actions.append(bouton('Ne plus attendre', 'close', () => { attente.delete(o.id); render(); }));
+    } else if (o.installe) {
       actions.append(bouton('Lancer', 'play', () => lancer(o), !o.miseAJour));
       if (o.miseAJour) actions.append(bouton('Mettre à jour', 'cloud-download', () => installer(o), true));
       const dossier = el('button', { className: 'icon-button', title: `Ouvrir le dossier d'installation de ${o.nom}` }, el('i', { className: 'codicon codicon-folder-opened' }));
@@ -36,7 +49,7 @@ const Outils = (() => {
       actions.append(el('span', { className: 'spacer' }), dossier);
     } else {
       const b = bouton('Installer', 'desktop-download', () => installer(o), true);
-      if (!o.derniere) b.disabled = true;
+      if (!o.derniere && !o.enPreparation) b.disabled = true;
       actions.append(b);
     }
 
@@ -73,13 +86,35 @@ const Outils = (() => {
       const dispo = outils.filter((o) => o.miseAJour);
       info.textContent = etat.erreurGithub ? `${etat.erreurGithub}. Les versions installées restent lançables.`
         : !outils.some((o) => o.derniere) ? 'Clique ↻ pour chercher les nouvelles versions sur GitHub.'
-          : dispo.length ? `${dispo.length} mise(s) à jour disponible(s).` : 'Tout est à jour.';
+          : outils.some((o) => o.enPreparation) ? `En préparation sur GitHub : ${outils.filter((o) => o.enPreparation).map((o) => `${o.nom} ${o.enPreparation}`).join(', ')}.`
+            : dispo.length ? `${dispo.length} mise(s) à jour disponible(s).` : 'Tout est à jour.';
       info.classList.toggle('erreur', Boolean(etat.erreurGithub));
+      suivre();
       if (!silencieux && refresh && !etat.erreurGithub) notify(dispo.length ? `Mise(s) à jour disponible(s) : ${dispo.map((o) => `${o.nom} ${o.derniere}`).join(', ')}` : 'Tous tes outils sont à jour.', dispo.length ? 'info' : 'success');
       return outils;
     } finally {
       btn.classList.remove('codicon-modifier-spin');
     }
+  }
+
+  // Tant qu'une version est en fabrication sur GitHub, on relit toutes les 30 secondes : la carte se
+  // met à jour toute seule quand elle est publiée, et celles que tu attends s'installent.
+  function suivre() {
+    clearTimeout(suivi);
+    for (const [id, version] of attente) {
+      const o = outils.find((x) => x.id === id);
+      if (o?.derniere === version) {
+        attente.delete(id);
+        installer(o, { confirme: true });
+      } else if (o && !o.enPreparation) {
+        attente.delete(id);
+        notify(`La fabrication de ${o.nom} ${version} sur GitHub s'est arrêtée sans publier la version. Regarde l'onglet « Actions » du dépôt.`, 'error');
+      }
+    }
+    if (outils.some((o) => o.enPreparation)) {
+      suivi = setTimeout(() => refresh({ refresh: true, silencieux: true }).catch(() => suivre()), 30_000);
+    }
+    render();
   }
 
   async function lancer(o) {
@@ -91,8 +126,29 @@ const Outils = (() => {
     }
   }
 
-  async function installer(o) {
-    if (o.installe) {
+  async function installer(o, { confirme = false } = {}) {
+    if (!confirme) {
+      // On relit GitHub d'abord : la carte peut dater de plusieurs minutes.
+      await refresh({ refresh: true, silencieux: true }).catch(() => {});
+      o = outils.find((x) => x.id === o.id) || o;
+    }
+    if (!confirme && o.enPreparation) {
+      // Une version plus récente est en train d'être fabriquée : l'installer maintenant donnerait l'ancienne.
+      const choix = await Dialogs.ask(`${o.nom} ${o.enPreparation} arrive`, `GitHub est en train de fabriquer ${o.nom} ${o.enPreparation} (en général 2 à 5 minutes après la fusion).${o.derniere ? ` La dernière version publiée pour l'instant est la ${o.derniere}.` : ''}\n\nAtelier peut attendre et l'installer dès qu'elle est publiée.${o.installe ? '' : '\n\nSi Windows affiche « Windows a protégé votre ordinateur », clique Informations complémentaires puis Exécuter quand même.'}`, [
+        { label: 'Annuler', value: null },
+        ...(o.derniere && (!o.installe || o.miseAJour) ? [{ label: `Installer la ${o.derniere}`, value: 'maintenant' }] : []),
+        { label: `Attendre la ${o.enPreparation}`, value: 'attendre', primary: true },
+      ]);
+      if (!choix) return;
+      if (choix === 'attendre') {
+        if (o.installe && await window.atelier.estOuvert(o.id)) notify(`Pense à fermer ${o.nom} avant que la ${o.enPreparation} arrive.`, 'info', 8000);
+        attente.set(o.id, o.enPreparation);
+        suivre();
+        return;
+      }
+      confirme = true; // « Installer la <ancienne> » : déjà confirmé, pas de deuxième question
+    }
+    if (o.installe && !confirme) {
       // Mise à jour : on montre ce qui change, et on vérifie que l'outil est fermé
       // (Windows ne laisse pas remplacer un programme ouvert).
       const nouveautes = o.nouveautes.slice(0, 12).map((c) => `• ${c}`).join('\n');
@@ -108,7 +164,16 @@ const Outils = (() => {
         ]);
         if (!encore) return;
       }
-    } else {
+    } else if (o.installe) {
+      // Mise à jour que tu as demandée en attendant la nouvelle version : l'outil doit être fermé.
+      while (await window.atelier.estOuvert(o.id)) {
+        const encore = await Dialogs.ask(`${o.nom} ${o.derniere} est prête`, `Ferme ${o.nom} (en enregistrant ton travail), puis clique Réessayer.`, [
+          { label: 'Annuler', value: false },
+          { label: 'Réessayer', value: true, primary: true },
+        ]);
+        if (!encore) return;
+      }
+    } else if (!confirme) {
       const ok = await Dialogs.ask(`Installer ${o.nom}`, `Atelier va télécharger ${o.nom}-Setup-${o.derniere}.exe depuis GitHub et l'ouvrir. Tu choisiras le dossier d'installation dans l'installeur, comme d'habitude.\n\nSi Windows affiche « Windows a protégé votre ordinateur », clique Informations complémentaires puis Exécuter quand même : l'installeur n'est simplement pas signé par un certificat payant.`, [
         { label: 'Annuler', value: false },
         { label: 'Installer', value: true, primary: true },
