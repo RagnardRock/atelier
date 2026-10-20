@@ -6,7 +6,7 @@
 // - garder les notes et les réglages dans %APPDATA%\atelier-hub ;
 // - mettre Atelier lui-même à jour.
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, net, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, shell } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -85,6 +85,10 @@ const DEFAULT_CONFIG = {
   checkToolUpdates: true, // au démarrage, regarder sur GitHub si Rune, Skald… ont une nouvelle version
   // Le dossier où sont rangés tes projets (widget Projets récents), comme dans Rune.
   dossierProjets: process.platform === 'win32' ? 'D:\\Projets' : path.join(os.homedir(), 'Projets'),
+  // Presse-papiers : retenir ce que tu copies, et le garder après la fermeture d'Atelier (désactivé par
+  // défaut : un mot de passe copié finirait sinon dans un fichier).
+  surveillerPressePapiers: true,
+  garderPressePapiers: false,
   // Widgets affichés (Réglages › Widgets).
   widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true },
 };
@@ -107,6 +111,73 @@ handle('notes:write', async (_event, notes) => {
   await writeJson(notesPath(), notes);
 });
 handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
+
+// --- Petits fichiers de données des widgets (couleurs, calendrier…) ---
+// Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers'];
+const donneesPath = (nom) => {
+  if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
+  return path.join(app.getPath('userData'), `${nom}.json`);
+};
+handle('donnees:lire', async (_event, nom, defaut = null) => readJson(donneesPath(nom), defaut));
+handle('donnees:ecrire', async (_event, nom, data) => writeJson(donneesPath(nom), data));
+
+// --- Widget Presse-papiers ---
+// Chaque seconde, on regarde le texte du presse-papiers de Windows. S'il a changé, il rejoint
+// l'historique (40 éléments au plus, le plus récent en haut) et l'interface est prévenue.
+// Seul le texte est retenu (pas les images ni les fichiers).
+const MAX_HISTORIQUE = 40;
+let historique = [];
+let dernierTexte = null;
+let surveillance = null;
+
+async function enregistrerHistorique() {
+  if ((await readConfig()).garderPressePapiers) await writeJson(donneesPath('presse-papiers'), historique);
+}
+function ajouterAuHistorique(texte) {
+  historique = [{ texte, quand: Date.now() }, ...historique.filter((h) => h.texte !== texte)].slice(0, MAX_HISTORIQUE);
+  sendToWindow('presse:change', historique);
+  enregistrerHistorique().catch((err) => log('ERREUR', `presse-papiers.json : ${err.message}`));
+}
+// (Dans Electron 44, lire le presse-papiers est asynchrone : d'où le await.)
+let lectureEnCours = false;
+async function verifierPressePapiers() {
+  if (lectureEnCours) return;
+  lectureEnCours = true;
+  const texte = String((await Promise.resolve(clipboard.readText()).catch(() => '')) ?? '');
+  lectureEnCours = false;
+  if (texte === dernierTexte) return;
+  dernierTexte = texte;
+  if (texte.trim() && texte.length <= 100_000) ajouterAuHistorique(texte);
+}
+async function demarrerSurveillance() {
+  const config = await readConfig();
+  clearInterval(surveillance);
+  surveillance = null;
+  if (config.garderPressePapiers && !historique.length) historique = await readJson(donneesPath('presse-papiers'), []);
+  if (!config.garderPressePapiers) await fs.rm(donneesPath('presse-papiers'), { force: true }).catch(() => {});
+  if (!config.surveillerPressePapiers) return;
+  dernierTexte = String((await clipboard.readText()) ?? ''); // ce qui était copié avant le lancement ne compte pas
+  surveillance = setInterval(verifierPressePapiers, 1000);
+}
+handle('presse:historique', async () => historique);
+handle('presse:copier', async (_event, texte) => {
+  await clipboard.writeText(String(texte));
+  dernierTexte = String(texte);
+  ajouterAuHistorique(dernierTexte); // remonte en haut de la liste
+});
+handle('presse:supprimer', async (_event, texte) => {
+  historique = historique.filter((h) => h.texte !== texte);
+  sendToWindow('presse:change', historique);
+  await enregistrerHistorique();
+});
+handle('presse:vider', async () => {
+  historique = [];
+  sendToWindow('presse:change', historique);
+  await enregistrerHistorique();
+});
+// Après un changement de réglages (surveiller / garder).
+handle('presse:reglages', async () => demarrerSurveillance());
 
 // --- Outils : où ils sont installés ---
 // Les installeurs de Rune et Skald (fabriqués par electron-builder) s'inscrivent dans le registre de
@@ -609,6 +680,7 @@ if (!app.requestSingleInstanceLock()) {
     log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
     Menu.setApplicationMenu(null);
     createWindow(config);
+    demarrerSurveillance();
   });
   app.on('window-all-closed', () => app.quit());
 }

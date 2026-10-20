@@ -67,6 +67,18 @@
         <ul id="projets-liste" class="widget-liste"></ul>
         <footer class="widget-pied discret"><span id="projets-racine"></span></footer>
       </article>
+
+      <article id="widget-presse-papiers" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-clippy"></i><span>Presse-papiers et couleurs</span>
+          <span class="spacer"></span>
+          <button id="btn-pipette" class="icon-button" title="Pipette : prendre une couleur n'importe où sur l'écran"><i class="codicon codicon-eyedropper"></i></button>
+          <label class="icon-button" title="Ajouter une couleur à la palette"><i class="codicon codicon-symbol-color"></i><input id="couleur-ajout" type="color" value="#5fd4a8"></label>
+          <button id="btn-vider-presse" class="icon-button" title="Vider l'historique du presse-papiers"><i class="codicon codicon-clear-all"></i></button>
+        </header>
+        <div id="palette"></div>
+        <ul id="presse-liste" class="widget-liste"></ul>
+      </article>
     </section>
   </main>
 
@@ -78,6 +90,7 @@
   <script src="outils.js"></script>
   <script src="notes.js"></script>
   <script src="projets.js"></script>
+  <script src="presse-papiers.js"></script>
   <script src="update.js"></script>
   <script src="app.js"></script>
 </body>

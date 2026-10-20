@@ -26,6 +26,18 @@ contextBridge.exposeInMainWorld('atelier', {
   ouvrirExplorateur: (dossier) => ipcRenderer.invoke('projets:explorateur', dossier),
   choisirDossierProjets: () => ipcRenderer.invoke('projets:choisirDossier'),
 
+  // Données des widgets (couleurs, calendrier…)
+  lireDonnees: (nom, defaut) => ipcRenderer.invoke('donnees:lire', nom, defaut),
+  ecrireDonnees: (nom, data) => ipcRenderer.invoke('donnees:ecrire', nom, data),
+
+  // Presse-papiers
+  historiquePressePapiers: () => ipcRenderer.invoke('presse:historique'),
+  copier: (texte) => ipcRenderer.invoke('presse:copier', texte),
+  supprimerDuPressePapiers: (texte) => ipcRenderer.invoke('presse:supprimer', texte),
+  viderPressePapiers: () => ipcRenderer.invoke('presse:vider'),
+  reglagesPressePapiers: () => ipcRenderer.invoke('presse:reglages'),
+  onPressePapiers: (callback) => ipcRenderer.on('presse:change', (_event, historique) => callback(historique)),
+
   // Réglages, fenêtre, mise à jour d'Atelier
   readConfig: () => ipcRenderer.invoke('config:read'),
   writeConfig: (changes) => ipcRenderer.invoke('config:write', changes),
