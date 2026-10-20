@@ -1,0 +1,70 @@
+{
+  "name": "atelier-tuiles",
+  "productName": "Tafl",
+  "version": "0.1.0",
+  "description": "Tafl, mon outil de tuiles façon Pokémon (pixel art, jeux de tuiles, cartes), un des outils d'Atelier",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "author": "Ragna",
+  "build": {
+    "appId": "fr.ragna.tafl",
+    "productName": "Tafl",
+    "copyright": "Ragna",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "!mettre-a-jour.*"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "tafl",
+        "name": "Jeu de tuiles Tafl",
+        "description": "Jeu de tuiles Tafl",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "executableName": "Tafl"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Tafl",
+      "artifactName": "Tafl-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Tafl",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "@vscode/codicons": "0.0.45",
+    "electron-updater": "6.8.9"
+  },
+  "private": true
+}
