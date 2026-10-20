@@ -1,11 +1,12 @@
 {
   "name": "atelier-hub",
   "productName": "Atelier",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Atelier, le hub de mes outils : lance Rune, Skald et les suivants, les installe et les met à jour, et réunit mes widgets (notes…)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "postinstall": "node ../commun/copier.js github.js",
     "dist": "electron-builder --win nsis --publish never"
   },
   "author": "Ragna",

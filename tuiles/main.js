@@ -288,6 +288,7 @@ handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file
 
 // --- Panneau Claude (le même que dans Skald, Brokk : voir ../commun/LISEZMOI.md) ---
 const claude = require('./commun/claude');
+const { creerGithub, LimiteGithub } = require('./commun/github');
 claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)" } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
@@ -327,10 +328,12 @@ function newer(a, b) {
 }
 
 // La Release de Tafl la plus récente publiée sur GitHub (on ignore celles des autres outils).
+// La liste vient de commun/github.js : le flux des Releases d'abord (pas compté dans la limite de
+// 60 demandes par heure de GitHub), l'API seulement en complément, gardée sur le disque.
+let github = null;
 async function latestTaflRelease() {
-  const res = await net.fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=50`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Tafl' } });
-  if (!res.ok) throw new Error(`GitHub a répondu ${res.status}`);
-  const releases = (await res.json()).filter((r) => !r.draft && !r.prerelease && /^tafl-v\d+\.\d+\.\d+$/.test(r.tag_name));
+  github ??= creerGithub({ net, dossier: app.getPath('userData'), agent: 'Tafl' });
+  const releases = (await github.releases()).filter((r) => /^tafl-v\d+\.\d+\.\d+$/.test(r.tag_name));
   let best = null;
   for (const r of releases) {
     const version = r.tag_name.slice('tafl-v'.length);
@@ -357,6 +360,7 @@ handle('update:check', async () => {
     try {
       release = await latestTaflRelease();
     } catch (err) {
+      if (err instanceof LimiteGithub) throw err; // le message dit déjà quoi faire et quand
       throw new Error(`Impossible de contacter GitHub : ${err.message.split('\n')[0]}`);
     }
     if (!release || !newer(release.version, app.getVersion())) return { mode: 'installer', version: app.getVersion(), changes: [] };
