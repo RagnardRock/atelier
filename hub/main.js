@@ -161,6 +161,7 @@ handle('notes:read', async () => ({ notes: await readJson(notesPath(), []), path
 handle('notes:write', async (_event, notes) => {
   if (!Array.isArray(notes)) throw new Error('Notes invalides');
   await writeJson(notesPath(), notes);
+  await ecrireNotesMd(notes);
 });
 handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 
@@ -171,10 +172,66 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
+  // La mémoire des projets vit dans le dossier partagé (voir plus bas) : Rune, Skald et Tafl la lisent aussi.
+  if (nom === 'projets-memoire') return memoirePath();
   return path.join(app.getPath('userData'), `${nom}.json`);
 };
 handle('donnees:lire', async (_event, nom, defaut = null) => readJson(donneesPath(nom), defaut));
 handle('donnees:ecrire', async (_event, nom, data) => writeJson(donneesPath(nom), data));
+
+// --- Dossier partagé avec les autres outils (%APPDATA%\atelier-commun) ---
+// Le Claude de Rune, de Skald et de Tafl y lit ce que celui d'Atelier sait déjà :
+// - memoire-projets.json : ce que Claude retient sur chaque projet (le seul exemplaire : Atelier et les
+//   outils lisent et écrivent tous ce fichier) ;
+// - notes.md : une copie lisible des notes, réécrite à chaque changement ;
+// - projet-en-cours.json : le dernier projet ouvert depuis Atelier, et avec quel outil ;
+// - LISEZMOI.md : ce mode d'emploi, pour toi et pour Claude.
+const communDir = () => path.join(app.getPath('appData'), 'atelier-commun');
+const memoirePath = () => path.join(communDir(), 'memoire-projets.json');
+
+const LISEZMOI = `# Dossier partagé de l'Atelier
+
+Écrit par Atelier, lu par Claude dans Rune, Skald et Tafl : quand Ragna passe d'un outil à l'autre,
+Claude sait sur quoi Ragna travaille et ce qui a déjà été décidé.
+
+- memoire-projets.json : ce que Claude retient sur chaque projet.
+  { "NomDuDossierDuProjet": [{ "id": "a1b2c3d4", "texte": "…", "quand": 1760000000000 }] }
+  Le nom est celui du dossier du projet. « quand » est en millisecondes depuis 1970.
+  Les outils peuvent y ajouter ou retirer des éléments : toujours relire le fichier juste avant
+  d'écrire, puis écrire dans memoire-projets.json.tmp et le renommer (jamais à moitié écrit).
+- notes.md : les notes du widget Notes d'Atelier (copie en lecture seule, réécrite à chaque changement).
+- projet-en-cours.json : { "nom", "dossier", "outil", "quand" }, le dernier projet ouvert depuis Atelier.
+`;
+
+async function ecrireNotesMd(notes) {
+  await fs.mkdir(communDir(), { recursive: true });
+  await fs.writeFile(path.join(communDir(), 'notes.md'), claude.notesMd(Array.isArray(notes) ? notes : []), 'utf8');
+}
+
+async function preparerCommun() {
+  await fs.mkdir(communDir(), { recursive: true });
+  await fs.writeFile(path.join(communDir(), 'LISEZMOI.md'), LISEZMOI, 'utf8');
+  // Avant Atelier 0.8, la mémoire était dans %APPDATA%\atelier-hub\projets-memoire.json : on la déplace
+  // (l'ancien fichier reste, en sauvegarde).
+  const ancienne = path.join(app.getPath('userData'), 'projets-memoire.json');
+  if (!fsSync.existsSync(memoirePath()) && fsSync.existsSync(ancienne)) {
+    await writeJson(memoirePath(), await readJson(ancienne, {}));
+    log('INFO', `Mémoire des projets déplacée dans ${memoirePath()}`);
+  }
+  await ecrireNotesMd(await readJson(notesPath(), []));
+  // Quand un outil change la mémoire, le widget Projets récents se met à jour.
+  let attente = null;
+  fsSync.watch(communDir(), (_type, nom) => {
+    if (nom !== 'memoire-projets.json') return;
+    clearTimeout(attente);
+    attente = setTimeout(() => sendToWindow('commun:memoire'), 300);
+  });
+}
+handle('commun:ouvrir', async () => {
+  await fs.mkdir(communDir(), { recursive: true });
+  const err = await shell.openPath(communDir());
+  if (err) throw new Error(err);
+});
 
 // --- Widget Presse-papiers ---
 // Chaque seconde, on regarde le texte du presse-papiers de Windows. S'il a changé, il rejoint
@@ -654,6 +711,7 @@ handle('projets:ouvrir', async (_event, folder, outil) => {
   child.on('error', (err) => reportError(`Ouverture dans ${tool.nom}`, err));
   child.unref();
   log('INFO', `Ouverture de ${full} dans ${tool.nom}`);
+  await writeJson(path.join(communDir(), 'projet-en-cours.json'), { nom: path.basename(full), dossier: full, outil: tool.id, quand: Date.now() });
 });
 // Toujours ouvrir ce projet avec cet outil (null : revenir au choix automatique).
 handle('projets:choisirOutil', async (_event, nom, outil) => {
@@ -909,6 +967,8 @@ if (!app.requestSingleInstanceLock()) {
     log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
     Menu.setApplicationMenu(null);
     appliquerOrthographe(config);
+    // Avant la fenêtre : la mémoire des projets doit être à sa nouvelle place quand le widget la lit.
+    await preparerCommun().catch((err) => reportError('Dossier partagé', err));
     createWindow(config);
     demarrerSurveillance();
   });

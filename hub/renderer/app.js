@@ -66,7 +66,10 @@ const App = (() => {
         ...WIDGETS.map(([key, label]) => ({ key: `widget-${key}`, label, type: 'checkbox', value: config.widgets?.[key] !== false })),
         { type: 'info', text: `Atelier ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
-      buttons: [{ label: 'Dossier des notes', run: () => window.atelier.montrerNotes() }],
+      buttons: [
+        { label: 'Dossier des notes', run: () => window.atelier.montrerNotes() },
+        { label: 'Dossier partagé avec les outils', run: () => window.atelier.ouvrirCommun() },
+      ],
       onInput(values, f) {
         parcourir.firstChild.onclick = async () => {
           const dossier = await window.atelier.choisirDossierProjets();

@@ -173,6 +173,14 @@ const Projets = (() => {
   });
   $('#btn-projets-actualiser').onclick = refresh;
   window.addEventListener('focus', () => { if (Date.now() - derniereLecture > 60_000) refresh(); });
+  // Un autre outil (Rune, Skald, Tafl) a changé la mémoire d'un projet.
+  window.atelier.onMemoireChangee(async () => {
+    if (!donnees.projets.length) return;
+    const memoire = await lireMemoire();
+    donnees.memoire = memoire;
+    for (const p of donnees.projets) p.memoire = memoire[p.nom] || [];
+    render();
+  });
 
   return { refresh, retenir, oublier, infoMemoire };
 })();
