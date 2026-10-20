@@ -5,8 +5,10 @@
 //   note, un évènement, lancer un minuteur, ouvrir un projet…) : une carte te demande d'abord ton accord
 //   (réglage « Actions » de Claude). L'action est faite ici, par les widgets, qui se mettent à jour.
 // - La réponse s'affiche au fil de l'eau, en Markdown. Chaque fichier qu'il lit apparaît sur une ligne.
-// - La conversation est gardée dans %APPDATA%\atelier-hub\claude.json : elle est toujours là au
-//   prochain démarrage d'Atelier, et Claude s'en souvient (--resume). « + » en commence une nouvelle.
+// - Les conversations sont gardées dans %APPDATA%\atelier-hub\claude-conversations.json : la dernière
+//   est toujours là au prochain démarrage d'Atelier, et Claude s'en souvient (--resume).
+//   « + » en commence une nouvelle ; le bouton horloge ouvre la liste des conversations, pour en
+//   rouvrir une (Claude la reprend là où elle en était), la renommer ou la supprimer.
 
 const ClaudeWidget = (() => {
   const liste = $('#claude-messages');
@@ -19,7 +21,11 @@ const ClaudeWidget = (() => {
   let brut = '';           // son texte Markdown
   let rendreBientot = false;
   const outils = new Map(); // id d'outil -> { ligne, item }
-  let conv = { sessionId: null, items: [] };
+  // Toutes les conversations, et celle qui est affichée. Une conversation neuve n'entre dans la liste
+  // qu'à son premier message (pas de conversations vides).
+  let conversations = [];
+  const neuve = () => ({ id: crypto.randomUUID(), titre: '', sessionId: null, items: [], creee: Date.now(), modifiee: Date.now() });
+  let conv = neuve();
 
   const SUGGESTIONS = [
     'Qu\'est-ce qui m\'attend cette semaine ?',
@@ -29,7 +35,10 @@ const ClaudeWidget = (() => {
     'Lance un Pomodoro',
   ];
 
-  const enregistrer = () => window.atelier.ecrireDonnees('claude', conv).catch(() => {});
+  const enregistrer = () => {
+    if (conv.items.length && !conv.supprimee && !conversations.includes(conv)) conversations.push(conv);
+    return window.atelier.ecrireDonnees('claude-conversations', { courante: conv.id, conversations }).catch(() => {});
+  };
 
   function setOccupe(valeur, texte = '') {
     occupe = valeur;
@@ -263,6 +272,9 @@ const ClaudeWidget = (() => {
       case 'denied': avis('info', `Claude voulait utiliser ${e.toolName} : refusé (il ne peut pas modifier de fichier ni lancer de commande).`); break;
       case 'permission': carteAction(e); break;
       case 'notice': avis('info', e.message); break;
+      case 'oubliee':
+        avis('info', 'Claude Code ne retrouve plus cette conversation (il efface les plus anciennes) : Claude repart de ton message, sans se souvenir du début.');
+        break;
       case 'result':
         finTexte();
         arreterOutils();
@@ -295,6 +307,8 @@ const ClaudeWidget = (() => {
     ajusterSaisie();
     bulleUtilisateur(t);
     conv.items.push({ t: 'user', text: t });
+    conv.modifiee = Date.now();
+    enregistrer();
     setOccupe(true, 'Atelier prépare tes notes, ton calendrier et tes projets…');
     try {
       await Notes.enregistrer(); // la note en cours de frappe doit être dans notes.md
@@ -305,18 +319,125 @@ const ClaudeWidget = (() => {
     }
   }
 
-  async function nouvelle() {
+  // Affiche une conversation (null = une nouvelle). Claude Code est arrêté : au prochain message, il
+  // reprend la conversation choisie (--resume), ou en commence une nouvelle.
+  async function ouvrirConv(c) {
     if (occupe) await window.atelier.claudeInterrompre();
     await window.atelier.claudeNouvelle();
     finTexte();
-    outils.clear();
-    conv = { sessionId: null, items: [] };
+    arreterOutils();
+    await enregistrer(); // ce qui venait d'arriver dans la conversation qu'on quitte
+    conv = c || neuve();
     setOccupe(false);
     $('#claude-modele').textContent = '';
-    accueil();
+    afficherConv();
+    if (conv.sessionId) await window.atelier.claudeReprendre(conv.sessionId);
+    fermerListe();
     enregistrer();
     saisie.focus();
   }
+  const nouvelle = () => ouvrirConv(null);
+
+  function afficherConv() {
+    if (!conv.items.length) return accueil();
+    liste.replaceChildren();
+    for (const item of conv.items) {
+      if (item.t === 'user') bulleUtilisateur(item.text);
+      else if (item.t === 'assistant') bulleClaude(item.text);
+      else if (item.t === 'tool') ligneOutil(item.icon, item.label, item.state === 'encours' ? 'arrete' : item.state);
+    }
+    liste.scrollTop = liste.scrollHeight;
+  }
+
+  // --- Liste des conversations ---
+  const panneau = $('#claude-conversations');
+  const listeConv = $('#claude-conv-liste');
+  const rechercheConv = $('#claude-conv-recherche');
+  const btnListe = $('#btn-claude-conversations');
+
+  // Titre : celui que tu as donné, sinon ton premier message.
+  function titreConv(c) {
+    if (c.titre) return c.titre;
+    const premier = c.items.find((i) => i.t === 'user')?.text.replace(/\s+/g, ' ').trim() || 'Nouvelle conversation';
+    return premier.length > 70 ? `${premier.slice(0, 70)}…` : premier;
+  }
+
+  function renderListe() {
+    const q = rechercheConv.value.trim().toLowerCase();
+    const contient = (c) => !q || titreConv(c).toLowerCase().includes(q)
+      || c.items.some((i) => (i.t === 'user' || i.t === 'assistant') && i.text.toLowerCase().includes(q));
+    const visibles = [...conversations].sort((a, b) => b.modifiee - a.modifiee).filter(contient);
+    listeConv.replaceChildren(...visibles.map((c) => {
+      const nb = c.items.filter((i) => i.t === 'user').length;
+      const renommer = el('button', { className: 'icon-button', title: 'Renommer' }, el('i', { className: 'codicon codicon-edit' }));
+      const supprimer = el('button', { className: 'icon-button', title: 'Supprimer cette conversation' }, el('i', { className: 'codicon codicon-trash' }));
+      renommer.onclick = (e) => { e.stopPropagation(); renommerConv(c); };
+      supprimer.onclick = (e) => { e.stopPropagation(); supprimerConv(c); };
+      const li = el('li', { className: `claude-conv${c === conv ? ' active' : ''}`, title: titreConv(c) },
+        el('div', { className: 'claude-conv-texte' },
+          el('div', { className: 'claude-conv-titre', textContent: titreConv(c) }),
+          el('div', { className: 'claude-conv-infos', textContent: `${dateRelative(c.modifiee)} · ${nb} message${nb > 1 ? 's' : ''}` })),
+        el('div', { className: 'claude-conv-actions' }, renommer, supprimer));
+      li.onclick = () => (c === conv ? fermerListe() : ouvrirConv(c));
+      return li;
+    }));
+    if (!visibles.length) listeConv.append(el('li', { className: 'vide', textContent: q ? 'Aucune conversation ne contient ce texte.' : 'Pas encore de conversation. Écris à Claude pour en commencer une.' }));
+  }
+
+  function ouvrirListe() {
+    panneau.hidden = false;
+    liste.hidden = $('#claude-formulaire').hidden = true;
+    btnListe.classList.add('actif');
+    rechercheConv.value = '';
+    renderListe();
+    rechercheConv.focus();
+  }
+  function fermerListe() {
+    if (panneau.hidden) return;
+    panneau.hidden = true;
+    liste.hidden = $('#claude-formulaire').hidden = false;
+    btnListe.classList.remove('actif');
+    saisie.focus();
+  }
+
+  async function renommerConv(c) {
+    const v = await Dialogs.form({
+      title: 'Renommer la conversation',
+      okLabel: 'Renommer',
+      fields: [
+        { key: 'titre', label: 'Nom', type: 'text', value: titreConv(c) },
+        { type: 'info', text: 'Laisse vide pour reprendre ton premier message comme nom.' },
+      ],
+    });
+    if (!v) return;
+    c.titre = v.titre.trim();
+    await enregistrer();
+    renderListe();
+  }
+
+  async function supprimerConv(c) {
+    const ok = await Dialogs.ask('Supprimer la conversation', `Supprimer « ${titreConv(c)} » ? Elle disparaît de la liste et Claude ne pourra plus la reprendre.`, [
+      { label: 'Annuler', value: false },
+      { label: 'Supprimer', value: true, primary: true },
+    ]);
+    if (!ok) return;
+    c.supprimee = true; // pour qu'elle ne revienne pas dans la liste en la quittant
+    conversations = conversations.filter((x) => x !== c);
+    if (c === conv) {
+      await ouvrirConv(null);
+      ouvrirListe(); // on reste dans la liste
+    } else {
+      await enregistrer();
+      renderListe();
+    }
+  }
+
+  btnListe.onclick = () => (panneau.hidden ? ouvrirListe() : fermerListe());
+  rechercheConv.addEventListener('input', renderListe);
+  rechercheConv.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); fermerListe(); }
+    if (e.key === 'Enter') listeConv.querySelector('.claude-conv')?.click();
+  });
 
   function ajusterSaisie() {
     saisie.style.height = 'auto';
@@ -327,6 +448,7 @@ const ClaudeWidget = (() => {
   saisie.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); }
     if (e.key === 'Escape' && occupe) { e.preventDefault(); window.atelier.claudeInterrompre(); }
+    if (e.key.toLowerCase() === 'h' && e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); ouvrirListe(); }
   });
   btnEnvoyer.onclick = () => (occupe ? window.atelier.claudeInterrompre() : envoyer());
   $('#btn-claude-nouvelle').onclick = nouvelle;
@@ -334,20 +456,23 @@ const ClaudeWidget = (() => {
 
   // Au démarrage : on réaffiche la dernière conversation, et Claude la reprendra au prochain message.
   async function start() {
-    const garde = await window.atelier.lireDonnees('claude', null);
-    if (garde && Array.isArray(garde.items) && garde.items.length) {
-      conv = { sessionId: garde.sessionId || null, items: garde.items };
-      liste.replaceChildren();
-      for (const item of conv.items) {
-        if (item.t === 'user') bulleUtilisateur(item.text);
-        else if (item.t === 'assistant') bulleClaude(item.text);
-        else if (item.t === 'tool') ligneOutil(item.icon, item.label, item.state === 'encours' ? 'arrete' : item.state);
+    let garde = await window.atelier.lireDonnees('claude-conversations', null);
+    if (!garde) {
+      // Avant la liste (Atelier 0.5 et plus ancien), une seule conversation dans claude.json : elle
+      // devient la première de la liste.
+      const ancienne = await window.atelier.lireDonnees('claude', null);
+      garde = { conversations: [] };
+      if (ancienne && Array.isArray(ancienne.items) && ancienne.items.length) {
+        const c = { ...neuve(), sessionId: ancienne.sessionId || null, items: ancienne.items };
+        garde = { courante: c.id, conversations: [c] };
       }
-      liste.scrollTop = liste.scrollHeight;
-      await window.atelier.claudeReprendre(conv.sessionId);
-    } else {
-      accueil();
     }
+    conversations = (Array.isArray(garde.conversations) ? garde.conversations : [])
+      .filter((c) => c && typeof c.id === 'string' && Array.isArray(c.items));
+    conv = conversations.find((c) => c.id === garde.courante) || neuve();
+    afficherConv();
+    if (conv.sessionId) await window.atelier.claudeReprendre(conv.sessionId);
+    if (conversations.length) enregistrer(); // l'ancienne conversation est maintenant dans la liste
   }
 
   return { start };

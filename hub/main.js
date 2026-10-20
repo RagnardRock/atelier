@@ -6,7 +6,7 @@
 // - garder les notes et les réglages dans %APPDATA%\atelier-hub ;
 // - mettre Atelier lui-même à jour.
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, shell } = require('electron');
+const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, screen, session, shell } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const path = require('node:path');
@@ -103,6 +103,9 @@ const DEFAULT_CONFIG = {
   // les familles pour lesquelles il ne demande plus (sinon : une carte Autoriser / Refuser à chaque fois).
   claudeActions: true,
   claudeSansDemander: { notes: false, calendrier: false, minuteurs: false, projets: false },
+  // Correction d'orthographe (notes, message à Claude…) : activée, et dans quelle(s) langue(s).
+  orthographe: true,
+  languesOrthographe: 'fr',
 };
 const readConfig = async () => {
   const config = { ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) };
@@ -115,7 +118,39 @@ handle('config:read', async () => ({ config: await readConfig(), path: configPat
 handle('config:write', async (_event, changes) => {
   const config = { ...(await readConfig()), ...changes };
   await writeJson(configPath(), config);
+  appliquerOrthographe(config);
   return config;
+});
+
+// --- Correction d'orthographe ---
+// Le correcteur de Chromium souligne les fautes dans les zones de texte (notes, message à Claude).
+// Sous Windows, il utilise le correcteur de Windows lui-même, avec les langues installées sur le PC.
+// Le clic droit sur un mot souligné propose les corrections (menu de l'interface, voir base.js).
+const LANGUES_ORTHOGRAPHE = { fr: ['fr-FR', 'fr'], en: ['en-US', 'en-GB', 'en'] };
+function appliquerOrthographe(config) {
+  const s = session.defaultSession;
+  s.setSpellCheckerEnabled(config.orthographe !== false);
+  if (config.orthographe === false) return;
+  // « fr+en » : les deux à la fois. Pour chaque langue, le premier code que Chromium connaît.
+  const dispo = s.availableSpellCheckerLanguages;
+  const langues = String(config.languesOrthographe || 'fr').split('+')
+    .map((l) => (LANGUES_ORTHOGRAPHE[l] || []).find((code) => !dispo.length || dispo.includes(code)))
+    .filter(Boolean);
+  try {
+    if (langues.length) s.setSpellCheckerLanguages(langues);
+  } catch (err) {
+    log('ERREUR', `Orthographe : langues ${langues.join(', ')} refusées : ${err.message}`);
+  }
+}
+
+// Clic droit dans une zone de texte : l'interface affiche le menu (corrections, couper, copier,
+// coller…) et demande ici ce que le menu de l'interface ne peut pas faire seul.
+handle('edition:commande', async (event, commande, mot) => {
+  const wc = event.sender;
+  if (commande === 'remplacer') return wc.replaceMisspelling(String(mot));
+  if (commande === 'dictionnaire') return wc.session.addWordToSpellCheckerDictionary(String(mot));
+  if (['cut', 'copy', 'paste', 'selectAll', 'undo', 'redo'].includes(commande)) return wc[commande]();
+  throw new Error(`Commande inconnue : ${commande}`);
 });
 handle('app:version', async () => app.getVersion());
 
@@ -132,7 +167,8 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 // --- Petits fichiers de données des widgets (couleurs, calendrier…) ---
 // Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
 // projets-memoire : ce que Claude retient sur chaque projet, { nomDuProjet: [{ id, texte, quand }] }.
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'projets-memoire'];
+// claude-conversations : les conversations du widget Claude (claude : l'ancienne, d'avant la liste).
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   return path.join(app.getPath('userData'), `${nom}.json`);
@@ -695,6 +731,53 @@ handle('window:theme', async (event, { glass, blur }) => {
   return { blur: useBlur, needsRestart: wanted && !win.blurCapable };
 });
 handle('window:blurSupported', async () => blurSupported());
+
+// --- Taille et place de la fenêtre, retrouvées d'une session à l'autre (fenetre.json) ---
+// { x, y, width, height, maximized }. x, y, width, height : la fenêtre « normale », même quand elle
+// est agrandie (pour qu'un clic sur « Restaurer » la remette à sa taille d'avant).
+const fenetrePath = () => path.join(app.getPath('userData'), 'fenetre.json');
+const FENETRE_DEFAUT = { width: 1400, height: 860 };
+
+function lireFenetre() {
+  let f;
+  try {
+    f = JSON.parse(fsSync.readFileSync(fenetrePath(), 'utf8'));
+  } catch {
+    return FENETRE_DEFAUT;
+  }
+  const nombre = (n) => Number.isFinite(n);
+  if (!nombre(f.width) || !nombre(f.height)) return FENETRE_DEFAUT;
+  const bounds = { width: Math.max(820, Math.round(f.width)), height: Math.max(520, Math.round(f.height)) };
+  // La place n'est reprise que si la fenêtre reste visible sur un écran branché
+  // (sinon, après avoir débranché un écran, elle s'ouvrirait hors de vue).
+  if (nombre(f.x) && nombre(f.y)) {
+    const zone = { x: Math.round(f.x), y: Math.round(f.y), ...bounds };
+    const visible = screen.getAllDisplays().some(({ workArea: w }) => {
+      const largeur = Math.min(zone.x + zone.width, w.x + w.width) - Math.max(zone.x, w.x);
+      const hauteur = Math.min(zone.y + zone.height, w.y + w.height) - Math.max(zone.y, w.y);
+      return largeur >= 100 && hauteur >= 40;
+    });
+    if (visible) Object.assign(bounds, { x: zone.x, y: zone.y });
+  }
+  return { ...bounds, maximized: Boolean(f.maximized) };
+}
+
+function retenirFenetre(win) {
+  let minuteur = null;
+  const ecrire = () => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen()) return;
+    const etat = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+    try {
+      fsSync.writeFileSync(fenetrePath(), JSON.stringify(etat, null, 2));
+    } catch (err) {
+      log('ERREUR', `Taille de la fenêtre non enregistrée : ${err.message}`);
+    }
+  };
+  // Pendant un déplacement, on attend la fin du mouvement ; à la fermeture, on écrit tout de suite.
+  const bientot = () => { clearTimeout(minuteur); minuteur = setTimeout(ecrire, 500); };
+  for (const evenement of ['resize', 'move', 'maximize', 'unmaximize']) win.on(evenement, bientot);
+  win.on('close', () => { clearTimeout(minuteur); ecrire(); });
+}
 // Un minuteur a sonné : l'icône d'Atelier clignote dans la barre des tâches jusqu'à ce que tu y reviennes.
 handle('window:attention', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -705,9 +788,10 @@ const WINDOW_ICON = path.join(__dirname, 'build', process.platform === 'win32' ?
 
 function createWindow(config) {
   const blur = wantsBlur(config);
+  const { maximized, ...bounds } = lireFenetre();
   const win = new BrowserWindow({
-    width: 1400,
-    height: 860,
+    ...bounds,
+    show: false,
     minWidth: 820,
     minHeight: 520,
     backgroundColor: blur ? '#00000000' : '#101014',
@@ -725,8 +809,27 @@ function createWindow(config) {
     },
   });
   win.blurCapable = blur;
+  // Agrandie à la dernière fermeture : elle se rouvre agrandie (sur l'écran où elle était).
+  if (maximized) win.maximize();
+  win.show();
+  retenirFenetre(win);
   win.on('focus', () => win.flashFrame(false));
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  // Clic droit dans une zone de texte : le menu (corrections d'orthographe, couper, copier, coller)
+  // est dessiné par l'interface, avec le même style que les autres menus d'Atelier.
+  win.webContents.on('context-menu', (_event, params) => {
+    if (!params.isEditable) return;
+    win.webContents.send('menu:edition', {
+      x: params.x,
+      y: params.y,
+      mot: params.misspelledWord,
+      suggestions: params.dictionarySuggestions || [],
+      selection: Boolean(params.selectionText),
+      peutCouper: params.editFlags.canCut,
+      peutCopier: params.editFlags.canCopy,
+      peutColler: params.editFlags.canPaste,
+    });
+  });
   win.webContents.on('will-navigate', (event, url) => {
     if (url !== win.webContents.getURL()) event.preventDefault();
   });
@@ -763,6 +866,7 @@ if (!app.requestSingleInstanceLock()) {
     const config = await readConfig();
     log('INFO', `Démarrage d'Atelier ${app.getVersion()}`);
     Menu.setApplicationMenu(null);
+    appliquerOrthographe(config);
     createWindow(config);
     demarrerSurveillance();
   });

@@ -26,6 +26,7 @@ const App = (() => {
     ['claude', 'Claude', 'widget-claude'],
   ];
   const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets']];
+  const LANGUES = [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']];
   const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
@@ -50,6 +51,8 @@ const App = (() => {
         { key: 'checkToolUpdates', label: 'Au démarrage, chercher les nouvelles versions de mes outils', type: 'checkbox', value: config.checkToolUpdates },
         { key: 'dossierProjets', label: 'Dossier des projets', type: 'text', value: config.dossierProjets },
         { type: 'element', element: parcourir },
+        { key: 'orthographe', label: 'Correction d\'orthographe (mots soulignés, corrections au clic droit)', type: 'checkbox', value: config.orthographe !== false },
+        { key: 'languesOrthographe', label: 'Langue de la correction', type: 'select', choices: LANGUES, value: config.languesOrthographe || 'fr' },
         { key: 'surveillerPressePapiers', label: 'Retenir ce que je copie (historique du presse-papiers)', type: 'checkbox', value: config.surveillerPressePapiers },
         { key: 'garderPressePapiers', label: 'Garder cet historique après la fermeture d\'Atelier', type: 'checkbox', value: config.garderPressePapiers },
         { type: 'info', text: 'Widget Claude :' },
