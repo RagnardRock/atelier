@@ -24,10 +24,12 @@ Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelie
 
 **Comment Atelier trouve les nouvelles versions.** Toutes les versions de tous les outils sont des Releases du même dépôt. Atelier garde pour chaque outil la plus récente dont l'étiquette commence par son préfixe (`rune-v`, `skald-v`, `brokk-v`, `tafl-v`).
 
+**Juste après une fusion.** GitHub met quelques minutes à fabriquer l'installeur avant de publier la Release : pendant ce temps, la dernière Release est encore l'ancienne version. Atelier regarde donc aussi les fabrications en cours sur `main` (onglet « Actions » du dépôt) : la carte affiche « 0.2.0 en préparation sur GitHub… », et si tu cliques Installer ou Mettre à jour, Atelier propose d'**attendre** cette version et de l'installer dès qu'elle est publiée (il relit GitHub toutes les 30 secondes), ou d'installer l'ancienne tout de suite.
+
 ### Ajouter un futur outil
 
-1. Une ligne de plus dans [`outils.js`](outils.js) : nom, rune, description, préfixe d'étiquette, nom du `.exe`, et la version à partir de laquelle il sait ouvrir un dossier.
-2. Son icône dans `renderer/outils/`.
+1. Une ligne de plus dans [`outils.js`](outils.js) : nom, rune, description, préfixe d'étiquette, nom du `.exe`, son dossier dans le dépôt, et la version à partir de laquelle il sait ouvrir un dossier.
+2. Son icône dans `renderer/outils/`, et son workflow nommé `.github/workflows/<id>.yml`.
 3. Son installeur doit s'appeler `<Nom>-Setup-<version>.exe`, avec `latest.yml` dans sa Release, et sa Release **ne doit pas** être marquée « Latest » (comme Skald, Brokk, Tafl et Atelier : Rune cherche ses mises à jour dans la Release « Latest »).
 
 ## Les widgets

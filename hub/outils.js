@@ -7,6 +7,7 @@
 // - nom : aussi le nom affiché dans « Paramètres › Applications » de Windows
 //   (package.json › build.nsis.uninstallDisplayName) ; Atelier s'en sert pour le retrouver.
 //   L'installeur publié s'appelle toujours « <nom>-Setup-<version>.exe ».
+// - dossier : son dossier dans le dépôt ; Atelier y lit la version en cours de fabrication sur GitHub.
 // - ouvreDossier : à partir de quelle version l'outil sait ouvrir un dossier passé en ligne de commande
 //   (« Rune.exe D:\Projets\site ») ; c'est ce qu'utilise le widget Projets récents.
 
@@ -19,6 +20,7 @@ module.exports = [
     prefixe: 'rune-v',
     exe: 'Rune.exe',
     icone: 'rune.svg',
+    dossier: 'ide',
     ouvreDossier: '0.12.0',
   },
   {
@@ -29,6 +31,7 @@ module.exports = [
     prefixe: 'skald-v',
     exe: 'Skald.exe',
     icone: 'skald.svg',
+    dossier: 'retouche',
     ouvreDossier: '0.3.0',
   },
   {
@@ -39,6 +42,7 @@ module.exports = [
     prefixe: 'brokk-v',
     exe: 'Brokk.exe',
     icone: 'brokk.svg',
+    dossier: 'export',
     ouvreDossier: '0.1.0',
   },
   {
@@ -49,6 +53,7 @@ module.exports = [
     prefixe: 'tafl-v',
     exe: 'Tafl.exe',
     icone: 'tafl.svg',
+    dossier: 'tuiles',
     ouvreDossier: '0.1.0',
   },
 ];

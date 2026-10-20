@@ -312,11 +312,52 @@ function newer(a, b) {
 let releasesCache = null; // { at, list } : on ne redemande pas à GitHub plus d'une fois par minute
 async function githubReleases(force = false) {
   if (!force && releasesCache && Date.now() - releasesCache.at < 60_000) return releasesCache.list;
-  const res = await net.fetch(`${GITHUB_API}/releases?per_page=100`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Atelier' } });
+  // cache: 'no-store' : sans ça, Electron peut resservir la réponse de GitHub d'il y a une minute
+  // (GitHub l'autorise), et une version publiée juste avant ton clic n'apparaîtrait pas encore.
+  const res = await net.fetch(`${GITHUB_API}/releases?per_page=100`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Atelier' } });
   if (!res.ok) throw new Error(`GitHub a répondu ${res.status}`);
   const list = (await res.json()).filter((r) => !r.draft && !r.prerelease);
-  releasesCache = { at: Date.now(), list };
+  releasesCache = { at: Date.now(), list, builds: await githubBuilds().catch(() => []) };
   return list;
+}
+
+// --- Outils : versions en cours de fabrication ---
+// Après la fusion d'une PR, GitHub met quelques minutes à fabriquer l'installeur puis à publier la
+// Release. Pendant ce temps, la dernière Release est encore l'ancienne version : installer à ce
+// moment-là donnait l'ancienne. On regarde donc aussi les fabrications en cours sur main
+// (onglet « Actions » du dépôt) : chaque outil a la sienne (.github/workflows/<id>.yml), et la
+// version qu'elle va publier est celle du package.json du commit fabriqué.
+const versionAuCommit = new Map(); // « sha:dossier » → version (un commit ne change jamais)
+async function githubBuilds() {
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'Atelier' };
+  const res = await net.fetch(`${GITHUB_API}/actions/runs?branch=main&event=push&per_page=30`, { cache: 'no-store', headers });
+  if (!res.ok) return [];
+  const runs = (await res.json()).workflow_runs || [];
+  const builds = [];
+  for (const run of runs) {
+    if (run.status === 'completed') continue;
+    const tool = OUTILS.find((t) => run.path === `.github/workflows/${t.id}.yml`);
+    if (!tool?.dossier) continue;
+    const key = `${run.head_sha}:${tool.dossier}`;
+    if (!versionAuCommit.has(key)) {
+      const r = await net.fetch(`${GITHUB_API}/contents/${tool.dossier}/package.json?ref=${run.head_sha}`, { headers: { ...headers, Accept: 'application/vnd.github.raw+json' } });
+      if (!r.ok) continue;
+      versionAuCommit.set(key, JSON.parse(await r.text()).version);
+    }
+    builds.push({ id: tool.id, version: versionAuCommit.get(key) });
+  }
+  return builds;
+}
+
+// La version plus récente que la dernière Release, en train d'être fabriquée (sinon null).
+function versionEnPreparation(tool, latest) {
+  let best = null;
+  for (const b of releasesCache?.builds || []) {
+    if (b.id !== tool.id || !/^\d+\.\d+\.\d+$/.test(b.version || '')) continue;
+    if (latest && !newer(b.version, latest.version)) continue;
+    if (!best || newer(b.version, best)) best = b.version;
+  }
+  return best;
 }
 
 function latestRelease(releases, prefix) {
@@ -361,6 +402,7 @@ handle('outils:etat', async (_event, { refresh = false, github = true } = {}) =>
       derniere: latest?.version || null,
       nouveautes: latest ? notesToList(latest.notes) : [],
       miseAJour: Boolean(installed && latest && installed.version && newer(latest.version, installed.version)),
+      enPreparation: releases ? versionEnPreparation(tool, latest) : null,
     });
   }
   return { outils: result, erreurGithub: githubError };
