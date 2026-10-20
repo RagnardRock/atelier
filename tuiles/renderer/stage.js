@@ -841,5 +841,5 @@ const Stage = (() => {
     render();
   }
 
-  return { init, render, fit, zoomBy, reset, zoneAt, get zoom() { return view().zoom; } };
+  return { init, render, fit, zoomBy, reset, zoneAt, get zoom() { return view().zoom; }, get hover() { return hover; } };
 })();

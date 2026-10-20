@@ -31,6 +31,7 @@ const App = (() => {
     $('#doc-name').textContent = doc ? `${doc.name}${doc.dirty ? ' ●' : ''}` : '';
     $('#btn-undo').disabled = !doc?.undo.length;
     $('#btn-redo').disabled = !doc?.redo.length;
+    $('#btn-jouer').hidden = !doc?.game;
     renderModes();
     renderToolbar();
     renderOptions();
@@ -695,6 +696,26 @@ const App = (() => {
     selectMap(i);
   }
 
+  // --- Jouer : le jeu tourne dans Saga, le moteur (Tafl 0.9) ---
+  // Saga lit les fichiers du dossier de jeu : on enregistre donc d'abord s'il y a des modifications.
+  // ici = false : depuis le départ du joueur. ici = true : depuis la case sous la souris (ou le milieu
+  // de la carte affichée), pour tester tout de suite l'endroit qu'on vient de dessiner.
+  async function jouer(ici = false) {
+    const doc = api.doc;
+    if (!doc?.game) return notify('Pour jouer, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
+    if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
+    let depart = null;
+    if (ici) {
+      const map = doc.map, h = api.mode === 'map' ? Stage.hover : null;
+      const dedans = h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
+      depart = { carte: map.id, x: dedans ? h.x : Math.floor(map.width / 2), y: dedans ? h.y : Math.floor(map.height / 2), direction: 'bas' };
+    } else if (!doc.depart) {
+      notify('Pas encore de départ : Saga commence sur la première carte. Place-le avec l\'outil Départ du joueur (J).', 'info', 5000);
+    }
+    await window.tafl.jouer(doc.game.folder, depart);
+    notify(ici ? `Saga lance le jeu sur « ${doc.map.name} » (${depart.x}, ${depart.y})…` : 'Saga lance le jeu…', 'info', 2500);
+  }
+
   // --- Événements : personnages, panneaux, coffres, objets, déclencheurs (Tafl 0.7) ---
   // L'éditeur (events.js) travaille sur une copie ; on remet le résultat d'un bloc (un seul Ctrl+Z).
   function applyEvent(map, r, old) {
@@ -889,6 +910,9 @@ const App = (() => {
       { label: 'Exporter la carte en image…', run: needDoc(IO.exportMapImage) },
     ] : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
     Jeu: () => (api.doc ? [
+      { label: 'Jouer (dans Saga)', keys: 'F5', disabled: !api.doc.game, run: () => run(() => jouer(false)) },
+      { label: 'Jouer depuis la case sous la souris', keys: 'Maj+F5', disabled: !api.doc.game, run: () => run(() => jouer(true)) },
+      null,
       { label: 'Titre du jeu…', run: () => run(renameGame) },
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
       { label: 'Données du jeu (personnages, créatures, objets…)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
@@ -931,6 +955,7 @@ const App = (() => {
   $('#btn-undo').onclick = undo;
   $('#btn-redo').onclick = redo;
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
+  $('#btn-jouer').onclick = (e) => needDoc(() => jouer(e.shiftKey))();
   $('#btn-export').onclick = needDoc(IO.exportSheet);
   $('#btn-settings').onclick = () => run(openSettings);
   $('#welcome-new').onclick = () => run(() => newDocument(false));
@@ -1034,6 +1059,7 @@ const App = (() => {
       return;
     }
     if (!api.doc) return;
+    if (e.key === 'F5') return go(() => run(() => jouer(e.shiftKey)));
     if (e.key === 'Tab') return go(() => setMode(api.mode === 'tile' ? 'map' : 'tile'));
     if (e.key === 'F2') return go(() => renameTile(api.doc.current));
     if (e.shiftKey && !e.altKey) {

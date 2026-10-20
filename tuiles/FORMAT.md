@@ -1,6 +1,6 @@
 # Format d'un dossier de jeu Tafl (version 1)
 
-Ce fichier décrit ce que Tafl enregistre quand tu crées un **jeu** (Fichier › Nouveau jeu, `Ctrl+Maj+J`). Il est écrit pour toi, et pour le futur **moteur** du jeu, qui lira ces fichiers sans rien savoir de Tafl.
+Ce fichier décrit ce que Tafl enregistre quand tu crées un **jeu** (Fichier › Nouveau jeu, `Ctrl+Maj+J`). Il est écrit pour toi, et pour le **moteur** du jeu (Saga, dans `atelier/moteur` : le bouton « Jouer » de Tafl l’y lance), qui lit ces fichiers sans rien savoir de Tafl.
 
 Tafl copie ce `FORMAT.md` dans le dossier du jeu à chaque enregistrement : il décrit toujours la version de Tafl qui a écrit les fichiers.
 
