@@ -1,0 +1,66 @@
+# Fabrique l'installeur Windows de Skald (Skald-Setup-<version>.exe) sur un PC Windows de GitHub.
+# Même principe que rune.yml :
+# - Sur une pull request qui touche retouche/ : l'installeur est fabriqué pour vérifier que tout marche,
+#   et se télécharge depuis l'onglet « Checks » de la PR (rubrique « Artifacts »).
+# - Sur une étiquette skald-vX.Y.Z (git tag skald-v0.1.0 puis git push origin skald-v0.1.0) :
+#   l'installeur est publié dans l'onglet « Releases » du dépôt.
+#   Important : cette Release n'est PAS marquée « Latest », car Rune cherche ses mises à jour
+#   dans la Release « Latest » du dépôt ; sinon Rune croirait que Skald est sa nouvelle version.
+name: Skald (installeur Windows)
+
+on:
+  pull_request:
+    paths: ['retouche/**', '.github/workflows/skald.yml']
+  push:
+    tags: ['skald-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # pour créer la version (release) et y déposer l'installeur
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: retouche
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tout l'historique, pour écrire les notes de version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: retouche/package-lock.json
+      - run: npm ci
+
+      - name: Vérifier que l'étiquette correspond à la version de package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "skald-v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "L'étiquette $GITHUB_REF_NAME ne correspond pas à la version $VERSION de retouche/package.json"
+            exit 1
+          fi
+
+      - name: Fabriquer l'installeur
+        run: npx electron-builder --win nsis --publish never
+      - uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        with:
+          name: Skald-Setup
+          path: retouche/dist/Skald-Setup-*.exe
+          retention-days: 14
+
+      - name: Publier la version (installeur et notes de version)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          PREVIOUS=$(git describe --tags --abbrev=0 --match 'skald-v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          RANGE=${PREVIOUS:+$PREVIOUS..}$GITHUB_REF_NAME
+          git log --no-merges --format='- %s' "$RANGE" -- . > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/Skald-Setup-*.exe \
+            --title "Skald ${GITHUB_REF_NAME#skald-v}" --notes-file notes.md --latest=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
