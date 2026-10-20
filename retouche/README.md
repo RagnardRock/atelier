@@ -16,15 +16,7 @@ npm start
 
 ## Installer Skald (Windows)
 
-Sur chaque pull request qui touche `retouche/`, GitHub fabrique `Skald-Setup-<version>.exe` (onglet **Checks** de la PR, rubrique « Artifacts »). Pour publier une version :
-
-1. Monte la version dans `retouche/package.json`, fusionne sur `main`.
-2. Pose l'étiquette et pousse-la :
-   ```bat
-   git tag skald-v0.2.0
-   git push origin skald-v0.2.0
-   ```
-3. GitHub publie l'installeur dans les **Releases**, sans la marquer « Latest » (Rune utilise la Release « Latest » pour ses propres mises à jour).
+Sur chaque pull request qui touche `retouche/`, GitHub fabrique `Skald-Setup-<version>.exe` (onglet **Checks** de la PR, rubrique « Artifacts »). Pour publier une version, monte la version dans `retouche/package.json` dans la PR. Quand elle est fusionnée sur `main`, GitHub crée l'étiquette `skald-v<version>` et publie l'installeur dans les **Releases**, sans la marquer « Latest » (Rune utilise la Release « Latest » pour ses propres mises à jour). Pas d'étiquette à poser à la main.
 
 **Ouvrir un dossier.** `Skald.exe D:\Projets\logos` ouvre Skald avec la fenêtre « Ouvrir » placée dans ce dossier (c'est ce que fait le widget Projets récents d'Atelier pour un projet d'images). Depuis le clone : `npm start -- D:\Projets\logos`.
 

@@ -24,15 +24,12 @@ Rune garde tes réglages, ta session et tes serveurs dans `%APPDATA%\atelier-ide
 
 ### Publier une nouvelle version de Rune
 
-Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/workflows/rune.yml`) :
+Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/workflows/rune.yml`). Il suffit de **monter la version** dans `ide/package.json` (par exemple `"version": "0.13.0"`) dans la PR :
 
-1. Monte la version dans `ide/package.json` (par exemple `"version": "0.12.0"`) et pousse ce commit sur `main`.
-2. Pose l'étiquette correspondante et pousse-la :
-   ```bat
-   git tag rune-v0.12.0
-   git push origin rune-v0.12.0
-   ```
-3. GitHub fabrique `Rune-Setup-0.12.0.exe` et le publie dans les Releases, avec comme notes la liste des commits de `ide/` depuis la version précédente. Tous les Rune installés la proposent ensuite.
+1. Quand la PR est fusionnée dans `main`, GitHub voit que l'étiquette `rune-v0.13.0` n'existe pas encore : il fabrique `Rune-Setup-0.13.0.exe`, crée l'étiquette et publie la Release, avec comme notes la liste des commits de `ide/` depuis la version précédente.
+2. Tous les Rune installés (et Atelier) la proposent ensuite.
+
+Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald et Atelier marchent pareil, avec `retouche/package.json` et `hub/package.json`.
 
 Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, sans le publier : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ». Pratique pour essayer une version avant de fusionner.
 
