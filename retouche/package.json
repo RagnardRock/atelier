@@ -1,0 +1,65 @@
+{
+  "name": "atelier-retouche",
+  "productName": "Skald",
+  "version": "0.2.0",
+  "description": "Skald, mon logiciel de retouche d'images et de logos (Electron), un des outils d'Atelier",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "author": "Ragna",
+  "build": {
+    "appId": "fr.ragna.skald",
+    "productName": "Skald",
+    "copyright": "Ragna",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "!node_modules/ag-psd/{src,dist-es}/**",
+      "!node_modules/ag-psd/dist/*.map",
+      "!mettre-a-jour.*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "executableName": "Skald"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Skald",
+      "artifactName": "Skald-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Skald",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "@vscode/codicons": "0.0.45",
+    "ag-psd": "31.0.3",
+    "electron-updater": "6.8.9"
+  },
+  "private": true
+}

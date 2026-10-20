@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Les images ouvertes passent par des adresses blob: et data:. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; worker-src 'self' blob:">
+  <title>Skald</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="skald.svg" alt="">Skald</span>
+    <nav id="menus"></nav>
+    <div class="title-actions">
+      <button id="btn-undo" class="icon-button" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
+      <button id="btn-redo" class="icon-button" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
+      <button id="btn-save" class="icon-button" title="Enregistrer (Ctrl+S)"><i class="codicon codicon-save"></i></button>
+      <button id="btn-export" class="icon-button" title="Exporter en PNG, WebP, JPEG, ICO (Ctrl+Maj+E)"><i class="codicon codicon-export"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Skald"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Options de l'outil choisi (taille du pinceau, proportions du recadrage…) -->
+  <div id="optionsbar"><div id="tool-options"></div></div>
+
+  <main id="layout">
+    <!-- Outils, couleurs principale / secondaire, réglages -->
+    <nav id="toolbar">
+      <div id="tool-buttons"></div>
+      <span class="spacer"></span>
+      <div id="swatches" title="Couleur principale (devant) et secondaire (derrière). X : échanger, D : noir et blanc">
+        <button id="swatch-secondary" class="swatch"></button>
+        <button id="swatch-primary" class="swatch"></button>
+      </div>
+      <div class="swatch-actions">
+        <button id="swap-colors" class="icon-button" title="Échanger les couleurs (X)"><i class="codicon codicon-arrow-swap"></i></button>
+        <button id="reset-colors" class="icon-button" title="Noir et blanc (D)"><i class="codicon codicon-circle-large-filled"></i></button>
+      </div>
+      <button id="btn-settings" class="tool" title="Réglages de Skald (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+    </nav>
+
+    <section id="workspace">
+      <div id="tabs"></div>
+      <div id="canvas-wrap">
+        <canvas id="stage" hidden></canvas>
+        <div id="welcome">
+          <img class="welcome-logo" src="skald.svg" alt="">
+          <h1>Skald</h1>
+          <p class="welcome-sub">Retouche d'images et de logos</p>
+          <div class="welcome-actions">
+            <button id="welcome-new" class="button primary"><i class="codicon codicon-new-file"></i> Nouvelle image <kbd>Ctrl+N</kbd></button>
+            <button id="welcome-open" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
+            <button id="welcome-paste" class="button"><i class="codicon codicon-clippy"></i> Coller <kbd>Ctrl+V</kbd></button>
+          </div>
+          <p class="welcome-hint">PSD, PNG, JPEG, WebP, SVG, GIF, ICO… Tu peux aussi glisser des images ici.</p>
+          <h2 id="welcome-recents-title" hidden>Récents</h2>
+          <div id="welcome-recents"></div>
+        </div>
+        <div id="drop-hint"></div>
+      </div>
+    </section>
+
+    <div id="side-resizer"></div>
+
+    <aside id="sidepanel">
+      <section class="panel" id="color-panel">
+        <div class="panel-header"><span class="panel-title">Couleur</span></div>
+        <div class="color-row">
+          <button id="color-big" title="Choisir la couleur principale"></button>
+          <div class="color-fields">
+            <input id="color-hex" spellcheck="false" title="Code hexadécimal (#rrggbb)">
+            <span id="color-rgb"></span>
+          </div>
+          <input id="color-native" type="color" tabindex="-1">
+        </div>
+        <div id="color-recent" title="Couleurs utilisées récemment"></div>
+      </section>
+
+      <section class="panel" id="layers-panel">
+        <div class="panel-header">
+          <span class="panel-title">Calques</span>
+          <span class="panel-actions" id="layers-actions">
+            <button id="layer-up" class="icon-button" title="Monter"><i class="codicon codicon-arrow-up"></i></button>
+            <button id="layer-down" class="icon-button" title="Descendre"><i class="codicon codicon-arrow-down"></i></button>
+            <button id="layer-merge" class="icon-button" title="Fusionner avec le calque inférieur (Ctrl+E)"><i class="codicon codicon-merge"></i></button>
+            <button id="layer-duplicate" class="icon-button" title="Dupliquer (Ctrl+J)"><i class="codicon codicon-copy"></i></button>
+            <button id="layer-special" class="icon-button" title="Nouveau calque de remplissage ou de réglage"><i class="codicon codicon-color-mode"></i></button>
+            <button id="layer-new" class="icon-button" title="Nouveau calque (Ctrl+Maj+N)"><i class="codicon codicon-add"></i></button>
+            <button id="layer-delete" class="icon-button" title="Supprimer le calque"><i class="codicon codicon-trash"></i></button>
+          </span>
+        </div>
+        <div id="layer-props" hidden>
+          <select id="layer-blend" title="Mode de fusion : comment le calque se mélange à ceux du dessous"></select>
+          <label class="opacity" title="Opacité du calque">
+            <span>Opacité</span>
+            <input id="layer-opacity" type="range" min="0" max="100">
+            <span id="layer-opacity-value"></span>
+          </label>
+        </div>
+        <div id="layer-list"></div>
+      </section>
+
+      <section class="panel" id="history-panel">
+        <div class="panel-header"><span class="panel-title">Historique</span></div>
+        <div id="history-list"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-hint"></span>
+    <span class="spacer"></span>
+    <span id="status-pos"></span>
+    <span id="status-doc"></span>
+    <span id="status-zoom"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+  <datalist id="font-list"></datalist>
+
+  <script src="../node_modules/ag-psd/dist/bundle.js"></script>
+  <script src="doc.js"></script>
+  <script src="selection.js"></script>
+  <script src="adjustments.js"></script>
+  <script src="notify.js"></script>
+  <script src="icons.js"></script>
+  <script src="view.js"></script>
+  <script src="tools.js"></script>
+  <script src="tools-extra.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="ops.js"></script>
+  <script src="io.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>

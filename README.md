@@ -1,6 +1,11 @@
 # Atelier
 
-Mes outils perso, réunis dans un seul dépôt. Pour l'instant, un seul outil : **Rune**, mon IDE (`ide/`). Les prochains (pipeline d'assets, panneau serveur…) viendront à côté.
+Mes outils perso, réunis dans un seul dépôt :
+
+- **Rune** ᚱ, mon IDE (`ide/`), décrit ci-dessous.
+- **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
+
+Les prochains (panneau serveur…) viendront à côté.
 
 ## Installer Rune (Windows)
 
