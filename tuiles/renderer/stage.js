@@ -43,14 +43,15 @@ const Stage = (() => {
       return {
         w: s, h: s, wrap: App.options.mosaic, empty: 0,
         get(x, y) {
-          const d = doc.tiles[index].data, o = (y * s + x) * 4;
+          const tile = doc.tiles[index];
+          const d = tile.frames[clamp(App.frame, 0, tile.frames.length - 1)], o = (y * s + x) * 4;
           return packRgba(d[o], d[o + 1], d[o + 2], d[o + 3]);
         },
         set(x, y, v) {
-          const tile = Doc.tileForEdit(doc, index);
+          const d = Doc.pixelsForEdit(doc, index, App.frame);
           const [r, g, b, a] = unpack(v), o = (y * s + x) * 4;
-          tile.data[o] = r; tile.data[o + 1] = g; tile.data[o + 2] = b; tile.data[o + 3] = a;
-          Doc.touch(tile);
+          d[o] = r; d[o + 1] = g; d[o + 2] = b; d[o + 3] = a;
+          Doc.touch(doc.tiles[index]);
         },
       };
     }
@@ -229,12 +230,20 @@ const Stage = (() => {
 
   function drawTile() {
     const doc = App.doc, v = view(), s = doc.tileSize, z = v.zoom, side = s * z;
-    const tile = Doc.tileCanvas(doc.tiles[doc.current], s);
+    const current = doc.tiles[doc.current];
+    const frame = clamp(App.frame, 0, current.frames.length - 1);
+    const tile = Doc.tileCanvas(current, s, frame);
+    // Pelure d'oignon : l'image précédente de l'animation, en transparence, pour dessiner la suivante.
+    const onion = App.options.onion && frame > 0 ? Doc.tileCanvas(current, s, frame - 1) : null;
     const copies = App.options.mosaic ? [-1, 0, 1] : [0];
     for (const j of copies) {
       for (const i of copies) {
         const x = v.x + i * side, y = v.y + j * side;
         drawChecker(ctx, x, y, side, side, Math.max(4, Math.round(z / 2) * 2 || 4));
+        if (onion) {
+          ctx.globalAlpha = 0.3;
+          ctx.drawImage(onion, x, y, side, side);
+        }
         ctx.globalAlpha = i || j ? 0.6 : 1;
         ctx.drawImage(tile, x, y, side, side);
         ctx.globalAlpha = 1;
@@ -291,7 +300,9 @@ const Stage = (() => {
     const doc = App.doc, v = view(), s = doc.tileSize, { map } = doc;
     const cell = s * v.zoom, mw = map.width * cell, mh = map.height * cell;
     drawChecker(ctx, v.x, v.y, mw, mh, 8);
-    const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s));
+    // Sur la carte, les tuiles animées bougent (si la lecture est en marche).
+    const now = App.playing ? performance.now() : 0;
+    const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s, Doc.frameAt(t, now)));
     map.layers.forEach((layer, li) => {
       if (!layer.visible) return;
       // Le calque qu'on ne modifie pas est un peu atténué quand on travaille sur le Décor.
@@ -373,7 +384,8 @@ const Stage = (() => {
       preview = { points: [[c.x, c.y]], value };
     } else if (tool === 'shift') {
       Doc.begin(doc, label);
-      action = { tool, start: c, original: doc.tiles[doc.current].data.slice() };
+      const tile = doc.tiles[doc.current];
+      action = { tool, start: c, original: tile.frames[clamp(App.frame, 0, tile.frames.length - 1)].slice() };
     }
     App.refreshLive();
   });
@@ -408,15 +420,15 @@ const Stage = (() => {
     } else if (action.tool === 'shift') {
       // Toute la tuile glisse, en boucle.
       const s = App.doc.tileSize, dx = c.x - action.start.x, dy = c.y - action.start.y;
-      const tile = Doc.tileForEdit(App.doc, App.doc.current);
+      const data = Doc.pixelsForEdit(App.doc, App.doc.current, App.frame);
       for (let y = 0; y < s; y++) {
         for (let x = 0; x < s; x++) {
           const sx = (((x - dx) % s) + s) % s, sy = (((y - dy) % s) + s) % s;
           const o = (y * s + x) * 4, so = (sy * s + sx) * 4;
-          for (let k = 0; k < 4; k++) tile.data[o + k] = action.original[so + k];
+          for (let k = 0; k < 4; k++) data[o + k] = action.original[so + k];
         }
       }
-      Doc.touch(tile);
+      Doc.touch(App.doc.tiles[App.doc.current]);
       App.refreshLive();
     }
   });

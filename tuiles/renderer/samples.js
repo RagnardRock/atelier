@@ -1,5 +1,5 @@
 // Tuiles d'exemple proposées à la création d'un jeu de tuiles : herbe, hautes herbes, chemin, eau
-// et fleur, avec une petite carte qui les utilise. De quoi voir tout de suite comment Tafl marche,
+// (animée) et fleur, avec une petite carte qui les utilise. De quoi voir tout de suite comment Tafl marche,
 // puis les retoucher ou les effacer.
 // Chaque tuile est dessinée ici en 16 × 16, une lettre par pixel (« . » = transparent) ;
 // pour une autre taille de tuile, elle est agrandie ou réduite pixel par pixel.
@@ -59,7 +59,12 @@ const Samples = (() => {
 
   // Remplit un jeu de tuiles neuf avec les exemples et une petite carte (route, mare, hautes herbes).
   function fill(doc) {
-    doc.tiles = TILES.map(([name, rows]) => ({ id: Doc.newId(), name, data: tileData(rows, doc.tileSize) }));
+    doc.tiles = TILES.map(([name, rows]) => ({ id: Doc.newId(), name, frames: [tileData(rows, doc.tileSize)], duration: Doc.DEFAULT_DURATION }));
+    // L'eau est animée : 4 images où les vagues glissent vers la droite, en boucle (la tuile reste raccordable).
+    const water = doc.tiles.find((t) => t.name === 'eau');
+    const waterRows = TILES.find(([name]) => name === 'eau')[1];
+    water.frames = [0, 4, 8, 12].map((dx) => tileData(waterRows.map((r) => r.slice(16 - dx) + r.slice(0, 16 - dx)), doc.tileSize));
+    water.duration = 300;
     const { width: W, height: H } = doc.map;
     const [sol, decor] = doc.map.layers;
     const set = (cells, x, y, v) => { if (x >= 0 && y >= 0 && x < W && y < H) cells[y * W + x] = v; };
