@@ -1,6 +1,6 @@
 # Atelier ᚨ
 
-Le hub de mes outils : il **lance, installe et met à jour** Rune, Skald et les suivants, et réunit des **widgets** pour le quotidien (notes, projets, presse-papiers, minuteurs, calendrier, et Claude).
+Le hub de mes outils : il **lance, installe et met à jour** Rune, Skald, Brokk, Tafl et les suivants, et réunit des **widgets** pour le quotidien (notes, projets, presse-papiers, minuteurs, calendrier, et Claude).
 
 Tout reste sur ton PC, dans `%APPDATA%\atelier-hub` : réglages (`config.json`), notes, couleurs, minuteurs, calendrier, et le journal `atelier.log`. La désinstallation ne les efface pas.
 
@@ -8,7 +8,7 @@ Tout reste sur ton PC, dans `%APPDATA%\atelier-hub` : réglages (`config.json`),
 
 Comme Rune et Skald : télécharge le dernier `Atelier-Setup-….exe` dans l'onglet **Releases** du dépôt, double-clique-le (si Windows affiche « Windows a protégé votre ordinateur » : **Informations complémentaires**, puis **Exécuter quand même**). Atelier s'installe dans `%LOCALAPPDATA%\Programs\Atelier`, sans droits administrateur.
 
-Ensuite, Atelier installe lui-même Rune, Skald et Brokk : plus besoin d'aller dans les Releases.
+Ensuite, Atelier installe lui-même Rune, Skald, Brokk et Tafl : plus besoin d'aller dans les Releases.
 
 ## La colonne Outils
 

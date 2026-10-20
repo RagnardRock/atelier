@@ -6,6 +6,7 @@ Mes outils perso, réunis dans un seul dépôt :
 - **Rune** ᚱ, mon IDE (`ide/`), décrit ci-dessous.
 - **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
 - **Brokk** ᛒ, l'export d'assets : un PSD ou un logo vers toutes les tailles web d'un projet (`export/`) : voir [export/README.md](export/README.md).
+- **Tafl** ᛏ, mes tuiles et cartes en pixel art, façon Pokémon (`tuiles/`) : voir [tuiles/README.md](tuiles/README.md).
 
 Les prochains (panneau serveur…) viendront à côté.
 

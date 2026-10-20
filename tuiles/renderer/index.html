@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Les tuiles passent par des adresses blob: et data:. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+  <title>Tafl</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune et Skald) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="tafl.svg" alt="">Tafl</span>
+    <nav id="menus"></nav>
+    <span id="doc-name"></span>
+    <div class="title-actions">
+      <button id="btn-undo" class="icon-button" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
+      <button id="btn-redo" class="icon-button" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
+      <button id="btn-save" class="icon-button" title="Enregistrer (Ctrl+S)"><i class="codicon codicon-save"></i></button>
+      <button id="btn-export" class="icon-button" title="Exporter la planche de tuiles en PNG (Ctrl+E)"><i class="codicon codicon-export"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Tafl"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Options de l'outil choisi (miroir, calque…) -->
+  <div id="optionsbar"><div id="tool-options"></div></div>
+
+  <main id="layout">
+    <!-- Outils, couleurs principale / secondaire, réglages -->
+    <nav id="toolbar">
+      <div id="tool-buttons"></div>
+      <span class="spacer"></span>
+      <div id="swatches" title="Couleur principale (clic gauche) et secondaire (clic droit). X : échanger">
+        <button id="color-secondary" class="swatch"></button>
+        <button id="color-primary" class="swatch"></button>
+      </div>
+      <div class="swatch-actions">
+        <button id="swap-colors" class="icon-button" title="Échanger les couleurs (X)"><i class="codicon codicon-arrow-swap"></i></button>
+      </div>
+      <button id="btn-settings" class="tool" title="Réglages de Tafl (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+    </nav>
+
+    <section id="workspace">
+      <!-- Les deux modes : dessiner une tuile, ou les poser sur la carte (Tab passe de l'un à l'autre) -->
+      <div id="modes" hidden>
+        <button class="mode" data-mode="tile" title="Dessiner la tuile choisie, pixel par pixel (Tab)"><i class="codicon codicon-edit"></i> Tuile</button>
+        <button class="mode" data-mode="map" title="Poser les tuiles sur une carte pour les essayer ensemble (Tab)"><i class="codicon codicon-map"></i> Carte</button>
+      </div>
+      <div id="canvas-wrap">
+        <canvas id="stage" hidden></canvas>
+        <div id="welcome">
+          <img class="welcome-logo" src="tafl.svg" alt="">
+          <h1>Tafl</h1>
+          <p class="welcome-sub">Tuiles et cartes en pixel art, façon Pokémon</p>
+          <div class="welcome-actions">
+            <button id="welcome-new" class="button primary"><i class="codicon codicon-new-file"></i> Nouveau jeu de tuiles <kbd>Ctrl+N</kbd></button>
+            <button id="welcome-open" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
+            <button id="welcome-import" class="button"><i class="codicon codicon-file-media"></i> Importer une planche <kbd>Ctrl+I</kbd></button>
+          </div>
+          <p class="welcome-hint">Jeux de tuiles .tafl, ou une planche en PNG à découper. Tu peux aussi les glisser ici.</p>
+          <h2 id="welcome-recents-title" hidden>Récents</h2>
+          <div id="welcome-recents"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside id="sidepanel">
+      <section class="panel" id="color-panel">
+        <div class="panel-header"><span class="panel-title">Palette</span>
+          <div class="panel-actions">
+            <select id="palette-preset" title="Remplacer la palette (tes tuiles ne changent pas)">
+              <option value="">Changer…</option>
+            </select>
+          </div>
+        </div>
+        <div class="color-row">
+          <input id="color-hex" spellcheck="false" title="Couleur principale : code hexadécimal (#rrggbb) ou « transparent »">
+          <button id="color-pick" class="button small" title="Choisir la couleur principale"><i class="codicon codicon-symbol-color"></i> Choisir…</button>
+          <input id="color-native" type="color" tabindex="-1">
+        </div>
+        <div id="palette"></div>
+      </section>
+
+      <section class="panel" id="tiles-panel">
+        <div class="panel-header"><span class="panel-title">Tuiles</span><span id="tiles-count"></span>
+          <div class="panel-actions">
+            <button id="tile-add" class="icon-button" title="Nouvelle tuile (Ctrl+Maj+N)"><i class="codicon codicon-add"></i></button>
+            <button id="tile-duplicate" class="icon-button" title="Dupliquer la tuile (Ctrl+D)"><i class="codicon codicon-copy"></i></button>
+            <button id="tile-delete" class="icon-button" title="Supprimer la tuile"><i class="codicon codicon-trash"></i></button>
+            <button id="tile-more" class="icon-button" title="Miroir, pivoter, décaler…"><i class="codicon codicon-ellipsis"></i></button>
+          </div>
+        </div>
+        <div id="tiles"></div>
+      </section>
+
+      <section class="panel" id="preview-panel">
+        <div class="panel-header"><span class="panel-title">Aperçu 3 × 3</span><span id="preview-scale"></span></div>
+        <div class="preview-box checker-bg"><canvas id="preview"></canvas></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-hint"></span>
+    <span class="spacer"></span>
+    <span id="status-pos"></span>
+    <span id="status-tile"></span>
+    <span id="status-zoom"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="palettes.js"></script>
+  <script src="doc.js"></script>
+  <script src="samples.js"></script>
+  <script src="stage.js"></script>
+  <script src="panels.js"></script>
+  <script src="io.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+</body>
+</html>
