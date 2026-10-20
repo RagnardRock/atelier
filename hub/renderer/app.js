@@ -23,7 +23,10 @@ const App = (() => {
     ['pressePapiers', 'Presse-papiers et couleurs', 'widget-presse-papiers'],
     ['minuteurs', 'Minuteurs', 'widget-minuteurs'],
     ['calendrier', 'Calendrier', 'widget-calendrier'],
+    ['claude', 'Claude', 'widget-claude'],
   ];
+  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer Rune ou Skald']];
+  const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
   }
@@ -49,6 +52,13 @@ const App = (() => {
         { type: 'element', element: parcourir },
         { key: 'surveillerPressePapiers', label: 'Retenir ce que je copie (historique du presse-papiers)', type: 'checkbox', value: config.surveillerPressePapiers },
         { key: 'garderPressePapiers', label: 'Garder cet historique après la fermeture d\'Atelier', type: 'checkbox', value: config.garderPressePapiers },
+        { type: 'info', text: 'Widget Claude :' },
+        { key: 'claudeModel', label: 'Modèle', type: 'select', choices: MODELES, value: config.claudeModel || '' },
+        { key: 'claudeCommand', label: 'Commande', type: 'text', value: config.claudeCommand || 'claude' },
+        { key: 'claudeLitProjets', label: 'Claude peut aussi lire les fichiers de mes projets (pas seulement leur état Git)', type: 'checkbox', value: config.claudeLitProjets !== false },
+        { key: 'claudeActions', label: 'Claude peut agir dans Atelier (notes, calendrier, minuteurs, ouvrir un projet)', type: 'checkbox', value: config.claudeActions !== false },
+        { type: 'info', text: 'Sans me demander la permission, pour :' },
+        ...FAMILLES.map(([key, label]) => ({ key: `sansDemander-${key}`, label, type: 'checkbox', value: Boolean(config.claudeSansDemander?.[key]) })),
         { type: 'info', text: 'Widgets affichés :' },
         ...WIDGETS.map(([key, label]) => ({ key: `widget-${key}`, label, type: 'checkbox', value: config.widgets?.[key] !== false })),
         { type: 'info', text: `Atelier ${version}. Réglages enregistrés dans ${configPath}.` },
@@ -76,6 +86,8 @@ const App = (() => {
     // Les cases « widget-… » deviennent config.widgets = { notes: true, … }.
     const widgets = {};
     for (const [key] of WIDGETS) { widgets[key] = v[`widget-${key}`]; delete v[`widget-${key}`]; }
+    v.claudeSansDemander = {};
+    for (const [key] of FAMILLES) { v.claudeSansDemander[key] = v[`sansDemander-${key}`]; delete v[`sansDemander-${key}`]; }
     const dossierChange = v.dossierProjets !== config.dossierProjets;
     config = await window.atelier.writeConfig({ ...v, widgets: { ...config.widgets, ...widgets } });
     applyWidgets(config);
@@ -113,6 +125,7 @@ const App = (() => {
     await PressePapiers.start();
     await Minuteurs.start();
     await Calendrier.start();
+    await ClaudeWidget.start();
     // Les versions installées s'affichent tout de suite ; GitHub n'est contacté au démarrage que si
     // le réglage est coché (sinon seulement quand tu cliques ↻).
     try {
