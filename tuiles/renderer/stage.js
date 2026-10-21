@@ -601,9 +601,12 @@ const Stage = (() => {
       const x = moving ? preview.x : ev.x, y = moving ? preview.y : ev.y;
       const px = v.x + x * cell, py = v.y + y * cell;
       const color = EVENT_COLORS[ev.type] || EVENT_COLORS.pnj;
-      const tile = ev.apparence.tuile >= 0 ? ev.apparence.tuile : Events.perso(doc, ev.apparence.personnage)?.tuile ?? -1;
+      const perso = ev.apparence.tuile >= 0 ? null : Events.perso(doc, ev.apparence.personnage);
+      const tile = ev.apparence.tuile >= 0 ? ev.apparence.tuile : perso?.tuile ?? -1;
       ctx.globalAlpha = moving ? 0.7 : 1;
-      if (tile >= 0 && canvases[tile]) ctx.drawImage(canvases[tile], px, py, cell, cell);
+      // Tafl 0.12 : un personnage avec un sprite est dessiné comme dans le jeu, tourné vers sa direction.
+      if (perso?.sprite && Sprites.dessinerSurCase(ctx, perso.sprite, ev.direction, px, py, cell, doc.tileSize, render)) { /* dessiné */ }
+      else if (tile >= 0 && canvases[tile]) ctx.drawImage(canvases[tile], px, py, cell, cell);
       else eventSymbol(ev.type, px, py, cell, color);
       ctx.globalAlpha = 1;
       // Un liseré de la couleur du type ; pointillé pour une case invisible (déclencheur).

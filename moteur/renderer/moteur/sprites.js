@@ -1,5 +1,6 @@
-// Les personnages sur la carte, en attendant leurs vrais sprites dessinés dans Tafl.
-// Saga dessine un petit bonhomme en pixel art (16 × 16, agrandi à la taille des tuiles), avec une
+// Les personnages sur la carte.
+// Un personnage qui a un sprite dessiné dans Tafl (Tafl 0.12, FORMAT.md › personnages.json) est
+// dessiné avec : voir dessinerSprite, plus bas. Sinon, Saga dessine un petit bonhomme en pixel art (16 × 16, agrandi à la taille des tuiles), avec une
 // casquette et un haut à la couleur du personnage (sa `couleur` dans personnages.json) : 4 directions,
 // 3 images chacune (debout, pied gauche, pied droit) pour la marche.
 //
@@ -131,5 +132,18 @@ const Sprites = (() => {
     ctx.drawImage(planche(couleur), pas * 16, r * 16, 16, 16, x, y, taille, taille);
   }
 
-  return { dessiner, ombre, images };
+  // L'image d'un pas (FORMAT.md) : pendant le pas n° `pas` (1, 2, 3…), l'image de marche suivante
+  // (1, 2, …, images - 1, puis on recommence) ; debout, l'image 0.
+  const imageDeMarche = (images, pas) => (pas > 0 && images > 1 ? 1 + ((pas - 1) % (images - 1)) : 0);
+
+  // Un sprite de Tafl : l'image de la direction, les pieds en bas de la case, centré. Un sprite plus
+  // haut qu'une case (16 × 32) dépasse sur la case du dessus. pas : 0 debout, sinon le n° du pas.
+  function dessinerSprite(ctx, sprite, direction, pas, x, y, taille) {
+    const r = Math.max(0, ORDRE.indexOf(direction));
+    const k = imageDeMarche(sprite.images, pas);
+    ctx.drawImage(sprite.img, k * sprite.largeur, r * sprite.hauteur, sprite.largeur, sprite.hauteur,
+      x + Math.floor((taille - sprite.largeur) / 2), y + taille - sprite.hauteur, sprite.largeur, sprite.hauteur);
+  }
+
+  return { dessiner, dessinerSprite, imageDeMarche, ombre, images };
 })();

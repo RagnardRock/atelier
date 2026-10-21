@@ -50,7 +50,7 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **Le joueur** avance case par case, marche ou court, et respecte le passage : cases bloquées, bord de la carte, événements non traversables. Les **rebords** se sautent dans leur sens (avec un petit saut et son ombre), jamais dans l'autre. Une zone avec un **objet requis** (la planche de surf pour l'eau) s'ouvre si le joueur a l'objet.
 - **Les téléporteurs** : marcher dessus fait un fondu au noir, puis le joueur arrive sur la carte et la case prévues, tourné dans la bonne direction. Le **nom de la carte** apparaît en haut à gauche.
 - **L'ambiance** de chaque carte : la **teinte** posée en produit sur toute la carte, puis la **météo** avec de vraies particules : pluie avec éclaboussures, orage avec éclairs, neige, brouillard en nappes, feuilles, lucioles. Les particules suivent le décor quand la caméra bouge, et le brouillard un peu plus vite (il est plus près de nous) : c'est ce qui donne de la profondeur.
-- **Les personnages** : en attendant les sprites dessinés dans Tafl, le héros (le personnage `heros` de `personnages.json`) et les PNJ sont de petits bonshommes en pixel art à leur `couleur`, avec 4 directions et une animation de marche, ou la tuile de leur apparence. Ils ont une ombre au sol et se croisent dans le bon ordre (le plus bas passe devant). Les pages des événements sont déjà lues : un PNJ dont aucune page n'est vraie au début de la partie n'apparaît pas.
+- **Les personnages** : le héros (le personnage `heros` de `personnages.json`) et les PNJ sont dessinés avec leur **sprite** fait dans Tafl (depuis Saga 0.2.1 et Tafl 0.12 : 4 directions et la marche ; un sprite plus haut qu'une case dépasse sur la case du dessus). Sans sprite : la tuile de leur apparence, sinon un petit bonhomme en pixel art à leur `couleur`, avec 4 directions et une animation de marche. Ils ont une ombre au sol et se croisent dans le bon ordre (le plus bas passe devant). Les pages des événements sont déjà lues : un PNJ dont aucune page n'est vraie au début de la partie n'apparaît pas.
 
 ## Ce que fait Saga 0.2 : les événements
 
@@ -67,7 +67,6 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 
 1. Les **combats** (sauvages et dresseurs), avec les données de Tafl 0.8.
 2. Les boutiques et le reste des menus du jeu (Pokédex, équipe détaillée).
-3. Les vrais sprites des personnages, dessinés dans Tafl.
 
 ## Comment c'est construit
 
@@ -84,7 +83,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ambiance.js` | La teinte et la météo. |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
-| `renderer/moteur/sprites.js` | Le petit bonhomme des personnages, en pixel art. |
+| `renderer/moteur/sprites.js` | Les personnages sur la carte : leur sprite de Tafl, ou le petit bonhomme en pixel art. |
 
 Les fichiers de `renderer/moteur/` ne touchent ni au disque ni à Electron : ils reçoivent les textes du jeu.
 Ils pourront donc un jour tourner dans un simple navigateur, pour un export web du jeu.

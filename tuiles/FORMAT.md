@@ -261,7 +261,7 @@ Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un
 |---|---|
 | `id` | Unique **dans la carte** (`ev-1`, `ev-2`…). Avec l'id de la carte, il désigne l'événement dans tout le jeu (pour son interrupteur « déjà fait »). |
 | `type` | `"pnj"` (personnage), `"panneau"`, `"coffre"`, `"objet"` (objet au sol), `"declencheur"` (case invisible). Il sert surtout à Tafl ; le moteur suit les autres champs. |
-| `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon celle du personnage, sinon rien (un déclencheur est invisible). |
+| `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon le sprite du personnage (tourné vers `direction`), sinon sa tuile, sinon rien (un déclencheur est invisible). |
 | `direction` | Où il regarde au départ. |
 | `deplacement` | `"fixe"`, `"regarde"` (se tourne vers le joueur qui lui parle), `"aleatoire"` (marche au hasard autour de sa case), `"tourne"` (regarde autour de lui). |
 | `traversable` | `false` : il bloque sa case comme un mur. `true` : on passe à travers (un déclencheur). |
@@ -329,7 +329,8 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
       "portraits": [
         { "expression": "normal", "png": "data:image/png;base64,..." },
         { "expression": "content", "png": "data:image/png;base64,..." }
-      ]
+      ],
+      "sprite": { "largeur": 16, "hauteur": 32, "images": 3, "planche": "data:image/png;base64,..." }
     }
   ]
 }
@@ -337,7 +338,12 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
 
 - `heros` : le personnage que joue le joueur (un seul). Il parle dans les dialogues comme les autres ; `{joueur}` reste le nom choisi par le joueur.
 - `couleur` : la couleur de son nom dans les boîtes de dialogue (`""` = celle par défaut).
-- `tuile` : la tuile qui le montre sur la carte en attendant ses sprites (`-1` = aucune).
+- `tuile` : la tuile qui le montre sur la carte quand il n'a pas de sprite (`-1` = aucune). Une seule image, quelle que soit sa direction.
+- `sprite` (Tafl 0.12, facultatif, `null` = aucun) : le personnage sur la carte, dans les 4 directions, avec sa marche. `planche` est une image PNG encodée en texte, découpée en **4 rangées** (de haut en bas : `bas` = de face, `gauche`, `droite`, `haut` = de dos) de **`images` images** chacune, toutes de `largeur` × `hauteur` pixels (la planche fait donc `largeur × images` sur `hauteur × 4`).
+  - Dans chaque rangée, l'image **0** est le personnage **debout** ; les suivantes sont les **pas**. Avec 3 images (le cas courant) : debout, pied gauche, pied droit.
+  - **Marche** : pendant un pas d'une case, le moteur montre l'image de pas suivante (1, 2, …, `images - 1`, puis il recommence à 1) pendant la première moitié du pas, puis l'image 0. Avec une seule image, le personnage ne s'anime pas.
+  - **Placement** : l'image est centrée sur la case, ses pieds (le bas de l'image) en bas de la case. Un sprite plus haut qu'une case (16 × 32, comme dans Pokémon) dépasse vers le haut, sur la case du dessus.
+  - Le moteur montre le sprite s'il y en a un, sinon la `tuile`, sinon ce qu'il veut (Saga dessine un petit bonhomme à la `couleur` du personnage).
 - `portraits` : un visage par expression (`normal`, `content`, `rire`, `triste`, `colere`, `surpris`, `inquiet`, `gene`, `determine`, ou d'autres noms), en image encodée en texte comme les tuiles. Taille libre.
 
 ### `donnees/quetes.json`
@@ -549,3 +555,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.7** : `evenements` dans les cartes (pages, conditions, commandes), `donnees` dans `jeu.json`, et le dossier `donnees/` (personnages avec portraits, quêtes, interrupteurs). Ce sont des champs en plus : un fichier de Tafl 0.6 se lit pareil (sans événements ni données), donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.8** : les bases de données (`types`, `talents`, `attaques`, `creatures`, `objets`, `dresseurs`, `boutiques`, `reglages` dans `donnees/`), `rencontres` et `taux` dans les zones, `ambiance` dans les cartes. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.11** : `groupe`, `interieur` et `monde` dans les cartes. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.12** : `sprite` dans les personnages (planche de 4 directions avec la marche). Un champ en plus, donc la version reste 1.

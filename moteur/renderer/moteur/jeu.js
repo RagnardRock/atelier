@@ -144,6 +144,24 @@ const Jeu = (() => {
     return carte;
   }
 
+  // Le sprite d'un personnage (Tafl 0.12, FORMAT.md › personnages.json) : une planche de 4 rangées
+  // (bas, gauche, droite, haut) de `images` images de largeur × hauteur. Renvoie le sprite avec son
+  // image chargée (`img`), ou null s'il n'en a pas.
+  async function chargerSprite(s) {
+    if (!s || typeof s !== 'object' || !/^data:image\/png;base64,/.test(s.planche || '')) return null;
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('planche illisible'));
+      i.src = s.planche;
+    });
+    const images = Math.max(1, Math.round(nombre(s.images, 1)));
+    const largeur = Math.max(1, Math.round(nombre(s.largeur, img.naturalWidth / images)));
+    const hauteur = Math.max(1, Math.round(nombre(s.hauteur, img.naturalHeight / 4)));
+    if (largeur * images > img.naturalWidth || hauteur * 4 > img.naturalHeight) throw new Error(`la planche fait ${img.naturalWidth} × ${img.naturalHeight} px, trop petite pour ${images} image(s) de ${largeur} × ${hauteur} px sur 4 rangées`);
+    return { largeur, hauteur, images, img };
+  }
+
   // textes = ce que renvoie main.js : { dossier, jeu, tuiles, cartes: { chemin: texte }, donnees: { chemin: texte } }.
   async function charger(textes) {
     const jeu = lireJson(textes.jeu, 'jeu.json');
@@ -176,6 +194,9 @@ const Jeu = (() => {
       try { donnees[sorte] = JSON.parse(texte); } catch { problemes.push(`${chemin} est abîmé`); }
     }
     const personnages = new Map((donnees.personnages?.personnages || []).map((p) => [p.id, p]));
+    for (const p of personnages.values()) {
+      try { p.sprite = await chargerSprite(p.sprite); } catch (err) { p.sprite = null; problemes.push(`le sprite de ${p.nom || p.id} : ${err.message}`); }
+    }
 
     // Le départ : celui de jeu.json, sinon la première case libre de la première carte.
     let depart = jeu.depart && cartes.has(jeu.depart.carte) ? { ...jeu.depart } : null;
