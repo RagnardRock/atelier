@@ -273,6 +273,18 @@ Dans **Jeu › Données du jeu › Réglages**, partie **Interface du jeu** :
 - Le joueur peut toujours forcer un thème dans les réglages de Saga.
 - **Claude** le règle aussi (action `donnee`, sorte `reglages`, `interface`).
 
+## De plus belles tuiles par Claude (Tafl 0.16)
+
+Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais plates. Il a maintenant les outils et les réflexes d'un pixel artiste :
+
+- **Des consignes de pixel art** (dans ses instructions de départ) : rampes de couleurs, lumière en haut à gauche, contours de la teinte la plus sombre plutôt que noirs, textures en amas sans pixels isolés, sols qui se raccordent, profondeur. Il suit la méthode : rampes → base → formes et volumes → détails → regarder → corriger.
+- **Palette « Brume (16 bits sombre, en rampes) »** : d'après ta référence (verts éteints, ardoises, bois, pluie), rangée en rampes du plus sombre au plus clair.
+- **`rampe`** : à partir d'une couleur, 3 à 8 teintes avec le décalage de teinte (les ombres vers le bleu violet, les lumières vers le jaune), ajoutées à la palette.
+- **`peindre_tuile`** : peint une tuile par opérations — remplir, rectangle, ellipse, ligne, pot, dégradé tramé façon 16 bits, texture (amas, brins, touffes d'herbe, traits ; se raccorde d'un bord à l'autre), contour, ombrage selon la lumière, ombre portée, pixels, symétrie, remplacer, décaler.
+- **`animer_tuile`** : fabrique toutes les images d'une animation à partir d'une seule — défilement (eau qui coule), cycle de couleurs (reflets), balancement (herbes au vent), scintillement.
+- **Il voit son résultat** : après chaque dessin, il reçoit la tuile, toutes ses images et une mosaïque 3 × 3 (pour les raccords), avec un regard critique (nombre de couleurs, pixels isolés, grands aplats, contraste, raccords visibles). `voir_tuile` le montre aussi.
+- **Variantes** : `poser_tuiles` accepte `variantes` (d'autres versions de la même herbe…) mélangées au hasard pour casser la répétition.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
