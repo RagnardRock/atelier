@@ -5,9 +5,8 @@
 // appuie sur Action, un téléporteur attend la fin du fondu). Une commande inconnue (écrite par une
 // version plus récente de Tafl) est sautée sans planter.
 //
-// Les combats se jouent depuis Saga 0.3 (combat.js). Les boutiques et l'écran des EV viendront dans
-// les prochaines versions : pour l'instant, Saga le dit dans une boîte et le script continue, pour que
-// l'histoire reste jouable de bout en bout.
+// Les combats se jouent depuis Saga 0.3 (combat.js), les boutiques et l'écran des EV depuis Saga 0.5
+// (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js.
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -41,6 +40,13 @@ const Scripts = (() => {
     }
     // Une phrase du jeu lui-même (« Tu reçois… »), sans nom.
     const narrer = (texte) => dire({}, texte);
+    // Ce que les menus hors combat (boutique, sac, EV) reçoivent pour parler et demander.
+    const ui = {
+      dire: async (texte) => { await narrer(texte); dialogue.fermer(); },
+      liste: (o) => moteur.menus.liste(o),
+      quantite: (o) => moteur.menus.quantite(o),
+      ev: (o) => moteur.menus.ev(o),
+    };
 
     async function jouer(commandes, ev) {
       for (const c of Array.isArray(commandes) ? commandes : []) {
@@ -159,11 +165,57 @@ const Scripts = (() => {
           partie.dernierSoin = moteur.position();
           await narrer(partie.equipe.length ? 'Ton équipe est en pleine forme !' : 'Tu te reposes un instant.');
           break;
+        // Tafl 0.16 : l'argent, les badges, le nom et la tenue du héros.
+        case 'argent': {
+          const montant = Math.max(0, Math.round(Number(c.montant) || 0));
+          const monnaie = jeu.donnees.reglages?.reglages?.monnaie || '₽';
+          if (!montant) break;
+          if (c.action === 'retirer') {
+            // Jamais sous 0 : s'il n'a pas assez, le joueur tombe à 0 et le script continue (FORMAT.md).
+            const retire = Math.min(montant, partie.argent);
+            partie.argent -= retire;
+            await narrer(`Tu donnes ${retire} ${monnaie}.`);
+          } else {
+            partie.argent += montant;
+            await narrer(`Tu reçois ${montant} ${monnaie} !`);
+          }
+          break;
+        }
+        case 'badge': {
+          if (!c.badge) break;
+          const def = (jeu.donnees.reglages?.reglages?.badges || []).find((b) => b.id === c.badge);
+          if (!partie.badges.includes(c.badge)) {
+            partie.badges.push(c.badge);
+            partie.compteurs.badges = partie.badges.length;
+            dialogue.annoncer('Nouveau badge', def?.nom || c.badge);
+            await narrer(`Tu reçois le ${def?.nom || c.badge} !`);
+          }
+          break;
+        }
+        case 'personnaliser': {
+          const heros = jeu.heros;
+          const tenues = [{ id: '', nom: 'Tenue de base', sprite: heros?.sprite || null }, ...(heros?.tenues || [])];
+          if (!c.nom && !c.tenue) break;
+          dialogue.fermer();
+          const r = await moteur.personnaliser({ nom: partie.nom, tenues, tenue: partie.tenue || '', demanderNom: Boolean(c.nom), demanderTenue: Boolean(c.tenue) });
+          if (c.nom && r.nom) partie.nom = r.nom;
+          if (c.tenue) partie.tenue = r.tenue || '';
+          break;
+        }
+        case 'tenue': {
+          const id = String(c.tenue || '');
+          // Une tenue inconnue (supprimée dans Tafl) : on garde la tenue de base.
+          partie.tenue = id && (jeu.heros?.tenues || []).some((t) => t.id === id) ? id : '';
+          break;
+        }
+        // Saga 0.5 : les boutiques et l'écran des EV.
         case 'boutique':
-          await narrer(`(La boutique « ${nomDe('boutiques', c.boutique)} » ouvrira dans une prochaine version de Saga.)`);
+          dialogue.fermer();
+          await Boutique.ouvrir({ jeu, partie, ui, id: c.boutique, vraie: (cond) => Monde.vraie(cond, partie, carte, ev) });
           break;
         case 'ecran_ev':
-          await narrer('(L\'écran des points d\'effort arrive dans une prochaine version de Saga.)');
+          dialogue.fermer();
+          await Regles.ecranEv({ jeu, partie, ui });
           break;
         default:
           break; // commande inconnue : on la saute
@@ -181,7 +233,7 @@ const Scripts = (() => {
       }
     }
 
-    return { executer };
+    return { executer, ui };
   }
 
   return { creer };

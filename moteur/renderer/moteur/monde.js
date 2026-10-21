@@ -21,6 +21,8 @@ const Monde = (() => {
       equipe: [],          // les créatures du joueur (voir creatures.js), 6 au plus
       boite: [],           // celles qui ne tiennent plus dans l'équipe
       argent: Number(reglages.argent_depart) || 0,
+      badges: [],          // les ids des badges reçus (Tafl 0.16) ; compteurs.badges = leur nombre
+      tenue: '',           // la tenue du héros (un id de ses tenues), '' = sa tenue de base
       dernierSoin: null,   // où le joueur se réveille après une défaite (la dernière commande « soigner »)
       repousse: 0,         // pas sans rencontres qui restent
       position: { ...depart },
@@ -35,6 +37,8 @@ const Monde = (() => {
       case 'local': return Boolean(partie.locaux[`${carte.id}/${ev?.id}`]) === Boolean(cond.valeur);
       case 'objet': return (partie.sac[cond.objet] || 0) >= (Number(cond.min) || 1);
       case 'compteur': return (partie.compteurs[cond.compteur] || 0) >= (Number(cond.min) || 0);
+      case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
+      case 'badge': return (partie.badges || []).includes(cond.badge);
       case 'quete': {
         const q = partie.quetes[cond.quete];
         const etat = q ? q.etat : 'pas_commencee';

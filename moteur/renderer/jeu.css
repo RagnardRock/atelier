@@ -371,3 +371,69 @@ body.plein-ecran #scene { cursor: none; }
 #scene[data-theme="pixel"] .combat-dresseur img { border-radius: 0; }
 #scene[data-theme="pixel"] #carnet-argent { font-size: 20px; }
 #scene[data-theme="pixel"] .combat-liste-aide { font-family: 'Jersey 10', monospace; font-size: 17px; }
+
+/* ---------- Saga 0.5 : les badges du carnet ---------- */
+.carnet-badges { display: flex; flex-wrap: wrap; gap: 8px; }
+.carnet-badge { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+.carnet-badge img { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; filter: brightness(0) opacity(0.35); }
+.carnet-badge.recu img { filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.25)); }
+.carnet-badge-vide { color: rgba(255, 255, 255, 0.18); font-size: 20px; }
+.carnet-badge.recu .carnet-badge-vide { color: var(--accent); }
+#scene[data-theme="pixel"] .carnet-badge { border-radius: 0; border: 2px solid var(--px-creux); }
+
+/* ---------- Saga 0.5 : l'écran du nom et de la tenue ---------- */
+.perso-ecran { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 6, 10, 0.5); backdrop-filter: blur(4px); z-index: 9; }
+.perso-carte {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; width: min(380px, calc(100% - 40px)); padding: 22px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 16px; background: rgba(14, 14, 22, 0.8);
+  backdrop-filter: blur(20px) saturate(150%); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); color: #f4f4f6;
+}
+.perso-titre { font-size: 20px; font-weight: 700; color: var(--accent); }
+.perso-apercu { width: 96px; height: 144px; image-rendering: pixelated; }
+.perso-label { align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+.perso-nom { width: 100%; padding: 10px 14px; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; background: rgba(255, 255, 255, 0.06); color: #fff; font-size: 20px; text-align: center; outline: none; }
+.perso-nom:focus { border-color: var(--accent); }
+.perso-tenue { display: flex; align-items: center; gap: 14px; }
+.perso-fleche { width: 36px; height: 36px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 50%; background: rgba(255, 255, 255, 0.06); color: var(--accent); cursor: pointer; }
+.perso-tenue-nom { font-size: 16px; font-weight: 600; }
+.perso-erreur { min-height: 18px; color: #f0503c; font-size: 14px; }
+.perso-ok { padding: 9px 26px; border: 1px solid var(--accent); border-radius: 10px; background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+.perso-aide { color: rgba(255, 255, 255, 0.5); font-size: 12px; }
+#scene[data-theme="pixel"] .perso-ecran { backdrop-filter: none; }
+#scene[data-theme="pixel"] .perso-carte, #scene[data-theme="pixel"] .perso-nom, #scene[data-theme="pixel"] .perso-fleche, #scene[data-theme="pixel"] .perso-ok {
+  font-family: 'Jersey 10', monospace; border-radius: 0; backdrop-filter: none;
+}
+#scene[data-theme="pixel"] .perso-carte { border: 3px solid var(--px-clair); background: var(--px-fond); box-shadow: 0 0 0 3px var(--px-ombre), inset 0 0 0 3px var(--px-creux), 6px 6px 0 3px rgba(0, 0, 0, 0.35); }
+#scene[data-theme="pixel"] .perso-titre { font-size: 28px; font-weight: 400; text-transform: uppercase; letter-spacing: 1px; }
+#scene[data-theme="pixel"] .perso-nom { font-size: 28px; border: 2px solid var(--px-clair); background: var(--px-ombre); }
+#scene[data-theme="pixel"] .perso-ok, #scene[data-theme="pixel"] .perso-tenue-nom { font-size: 24px; font-weight: 400; }
+#scene[data-theme="pixel"] .perso-label, #scene[data-theme="pixel"] .perso-aide, #scene[data-theme="pixel"] .perso-erreur { font-family: 'Jersey 10', monospace; font-size: 17px; }
+
+/* ---------- Saga 0.5 : les menus hors combat (boutique, sac, EV), sur le modèle des listes du combat ---------- */
+.menu-ecran { position: absolute; inset: 0; z-index: 7; }
+.menu-boite { transform: translate(-50%, -50%); max-height: 80%; }
+.menu-tete { display: flex; align-items: baseline; gap: 12px; }
+.menu-entete { margin-left: auto; color: var(--accent); font-size: 14px; font-weight: 600; }
+.menu-note { margin: -4px 4px 10px; color: rgba(255, 255, 255, 0.6); font-size: 13px; line-height: 1.4; }
+.menu-vide { padding: 10px; color: rgba(255, 255, 255, 0.45); }
+.menu-ok { display: block; text-align: center; font-weight: 700; margin-top: 4px; }
+.menu-quantite { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 10px 0 14px; }
+.menu-quantite-n { min-width: 70px; text-align: center; font-size: 24px; font-weight: 700; color: #fff; }
+.menu-quantite-total { min-width: 110px; color: var(--accent); font-size: 17px; font-weight: 600; }
+.menu-ev-ligne { grid-template-columns: 110px 1fr 46px 60px; cursor: default; }
+.menu-ev-curseur { width: 100%; accent-color: var(--accent); }
+.menu-ev-valeur { text-align: right; font-variant-numeric: tabular-nums; color: #fff; }
+.carnet-sac-droite { display: flex; align-items: center; gap: 10px; }
+.carnet-utiliser { padding: 2px 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 6px; background: rgba(255, 255, 255, 0.06); color: var(--accent); font-size: 12px; cursor: pointer; }
+.carnet-utiliser:hover { border-color: var(--accent); }
+#scene[data-theme="pixel"] .menu-entete, #scene[data-theme="pixel"] .menu-note, #scene[data-theme="pixel"] .menu-vide,
+#scene[data-theme="pixel"] .menu-quantite-n, #scene[data-theme="pixel"] .menu-quantite-total, #scene[data-theme="pixel"] .menu-ok,
+#scene[data-theme="pixel"] .menu-ev-valeur, #scene[data-theme="pixel"] .carnet-utiliser { font-family: 'Jersey 10', monospace; font-weight: 400; }
+#scene[data-theme="pixel"] .menu-entete { font-size: 20px; }
+#scene[data-theme="pixel"] .menu-note { font-size: 18px; }
+#scene[data-theme="pixel"] .menu-quantite-n { font-size: 32px; }
+#scene[data-theme="pixel"] .menu-quantite-total { font-size: 22px; }
+#scene[data-theme="pixel"] .menu-ok { font-size: 22px; }
+#scene[data-theme="pixel"] .menu-ev-valeur { font-size: 20px; }
+#scene[data-theme="pixel"] .carnet-utiliser { border-radius: 0; font-size: 17px; }
+#scene[data-theme="pixel"] .perso-fleche { border-radius: 0; }

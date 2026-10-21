@@ -30,7 +30,7 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Maj (tenue) | Courir (ou marcher, si « Courir sans tenir Maj » est coché dans les réglages). |
 | Espace, Entrée ou E | **Action** : parler au PNJ en face, ouvrir un coffre, lire un panneau, faire avancer un dialogue, valider un choix. |
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
-| Tab | Le **carnet** : équipe, sac, argent, quêtes. |
+| Tab | Le **carnet** : équipe, badges, sac (avec « Utiliser »), argent, quêtes. |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
 | Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
@@ -84,11 +84,21 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - Les deux thèmes couvrent les dialogues, les choix, les annonces, le nom de la carte, le carnet et tout le combat.
 - **Réglages de Saga › Interface en jeu** : « Celle choisie par le jeu », ou forcer Verre ou Pixel.
 
+## Ce que fait Saga 0.5 : au niveau de Tafl 0.16
+
+- **Le nom et la tenue du héros** : la commande `personnaliser` ouvre un écran où le joueur tape son nom et choisit sa tenue (avec l'aperçu du héros qui marche). `tenue` change la tenue en cours de jeu ; les tenues viennent de **Personnages › Héros** dans Tafl. `{joueur}` dans les dialogues donne le nom choisi.
+- **L'argent et les badges** : commandes `argent` (donner, retirer, jamais sous 0) et `badge` (une seule fois chacun, avec une annonce), conditions « argent ≥ » et « a le badge ». Le compteur `badges` suit le nombre de badges. Le carnet (Tab) montre les badges reçus et ceux qui manquent.
+- **Les boutiques** (commande `boutique`) : acheter des objets (combien ? gauche/droite ±1, haut/bas ±10) et des créatures, revendre ses objets à moitié prix (sauf les objets clés), vendre ses créatures. Un article n'apparaît que quand sa condition est vraie : badges, captures, dresseurs battus, quête…
+- **Les objets hors combat** : bouton **Utiliser** dans le sac du carnet. Soins, rappels, PP, PP Plus, Repousse, pierres d'évolution, Super Bonbon (jusqu'au plafond de niveau), vitamines (EV), capsules (IV) et aromates (la nature des stats change, pas la vraie nature). Un objet sans effet n'est pas dépensé.
+- **L'écran des EV** (commande `ecran_ev`, le centre) : choisir une créature, répartir ses EV au clavier ou en glissant (252 par stat, 510 en tout), avec l'effet sur les stats.
+- **Le pack de règles** : le jeu dit lequel il suit (`reglages.regles`, Pokémon pour l'instant). Tout ce qui touche aux créatures passe par la porte `Regles`, pour qu'un autre pack puisse remplacer Pokémon un jour.
+- Les menus ne se laissent plus voler le choix par une souris immobile sous le menu qui s'ouvre (en combat aussi).
+
 ## La suite
 
-1. Les **boutiques** (débloquées par les succès) et l'écran des EV du centre.
-2. Le reste des menus du jeu : équipe détaillée, Pokédex, boîte.
-3. Les combats en duo et les talents qui changent le combat.
+1. Le reste des menus du jeu : équipe détaillée, Pokédex, boîte.
+2. Les combats en duo et les talents qui changent le combat.
+3. Un deuxième pack de règles, pour vérifier que Saga n'est pas lié à Pokémon.
 
 ## Comment c'est construit
 
@@ -109,6 +119,10 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/regles/regles.js` | **La porte des règles** : le moteur ne parle qu'à elle pour tout ce qui touche aux créatures et aux combats. |
 | `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |
 | `renderer/moteur/regles/pokemon/combat.js` | Le déroulé d'un combat : tours, dégâts, statuts, sac, capture, fuite, XP, dresseurs. |
+| `renderer/moteur/regles/pokemon/hors-combat.js` | Ce qui touche aux créatures hors combat : les objets du sac, l'écran des EV, le prix d'une créature vendue. |
+| `renderer/moteur/menus.js` | Les menus du jeu hors combat : une liste, le choix d'une quantité, l'écran des EV. |
+| `renderer/moteur/boutique.js` | Les boutiques : acheter, revendre, vendre des créatures, articles débloqués par les succès. |
+| `renderer/moteur/personnaliser.js` | L'écran du nom et de la tenue du héros. |
 | `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus et animations. |
 | `renderer/moteur/sprites.js` | Les personnages sur la carte : leur sprite de Tafl, ou le petit bonhomme en pixel art. |
 

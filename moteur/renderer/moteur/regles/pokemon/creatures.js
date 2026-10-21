@@ -61,7 +61,8 @@ const Creatures = (() => {
   function stats(jeu, c) {
     const e = espece(jeu, c);
     const base = e?.stats || {};
-    const nat = NATURES[c.nature] || null;
+    // Une menthe (Saga 0.5) remplace l'effet de la nature sur les stats ; la nature, elle, reste.
+    const nat = NATURES[c.menthe || c.nature] || null;
     const out = {};
     for (const s of STATS) {
       const b = Number(base[s]) || 50, iv = c.ivs?.[s] || 0, ev = c.evs?.[s] || 0;

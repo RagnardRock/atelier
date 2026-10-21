@@ -234,7 +234,22 @@ const App = (() => {
         el('span', { className: 'carnet-pv' }, el('span', { style: `width: ${Math.round(k * 100)}%`, className: `niveau-${k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas'}` })),
         el('span', { className: 'discret', textContent: `N.${r.niveau} · ${r.pv > 0 ? `${r.pv}/${r.pvMax} PV` : 'K.O.'}` }));
     }), 'Pas encore de compagnon.');
-    section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {}, el('span', { textContent: nom('objets', id) }), el('span', { className: 'discret', textContent: `×${n}` }))), 'Le sac est vide.');
+    // Les badges du jeu (Tafl 0.16) : ceux reçus en couleur, les autres en ombre.
+    const badges = jeu.donnees.reglages?.reglages?.badges || [];
+    if (badges.length) {
+      corps.append(el('h3', { textContent: `Badges · ${p.badges.filter((b) => badges.some((x) => x.id === b)).length}/${badges.length}` }));
+      corps.append(el('div', { className: 'carnet-badges' }, ...badges.map((b) => {
+        const recu = p.badges.includes(b.id);
+        return el('div', { className: `carnet-badge${recu ? ' recu' : ''}`, title: recu ? b.nom : '???' },
+          b.icone ? el('img', { src: b.icone, alt: '' }) : el('span', { className: 'carnet-badge-vide', textContent: '★' }));
+      })));
+    }
+    // Le sac : un objet qui sert hors combat (soin, vitamine, menthe, capsule, pierre…) a son bouton « Utiliser ».
+    section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {},
+      el('span', { textContent: nom('objets', id) }),
+      el('span', { className: 'carnet-sac-droite' },
+        moteur.objetUtilisable(id) ? el('button', { className: 'carnet-utiliser', type: 'button', textContent: 'Utiliser', onclick: () => { fermerCarnet(); moteur.utiliserObjet(id); } }) : null,
+        el('span', { className: 'discret', textContent: `×${n}` })))), 'Le sac est vide.');
     const quetes = Object.entries(p.quetes).sort(([, a], [, b]) => (a.etat === 'finie') - (b.etat === 'finie'));
     section('Quêtes', quetes.map(([id, q]) => {
       const def = liste('quetes').find((x) => x.id === id);

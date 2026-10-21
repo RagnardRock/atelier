@@ -102,6 +102,8 @@ const Moteur = (() => {
     let actionDemandee = false;
     // Les combats (Saga 0.3) : leur écran, posé sur le jeu comme la boîte de dialogue.
     const ecranCombat = EcranCombat.creer(canvas.parentElement);
+    const ecranPerso = Personnaliser.creer(canvas.parentElement);
+    const menus = Menus.creer(canvas.parentElement);
     let enCombat = false;
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
@@ -156,6 +158,11 @@ const Moteur = (() => {
       partie.boite = (partie.boite || []).map((c) => Regles.completer(jeu, c)).filter(Boolean);
       enCombat = false;
       ecranCombat.fermer();
+      ecranPerso.fermer();
+      menus.fermer();
+      // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
+      partie.badges = [...new Set(Array.isArray(partie.badges) ? partie.badges : [])];
+      partie.compteurs = { ...Monde.nouvellePartie(jeu).compteurs, ...partie.compteurs, badges: partie.badges.length };
       carte = null;
       enScript = false;
       attentes = [];
@@ -167,6 +174,9 @@ const Moteur = (() => {
         attendre: (ms) => new Promise((resoudre) => attentes.push({ reste: ms / 1000, resoudre })),
         teleporter: (c, x, y, d) => new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: c, x, y, direction: d }, resoudre }; }),
         combattre,
+        // L'écran du nom et de la tenue (commande personnaliser, Tafl 0.16).
+        personnaliser: (o) => ecranPerso.ouvrir(o),
+        menus,
         position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
       });
       redimensionner();
@@ -470,7 +480,9 @@ const Moteur = (() => {
         if (m) pas = m.t / m.duree < 0.5 ? joueur.pas : 0;
         else if (joueur.pietine > 0) pas = Math.floor(joueur.pietine * 4) % 2 ? joueur.pas || 1 : 0;
         const x = pj.x - cam.x, y = pj.y - cam.y;
-        dessinerCorps({ perso: jeu.heros, couleur: '#d94a4a', direction: joueur.dir, pas, x, y, hy: y - pj.saut, ombre: pj.saut ? 0.8 : 1 }, maintenant);
+        // La tenue choisie (Tafl 0.16) remplace le sprite du héros ; sans sprite, sa tenue de base.
+        const tenue = partie.tenue ? jeu.heros?.tenues?.find((t) => t.id === partie.tenue) : null;
+        dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : jeu.heros, couleur: '#d94a4a', direction: joueur.dir, pas, x, y, hy: y - pj.saut, ombre: pj.saut ? 0.8 : 1 }, maintenant);
       } });
       liste.sort((a, b) => a.y - b.y);
       for (const e of liste) e.dessiner();
@@ -562,7 +574,8 @@ const Moteur = (() => {
       if (!enPause) {
         // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
         for (const a of entrees.appuis()) {
-          if (a === 'echap') { if (enCombat) ecranCombat.touche('retour'); }
+          if (menus.ouvert) menus.touche(a === 'echap' ? 'retour' : a);
+          else if (a === 'echap') { if (enCombat) ecranCombat.touche('retour'); }
           else if (enCombat) ecranCombat.touche(a);
           else if (enScript) dialogue.touche(a);
           else if (a === 'action') actionDemandee = true;
@@ -594,6 +607,26 @@ const Moteur = (() => {
       // La partie en cours, pour la sauvegarder (une copie : la sauvegarde ne bouge plus ensuite).
       partie() { return partie ? JSON.parse(JSON.stringify({ ...partie, position: this.position() || partie.position })) : null; },
       annoncer: (titre, detail) => dialogue.annoncer(titre, detail),
+      // Utiliser un objet du sac sur la carte (depuis le carnet, Saga 0.5). Comme un script : le
+      // joueur ne bouge pas pendant ce temps. Rend false si ce n'est pas le moment.
+      async utiliserObjet(id) {
+        if (!jeu || enScript || enCombat || fondu) return false;
+        enScript = true;
+        entrees.oublier();
+        try {
+          await Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id });
+        } catch (err) {
+          rappels.message?.(`Erreur avec cet objet : ${err.message}`);
+        } finally {
+          menus.fermer();
+          dialogue.fermer();
+          presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+          enScript = false;
+          entrees.oublier();
+        }
+        return true;
+      },
+      objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),
       basculerDebug() { debug = !debug; return debug; },
       get debug() { return debug; },
       // Pour la barre d'infos (F3) et pour « Recharger » (F5 garde la position du joueur).

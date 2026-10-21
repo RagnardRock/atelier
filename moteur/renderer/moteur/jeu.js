@@ -197,6 +197,11 @@ const Jeu = (() => {
     const personnages = new Map((donnees.personnages?.personnages || []).map((p) => [p.id, p]));
     for (const p of personnages.values()) {
       try { p.sprite = await chargerSprite(p.sprite); } catch (err) { p.sprite = null; problemes.push(`le sprite de ${p.nom || p.id} : ${err.message}`); }
+      // Les tenues du héros (Tafl 0.16) : chacune son sprite, au même format.
+      p.tenues = Array.isArray(p.tenues) ? p.tenues.filter((t) => t && typeof t.id === 'string' && t.id) : [];
+      for (const t of p.tenues) {
+        try { t.sprite = await chargerSprite(t.sprite); } catch (err) { t.sprite = null; problemes.push(`le sprite de la tenue ${t.nom || t.id} : ${err.message}`); }
+      }
     }
 
     // Le départ : celui de jeu.json, sinon la première case libre de la première carte.
