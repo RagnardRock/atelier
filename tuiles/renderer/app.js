@@ -33,8 +33,6 @@ const App = (() => {
     $('#btn-undo').disabled = !doc?.undo.length;
     $('#btn-redo').disabled = !doc?.redo.length;
     $('#btn-jouer').hidden = !doc?.game;
-    // Tafl 0.11 : les données du jeu à portée de clic, en mode Tuile comme en mode Carte.
-    $('#btn-donnees').hidden = !doc;
     renderModes();
     renderToolbar();
     renderOptions();
@@ -1125,7 +1123,6 @@ const App = (() => {
   $('#btn-undo').onclick = undo;
   $('#btn-redo').onclick = redo;
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
-  $('#btn-donnees').onclick = () => { if (api.doc) run(() => openData()); };
   $('#btn-jouer').onclick = (e) => needDoc(() => jouer(e.shiftKey))();
   $('#btn-export').onclick = needDoc(IO.exportSheet);
   $('#btn-settings').onclick = () => run(openSettings);
