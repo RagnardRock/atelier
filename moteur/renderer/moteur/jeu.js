@@ -121,6 +121,7 @@ const Jeu = (() => {
       id: data.id || entree.id,
       nom: data.nom || entree.nom || entree.id,
       largeur, hauteur, taille,
+      interieur: Boolean(data.interieur), // Tafl 0.11 : une maison, une grotte… (le décor des combats)
       calques,
       passage: grille(data.passage, n, 0),
       zones: (Array.isArray(data.zones) ? data.zones : []).map((z) => ({

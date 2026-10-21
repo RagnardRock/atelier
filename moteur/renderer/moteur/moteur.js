@@ -98,6 +98,9 @@ const Moteur = (() => {
     let scripts = null, enScript = false, autoAFaire = false;
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
+    // Les combats (Saga 0.3) : leur écran, posé sur le jeu comme la boîte de dialogue.
+    const ecranCombat = EcranCombat.creer(canvas.parentElement);
+    let enCombat = false;
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
     function redimensionner() {
@@ -146,6 +149,11 @@ const Moteur = (() => {
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
+      // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
+      partie.equipe = (partie.equipe || []).map((c) => Regles.completer(jeu, c)).filter(Boolean);
+      partie.boite = (partie.boite || []).map((c) => Regles.completer(jeu, c)).filter(Boolean);
+      enCombat = false;
+      ecranCombat.fermer();
       carte = null;
       enScript = false;
       attentes = [];
@@ -156,6 +164,8 @@ const Moteur = (() => {
         carte: () => carte,
         attendre: (ms) => new Promise((resoudre) => attentes.push({ reste: ms / 1000, resoudre })),
         teleporter: (c, x, y, d) => new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: c, x, y, direction: d }, resoudre }; }),
+        combattre,
+        position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
       });
       redimensionner();
       const d = partie.position;
@@ -222,11 +232,70 @@ const Moteur = (() => {
         fondu = { phase: 'sortie', t: 0, vers: tp.vers };
         return true;
       }
-      return false;
+      // Les hautes herbes (ou l'eau, une grotte…) : une créature sauvage peut surgir.
+      return rencontre();
+    }
+
+    // --- Les combats ---
+    // Le décor du combat : celui de la zone où est le joueur (herbes, eau, grotte), ou de la carte.
+    function fondCombat() {
+      const z = Monde.zonesEn(carte, joueur.x, joueur.y).find((q) => ['herbes', 'eau', 'grotte'].includes(q.type));
+      return z ? z.type : carte.interieur ? 'interieur' : 'herbes';
+    }
+    function rencontre() {
+      const zone = Monde.zonesEn(carte, joueur.x, joueur.y).find((z) => z.rencontres.length);
+      if (!zone || !partie.equipe.some((c) => c.pv > 0)) return false;
+      if (partie.repousse > 0) {
+        partie.repousse--;
+        if (!partie.repousse) dialogue.annoncer('Repousse', 'Ses effets se dissipent.');
+        return false;
+      }
+      if (Math.random() * 100 >= zone.taux) return false;
+      // Les chances des créatures sont des poids (ramenés à 100).
+      const possibles = zone.rencontres.filter((r) => Regles.existe(jeu, r.creature));
+      const total = possibles.reduce((s, r) => s + Math.max(0, Number(r.chance) || 0), 0);
+      if (!possibles.length || total <= 0) return false;
+      let tirage = Math.random() * total;
+      const r = possibles.find((q) => (tirage -= Math.max(0, Number(q.chance) || 0)) < 0) || possibles[0];
+      const min = Number(r.niveau_min) || 2, max = Math.max(min, Number(r.niveau_max) || min);
+      const sauvage = Regles.creer(jeu, r.creature, min + Math.floor(Math.random() * (max - min + 1)));
+      (async () => {
+        enScript = true;
+        await combattre({ sauvage });
+        presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+        enScript = false;
+        entrees.oublier();
+      })();
+      return true;
+    }
+    // Un combat (une rencontre, ou les commandes combat_sauvage et combat_dresseur des scripts).
+    // Rend l'issue : 'victoire', 'defaite', 'fuite' ou 'capture'. Après une défaite, le joueur se
+    // réveille au dernier endroit où il s'est soigné (sinon au départ du jeu), son équipe soignée.
+    async function combattre({ sauvage = null, dresseur = null }) {
+      enCombat = true;
+      entrees.oublier();
+      dialogue.fermer();
+      let issue = 'fuite';
+      try {
+        ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranCombat, sauvage, dresseur, fond: fondCombat() }));
+      } catch (err) {
+        ecranCombat.fermer();
+        rappels.message?.(`Erreur pendant le combat : ${err.message}`);
+      }
+      enCombat = false;
+      entrees.oublier();
+      if (issue === 'defaite') {
+        for (const c of partie.equipe) Regles.soigner(jeu, c);
+        const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
+        noir = 1;
+        await new Promise((resoudre) => { fondu = { phase: 'sortie', t: DUREE_FONDU, vers: { ...d, direction: d.direction || 'bas' }, resoudre }; });
+        dialogue.annoncer('Tu te réveilles…', 'Ton équipe est soignée.');
+      }
+      return issue;
     }
 
     function avancerJoueur(dt) {
-      const libre = !enPause && !fondu && !enScript;
+      const libre = !enPause && !fondu && !enScript && !enCombat;
       const { dir, course: maj } = libre ? entrees.lire() : { dir: null, course: false };
       const course = options.courirParDefaut ? !maj : maj;
       if (joueur.mouvement) {
@@ -491,7 +560,8 @@ const Moteur = (() => {
       if (!enPause) {
         // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
         for (const a of entrees.appuis()) {
-          if (enScript) dialogue.touche(a);
+          if (enCombat) ecranCombat.touche(a);
+          else if (enScript) dialogue.touche(a);
           else if (a === 'action') actionDemandee = true;
         }
         avancerJoueur(dt);
@@ -499,6 +569,7 @@ const Moteur = (() => {
         avancerPNJ(dt);
         avancerFondu(dt);
         dialogue.avancer(dt);
+        ecranCombat.avancer(dt);
         for (const a of attentes) a.reste -= dt;
         for (const a of attentes.filter((x) => x.reste <= 0)) a.resoudre();
         attentes = attentes.filter((x) => x.reste > 0);
@@ -516,6 +587,7 @@ const Moteur = (() => {
       regler(o) { options = { ...options, ...o }; if (jeu) redimensionner(); },
       pause(oui) { enPause = oui; entrees.oublier(); },
       get enScript() { return enScript; },
+      get enCombat() { return enCombat; },
       // La partie en cours, pour la sauvegarder (une copie : la sauvegarde ne bouge plus ensuite).
       partie() { return partie ? JSON.parse(JSON.stringify({ ...partie, position: this.position() || partie.position })) : null; },
       annoncer: (titre, detail) => dialogue.annoncer(titre, detail),

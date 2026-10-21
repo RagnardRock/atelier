@@ -18,8 +18,11 @@ const Monde = (() => {
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
       compteurs: { captures: 0, dresseurs_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
-      equipe: [],          // [{ creature, niveau }]
+      equipe: [],          // les créatures du joueur (voir creatures.js), 6 au plus
+      boite: [],           // celles qui ne tiennent plus dans l'équipe
       argent: Number(reglages.argent_depart) || 0,
+      dernierSoin: null,   // où le joueur se réveille après une défaite (la dernière commande « soigner »)
+      repousse: 0,         // pas sans rencontres qui restent
       position: { ...depart },
     };
   }

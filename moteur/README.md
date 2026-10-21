@@ -59,14 +59,28 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **Dialogues** : une boîte en verre en bas de l'écran, avec le nom de celui qui parle (dans sa couleur), son **portrait** pour l'expression demandée, et le texte qui s'écrit lettre par lettre (Action l'affiche d'un coup, puis passe à la suite). Une ligne vide dans le texte coupe en plusieurs boîtes ; `{joueur}` est remplacé par le nom du héros.
 - **Choix** : 2 à 4 réponses à côté de la boîte, au clavier (haut/bas, Action), à la manette ou à la souris. Chaque réponse a ses propres commandes.
 - **Les scripts de Tafl** sont joués commande par commande : `dire`, `choix`, `si`, `interrupteur`, `local`, `attendre`, `objet` (donner, retirer), `creature` (dans l'équipe ou la boîte), `teleporter`, `quete` (commencer, étape, finir, avec une annonce en haut à droite), `soigner`, `fin`. Les pages des événements sont relues après chaque script : un PNJ peut apparaître, disparaître ou changer de texte.
-- **Pas encore là** : les combats, les boutiques et l'écran des EV. Saga le dit dans une boîte et l'histoire continue (un combat de dresseur compte comme gagné, avec ses dialogues et son argent).
+- **Pas encore là** : les boutiques et l'écran des EV. Saga le dit dans une boîte et l'histoire continue. (Les combats sont arrivés avec Saga 0.3, plus bas.)
 - **PNJ qui bougent** : un événement en déplacement `aleatoire` se promène (sans s'éloigner de plus de 2 cases), `tourne` regarde autour de lui.
 - **Sauvegarde** : Ctrl+S ou le menu de pause. Elle va dans `%APPDATA%\atelier-moteur\sauvegardes` (jamais dans le dossier du jeu), une par jeu. Quand on rouvre le jeu, Saga propose **Continuer** ou **Nouvelle partie**. F5 (recharger) garde la partie en cours.
 
+## Ce que fait Saga 0.3 : les combats
+
+- **Rencontres sauvages** : dans une zone qui a des rencontres (les hautes herbes, l'eau…), chaque pas a sa chance de lancer un combat, selon le taux de la zone. La créature est tirée au sort selon les poids de la table, à un niveau entre le minimum et le maximum. Un **Repousse** empêche les rencontres pendant un certain nombre de pas.
+- **Dresseurs** : les commandes `combat_sauvage` et `combat_dresseur` de Tafl lancent un vrai combat. Le dresseur envoie ses créatures une par une, dit son `dialogue_victoire` ou son `dialogue_defaite` selon l'issue, et donne son argent. Un dresseur gagné compte dans les succès (`dresseurs_battus`). Le niveau de ses créatures suit le réglage d'ajustement des dresseurs de Tafl.
+- **L'écran de combat** : un fond selon la carte (herbe, eau, grotte, intérieur), les deux créatures avec leur nom, leur niveau, leur statut et leur barre de PV, la barre d'XP du joueur, et des messages qui s'écrivent lettre par lettre. Menu **Attaque / Sac / Équipe / Fuite** au clavier (flèches, Action, Retour pour revenir), à la manette ou à la souris.
+- **Les vraies formules** (celles des jeux officiels depuis la 3ᵉ génération) : statistiques avec IV, EV et nature ; dégâts avec bonus de type (STAB), table des types de Tafl (super efficace, peu efficace, sans effet), coups critiques, précision et esquive ; priorité et vitesse pour l'ordre des attaques.
+- **Statuts** : brûlure, paralysie, poison, poison grave, sommeil, gel et confusion, avec leurs effets officiels. Aussi : la peur, le vol de PV, le contrecoup, les attaques qui soignent, celles qui frappent plusieurs fois, et les hausses ou baisses de stats.
+- **Le sac en combat** : potions, soins de statut, rappels, PP, et **Poké Balls** contre une créature sauvage (formule de capture officielle, avec les secousses). Une créature capturée va dans l'équipe, ou dans la boîte si l'équipe est pleine.
+- **XP et niveaux** : l'XP est partagée entre les créatures qui ont combattu (plus avec un dresseur), avec les 6 courbes officielles et les EV gagnés. En montant de niveau, une créature apprend ses attaques (et propose d'en oublier une si elle en a déjà 4) et **évolue pendant le combat**. Le **plafond de niveau** suit les badges (réglage de Tafl) : au plafond, plus d'XP.
+- **Défaite** : le joueur perd la moitié de son argent, son équipe est soignée, et il se réveille au dernier endroit où il a été soigné (sinon au départ du jeu).
+- **Le carnet** montre maintenant chaque créature de l'équipe avec son sprite, son niveau, son statut et sa barre de PV.
+- **Sauvegarde** : les créatures sont gardées en entier (niveau, XP, PV, IV, EV, nature, attaques et PP), ainsi que la boîte et le dernier lieu de soin. Une sauvegarde de Saga 0.2 est mise à jour toute seule.
+
 ## La suite
 
-1. Les **combats** (sauvages et dresseurs), avec les données de Tafl 0.8.
-2. Les boutiques et le reste des menus du jeu (Pokédex, équipe détaillée).
+1. Les **boutiques** (débloquées par les succès) et l'écran des EV du centre.
+2. Le reste des menus du jeu : équipe détaillée, Pokédex, boîte.
+3. Les combats en duo et les talents qui changent le combat.
 
 ## Comment c'est construit
 
@@ -83,7 +97,13 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ambiance.js` | La teinte et la météo. |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
+| `renderer/moteur/regles/regles.js` | **La porte des règles** : le moteur ne parle qu'à elle pour tout ce qui touche aux créatures et aux combats. |
+| `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |
+| `renderer/moteur/regles/pokemon/combat.js` | Le déroulé d'un combat : tours, dégâts, statuts, sac, capture, fuite, XP, dresseurs. |
+| `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus et animations. |
 | `renderer/moteur/sprites.js` | Les personnages sur la carte : leur sprite de Tafl, ou le petit bonhomme en pixel art. |
+
+**Des règles remplaçables.** Les règles de combat et de créatures (aujourd'hui celles de Pokémon) sont rangées à part, dans `renderer/moteur/regles/pokemon/`. Le moteur (cartes, déplacements, scripts, sauvegarde) ne les appelle jamais directement : il passe par `regles.js`, qui dit en tête de fichier la petite liste de fonctions qu'un jeu de règles doit fournir (créer une créature, la soigner, la résumer pour le carnet, lancer un combat…). Pour un jeu avec d'autres règles, on écrira un autre dossier à côté de `pokemon/`, sans toucher au moteur. L'écran de combat, lui, ne connaît aucune règle : il montre ce qu'on lui dit.
 
 Les fichiers de `renderer/moteur/` ne touchent ni au disque ni à Electron : ils reçoivent les textes du jeu.
 Ils pourront donc un jour tourner dans un simple navigateur, pour un export web du jeu.
