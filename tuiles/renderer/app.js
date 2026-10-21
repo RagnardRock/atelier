@@ -1277,6 +1277,10 @@ const App = (() => {
       { label: 'Carte monde…', keys: 'Ctrl+Maj+M', disabled: !api.doc, run: () => run(openWorld) },
       { label: 'Zoom avant', keys: 'Ctrl++', disabled: !api.doc, run: () => Stage.zoomBy(1) },
       { label: 'Zoom arrière', keys: 'Ctrl+-', disabled: !api.doc, run: () => Stage.zoomBy(-1) },
+      null,
+      { label: 'Panneaux plus grands', run: () => run(() => panelZoomBy(10)) },
+      { label: 'Panneaux plus petits', run: () => run(() => panelZoomBy(-10)) },
+      { label: 'Disposition des panneaux par défaut', run: () => Disposition.reinitialiser() },
     ],
   };
   const menuBar = $('#menus');
@@ -1290,6 +1294,13 @@ const App = (() => {
     // Survoler un autre menu pendant qu'un menu est ouvert l'ouvre à sa place.
     b.onmouseenter = () => { if (Menus.isOpen() && !b.classList.contains('open') && $('#menus .open')) b.click(); };
     menuBar.append(b);
+  }
+
+  // Affichage › Panneaux plus grands / plus petits (comme Ctrl+molette sur le panneau).
+  async function panelZoomBy(d) {
+    const z = Math.min(Disposition.ZOOM.max, Math.max(Disposition.ZOOM.min, (api.config.panelZoom ?? 100) + d));
+    api.config = await window.tafl.writeConfig({ panelZoom: z });
+    Disposition.appliquer(api.config);
   }
 
   function toggleMosaic() {
@@ -1454,6 +1465,7 @@ const App = (() => {
     document.body.classList.toggle('glass', Boolean(config.glass));
     api.options.pixelGrid = config.pixelGrid !== false;
     api.options.tileGrid = config.tileGrid !== false;
+    Disposition.appliquer(config);
     const { blur, needsRestart } = await window.tafl.setWindowTheme({ glass: config.glass, blur: config.windowBlur });
     document.body.classList.toggle('window-blur', blur);
     return needsRestart;
@@ -1475,6 +1487,10 @@ const App = (() => {
         { key: 'palette', label: 'Palette par défaut', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]) },
         { key: 'pixelGrid', label: 'Grille des pixels (mode Tuile)', type: 'checkbox', value: api.config.pixelGrid },
         { key: 'tileGrid', label: 'Grille des cases (mode Carte)', type: 'checkbox', value: api.config.tileGrid },
+        { key: 'panelZoom', label: 'Taille des panneaux de droite (texte, boutons)', type: 'range', value: api.config.panelZoom ?? 100, min: Disposition.ZOOM.min, max: Disposition.ZOOM.max, step: 10, unit: '%' },
+        { key: 'vignette', label: 'Taille des vignettes (tuiles, tampons)', type: 'range', value: api.config.vignette ?? 44, min: Disposition.VIGNETTE.min, max: Disposition.VIGNETTE.max, step: 4, unit: 'px' },
+        { key: 'colonnes', label: 'Colonnes du panneau de droite', type: 'select', value: api.config.colonnes || 'auto', choices: [['auto', 'Automatique : deux quand il est large'], ['1', 'Toujours une'], ['2', 'Toujours deux']] },
+        { type: 'info', text: 'Astuces : glisse le bord gauche du panneau pour l\'élargir, clique sur le titre d\'un panneau pour le replier, glisse le bas d\'un panneau pour sa hauteur. Ctrl+molette sur le panneau : sa taille ; sur les tuiles : les vignettes.' },
         { key: 'historySteps', label: 'Étapes d\'annulation gardées', type: 'number', value: api.config.historySteps, min: 5, max: 500 },
         { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
         { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude' },
@@ -1492,9 +1508,11 @@ const App = (() => {
         // Aperçu immédiat de la couleur et du verre.
         document.documentElement.style.setProperty('--accent', values.accentColor);
         document.body.classList.toggle('glass', values.glass);
+        Disposition.appliquer({ ...api.config, ...values });
+        Panels.renderStamps();
       },
     });
-    if (!v) return applyTheme(api.config);
+    if (!v) { await applyTheme(api.config); return Panels.renderStamps(); }
     api.config = await window.tafl.writeConfig({ ...v, tileSize: Number(v.tileSize) });
     if (await applyTheme(api.config)) notify('Le flou de Windows 11 sera actif au prochain démarrage de Tafl.', 'info', 6000);
     refresh();

@@ -470,7 +470,7 @@ const Panels = (() => {
     stampsEl.innerHTML = '';
     if (!doc) return;
     doc.stamps.forEach((st, i) => {
-      const item = el('button', { className: `stamp-item${App.tool === 'stamp' && i === App.options.stamp ? ' active' : i === App.options.stamp ? ' chosen' : ''}`, title: `${st.name} : ${st.w} × ${st.h} tuiles${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''}\nClic : le poser (outil Tampon) · double-clic : réglages · clic droit : plus d'actions` }, [stampCanvas(doc, st, 56)]);
+      const item = el('button', { className: `stamp-item${App.tool === 'stamp' && i === App.options.stamp ? ' active' : i === App.options.stamp ? ' chosen' : ''}`, title: `${st.name} : ${st.w} × ${st.h} tuiles${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''}\nClic : le poser (outil Tampon) · double-clic : réglages · clic droit : plus d'actions` }, [stampCanvas(doc, st, Math.round(Disposition.vignette() * 1.3))]);
       item.onclick = () => App.selectStamp(i);
       item.ondblclick = () => App.stampProperties(i);
       item.oncontextmenu = (e) => { e.preventDefault(); Menus.open(App.stampMenuItems(i), e.clientX, e.clientY); };

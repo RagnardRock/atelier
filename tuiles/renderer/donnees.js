@@ -173,7 +173,7 @@ const Donnees = (() => {
     ajustement: 'badges', ecart: 0, chance_chromatique: 4096,
     interface: { theme: 'verre', accent: '' },
   });
-  // L'interface en jeu (Tafl 0.14, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
+  // L'interface en jeu (Tafl 0.15, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
   const THEMES = [['verre', 'Verre : sombre et flou, coins arrondis'], ['pixel', 'Pixel : police pixel, cadres nets, rétro']];
   function normReglages(r) {
     const d = reglagesVides();

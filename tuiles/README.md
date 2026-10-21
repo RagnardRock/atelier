@@ -255,7 +255,16 @@ Le panneau **Tuiles** sait maintenant ranger un jeu de plusieurs centaines de tu
 - **Claude** range aussi (`ranger_tuiles`) : catégories, tris, doublons, tuiles inutilisées ; `voir_tuiles` lui donne les catégories.
 - La catégorie est enregistrée dans le `.tafl` (champ `categorie` de chaque tuile, voir `FORMAT.md`). Saga l'ignore.
 
-## L'interface du jeu (Tafl 0.14)
+## Des panneaux à la bonne taille (Tafl 0.14)
+
+Sur un grand écran, le panneau de droite ne reste plus coincé à 300 px :
+
+- **Largeur** : glisse le bord gauche du panneau (entre la carte et lui). Double-clic : largeur par défaut. Sur un écran large, il démarre à 560 px.
+- **Deux colonnes** : dès qu'il est assez large, à gauche Cartes, Calques, Événements ; à droite Tampons et Tuiles, sur toute la hauteur. Réglable (Automatique, Toujours une, Toujours deux) dans les réglages.
+- **Replier** un panneau : clic sur son titre. **Hauteur** d'un panneau : glisse son bord du bas (double-clic : automatique). Les tuiles prennent toute la place qui reste.
+- **Taille du texte et des boutons** des panneaux (80 à 160 %) et **taille des vignettes** (28 à 128 px) dans les réglages (Ctrl+,). Raccourci : Ctrl+molette sur le panneau, ou sur les tuiles et les tampons pour les vignettes. Aussi dans Affichage : Panneaux plus grands / plus petits, Disposition des panneaux par défaut.
+
+## L'interface du jeu (Tafl 0.15)
 
 Dans **Jeu › Données du jeu › Réglages**, partie **Interface du jeu** :
 
