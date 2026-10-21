@@ -372,6 +372,8 @@ const CLAUDE_CONSIGNES = [
   '  Pas d\'« ombrage coussin » (le centre clair et tout le tour sombre) : la lumière vient d\'un côté.',
   '- Tuiles de sol (herbe, terre, eau) : elles doivent se raccorder ; vérifie la mosaïque 3 × 3, pas de motif centré.',
   '  Fais 2 ou 3 variantes (même recette, autre graine) et pose-les avec poser_tuiles variantes : la répétition disparaît.',
+  '- La finesse se joue sur les grands objets : dessine-les d\'un seul tenant avec dessiner_objet (un sapin en 3 × 4',
+  '  tuiles, une maison en 5 × 5), silhouette en polygone, puis des motifs soignés répétés (repeter), puis retouches.',
   '- Profondeur : les objets hauts (arbres, maisons, falaises) sur plusieurs tuiles (tampons), le haut sur un calque',
   '  « dessus » ; une rangée plus sombre au pied des murs et falaises.',
   '- Animation : animer_tuile plutôt qu\'image par image : cycle de couleurs pour l\'eau, balancement d\'1 pixel pour',

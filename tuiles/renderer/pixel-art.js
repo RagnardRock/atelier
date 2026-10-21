@@ -164,6 +164,34 @@ const PixelArt = (() => {
         }
         break;
       }
+      case 'polygone': {
+        // Une forme nette donnée par ses sommets [[x, y], …] (dans l'ordre du tour) : une silhouette de sapin
+        // en dents de scie, un pan de toit, une roche taillée… Remplie, ou seulement son bord avec vide: true.
+        const c = lire(op.couleur);
+        const pts = (op.points || []).map((p) => (Array.isArray(p) ? [Number(p[0]), Number(p[1])] : [Number(p.x), Number(p.y)]));
+        if (pts.length < 3 || pts.some(([x, y]) => !Number.isFinite(x) || !Number.isFinite(y))) throw new Error('polygone : points, au moins 3 [x, y].');
+        const tmp = Toile(new Uint8ClampedArray(w * h * 4), w, h);
+        const un = [1, 1, 1, 1];
+        if (!op.vide) {
+          // Remplissage par rangées : un pixel est dedans si son centre l'est (règle pair-impair).
+          for (let y = 0; y < h; y++) {
+            const cy = y + 0.5, xs = [];
+            for (let i = 0; i < pts.length; i++) {
+              const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+              if ((y1 <= cy && y2 > cy) || (y2 <= cy && y1 > cy)) xs.push(x1 + ((cy - y1) / (y2 - y1)) * (x2 - x1));
+            }
+            xs.sort((a, b) => a - b);
+            for (let k = 0; k + 1 < xs.length; k += 2) for (let x = Math.ceil(xs[k] - 0.5); x < Math.ceil(xs[k + 1] - 0.5); x++) tmp.set(x, y, un);
+          }
+        }
+        // Le bord, tracé par-dessus : les pointes fines restent visibles même quand elles font moins d'un pixel.
+        for (let i = 0; i < pts.length; i++) {
+          const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+          ligne(tmp, Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2), un);
+        }
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (tmp.get(x, y)[3]) poser(x, y, c);
+        break;
+      }
       case 'ligne': {
         const c = lire(op.couleur);
         const tmp = Toile(new Uint8ClampedArray(w * h * 4), w, h);
@@ -382,6 +410,21 @@ const PixelArt = (() => {
         lignes.forEach((l, j) => [...l].forEach((ch, i) => { if (ch !== '.' && ch !== ' ') poser(zone.x + i, zone.y + j, lire(ch)); }));
         break;
       }
+      case 'repeter': {
+        // Un même petit motif dessiné à la main (une branche de sapin, une tuile de toit, une planche, une
+        // pierre de mur…) posé à plusieurs endroits : positions [[x, y], …] ou [{ x, y, miroir: true }, …].
+        // C'est comme ça qu'on construit un grand objet fin : un motif soigné, répété en rangées.
+        const lignes = Array.isArray(op.lignes) ? op.lignes.map(String) : [];
+        if (!lignes.length) throw new Error('repeter : lignes (le motif), au moins une.');
+        const lw = Math.max(...lignes.map((l) => l.length));
+        for (const pos of op.positions || []) {
+          const [px, py, miroir] = Array.isArray(pos) ? [pos[0], pos[1], pos[2]] : [pos.x, pos.y, pos.miroir];
+          lignes.forEach((l, j) => [...l].forEach((ch, i) => {
+            if (ch !== '.' && ch !== ' ') poser(n(px) + (miroir ? lw - 1 - i : i), n(py) + j, lire(ch));
+          }));
+        }
+        break;
+      }
       case 'symetrie': {
         // vertical : la moitié gauche recopiée en miroir à droite ; horizontal : le haut recopié en bas.
         const copie = new Uint8ClampedArray(t.data);
@@ -409,7 +452,7 @@ const PixelArt = (() => {
         throw new Error(`Opération inconnue : ${op.type}. Possibles : ${OPERATIONS.join(', ')}.`);
     }
   }
-  const OPERATIONS = ['remplir', 'rect', 'ellipse', 'ligne', 'pot', 'degrade', 'taches', 'bruit', 'nettoyer', 'contour', 'ombrage', 'ombre_portee', 'pixels', 'symetrie', 'remplacer', 'decaler'];
+  const OPERATIONS = ['remplir', 'rect', 'ellipse', 'polygone', 'ligne', 'pot', 'degrade', 'taches', 'bruit', 'nettoyer', 'contour', 'ombrage', 'ombre_portee', 'pixels', 'repeter', 'symetrie', 'remplacer', 'decaler'];
 
   // --- Animations : les images 1 à n-1 fabriquées à partir de l'image source ---
   function animer(src, w, h, mode, o, lire) {
@@ -531,7 +574,9 @@ const PixelArt = (() => {
   function apercu(frames, w, h, { mosaique = true } = {}) {
     const n = frames.length;
     // Les images de 160 px de côté au plus, moins quand il y en a beaucoup (tout tient sur 1000 px).
-    const k = Math.max(1, Math.floor(Math.min(160, 1000 / (n + 1.6)) / Math.max(w, h)));
+    // (Un grand objet : jusqu'à 640 px, pour que Claude en voie chaque pixel.)
+    const cote = Math.max(160, Math.min(640, Math.max(w, h) * 10));
+    const k = Math.max(1, Math.floor(Math.min(cote, 1000 / (n + (mosaique ? 1.6 : 0))) / Math.max(w, h)));
     const marge = 8;
     const mos = mosaique ? 3 : 0;
     const kk = Math.max(1, Math.round(k / 2)); // la mosaïque, deux fois plus petite (et toujours en pixels entiers)

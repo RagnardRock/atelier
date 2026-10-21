@@ -265,7 +265,7 @@
       icone: 'paintcan',
       libelle: (a) => `${a.index === undefined || a.index === null ? 'Peint une nouvelle tuile' : `Peint la tuile ${a.index}`} (${a.operations?.length || 0} opération(s))`,
       description: `Peint une tuile par opérations, dans l'ordre (plus rapide et plus propre que pixel par pixel pour les fonds, textures, volumes et ombres ; finis les détails avec l'opération pixels ou dessiner_tuile). Sans index : une nouvelle tuile (nom) ; avec index : part de cette tuile (image : l'image d'une tuile animée ; toutes_images : true pour peindre chaque image pareil). Couleurs : code de la palette, #rrggbb (ajouté à la palette) ou « . » (transparent). Coordonnées en pixels, 0,0 en haut à gauche. Chaque opération accepte seulement : des couleurs (codes) — elle ne touche alors que les pixels de ces couleurs. forme (contour, ombrage, ombre_portee) : les codes des couleurs de l'objet ; si le sol autour a les mêmes couleurs, ajoute x, y, largeur, hauteur pour limiter la forme à ce rectangle. operations : [{ type, … }] avec type =
-- remplir (couleur) ; rect (x, y, largeur, hauteur, couleur, vide) ; ellipse (idem) ; ligne (x1, y1, x2, y2, couleur) ; pot (x, y, couleur : remplit la zone de même couleur) ;
+- remplir (couleur) ; rect (x, y, largeur, hauteur, couleur, vide) ; ellipse (idem) ; polygone (points [[x, y], …] dans l'ordre du tour, couleur, vide : une silhouette nette, dents de scie, pan de toit) ; ligne (x1, y1, x2, y2, couleur) ; pot (x, y, couleur : remplit la zone de même couleur) ;
 - degrade (couleurs : 2 ou plus, du début à la fin ; direction bas, haut, droite, gauche, diagonale, radial ; x, y, largeur, hauteur ; trame : false pour des bandes nettes, sinon tramé façon 16 bits) ;
 - taches (couleurs : une par niveau, densite : la part couverte, taille des taches en pixels, graine ; bord tramé sauf trame: false ; se raccorde) : les grandes nuances calmes d'un sol, à préférer au bruit ;
 - nettoyer (garder : codes à ne pas toucher) : remplace les pixels isolés par la couleur autour ; à faire en dernier sur un sol ;
@@ -273,7 +273,7 @@
 - contour (couleur, forme : les codes des couleurs de l'objet, sinon tout le non transparent ; cotes tout, bas, bas_droite, haut ; interieur: true pour peindre le bord de l'objet lui-même) ;
 - ombrage (forme, clair, sombre, lumiere haut_gauche (défaut), haut, haut_droite, gauche, droite ; epaisseur 1 à 4) : le volume, bord éclairé et bord dans l'ombre ;
 - ombre_portee (couleur, forme, dx, dy : 1, 1 par défaut) : l'ombre de l'objet sur le sol ;
-- pixels (lignes : du texte comme dessiner_tuile, x, y ; « . » = laisser) ; symetrie (axe vertical : gauche → droite, horizontal : haut → bas) ; remplacer (de, vers) ; decaler (dx, dy, en boucle).
+- pixels (lignes : du texte comme dessiner_tuile, x, y ; « . » = laisser) ; repeter (lignes : un petit motif soigné, positions : [[x, y], …] ou [{ x, y, miroir }]) ; symetrie (axe vertical : gauche → droite, horizontal : haut → bas) ; remplacer (de, vers) ; decaler (dx, dy, en boucle).
 Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       schema: { type: 'object', properties: { operations: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: PixelArt.OPERATIONS } }, required: ['type'] } }, index: nombre, image: nombre, toutes_images: { type: 'boolean' }, nom: { type: 'string' } }, required: ['operations'] },
       faire: (a) => {
@@ -310,6 +310,80 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         });
         App.selectTile(i);
         return resultatTuile(doc, i, `Tuile ${i} « ${doc.tiles[i].name} » peinte (${a.operations.length} opération(s)${nouvelles.size ? `, ${nouvelles.size} couleur(s) ajoutée(s) à la palette` : ''}).`, k);
+      },
+    },
+    dessiner_objet: {
+      icone: 'symbol-structure',
+      libelle: (a) => (a.tampon !== undefined ? `Redessine l'objet ${a.tampon}` : `Dessine l'objet « ${a.nom || 'objet'} » (${a.largeur || 2} × ${a.hauteur || 2} tuiles)`),
+      description: `Dessine un grand objet (arbre, maison, falaise, fontaine, statue…) d'un seul tenant, sur plusieurs tuiles : c'est là que se fait la finesse (un sapin de 3 × 4 tuiles a la place pour des branches étagées, une maison pour ses planches, ses tuiles de toit et ses fenêtres). Mêmes operations que peindre_tuile, sur toute l'image (largeur × taille des tuiles en pixels, fond transparent), plus repeter (un motif soigné posé à plusieurs positions). L'image est ensuite découpée en tuiles (les tuiles vides sont sautées) et devient un tampon prêt à poser. largeur, hauteur : en tuiles (1 à 8) ; nom ; dessus : les rangées du haut qui passent devant le joueur (la cime) ; tampon : un objet existant (numéro ou nom) à reprendre et retoucher, ses tuiles sont alors remplacées. Tu vois ensuite l'objet agrandi pixel par pixel.`,
+      schema: { type: 'object', properties: { operations: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: PixelArt.OPERATIONS } }, required: ['type'] } }, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, dessus: nombre, tampon: { type: ['string', 'number'] } }, required: ['operations'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const s = doc.tileSize;
+        let st = null, si = -1;
+        if (a.tampon !== undefined && a.tampon !== null && a.tampon !== '') {
+          const t = String(a.tampon);
+          si = /^\d+$/.test(t) && doc.stamps[Number(t)] ? Number(t) : doc.stamps.findIndex((o) => o.name.toLowerCase() === t.toLowerCase());
+          if (si < 0) throw new Error(`Pas de tampon « ${a.tampon} » : ${doc.stamps.map((o, k) => `${k} = ${o.name}`).join(', ') || 'aucun tampon'}.`);
+          st = doc.stamps[si];
+        }
+        const tw = st ? st.w : clamp(Math.round(a.largeur || 2), 1, 8), th = st ? st.h : clamp(Math.round(a.hauteur || 2), 1, 8);
+        const W = tw * s, H = th * s;
+        const data = new Uint8ClampedArray(W * H * 4);
+        // Reprendre un objet : on recolle ses tuiles en une seule image.
+        if (st) st.cells.forEach((c, k) => {
+          if (c < 0) return;
+          const f = doc.tiles[c].frames[0], ox = (k % tw) * s, oy = Math.floor(k / tw) * s;
+          for (let y = 0; y < s; y++) data.set(f.subarray(y * s * 4, (y + 1) * s * 4), ((oy + y) * W + ox) * 4);
+        });
+        const { nouvelles, lire } = lecteurCouleurs(doc);
+        const toile = PixelArt.Toile(data, W, H);
+        (a.operations || []).forEach((op, n) => {
+          try { PixelArt.operation(toile, op || {}, lire); } catch (err) { throw new Error(`Opération ${n + 1} (${op?.type}) : ${err.message}`); }
+        });
+        // Découpe en tuiles.
+        const morceaux = [];
+        for (let j = 0; j < th; j++) for (let i = 0; i < tw; i++) {
+          const f = new Uint8ClampedArray(s * s * 4);
+          for (let y = 0; y < s; y++) f.set(data.subarray(((j * s + y) * W + i * s) * 4, ((j * s + y) * W + (i + 1) * s) * 4), y * s * 4);
+          let vide = true;
+          for (let k = 3; k < f.length; k += 4) if (f[k]) { vide = false; break; }
+          morceaux.push(vide ? null : f);
+        }
+        if (!morceaux.some(Boolean)) throw new Error('L\'objet est vide : aucune opération n\'a peint de pixel.');
+        const nom = st ? st.name : (a.nom || 'objet');
+        let index = si;
+        Doc.change(doc, st ? 'Retoucher l\'objet (Claude)' : 'Nouvel objet (Claude)', () => {
+          ajouterCouleurs(doc, nouvelles);
+          const cells = morceaux.map((f, k) => {
+            if (!f) return -1;
+            const ancienne = st ? st.cells[k] : -1;
+            if (ancienne >= 0) {
+              const t = Doc.tileForEdit(doc, ancienne);
+              t.frames = [f];
+              Doc.touch(t);
+              return ancienne;
+            }
+            const i = Doc.addTile(doc, f, Doc.uniqueName(doc, `${nom}-${Math.floor(k / tw) + 1}-${(k % tw) + 1}`.replace(/\s+/g, '-')));
+            doc.tiles[i].categorie = nom;
+            return i;
+          });
+          if (st) doc.stamps = doc.stamps.map((o, k) => (k === si ? { ...o, cells, dessus: a.dessus === undefined ? o.dessus : clamp(Math.round(a.dessus), 0, o.h) } : o));
+          else {
+            const nouveau = Doc.newStamp(doc, { name: nom, w: tw, h: th, cells, dessus: a.dessus || 0 });
+            doc.stamps = [...doc.stamps, nouveau];
+            index = doc.stamps.length - 1;
+          }
+        });
+        App.refresh();
+        const o = doc.stamps[index];
+        return {
+          texte: [`Objet « ${o.name} » : tampon ${index}, ${tw} × ${th} tuiles (${W} × ${H} px), tuiles ${o.cells.filter((c) => c >= 0).join(', ')}${o.dessus ? `, ${o.dessus} rangée(s) devant le joueur` : ''}. Pose-le avec tampon action poser.`,
+            `Regard critique : ${PixelArt.analyse(data, W, H).join(' ')}`,
+            'Regarde l\'image agrandie : silhouette lisible, lumière en haut à gauche, détails en motifs soignés, contour sélectif. Retouche avec tampon et d\'autres operations si besoin.'].join('\n'),
+          image: PixelArt.apercu([data], W, H, { mosaique: false }),
+          max: 1024,
+        };
       },
     },
     animer_tuile: {
