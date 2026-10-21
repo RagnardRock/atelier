@@ -207,7 +207,7 @@ const EcranCombat = (() => {
       suite.hidden = true;
       return new Promise((resoudre) => {
         const a = { type: 'grille', i: 0, boutons, annulable, resoudre, info };
-        boutons.forEach((b, i) => { b.el.onclick = () => { if (attente === a) { a.i = i; valider(); } }; b.el.onmouseenter = () => { if (attente === a) { a.i = i; surligner(); } }; });
+        boutons.forEach((b, i) => { b.el.onclick = () => { if (attente === a) { a.i = i; valider(); } }; b.el.onmousemove = () => { if (Menus.aBouge() && attente === a && a.i !== i) { a.i = i; surligner(); } }; });
         attente = a;
         surligner();
       });
@@ -263,7 +263,7 @@ const EcranCombat = (() => {
         const a = { type: 'liste', i: Math.max(0, premier), items, lignes, annulable, resoudre };
         lignes.forEach((l, i) => {
           l.onclick = () => { if (attente === a && !items[i].desactive) { a.i = i; validerListe(); } };
-          l.onmouseenter = () => { if (attente === a && !items[i].desactive) { a.i = i; surlignerListe(); } };
+          l.onmousemove = () => { if (Menus.aBouge() && attente === a && !items[i].desactive && a.i !== i) { a.i = i; surlignerListe(); } };
         });
         attente = a;
         surlignerListe();
