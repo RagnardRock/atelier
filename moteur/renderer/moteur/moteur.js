@@ -139,8 +139,11 @@ const Moteur = (() => {
       const m = joueur.mouvement;
       if (!m) return { x: joueur.x * t, y: joueur.y * t, saut: 0 };
       const k = Math.min(1, m.t / m.duree);
-      const x = (m.de.x + (m.vers.x - m.de.x) * k) * t, y = (m.de.y + (m.vers.y - m.de.y) * k) * t;
-      return { x, y, saut: m.saut ? Math.sin(k * Math.PI) * t * 0.55 : 0 };
+      // Arrondi ICI, une seule fois : la caméra et le dessin partent du même pixel entier. Sinon les
+      // deux arrondis (caméra, puis joueur) se contredisent d'un pixel d'une image à l'autre et le
+      // joueur tremble pendant qu'il marche (surtout de côté, sur un écran de largeur impaire).
+      const x = Math.round((m.de.x + (m.vers.x - m.de.x) * k) * t), y = Math.round((m.de.y + (m.vers.y - m.de.y) * k) * t);
+      return { x, y, saut: m.saut ? Math.round(Math.sin(k * Math.PI) * t * 0.55) : 0 };
     }
 
     function essayerPas(dir, course) {
@@ -202,7 +205,7 @@ const Moteur = (() => {
       if (!joueur) return;
       const t = jeu.taille, p = pixelsJoueur();
       const lw = carte.largeur * t, lh = carte.hauteur * t;
-      const cx = p.x + t / 2 - W / 2, cy = p.y + t / 2 - H / 2;
+      const cx = p.x + Math.floor(t / 2) - Math.floor(W / 2), cy = p.y + Math.floor(t / 2) - Math.floor(H / 2);
       cam.x = Math.round(lw <= W ? (lw - W) / 2 : Math.min(lw - W, Math.max(0, cx)));
       cam.y = Math.round(lh <= H ? (lh - H) / 2 : Math.min(lh - H, Math.max(0, cy)));
     }
@@ -257,7 +260,7 @@ const Moteur = (() => {
       }
       const pj = pixelsJoueur();
       liste.push({ y: pj.y, dessiner: () => {
-        const x = Math.round(pj.x - cam.x), y = Math.round(pj.y - cam.y);
+        const x = pj.x - cam.x, y = pj.y - cam.y;
         const m = joueur.mouvement;
         // Les pieds : un pied pendant la première moitié du pas, debout pendant la seconde.
         // Contre un mur, il piétine sur place (comme dans les jeux Pokémon).
@@ -265,7 +268,7 @@ const Moteur = (() => {
         if (m) pas = m.t / m.duree < 0.5 ? joueur.pied : 0;
         else if (joueur.pietine > 0) pas = Math.floor(joueur.pietine * 4) % 2 ? joueur.pied : 0;
         Sprites.ombre(ctx, x, y, t, pj.saut ? 0.8 : 1);
-        const hy = y - Math.round(pj.saut);
+        const hy = y - pj.saut;
         if (jeu.heros?.tuile >= 0) dessinerTuile(jeu.heros.tuile, x, hy, maintenant);
         else Sprites.dessiner(ctx, jeu.heros?.couleur || '#d94a4a', joueur.dir, pas, x, hy, t);
       } });
