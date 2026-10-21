@@ -22,8 +22,8 @@ jobs:
           Set-Content C:\lire.js "console.log('lu', require('fs').readFileSync(process.argv[2],'utf8').length); setInterval(()=>{},1000)"
           @'
           $dir = "$env:LOCALAPPDATA\Programs\Brokk"
-          function Lancer($exe, $args, $sec) {
-            $p = Start-Process $exe -ArgumentList $args -PassThru
+          function Lancer($exe, $arguments, $sec) {
+            $p = Start-Process $exe -ArgumentList $arguments -PassThru
             if (-not $p.WaitForExit($sec * 1000)) {
               "  >> $([IO.Path]::GetFileName($exe)) BLOQUÉ après $sec s (fenêtre d'erreur en attente)"
               Get-Process | ? { $_.MainWindowTitle } | % { "     fenêtre : $($_.Name) « $($_.MainWindowTitle) »" }
