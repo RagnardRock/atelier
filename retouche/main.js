@@ -57,6 +57,7 @@ const configPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CONFIG = {
   claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
   claudeModel: '',
+  claudeCommandes: false, // Claude peut-il lancer des commandes (PowerShell, Python…) ?
   accentColor: '#e0a526',
   glass: true,
   windowBlur: false,
@@ -190,7 +191,13 @@ handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file
 // --- Panneau Claude (le même que dans Tafl, Brokk : voir ../commun/LISEZMOI.md) ---
 const claude = require('./commun/claude');
 const { creerGithub, LimiteGithub } = require('./commun/github');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD, export web)" } });
+// Ce que Claude doit savoir en plus dans cet outil (voir ../commun/claude.js, ecrireConsignes).
+const CLAUDE_CONSIGNES = [
+  '- L\'image ouverte vit dans la fenêtre de Skald : regarde-la avec les actions de lecture (voir…) et change-la',
+  '  avec les actions (retoucher, calque, peindre, menu…), plutôt que de traiter des fichiers toi-même.',
+  '- Pour écrire un fichier dans le projet : exporter, enregistrer_sous ou pack_icones.',
+].join('\n');
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD, export web)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {

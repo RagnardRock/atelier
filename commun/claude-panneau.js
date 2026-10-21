@@ -172,12 +172,37 @@ const ClaudePanneau = (() => {
   }
 
   // --- Envoi ---
+  // Pendant que Claude travaille : ce qu'il fait, et depuis combien de temps (sans nouvelles depuis
+  // longtemps, on le dit, et ■ l'arrête pour de bon).
+  let busySince = 0;
+  let lastEvent = 0;
+  let busyLabel = '';
+  let busyTimer = null;
+  const duree = (ms) => {
+    const sec = Math.floor(ms / 1000);
+    return sec < 60 ? `${sec} s` : `${Math.floor(sec / 60)} min ${String(sec % 60).padStart(2, '0')}`;
+  };
+  function showBusy() {
+    if (!busy) return;
+    const now = Date.now();
+    const silence = now - lastEvent;
+    const enAttente = busyLabel === 'En attente de ta réponse';
+    statusEl.lastChild.textContent = !enAttente && silence > 3 * 60_000
+      ? `Aucune nouvelle de Claude depuis ${duree(silence)} : ■ pour l'arrêter`
+      : `${busyLabel} · ${duree(now - busySince)}`;
+  }
   function setBusy(value, label = '') {
+    if (value && !busy) busySince = Date.now();
     busy = value;
+    lastEvent = Date.now();
     stopButton.hidden = !value;
     sendButton.disabled = value;
+    clearInterval(busyTimer);
     statusEl.innerHTML = value ? '<i class="codicon codicon-loading codicon-modifier-spin"></i><span></span>' : '';
-    if (value) statusEl.lastChild.textContent = label || 'Claude réfléchit…';
+    if (!value) return;
+    busyLabel = label || 'Claude réfléchit…';
+    showBusy();
+    busyTimer = setInterval(showBusy, 1000);
   }
   const autoGrow = () => {
     input.style.height = 'auto';
@@ -507,6 +532,13 @@ const ClaudePanneau = (() => {
         appendText(e.text);
         setBusy(true, 'Claude écrit…');
         break;
+      case 'status': setBusy(true, e.text); break;
+      case 'retry': {
+        const raison = e.status === 429 ? 'limite d\'utilisation atteinte' : e.status === 529 || e.status === 503 ? 'serveurs surchargés'
+          : e.status ? `erreur ${e.status}` : 'pas de connexion';
+        setBusy(true, `Claude ne répond pas (${raison}), nouvel essai ${e.attempt || '?'}/${e.max || '?'}`);
+        break;
+      }
       case 'tool': addTool(e); break;
       case 'tool-result': toolDone(e); break;
       case 'permission': askPermission(e); break;

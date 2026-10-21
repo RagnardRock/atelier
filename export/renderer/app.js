@@ -55,6 +55,7 @@ const App = (() => {
         { key: 'jpegQuality', label: 'Qualité JPEG par défaut', type: 'range', value: config.jpegQuality, min: 30, max: 100, unit: '%' },
         { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
         { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: config.claudeCommand || 'claude' },
+        { key: 'claudeCommandes', label: 'Claude peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(config.claudeCommandes) },
         { type: 'info', text: `Les qualités par défaut servent aux nouveaux assets ; chaque asset garde la sienne (panneau Réglages).\n\nBrokk ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
       onInput(values, f) {

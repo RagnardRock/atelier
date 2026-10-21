@@ -19,6 +19,21 @@ par git : on ne modifie que les fichiers de ce dossier-ci, puis `npm install` da
 Rune a son propre panneau Claude (`ide/`), plus riche (contexte de l'éditeur, rechargement des
 fichiers), et sa propre copie de `mcp-commun.js`.
 
+## Ce que Claude sait en arrivant
+
+À chaque lancement, `claude.js` écrit `claude-consignes.md` (dans le dossier de réglages de l'outil)
+et le donne à Claude Code (`--append-system-prompt-file`) : dans quel outil il est, le projet et sa
+mémoire (déjà lue), et qu'il doit passer par les actions de l'outil sans explorer le PC. Chaque outil
+y ajoute ses propres consignes (`CLAUDE_CONSIGNES` dans son `main.js`).
+
+Pour qu'il réponde vite, Claude Code n'a que ses outils de fichiers et de web (`--tools`), et
+seulement le serveur MCP de l'Atelier (`--strict-mcp-config`). Les commandes (PowerShell, Bash)
+s'ajoutent si la case « Claude peut lancer des commandes » est cochée dans les réglages de l'outil.
+
+Le panneau dit ce que fait Claude quand il n'écrit rien (il réfléchit, prépare une action, ou les
+serveurs de Claude ne répondent pas et Claude Code réessaie), avec le temps écoulé. ■ l'arrête,
+même s'il est bloqué (au bout de 5 s, Claude Code est arrêté ; le message suivant reprend la conversation).
+
 ## Les actions de l'outil
 
 Chaque outil décrit ce que Claude peut y faire dans `renderer/claude-actions.js`, avec
