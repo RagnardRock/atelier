@@ -5,15 +5,13 @@
 ; un programme, il s'arrête (code 2) et l'installeur affichait « Échec de désinstallation des anciens
 ; fichiers d'application : 2 », puis abandonnait.
 ;
-; 1. customCheckAppRunning remplace la recherche de l'outil ouvert d'electron-builder. Celle-ci passe
-;    par PowerShell et compare le chemin de chaque programme au dossier d'installation : elle rate les
-;    programmes dont Windows ne donne pas le chemin, et les copies de l'outil lancées en mode Node par
-;    Claude Code (le serveur MCP de l'Atelier). Ici on ferme tout ce qui s'appelle <Outil>.exe pour ta
-;    session Windows, avec ses sous-programmes (/T : Claude Code et son serveur MCP compris).
-; 2. customUnInstallCheck / customUnInstallCheckCurrentUser : si l'ancien désinstalleur échoue quand
-;    même (un autre programme tient un fichier), on ne s'arrête plus. Il a remis l'ancienne version en
-;    place ; on installe la nouvelle par-dessus. Si un fichier est vraiment bloqué, l'installeur le dit
-;    alors avec son chemin (et propose Réessayer), au lieu d'un « : 2 » sans explication.
+; 1. customCheckAppRunning remplace la recherche de l'outil ouvert d'electron-builder (PowerShell, qui
+;    compare le chemin de chaque programme au dossier d'installation). Ici, plus simple : on ferme tout
+;    ce qui s'appelle <Outil>.exe dans ta session Windows, avec ses sous-programmes (/T : Claude Code et
+;    le serveur MCP de l'Atelier, qui est une copie de l'outil lancée en mode Node).
+; 2. customUnInstallCheck : si l'ancien désinstalleur échoue quand même, c'est qu'un AUTRE programme
+;    tient un fichier. On demande à Windows lequel (commun/bloqueurs.ps1), on te le montre, on le ferme
+;    et on réessaie, au lieu du « : 2 » sans explication.
 
 !macro atelierTrouverOutil _RETOUR
   nsExec::Exec `"$SYSDIR\cmd.exe" /C tasklist /FI "USERNAME eq %USERNAME%" /FI "IMAGENAME eq ${APP_EXECUTABLE_FILENAME}" /FO CSV /NH | "$SYSDIR\findstr.exe" /B /I /C:"\"${APP_EXECUTABLE_FILENAME}\""`
@@ -55,11 +53,57 @@
   ${endIf}
 !macroend
 
+; Quels programmes bloquent encore des fichiers du dossier de l'outil ? (commun/bloqueurs.ps1)
+; Les montre et propose de les fermer (fermés d'office en mode silencieux, comme l'outil lui-même).
+; Sortie : $R1 = 1 si des programmes ont été fermés (on peut réessayer), 0 sinon.
+; Seulement dans l'installeur (le désinstalleur est fabriqué à part et ne s'en sert pas).
+!ifndef BUILD_UNINSTALLER
+Function atelierDebloquer
+  InitPluginsDir
+  File "/oname=$PLUGINSDIR\bloqueurs.ps1" "${PROJECT_DIR}\..\commun\bloqueurs.ps1"
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\bloqueurs.ps1" -Dossier "$INSTDIR"`
+  Pop $R1
+  Pop $R2
+  StrCmp $R1 "1" 0 aucun
+  DetailPrint "Fichiers de ${PRODUCT_NAME} bloqués par : $R2"
+  MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "Ces programmes gardent des fichiers de ${PRODUCT_NAME} ouverts, la mise à jour ne peut pas les remplacer :$\r$\n$\r$\n$R2$\r$\nOK : les fermer et continuer. Annuler : arrêter la mise à jour." /SD IDOK IDOK fermer
+  StrCpy $R1 0
+  Return
+  fermer:
+  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "$PLUGINSDIR\bloqueurs.ps1" -Dossier "$INSTDIR" -Fermer`
+  Pop $R2
+  Sleep 1500
+  StrCpy $R1 1
+  Return
+  aucun:
+  StrCpy $R1 0
+FunctionEnd
+!endif
+
+; Appelé par electron-builder après l'ancien désinstalleur ($R0 = son code, 0 = réussi).
+; S'il a échoué : on cherche qui bloque, on le ferme, on relance le désinstalleur (3 fois au plus).
+; Si ça échoue encore, même fin qu'avant (message d'erreur, installation arrêtée) : surtout pas
+; d'installation par-dessus, qui laisserait un mélange de l'ancienne et de la nouvelle version.
 !macro customUnInstallCheck
   ClearErrors
+  StrCpy $R3 0
+  ${While} $R0 != 0
+  ${AndIf} $R3 < 3
+    IntOp $R3 $R3 + 1
+    Call atelierDebloquer
+    ${If} $R1 == 0
+      ${ExitWhile}
+    ${EndIf}
+    Push $rootKey_uninstallResult
+    Call uninstallOldVersion
+    ClearErrors
+  ${EndWhile}
   ${if} $R0 != 0
-    DetailPrint "L'ancienne version n'a pas pu être retirée (code $R0) : la nouvelle est installée par-dessus."
-  ${endIf}
+    MessageBox MB_OK|MB_ICONEXCLAMATION "$(uninstallFailed): $R0"
+    DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
+    SetErrorLevel 2
+    Quit
+  ${endif}
 !macroend
 
 !macro customUnInstallCheckCurrentUser

@@ -3,7 +3,7 @@ name: Diagnostic mise à jour (temporaire)
 on:
   push:
     branches: [claude/project-thread-uzu8ff]
-    paths: ['.github/workflows/diagnostic-maj.yml', 'commun/installeur.nsh']
+    paths: ['.github/workflows/diagnostic-maj.yml', 'commun/installeur.nsh', 'commun/bloqueurs.ps1']
 defaults:
   run:
     shell: pwsh
