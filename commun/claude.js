@@ -33,6 +33,7 @@ let buffer = '';          // morceau de ligne pas encore complet
 let nextRequestId = 1;
 let lastSession = null;   // { id, cwd } : pour reprendre la conversation si Claude Code s'arrête
 let dossierDonne = null;  // dossier passé par Atelier au lancement (ou plus tard, s'il rouvre l'outil)
+let tourEnCours = false;  // un message envoyé, sa réponse pas encore finie
 
 function emit(event) {
   if (sender && !sender.isDestroyed()) sender.send('claude:event', event);
@@ -133,7 +134,16 @@ function executerAction(nom, args, log) {
   });
 }
 
-function start({ command, model, cwd, log, resume, mcpConfig }) {
+// Les outils de Claude Code qu'il garde dans un outil de l'Atelier : voir et modifier les fichiers du
+// projet, chercher sur le web. Tout le reste (sous-agents, tâches planifiées, worktrees…) ne sert à rien
+// ici et alourdit chaque réponse. Les commandes (PowerShell, Bash, donc Python, Node…) seulement si
+// Ragna les autorise dans les réglages : sans elles, Claude ne perd plus de temps à fouiller le PC
+// (Get-ChildItem, « node est-il installé ? »…) et passe par les actions de l'outil.
+// (Les outils mcp__atelier__ ne sont pas concernés : --tools ne trie que ceux de Claude Code.)
+const OUTILS_CLAUDE = ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'WebFetch', 'WebSearch', 'TodoWrite'];
+const COMMANDES = ['PowerShell', 'Bash'];
+
+function start({ command, model, cwd, log, resume, mcpConfig, consignes, commandes }) {
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -141,11 +151,18 @@ function start({ command, model, cwd, log, resume, mcpConfig }) {
     '--verbose',                      // obligatoire avec stream-json
     '--include-partial-messages',     // le texte arrive mot par mot
     '--permission-prompt-tool=stdio', // les demandes de permission passent par nous
+    '--tools', [...OUTILS_CLAUDE, ...(commandes ? COMMANDES : [])].join(','),
   ];
   if (model) args.push('--model', model);
   if (resume) args.push('--resume', resume);
+  // Les consignes (où il est, ce qu'il peut faire) vont dans ses instructions de départ, à chaque
+  // lancement, même en reprenant une conversation. Par un fichier : pas de souci de guillemets ni de
+  // retours à la ligne avec cmd.exe.
+  if (consignes) args.push('--append-system-prompt-file', consignes);
   const lecture = [...LECTURE, ...actions.filter((a) => a.lecture).map((a) => `mcp__atelier__${a.name}`)];
-  if (mcpConfig) args.push('--mcp-config', mcpConfig, '--allowedTools', ...lecture);
+  // --strict-mcp-config : seulement le serveur de l'Atelier, pas les autres serveurs MCP installés sur
+  // le PC (chacun se lance et ajoute ses outils à lire avant chaque réponse : c'est du temps perdu ici).
+  if (mcpConfig) args.push('--mcp-config', mcpConfig, '--strict-mcp-config', '--allowedTools', ...lecture);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}`);
   try {
@@ -174,13 +191,18 @@ function start({ command, model, cwd, log, resume, mcpConfig }) {
   });
   let stderr = '';
   current.stderr.setEncoding('utf8');
-  current.stderr.on('data', (chunk) => { stderr = (stderr + chunk).slice(-2000); });
+  current.stderr.on('data', (chunk) => {
+    stderr = (stderr + chunk).slice(-2000);
+    // Dans le journal de l'outil tout de suite : utile quand Claude semble bloqué sans rien dire.
+    for (const ligne of chunk.split(/\r?\n/)) if (ligne.trim()) log('INFO', `Claude Code : ${ligne.trim().slice(0, 300)}`);
+  });
   current.on('error', (err) => {
     log('ERREUR', `Claude : ${err.message}`);
     emit({ kind: 'error', notInstalled: err.code === 'ENOENT', message: err.message });
   });
   current.on('exit', (code) => {
     if (proc === current) proc = null;
+    tourEnCours = false;
     // Sous Windows, une commande introuvable ne déclenche pas « error » mais un code 1 du shell.
     const notFound = process.platform === 'win32' && /n.est pas reconnu|is not recognized/i.test(stderr);
     if (code !== 0 && code !== null) log('ERREUR', `Claude s'est arrêté (code ${code}) : ${stderr.trim()}`);
@@ -202,7 +224,17 @@ function handleMessage(m) {
     const e = m.event;
     if (m.parent_tool_use_id) return; // texte d'un sous-agent : on n'affiche que le fil principal
     if (e.type === 'content_block_delta' && e.delta.type === 'text_delta') return emit({ kind: 'text', text: e.delta.text });
+    // Ce qu'il fait quand il n'écrit rien : réfléchir, ou préparer une action (une grande carte à
+    // écrire peut prendre une minute). Sans ça, le panneau semble figé.
+    if (e.type === 'content_block_start' && e.content_block?.type === 'thinking') return emit({ kind: 'status', text: 'Claude réfléchit…' });
+    if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') return emit({ kind: 'status', text: 'Claude prépare une action…' });
+    if (e.type === 'message_start') return emit({ kind: 'status', text: 'Claude réfléchit…' });
     return;
+  }
+  // Les serveurs de Claude ne répondent pas (surchargés, limite d'utilisation…) : Claude Code
+  // réessaie tout seul, parfois longtemps. On le dit au lieu de mouliner en silence.
+  if (m.type === 'system' && m.subtype === 'api_retry') {
+    return emit({ kind: 'retry', attempt: m.attempt, max: m.max_retries, delayMs: m.retry_delay_ms, status: m.error_status, error: m.error });
   }
   if (m.type === 'assistant' && !m.parent_tool_use_id) {
     for (const block of m.message.content || []) {
@@ -227,6 +259,7 @@ function handleMessage(m) {
     });
   }
   if (m.type === 'result') {
+    tourEnCours = false;
     return emit({ kind: 'result', isError: Boolean(m.is_error) || m.subtype !== 'success', text: m.result });
   }
 }
@@ -273,7 +306,8 @@ async function writeHistory(list) {
   await fsp.writeFile(historyFile, JSON.stringify(list.slice(0, MAX_CONVERSATIONS)), 'utf8');
 }
 
-// outil : { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD)" }
+// outil : { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD)", consignes: '…' }
+// (consignes : ce que Claude doit savoir en plus dans cet outil, en Markdown ; facultatif)
 function register({ handle, log, dataDir, readConfig, outil }) {
   historyFile = path.join(dataDir, 'claude-conversations.json');
   communDir = path.join(path.dirname(dataDir), 'atelier-commun');
@@ -308,27 +342,59 @@ function register({ handle, log, dataDir, readConfig, outil }) {
     return mcpFile;
   }
 
-  // Glissé avant ton premier message de chaque lancement (tu ne le vois pas dans le panneau).
-  function intro(nom) {
-    return [
-      `(${outil.nom} : tu es dans ${outil.nom}, ${outil.role}, un des outils de l'Atelier de Ragna.`,
-      nom
-        ? `Le projet en cours est « ${nom} » : tu travailles dans son dossier.`
-        : 'Aucun projet n\'est ouvert : tu travailles dans un dossier vide, propre à cet outil.',
-      'Le Claude d\'Atelier (le hub) garde une mémoire par projet et voit les notes de Ragna. Tu y as accès avec',
-      'les outils mcp__atelier__ : lire_contexte (la mémoire du projet ; lis-la avant de répondre à ce premier message),',
-      'lire_notes (quand la question s\'y rapporte), retenir_projet et oublier_projet (garde une info courte et utile',
-      'plus tard quand Ragna te la demande ou te l\'apprend ; elle sera visible dans Atelier et les autres outils).',
-      ...(actions.length ? [
-        `Tu peux aussi agir dans ${outil.nom} avec ses propres outils mcp__atelier__ (${actions.map((a) => a.name).join(', ')}) :`,
-        'ils agissent sur ce qui est ouvert dans la fenêtre, sous les yeux de Ragna, et s\'annulent avec Ctrl+Z.',
-        'Regarde avant d\'agir (les outils « voir » montrent une capture) et vérifie après. Ragna valide chaque',
-        'modification sur une carte : quand Ragna te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
-      ] : []),
-      ')',
+  // Les consignes données à Claude Code à chaque lancement (--append-system-prompt-file) : où il est,
+  // la mémoire du projet (déjà lue, pour qu'il n'ait pas à la demander), ce qu'il peut faire, et
+  // surtout qu'il ne doit pas explorer le PC comme pour du code. Tu ne les vois pas dans le panneau.
+  const consignesFile = path.join(dataDir, 'claude-consignes.md');
+
+  async function memoireProjet(nom) {
+    if (!nom) return '';
+    try {
+      const infos = JSON.parse(await fsp.readFile(path.join(communDir, 'memoire-projets.json'), 'utf8'))[nom];
+      return Array.isArray(infos) ? infos.map((m) => `- ${m.texte} (id : ${m.id})`).join('\n') : '';
+    } catch {
+      return '';
+    }
+  }
+
+  async function ecrireConsignes(nom, cwd, commandes) {
+    const memoire = await memoireProjet(nom);
+    const texte = [
+      `# Tu es dans ${outil.nom}`,
       '',
+      `Tu es le Claude intégré à ${outil.nom}, ${outil.role}, un des outils de l'Atelier de Ragna. Ragna te parle`,
+      `depuis le panneau Claude de ${outil.nom}, en français : réponds en français, simplement et brièvement.`,
+      'Tu n\'es pas ici pour coder : tu aides Ragna à faire son travail dans cet outil.',
+      '',
+      nom
+        ? `Le projet en cours est « ${nom} », dans le dossier ${cwd} (ton dossier de travail).`
+        : `Aucun projet n'est ouvert : ton dossier de travail (${cwd}) est un dossier vide, propre à ${outil.nom}.`,
+      ...(nom ? ['', `## Mémoire du projet ${nom}`, '', memoire || '(rien de retenu pour l\'instant)',
+        '', '(Déjà lue pour toi : lire_contexte ne sert qu\'à la relire plus tard.)'] : []),
+      '',
+      '## Comment travailler',
+      '',
+      ...(actions.length ? [
+        `- Passe d'abord par les outils mcp__atelier__ de ${outil.nom} : ils lisent et changent ce qui est ouvert`,
+        '  dans la fenêtre, sous les yeux de Ragna, et s\'annulent avec Ctrl+Z. Ils couvrent presque tout.',
+        ...(actions.some((x) => x.name === 'menu') ? ['  L\'action « menu » donne en plus toutes les commandes des menus.'] : []),
+        '  Regarde avant d\'agir (les actions de lecture et « voir » sont immédiates) et vérifie après.',
+        '- Ragna valide chaque modification sur une carte Autoriser / Refuser : quand Ragna te demande quelque',
+        '  chose, fais-le directement, sans le reproposer d\'abord.',
+      ] : []),
+      '- N\'explore pas l\'ordinateur : pas de recherche de programmes (node, python…), pas de listage de dossiers',
+      '  « pour voir ». Tout ce qu\'il te faut est ici ou dans les outils de l\'Atelier.',
+      commandes
+        ? '- Tu peux lancer des commandes (Ragna l\'a permis dans les réglages), mais seulement quand aucune action ne convient.'
+        : '- Tu ne peux pas lancer de commandes (PowerShell, Python…) : Ragna ne l\'a pas permis. Pour les fichiers du projet, tu as Read, Glob, Grep, Edit et Write.',
+      '- lire_notes lit les notes de Ragna (quand la question s\'y rapporte) ; retenir_projet / oublier_projet',
+      '  gardent une info courte et utile plus tard, quand Ragna te la demande ou te l\'apprend (visible dans',
+      '  Atelier et les autres outils).',
+      ...(outil.consignes ? ['', `## Dans ${outil.nom}`, '', outil.consignes] : []),
       '',
     ].join('\n');
+    await fsp.writeFile(consignesFile, texte, 'utf8');
+    return consignesFile;
   }
 
   handle('claude:projet', async () => projet());
@@ -387,20 +453,26 @@ function register({ handle, log, dataDir, readConfig, outil }) {
     const { cwd, nom } = await cwdActuel();
     // Le projet a changé depuis le lancement : conversation neuve dans le bon dossier.
     if (proc && procCwd !== cwd) stop();
-    let debut = '';
     if (!proc) {
       const config = await readConfig();
       const resume = lastSession && lastSession.cwd === cwd && /^[\w-]+$/.test(lastSession.id) ? lastSession.id : null;
+      const commandes = Boolean(config.claudeCommandes);
       let mcpConfig = null;
+      let consignes = null;
       try {
         mcpConfig = await ecrireConfigMcp(nom);
-        debut = intro(nom);
       } catch (err) {
         log('ERREUR', `Claude : dossier partagé de l'Atelier indisponible : ${err.message}`);
       }
-      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd, log, resume, mcpConfig })) return;
+      try {
+        consignes = await ecrireConsignes(nom, cwd, commandes);
+      } catch (err) {
+        log('ERREUR', `Claude : consignes impossibles à écrire : ${err.message}`);
+      }
+      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd, log, resume, mcpConfig, consignes, commandes })) return;
     }
-    write({ type: 'user', message: { role: 'user', content: debut + text }, parent_tool_use_id: null, session_id: '' });
+    tourEnCours = true;
+    write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' });
   });
 
   // Ta réponse à une demande de permission.
@@ -419,6 +491,15 @@ function register({ handle, log, dataDir, readConfig, outil }) {
 
   handle('claude:interrupt', async () => {
     write({ type: 'control_request', request_id: `interrupt-${nextRequestId++}`, request: { subtype: 'interrupt' } });
+    // S'il ne s'arrête pas de lui-même (vraiment bloqué), on arrête Claude Code : la conversation
+    // reprendra au prochain message (--resume).
+    const current = proc;
+    setTimeout(() => {
+      if (tourEnCours && proc === current) {
+        log('INFO', 'Claude : pas d\'arrêt après 5 s, Claude Code est arrêté');
+        stop();
+      }
+    }, 5000);
   });
   handle('claude:reset', async () => { lastSession = null; stop(); });
 }

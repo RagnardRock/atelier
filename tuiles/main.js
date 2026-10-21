@@ -58,6 +58,7 @@ const configPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CONFIG = {
   claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
   claudeModel: '',
+  claudeCommandes: false, // Claude peut-il lancer des commandes (PowerShell, Python…) ?
   accentColor: '#7bd88f',
   glass: true,
   windowBlur: false,
@@ -337,7 +338,16 @@ handle('jeu:jouer', async (_event, dossier, depart) => {
 // --- Panneau Claude (le même que dans Skald, Brokk : voir ../commun/LISEZMOI.md) ---
 const claude = require('./commun/claude');
 const { creerGithub, LimiteGithub } = require('./commun/github');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)" } });
+// Ce que Claude doit savoir en plus dans cet outil (voir ../commun/claude.js, ecrireConsignes).
+const CLAUDE_CONSIGNES = [
+  '- Le jeu ouvert vit dans la fenêtre de Tafl : lis-le avec infos, voir_carte, donnees, voir_donnees, et',
+  '  change-le avec les actions (poser_tuiles, cartes, evenement, donnee…). Ne modifie pas les fichiers JSON du dossier de',
+  '  jeu toi-même : Tafl les réécrit à chaque enregistrement, et ce qui n\'est pas enregistré n\'y est pas encore.',
+  '- Un dossier de jeu (jeu.json, tuiles.tafl, cartes/, donnees/) est décrit dans le FORMAT.md copié dans ce',
+  '  dossier : ouvre-le avec Read seulement si une question porte sur le format des fichiers (pour le moteur Saga).',
+  '- Pour enregistrer : enregistrer_jeu (ou enregistrer). Pour essayer le jeu : Ragna clique sur « Jouer ».',
+].join('\n');
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
