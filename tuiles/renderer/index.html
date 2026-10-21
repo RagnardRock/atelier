@@ -70,7 +70,13 @@
       </div>
     </section>
 
+    <!-- Glisser pour élargir ou rétrécir le panneau de droite (double-clic : largeur par défaut) -->
+    <div id="side-resizer" title="Glisser pour élargir ou rétrécir les panneaux · double-clic : largeur par défaut"></div>
+
+    <!-- Deux colonnes (disposition.js) : à gauche les listes, à droite les vignettes (tampons, tuiles).
+         Sur une seule colonne, les deux s'effacent et les panneaux reprennent leur ordre habituel. -->
     <aside id="sidepanel">
+      <div class="side-col" id="side-a">
       <!-- Mode Carte : les cartes du jeu (ville, route, maison…) et les calques de la carte affichée -->
       <section class="panel map-only" id="maps-panel">
         <div class="panel-header"><span class="panel-title">Cartes</span><span id="maps-count" class="panel-count"></span>
@@ -96,17 +102,6 @@
           </div>
         </div>
         <div id="layers" class="rows"></div>
-      </section>
-
-      <!-- Les tampons : objets de plusieurs tuiles (arbre, maison…) posés d'un clic (outil Tampon, S) -->
-      <section class="panel map-only" id="stamps-panel">
-        <div class="panel-header"><span class="panel-title">Tampons</span><span id="stamps-count" class="panel-count"></span>
-          <div class="panel-actions">
-            <button id="stamp-props" class="icon-button" title="Renommer, rangées au-dessus du joueur"><i class="codicon codicon-settings"></i></button>
-            <button id="stamp-delete" class="icon-button" title="Supprimer le tampon (ses tuiles restent)"><i class="codicon codicon-trash"></i></button>
-          </div>
-        </div>
-        <div id="stamps"></div>
       </section>
 
       <!-- Les événements de la carte affichée : personnages, panneaux, coffres… (outil Événement, N) -->
@@ -135,22 +130,6 @@
         <div id="palette"></div>
       </section>
 
-      <section class="panel" id="tiles-panel">
-        <div class="panel-header"><span class="panel-title">Tuiles</span><span id="tiles-count"></span>
-          <div class="panel-actions">
-            <button id="tile-add" class="icon-button" title="Nouvelle tuile (Ctrl+Maj+N)"><i class="codicon codicon-add"></i></button>
-            <button id="tile-duplicate" class="icon-button" title="Dupliquer la tuile (Ctrl+D)"><i class="codicon codicon-copy"></i></button>
-            <button id="tile-delete" class="icon-button" title="Supprimer la tuile"><i class="codicon codicon-trash"></i></button>
-            <button id="tile-more" class="icon-button" title="Miroir, pivoter, décaler…"><i class="codicon codicon-ellipsis"></i></button>
-          </div>
-        </div>
-        <div class="tiles-tools">
-          <label class="tiles-search"><i class="codicon codicon-search"></i><input id="tiles-filter" type="search" placeholder="Chercher : nom, catégorie, n°" spellcheck="false"></label>
-          <button id="tile-sort" class="icon-button" title="Trier et ranger les tuiles (catégories, ordre, doublons…)"><i class="codicon codicon-sort-precedence"></i></button>
-        </div>
-        <div id="tiles"></div>
-      </section>
-
       <!-- Animation : les images de la tuile choisie (une seule pour une tuile fixe) -->
       <section class="panel tile-only" id="frames-panel">
         <div class="panel-header"><span class="panel-title">Animation</span><span id="frames-count"></span>
@@ -171,6 +150,36 @@
         <div class="panel-header"><span class="panel-title">Aperçu 3 × 3</span><span id="preview-scale"></span></div>
         <div class="preview-box checker-bg"><canvas id="preview"></canvas></div>
       </section>
+      </div>
+      <div class="side-col" id="side-b">
+      <!-- Les tampons : objets de plusieurs tuiles (arbre, maison…) posés d'un clic (outil Tampon, S) -->
+      <section class="panel map-only" id="stamps-panel">
+        <div class="panel-header"><span class="panel-title">Tampons</span><span id="stamps-count" class="panel-count"></span>
+          <div class="panel-actions">
+            <button id="stamp-props" class="icon-button" title="Renommer, rangées au-dessus du joueur"><i class="codicon codicon-settings"></i></button>
+            <button id="stamp-delete" class="icon-button" title="Supprimer le tampon (ses tuiles restent)"><i class="codicon codicon-trash"></i></button>
+          </div>
+        </div>
+        <div id="stamps"></div>
+      </section>
+
+      <section class="panel" id="tiles-panel">
+        <div class="panel-header"><span class="panel-title">Tuiles</span><span id="tiles-count"></span>
+          <div class="panel-actions">
+            <button id="tile-add" class="icon-button" title="Nouvelle tuile (Ctrl+Maj+N)"><i class="codicon codicon-add"></i></button>
+            <button id="tile-duplicate" class="icon-button" title="Dupliquer la tuile (Ctrl+D)"><i class="codicon codicon-copy"></i></button>
+            <button id="tile-delete" class="icon-button" title="Supprimer la tuile"><i class="codicon codicon-trash"></i></button>
+            <button id="tile-more" class="icon-button" title="Miroir, pivoter, décaler…"><i class="codicon codicon-ellipsis"></i></button>
+          </div>
+        </div>
+        <div class="tiles-tools">
+          <label class="tiles-search"><i class="codicon codicon-search"></i><input id="tiles-filter" type="search" placeholder="Chercher : nom, catégorie, n°" spellcheck="false"></label>
+          <button id="tile-sort" class="icon-button" title="Trier et ranger les tuiles (catégories, ordre, doublons…)"><i class="codicon codicon-sort-precedence"></i></button>
+        </div>
+        <div id="tiles"></div>
+      </section>
+
+      </div>
     </aside>
   </main>
 
@@ -195,6 +204,7 @@
   <script src="samples.js"></script>
   <script src="stage.js"></script>
   <script src="panels.js"></script>
+  <script src="disposition.js"></script>
   <script src="planche.js"></script>
   <script src="io.js"></script>
   <script src="monde.js"></script>
