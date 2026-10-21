@@ -451,6 +451,7 @@ handle('update:install', async () => {
     if (!result?.isUpdateAvailable) throw new Error(`La Release ${pendingRelease.tag} ne contient pas d'installeur utilisable`);
     await updater.downloadUpdate();
     // Installation silencieuse (pas de fenêtre d'installeur), puis Tafl se relance tout seul.
+    claude.stop(true); // Claude Code et son serveur MCP aussi, sinon l'installeur ne peut pas remplacer les fichiers
     setTimeout(() => updater.quitAndInstall(true, true), 300);
     return;
   }
@@ -580,5 +581,5 @@ if (!app.requestSingleInstanceLock()) {
     createWindow(config);
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('will-quit', () => claude.stop());
+  app.on('will-quit', () => claude.stop(true));
 }

@@ -1,7 +1,7 @@
 {
   "name": "atelier-retouche",
   "productName": "Skald",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Skald, mon logiciel de retouche d'images et de logos (Electron), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
@@ -37,6 +37,7 @@
       "executableName": "Skald"
     },
     "nsis": {
+      "include": "../commun/installeur.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
