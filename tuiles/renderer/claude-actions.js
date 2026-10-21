@@ -50,14 +50,14 @@
   const legende = (doc) => `Légende des pixels : « . » = transparent, ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} = ${c}`).join(', ')}.`;
 
   // Pixels d'une image de tuile -> lignes de texte.
-  function versTexte(doc, data) {
-    const s = doc.tileSize;
+  // (w × h : la taille de l'image, une tuile par défaut ; un sprite peut être plus haut.)
+  function versTexte(doc, data, w = doc.tileSize, h = w) {
     const index = new Map(doc.palette.map((c, i) => [c.toLowerCase(), CODES[i]]));
     const lignes = [];
-    for (let y = 0; y < s; y++) {
+    for (let y = 0; y < h; y++) {
       let ligne = '';
-      for (let x = 0; x < s; x++) {
-        const k = (y * s + x) * 4;
+      for (let x = 0; x < w; x++) {
+        const k = (y * w + x) * 4;
         const hex = rgbaToHex(data[k], data[k + 1], data[k + 2], data[k + 3]);
         ligne += hex ? (index.get(hex.slice(0, 7)) || '?') : '.';
       }
@@ -66,19 +66,18 @@
     return lignes;
   }
   // Lignes de texte -> pixels (couleurs : la palette, ou couleurs_en_plus { caractère: '#rrggbb' }).
-  function depuisTexte(doc, lignes, enPlus = {}) {
-    const s = doc.tileSize;
-    if (!Array.isArray(lignes) || lignes.length !== s) throw new Error(`Il faut ${s} lignes de ${s} caractères (la tuile fait ${s} × ${s} pixels).`);
-    const data = new Uint8ClampedArray(s * s * 4);
+  function depuisTexte(doc, lignes, enPlus = {}, w = doc.tileSize, h = w, quoi = 'la tuile') {
+    if (!Array.isArray(lignes) || lignes.length !== h) throw new Error(`Il faut ${h} lignes de ${w} caractères (${quoi} fait ${w} × ${h} pixels).`);
+    const data = new Uint8ClampedArray(w * h * 4);
     lignes.forEach((ligne, y) => {
       const l = String(ligne);
-      if (l.length !== s) throw new Error(`La ligne ${y + 1} fait ${l.length} caractères au lieu de ${s}.`);
-      for (let x = 0; x < s; x++) {
+      if (l.length !== w) throw new Error(`La ligne ${y + 1} fait ${l.length} caractères au lieu de ${w}.`);
+      for (let x = 0; x < w; x++) {
         const c = l[x];
         if (c === '.' || c === ' ') continue;
         const hex = enPlus[c] || doc.palette[CODES.indexOf(c)];
         if (!hex) throw new Error(`Caractère « ${c} » (ligne ${y + 1}) : pas dans la palette ni dans couleurs_en_plus.`);
-        data.set(hexToRgba(hex), (y * s + x) * 4);
+        data.set(hexToRgba(hex), (y * w + x) * 4);
       }
     });
     return data;
@@ -975,7 +974,7 @@
     const d = doc.data;
     return [
       `Personnages (${d.personnages.length}) :`,
-      ...d.personnages.map((p) => `- ${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}${p.couleur ? `, couleur ${p.couleur}` : ''}${p.tuile >= 0 ? `, tuile ${p.tuile}` : ''}, portraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}${p.description ? `\n  ${p.description.replace(/\n/g, '\n  ')}` : ''}`),
+      ...d.personnages.map((p) => `- ${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}${p.couleur ? `, couleur ${p.couleur}` : ''}${p.tuile >= 0 ? `, tuile ${p.tuile}` : ''}${p.sprite ? `, sprite ${p.sprite.largeur} × ${p.sprite.hauteur} px, ${p.sprite.images} image(s) par direction` : ', pas de sprite'}, portraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}${p.description ? `\n  ${p.description.replace(/\n/g, '\n  ')}` : ''}`),
       '',
       `Quêtes (${d.quetes.length}) :`,
       ...d.quetes.map((q) => `- ${q.id} « ${q.titre} » (${q.secondaire ? 'secondaire' : 'principale'})${q.suivante ? `, suite : ${q.suivante}` : ''}${q.personnages.length ? `, personnages : ${q.personnages.join(', ')}` : ''}${q.description ? `\n  ${q.description.replace(/\n/g, '\n  ')}` : ''}\n${q.etapes.map((e, i) => `  ${i + 1}. ${e.texte}`).join('\n')}`),
@@ -1109,15 +1108,15 @@
     personnage: {
       icone: 'person',
       libelle: (a) => `Personnage : ${String(a.action || '').replace(/_/g, ' ')}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
-      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression). Pour voir les portraits : action donnees avec personnage.',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait'] }, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' } }, required: ['action'] },
+      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression), sprite (id, chemin : une planche PNG du projet, 4 rangées face/gauche/droite/dos, images : nombre d\'images par rangée, deviné sinon), retirer_sprite (id). Pour voir les portraits : action donnees avec personnage ; pour le sprite : voir_sprite ; pour le dessiner pixel par pixel : dessiner_sprite.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait', 'sprite', 'retirer_sprite'] }, images: nombre, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' } }, required: ['action'] },
       faire: async (a) => {
         const doc = besoinJeu();
         const liste = doc.data.personnages;
         if (a.action === 'ajouter') {
           if (!a.nom) throw new Error('nom : le nom du personnage.');
           const id = Events.ident(a.id || a.nom, liste, 'personnage');
-          const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [] };
+          const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [], sprite: null };
           changerDonnees(doc, 'Nouveau personnage (Claude)', (d) => ({ ...d, personnages: [...d.personnages.map((o) => (p.heros ? { ...o, heros: false } : o)), p] }));
           return `Personnage ${id} « ${p.nom} » ajouté.`;
         }
@@ -1141,6 +1140,19 @@
           changerDonnees(doc, 'Retirer un portrait (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: p.portraits.filter((x) => x.expression !== expression) } : p)) }));
           return `Portrait « ${expression} » retiré.`;
         }
+        if (a.action === 'sprite') {
+          if (!a.chemin) throw new Error('chemin : la planche du sprite (PNG), dans le projet.');
+          const f = await window.claude.lireFichier(a.chemin);
+          const png = await Events.imagePortrait(f);
+          const sprite = await Sprites.depuisPlanche(png.png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
+          changerDonnees(doc, 'Sprite (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite } : p)) }));
+          return `Sprite de ${p0.nom} : ${sprite.images} image(s) de ${sprite.largeur} × ${sprite.hauteur} px par direction (face, gauche, droite, dos).`;
+        }
+        if (a.action === 'retirer_sprite') {
+          if (!p0.sprite) throw new Error(`${p0.nom} n'a pas de sprite.`);
+          changerDonnees(doc, 'Retirer le sprite (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: null } : p)) }));
+          return `Sprite de ${p0.nom} retiré : sur la carte, il reprend sa tuile.`;
+        }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
         const p = { ...p0 };
         if (a.nom !== undefined) p.nom = String(a.nom);
@@ -1150,6 +1162,68 @@
         if (a.tuile !== undefined) p.tuile = Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile);
         changerDonnees(doc, 'Modifier le personnage (Claude)', (d) => ({ ...d, personnages: d.personnages.map((o) => (o.id === p.id ? p : p.heros ? { ...o, heros: false } : o)) }));
         return `Personnage ${p.id} modifié.`;
+      },
+    },
+    // --- Tafl 0.12 : les sprites des personnages (voir sprites.js) ---
+    voir_sprite: {
+      lecture: true,
+      icone: 'person',
+      libelle: (a) => `Regarde le sprite de ${a.id}`,
+      description: 'Le sprite d\'un personnage sur la carte : sa taille, et les pixels de chaque image (face, gauche, droite, dos ; image 0 = debout, puis les pas), avec la planche agrandie. direction : une seule direction (bas, gauche, droite, haut), sinon toutes.',
+      schema: { type: 'object', properties: { id: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS } }, required: ['id'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const p = Events.perso(doc, a.id);
+        if (!p) throw new Error(`Pas de personnage « ${a.id} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+        if (!p.sprite) return `${p.nom} n'a pas encore de sprite${p.tuile >= 0 ? ` (sur la carte : la tuile ${p.tuile})` : ''}. Dessine-le avec dessiner_sprite (une image à la fois), ou importe une planche avec personnage action sprite.`;
+        const { largeur, hauteur, images } = p.sprite;
+        const frames = await Sprites.decouper(p.sprite);
+        const dirs = a.direction ? [a.direction] : Sprites.DIRECTIONS;
+        const texte = [`Sprite de ${p.nom} : ${images} image(s) de ${largeur} × ${hauteur} px par direction (image 0 = debout, puis les pas).`, legende(doc)];
+        for (const d of dirs) {
+          const r = Sprites.DIRECTIONS.indexOf(d);
+          frames[r].forEach((c, k) => texte.push('', `${d} (${Sprites.NOMS[d]}), image ${k}${k === 0 ? ' (debout)' : ` (pas ${k})`} :`, ...versTexte(doc, c.getContext('2d').getImageData(0, 0, largeur, hauteur).data, largeur, hauteur)));
+        }
+        const planche = el('canvas', { width: largeur * images, height: hauteur * 4 });
+        planche.getContext('2d').drawImage(await Sprites.charger(p.sprite.planche), 0, 0);
+        return { texte: texte.join('\n'), image: agrandir(planche) };
+      },
+    },
+    dessiner_sprite: {
+      icone: 'edit',
+      libelle: (a) => `Dessine le sprite de ${a.id} : ${Sprites.NOMS[a.direction] || a.direction}, image ${a.image ?? 0}${a.miroir ? ' (et son miroir)' : ''}`,
+      description: 'Dessine une image du sprite d\'un personnage (comment il apparaît sur la carte), pixel par pixel comme dessiner_tuile. direction : bas (face), gauche, droite ou haut (dos). image : 0 = debout, 1 et 2 = les pas (pied gauche, pied droit). pixels : une ligne par rangée de pixels (« . » = transparent, sinon un code de la palette) ; la première image dessinée fixe la taille de toutes (souvent largeur de la tuile × 2 fois sa hauteur, les pieds en bas). images : nombre d\'images par direction, à la création du sprite (3 par défaut). miroir : true pour gauche ou droite, dessine aussi l\'autre côté en miroir. couleurs_en_plus : { "caractère": "#rrggbb" }.',
+      schema: { type: 'object', properties: { id: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS }, image: nombre, pixels: lignesSchema, images: nombre, miroir: { type: 'boolean' }, couleurs_en_plus: { type: 'object' } }, required: ['id', 'direction', 'pixels'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const p0 = Events.perso(doc, a.id);
+        if (!p0) throw new Error(`Pas de personnage « ${a.id} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+        const r = Sprites.DIRECTIONS.indexOf(a.direction);
+        if (r < 0) throw new Error(`direction : ${Sprites.DIRECTIONS.join(', ')}.`);
+        const lignes = Array.isArray(a.pixels) ? a.pixels.map(String) : [];
+        const h = lignes.length, w = lignes[0]?.length || 0;
+        if (!w || !h) throw new Error('pixels : au moins une ligne.');
+        const sprite = p0.sprite || Sprites.vide(w, h, clamp(Math.round(a.images || 3), 1, 8));
+        if (sprite.largeur !== w || sprite.hauteur !== h) throw new Error(`Le sprite de ${p0.nom} fait ${sprite.largeur} × ${sprite.hauteur} px par image : il faut ${sprite.hauteur} lignes de ${sprite.largeur} caractères.`);
+        const k = Math.round(a.image || 0);
+        if (k < 0 || k >= sprite.images) throw new Error(`image : de 0 à ${sprite.images - 1} (le sprite a ${sprite.images} image(s) par direction).`);
+        const enPlus = Object.fromEntries(Object.entries(a.couleurs_en_plus || {}).map(([c, v]) => [c, normalizeHex(v)]).filter(([c, v]) => c.length === 1 && v));
+        const data = depuisTexte(doc, lignes, enPlus, w, h, 'une image du sprite');
+        const frames = await Sprites.decouper(sprite);
+        const c = el('canvas', { width: w, height: h });
+        c.getContext('2d').putImageData(new ImageData(data, w, h), 0, 0);
+        frames[r][k] = c;
+        const autre = { gauche: 'droite', droite: 'gauche' }[a.direction];
+        if (a.miroir && autre) frames[Sprites.DIRECTIONS.indexOf(autre)][k] = Sprites.miroir(c);
+        const nouveau = { ...sprite, planche: Sprites.assembler(frames, w, h) };
+        Doc.change(doc, 'Dessiner le sprite (Claude)', () => {
+          for (const hex of Object.values(enPlus)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
+          doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: nouveau } : p)) };
+        });
+        Stage.render();
+        const planche = el('canvas', { width: w * sprite.images, height: h * 4 });
+        planche.getContext('2d').drawImage(await Sprites.charger(nouveau.planche), 0, 0);
+        return { texte: `Sprite de ${p0.nom} : ${a.direction}, image ${k}${a.miroir && autre ? ` (et ${autre} en miroir)` : ''} dessinée. La planche (rangées : face, gauche, droite, dos) :`, image: agrandir(planche) };
       },
     },
     quete: {
@@ -1228,7 +1302,7 @@
         if (!a.personnage) return decrireDonnees(doc);
         const p = Events.perso(doc, a.personnage);
         if (!p) throw new Error(`Pas de personnage « ${a.personnage} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
-        const texte = `${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}\n${p.description || '(pas de description)'}\nPortraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}.\nUtilisé par : ${Events.utilisations(doc, 'personnage', p.id).join(', ') || 'rien encore'}.`;
+        const texte = `${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}\n${p.description || '(pas de description)'}\nPortraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}.\nSprite : ${p.sprite ? `${p.sprite.largeur} × ${p.sprite.hauteur} px, ${p.sprite.images} image(s) par direction (voir_sprite)` : 'aucun'}.\nUtilisé par : ${Events.utilisations(doc, 'personnage', p.id).join(', ') || 'rien encore'}.`;
         return p.portraits.length ? { texte, image: await planchePortraits(p) } : texte;
       },
     },

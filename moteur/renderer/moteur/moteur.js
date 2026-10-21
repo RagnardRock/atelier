@@ -128,7 +128,7 @@ const Moteur = (() => {
         x: Math.min(carte.largeur - 1, Math.max(0, Number(x) || 0)),
         y: Math.min(carte.hauteur - 1, Math.max(0, Number(y) || 0)),
         dir: DIRECTIONS[direction] ? direction : 'bas',
-        mouvement: null, pied: 1, attente: 0, pietine: 0,
+        mouvement: null, pas: 0, attente: 0, pietine: 0,
       };
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       presents = Monde.evenementsPresents(jeu, carte, partie);
@@ -195,7 +195,7 @@ const Moteur = (() => {
         return false;
       }
       joueur.pietine = 0;
-      joueur.pied = joueur.pied === 1 ? 2 : 1;
+      joueur.pas++;
       joueur.mouvement = {
         de: { x: joueur.x, y: joueur.y }, vers: { x: d.x, y: d.y }, t: 0, saut: d.saut,
         duree: d.saut ? DUREE_SAUT : course ? DUREE_PAS_COURSE : DUREE_PAS,
@@ -313,7 +313,8 @@ const Moteur = (() => {
         const d = Monde.destination(carte, partie, autres, p.x, p.y, dir, prises);
         if (!d || d.saut || Monde.teleporteur(carte, d.x, d.y)) continue;
         // Il prend tout de suite sa nouvelle case (personne d'autre ne peut y entrer) et y glisse.
-        p.mouvement = { de: { x: p.x * t, y: p.y * t }, t: 0, duree: DUREE_PAS * 1.4, pied: Math.random() < 0.5 ? 1 : 2 };
+        p.pas++;
+        p.mouvement = { de: { x: p.x * t, y: p.y * t }, t: 0, duree: DUREE_PAS * 1.4 };
         p.x = d.x;
         p.y = d.y;
       }
@@ -361,6 +362,18 @@ const Moteur = (() => {
       ctx.drawImage(jeu.planche, img.sx, img.sy, jeu.taille, jeu.taille, x, y, jeu.taille, jeu.taille);
     }
 
+    // Un personnage sur sa case (x, y : le coin haut gauche, à l'écran) : la tuile de l'événement,
+    // sinon le sprite du personnage, sinon sa tuile, sinon le petit bonhomme à sa couleur.
+    // pas : 0 debout, sinon le n° du pas en cours (pour l'image de marche).
+    function dessinerCorps({ tuile = -1, perso, couleur, direction, pas, x, y, hy = y, ombre = 1 }, maintenant) {
+      const t = jeu.taille;
+      if (tuile >= 0) { dessinerTuile(tuile, x, hy, maintenant); return; }
+      Sprites.ombre(ctx, x, y, t, ombre);
+      if (perso?.sprite) Sprites.dessinerSprite(ctx, perso.sprite, direction, pas, x, hy, t);
+      else if (perso?.tuile >= 0) dessinerTuile(perso.tuile, x, hy, maintenant);
+      else Sprites.dessiner(ctx, perso?.couleur || couleur, direction, pas ? (pas % 2 ? 1 : 2) : 0, x, hy, t);
+    }
+
     // Les personnages (le joueur et les événements visibles), du plus haut au plus bas de l'écran :
     // celui qui est plus bas passe devant.
     function dessinerPersonnages(maintenant) {
@@ -372,28 +385,21 @@ const Moteur = (() => {
         const m = p.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
         const px = m ? Math.round(m.de.x + (p.x * t - m.de.x) * k) : p.x * t;
         const py = m ? Math.round(m.de.y + (p.y * t - m.de.y) * k) : p.y * t;
-        liste.push({ y: py, dessiner: () => {
-          const x = px - cam.x, y = py - cam.y;
-          if (p.tuile >= 0) dessinerTuile(p.tuile, x, y, maintenant);
-          else {
-            Sprites.ombre(ctx, x, y, t);
-            Sprites.dessiner(ctx, p.perso?.couleur || '#5ec8ff', p.direction, m && k < 0.5 ? m.pied : 0, x, y, t);
-          }
-        } });
+        liste.push({ y: py, dessiner: () => dessinerCorps({
+          tuile: p.tuile, perso: p.perso, couleur: '#5ec8ff', direction: p.direction,
+          pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,
+        }, maintenant) });
       }
       const pj = pixelsJoueur();
       liste.push({ y: pj.y, dessiner: () => {
-        const x = pj.x - cam.x, y = pj.y - cam.y;
         const m = joueur.mouvement;
-        // Les pieds : un pied pendant la première moitié du pas, debout pendant la seconde.
+        // Les pieds : l'image du pas pendant la première moitié du pas, debout pendant la seconde.
         // Contre un mur, il piétine sur place (comme dans les jeux Pokémon).
         let pas = 0;
-        if (m) pas = m.t / m.duree < 0.5 ? joueur.pied : 0;
-        else if (joueur.pietine > 0) pas = Math.floor(joueur.pietine * 4) % 2 ? joueur.pied : 0;
-        Sprites.ombre(ctx, x, y, t, pj.saut ? 0.8 : 1);
-        const hy = y - pj.saut;
-        if (jeu.heros?.tuile >= 0) dessinerTuile(jeu.heros.tuile, x, hy, maintenant);
-        else Sprites.dessiner(ctx, jeu.heros?.couleur || '#d94a4a', joueur.dir, pas, x, hy, t);
+        if (m) pas = m.t / m.duree < 0.5 ? joueur.pas : 0;
+        else if (joueur.pietine > 0) pas = Math.floor(joueur.pietine * 4) % 2 ? joueur.pas || 1 : 0;
+        const x = pj.x - cam.x, y = pj.y - cam.y;
+        dessinerCorps({ perso: jeu.heros, couleur: '#d94a4a', direction: joueur.dir, pas, x, y, hy: y - pj.saut, ombre: pj.saut ? 0.8 : 1 }, maintenant);
       } });
       liste.sort((a, b) => a.y - b.y);
       for (const e of liste) e.dessiner();

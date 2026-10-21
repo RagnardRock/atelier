@@ -60,18 +60,21 @@ const Monde = (() => {
       const page = pageActive(ev, partie, carte);
       if (!page || page.cache) continue;
       const perso = jeu.personnages.get(ev.apparence?.personnage || '') || null;
+      // Ce qu'on montre (FORMAT.md, apparence) : la tuile de l'événement, sinon le sprite du
+      // personnage (Tafl 0.12), sinon sa tuile, sinon le petit bonhomme de Saga.
       let tuile = Number(ev.apparence?.tuile);
-      if (!(tuile >= 0) && perso && perso.tuile >= 0) tuile = perso.tuile;
+      if (!(tuile >= 0) && perso && !perso.sprite && perso.tuile >= 0) tuile = perso.tuile;
       const ancien = avant.find((p) => p.ev === ev);
       out.push({
         ev, page, perso,
         x: ancien ? ancien.x : ev.x,
         y: ancien ? ancien.y : ev.y,
         direction: ancien ? ancien.direction : DIRECTIONS[ev.direction] ? ev.direction : 'bas',
-        mouvement: null,  // { de: {x, y}, t, duree } quand il marche
+        mouvement: null,  // { de: {x, y}, t, duree, pas } quand il marche
+        pas: ancien ? ancien.pas : 0, // combien de pas il a faits (pour alterner les pieds)
         attente: 1 + Math.random() * 2,
         tuile: tuile >= 0 ? tuile : -1,
-        // Sans tuile mais avec un personnage : Saga le dessine en petit bonhomme à sa couleur.
+        // Sans tuile mais avec un personnage : son sprite, ou le petit bonhomme à sa couleur.
         visible: tuile >= 0 || Boolean(perso),
         bloque: !ev.traversable,
       });

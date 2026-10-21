@@ -224,6 +224,22 @@ Une ombre dessinée par-dessus le damier garde le damier assombri (ce sont des p
 - **Exporter en image…** : toute la région en un seul PNG (pour un écran « carte de la région » dans le jeu, ou pour le montrer).
 - **Valider** garde les places (`monde` dans chaque carte, en cases) ; `Ctrl+Z` annule. Le moteur pourra s'en servir pour enchaîner les cartes voisines sans écran noir.
 
+## Les sprites des personnages (Tafl 0.12)
+
+Avant, un personnage n'avait qu'**une tuile** sur la carte : la même image, qu'il regarde en haut, en bas ou de côté. Maintenant il a un **sprite** : 4 directions (face, gauche, droite, dos) et sa marche.
+
+Dans **Jeu › Données du jeu › Personnages**, partie **Sprite sur la carte** :
+
+- **Créer le sprite** : choisis la taille d'une image (une case, ou une case et la tête au-dessus, 16 × 32, comme dans Pokémon) et le nombre d'images par direction (3 : debout, pied gauche, pied droit). S'il avait une tuile, elle sert de point de départ dans chaque image.
+- **Dessiner** : clique une image dans la grille (une rangée par direction), puis dessine sur la grande image. Clic : crayon, clic droit : gomme, `Alt` + clic : prendre une couleur, et le seau pour remplir. Les couleurs sont celles de la palette du jeu, plus le sélecteur. Sur un pas, l'image debout apparaît en transparence pour caler le personnage. Le cadre violet, c'est la case du jeu : les pieds vont dedans.
+- **Gagner du temps** : « Droite = Gauche en miroir » (on ne dessine qu'un côté), « Copier l'image debout ici » (puis on ne change que les jambes), « Annuler » (dans le sprite).
+- **L'aperçu** à côté de la grille fait marcher le personnage dans la direction choisie, comme dans le jeu.
+- **Importer une planche…** faite dans Skald ou Photoshop : 4 rangées (face, gauche, droite, dos), et dans chaque rangée l'image debout puis les pas. Tafl devine la découpe. **Exporter la planche…** pour la retoucher ailleurs.
+- Sur la carte de Tafl, les PNJ apparaissent avec leur sprite, tournés vers leur direction. Dans Saga (0.2.1 ou plus), le héros et les PNJ marchent avec.
+- **Claude** dessine aussi les sprites, image par image (`dessiner_sprite`, avec le miroir pour l'autre côté), les regarde (`voir_sprite`) et importe une planche du projet (`personnage`, action `sprite`).
+
+Le format est décrit dans `FORMAT.md` (`sprite` dans `personnages.json`).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -246,6 +262,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - **Depuis Tafl 0.7, il écrit l'histoire** : il crée les personnages (avec leurs portraits, depuis une image du projet), les quêtes et leurs étapes, les interrupteurs, et pose les événements avec leur script complet (dialogues, choix, conditions, objets, combats, quêtes…). Tafl vérifie chaque script avant de l'accepter et lui dit précisément ce qui ne va pas. Il relit tout avec `donnees` et `evenement` (voir), et voit les portraits.
 - **Depuis Tafl 0.8, il remplit les bases de données** : il cherche et lit les créatures, attaques, objets… (`voir_donnees`), en ajoute, modifie ou supprime (`donnee`), met un sprite ou une icône depuis une image du projet, lance l'import officiel, règle les rencontres des zones et l'ambiance des cartes.
 - **Depuis Tafl 0.10, il pose les objets** : il importe une planche avec tous les nouveaux réglages (fond, marge, espacement, zone, tampons), regarde les tampons (`voir_tampons`), en pose ou en efface sur la carte, en crée (depuis des numéros de tuiles ou un rectangle de la carte), les renomme et règle leurs rangées au-dessus du joueur.
+- **Depuis Tafl 0.12, il dessine les sprites des personnages** : une image à la fois (direction, debout ou pas), avec le miroir gauche/droite, et il voit la planche agrandie avec `voir_sprite`.
 - **Depuis Tafl 0.11, il range les cartes** : il les met en groupes, marque les intérieurs, regarde la carte monde (une image de toute la région avec la place de chaque carte, action `carte_monde`), place une carte ou relance le placement automatique.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
@@ -271,6 +288,7 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur, Événement et Départ. |
 | `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques, événements. |
 | `renderer/events.js` | Les événements et leurs scripts (commandes, conditions, vérification), l'éditeur d'un événement et la fenêtre Données du jeu (personnages, quêtes, interrupteurs). |
+| `renderer/sprites.js` | Les sprites des personnages (Tafl 0.12) : lire et assembler les planches, l'éditeur pixel par pixel de la fiche du personnage, et le dessin sur la carte. |
 | `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), la fenêtre d'import de planches et les exports (PNG, Tiled). |
 | `renderer/planche.js` | Le découpage d'une planche : détection du fond peint et transparence, marge, espacement, zone, recherche des objets (tampons), et l'aperçu de la fenêtre d'import. |
 | `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |

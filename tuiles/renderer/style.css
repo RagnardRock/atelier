@@ -960,3 +960,28 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .world-view { position: relative; flex: 1; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.04), transparent 70%), rgba(8, 9, 14, 0.55); border-bottom-right-radius: 0; }
 .world-view canvas { display: block; touch-action: none; cursor: grab; }
 .world-tip { position: absolute; pointer-events: none; padding: 4px 9px; border-radius: 7px; background: rgba(16, 17, 24, 0.92); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text); font-size: 12px; white-space: nowrap; }
+
+/* Tafl 0.12 : l'éditeur de sprite d'un personnage (Données du jeu › Personnages) */
+.sprite-editeur { display: flex; flex-direction: column; gap: 10px; }
+.sprite-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sprite-actions select { width: auto; }
+.sprite-corps { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.sprite-gauche { display: flex; flex-direction: column; gap: 12px; }
+.sprite-grille { display: grid; gap: 4px; align-items: center; }
+.sprite-col { font-size: 10.5px; color: var(--muted); text-align: center; }
+.sprite-rang { font-size: 11.5px; color: var(--muted); padding-right: 6px; }
+.sprite-case { display: flex; align-items: center; justify-content: center; padding: 3px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
+.sprite-case canvas { image-rendering: pixelated; display: block; }
+.sprite-case:hover { border-color: rgba(255, 255, 255, 0.3); }
+.sprite-case.actif { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.sprite-apercu-boite { display: flex; align-items: flex-end; gap: 10px; }
+.sprite-apercu { image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border); }
+.sprite-droite { display: flex; flex-direction: column; gap: 8px; max-width: 440px; }
+.sprite-barre { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 420px; }
+.sprite-outils { display: flex; gap: 2px; }
+.sprite-outils .icon-button.actif { color: var(--accent); background: var(--hover); }
+.sprite-couleurs { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.sprite-couleur { width: 18px; height: 18px; padding: 0; border: 1px solid rgba(0, 0, 0, 0.4); border-radius: 4px; cursor: pointer; }
+.sprite-couleur.actif { outline: 2px solid #fff; outline-offset: 1px; }
+.sprite-couleurs input[type=color] { width: 26px; height: 22px; padding: 0; border: none; background: none; }
+.sprite-grand { image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border); cursor: crosshair; touch-action: none; align-self: flex-start; }

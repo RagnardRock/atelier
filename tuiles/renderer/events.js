@@ -14,7 +14,7 @@
 // Comme les zones, on ne le modifie jamais sur place : on remplace la liste (map.events = [...]).
 //
 // doc.data, les données du jeu, suit la même règle (on remplace doc.data en entier) :
-//   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }] }],
+//   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }], sprite }],
 //     quetes: [{ id, titre, description, secondaire, suivante, personnages, etapes: [{ texte }] }],
 //     interrupteurs: [{ id, nom, description }] }
 //
@@ -462,6 +462,7 @@ const Events = (() => {
           couleur: normalizeHex(p?.couleur) || '',
           tuile: tuile >= 0 && tuile < tileCount ? tuile : -1,
           portraits: arr(p?.portraits).filter((x) => /^data:image\/(png|gif|webp|jpeg|bmp);base64,/.test(x?.png)).map((x) => ({ expression: Doc.slug(x.expression, 'normal'), png: x.png })),
+          sprite: Sprites.norm(p?.sprite), // Tafl 0.12 : sa planche de marche (voir sprites.js), ou null
         };
       })),
       quetes: uniques(arr(d?.quetes).map((q, i) => ({
@@ -747,7 +748,7 @@ const Events = (() => {
         champ('Colonne (x)', num('x', map.width - 1)),
         champ('Rangée (y)', num('y', map.height - 1)),
         section('Apparence'),
-        champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits, et plus tard son sprite'),
+        champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits et son sprite'),
         el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
         champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
         champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
@@ -885,7 +886,7 @@ const Events = (() => {
   // Les onglets de Tafl 0.8 viennent de donnees.js (Donnees.ONGLETS).
   const ONGLETS = [
     { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
-      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [] }),
+      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null }),
       meta: (o) => (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
       vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
     { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
@@ -1103,7 +1104,9 @@ const Events = (() => {
             return c;
           })()),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur du nom' }), couleur, sansCouleur, el('span', { className: 'unit', textContent: 'dans les boîtes de dialogue' })]),
-          champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'En attendant ses sprites de marche : la tuile qui le montre sur la carte'),
+          section('Sprite sur la carte : 4 directions et la marche'),
+          Sprites.editeur(p, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe, tuile: () => (doc.tiles[p.tuile] ? Doc.tileCanvas(doc.tiles[p.tuile], doc.tileSize) : null) }),
+          champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'Sans sprite : la tuile qui le montre sur la carte (une seule image, quelle que soit sa direction)'),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,
