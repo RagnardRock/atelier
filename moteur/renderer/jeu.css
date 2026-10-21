@@ -285,3 +285,89 @@ body.plein-ecran #scene { cursor: none; }
 .carnet-pv { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
 .carnet-pv span { display: block; height: 100%; background: #4cd964; }
 .carnet-pv .niveau-moyen { background: #f2c230; } .carnet-pv .niveau-bas { background: #f0503c; }
+
+/* =========================================================================
+   Saga 0.4 : les thèmes de l'interface en jeu, choisis dans Tafl (Réglages > Interface du jeu)
+   ou forcés dans les réglages de Saga. #scene porte data-theme="verre" ou "pixel", et --accent
+   y prend la couleur d'accent du jeu : tout ce qui est dans la scène la suit.
+   ========================================================================= */
+/* Jersey 10 (licence SIL OFL, polices/OFL.txt) : une police pixel aux chiffres bien lisibles. Une seule graisse : le gras n'est pas simulé. */
+@font-face { font-family: 'Jersey 10'; src: url('polices/jersey-10.woff2') format('woff2'); font-weight: 100 900; font-display: block; }
+
+/* ---------- Verre : le combat flotte sur le décor, en plaques de verre sombre ---------- */
+#scene[data-theme="verre"] .combat-scene { position: absolute; inset: 0; }
+#scene[data-theme="verre"] .combat-bas { position: absolute; left: 16px; right: 16px; bottom: 16px; height: 140px; padding: 0; gap: 10px; background: none; border: none; z-index: 1; }
+#scene[data-theme="verre"] .combat-boite {
+  background: rgba(14, 14, 22, 0.66); border-color: rgba(255, 255, 255, 0.16); border-radius: 16px;
+  backdrop-filter: blur(18px) saturate(150%); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+#scene[data-theme="verre"] .combat-choix { background: rgba(14, 14, 22, 0.62); backdrop-filter: blur(18px) saturate(150%); border-color: rgba(255, 255, 255, 0.14); border-radius: 12px; }
+#scene[data-theme="verre"] .combat-choix.actif { background: rgba(30, 30, 44, 0.78); border-color: var(--accent); }
+#scene[data-theme="verre"] .combat-cote.joueur { bottom: 176px; }
+#scene[data-theme="verre"] .combat-carte { background: rgba(14, 14, 22, 0.58); border-color: rgba(255, 255, 255, 0.22); border-radius: 16px; }
+#scene[data-theme="verre"] .combat-pv-barre, #scene[data-theme="verre"] .combat-xp-barre { box-shadow: 0 0 8px currentColor; }
+#scene[data-theme="verre"] .combat-xp-barre { background: var(--accent); }
+
+/* ---------- Pixel : police pixel, cadres nets à double bordure, aucun flou ni arrondi ---------- */
+#scene[data-theme="pixel"] {
+  --px-fond: #1b1d2a;
+  --px-clair: #efe8d6;
+  --px-ombre: #0b0c12;
+  --px-creux: #2c3045;
+}
+#scene[data-theme="pixel"] .dialogue, #scene[data-theme="pixel"] .dialogue-choix, #scene[data-theme="pixel"] .annonce,
+#scene[data-theme="pixel"] #bandeau, #scene[data-theme="pixel"] .carnet-carte, #scene[data-theme="pixel"] .combat-carte,
+#scene[data-theme="pixel"] .combat-boite, #scene[data-theme="pixel"] .combat-liste, #scene[data-theme="pixel"] .combat-dresseur,
+#scene[data-theme="pixel"] .combat-choix {
+  font-family: 'Jersey 10', monospace;
+  border-radius: 0;
+  border: 3px solid var(--px-clair);
+  background: var(--px-fond);
+  backdrop-filter: none;
+  box-shadow: 0 0 0 3px var(--px-ombre), inset 0 0 0 3px var(--px-creux), 6px 6px 0 3px rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.3px;
+}
+#scene[data-theme="pixel"] .dialogue { bottom: 26px; }
+#scene[data-theme="pixel"] .dialogue-texte { font-size: 30px; line-height: 1.25; }
+#scene[data-theme="pixel"] .dialogue-nom { font-size: 22px; text-transform: uppercase; letter-spacing: 1px; }
+#scene[data-theme="pixel"] .dialogue-portrait { border-radius: 0; border: 3px solid var(--px-creux); background: #262a3b; }
+#scene[data-theme="pixel"] .dialogue-suite, #scene[data-theme="pixel"] .combat-suite { animation-timing-function: steps(2); }
+#scene[data-theme="pixel"] .dialogue-option { border-radius: 0; font-size: 26px; }
+#scene[data-theme="pixel"] .dialogue-option.actif { background: none; color: var(--accent); }
+#scene[data-theme="pixel"] .annonce-titre, #scene[data-theme="pixel"] #bandeau { text-transform: uppercase; letter-spacing: 1px; }
+#scene[data-theme="pixel"] #bandeau { border-left: 3px solid var(--px-clair); transition-timing-function: steps(4); }
+#scene[data-theme="pixel"] .annonce { border-right: 3px solid var(--px-clair); }
+#scene[data-theme="pixel"] .annonce-detail { font-size: 22px; }
+#scene[data-theme="pixel"] #carnet, #scene[data-theme="pixel"] #pause { backdrop-filter: none; background: rgba(6, 6, 10, 0.55); }
+#scene[data-theme="pixel"] .carnet-tete { font-family: 'Jersey 10', monospace; font-size: 28px; }
+#scene[data-theme="pixel"] #carnet-corps { font-family: 'Jersey 10', monospace; font-size: 22px; }
+#scene[data-theme="pixel"] #carnet-corps h3 { font-size: 18px; color: var(--accent); }
+#scene[data-theme="pixel"] #carnet-corps li { border-radius: 0; background: none; border-bottom: 2px dashed var(--px-creux); }
+
+/* Le combat en pixel */
+#scene[data-theme="pixel"] .combat-scene::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 4px); }
+#scene[data-theme="pixel"] .combat-bas { background: var(--px-ombre); border-top: 3px solid var(--px-clair); }
+#scene[data-theme="pixel"] .combat-texte { font-size: 32px; line-height: 1.2; }
+#scene[data-theme="pixel"] .combat-nom { font-size: 28px; }
+#scene[data-theme="pixel"] .combat-niveau { font-size: 22px; }
+#scene[data-theme="pixel"] .combat-pv-fond { height: 10px; border-radius: 0; background: var(--px-ombre); border: 2px solid var(--px-clair); }
+#scene[data-theme="pixel"] .combat-pv-barre, #scene[data-theme="pixel"] .combat-liste-pv span, #scene[data-theme="pixel"] .carnet-pv span { border-radius: 0; transition: none; }
+#scene[data-theme="pixel"] .combat-xp, #scene[data-theme="pixel"] .combat-liste-pv, #scene[data-theme="pixel"] .carnet-pv { border-radius: 0; }
+#scene[data-theme="pixel"] .combat-xp-barre { background: var(--accent); transition-timing-function: steps(8); }
+#scene[data-theme="pixel"] .combat-statut, #scene[data-theme="pixel"] .combat-type { border-radius: 0; text-shadow: none; font-family: 'Jersey 10', monospace; font-size: 15px; font-weight: 400; }
+#scene[data-theme="pixel"] .combat-pv-texte, #scene[data-theme="pixel"] .combat-attaque-info, #scene[data-theme="pixel"] .combat-liste-detail { font-size: 20px; font-weight: 400; }
+#scene[data-theme="pixel"] .combat-pv-label { font-size: 15px; font-weight: 400; }
+#scene[data-theme="pixel"] * { font-synthesis: none; }
+#scene[data-theme="pixel"] .combat-choix { font-size: 26px; padding-left: 30px; position: relative; box-shadow: 0 0 0 3px var(--px-ombre); }
+#scene[data-theme="pixel"] .combat-choix .codicon { display: none; }
+#scene[data-theme="pixel"] .combat-choix.actif { background: var(--px-creux); color: #fff; border-color: var(--accent); box-shadow: 0 0 0 3px var(--px-ombre); }
+#scene[data-theme="pixel"] .combat-choix.actif::before { content: '▶'; position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--accent); }
+#scene[data-theme="pixel"] .combat-attaque { border-left-width: 3px; border-left-color: var(--px-clair); }
+#scene[data-theme="pixel"] .combat-attaque .combat-attaque-nom { font-size: 24px; }
+#scene[data-theme="pixel"] .combat-attaque .combat-type { background: var(--type) !important; }
+#scene[data-theme="pixel"] .combat-liste-ligne { border-radius: 0; font-family: 'Jersey 10', monospace; font-size: 23px; }
+#scene[data-theme="pixel"] .combat-liste-ligne.actif { background: var(--px-creux); }
+#scene[data-theme="pixel"] .combat-liste-titre { font-size: 24px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); }
+#scene[data-theme="pixel"] .combat-dresseur img { border-radius: 0; }
+#scene[data-theme="pixel"] #carnet-argent { font-size: 20px; }
+#scene[data-theme="pixel"] .combat-liste-aide { font-family: 'Jersey 10', monospace; font-size: 17px; }

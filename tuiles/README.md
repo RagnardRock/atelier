@@ -264,6 +264,15 @@ Sur un grand écran, le panneau de droite ne reste plus coincé à 300 px :
 - **Replier** un panneau : clic sur son titre. **Hauteur** d'un panneau : glisse son bord du bas (double-clic : automatique). Les tuiles prennent toute la place qui reste.
 - **Taille du texte et des boutons** des panneaux (80 à 160 %) et **taille des vignettes** (28 à 128 px) dans les réglages (Ctrl+,). Raccourci : Ctrl+molette sur le panneau, ou sur les tuiles et les tampons pour les vignettes. Aussi dans Affichage : Panneaux plus grands / plus petits, Disposition des panneaux par défaut.
 
+## L'interface du jeu (Tafl 0.15)
+
+Dans **Jeu › Données du jeu › Réglages**, partie **Interface du jeu** :
+
+- **Thème** : **Verre** (plaques sombres et floues, coins arrondis, le combat flotte sur le décor) ou **Pixel** (police pixel, cadres nets à double bordure, comme sur Game Boy Advance). Saga (0.4 ou plus) l'applique aux dialogues, aux choix, aux annonces, au carnet et au combat.
+- **Couleur d'accent** : la couleur des noms dans les dialogues, des curseurs, de la barre d'XP. « Celle de Saga » revient à l'orange par défaut.
+- Le joueur peut toujours forcer un thème dans les réglages de Saga.
+- **Claude** le règle aussi (action `donnee`, sorte `reglages`, `interface`).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).

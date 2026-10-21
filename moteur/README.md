@@ -32,7 +32,7 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
 | Tab | Le **carnet** : équipe, sac, argent, quêtes. |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
-| Échap | Menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
+| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
@@ -67,7 +67,7 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 
 - **Rencontres sauvages** : dans une zone qui a des rencontres (les hautes herbes, l'eau…), chaque pas a sa chance de lancer un combat, selon le taux de la zone. La créature est tirée au sort selon les poids de la table, à un niveau entre le minimum et le maximum. Un **Repousse** empêche les rencontres pendant un certain nombre de pas.
 - **Dresseurs** : les commandes `combat_sauvage` et `combat_dresseur` de Tafl lancent un vrai combat. Le dresseur envoie ses créatures une par une, dit son `dialogue_victoire` ou son `dialogue_defaite` selon l'issue, et donne son argent. Un dresseur gagné compte dans les succès (`dresseurs_battus`). Le niveau de ses créatures suit le réglage d'ajustement des dresseurs de Tafl.
-- **L'écran de combat** : un fond selon la carte (herbe, eau, grotte, intérieur), les deux créatures avec leur nom, leur niveau, leur statut et leur barre de PV, la barre d'XP du joueur, et des messages qui s'écrivent lettre par lettre. Menu **Attaque / Sac / Équipe / Fuite** au clavier (flèches, Action, Retour pour revenir), à la manette ou à la souris.
+- **L'écran de combat** (animations d'entrée revues en 0.3.1 : le fond s'ouvre après le flash, la créature sauvage glisse depuis la droite, celle du dresseur arrive quand il l'envoie, la tienne sort d'une balle sur « En avant ! ») : un fond selon la carte (herbe, eau, grotte, intérieur), les deux créatures avec leur nom, leur niveau, leur statut et leur barre de PV, la barre d'XP du joueur, et des messages qui s'écrivent lettre par lettre. Menu **Attaque / Sac / Équipe / Fuite** au clavier (flèches, Action, Retour pour revenir), à la manette ou à la souris.
 - **Les vraies formules** (celles des jeux officiels depuis la 3ᵉ génération) : statistiques avec IV, EV et nature ; dégâts avec bonus de type (STAB), table des types de Tafl (super efficace, peu efficace, sans effet), coups critiques, précision et esquive ; priorité et vitesse pour l'ordre des attaques.
 - **Statuts** : brûlure, paralysie, poison, poison grave, sommeil, gel et confusion, avec leurs effets officiels. Aussi : la peur, le vol de PV, le contrecoup, les attaques qui soignent, celles qui frappent plusieurs fois, et les hausses ou baisses de stats.
 - **Le sac en combat** : potions, soins de statut, rappels, PP, et **Poké Balls** contre une créature sauvage (formule de capture officielle, avec les secousses). Une créature capturée va dans l'équipe, ou dans la boîte si l'équipe est pleine.
@@ -75,6 +75,14 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **Défaite** : le joueur perd la moitié de son argent, son équipe est soignée, et il se réveille au dernier endroit où il a été soigné (sinon au départ du jeu).
 - **Le carnet** montre maintenant chaque créature de l'équipe avec son sprite, son niveau, son statut et sa barre de PV.
 - **Sauvegarde** : les créatures sont gardées en entier (niveau, XP, PV, IV, EV, nature, attaques et PP), ainsi que la boîte et le dernier lieu de soin. Une sauvegarde de Saga 0.2 est mise à jour toute seule.
+
+## Ce que fait Saga 0.4 : deux thèmes pour l'interface en jeu
+
+- Le jeu choisit son thème dans Tafl (0.15 ou plus : **Données du jeu › Réglages › Interface du jeu**), avec sa **couleur d'accent** (les noms dans les dialogues, les curseurs, la barre d'XP).
+- **Verre** : des plaques sombres et floues aux coins arrondis. En combat, le texte et les boutons flottent sur le décor au lieu d'une barre opaque.
+- **Pixel** : la police pixel Jersey 10 (aux chiffres bien lisibles), des cadres nets à double bordure, pas de flou ni d'arrondi, un curseur ▶, des lignes de balayage légères en combat. Façon Game Boy Advance.
+- Les deux thèmes couvrent les dialogues, les choix, les annonces, le nom de la carte, le carnet et tout le combat.
+- **Réglages de Saga › Interface en jeu** : « Celle choisie par le jeu », ou forcer Verre ou Pixel.
 
 ## La suite
 
@@ -97,6 +105,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ambiance.js` | La teinte et la météo. |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
+| `renderer/polices/` | La police pixel Jersey 10 (licence SIL OFL, dans `OFL.txt`). |
 | `renderer/moteur/regles/regles.js` | **La porte des règles** : le moteur ne parle qu'à elle pour tout ce qui touche aux créatures et aux combats. |
 | `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |
 | `renderer/moteur/regles/pokemon/combat.js` | Le déroulé d'un combat : tours, dégâts, statuts, sac, capture, fuite, XP, dresseurs. |

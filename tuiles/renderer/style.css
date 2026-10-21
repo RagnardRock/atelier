@@ -1050,3 +1050,8 @@ body.resizing-row { cursor: row-resize; }
 /* Les calques ne s'étirent plus dans le vide : la place libre va aux tuiles. */
 #layers-panel { flex: 0 0 auto; }
 #color-panel:not(.sized) { flex-shrink: 0; }
+
+/* Réglages > Interface du jeu (Tafl 0.15) : le nuancier de l'accent et son bouton « Celle de Saga » */
+.accent-jeu { display: flex; align-items: center; gap: 8px; }
+.accent-jeu input[type="color"] { width: 44px; height: 30px; padding: 0 2px; border: 1px solid var(--border); border-radius: 7px; background: transparent; cursor: pointer; }
+.accent-jeu .button { white-space: nowrap; }
