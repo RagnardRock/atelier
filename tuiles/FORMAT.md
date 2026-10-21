@@ -128,7 +128,10 @@ Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme
   ],
   "evenements": [
     { "id": "ev-1", "nom": "Maman", "type": "pnj", "x": 6, "y": 4, "...": "voir « Événements »" }
-  ]
+  ],
+  "groupe": "Bourg Palette",
+  "interieur": false,
+  "monde": { "x": 0, "y": 30 }
 }
 ```
 
@@ -201,6 +204,16 @@ Des rectangles de cases (`x`, `y`, `largeur`, `hauteur`), qui peuvent se chevauc
 Une case `(x, y)` qui mène ailleurs : marcher dessus emmène le joueur sur la case `(vers.x, vers.y)` de la carte `vers.carte` (son `id`), tourné vers `vers.direction`. C'est une porte, un escalier, une bouche de grotte, ou le bord d'une route qui continue sur la carte suivante.
 
 Conseil pour une porte : l'arrivée sur le paillasson à l'intérieur, et le téléporteur du retour juste derrière lui (Tafl peut le créer tout seul : case « Créer aussi le téléporteur du retour »). Ainsi, le joueur qui arrive ne repart pas aussitôt.
+
+### Groupe, intérieur et carte monde
+
+Ajoutés par Tafl 0.11. Une carte d'un fichier plus ancien se lit comme `"groupe": ""`, `"interieur": false`, `"monde": null`.
+
+| Champ | Sens |
+|---|---|
+| `groupe` | Le groupe de la carte dans le panneau Cartes de Tafl (« Ville 1 », « Routes »…), `""` = aucun. Seulement pour ranger : le moteur peut l'ignorer. |
+| `interieur` | `true` pour un intérieur (maison, centre, grotte…) : il n'est pas sur la carte monde. `false` pour une ville, une route… |
+| `monde` | La place de la carte sur la carte monde : la case `{ "x", "y" }` de son coin en haut à gauche, en cases (une case de la carte = une case du monde). `null` pour un intérieur, ou une carte que Tafl n'a pas encore placée. Deux cartes extérieures dont les bords se touchent sur la carte monde sont voisines : le moteur peut les enchaîner sans écran noir, et dessiner un écran « carte de la région ». |
 
 ### Événements
 
@@ -535,3 +548,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1** (Tafl 0.6) : dossier de jeu, plusieurs cartes, calques avec profondeur, opacité, fusion et parallaxe, passage et collisions, zones, téléporteurs, départ du joueur.
 - **Version 1, ajouts de Tafl 0.7** : `evenements` dans les cartes (pages, conditions, commandes), `donnees` dans `jeu.json`, et le dossier `donnees/` (personnages avec portraits, quêtes, interrupteurs). Ce sont des champs en plus : un fichier de Tafl 0.6 se lit pareil (sans événements ni données), donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.8** : les bases de données (`types`, `talents`, `attaques`, `creatures`, `objets`, `dresseurs`, `boutiques`, `reglages` dans `donnees/`), `rencontres` et `taux` dans les zones, `ambiance` dans les cartes. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.11** : `groupe`, `interieur` et `monde` dans les cartes. Des champs en plus, donc la version reste 1.

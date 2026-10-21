@@ -65,6 +65,10 @@ const IO = (() => {
       teleporteurs: map.warps.map((w) => ({ id: w.id, x: w.x, y: w.y, vers: { carte: w.carte, x: w.tx, y: w.ty, direction: w.direction } })),
       // Tafl 0.7 : personnages, panneaux, coffres… avec leur script (déjà au format du fichier, voir events.js).
       evenements: map.events,
+      // Tafl 0.11 : le groupe dans la liste des cartes, intérieur ou non, et la place sur la carte monde.
+      groupe: map.groupe || '',
+      interieur: Boolean(map.interieur),
+      monde: map.monde ? { x: map.monde.x, y: map.monde.y } : null,
     };
   }
   const oneOf = (v, list, fallback) => (list.some(([k]) => k === v) ? v : fallback);
@@ -95,6 +99,9 @@ const IO = (() => {
       carte: String(w.vers.carte), tx: int(w.vers.x), ty: int(w.vers.y), direction: oneOf(w.vers.direction, Doc.DIRECTIONS, 'bas'),
     }));
     map.events = Events.normEvents(data.evenements, width, height, tileCount);
+    map.groupe = String(data.groupe || '').trim().slice(0, 60);
+    map.interieur = data.interieur === true;
+    map.monde = Number.isFinite(Number(data.monde?.x)) && Number.isFinite(Number(data.monde?.y)) ? { x: int(data.monde.x), y: int(data.monde.y) } : null;
     return map;
   }
 
@@ -521,12 +528,12 @@ const IO = (() => {
     return c;
   }
 
-  function mapCanvas(doc, scale = 1) {
-    const s = doc.tileSize, { map } = doc;
+  // map : la carte affichée, ou une autre (la carte monde les dessine toutes) ; canvases : les tuiles déjà dessinées.
+  function mapCanvas(doc, scale = 1, map = doc.map, canvases = doc.tiles.map((t) => Doc.tileCanvas(t, doc.tileSize))) {
+    const s = doc.tileSize;
     const c = el('canvas', { width: map.width * s * scale, height: map.height * s * scale });
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
-    const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s));
     for (const layer of map.layers) {
       if (!layer.visible) continue;
       // Opacité et mode de fusion du calque : comme dans le jeu.

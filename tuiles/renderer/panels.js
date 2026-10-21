@@ -239,26 +239,70 @@ const Panels = (() => {
   }
 
   // --- Cartes du jeu ---
+  // Tafl 0.11 : les cartes d'un même groupe (« Ville 1 », « Routes »…) se rangent sous un titre
+  // qu'on replie d'un clic. Le groupe se place là où est sa première carte dans la liste.
+  // Glisser une carte sur un titre la met dans ce groupe ; sur une autre carte, la range juste avant elle.
   const mapsEl = $('#maps');
+  const REPLIS = 'tafl.groupesReplies';
+  let replies;
+  try { replies = new Set(JSON.parse(localStorage.getItem(REPLIS) || '[]')); } catch { replies = new Set(); }
+  function toggleGroup(nom) {
+    if (replies.has(nom)) replies.delete(nom); else replies.add(nom);
+    try { localStorage.setItem(REPLIS, JSON.stringify([...replies])); } catch { /* sans mémoire, tant pis */ }
+    renderMaps();
+  }
+  let dragged = -1; // la carte qu'on glisse dans la liste
+  function dropTarget(node, onDrop) {
+    node.ondragover = (e) => { if (dragged < 0) return; e.preventDefault(); node.classList.add('drop'); };
+    node.ondragleave = () => node.classList.remove('drop');
+    node.ondrop = (e) => { e.preventDefault(); node.classList.remove('drop'); const from = dragged; dragged = -1; if (from >= 0) onDrop(from); };
+  }
+  function mapRow(doc, m, i, inGroup) {
+    const row = el('button', { className: `row${i === doc.mapIndex ? ' active' : ''}${inGroup ? ' in-group' : ''}`, draggable: true, title: `${m.name} (fichier cartes/${m.id}.json)${m.interieur ? '\nIntérieur : pas sur la carte monde' : ''}\nClic : l'afficher · double-clic : renommer · clic droit : plus d'actions · glisser : la ranger` }, [
+      el('i', { className: `codicon codicon-${m.interieur ? 'home' : 'map'} lead` }),
+      el('span', { className: 'row-name', textContent: m.name }),
+      doc.depart?.carte === m.id ? el('span', { className: 'badge start', textContent: 'départ', title: 'Le joueur commence le jeu sur cette carte' }) : null,
+      el('span', { className: 'row-meta', textContent: `${m.width}×${m.height}` }),
+    ]);
+    row.onclick = () => App.selectMap(i);
+    row.ondblclick = () => App.renameMap(i);
+    row.oncontextmenu = (e) => {
+      e.preventDefault();
+      App.selectMap(i);
+      Menus.open(App.mapMenuItems(), e.clientX, e.clientY);
+    };
+    row.ondragstart = (e) => { dragged = i; e.dataTransfer.effectAllowed = 'move'; };
+    row.ondragend = () => { dragged = -1; };
+    // Vers le bas : juste après la carte visée ; vers le haut : juste avant.
+    dropTarget(row, (from) => { if (from !== i) App.placeMap(from, from < i ? i + 1 : i, m.groupe); });
+    return row;
+  }
   function renderMaps() {
     const doc = App.doc;
     mapsEl.innerHTML = '';
     if (!doc) return;
+    const groupes = new Map(); // nom → [numéros des cartes], dans l'ordre de la liste
+    doc.maps.forEach((m, i) => { if (m.groupe) groupes.set(m.groupe, [...(groupes.get(m.groupe) || []), i]); });
+    const faits = new Set();
     doc.maps.forEach((m, i) => {
-      const row = el('button', { className: `row${i === doc.mapIndex ? ' active' : ''}`, title: `${m.name} (fichier cartes/${m.id}.json)\nClic : l'afficher · double-clic : renommer · clic droit : plus d'actions` }, [
-        el('i', { className: 'codicon codicon-map lead' }),
-        el('span', { className: 'row-name', textContent: m.name }),
-        doc.depart?.carte === m.id ? el('span', { className: 'badge start', textContent: 'départ', title: 'Le joueur commence le jeu sur cette carte' }) : null,
-        el('span', { className: 'row-meta', textContent: `${m.width}×${m.height}` }),
+      if (!m.groupe) return mapsEl.append(mapRow(doc, m, i, false));
+      if (faits.has(m.groupe)) return;
+      faits.add(m.groupe);
+      const membres = groupes.get(m.groupe);
+      const replie = replies.has(m.groupe);
+      const head = el('button', { className: 'row group-row', title: `Groupe « ${m.groupe} »\nClic : replier ou déplier · double-clic : renommer · clic droit : plus d'actions · glisse une carte ici pour l'y ranger` }, [
+        el('i', { className: `codicon codicon-chevron-${replie ? 'right' : 'down'} lead` }),
+        el('i', { className: `codicon codicon-folder${replie ? '' : '-opened'} group-icon` }),
+        el('span', { className: 'row-name', textContent: m.groupe }),
+        el('span', { className: 'row-meta', textContent: membres.length }),
       ]);
-      row.onclick = () => App.selectMap(i);
-      row.ondblclick = () => App.renameMap(i);
-      row.oncontextmenu = (e) => {
-        e.preventDefault();
-        App.selectMap(i);
-        Menus.open(App.mapMenuItems(), e.clientX, e.clientY);
-      };
-      mapsEl.append(row);
+      head.onclick = () => toggleGroup(m.groupe);
+      head.ondblclick = (e) => { e.preventDefault(); App.run(() => App.renameGroup(m.groupe)); };
+      head.oncontextmenu = (e) => { e.preventDefault(); Menus.open(App.groupMenuItems(m.groupe, replie), e.clientX, e.clientY); };
+      dropTarget(head, (from) => App.placeMap(from, membres[membres.length - 1] + 1, m.groupe));
+      mapsEl.append(head);
+      // Replié : on garde visible la carte affichée, pour savoir où on est.
+      for (const k of membres) if (!replie || k === doc.mapIndex) mapsEl.append(mapRow(doc, doc.maps[k], k, true));
     });
     $('#maps-count').textContent = doc.maps.length;
     $('#map-delete').disabled = doc.maps.length < 2;
@@ -388,5 +432,5 @@ const Panels = (() => {
     }
   }
 
-  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, renderStamps, stampCanvas, tick, usedColors };
+  return { render, renderLive, toggleGroup, isGroupFolded: (nom) => replies.has(nom), renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, renderStamps, stampCanvas, tick, usedColors };
 })();

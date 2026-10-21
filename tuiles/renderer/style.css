@@ -941,3 +941,22 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .stamp-item.chosen { border-color: rgba(255, 255, 255, 0.25); }
 .stamp-item.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .stamp-item canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+
+/* ---------- Tafl 0.11 : groupes de cartes et carte monde ---------- */
+.row.group-row { min-height: 26px; font-weight: 600; color: var(--text-strong); }
+.row.group-row .group-icon { color: var(--accent); opacity: 0.85; }
+.row.in-group { margin-left: 14px; }
+.row.drop { border-color: color-mix(in srgb, var(--accent) 80%, transparent); border-style: dashed; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.world-editor .editor-body { position: relative; }
+.world-side { width: 270px; gap: 2px; }
+.world-help { margin: 0 0 6px; }
+.world-row { display: flex; align-items: center; gap: 7px; min-height: 28px; padding: 2px 8px; border: 1px solid transparent; border-radius: 7px; cursor: pointer; }
+.world-row:hover { background: var(--hover); }
+.world-row.active { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.world-row.inside { color: var(--muted); cursor: default; }
+.world-row .codicon { color: var(--muted); }
+.world-row input { margin: 0; accent-color: var(--accent); }
+.badge.conflit { background: rgba(255, 107, 107, 0.18); color: #ff8a8a; }
+.world-view { position: relative; flex: 1; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.04), transparent 70%), rgba(8, 9, 14, 0.55); border-bottom-right-radius: 0; }
+.world-view canvas { display: block; touch-action: none; cursor: grab; }
+.world-tip { position: absolute; pointer-events: none; padding: 4px 9px; border-radius: 7px; background: rgba(16, 17, 24, 0.92); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text); font-size: 12px; white-space: nowrap; }

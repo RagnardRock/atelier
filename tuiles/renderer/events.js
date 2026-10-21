@@ -1216,6 +1216,6 @@ const Events = (() => {
     TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
-    editEvent, editData, isOpen, handleKey, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
+    editEvent, editData, isOpen, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
   };
 })();
