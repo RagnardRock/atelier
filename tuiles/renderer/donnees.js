@@ -171,7 +171,10 @@ const Donnees = (() => {
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
     ajustement: 'badges', ecart: 0, chance_chromatique: 4096,
+    interface: { theme: 'verre', accent: '' },
   });
+  // L'interface en jeu (Tafl 0.13, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
+  const THEMES = [['verre', 'Verre : sombre et flou, coins arrondis'], ['pixel', 'Pixel : police pixel, cadres nets, rétro']];
   function normReglages(r) {
     const d = reglagesVides();
     if (!r || typeof r !== 'object') return d;
@@ -183,6 +186,10 @@ const Donnees = (() => {
       ajustement: pick(r.ajustement, AJUSTEMENTS, d.ajustement),
       ecart: int(r.ecart, 0, -20, 20),
       chance_chromatique: int(r.chance_chromatique, 4096, 0, 100000),
+      interface: {
+        theme: pick(r.interface?.theme, THEMES, 'verre'),
+        accent: /^#[0-9a-f]{6}$/i.test(r.interface?.accent || '') ? r.interface.accent.toLowerCase() : '',
+      },
     };
   }
   const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], reglages: reglagesVides() });
@@ -828,12 +835,26 @@ const Donnees = (() => {
     );
   }
 
+  // La couleur d'accent : un nuancier, et « Celle de Saga » pour revenir à l'orange par défaut.
+  function couleurAccent(r, ctx) {
+    const entree = el('input', { type: 'color', value: r.interface.accent || '#ffb347' });
+    const defaut = el('button', { className: 'button', type: 'button', textContent: 'Celle de Saga (orange)' });
+    const maj = () => { defaut.disabled = !r.interface.accent; entree.style.opacity = r.interface.accent ? '1' : '0.45'; };
+    entree.addEventListener('input', () => { r.interface.accent = entree.value; maj(); ctx.change?.(); });
+    defaut.addEventListener('click', () => { r.interface.accent = ''; entree.value = '#ffb347'; maj(); ctx.change?.(); });
+    maj();
+    return el('div', { className: 'accent-jeu' }, [entree, defaut]);
+  }
   function formReglages(r, ctx) {
     const natures = el('table', { className: 'natures' }, [
       el('tr', {}, [el('th', { textContent: 'Nature' }), el('th', { textContent: '+10 %' }), el('th', { textContent: '−10 %' })]),
       ...NATURES.map(([, n, p, m]) => el('tr', {}, [el('td', { textContent: n }), el('td', { textContent: p ? libelleStat(p) : '—' }), el('td', { textContent: m ? libelleStat(m) : '—' })])),
     ]);
     ctx.form.append(
+      section('Interface du jeu'),
+      info('Le style des dialogues, du combat et des menus quand on joue dans Saga. Le joueur peut aussi le forcer dans les réglages de Saga.'),
+      champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
+      champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
       section('Argent et équipe'),
       el('div', { className: 'field-grid' }, [
         champ('Monnaie', ctx.input(r, 'monnaie', 'Pokédollars')),

@@ -529,13 +529,15 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 { "format": "tafl-reglages", "version": 1, "reglages": {
   "monnaie": "Pokédollars", "argent_depart": 3000, "equipe_max": 6,
   "plafonds": [{ "badges": 0, "niveau": 15 }, { "badges": 1, "niveau": 20 }, { "badges": 8, "niveau": 100 }],
-  "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096
+  "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096,
+  "interface": { "theme": "verre", "accent": "#ffb347" }
 } }
 ```
 
 - `plafonds` : le niveau maximum des créatures du joueur selon ses badges.
 - `ajustement` : comment les dresseurs `ajuste: true` règlent leur niveau : `"aucun"`, `"equipe"` (le meilleur niveau de l'équipe du joueur), `"badges"` (le plafond des badges du joueur). Leur niveau devient cette référence plus `ecart`, sans descendre sous celui écrit dans leur équipe.
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
+- `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga.
 
 ## Exemple de lecture (JavaScript)
 
@@ -556,3 +558,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.8** : les bases de données (`types`, `talents`, `attaques`, `creatures`, `objets`, `dresseurs`, `boutiques`, `reglages` dans `donnees/`), `rencontres` et `taux` dans les zones, `ambiance` dans les cartes. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.11** : `groupe`, `interieur` et `monde` dans les cartes. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.12** : `sprite` dans les personnages (planche de 4 directions avec la marche). Un champ en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.13** : `interface` dans les réglages (thème verre ou pixel, couleur d'accent). Un champ en plus, donc la version reste 1.

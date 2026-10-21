@@ -76,6 +76,14 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **Le carnet** montre maintenant chaque créature de l'équipe avec son sprite, son niveau, son statut et sa barre de PV.
 - **Sauvegarde** : les créatures sont gardées en entier (niveau, XP, PV, IV, EV, nature, attaques et PP), ainsi que la boîte et le dernier lieu de soin. Une sauvegarde de Saga 0.2 est mise à jour toute seule.
 
+## Ce que fait Saga 0.4 : deux thèmes pour l'interface en jeu
+
+- Le jeu choisit son thème dans Tafl (0.13 ou plus : **Données du jeu › Réglages › Interface du jeu**), avec sa **couleur d'accent** (les noms dans les dialogues, les curseurs, la barre d'XP).
+- **Verre** : des plaques sombres et floues aux coins arrondis. En combat, le texte et les boutons flottent sur le décor au lieu d'une barre opaque.
+- **Pixel** : la police pixel Jersey 10 (aux chiffres bien lisibles), des cadres nets à double bordure, pas de flou ni d'arrondi, un curseur ▶, des lignes de balayage légères en combat. Façon Game Boy Advance.
+- Les deux thèmes couvrent les dialogues, les choix, les annonces, le nom de la carte, le carnet et tout le combat.
+- **Réglages de Saga › Interface en jeu** : « Celle choisie par le jeu », ou forcer Verre ou Pixel.
+
 ## La suite
 
 1. Les **boutiques** (débloquées par les succès) et l'écran des EV du centre.
@@ -97,6 +105,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ambiance.js` | La teinte et la météo. |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
+| `renderer/polices/` | La police pixel Jersey 10 (licence SIL OFL, dans `OFL.txt`). |
 | `renderer/moteur/regles/regles.js` | **La porte des règles** : le moteur ne parle qu'à elle pour tout ce qui touche aux créatures et aux combats. |
 | `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |
 | `renderer/moteur/regles/pokemon/combat.js` | Le déroulé d'un combat : tours, dégâts, statuts, sac, capture, fuite, XP, dresseurs. |

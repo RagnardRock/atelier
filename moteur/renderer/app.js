@@ -22,6 +22,7 @@ const App = (() => {
 
   async function reglages() {
     const etaitEnPause = !$('#pause').hidden;
+    const themeAvant = config.theme;
     moteur.pause(true);
     const v = await Dialogs.form({
       title: 'Réglages de Saga',
@@ -32,14 +33,27 @@ const App = (() => {
         { type: 'info', text: 'En zoom automatique, Saga choisit le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur. Un zoom entier garde le pixel art parfaitement net.' },
         { key: 'courirParDefaut', label: 'Courir sans tenir Maj (Maj fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },
         { key: 'meteo', label: 'Montrer la météo des cartes', type: 'checkbox', value: config.meteo },
+        { key: 'theme', label: 'Interface en jeu', type: 'select', value: config.theme || 'jeu', choices: [['jeu', 'Celle choisie par le jeu'], ['verre', 'Verre (sombre, flou)'], ['pixel', 'Pixel (rétro)']] },
       ],
-      onInput: (vals) => moteur.regler({ ...vals, zoom: Number(vals.zoom) }),
+      onInput: (vals) => { moteur.regler({ ...vals, zoom: Number(vals.zoom) }); config = { ...config, theme: vals.theme }; appliquerTheme(); },
     });
     if (v) {
       config = await window.saga.writeConfig({ ...v, zoom: Number(v.zoom) });
-    }
+    } else config = { ...config, theme: themeAvant };
     moteur.regler(config);
+    appliquerTheme();
     if (!etaitEnPause) moteur.pause(false);
+  }
+
+  // Le thème de l'interface en jeu (Saga 0.4) : celui que le jeu choisit dans Tafl (Réglages >
+  // Interface du jeu), sauf si les réglages de Saga en forcent un. La couleur d'accent du jeu remplace
+  // celle de Saga dans toute la scène (dialogues, combat, carnet, pause).
+  function appliquerTheme() {
+    const ui = ouvert?.jeu.donnees.reglages?.reglages?.interface || {};
+    const theme = config.theme === 'verre' || config.theme === 'pixel' ? config.theme : ui.theme === 'pixel' ? 'pixel' : 'verre';
+    $('#scene').dataset.theme = theme;
+    const accent = /^#[0-9a-f]{6}$/i.test(ui.accent || '') ? ui.accent : '';
+    $('#scene').style.setProperty('--accent', accent || null);
   }
 
   // --- Ouvrir un jeu ---
@@ -57,6 +71,7 @@ const App = (() => {
     // Un départ demandé (« Jouer ici » de Tafl, ou F5) qui n'existe plus : on revient au départ du jeu.
     const d = depart && jeu.cartes.has(depart.carte) ? depart : null;
     ouvert = { dossier: textes.dossier, jeu };
+    appliquerTheme();
     $('#accueil').hidden = true;
     $('#scene').hidden = false;
     $('#titre-jeu').textContent = jeu.titre;
