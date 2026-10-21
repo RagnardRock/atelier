@@ -265,6 +265,68 @@ const PixelArt = (() => {
         }
         break;
       }
+      case 'taches': {
+        // De grandes taches douces (bruit de valeur qui se raccorde d'un bord à l'autre) : les nuances
+        // calmes d'une herbe, d'une terre ou d'une eau, au lieu de petits points partout. couleurs : une
+        // par niveau (la première pour les taches, les suivantes pour leur cœur) ; densite : la part
+        // couverte ; taille : la taille des taches en pixels ; bord tramé sauf trame: false.
+        const couleurs = (op.couleurs || []).map(lire);
+        if (!couleurs.length) throw new Error('taches : couleurs, au moins une.');
+        const r = hasard(op.graine ?? 5);
+        // Des bosses douces (gaussiennes) posées au hasard, de tailles variées ; la distance se compte en
+        // boucle pour que les taches qui dépassent d'un bord reviennent de l'autre côté.
+        const taille = clamp(Number(op.taille ?? 6), 2, 64);
+        const nb = Math.max(2, Math.round((zone.l * zone.h) / (taille * taille) * 1.6));
+        const bosses = Array.from({ length: nb }, () => ({ x: r() * zone.l, y: r() * zone.h, s: (taille / 2) * (0.55 + r() * 0.7), f: 0.6 + r() * 0.4 }));
+        const valeur = (x, y) => {
+          let v = 0;
+          for (const b of bosses) {
+            let dx = Math.abs(x + 0.5 - b.x), dy = Math.abs(y + 0.5 - b.y);
+            if (op.raccord !== false) { dx = Math.min(dx, zone.l - dx); dy = Math.min(dy, zone.h - dy); }
+            v += b.f * Math.exp(-(dx * dx + dy * dy) / (2 * b.s * b.s));
+          }
+          return v;
+        };
+        const densite = clamp(Number(op.densite ?? 0.35), 0, 1);
+        // Le seuil qui couvre la part demandée, mesuré sur la tuile elle-même.
+        const vals = [];
+        for (let y = 0; y < zone.h; y++) for (let x = 0; x < zone.l; x++) vals.push(valeur(x, y));
+        const tries = [...vals].sort((a, b) => b - a);
+        const seuil = (k) => tries[clamp(Math.floor(tries.length * densite * (1 - k / couleurs.length)) - 1, 0, tries.length - 1)];
+        const seuils = couleurs.map((_, k) => seuil(k));
+        const bande = op.trame === false ? 0 : 0.035;
+        for (let y = 0; y < zone.h; y++) for (let x = 0; x < zone.l; x++) {
+          const v = vals[y * zone.l + x];
+          const b = (BAYER[(zone.y + y) & 3][(zone.x + x) & 3] + 0.5) / 16 - 0.5;
+          let c = null;
+          seuils.forEach((s, k) => { if (v + b * bande * 2 >= s) c = couleurs[k]; });
+          if (c) poser(zone.x + x, zone.y + y, c);
+        }
+        break;
+      }
+      case 'nettoyer': {
+        // Le ménage du pixel artiste : chaque pixel qui n'a aucun voisin (haut, bas, gauche, droite) de sa
+        // couleur prend la couleur la plus présente autour de lui. garder : les couleurs à laisser (fleurs, reflets…).
+        const garder = op.garder ? [...String(op.garder)].map(lire) : [];
+        const copie = Toile(new Uint8ClampedArray(t.data), w, h);
+        const boucle = op.raccord !== false;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          const p = Array.from(copie.get(x, y));
+          if (!p[3] || garder.some((c) => copie.meme(x, y, c))) continue;
+          const voisins = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [x + dx, y + dy]).map(([xx, yy]) => (boucle ? [(xx + w) % w, (yy + h) % h] : [xx, yy])).filter(([xx, yy]) => xx >= 0 && yy >= 0 && xx < w && yy < h);
+          if (voisins.some(([xx, yy]) => copie.meme(xx, yy, p))) continue;
+          const compte = new Map();
+          for (const [xx, yy] of voisins) {
+            const q = Array.from(copie.get(xx, yy));
+            if (!q[3]) continue;
+            const cle = q.join(',');
+            compte.set(cle, (compte.get(cle) || 0) + 1);
+          }
+          const meilleur = [...compte.entries()].sort((a, b) => b[1] - a[1])[0];
+          if (meilleur && meilleur[1] >= 2) poser(x, y, meilleur[0].split(',').map(Number));
+        }
+        break;
+      }
       case 'contour': {
         // Un contour autour de la forme : à l'extérieur (sur les pixels hors de la forme), ou sur
         // le bord de la forme elle-même avec interieur: true (utile quand le fond est déjà peint).
@@ -347,7 +409,7 @@ const PixelArt = (() => {
         throw new Error(`Opération inconnue : ${op.type}. Possibles : ${OPERATIONS.join(', ')}.`);
     }
   }
-  const OPERATIONS = ['remplir', 'rect', 'ellipse', 'ligne', 'pot', 'degrade', 'bruit', 'contour', 'ombrage', 'ombre_portee', 'pixels', 'symetrie', 'remplacer', 'decaler'];
+  const OPERATIONS = ['remplir', 'rect', 'ellipse', 'ligne', 'pot', 'degrade', 'taches', 'bruit', 'nettoyer', 'contour', 'ombrage', 'ombre_portee', 'pixels', 'symetrie', 'remplacer', 'decaler'];
 
   // --- Animations : les images 1 à n-1 fabriquées à partir de l'image source ---
   function animer(src, w, h, mode, o, lire) {
@@ -435,6 +497,23 @@ const PixelArt = (() => {
     if (compte.size <= 2 && opaques > w * h * 0.5) remarques.push('Très peu de couleurs : ajoute une ombre et une lumière (rampe) pour le volume.');
     if (plusGros && plusGros[1] > opaques * 0.85 && opaques > 32) remarques.push(`Grand aplat : ${plusGros[0]} couvre ${Math.round((plusGros[1] / opaques) * 100)} % — une texture légère (bruit en amas, tramage) le rendrait plus vivant.`);
     if (isoles.length > Math.max(3, opaques * 0.06)) remarques.push(`${isoles.length} pixels isolés qui tranchent (ex. ${isoles.slice(0, 4).map(([x, y]) => `${x},${y}`).join(' ; ')}) : groupe-les en amas de 2 ou 3, ou adoucis leur couleur.`);
+    // Agitation : la part des pixels voisins de couleurs différentes. Au-delà d'un tiers, l'œil voit du
+    // bruit et la tuile paraît brouillonne, surtout un sol répété sur toute une carte.
+    let paires = 0, differentes = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const p = t.get(x, y);
+      if (!p[3]) continue;
+      for (const [xx, yy] of [[x + 1, y], [x, y + 1]]) {
+        if (xx >= w || yy >= h) continue;
+        const q = t.get(xx, yy);
+        if (!q[3]) continue;
+        paires++;
+        if (q[0] !== p[0] || q[1] !== p[1] || q[2] !== p[2]) differentes++;
+      }
+    }
+    const agitation = paires ? differentes / paires : 0;
+    remarques.push(`Agitation ${Math.round(agitation * 100)} % (un sol calme : moins de 25 % ; un objet détaillé : 30 à 45 %).`);
+    if (agitation > 0.45 || (agitation > 0.3 && !transparents && plusGros && plusGros[1] > opaques * 0.5)) remarques.push('Trop chargé, ça fait brouillon : moins de marques, plus grandes et peu contrastées (taches), puis l\'opération nettoyer.');
     if (opaques && lumMax - lumMin < 40) remarques.push('Contraste faible : écarte davantage le plus clair et le plus sombre.');
     // Raccords (tuile pleine seulement) : le bord droit doit continuer le bord gauche, et le bas le haut.
     if (!transparents) {
