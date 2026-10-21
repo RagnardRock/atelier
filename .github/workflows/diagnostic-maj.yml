@@ -51,6 +51,12 @@ jobs:
           & C:\h\handle64.exe -accepteula -nobanner $dir 2>$null | Select-Object -First 8 | % { "    $_" }
           $c = Installer C:\new.exe @('/S','--updated') 180
           "### RÉSULTAT : code $c, version après : $(Version)"
+          Get-Process pwsh | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep 1
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          "    version dans app.asar : $(& "$dir\Brokk.exe" -p "require(process.argv[1]).version" "$dir\resources\app.asar\package.json" | Out-String)"
+          Remove-Item Env:ELECTRON_RUN_AS_NODE
+          Get-ChildItem $dir -Recurse -File | Sort-Object LastWriteTime | Select-Object -First 3 | % { "    plus ancien fichier : $($_.FullName) $($_.LastWriteTime)" }
           Get-Process Brokk -ErrorAction SilentlyContinue | % { "    Brokk.exe encore là : $($_.Id)" }
           '@ | Set-Content C:\fin.ps1
       - name: A Brokk ouvert + Claude Code et son serveur MCP (Brokk.exe en mode Node)
