@@ -18,7 +18,7 @@
 // ici par un canal local (un « named pipe » de Windows, protégé par un jeton secret) ; on les passe
 // à la fenêtre, qui les fait sous tes yeux, et la réponse repart par le même chemin.
 
-const { spawn, execFile } = require('node:child_process');
+const { spawn, execFile, execFileSync } = require('node:child_process');
 const crypto = require('node:crypto');
 const net = require('node:net');
 const os = require('node:os');
@@ -264,13 +264,22 @@ function handleMessage(m) {
   }
 }
 
-function stop() {
+// attendre : quand l'outil se ferme (et avant une mise à jour), on attend que Claude Code et son
+// serveur MCP soient vraiment arrêtés. Sinon ils peuvent survivre à l'outil : le serveur MCP est une
+// copie de l'outil (<Outil>.exe en mode Node) qui garde ses fichiers ouverts, et l'installeur de la
+// version suivante ne peut plus les remplacer.
+function stop(attendre = false) {
   if (!proc) return;
   const current = proc;
   proc = null;
   if (process.platform === 'win32') {
     // Avec le shell, kill() n'arrêterait que cmd.exe : taskkill arrête aussi Claude Code.
-    execFile('taskkill', ['/pid', String(current.pid), '/T', '/F'], () => {});
+    const args = ['/pid', String(current.pid), '/T', '/F'];
+    if (attendre) {
+      try { execFileSync('taskkill', args, { windowsHide: true, timeout: 5000, stdio: 'ignore' }); } catch { /* déjà arrêté */ }
+    } else {
+      execFile('taskkill', args, { windowsHide: true }, () => {});
+    }
   } else {
     current.kill();
   }

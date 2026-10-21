@@ -1,0 +1,78 @@
+# Temporaire : vérifie la correction de « Échec de désinstallation des anciens fichiers » sur un PC Windows.
+name: Diagnostic mise à jour (temporaire)
+on:
+  push:
+    branches: [claude/project-thread-uzu8ff]
+    paths: ['.github/workflows/diagnostic-maj.yml', 'commun/installeur.nsh', 'commun/bloqueurs.ps1']
+defaults:
+  run:
+    shell: pwsh
+jobs:
+  repro:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Fabriquer le nouvel installeur de Brokk
+        working-directory: export
+        run: |
+          npm ci
+          npx electron-builder --win nsis --publish never
+          Copy-Item (Get-ChildItem dist\Brokk-Setup-*.exe)[0].FullName C:\new.exe
+      - name: Préparer
+        run: |
+          curl.exe -sSL -o C:\old.exe "https://github.com/RagnardRock/atelier/releases/download/brokk-v0.4.2/Brokk-Setup-0.4.2.exe"
+          curl.exe -sSL -o h.zip https://download.sysinternals.com/files/Handle.zip
+          Expand-Archive h.zip -DestinationPath C:\h -Force
+          @'
+          $dir = "$env:LOCALAPPDATA\Programs\Brokk"
+          # Lance un programme complètement détaché de l'étape (sinon l'étape attend sa fin).
+          function Detache($ligne) { (Invoke-CimMethod Win32_Process -MethodName Create -Arguments @{ CommandLine = $ligne }).ProcessId }
+          function Installer($exe, $arguments, $sec) {
+            $p = Start-Process $exe -ArgumentList $arguments -PassThru
+            if (-not $p.WaitForExit($sec * 1000)) {
+              "  >> BLOQUÉ après $sec s (une fenêtre attend un clic)"
+              Get-Process | ? { $_.MainWindowTitle } | % { "     fenêtre : $($_.Name) « $($_.MainWindowTitle) »" }
+              Stop-Process $p -Force
+              Get-Process | ? { $_.Path -like "$env:TEMP*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+              return 'bloqué'
+            }
+            return $p.ExitCode
+          }
+          function Version { (Get-Item "$dir\Brokk.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion }
+          Get-Process Brokk -ErrorAction SilentlyContinue | Stop-Process -Force
+          "  ancienne : code $(Installer C:\old.exe @('/S') 120), version $(Version)"
+          '@ | Set-Content C:\debut.ps1
+          @'
+          Start-Sleep 5
+          "  qui tient des fichiers de Brokk :"
+          & C:\h\handle64.exe -accepteula -nobanner $dir 2>$null | Select-Object -First 8 | % { "    $_" }
+          $c = Installer C:\new.exe @('/S','--updated') 180
+          "### RÉSULTAT : code $c, version après : $(Version)"
+          Get-Process pwsh | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+          Start-Sleep 1
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          "    version dans app.asar : $(& "$dir\Brokk.exe" -p "require(process.argv[1]).version" "$dir\resources\app.asar\package.json" | Out-String)"
+          Remove-Item Env:ELECTRON_RUN_AS_NODE
+          Get-ChildItem $dir -Recurse -File | Sort-Object LastWriteTime | Select-Object -First 3 | % { "    plus ancien fichier : $($_.FullName) $($_.LastWriteTime)" }
+          Get-Process Brokk -ErrorAction SilentlyContinue | % { "    Brokk.exe encore là : $($_.Id)" }
+          '@ | Set-Content C:\fin.ps1
+      - name: A Brokk ouvert + Claude Code et son serveur MCP (Brokk.exe en mode Node)
+        if: always()
+        timeout-minutes: 8
+        run: |
+          . C:\debut.ps1
+          Detache "`"$dir\Brokk.exe`"" | Out-Null
+          # Un « Claude Code » (cmd) qui a lancé le serveur MCP : Brokk.exe en mode Node, hors de Brokk.
+          Detache "cmd /c set ELECTRON_RUN_AS_NODE=1&& `"$dir\Brokk.exe`" -e `"setInterval(function(){},1000)`"" | Out-Null
+          . C:\fin.ps1
+      - name: B un autre programme garde app.asar de Brokk ouvert
+        if: always()
+        timeout-minutes: 8
+        run: |
+          . C:\debut.ps1
+          Detache "pwsh -NoProfile -Command `$f=[IO.File]::Open('$dir\resources\app.asar','Open','Read','Read'); Start-Sleep 400" | Out-Null
+          . C:\fin.ps1
+          Get-Process pwsh | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
