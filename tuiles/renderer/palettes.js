@@ -18,7 +18,7 @@ const PALETTES = [
   {
     id: 'brume',
     nom: 'Brume (16 bits sombre, en rampes)',
-    // Tafl 0.16 : d'après la référence de Ragna (pluie, verts éteints, ardoises sombres, bois).
+    // Tafl 0.17 : d'après la référence de Ragna (pluie, verts éteints, ardoises sombres, bois).
     // Rangée par rampes, de la plus sombre à la plus claire : les ombres tirent vers le violet,
     // les lumières vers le jaune. Claude s'en sert pour ombrer sans changer de famille de couleurs.
     couleurs: [

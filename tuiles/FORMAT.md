@@ -292,6 +292,10 @@ Le moteur joue les `commandes` de la page dans l'ordre. Pendant un script, le jo
 | `soigner` | | Soigne toute l'équipe (le centre de soins). |
 | `boutique` | `boutique` | Ouvre une boutique de `boutiques.json`. |
 | `ecran_ev` | | Ouvre l'écran où le joueur répartit les points d'effort (EV) de ses créatures. |
+| `argent` | `action` (`"donner"` ou `"retirer"`), `montant` | (Tafl 0.16) Ajoute ou retire de l'argent. Retirer ne descend jamais sous 0 : s'il n'a pas assez, le joueur tombe à 0 et le script continue. Pour un péage, teste d'abord avec la condition `argent`. |
+| `badge` | `badge` | (Tafl 0.16) Donne au joueur le badge `badge` (un id de `reglages.badges`). Un badge déjà reçu ne compte pas deux fois. Le compteur `badges` vaut toujours le nombre de badges différents reçus : c'est lui qui fait monter les `plafonds` et le niveau des dresseurs qui s'ajustent. |
+| `personnaliser` | `nom` (`true`/`false`), `tenue` (`true`/`false`) | (Tafl 0.16) Ouvre l'écran où le joueur tape son nom (`nom`) et/ou choisit la tenue du héros parmi sa tenue de base et ses `tenues` (`tenue`). Le nom devient `{joueur}` dans les dialogues. |
+| `tenue` | `tenue` | (Tafl 0.16) Met au héros la tenue `tenue` (un id de ses `tenues`), ou `""` pour sa tenue de base. Pour l'histoire : un uniforme pour s'infiltrer, une combinaison de plongée… |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
 
@@ -304,10 +308,12 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `objet` | `objet`, `min` | le joueur a au moins `min` fois cet objet. |
 | `quete` | `quete`, `etat`, `etape` | la quête est `"pas_commencee"`, `"en_cours"` ou `"finie"`. Pour `"en_cours"`, `etape` > 0 demande en plus d'être au moins à cette étape. |
 | `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"evolutions"` (évolutions vues), `"badges"`, `"pas"`. Pour débloquer des boutiques ou des personnages au fil de la progression. |
+| `argent` | `min` | (Tafl 0.16) le joueur a au moins `min` d'argent. |
+| `badge` | `badge` | (Tafl 0.16) le joueur a reçu ce badge. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, la carte et la case du joueur.
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base).
 
 ## Données du jeu (`donnees/`)
 
@@ -331,7 +337,8 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
         { "expression": "normal", "png": "data:image/png;base64,..." },
         { "expression": "content", "png": "data:image/png;base64,..." }
       ],
-      "sprite": { "largeur": 16, "hauteur": 32, "images": 3, "planche": "data:image/png;base64,..." }
+      "sprite": { "largeur": 16, "hauteur": 32, "images": 3, "planche": "data:image/png;base64,..." },
+      "tenues": []
     }
   ]
 }
@@ -345,6 +352,7 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
   - **Marche** : pendant un pas d'une case, le moteur montre l'image de pas suivante (1, 2, …, `images - 1`, puis il recommence à 1) pendant la première moitié du pas, puis l'image 0. Avec une seule image, le personnage ne s'anime pas.
   - **Placement** : l'image est centrée sur la case, ses pieds (le bas de l'image) en bas de la case. Un sprite plus haut qu'une case (16 × 32, comme dans Pokémon) dépasse vers le haut, sur la case du dessus.
   - Le moteur montre le sprite s'il y en a un, sinon la `tuile`, sinon ce qu'il veut (Saga dessine un petit bonhomme à la `couleur` du personnage).
+- `tenues` (Tafl 0.16, pour le héros) : ses autres apparences, `[{ "id": "hiver", "nom": "Hiver", "sprite": { … } }]`, chacune avec un `sprite` au même format que ci-dessus (ou `null`). Le joueur en choisit une (commande `personnaliser`), ou l'histoire la lui met (commande `tenue`) ; le moteur montre alors le sprite de la tenue à la place du sien. Les portraits ne changent pas.
 - `portraits` : un visage par expression (`normal`, `content`, `rire`, `triste`, `colere`, `surpris`, `inquiet`, `gene`, `determine`, ou d'autres noms), en image encodée en texte comme les tuiles. Taille libre.
 
 ### `donnees/quetes.json`
@@ -531,13 +539,17 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
   "monnaie": "Pokédollars", "argent_depart": 3000, "equipe_max": 6,
   "plafonds": [{ "badges": 0, "niveau": 15 }, { "badges": 1, "niveau": 20 }, { "badges": 8, "niveau": 100 }],
   "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096,
-  "interface": { "theme": "verre", "accent": "#ffb347" }
+  "interface": { "theme": "verre", "accent": "#ffb347" },
+  "regles": "pokemon",
+  "badges": [{ "id": "badge-roche", "nom": "Badge Roche", "icone": "data:image/png;base64,..." }]
 } }
 ```
 
 - `plafonds` : le niveau maximum des créatures du joueur selon ses badges.
 - `ajustement` : comment les dresseurs `ajuste: true` règlent leur niveau : `"aucun"`, `"equipe"` (le meilleur niveau de l'équipe du joueur), `"badges"` (le plafond des badges du joueur). Leur niveau devient cette référence plus `ecart`, sans descendre sous celui écrit dans leur équipe.
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
+- `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. Seule valeur pour l'instant : `"pokemon"` (les types, talents, attaques, créatures et objets de `donnees/` sont ses données). Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
+- `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
 - `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga.
 
 ## Exemple de lecture (JavaScript)
@@ -560,3 +572,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.11** : `groupe`, `interieur` et `monde` dans les cartes. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.12** : `sprite` dans les personnages (planche de 4 directions avec la marche). Un champ en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.15** : `interface` dans les réglages (thème verre ou pixel, couleur d'accent). Un champ en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.16** : les commandes `argent`, `badge`, `personnaliser` et `tenue`, les conditions `argent` et `badge`, `tenues` dans les personnages, `regles` et `badges` dans les réglages. Des champs en plus, donc la version reste 1.

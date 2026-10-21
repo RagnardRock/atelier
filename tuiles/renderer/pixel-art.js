@@ -1,4 +1,4 @@
-// Outils de pixel art pour Claude (Tafl 0.16) : de quoi dessiner des tuiles plus belles qu'à la main
+// Outils de pixel art pour Claude (Tafl 0.17) : de quoi dessiner des tuiles plus belles qu'à la main
 // pixel par pixel. Utilisés par les actions rampe, peindre_tuile, animer_tuile et voir_tuile
 // (renderer/claude-actions.js).
 //
@@ -495,7 +495,7 @@ const PixelArt = (() => {
     remarques.push(`${compte.size} couleur(s)${transparents ? `, ${Math.round((transparents / (w * h)) * 100)} % transparent` : ''}.`);
     if (compte.size > 12 && w <= 16) remarques.push('Beaucoup de couleurs pour une si petite tuile : 4 à 8 suffisent souvent, en rampes.');
     if (compte.size <= 2 && opaques > w * h * 0.5) remarques.push('Très peu de couleurs : ajoute une ombre et une lumière (rampe) pour le volume.');
-    if (plusGros && plusGros[1] > opaques * 0.85 && opaques > 32) remarques.push(`Grand aplat : ${plusGros[0]} couvre ${Math.round((plusGros[1] / opaques) * 100)} % — une texture légère (bruit en amas, tramage) le rendrait plus vivant.`);
+    if (plusGros && plusGros[1] > opaques * 0.97 && opaques > 32) remarques.push(`Aplat presque nu : ${plusGros[0]} couvre ${Math.round((plusGros[1] / opaques) * 100)} % — quelques marques (3 à 6 touffes, cailloux, reflets) suffisent à le faire vivre.`);
     if (isoles.length > Math.max(3, opaques * 0.06)) remarques.push(`${isoles.length} pixels isolés qui tranchent (ex. ${isoles.slice(0, 4).map(([x, y]) => `${x},${y}`).join(' ; ')}) : groupe-les en amas de 2 ou 3, ou adoucis leur couleur.`);
     // Agitation : la part des pixels voisins de couleurs différentes. Au-delà d'un tiers, l'œil voit du
     // bruit et la tuile paraît brouillonne, surtout un sol répété sur toute une carte.
