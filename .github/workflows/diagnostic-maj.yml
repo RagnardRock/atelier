@@ -32,7 +32,15 @@ jobs:
             Start-Sleep 5
             Write-Host "  poignées dans le dossier :"
             & .\h\handle64.exe -accepteula -nobanner $dir 2>$null | Select-Object -First 15 | % { "    $_" }
-            $p = Start-Process .\new.exe -ArgumentList '/S','--updated' -Wait -PassThru
+            $p = Start-Process .\new.exe -ArgumentList '/S','--updated' -PassThru
+            if (-not $p.WaitForExit(150000)) {
+              "### $nom => BLOQUÉ après 150 s (une fenêtre d'erreur attend un clic)"
+              Get-Process | ? { $_.MainWindowTitle } | % { "    fenêtre : $($_.Name) « $($_.MainWindowTitle) »" }
+              Get-Process Brokk-Setup*,new,old-uninstaller,Un_A -ErrorAction SilentlyContinue | Stop-Process -Force
+              Get-Process | ? { $_.Path -like "$env:TEMP*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+              Start-Sleep 2
+              return
+            }
             "### $nom => code $($p.ExitCode)  (version après : $((Get-Item "$dir\Brokk.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion))"
             Get-Process | ? { $_.Path -like "$dir*" } | % { "    encore là : $($_.Name) $($_.Id)" }
           }
