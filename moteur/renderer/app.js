@@ -210,7 +210,15 @@ const App = (() => {
     };
     $('#carnet-titre').textContent = p.nom;
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
-    section('Équipe', p.equipe.map((c) => el('li', {}, el('span', { textContent: nom('creatures', c.creature) }), el('span', { className: 'discret', textContent: `niv. ${c.niveau}` }))), 'Pas encore de compagnon.');
+    // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
+    section('Équipe', p.equipe.map((c) => {
+      const r = Regles.resume(jeu, c), k = r.pv / Math.max(1, r.pvMax);
+      return el('li', { className: 'carnet-creature' },
+        r.espece?.sprites?.face ? el('img', { src: r.espece.sprites.face, alt: '' }) : el('span', { className: 'carnet-img' }),
+        el('span', { className: 'carnet-nom', textContent: `${r.nom}${r.statut ? `  ${r.statut}` : ''}` }),
+        el('span', { className: 'carnet-pv' }, el('span', { style: `width: ${Math.round(k * 100)}%`, className: `niveau-${k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas'}` })),
+        el('span', { className: 'discret', textContent: `N.${r.niveau} · ${r.pv > 0 ? `${r.pv}/${r.pvMax} PV` : 'K.O.'}` }));
+    }), 'Pas encore de compagnon.');
     section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {}, el('span', { textContent: nom('objets', id) }), el('span', { className: 'discret', textContent: `×${n}` }))), 'Le sac est vide.');
     const quetes = Object.entries(p.quetes).sort(([, a], [, b]) => (a.etat === 'finie') - (b.etat === 'finie'));
     section('Quêtes', quetes.map(([id, q]) => {

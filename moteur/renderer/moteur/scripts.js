@@ -5,8 +5,8 @@
 // appuie sur Action, un téléporteur attend la fin du fondu). Une commande inconnue (écrite par une
 // version plus récente de Tafl) est sautée sans planter.
 //
-// Les combats, les boutiques et l'écran des EV viendront dans les prochaines versions de Saga : pour
-// l'instant, Saga le dit dans une boîte et le script continue (un combat compte comme gagné), pour que
+// Les combats se jouent depuis Saga 0.3 (combat.js). Les boutiques et l'écran des EV viendront dans
+// les prochaines versions : pour l'instant, Saga le dit dans une boîte et le script continue, pour que
 // l'histoire reste jouable de bout en bout.
 
 const Scripts = (() => {
@@ -100,29 +100,34 @@ const Scripts = (() => {
           const niveau = Math.max(1, Number(c.niveau) || 5);
           const max = Number(jeu.donnees.reglages?.reglages?.equipe_max) || 6;
           const nom = nomDe('creatures', c.creature);
+          if (!trouver('creatures', c.creature)) { await narrer(`(La créature « ${c.creature} » n'existe pas dans les données du jeu.)`); break; }
+          const nouvelle = Regles.creer(jeu, c.creature, niveau);
           if (partie.equipe.length < max) {
-            partie.equipe.push({ creature: c.creature, niveau });
+            partie.equipe.push(nouvelle);
             await narrer(`${nom} (niveau ${niveau}) rejoint ton équipe !`);
           } else {
-            (partie.boite ||= []).push({ creature: c.creature, niveau });
+            (partie.boite ||= []).push(nouvelle);
             await narrer(`Ton équipe est pleine : ${nom} part dans ta boîte.`);
           }
           break;
         }
-        case 'combat_sauvage':
-          await narrer(`Un ${nomDe('creatures', c.creature)} sauvage (niveau ${Number(c.niveau) || '?'}) apparaît !\n\n(Les combats arrivent dans une prochaine version de Saga.)`);
+        // Les combats (Saga 0.3). Perdu : le script s'arrête là (le joueur se réveille au dernier soin).
+        case 'combat_sauvage': {
+          if (!trouver('creatures', c.creature)) { await narrer(`(La créature « ${c.creature} » n'existe pas dans les données du jeu.)`); break; }
+          if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Tu n\'as aucune créature en état de se battre !'); break; }
+          const issue = await moteur.combattre({ sauvage: Regles.creer(jeu, c.creature, Number(c.niveau) || 5) });
+          if (issue === 'defaite') throw new Fin();
           break;
+        }
         case 'combat_dresseur': {
           const d = trouver('dresseurs', c.dresseur);
-          const qui = d?.personnage ? orateur(d.personnage, 'normal') : { nom: d ? `${d.classe ? `${d.classe} ` : ''}${d.nom}` : c.dresseur };
-          if (d?.dialogue_avant) await dire(qui, d.dialogue_avant);
-          await narrer('(Les combats arrivent dans une prochaine version de Saga : on fait comme si tu avais gagné.)');
-          if (d?.dialogue_defaite) await dire(qui, d.dialogue_defaite);
-          partie.compteurs.dresseurs_battus++;
-          if (d?.argent) {
-            partie.argent += Number(d.argent) || 0;
-            await narrer(`Tu gagnes ${d.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}.`);
-          }
+          if (!d) { await narrer(`(Le dresseur « ${c.dresseur} » n'existe pas dans les données du jeu.)`); break; }
+          const qui = d.personnage ? orateur(d.personnage, 'normal') : { nom: `${d.classe ? `${d.classe} ` : ''}${d.nom}` };
+          if (d.dialogue_avant) await dire(qui, d.dialogue_avant);
+          if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Tu n\'as aucune créature en état de se battre !'); break; }
+          const issue = await moteur.combattre({ dresseur: d });
+          if (issue === 'defaite') throw new Fin();
+          if (issue === 'victoire') partie.compteurs.dresseurs_battus = (partie.compteurs.dresseurs_battus || 0) + 1;
           break;
         }
         case 'teleporter':
@@ -149,6 +154,9 @@ const Scripts = (() => {
           break;
         }
         case 'soigner':
+          for (const x of partie.equipe) Regles.soigner(jeu, x);
+          // C'est ici que le joueur se réveillera s'il perd un combat.
+          partie.dernierSoin = moteur.position();
           await narrer(partie.equipe.length ? 'Ton équipe est en pleine forme !' : 'Tu te reposes un instant.');
           break;
         case 'boutique':
