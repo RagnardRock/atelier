@@ -135,7 +135,8 @@
       faire: () => {
         const doc = besoinJeu();
         const colonnes = Math.min(doc.tiles.length, 8);
-        return { texte: `${doc.tiles.length} tuiles, ${colonnes} par ligne, numérotées à partir de 0.`, image: agrandir(IO.sheetCanvas(doc, colonnes, 1, 0, false), 768) };
+        const cats = [...new Set(doc.tiles.map((t) => t.categorie || ''))].filter(Boolean).map((c) => `${c} : ${doc.tiles.map((t, i) => (t.categorie === c ? i : -1)).filter((i) => i >= 0).join(', ')}`);
+        return { texte: `${doc.tiles.length} tuiles, ${colonnes} par ligne, numérotées à partir de 0.${cats.length ? `\nCatégories (numéros des tuiles) :\n${cats.join('\n')}` : ' Aucune catégorie (action ranger_tuiles pour en créer).'}`, image: agrandir(IO.sheetCanvas(doc, colonnes, 1, 0, false), 768) };
       },
     },
     voir_tuile: {
@@ -248,6 +249,38 @@
         } else throw new Error(`Action inconnue : ${a.action}`);
         App.refresh();
         return `Fait. Il y a maintenant ${doc.tiles.length} tuiles.`;
+      },
+    },
+    ranger_tuiles: {
+      icone: 'sort-precedence',
+      libelle: (a) => ({ categorie: `Range ${a.tuiles?.length || 1} tuile(s) dans « ${a.categorie || 'sans catégorie'} »`, trier: `Trie les tuiles ${a.par || 'par nom'}`, doublons: 'Fusionne les tuiles en double', inutilisees: 'Supprime les tuiles inutilisées', renommer_categorie: `Renomme la catégorie « ${a.categorie} »` }[a.action] || 'Range les tuiles'),
+      description: 'Range les tuiles (Tafl 0.13). La carte suit toujours : rien ne change à l\'écran du jeu. action : categorie (met les tuiles « tuiles » [numéros] dans la catégorie « categorie », vide = sans catégorie ; elles rejoignent les autres tuiles de la catégorie), renommer_categorie (categorie → nom), trier (par : nom, couleur, utilisation, animees ou categorie ; avec « tuiles », seules elles changent de place entre elles, sinon toutes, chaque catégorie restant groupée), doublons (les tuiles identiques n\'en font plus qu\'une), inutilisees (supprime les tuiles posées nulle part : cartes, tampons, événements, personnages). Les numéros des tuiles changent : relis voir_tuiles après.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['categorie', 'renommer_categorie', 'trier', 'doublons', 'inutilisees'] }, tuiles: { type: 'array', items: nombre }, categorie: { type: 'string' }, nom: { type: 'string' }, par: { type: 'string', enum: ['nom', 'couleur', 'utilisation', 'animees', 'categorie'] } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const lot = (a.tuiles || []).map((i) => tuileNumero(doc, i));
+        if (a.action === 'categorie') {
+          const categorie = String(a.categorie || '').trim().slice(0, 60);
+          const cibles = lot.length ? lot : [doc.current];
+          const last = doc.tiles.reduce((k, t, j) => ((t.categorie || '') === categorie && !cibles.includes(j) ? j : k), -1);
+          App.placeTiles(cibles, last >= 0 ? last + 1 : Math.min(...cibles), categorie);
+          return `${cibles.length} tuile(s) rangée(s) ${categorie ? `dans « ${categorie} »` : 'sans catégorie'}.`;
+        }
+        if (a.action === 'renommer_categorie') {
+          const nom = String(a.nom || '').trim().slice(0, 60);
+          if (!nom || !doc.tiles.some((t) => t.categorie === a.categorie)) throw new Error('Donne une catégorie existante (categorie) et son nouveau nom (nom).');
+          Doc.change(doc, 'Renommer la catégorie', () => { doc.tiles = doc.tiles.map((t) => (t.categorie === a.categorie ? { ...t, categorie: nom } : t)); });
+          return `Catégorie « ${a.categorie} » renommée « ${nom} ».`;
+        }
+        const avant = doc.tiles.length;
+        if (a.action === 'trier') App.sortTiles(a.par || 'nom', lot.length > 1 ? lot : null);
+        else if (a.action === 'doublons') App.mergeDuplicates();
+        else if (a.action === 'inutilisees') {
+          const used = Doc.usedTiles(doc);
+          const unused = doc.tiles.map((_t, i) => i).filter((i) => !used.has(i));
+          if (unused.length) Doc.change(doc, 'Supprimer les tuiles inutilisées (Claude)', () => Doc.removeTiles(doc, new Set(unused)));
+        } else throw new Error(`Action inconnue : ${a.action}`);
+        return `Fait. ${avant !== doc.tiles.length ? `${avant - doc.tiles.length} tuile(s) en moins, ` : ''}${doc.tiles.length} tuiles maintenant (les numéros ont pu changer).`;
       },
     },
     poser_tuiles: {

@@ -627,6 +627,36 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 .tile-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .tile-item.dragging { opacity: 0.4; }
 .tile-item.drop { box-shadow: -3px 0 0 var(--accent); }
+.tile-item.selected { border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* Tafl 0.13 : chercher, trier, ranger les tuiles par catégorie */
+.tiles-tools { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; }
+.tiles-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 26px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; background: rgba(0, 0, 0, 0.2); color: var(--muted); }
+.tiles-search:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.tiles-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; outline: none; padding: 0; }
+.tile-cat {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.tile-cat:first-child { margin-top: 0; }
+.tile-cat:hover { background: var(--hover); }
+.tile-cat .codicon { color: var(--muted); font-size: 14px; }
+.tile-cat.none .row-name { color: var(--muted); font-style: italic; }
+.tile-cat.drop { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+#tiles .rows-empty { grid-column: 1 / -1; }
 .tile-canvas {
   width: 100%;
   height: 100%;
@@ -986,7 +1016,7 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .sprite-couleurs input[type=color] { width: 26px; height: 22px; padding: 0; border: none; background: none; }
 .sprite-grand { image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border); cursor: crosshair; touch-action: none; align-self: flex-start; }
 
-/* Réglages > Interface du jeu (Tafl 0.13) : le nuancier de l'accent et son bouton « Celle de Saga » */
+/* Réglages > Interface du jeu (Tafl 0.14) : le nuancier de l'accent et son bouton « Celle de Saga » */
 .accent-jeu { display: flex; align-items: center; gap: 8px; }
 .accent-jeu input[type="color"] { width: 44px; height: 30px; padding: 0 2px; border: 1px solid var(--border); border-radius: 7px; background: transparent; cursor: pointer; }
 .accent-jeu .button { white-space: nowrap; }

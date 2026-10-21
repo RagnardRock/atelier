@@ -78,7 +78,7 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 
 ## Ce que fait Saga 0.4 : deux thèmes pour l'interface en jeu
 
-- Le jeu choisit son thème dans Tafl (0.13 ou plus : **Données du jeu › Réglages › Interface du jeu**), avec sa **couleur d'accent** (les noms dans les dialogues, les curseurs, la barre d'XP).
+- Le jeu choisit son thème dans Tafl (0.14 ou plus : **Données du jeu › Réglages › Interface du jeu**), avec sa **couleur d'accent** (les noms dans les dialogues, les curseurs, la barre d'XP).
 - **Verre** : des plaques sombres et floues aux coins arrondis. En combat, le texte et les boutons flottent sur le décor au lieu d'une barre opaque.
 - **Pixel** : la police pixel Jersey 10 (aux chiffres bien lisibles), des cadres nets à double bordure, pas de flou ni d'arrondi, un curseur ▶, des lignes de balayage légères en combat. Façon Game Boy Advance.
 - Les deux thèmes couvrent les dialogues, les choix, les annonces, le nom de la carte, le carnet et tout le combat.

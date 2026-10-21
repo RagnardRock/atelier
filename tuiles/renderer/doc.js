@@ -353,6 +353,41 @@ const Doc = (() => {
   // Combien de cases (toutes cartes confondues) utilisent la tuile n° index.
   const tileUses = (doc, index) => doc.maps.reduce((n, m) => n + m.layers.reduce((k, l) => k + l.cells.filter((c) => c === index).length, 0), 0);
 
+  // Tafl 0.13 : ranger les tuiles. order = les anciens numéros, dans le nouvel ordre ; la carte suit.
+  function reorderTiles(doc, order) {
+    const newIndex = new Int32Array(doc.tiles.length);
+    order.forEach((old, n) => { newIndex[old] = n; });
+    const current = doc.tiles[doc.current];
+    doc.tiles = order.map((old) => doc.tiles[old]);
+    remapCells(doc, (i) => newIndex[i]);
+    doc.current = Math.max(0, doc.tiles.indexOf(current));
+  }
+  // Retire plusieurs tuiles d'un coup. replace : tuile retirée → tuile gardée qui prend sa place
+  // sur les cartes (pour fusionner les doublons) ; sans remplaçante, ses cases deviennent vides.
+  function removeTiles(doc, remove, replace = new Map()) {
+    const newIndex = new Int32Array(doc.tiles.length).fill(-1);
+    let n = 0;
+    doc.tiles.forEach((_t, i) => { if (!remove.has(i)) newIndex[i] = n++; });
+    const current = doc.tiles[replace.get(doc.current) ?? doc.current];
+    doc.tiles = doc.tiles.filter((_t, i) => !remove.has(i));
+    remapCells(doc, (i) => (remove.has(i) ? (replace.has(i) ? newIndex[replace.get(i)] : -1) : newIndex[i]));
+    if (!doc.tiles.length) doc.tiles.push(emptyTile(doc.tileSize, 'tuile-1'));
+    doc.current = clamp(doc.tiles.indexOf(current), 0, doc.tiles.length - 1);
+  }
+  // Les tuiles servies quelque part : cartes, apparence des événements, personnages, tampons.
+  function usedTiles(doc) {
+    const used = new Set();
+    for (const map of doc.maps) {
+      for (const l of map.layers) for (const c of l.cells) if (c >= 0) used.add(c);
+      for (const e of map.events) if (e.apparence.tuile >= 0) used.add(e.apparence.tuile);
+    }
+    for (const p of doc.data.personnages) if (p.tuile >= 0) used.add(p.tuile);
+    for (const st of doc.stamps) for (const c of st.cells) if (c >= 0) used.add(c);
+    return used;
+  }
+  // Empreinte des pixels (toutes les images et la vitesse) : deux tuiles identiques ont la même.
+  const tileKey = (t) => `${t.frames.length > 1 ? t.duration : 0}|${t.frames.map((f) => f.join(',')).join('/')}`;
+
   // Images d'une tuile animée.
   function addFrame(doc, index, at, data) {
     const tile = tileForEdit(doc, index);
@@ -556,5 +591,5 @@ const Doc = (() => {
     });
   }
 
-  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, newStamp, placeStamp, stampTopLayer, stampFromRect, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
+  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, newStamp, placeStamp, stampTopLayer, stampFromRect, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, reorderTiles, removeTiles, usedTiles, tileKey, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
 })();

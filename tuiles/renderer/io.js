@@ -120,6 +120,7 @@ const IO = (() => {
         const pngs = t.frames.map((_f, k) => Doc.tileCanvas(t, s, k).toDataURL('image/png'));
         const tile = Doc.animated(t) ? { name: t.name, png: pngs[0], frames: pngs, duration: t.duration } : { name: t.name, png: pngs[0] };
         if (t.passage && t.passage !== 'auto') tile.passage = t.passage;
+        if (t.categorie) tile.categorie = t.categorie;
         return tile;
       }),
     };
@@ -157,7 +158,7 @@ const IO = (() => {
       const sources = Array.isArray(t.frames) && t.frames.length ? t.frames.slice(0, 16) : [t.png];
       const frames = [];
       for (const src of sources) frames.push(await pixels(src));
-      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto' });
+      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto', categorie: String(t.categorie || '').slice(0, 60) });
     }
     if (!doc.tiles.length) Doc.addTile(doc);
     doc.stamps = (Array.isArray(data.tampons) ? data.tampons : []).map((t) => {
@@ -440,6 +441,7 @@ const IO = (() => {
       ? Doc.create({ name: file.name.replace(/\.[^.]+$/, ''), tileSize: s, tiles: 0, palette: paletteById(App.config.palette).couleurs, mapWidth: v.asMap ? zone.w : 20, mapHeight: v.asMap ? zone.h : 15 })
       : doc;
     const base = Doc.slug(file.name.replace(/\.[^.]+$/, ''), 'objet');
+    const categorie = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
     const add = () => {
       const known = new Map(); // empreinte des pixels → numéro de tuile (pour les doublons)
       if (v.dedupe) target.tiles.forEach((t, i) => { if (!Doc.animated(t)) known.set(t.frames[0].join(','), i); });
@@ -451,6 +453,8 @@ const IO = (() => {
           if (key && known.has(key)) i = known.get(key);
           else {
             i = Doc.addTile(target, data, Doc.uniqueName(target, 'tuile'));
+            // Tafl 0.13 : les tuiles d'une planche sont rangées dans une catégorie à son nom.
+            target.tiles[i].categorie = categorie;
             added++;
             if (key) known.set(key, i);
           }
