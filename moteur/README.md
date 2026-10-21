@@ -28,14 +28,18 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 |---|---|
 | Flèches ou ZQSD | Se déplacer, case par case. Une touche à peine touchée tourne le joueur sans le faire avancer. |
 | Maj (tenue) | Courir (ou marcher, si « Courir sans tenir Maj » est coché dans les réglages). |
-| Échap | Menu de pause : reprendre, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
+| Espace, Entrée ou E | **Action** : parler au PNJ en face, ouvrir un coffre, lire un panneau, faire avancer un dialogue, valider un choix. |
+| Retour arrière ou X | Faire avancer un dialogue (comme Action). |
+| Tab | Le **carnet** : équipe, sac, argent, quêtes. |
+| Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
+| Échap | Menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
 | Ctrl+O | Ouvrir un autre jeu. |
 | Ctrl+, | Réglages. |
 
-Une **manette** marche aussi (croix ou stick gauche, B pour courir, Start pour la pause).
+Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour courir, Start pour la pause).
 
 ## Ce que fait Saga 0.1
 
@@ -48,12 +52,22 @@ Une **manette** marche aussi (croix ou stick gauche, B pour courir, Start pour l
 - **L'ambiance** de chaque carte : la **teinte** posée en produit sur toute la carte, puis la **météo** avec de vraies particules : pluie avec éclaboussures, orage avec éclairs, neige, brouillard en nappes, feuilles, lucioles. Les particules suivent le décor quand la caméra bouge, et le brouillard un peu plus vite (il est plus près de nous) : c'est ce qui donne de la profondeur.
 - **Les personnages** : en attendant les sprites dessinés dans Tafl, le héros (le personnage `heros` de `personnages.json`) et les PNJ sont de petits bonshommes en pixel art à leur `couleur`, avec 4 directions et une animation de marche, ou la tuile de leur apparence. Ils ont une ombre au sol et se croisent dans le bon ordre (le plus bas passe devant). Les pages des événements sont déjà lues : un PNJ dont aucune page n'est vraie au début de la partie n'apparaît pas.
 
+## Ce que fait Saga 0.2 : les événements
+
+- **Parler** : la touche Action déclenche l'événement en face du joueur (déclenchement `parler`). Un PNJ se tourne vers le joueur avant de répondre. Pendant un script, le joueur ne bouge pas.
+- **Toucher** : un événement `toucher` se lance quand le joueur marche dessus, ou quand il se cogne contre lui s'il est bloquant. Un événement `auto` se lance tout seul dès que sa page est vraie (une cinématique à l'arrivée sur une carte) ; pour qu'il ne tourne pas en boucle, son script change un interrupteur ou un interrupteur local.
+- **Dialogues** : une boîte en verre en bas de l'écran, avec le nom de celui qui parle (dans sa couleur), son **portrait** pour l'expression demandée, et le texte qui s'écrit lettre par lettre (Action l'affiche d'un coup, puis passe à la suite). Une ligne vide dans le texte coupe en plusieurs boîtes ; `{joueur}` est remplacé par le nom du héros.
+- **Choix** : 2 à 4 réponses à côté de la boîte, au clavier (haut/bas, Action), à la manette ou à la souris. Chaque réponse a ses propres commandes.
+- **Les scripts de Tafl** sont joués commande par commande : `dire`, `choix`, `si`, `interrupteur`, `local`, `attendre`, `objet` (donner, retirer), `creature` (dans l'équipe ou la boîte), `teleporter`, `quete` (commencer, étape, finir, avec une annonce en haut à droite), `soigner`, `fin`. Les pages des événements sont relues après chaque script : un PNJ peut apparaître, disparaître ou changer de texte.
+- **Pas encore là** : les combats, les boutiques et l'écran des EV. Saga le dit dans une boîte et l'histoire continue (un combat de dresseur compte comme gagné, avec ses dialogues et son argent).
+- **PNJ qui bougent** : un événement en déplacement `aleatoire` se promène (sans s'éloigner de plus de 2 cases), `tourne` regarde autour de lui.
+- **Sauvegarde** : Ctrl+S ou le menu de pause. Elle va dans `%APPDATA%\atelier-moteur\sauvegardes` (jamais dans le dossier du jeu), une par jeu. Quand on rouvre le jeu, Saga propose **Continuer** ou **Nouvelle partie**. F5 (recharger) garde la partie en cours.
+
 ## La suite
 
-1. Les **événements** : parler aux PNJ, dialogues avec portraits et choix, scripts (interrupteurs, objets, quêtes, téléporter…), sauvegarde.
-2. Les **combats** (sauvages et dresseurs), avec les données de Tafl 0.8.
-3. Les menus du jeu (équipe, sac, Pokédex, quêtes), les boutiques.
-4. Les vrais sprites des personnages, dessinés dans Tafl.
+1. Les **combats** (sauvages et dresseurs), avec les données de Tafl 0.8.
+2. Les boutiques et le reste des menus du jeu (Pokédex, équipe détaillée).
+3. Les vrais sprites des personnages, dessinés dans Tafl.
 
 ## Comment c'est construit
 
@@ -61,13 +75,15 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 
 | Fichier | Rôle |
 |---|---|
-| `main.js` | La fenêtre, les réglages, la lecture du dossier de jeu (Saga n'y écrit jamais), la ligne de commande (`Saga.exe <dossier> --carte=… --x=… --y=…`), la mise à jour. |
+| `main.js` | La fenêtre, les réglages, la lecture du dossier de jeu (Saga n'y écrit jamais), les sauvegardes, la ligne de commande (`Saga.exe <dossier> --carte=… --x=… --y=…`), la mise à jour. |
 | `preload.js` | Le pont entre l'interface et `main.js` (`window.saga`). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |
 | `renderer/moteur/moteur.js` | La boucle du jeu : commandes, déplacements, caméra, dessin des calques et des personnages, fondus. |
 | `renderer/moteur/ambiance.js` | La teinte et la météo. |
+| `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
+| `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
 | `renderer/moteur/sprites.js` | Le petit bonhomme des personnages, en pixel art. |
 
 Les fichiers de `renderer/moteur/` ne touchent ni au disque ni à Electron : ils reçoivent les textes du jeu.

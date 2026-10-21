@@ -107,3 +107,98 @@ body.plein-ecran #scene { cursor: none; }
 .pause-choix:focus { box-shadow: inset 2px 0 0 var(--accent); }
 .pause-choix .codicon { color: var(--accent); }
 .pause-aide { margin: 10px 4px 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+
+/* ---------- Saga 0.2 : la boîte de dialogue ---------- */
+.dialogue {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  width: min(920px, calc(100% - 40px));
+  min-height: 118px;
+  padding: 16px 22px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(14, 14, 22, 0.78);
+  backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  z-index: 5;
+}
+.dialogue-portrait {
+  width: 104px;
+  height: 104px;
+  flex-shrink: 0;
+  object-fit: contain;
+  image-rendering: pixelated;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.dialogue-corps { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; gap: 6px; }
+.dialogue-nom { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: 0.3px; }
+.dialogue-texte { font-size: 19px; line-height: 1.5; color: #f4f4f6; white-space: pre-wrap; word-break: break-word; }
+.dialogue-suite { position: absolute; right: 18px; bottom: 10px; color: var(--accent); font-size: 12px; animation: suite 0.9s ease-in-out infinite; }
+@keyframes suite { 50% { transform: translateY(3px); opacity: 0.5; } }
+
+/* Les choix, au-dessus de la boîte, à droite */
+.dialogue-choix {
+  position: absolute;
+  right: max(20px, calc(50% - 460px));
+  bottom: 156px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(14, 14, 22, 0.85);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+}
+.dialogue-option { padding: 8px 14px 8px 26px; border-radius: 8px; font-size: 17px; color: #e8e8ee; cursor: pointer; position: relative; }
+.dialogue-option.actif { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.dialogue-option.actif::before { content: "▶"; position: absolute; left: 9px; top: 10px; font-size: 11px; color: var(--accent); }
+
+/* Les annonces (nouvelle quête, partie sauvegardée), en haut à droite */
+.annonces { position: absolute; top: 18px; right: 18px; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; z-index: 4; }
+.annonce {
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-right: 3px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(12, 12, 18, 0.65);
+  backdrop-filter: blur(14px);
+  animation: annonce 0.35s ease-out;
+  transition: opacity 0.4s, transform 0.4s;
+}
+.annonce.partie { opacity: 0; transform: translateX(20px); }
+.annonce-titre { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+.annonce-detail { color: #fff; font-size: 15px; margin-top: 2px; }
+@keyframes annonce { from { opacity: 0; transform: translateX(20px); } }
+
+/* Le carnet (Tab) */
+#carnet { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 6, 10, 0.45); backdrop-filter: blur(3px); z-index: 10; }
+.carnet-carte {
+  width: min(560px, calc(100% - 40px));
+  max-height: calc(100% - 60px);
+  overflow: auto;
+  padding: 18px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(20, 20, 28, 0.78);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: var(--shadow);
+}
+.carnet-tete { display: flex; align-items: center; gap: 12px; font-size: 18px; font-weight: 600; color: var(--text-strong); }
+#carnet-argent { margin-left: auto; color: var(--accent); font-size: 14px; }
+#carnet-corps h3 { margin: 16px 0 6px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+#carnet-corps ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+#carnet-corps li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 7px; background: rgba(255, 255, 255, 0.03); color: var(--text-strong); }
+#carnet-corps li.finie { opacity: 0.55; }
+#carnet-corps li.vide { color: var(--muted); background: none; }
+#carnet-corps .discret { color: var(--muted); text-align: right; }

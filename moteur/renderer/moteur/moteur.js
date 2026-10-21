@@ -21,14 +21,23 @@ const Moteur = (() => {
     ArrowDown: 'bas', ArrowUp: 'haut', ArrowLeft: 'gauche', ArrowRight: 'droite',
     KeyS: 'bas', KeyW: 'haut', KeyA: 'gauche', KeyD: 'droite',
   };
+  // Action (parler, ouvrir, passer un dialogue) : Espace, Entrée ou E. Retour : Retour arrière ou X.
+  const ACTIONS = { Space: 'action', Enter: 'action', NumpadEnter: 'action', KeyE: 'action', Backspace: 'retour', KeyX: 'retour' };
   function creerEntrees() {
     const tenues = []; // directions tenues, la dernière appuyée à la fin
     let course = false;
+    let appuis = [];   // les touches appuyées depuis la dernière image : 'action', 'retour', 'haut'…
     const lacher = (dir) => { const i = tenues.indexOf(dir); if (i >= 0) tenues.splice(i, 1); };
     window.addEventListener('keydown', (e) => {
-      if (e.target.closest?.('input, select, textarea')) return;
+      if (e.target.closest?.('input, select, textarea, button, .modal')) return;
       const dir = TOUCHES[e.code];
-      if (dir) { e.preventDefault(); lacher(dir); tenues.push(dir); }
+      if (dir) {
+        e.preventDefault();
+        appuis.push(dir);
+        if (!e.repeat) { lacher(dir); tenues.push(dir); }
+      }
+      const action = ACTIONS[e.code];
+      if (action && !e.ctrlKey && !e.altKey) { e.preventDefault(); if (!e.repeat) appuis.push(action); }
       if (e.key === 'Shift') course = true;
     });
     window.addEventListener('keyup', (e) => {
@@ -37,9 +46,11 @@ const Moteur = (() => {
       if (e.key === 'Shift') course = false;
     });
     // Fenêtre quittée (Alt+Tab) : on oublie tout, sinon le joueur continuerait de marcher tout seul.
-    window.addEventListener('blur', () => { tenues.length = 0; course = false; });
+    window.addEventListener('blur', () => { tenues.length = 0; course = false; appuis = []; });
 
     // Manette (Xbox, PlayStation, Switch Pro…) : croix directionnelle ou stick gauche, bouton B pour courir.
+    // Bouton A : action, bouton B : retour (et courir, tenu).
+    let padAvant = {};
     function manette() {
       for (const pad of navigator.getGamepads?.() || []) {
         if (!pad) continue;
@@ -50,6 +61,11 @@ const Moteur = (() => {
         else if (b(13) || ay > 0.5) dir = 'bas';
         else if (b(14) || ax < -0.5) dir = 'gauche';
         else if (b(15) || ax > 0.5) dir = 'droite';
+        const etat = { dir, a: b(0), b: b(1) };
+        if (etat.a && !padAvant.a) appuis.push('action');
+        if (etat.b && !padAvant.b) appuis.push('retour');
+        if (dir && dir !== padAvant.dir) appuis.push(dir);
+        padAvant = etat;
         return { dir, course: b(1) || b(2) };
       }
       return null;
@@ -59,7 +75,9 @@ const Moteur = (() => {
         const pad = manette();
         return { dir: tenues[tenues.length - 1] || pad?.dir || null, course: course || Boolean(pad?.course) };
       },
-      oublier() { tenues.length = 0; course = false; },
+      // Les appuis depuis la dernière fois (chacun n'est rendu qu'une fois).
+      appuis() { const a = appuis; appuis = []; return a; },
+      oublier() { tenues.length = 0; course = false; appuis = []; },
     };
   }
 
@@ -75,6 +93,11 @@ const Moteur = (() => {
     let fondu = null, noir = 0;
     let enPause = false, debug = false, boucle = 0, avant = 0;
     let fps = 0, images = 0, chrono = 0;
+    // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
+    const dialogue = Dialogue.creer(canvas.parentElement);
+    let scripts = null, enScript = false, autoAFaire = false;
+    let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
+    let actionDemandee = false;
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
     function redimensionner() {
@@ -112,13 +135,28 @@ const Moteur = (() => {
       ambiance.regler(carte.ambiance);
       placerCamera();
       if (change) rappels.carte?.(carte);
+      // Les événements « auto » de cette carte se joueront dès la fin du fondu.
+      autoAFaire = true;
       return true;
     }
 
-    function demarrer(nouveauJeu, depart) {
+    // partieGardee : une partie déjà commencée (une sauvegarde, ou F5 qui recharge le jeu sans
+    // perdre ce que le joueur a fait). depart : où commencer, à la place de la position de la partie.
+    function demarrer(nouveauJeu, depart, partieGardee = null) {
       jeu = nouveauJeu;
-      partie = Monde.nouvellePartie(jeu, depart || jeu.depart);
+      partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
+      if (partieGardee && depart) partie.position = { ...depart };
       carte = null;
+      enScript = false;
+      attentes = [];
+      dialogue.fermer();
+      scripts = Scripts.creer({
+        jeu, dialogue,
+        partie: () => partie,
+        carte: () => carte,
+        attendre: (ms) => new Promise((resoudre) => attentes.push({ reste: ms / 1000, resoudre })),
+        teleporter: (c, x, y, d) => new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: c, x, y, direction: d }, resoudre }; }),
+      });
       redimensionner();
       const d = partie.position;
       if (!entrerSur(d.carte, d.x, d.y, d.direction)) entrerSur(jeu.depart.carte, jeu.depart.x, jeu.depart.y, jeu.depart.direction);
@@ -149,7 +187,13 @@ const Moteur = (() => {
     function essayerPas(dir, course) {
       joueur.dir = dir;
       const d = Monde.destination(carte, partie, presents, joueur.x, joueur.y, dir);
-      if (!d) return false;
+      if (!d) {
+        // Se cogner contre un événement « toucher » qui bloque (un PNJ qui arrête le joueur) le lance.
+        const [dx, dy] = DIRECTIONS[dir];
+        const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy);
+        if (p && p.bloque && p.ev.declenchement === 'toucher' && joueur.pietine === 0) lancer(p);
+        return false;
+      }
       joueur.pietine = 0;
       joueur.pied = joueur.pied === 1 ? 2 : 1;
       joueur.mouvement = {
@@ -166,6 +210,12 @@ const Moteur = (() => {
       joueur.mouvement = null;
       partie.compteurs.pas++;
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+      // Un événement « toucher » sous les pieds (une case invisible qui lance une scène).
+      const p = Monde.presentEn(presents, joueur.x, joueur.y);
+      if (p && p.ev.declenchement === 'toucher' && !p.bloque) {
+        lancer(p);
+        return true;
+      }
       // Un téléporteur sous les pieds : fondu au noir, puis la carte d'arrivée.
       const tp = Monde.teleporteur(carte, joueur.x, joueur.y);
       if (tp) {
@@ -176,7 +226,8 @@ const Moteur = (() => {
     }
 
     function avancerJoueur(dt) {
-      const { dir, course: maj } = enPause || fondu ? { dir: null, course: false } : entrees.lire();
+      const libre = !enPause && !fondu && !enScript;
+      const { dir, course: maj } = libre ? entrees.lire() : { dir: null, course: false };
       const course = options.courirParDefaut ? !maj : maj;
       if (joueur.mouvement) {
         joueur.mouvement.t += dt;
@@ -187,7 +238,15 @@ const Moteur = (() => {
         if (dir && essayerPas(dir, course)) joueur.mouvement.t = Math.min(reste, joueur.mouvement.duree * 0.5);
         return;
       }
-      if (!dir) { joueur.attente = 0; joueur.pietine = 0; return; }
+      if (!dir) joueur.pietine = 0;
+      // Action : parler à celui qui est devant, ouvrir le coffre, lire le panneau.
+      if (libre && actionDemandee) {
+        actionDemandee = false;
+        const [dx, dy] = DIRECTIONS[joueur.dir];
+        const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy) || Monde.presentEn(presents, joueur.x, joueur.y);
+        if (p && p.ev.declenchement === 'parler') { lancer(p); return; }
+      }
+      if (!dir) { joueur.attente = 0; return; }
       if (dir !== joueur.dir && joueur.attente === 0) {
         joueur.dir = dir;
         joueur.attente = ATTENTE_TOUR;
@@ -198,6 +257,66 @@ const Moteur = (() => {
         if (joueur.attente > 1e-6) return;
       }
       if (!essayerPas(dir, course)) joueur.pietine += dt;
+    }
+
+    // --- Les événements ---
+    // Jouer la page active d'un événement. Le joueur ne bouge plus jusqu'à la fin.
+    async function lancer(p) {
+      if (enScript || !p.page?.commandes?.length) return;
+      enScript = true;
+      entrees.oublier();
+      // Celui à qui on parle se tourne vers le joueur (sauf s'il est « fixe »).
+      if (p.ev.deplacement !== 'fixe' && p.ev.declenchement === 'parler') p.direction = Monde.directionVers(p.x, p.y, joueur.x, joueur.y);
+      try {
+        await scripts.executer(p.page.commandes, p.ev);
+      } catch (err) {
+        rappels.message?.(`Erreur dans le script de « ${p.ev.nom || p.ev.id} » : ${err.message}`);
+      }
+      // Le script a pu changer des interrupteurs : chaque événement reprend sa bonne page.
+      presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      enScript = false;
+      entrees.oublier();
+    }
+
+    // Les événements « auto » de la carte, l'un après l'autre (une scène d'arrivée).
+    async function lancerAuto() {
+      autoAFaire = false;
+      for (const p of presents.filter((q) => q.ev.declenchement === 'auto')) {
+        const actuel = presents.find((q) => q.ev === p.ev);
+        if (actuel) await lancer(actuel);
+        if (autoAFaire) return; // un script a changé de carte : la nouvelle carte a ses propres scènes
+      }
+    }
+
+    // Les PNJ qui bougent : « aleatoire » marche au hasard à deux cases au plus de sa place,
+    // « tourne » regarde autour de lui.
+    function avancerPNJ(dt) {
+      const t = jeu.taille;
+      for (const p of presents) {
+        if (p.mouvement) {
+          p.mouvement.t += dt;
+          if (p.mouvement.t >= p.mouvement.duree) p.mouvement = null;
+          continue;
+        }
+        if (enScript || (p.ev.deplacement !== 'aleatoire' && p.ev.deplacement !== 'tourne')) continue;
+        p.attente -= dt;
+        if (p.attente > 0) continue;
+        p.attente = 1.2 + Math.random() * 2.8;
+        const dirs = Object.keys(DIRECTIONS);
+        const dir = dirs[Math.floor(Math.random() * 4)];
+        p.direction = dir;
+        if (p.ev.deplacement !== 'aleatoire') continue;
+        const [dx, dy] = DIRECTIONS[dir];
+        if (Math.abs(p.x + dx - p.ev.x) > 2 || Math.abs(p.y + dy - p.ev.y) > 2) continue;
+        const prises = [{ x: joueur.x, y: joueur.y }, ...(joueur.mouvement ? [joueur.mouvement.vers] : [])];
+        const autres = presents.filter((q) => q !== p);
+        const d = Monde.destination(carte, partie, autres, p.x, p.y, dir, prises);
+        if (!d || d.saut || Monde.teleporteur(carte, d.x, d.y)) continue;
+        // Il prend tout de suite sa nouvelle case (personne d'autre ne peut y entrer) et y glisse.
+        p.mouvement = { de: { x: p.x * t, y: p.y * t }, t: 0, duree: DUREE_PAS * 1.4, pied: Math.random() < 0.5 ? 1 : 2 };
+        p.x = d.x;
+        p.y = d.y;
+      }
     }
 
     // --- La caméra suit le joueur, sans sortir de la carte (une petite carte est centrée) ---
@@ -249,12 +368,16 @@ const Moteur = (() => {
       const liste = [];
       for (const p of presents) {
         if (!p.visible) continue;
-        liste.push({ y: p.y * t, dessiner: () => {
-          const x = p.x * t - cam.x, y = p.y * t - cam.y;
+        // Un PNJ qui marche glisse de son ancienne case à la nouvelle.
+        const m = p.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
+        const px = m ? Math.round(m.de.x + (p.x * t - m.de.x) * k) : p.x * t;
+        const py = m ? Math.round(m.de.y + (p.y * t - m.de.y) * k) : p.y * t;
+        liste.push({ y: py, dessiner: () => {
+          const x = px - cam.x, y = py - cam.y;
           if (p.tuile >= 0) dessinerTuile(p.tuile, x, y, maintenant);
           else {
             Sprites.ombre(ctx, x, y, t);
-            Sprites.dessiner(ctx, p.perso?.couleur || '#5ec8ff', p.direction, 0, x, y, t);
+            Sprites.dessiner(ctx, p.perso?.couleur || '#5ec8ff', p.direction, m && k < 0.5 ? m.pied : 0, x, y, t);
           }
         } });
       }
@@ -338,11 +461,16 @@ const Moteur = (() => {
         if (k >= 1) {
           const v = fondu.vers;
           entrerSur(v.carte, v.x, v.y, v.direction || joueur.dir);
-          fondu = { phase: 'entree', t: 0 };
+          fondu = { phase: 'entree', t: 0, resoudre: fondu.resoudre };
         }
       } else {
         noir = 1 - k;
-        if (k >= 1) { fondu = null; noir = 0; }
+        if (k >= 1) {
+          const r = fondu.resoudre;
+          fondu = null;
+          noir = 0;
+          r?.();
+        }
       }
     }
 
@@ -355,9 +483,21 @@ const Moteur = (() => {
       chrono += dt;
       if (chrono >= 0.5) { fps = Math.round(images / chrono); images = 0; chrono = 0; }
       if (!enPause) {
+        // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
+        for (const a of entrees.appuis()) {
+          if (enScript) dialogue.touche(a);
+          else if (a === 'action') actionDemandee = true;
+        }
         avancerJoueur(dt);
+        actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
+        avancerPNJ(dt);
         avancerFondu(dt);
-      }
+        dialogue.avancer(dt);
+        for (const a of attentes) a.reste -= dt;
+        for (const a of attentes.filter((x) => x.reste <= 0)) a.resoudre();
+        attentes = attentes.filter((x) => x.reste > 0);
+        if (autoAFaire && !fondu && !enScript) lancerAuto();
+      } else entrees.appuis();
       placerCamera();
       ambiance.avancer(enPause ? 0 : dt, cam, options.meteo);
       dessiner(maintenant);
@@ -369,6 +509,10 @@ const Moteur = (() => {
       redimensionner,
       regler(o) { options = { ...options, ...o }; if (jeu) redimensionner(); },
       pause(oui) { enPause = oui; entrees.oublier(); },
+      get enScript() { return enScript; },
+      // La partie en cours, pour la sauvegarder (une copie : la sauvegarde ne bouge plus ensuite).
+      partie() { return partie ? JSON.parse(JSON.stringify({ ...partie, position: this.position() || partie.position })) : null; },
+      annoncer: (titre, detail) => dialogue.annoncer(titre, detail),
       basculerDebug() { debug = !debug; return debug; },
       get debug() { return debug; },
       // Pour la barre d'infos (F3) et pour « Recharger » (F5 garde la position du joueur).

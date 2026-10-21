@@ -2,20 +2,24 @@
 // (cette case est-elle bloquée ? y a-t-il un téléporteur ? qui est là ?).
 //
 // La partie suit FORMAT.md › « Ce que le moteur garde dans une sauvegarde » : interrupteurs, interrupteurs
-// « déjà fait » de chaque événement, quêtes, compteurs, sac. En 0.1, rien ne les change encore (les
-// scripts viendront ensuite), mais les conditions des pages d'événements se lisent déjà dessus : un PNJ
-// qui n'apparaît qu'après une quête est donc déjà absent au début de la partie, comme prévu.
+// « déjà fait » de chaque événement, quêtes, compteurs, sac, équipe, argent, position. Les scripts des
+// événements (scripts.js) la changent ; les conditions des pages se lisent dessus.
 
 const Monde = (() => {
   const { PASSAGE, DIRECTIONS, REBORDS } = Jeu;
 
   function nouvellePartie(jeu, depart = jeu.depart) {
+    const reglages = jeu.donnees.reglages?.reglages || {};
     return {
+      version: 1,
+      nom: jeu.heros?.nom || 'Héros', // {joueur} dans les dialogues
       interrupteurs: {},   // id → true (les absents sont éteints)
       locaux: {},          // "carte/ev-1" → true
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
       compteurs: { captures: 0, dresseurs_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
+      equipe: [],          // [{ creature, niveau }]
+      argent: Number(reglages.argent_depart) || 0,
       position: { ...depart },
     };
   }
@@ -48,8 +52,9 @@ const Monde = (() => {
   }
 
   // Les événements présents sur la carte, avec leur apparence. À refaire après chaque script
-  // et à chaque changement de carte.
-  function evenementsPresents(jeu, carte, partie) {
+  // et à chaque changement de carte. avant : la liste précédente de la même carte, pour garder
+  // la place et la direction de ceux qui se sont déplacés (un PNJ qui marche au hasard).
+  function evenementsPresents(jeu, carte, partie, avant = []) {
     const out = [];
     for (const ev of carte.evenements) {
       const page = pageActive(ev, partie, carte);
@@ -57,10 +62,14 @@ const Monde = (() => {
       const perso = jeu.personnages.get(ev.apparence?.personnage || '') || null;
       let tuile = Number(ev.apparence?.tuile);
       if (!(tuile >= 0) && perso && perso.tuile >= 0) tuile = perso.tuile;
+      const ancien = avant.find((p) => p.ev === ev);
       out.push({
         ev, page, perso,
-        x: ev.x, y: ev.y,
-        direction: DIRECTIONS[ev.direction] ? ev.direction : 'bas',
+        x: ancien ? ancien.x : ev.x,
+        y: ancien ? ancien.y : ev.y,
+        direction: ancien ? ancien.direction : DIRECTIONS[ev.direction] ? ev.direction : 'bas',
+        mouvement: null,  // { de: {x, y}, t, duree } quand il marche
+        attente: 1 + Math.random() * 2,
         tuile: tuile >= 0 ? tuile : -1,
         // Sans tuile mais avec un personnage : Saga le dessine en petit bonhomme à sa couleur.
         visible: tuile >= 0 || Boolean(perso),
@@ -78,12 +87,13 @@ const Monde = (() => {
   // Peut-on entrer sur la case (x, y) en allant vers dir ? Renvoie null (non) ou { x, y, saut }.
   // - case bloquée : non, sauf une zone dont on possède l'objet requis (la planche de surf pour l'eau) ;
   // - rebord : on le saute seulement dans sa direction, et on atterrit sur la case d'après ;
-  // - un événement qui n'est pas traversable bloque sa case.
-  function destination(carte, partie, presents, x, y, dir) {
+  // - un événement qui n'est pas traversable bloque sa case ;
+  // - prises : d'autres cases occupées (le joueur, pour un PNJ qui marche).
+  function destination(carte, partie, presents, x, y, dir, prises = []) {
     const [dx, dy] = DIRECTIONS[dir];
     const tx = x + dx, ty = y + dy;
     if (!dansCarte(carte, tx, ty)) return null;
-    const occupe = (cx, cy) => presents.some((p) => p.bloque && p.x === cx && p.y === cy);
+    const occupe = (cx, cy) => presents.some((p) => p.bloque && p.x === cx && p.y === cy) || prises.some((c) => c.x === cx && c.y === cy);
     const c = code(carte, tx, ty);
     if (REBORDS[c]) {
       if (REBORDS[c] !== dir) return null;
@@ -100,5 +110,14 @@ const Monde = (() => {
     return { x: tx, y: ty, saut: false };
   }
 
-  return { nouvellePartie, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination };
+  // L'événement présent sur une case (le premier qui y est), ou null.
+  const presentEn = (presents, x, y) => presents.find((p) => p.x === x && p.y === y) || null;
+
+  // La direction de (x1, y1) vers (x2, y2), pour un PNJ qui se tourne vers le joueur.
+  function directionVers(x1, y1, x2, y2) {
+    if (Math.abs(x2 - x1) >= Math.abs(y2 - y1)) return x2 > x1 ? 'droite' : 'gauche';
+    return y2 > y1 ? 'bas' : 'haut';
+  }
+
+  return { nouvellePartie, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

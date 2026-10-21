@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('saga', {
   ouvrirJeu: (dossier) => ipcRenderer.invoke('jeu:ouvrir', dossier),
   jeuxRecents: () => ipcRenderer.invoke('jeu:recents'),
   montrerJeu: (dossier) => ipcRenderer.invoke('jeu:montrer', dossier),
+  // La sauvegarde de la partie d'un jeu (dans %APPDATA%\atelier-moteur\sauvegardes, jamais dans le jeu).
+  lireSauvegarde: (dossier) => ipcRenderer.invoke('sauvegarde:lire', dossier),
+  ecrireSauvegarde: (dossier, donnees) => ipcRenderer.invoke('sauvegarde:ecrire', dossier, donnees),
   // Un jeu lancé par Tafl ou Atelier alors que Saga est déjà ouvert : { dossier, depart }.
   onJeuExterne: (callback) => ipcRenderer.on('jeu:externe', (_event, l) => callback(l)),
   demarrage: () => ipcRenderer.invoke('startup'),

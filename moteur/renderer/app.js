@@ -43,7 +43,9 @@ const App = (() => {
   }
 
   // --- Ouvrir un jeu ---
-  async function lancer(textes, depart) {
+  // depart : où commencer (« Jouer ici » de Tafl). partie : une partie à garder (F5).
+  // Sans l'un ni l'autre, s'il y a une sauvegarde, Saga propose de la continuer.
+  async function lancer(textes, depart, partie = null) {
     if (!textes) return;
     let jeu;
     try {
@@ -63,8 +65,31 @@ const App = (() => {
     for (const id of ['#btn-recharger', '#btn-debug']) $(id).hidden = false;
     document.title = `${jeu.titre} · Saga`;
     fermerPause();
-    moteur.demarrer(jeu, d);
+    if (!partie && !d) {
+      const sauvegarde = await window.saga.lireSauvegarde(textes.dossier).catch(() => null);
+      if (sauvegarde?.partie) {
+        const quand = new Date(sauvegarde.quand).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+        const suite = await Dialogs.ask(jeu.titre, `Une partie est sauvegardée (${quand}).`, [
+          { label: 'Nouvelle partie', value: false },
+          { label: 'Continuer', value: true, primary: true },
+        ]);
+        if (suite) partie = sauvegarde.partie;
+      }
+    }
+    // Une partie dont la carte n'existe plus (supprimée dans Tafl) repart du départ du jeu.
+    if (partie && !jeu.cartes.has(partie.position?.carte)) partie = { ...partie, position: { ...jeu.depart } };
+    moteur.demarrer(jeu, d, partie);
     for (const p of jeu.problemes) notify(`À savoir : ${p}.`, 'warning', 9000);
+  }
+
+  async function sauvegarder() {
+    if (!ouvert || moteur.enScript) return;
+    try {
+      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() });
+      moteur.annoncer('Partie sauvegardée');
+    } catch (err) {
+      notify(`Sauvegarde impossible : ${cleanError(err)}`, 'error');
+    }
   }
 
   async function ouvrir() {
@@ -75,19 +100,20 @@ const App = (() => {
     }
   }
 
-  async function ouvrirDossier(dossier, depart) {
+  async function ouvrirDossier(dossier, depart, partie) {
     try {
-      await lancer(await window.saga.ouvrirJeu(dossier), depart);
+      await lancer(await window.saga.ouvrirJeu(dossier), depart, partie);
     } catch (err) {
       notify(cleanError(err), 'error');
     }
   }
 
-  // F5 : on relit le jeu sur le disque (ce que Tafl vient d'enregistrer) et on replace le joueur où il était.
+  // F5 : on relit le jeu sur le disque (ce que Tafl vient d'enregistrer), sans perdre la partie :
+  // le joueur reste où il était, avec ses objets, ses quêtes, ses interrupteurs.
   async function recharger() {
-    if (!ouvert) return;
-    const ici = moteur.position();
-    await ouvrirDossier(ouvert.dossier, ici);
+    if (!ouvert || moteur.enScript) return;
+    const partie = moteur.partie();
+    await ouvrirDossier(ouvert.dossier, partie?.position, partie);
     notify('Jeu rechargé.', 'success', 1800);
   }
 
@@ -149,6 +175,8 @@ const App = (() => {
     if (action === 'reprendre') fermerPause();
     else if (action === 'recharger') recharger();
     else if (action === 'recommencer') { fermerPause(); moteur.demarrer(ouvert.jeu, null); }
+    else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
+    else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'quitter') quitter();
@@ -163,6 +191,44 @@ const App = (() => {
       choix[(i + (e.key === 'ArrowDown' ? 1 : -1) + choix.length) % choix.length].focus();
     }
   });
+
+  // --- Le carnet (Tab) : l'équipe, le sac, l'argent et les quêtes ---
+  function ouvrirCarnet() {
+    if (!ouvert) return;
+    const { jeu } = ouvert;
+    const p = moteur.partie();
+    const liste = (sorte) => jeu.donnees[sorte]?.[sorte] || [];
+    const nom = (sorte, id) => liste(sorte).find((x) => x.id === id)?.nom || id;
+    const corps = $('#carnet-corps');
+    corps.innerHTML = '';
+    const section = (titre, lignes, vide) => {
+      corps.append(el('h3', { textContent: titre }));
+      const ul = el('ul');
+      for (const l of lignes) ul.append(l);
+      if (!lignes.length) ul.append(el('li', { className: 'vide', textContent: vide }));
+      corps.append(ul);
+    };
+    $('#carnet-titre').textContent = p.nom;
+    $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
+    section('Équipe', p.equipe.map((c) => el('li', {}, el('span', { textContent: nom('creatures', c.creature) }), el('span', { className: 'discret', textContent: `niv. ${c.niveau}` }))), 'Pas encore de compagnon.');
+    section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {}, el('span', { textContent: nom('objets', id) }), el('span', { className: 'discret', textContent: `×${n}` }))), 'Le sac est vide.');
+    const quetes = Object.entries(p.quetes).sort(([, a], [, b]) => (a.etat === 'finie') - (b.etat === 'finie'));
+    section('Quêtes', quetes.map(([id, q]) => {
+      const def = liste('quetes').find((x) => x.id === id);
+      const etape = def?.etapes?.[q.etape - 1]?.texte;
+      return el('li', { className: q.etat === 'finie' ? 'finie' : '' },
+        el('span', { textContent: `${def?.titre || id}${def?.secondaire ? ' (secondaire)' : ''}` }),
+        el('span', { className: 'discret', textContent: q.etat === 'finie' ? 'terminée' : etape || `étape ${q.etape}` }));
+    }), 'Aucune quête commencée.');
+    fermerPause();
+    moteur.pause(true);
+    $('#carnet').hidden = false;
+  }
+  function fermerCarnet() {
+    $('#carnet').hidden = true;
+    moteur.pause(false);
+  }
+  $('#carnet').addEventListener('click', (e) => { if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet(); });
 
   // --- Infos (F3) ---
   function basculerDebug() {
@@ -197,9 +263,16 @@ const App = (() => {
     else if (e.key === 'F11') { e.preventDefault(); basculerPleinEcran(); }
     else if (e.key === 'F5' && ouvert) { e.preventDefault(); recharger(); }
     else if (e.key === 'F3' && ouvert) { e.preventDefault(); basculerDebug(); }
+    else if (ctrl && e.key.toLowerCase() === 's' && ouvert) { e.preventDefault(); sauvegarder(); }
+    else if (e.key === 'Tab' && ouvert) {
+      e.preventDefault();
+      if (!$('#carnet').hidden) fermerCarnet(); else if (!moteur.enScript) ouvrirCarnet();
+    }
     else if (e.key === 'Escape' && ouvert) {
       e.preventDefault();
-      if ($('#pause').hidden) ouvrirPause(); else fermerPause();
+      if (!$('#carnet').hidden) fermerCarnet();
+      else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
+      else if ($('#pause').hidden) ouvrirPause(); else fermerPause();
     }
   });
   // Manette : le bouton Start ouvre et ferme le menu de pause.
@@ -217,6 +290,9 @@ const App = (() => {
   $('#btn-plein').onclick = basculerPleinEcran;
   $('#btn-reglages').onclick = reglages;
   new ResizeObserver(() => { if (ouvert) moteur.redimensionner(); }).observe($('#scene'));
+
+  // Sauvegarder en quittant Saga ? Non : la sauvegarde reste un geste du joueur (Ctrl+S ou la pause),
+  // comme dans les jeux Pokémon. F5 garde la partie en mémoire.
 
   // Un jeu lancé par Tafl (« Jouer ») ou Atelier alors que Saga est déjà ouvert.
   window.saga.onJeuExterne((l) => ouvrirDossier(l.dossier, l.depart));
