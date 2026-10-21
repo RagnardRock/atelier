@@ -60,7 +60,7 @@ jobs:
           . C:\debut.ps1
           Detache "`"$dir\Brokk.exe`"" | Out-Null
           # Un « Claude Code » (cmd) qui a lancé le serveur MCP : Brokk.exe en mode Node, hors de Brokk.
-          Detache "cmd /c set ELECTRON_RUN_AS_NODE=1&& `"$dir\Brokk.exe`" -e setInterval(()=>{},1000)" | Out-Null
+          Detache "cmd /c set ELECTRON_RUN_AS_NODE=1&& `"$dir\Brokk.exe`" -e `"setInterval(function(){},1000)`"" | Out-Null
           . C:\fin.ps1
       - name: B un autre programme garde app.asar de Brokk ouvert
         if: always()
