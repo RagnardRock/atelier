@@ -355,9 +355,23 @@ async function findInstalled(tool, registry) {
 // --- Outils : dernières versions publiées sur GitHub ---
 // Toutes les versions de tous les outils sont des Releases du même dépôt. On les demande une fois,
 // puis on garde pour chaque outil la plus récente dont l'étiquette commence par son préfixe.
+// La lecture est dans commun/github.js (partagé avec Skald, Tafl et Brokk) : le flux des Releases
+// d'abord, qui n'est pas compté dans la limite de 60 demandes par heure de l'API GitHub, et l'API
+// seulement en complément. hub/commun/ est rempli par « npm install » ; depuis le clone, si ce n'est
+// pas encore fait, on prend directement le fichier de commun/.
 const GITHUB_REPO = 'RagnardRock/atelier';
-// ATELIER_GITHUB_API sert seulement aux tests (un faux GitHub sur le PC).
-const GITHUB_API = process.env.ATELIER_GITHUB_API || `https://api.github.com/repos/${GITHUB_REPO}`;
+const { creerGithub, LimiteGithub } = (() => {
+  try { return require('./commun/github'); } catch { return require('../commun/github'); }
+})();
+let depot = null;
+const depotGithub = () => depot ??= creerGithub({
+  net, dossier: app.getPath('userData'), agent: 'Atelier',
+  // ATELIER_GITHUB_API / ATELIER_GITHUB_SITE servent seulement aux tests (un faux GitHub sur le PC).
+  ...(process.env.ATELIER_GITHUB_API && { api: process.env.ATELIER_GITHUB_API }),
+  ...(process.env.ATELIER_GITHUB_SITE && { site: process.env.ATELIER_GITHUB_SITE }),
+});
+// Le message à montrer : celui de la limite tel quel (il dit quand réessayer), sinon « Impossible de contacter ».
+const messageGithub = (err) => err instanceof LimiteGithub ? err.message : `Impossible de contacter GitHub : ${err.message.split('\n')[0]}`;
 
 // 1.10.0 > 1.9.3 : on compare nombre par nombre, pas comme du texte.
 function newer(a, b) {
@@ -366,15 +380,19 @@ function newer(a, b) {
   return false;
 }
 
-let releasesCache = null; // { at, list } : on ne redemande pas à GitHub plus d'une fois par minute
-async function githubReleases(force = false) {
+let releasesCache = null; // { at, list, builds } : on ne relit pas GitHub plus d'une fois par minute
+let buildsAt = 0; // dernière lecture des fabrications en cours (API, comptée dans la limite)
+// suivi : relecture automatique pendant une fabrication. Les fabrications en cours ne sont alors
+// relues que toutes les 2 minutes ; sur un clic (↻, Installer), au plus toutes les 30 secondes.
+async function githubReleases(force = false, { suivi = false } = {}) {
   if (!force && releasesCache && Date.now() - releasesCache.at < 60_000) return releasesCache.list;
-  // cache: 'no-store' : sans ça, Electron peut resservir la réponse de GitHub d'il y a une minute
-  // (GitHub l'autorise), et une version publiée juste avant ton clic n'apparaîtrait pas encore.
-  const res = await net.fetch(`${GITHUB_API}/releases?per_page=100`, { cache: 'no-store', headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Atelier' } });
-  if (!res.ok) throw new Error(`GitHub a répondu ${res.status}`);
-  const list = (await res.json()).filter((r) => !r.draft && !r.prerelease);
-  releasesCache = { at: Date.now(), list, builds: await githubBuilds().catch(() => []) };
+  const list = await depotGithub().releases();
+  let builds = releasesCache?.builds || [];
+  if (Date.now() - buildsAt > (suivi ? 120_000 : 30_000)) {
+    buildsAt = Date.now();
+    builds = await githubBuilds().catch(() => builds);
+  }
+  releasesCache = { at: Date.now(), list, builds };
   return list;
 }
 
@@ -384,12 +402,12 @@ async function githubReleases(force = false) {
 // moment-là donnait l'ancienne. On regarde donc aussi les fabrications en cours sur main
 // (onglet « Actions » du dépôt) : chaque outil a la sienne (.github/workflows/<id>.yml), et la
 // version qu'elle va publier est celle du package.json du commit fabriqué.
+// Ces deux lectures passent par l'API (comptée dans la limite de 60 par heure) : si la limite est
+// atteinte, demanderApi refuse sans rien demander et on garde ce qu'on savait.
 const versionAuCommit = new Map(); // « sha:dossier » → version (un commit ne change jamais)
 async function githubBuilds() {
-  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'Atelier' };
-  const res = await net.fetch(`${GITHUB_API}/actions/runs?branch=main&event=push&per_page=30`, { cache: 'no-store', headers });
-  if (!res.ok) return [];
-  const runs = (await res.json()).workflow_runs || [];
+  const api = depotGithub().demanderApi;
+  const runs = (await (await api('/actions/runs?branch=main&event=push&per_page=30')).json()).workflow_runs || [];
   const builds = [];
   for (const run of runs) {
     if (run.status === 'completed') continue;
@@ -397,8 +415,8 @@ async function githubBuilds() {
     if (!tool?.dossier) continue;
     const key = `${run.head_sha}:${tool.dossier}`;
     if (!versionAuCommit.has(key)) {
-      const r = await net.fetch(`${GITHUB_API}/contents/${tool.dossier}/package.json?ref=${run.head_sha}`, { headers: { ...headers, Accept: 'application/vnd.github.raw+json' } });
-      if (!r.ok) continue;
+      const r = await api(`/contents/${tool.dossier}/package.json?ref=${run.head_sha}`, 'application/vnd.github.raw+json').catch(() => null);
+      if (!r) continue;
       versionAuCommit.set(key, JSON.parse(await r.text()).version);
     }
     builds.push({ id: tool.id, version: versionAuCommit.get(key) });
@@ -432,15 +450,15 @@ const notesToList = (notes) => notes.split('\n').map((l) => l.replace(/^\s*[-*�
 
 // État de chaque outil pour l'interface : installé ou non, quelle version, une plus récente ?
 // github: false → on ne lit que ce qui est installé, sans contacter GitHub (réglage décoché au démarrage).
-handle('outils:etat', async (_event, { refresh = false, github = true } = {}) => {
+handle('outils:etat', async (_event, { refresh = false, github = true, suivi = false } = {}) => {
   const registry = await readUninstallRegistry();
   let releases = null;
   let githubError = null;
   if (github || releasesCache) {
     try {
-      releases = github ? await githubReleases(refresh) : releasesCache.list;
+      releases = github ? await githubReleases(refresh, { suivi }) : releasesCache.list;
     } catch (err) {
-      githubError = `Impossible de contacter GitHub : ${err.message.split('\n')[0]}`;
+      githubError = messageGithub(err);
     }
   }
   const result = [];
@@ -540,21 +558,19 @@ handle('outils:installer', async (_event, id) => {
     const latest = latestRelease(await githubReleases(true), tool.prefixe);
     if (!latest) throw new Error(`Aucune version de ${tool.nom} n'est publiée sur GitHub`);
     const setupName = `${tool.nom}-Setup-${latest.version}.exe`;
-    const setup = latest.assets.find((a) => a.name === setupName);
-    if (!setup) throw new Error(`La Release ${latest.tag} ne contient pas ${setupName}`);
-    const yml = latest.assets.find((a) => a.name === 'latest.yml');
+    // Une Release lue dans le flux n'a pas la liste de ses fichiers : leurs adresses se devinent
+    // (releases/download/<étiquette>/<nom>), et ces téléchargements ne comptent pas dans la limite.
+    if (latest.assets.length && !latest.assets.some((a) => a.name === setupName)) throw new Error(`La Release ${latest.tag} ne contient pas ${setupName}`);
     let expected = null;
-    if (yml) {
-      const res = await net.fetch(yml.browser_download_url, { headers: { 'User-Agent': 'Atelier' } });
-      if (res.ok) expected = (await res.text()).match(/^sha512:\s*(\S+)/m)?.[1] || null;
-    }
+    const yml = await net.fetch(depotGithub().urlFichier(latest.tag, 'latest.yml'), { headers: { 'User-Agent': 'Atelier' } }).catch(() => null);
+    if (yml?.ok) expected = (await yml.text()).match(/^sha512:\s*(\S+)/m)?.[1] || null;
 
     const folder = path.join(app.getPath('temp'), 'atelier-installeurs');
     await fs.mkdir(folder, { recursive: true });
     const file = path.join(folder, setupName);
     log('INFO', `Téléchargement de ${setupName}`);
     progress('telechargement', 0);
-    const actual = await download(setup.browser_download_url, file, (p) => progress('telechargement', p));
+    const actual = await download(depotGithub().urlFichier(latest.tag, setupName), file, (p) => progress('telechargement', p));
     if (expected && actual !== expected) {
       await fs.rm(file, { force: true });
       throw new Error(`L'installeur de ${tool.nom} téléchargé est abîmé (empreinte différente). Réessaie.`);
@@ -771,7 +787,7 @@ handle('update:check', async () => {
     try {
       release = latestRelease(await githubReleases(), 'atelier-v');
     } catch (err) {
-      throw new Error(`Impossible de contacter GitHub : ${err.message.split('\n')[0]}`);
+      throw new Error(messageGithub(err));
     }
     if (!release || !newer(release.version, app.getVersion())) return { mode: 'installer', version: app.getVersion(), changes: [] };
     pendingRelease = release;

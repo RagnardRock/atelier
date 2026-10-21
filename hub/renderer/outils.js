@@ -76,11 +76,11 @@ const Outils = (() => {
     liste.replaceChildren(...outils.map(carte));
   }
 
-  async function refresh({ refresh = false, github = true, silencieux = false } = {}) {
+  async function refresh({ refresh = false, github = true, silencieux = false, auto = false } = {}) {
     const btn = $('#btn-actualiser .codicon');
     btn.classList.add('codicon-modifier-spin');
     try {
-      const etat = await window.atelier.etatOutils({ refresh, github });
+      const etat = await window.atelier.etatOutils({ refresh, github, suivi: auto });
       outils = etat.outils;
       render();
       const dispo = outils.filter((o) => o.miseAJour);
@@ -99,6 +99,8 @@ const Outils = (() => {
 
   // Tant qu'une version est en fabrication sur GitHub, on relit toutes les 30 secondes : la carte se
   // met à jour toute seule quand elle est publiée, et celles que tu attends s'installent.
+  // « auto » : ces relectures lisent surtout le flux des Releases (gratuit) ; les fabrications en
+  // cours (comptées dans la limite de GitHub) ne sont relues que toutes les 2 minutes.
   function suivre() {
     clearTimeout(suivi);
     for (const [id, version] of attente) {
@@ -112,7 +114,7 @@ const Outils = (() => {
       }
     }
     if (outils.some((o) => o.enPreparation)) {
-      suivi = setTimeout(() => refresh({ refresh: true, silencieux: true }).catch(() => suivre()), 30_000);
+      suivi = setTimeout(() => refresh({ refresh: true, silencieux: true, auto: true }).catch(() => suivre()), 30_000);
     }
     render();
   }
