@@ -7,7 +7,7 @@ Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude*
 | `claude.js` | Processus principal : lance Claude Code, transmet tes messages et ses demandes de permission, garde l'historique des conversations par projet. |
 | `mcp-commun.js` | Petit serveur MCP donné à Claude : la mémoire du projet et tes notes, lues et écrites dans le dossier partagé `%APPDATA%\atelier-commun` (tenu à jour par Atelier 0.8 ou plus). |
 | `claude-panneau.js` / `.css` | Le panneau dans la fenêtre : bulles, outils utilisés, cartes Autoriser / Refuser, historique. Bouton étincelle dans la barre de titre, ou `Ctrl+Maj+K`. |
-| `github.js` | Lit les Releases GitHub pour les mises à jour sans épuiser la limite de 60 demandes par heure de GitHub : le flux des Releases d'abord (non compté), l'API seulement en complément (au plus une fois par demi-heure, gardée sur le disque), et un message clair avec l'heure où réessayer si la limite est atteinte. Atelier l'utilise aussi (`hub/commun/`, copié par `npm install`). |
+| `github.js` | Lit les Releases GitHub pour les mises à jour sans épuiser la limite de 60 demandes par heure de GitHub : le flux des Releases d'abord (non compté), l'API seulement en complément (au plus une fois par demi-heure, gardée sur le disque), et un message clair avec l'heure où réessayer si la limite est atteinte. Atelier et Saga l'utilisent aussi (`hub/commun/`, `moteur/commun/`, copiés par `npm install`). |
 | `copier.js` | Recopie ces fichiers dans `<outil>/commun/`. |
 
 **Pourquoi une copie ?** Chaque outil est fabriqué depuis son propre dossier, et son installeur

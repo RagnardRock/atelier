@@ -695,6 +695,8 @@ async function listeProjets() {
     p.outilAuto = p.categorie === 'images' ? 'skald' : 'rune';
     p.outil = outilsProjets[p.nom] || p.outilAuto;
     p.memoire = Array.isArray(memoire[p.nom]) ? memoire[p.nom] : [];
+    // Un dossier de jeu de Tafl (il a un jeu.json) : on peut aussi y jouer dans Saga.
+    p.jeu = fsSync.existsSync(path.join(p.dossier, 'jeu.json'));
   }));
   return { racine, existe: true, projets: garder, total: projets.length, noms: projets.map((p) => p.nom), memoire };
 }

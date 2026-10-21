@@ -1,0 +1,109 @@
+/* =========================================================================
+   Saga : ce qui est propre à Saga (l'accueil, la scène du jeu, le menu de pause).
+   Le reste (boutons, dialogues, notifications, verre) vient de style.css, commun aux outils.
+   ========================================================================= */
+
+/* Accueil */
+#accueil { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; overflow: auto; padding-bottom: 40px; }
+.welcome-logo { width: 96px; height: 96px; filter: drop-shadow(0 12px 30px rgba(155, 107, 255, 0.3)); }
+#accueil h1 { margin: 8px 0 0; font-size: 30px; font-weight: 600; color: var(--text-strong); letter-spacing: 0.5px; }
+.welcome-sub { margin: 0 0 14px; color: var(--muted); max-width: 520px; text-align: center; line-height: 1.5; }
+.welcome-actions { display: flex; gap: 8px; }
+.welcome-hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; max-width: 560px; text-align: center; line-height: 1.5; }
+#accueil h2 { margin: 22px 0 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+#accueil-recents { display: flex; flex-direction: column; gap: 2px; width: min(560px, 90%); }
+.recent { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: none; border-radius: 7px; background: transparent; text-align: left; cursor: pointer; }
+.recent:hover { background: var(--hover); }
+.recent .codicon { color: var(--accent); }
+.recent-name { color: var(--text-strong); white-space: nowrap; }
+.recent-path { flex: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+
+/* Barre de titre : le nom du jeu au milieu */
+#titre-jeu { color: var(--muted); padding-left: 10px; border-left: 1px solid var(--border); }
+#btn-debug.actif { color: var(--accent); background: var(--hover); }
+
+/* La scène : le canvas centré, agrandi sans lissage (chaque pixel du jeu reste un carré net) */
+#scene { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
+#ecran { display: block; image-rendering: pixelated; flex-shrink: 0; }
+body.plein-ecran #titlebar { display: none; }
+body.plein-ecran #scene { cursor: none; }
+
+/* Le nom de la carte, en haut à gauche, qui glisse puis s'efface */
+#bandeau {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  padding: 10px 20px 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  background: rgba(12, 12, 18, 0.55);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  opacity: 0;
+  transform: translateY(-14px);
+  transition: opacity 0.35s, transform 0.35s;
+  pointer-events: none;
+}
+#bandeau.visible { opacity: 1; transform: none; }
+
+/* F3 */
+#infos {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #e8e8e8;
+  font: 12px Consolas, "Cascadia Mono", monospace;
+  pointer-events: none;
+}
+
+/* Menu de pause : une plaque de verre sur le jeu figé */
+#pause {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 6, 10, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: 10;
+}
+.pause-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 340px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(20, 20, 28, 0.7);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: var(--shadow);
+}
+.pause-titre { display: flex; align-items: center; gap: 10px; margin: 0 0 10px 4px; font-size: 16px; font-weight: 600; color: var(--text-strong); }
+.pause-titre img { width: 26px; height: 26px; }
+.pause-choix {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.pause-choix kbd { margin-left: auto; }
+.pause-choix:hover, .pause-choix:focus-visible, .pause-choix:focus { background: var(--hover); color: var(--text-strong); }
+.pause-choix:focus { box-shadow: inset 2px 0 0 var(--accent); }
+.pause-choix .codicon { color: var(--accent); }
+.pause-aide { margin: 10px 4px 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }

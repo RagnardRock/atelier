@@ -286,6 +286,54 @@ handle('game:write', async (_event, folder, files, remove = []) => {
 
 handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file)));
 
+// --- Jouer : lancer le jeu dans Saga, le moteur (atelier/moteur) ---
+// Saga reçoit le dossier du jeu en ligne de commande, et pour « Jouer ici » la carte et la case :
+//   Saga.exe D:\Jeux\MonJeu --carte=route-1 --x=4 --y=7
+// Où est Saga ?
+// - Tafl lancé depuis le clone (npm start) et Saga installé dans le clone (moteur/node_modules) :
+//   on lance le Saga du clone, avec son Electron, pour jouer avec la même version du code.
+// - Sinon, le Saga installé (Saga-Setup.exe) : le registre de Windows le dit (comme dans Atelier),
+//   ou l'emplacement par défaut %LOCALAPPDATA%\Programs\Saga.
+function sagaDuClone() {
+  const dossier = path.join(__dirname, '..', 'moteur');
+  try {
+    const electron = require(path.join(dossier, 'node_modules', 'electron'));
+    return typeof electron === 'string' && fsSync.existsSync(electron) ? { exe: electron, args: [dossier] } : null;
+  } catch {
+    return null;
+  }
+}
+function sagaInstalle() {
+  return new Promise((resolve) => {
+    const parDefaut = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'Saga', 'Saga.exe');
+    const ici = () => resolve(fsSync.existsSync(parDefaut) ? { exe: parDefaut, args: [] } : null);
+    if (process.platform !== 'win32') return ici();
+    execFile('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', '/s', '/f', 'Saga', '/d'], { windowsHide: true }, (err, stdout) => {
+      if (err) return ici();
+      // Le bloc du programme dont le nom affiché est exactement « Saga », puis son dossier d'installation.
+      for (const bloc of String(stdout).split(/\r?\n(?=HKEY_)/)) {
+        if (!/^\s+DisplayName\s+REG_SZ\s+Saga\s*$/m.test(bloc)) continue;
+        const lieu = bloc.match(/^\s+InstallLocation\s+REG_SZ\s+(.+)$/m)?.[1]?.trim().replace(/^"|"$/g, '');
+        const exe = lieu && path.join(lieu, 'Saga.exe');
+        if (exe && fsSync.existsSync(exe)) return resolve({ exe, args: [] });
+      }
+      ici();
+    });
+  });
+}
+handle('jeu:jouer', async (_event, dossier, depart) => {
+  const root = path.resolve(String(dossier));
+  if (!gameFolders.has(root) || !fsSync.existsSync(path.join(root, 'jeu.json'))) throw new Error('Enregistre d\'abord le jeu dans un dossier');
+  const saga = (!app.isPackaged && sagaDuClone()) || (await sagaInstalle()) || sagaDuClone();
+  if (!saga) throw new Error('Saga, le moteur du jeu, n\'est pas installé : installe-le depuis Atelier');
+  const args = [...saga.args, root];
+  if (depart?.carte) args.push(`--carte=${depart.carte}`, `--x=${Math.round(depart.x)}`, `--y=${Math.round(depart.y)}`, `--direction=${depart.direction || 'bas'}`);
+  const child = spawn(saga.exe, args, { cwd: root, detached: true, stdio: 'ignore' });
+  child.on('error', (err) => log('ERREUR', `Saga : ${err.message}`));
+  child.unref();
+  log('INFO', `Jouer : ${saga.exe} ${args.join(' ')}`);
+});
+
 // --- Panneau Claude (le même que dans Skald, Brokk : voir ../commun/LISEZMOI.md) ---
 const claude = require('./commun/claude');
 const { creerGithub, LimiteGithub } = require('./commun/github');

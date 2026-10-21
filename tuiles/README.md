@@ -175,6 +175,15 @@ Les onglets :
 
 Dans les scripts, les champs créature, objet, dresseur et boutique proposent la liste du jeu, et Tafl refuse un script de Claude qui en nomme un qui n'existe pas.
 
+## Jouer (Tafl 0.9)
+
+Le bouton **Jouer** de la barre de titre (ou `F5`, ou Jeu › Jouer) lance le jeu dans **Saga**, le moteur (`moteur/`, voir [moteur/README.md](../moteur/README.md)). Tafl enregistre d'abord le jeu s'il a des modifications : Saga lit les fichiers du dossier de jeu.
+
+- `F5` : depuis le départ du joueur.
+- `Maj+F5` (ou Maj+clic sur Jouer) : depuis **la case sous la souris**, sur la carte affichée. Pratique pour essayer tout de suite le coin qu'on vient de dessiner.
+- Saga déjà ouvert : il recharge le jeu dans sa fenêtre, avec ce que Tafl vient d'enregistrer.
+- Lancé depuis le clone (`npm start`), Tafl lance le Saga du clone (`moteur/`, après un `npm install` dans `moteur`) ; installé, il lance le Saga installé (depuis Atelier).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -204,7 +213,7 @@ Le plan (validé avec Ragna le 20/10/2026) :
 
 1. ~~**Tafl 0.7, les événements**~~ : fait (voir plus haut).
 2. ~~**Tafl 0.8, les bases de données**~~ : fait (voir plus haut).
-3. **Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl.
+3. ~~**Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl~~ : commencé, c'est **Saga** (voir plus haut).
 
 Et toujours : tuiles automatiques (bords de chemin et de mare posés tout seuls), sélection et copier-coller sur la carte, lien direct avec Skald.
 
