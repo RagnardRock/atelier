@@ -13,10 +13,10 @@ name: Saga (installeur Windows)
 
 on:
   pull_request:
-    paths: ['moteur/**', '.github/workflows/saga.yml']
+    paths: ['moteur/**', 'commun/github.js', 'commun/copier.js', '.github/workflows/saga.yml']
   push:
     branches: [main]
-    paths: ['moteur/**', '.github/workflows/saga.yml']
+    paths: ['moteur/**', 'commun/github.js', 'commun/copier.js', '.github/workflows/saga.yml']
     tags: ['saga-v*']
   workflow_dispatch:
 

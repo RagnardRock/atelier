@@ -1,4 +1,5 @@
-// Recopie les fichiers communs (le panneau Claude, son serveur MCP) dans un outil de l'Atelier.
+// Recopie les fichiers communs (le panneau Claude, son serveur MCP, la lecture des Releases GitHub)
+// dans un outil de l'Atelier.
 //
 // Skald, Tafl et Brokk sont fabriqués chacun depuis leur dossier (retouche/, tuiles/, export/) :
 // l'installeur ne peut emporter que ce qui s'y trouve. Ce script est lancé tout seul après chaque
@@ -8,7 +9,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const FICHIERS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css'];
+// On peut ne demander que certains fichiers : « node ../commun/copier.js github.js » (Atelier, qui a
+// son propre Claude, ne prend que github.js).
+const TOUS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css', 'github.js'];
+const FICHIERS = process.argv.length > 2 ? process.argv.slice(2).filter((f) => TOUS.includes(f)) : TOUS;
 const cible = path.join(process.cwd(), 'commun');
 fs.mkdirSync(cible, { recursive: true });
 for (const f of FICHIERS) fs.copyFileSync(path.join(__dirname, f), path.join(cible, f));
