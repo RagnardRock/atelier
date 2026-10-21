@@ -56,4 +56,15 @@ module.exports = [
     dossier: 'tuiles',
     ouvreDossier: '0.1.0',
   },
+  {
+    id: 'saga',
+    nom: 'Saga',
+    glyphe: 'ᛃ',
+    description: 'Le moteur du jeu : joue les jeux faits avec Tafl',
+    prefixe: 'saga-v',
+    exe: 'Saga.exe',
+    icone: 'saga.svg',
+    dossier: 'moteur',
+    ouvreDossier: '0.1.0',
+  },
 ];

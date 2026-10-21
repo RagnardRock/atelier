@@ -7,6 +7,7 @@ Mes outils perso, réunis dans un seul dépôt :
 - **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
 - **Brokk** ᛒ, l'export d'assets : un PSD ou un logo vers toutes les tailles web d'un projet (`export/`) : voir [export/README.md](export/README.md).
 - **Tafl** ᛏ, mes tuiles et cartes en pixel art, façon Pokémon (`tuiles/`) : voir [tuiles/README.md](tuiles/README.md).
+- **Saga** ᛃ, le moteur qui fait tourner les jeux décrits dans Tafl (`moteur/`) : voir [moteur/README.md](moteur/README.md).
 
 Les prochains (panneau serveur…) viendront à côté.
 
@@ -31,7 +32,7 @@ Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/w
 1. Quand la PR est fusionnée dans `main`, GitHub voit que l'étiquette `rune-v0.13.0` n'existe pas encore : il fabrique `Rune-Setup-0.13.0.exe`, crée l'étiquette et publie la Release, avec comme notes la liste des commits de `ide/` depuis la version précédente.
 2. Tous les Rune installés (et Atelier) la proposent ensuite.
 
-Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk, Tafl et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json`, `tuiles/package.json` et `hub/package.json`.
+Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk, Tafl, Saga et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json`, `tuiles/package.json`, `moteur/package.json` et `hub/package.json`.
 
 Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, sans le publier : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ». Pratique pour essayer une version avant de fusionner.
 
