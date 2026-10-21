@@ -120,8 +120,44 @@ const Panels = (() => {
   }
 
   // --- Tuiles du jeu ---
+  // Tafl 0.13 : les tuiles se rangent par catégorie (« Herbe », « Maisons »…) sous un titre qu'on replie,
+  // comme les groupes de cartes. Ctrl+clic et Maj+clic en choisissent plusieurs ; on les glisse ensemble.
+  // Glisser sur un titre range dans cette catégorie ; sur une tuile, juste à côté d'elle.
   const tilesEl = $('#tiles');
-  let dragFrom = null;
+  const filterInput = $('#tiles-filter');
+  const PLIS = 'tafl.categoriesRepliees';
+  let pliees;
+  try { pliees = new Set(JSON.parse(localStorage.getItem(PLIS) || '[]')); } catch { pliees = new Set(); }
+  function toggleCategory(nom) {
+    if (pliees.has(nom)) pliees.delete(nom); else pliees.add(nom);
+    try { localStorage.setItem(PLIS, JSON.stringify([...pliees])); } catch { /* sans mémoire, tant pis */ }
+    renderTiles();
+  }
+  // Les tuiles choisies en plus de la tuile en cours (par leur id : il ne bouge pas quand on les range).
+  const choisies = new Set();
+  let ancre = -1; // pour Maj+clic : la dernière tuile cliquée
+  function selection() {
+    const doc = App.doc;
+    if (!doc) return [];
+    return doc.tiles.map((t, i) => (choisies.has(t.id) || i === doc.current ? i : -1)).filter((i) => i >= 0);
+  }
+  function setSelection(indices) {
+    choisies.clear();
+    for (const i of indices) if (App.doc.tiles[i]) choisies.add(App.doc.tiles[i].id);
+    renderTiles();
+  }
+  const clearSelection = () => { choisies.clear(); };
+  filterInput.oninput = () => renderTiles();
+  filterInput.onkeydown = (e) => { if (e.key === 'Escape') { filterInput.value = ''; renderTiles(); filterInput.blur(); } };
+
+  // Les catégories, dans l'ordre de leur première tuile ('' = sans catégorie).
+  function categories(doc) {
+    const cats = new Map();
+    doc.tiles.forEach((t, i) => { const c = t.categorie || ''; if (!cats.has(c)) cats.set(c, []); cats.get(c).push(i); });
+    return cats;
+  }
+  const categoryNames = (doc) => [...categories(doc).keys()].filter(Boolean);
+  let dragFrom = null; // les numéros des tuiles qu'on glisse
 
   // Image montrée dans les vignettes : celle de l'horloge d'animation (ou la première, à l'arrêt).
   const shownFrame = (tile) => Doc.frameAt(tile, App.playing ? performance.now() : 0);
@@ -130,43 +166,101 @@ const Panels = (() => {
     c.getContext('2d').drawImage(Doc.tileCanvas(tile, size, shownFrame(tile)), 0, 0);
     return c;
   }
+  function dropZone(node, onDrop) {
+    node.ondragover = (e) => { if (!dragFrom) return; e.preventDefault(); node.classList.add('drop'); };
+    node.ondragleave = () => node.classList.remove('drop');
+    node.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); node.classList.remove('drop'); const from = dragFrom; dragFrom = null; if (from) onDrop(from); };
+  }
+
+  function tileItem(doc, tile, i, grouped, sel) {
+    const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}${sel.has(i) && i !== doc.current ? ' selected' : ''}`, title: `${i}. ${tile.name}${tile.categorie ? ` (${tile.categorie})` : ''}${Doc.animated(tile) ? `\nAnimée, ${tile.frames.length} images` : ''}\nClic : choisir · Ctrl+clic, Maj+clic : en choisir plusieurs\nDouble-clic : renommer · glisser : ranger (sur une autre tuile ou un titre de catégorie)`, draggable: true }, [thumb(tile, doc.tileSize), Doc.animated(tile) ? el('span', { className: 'tile-anim', textContent: tile.frames.length }) : null, tile.passage && tile.passage !== 'auto' ? el('span', { className: `tile-pass ${tile.passage}`, title: tile.passage === 'bloque' ? 'Bloque le joueur' : 'Laisse passer le joueur' }) : null]);
+    item.dataset.index = i;
+    item.onclick = (e) => {
+      if (e.shiftKey && ancre >= 0) {
+        // Maj+clic : toutes les tuiles affichées entre la dernière cliquée et celle-ci.
+        const shown = [...tilesEl.querySelectorAll('.tile-item')].map((n) => Number(n.dataset.index));
+        const [a, b] = [shown.indexOf(ancre), shown.indexOf(i)].sort((x, y) => x - y);
+        if (a >= 0) for (const k of shown.slice(a, b + 1)) choisies.add(doc.tiles[k].id);
+        choisies.add(doc.tiles[doc.current].id);
+        return App.selectTile(i, true);
+      }
+      ancre = i;
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+clic : ajoute ou retire la tuile du lot (la tuile en cours en fait toujours partie).
+        const lot = selection();
+        if (sel.has(i) && lot.length > 1) {
+          choisies.delete(tile.id);
+          return i === doc.current ? App.selectTile(lot.find((k) => k !== i), true) : renderTiles();
+        }
+        choisies.add(doc.tiles[doc.current].id);
+        return App.selectTile(i, true);
+      }
+      App.selectTile(i);
+    };
+    item.ondblclick = () => App.renameTile(i);
+    item.oncontextmenu = (e) => {
+      e.preventDefault();
+      if (!sel.has(i)) App.selectTile(i);
+      Menus.open(App.tileMenuItems(), e.clientX, e.clientY);
+    };
+    item.ondragstart = (e) => {
+      dragFrom = sel.has(i) ? selection() : [i];
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+    };
+    item.ondragend = () => { dragFrom = null; item.classList.remove('dragging'); $$('#tiles .drop').forEach((n) => n.classList.remove('drop')); };
+    // Vers la droite : juste après la tuile visée ; vers la gauche : juste avant. Dans la vue par
+    // catégories, les tuiles prennent aussi la catégorie de celle visée.
+    dropZone(item, (from) => {
+      if (from.length === 1 && from[0] === i) return;
+      App.placeTiles(from, from.every((k) => k < i) ? i + 1 : i, grouped ? tile.categorie || '' : undefined);
+    });
+    return item;
+  }
 
   function renderTiles() {
     const doc = App.doc;
     tilesEl.innerHTML = '';
     if (!doc) return;
+    for (const id of [...choisies]) if (!doc.tiles.some((t) => t.id === id)) choisies.delete(id);
+    const sel = new Set(selection());
+    const q = filterInput.value.trim().toLowerCase();
+    const match = (t, i) => !q || String(i) === q || t.name.toLowerCase().includes(q) || (t.categorie || '').toLowerCase().includes(q);
     tilesEl.style.setProperty('--cols', doc.columns);
-    doc.tiles.forEach((tile, i) => {
-      const item = el('button', { className: `tile-item${i === doc.current ? ' active' : ''}`, title: `${i}. ${tile.name}${Doc.animated(tile) ? ` (animée, ${tile.frames.length} images)` : ''}\nClic : choisir · double-clic : renommer · glisser : changer l'ordre`, draggable: true }, [thumb(tile, doc.tileSize), Doc.animated(tile) ? el('span', { className: 'tile-anim', textContent: tile.frames.length }) : null, tile.passage && tile.passage !== 'auto' ? el('span', { className: `tile-pass ${tile.passage}`, title: tile.passage === 'bloque' ? 'Bloque le joueur' : 'Laisse passer le joueur' }) : null]);
-      item.dataset.index = i;
-      item.onclick = () => App.selectTile(i);
-      item.ondblclick = () => App.renameTile(i);
-      item.oncontextmenu = (e) => {
-        e.preventDefault();
-        App.selectTile(i);
-        Menus.open(App.tileMenuItems(), e.clientX, e.clientY);
-      };
-      item.ondragstart = (e) => { dragFrom = i; e.dataTransfer.effectAllowed = 'move'; item.classList.add('dragging'); };
-      item.ondragend = () => { dragFrom = null; item.classList.remove('dragging'); $$('.tile-item.drop').forEach((n) => n.classList.remove('drop')); };
-      item.ondragover = (e) => { if (dragFrom === null) return; e.preventDefault(); item.classList.add('drop'); };
-      item.ondragleave = () => item.classList.remove('drop');
-      item.ondrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const to = i;
-        if (dragFrom === null || dragFrom === to) return;
-        const from = dragFrom;
-        Doc.change(doc, 'Déplacer une tuile', () => Doc.moveTile(doc, from, to));
-      };
-      tilesEl.append(item);
-    });
-    $('#tiles-count').textContent = `${doc.tiles.length} · ${doc.tileSize}×${doc.tileSize}`;
+    const cats = categories(doc);
+    const grouped = cats.size > 1 || !cats.has('');
+    let shown = 0;
+    if (!grouped) {
+      doc.tiles.forEach((t, i) => { if (match(t, i)) { tilesEl.append(tileItem(doc, t, i, false, sel)); shown++; } });
+    } else {
+      for (const [nom, membres] of cats) {
+        const vus = membres.filter((i) => match(doc.tiles[i], i));
+        if (q && !vus.length) continue;
+        const pliee = pliees.has(nom) && !q;
+        const head = el('button', { className: `tile-cat${nom ? '' : ' none'}`, title: nom ? `Catégorie « ${nom} »\nClic : replier ou déplier · double-clic : renommer · clic droit : plus d'actions · glisse des tuiles ici pour les y ranger` : 'Les tuiles sans catégorie\nGlisse des tuiles ici pour les sortir de leur catégorie' }, [
+          el('i', { className: `codicon codicon-chevron-${pliee ? 'right' : 'down'}` }),
+          el('i', { className: `codicon codicon-${nom ? `folder${pliee ? '' : '-opened'}` : 'circle-slash'}` }),
+          el('span', { className: 'row-name', textContent: nom || 'Sans catégorie' }),
+          el('span', { className: 'row-meta', textContent: q ? `${vus.length} / ${membres.length}` : membres.length }),
+        ]);
+        head.onclick = () => toggleCategory(nom);
+        head.ondblclick = (e) => { e.preventDefault(); if (nom) App.run(() => App.renameCategory(nom)); };
+        head.oncontextmenu = (e) => { e.preventDefault(); Menus.open(App.categoryMenuItems(nom, pliee), e.clientX, e.clientY); };
+        dropZone(head, (from) => App.placeTiles(from, membres[membres.length - 1] + 1, nom));
+        tilesEl.append(head);
+        // Repliée : on garde visible la tuile en cours, pour savoir où on est.
+        for (const i of vus) if (!pliee || i === doc.current) { tilesEl.append(tileItem(doc, doc.tiles[i], i, true, sel)); shown++; }
+      }
+    }
+    if (q && !shown) tilesEl.append(el('p', { className: 'rows-empty', textContent: `Aucune tuile ne correspond à « ${filterInput.value.trim()} ».` }));
+    const n = sel.size > 1 ? ` · ${sel.size} choisies` : '';
+    $('#tiles-count').textContent = `${doc.tiles.length} · ${doc.tileSize}×${doc.tileSize}${n}`;
   }
 
   // Pendant un coup de crayon (ou à chaque image de l'animation) : seule une vignette est refaite.
   function refreshThumb(i, frame) {
     const doc = App.doc;
-    const item = tilesEl.children[i];
+    const item = tilesEl.querySelector(`.tile-item[data-index="${i}"]`);
     if (!item || !doc.tiles[i]) return;
     const c = item.querySelector('canvas');
     const g = c.getContext('2d');
@@ -376,7 +470,7 @@ const Panels = (() => {
     stampsEl.innerHTML = '';
     if (!doc) return;
     doc.stamps.forEach((st, i) => {
-      const item = el('button', { className: `stamp-item${App.tool === 'stamp' && i === App.options.stamp ? ' active' : i === App.options.stamp ? ' chosen' : ''}`, title: `${st.name} : ${st.w} × ${st.h} tuiles${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''}\nClic : le poser (outil Tampon) · double-clic : réglages · clic droit : plus d'actions` }, [stampCanvas(doc, st, 56)]);
+      const item = el('button', { className: `stamp-item${App.tool === 'stamp' && i === App.options.stamp ? ' active' : i === App.options.stamp ? ' chosen' : ''}`, title: `${st.name} : ${st.w} × ${st.h} tuiles${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''}\nClic : le poser (outil Tampon) · double-clic : réglages · clic droit : plus d'actions` }, [stampCanvas(doc, st, Math.round(Disposition.vignette() * 1.3))]);
       item.onclick = () => App.selectStamp(i);
       item.ondblclick = () => App.stampProperties(i);
       item.oncontextmenu = (e) => { e.preventDefault(); Menus.open(App.stampMenuItems(i), e.clientX, e.clientY); };
@@ -432,5 +526,5 @@ const Panels = (() => {
     }
   }
 
-  return { render, renderLive, toggleGroup, isGroupFolded: (nom) => replies.has(nom), renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, renderStamps, stampCanvas, tick, usedColors };
+  return { render, renderLive, toggleGroup, toggleCategory, isCategoryFolded: (nom) => pliees.has(nom), selection, setSelection, clearSelection, categoryNames, isGroupFolded: (nom) => replies.has(nom), renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, renderStamps, stampCanvas, tick, usedColors };
 })();

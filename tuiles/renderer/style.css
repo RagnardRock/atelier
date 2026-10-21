@@ -363,8 +363,9 @@ input[type=range]::-webkit-slider-thumb {
 #side-resizer:hover, #side-resizer.dragging { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* ---------- Panneau de droite ---------- */
-#sidepanel { width: 300px; display: flex; flex-direction: column; gap: 8px; min-height: 0; flex-shrink: 0; }
+#sidepanel { --vignette: 44px; width: 320px; display: flex; flex-direction: column; gap: 8px; min-height: 0; flex-shrink: 0; }
 .panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--plate-border);
@@ -610,7 +611,7 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
   flex: 1;
   overflow-y: auto;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--vignette), 1fr));
   gap: 4px;
   align-content: start;
   padding: 0 12px 12px;
@@ -627,6 +628,36 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 .tile-item.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .tile-item.dragging { opacity: 0.4; }
 .tile-item.drop { box-shadow: -3px 0 0 var(--accent); }
+.tile-item.selected { border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* Tafl 0.13 : chercher, trier, ranger les tuiles par catégorie */
+.tiles-tools { display: flex; align-items: center; gap: 6px; padding: 0 12px 8px; }
+.tiles-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px; height: 26px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 7px; background: rgba(0, 0, 0, 0.2); color: var(--muted); }
+.tiles-search:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.tiles-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 12px; outline: none; padding: 0; }
+.tile-cat {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-top: 4px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.tile-cat:first-child { margin-top: 0; }
+.tile-cat:hover { background: var(--hover); }
+.tile-cat .codicon { color: var(--muted); font-size: 14px; }
+.tile-cat.none .row-name { color: var(--muted); font-style: italic; }
+.tile-cat.drop { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+#tiles .rows-empty { grid-column: 1 / -1; }
 .tile-canvas {
   width: 100%;
   height: 100%;
@@ -648,7 +679,7 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 #color-primary { left: 0; top: 0; z-index: 1; }
 #color-secondary { right: 0; bottom: 0; }
 /* Sans jeu de tuiles ouvert, l'accueil prend toute la place. */
-body.no-doc #sidepanel { display: none; }
+body.no-doc #sidepanel, body.no-doc #side-resizer { display: none; }
 
 /* Animation : les images de la tuile choisie */
 #frames-panel { flex-shrink: 0; }
@@ -933,7 +964,7 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 #stamps { overflow-y: auto; padding: 0 8px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 .stamp-item {
   display: flex; align-items: center; justify-content: center;
-  width: 64px; height: 64px; padding: 3px;
+  width: calc(var(--vignette) * 1.45); height: calc(var(--vignette) * 1.45); padding: 3px;
   border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 7px;
   background: rgba(255, 255, 255, 0.03); cursor: pointer;
 }
@@ -985,3 +1016,42 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .sprite-couleur.actif { outline: 2px solid #fff; outline-offset: 1px; }
 .sprite-couleurs input[type=color] { width: 26px; height: 22px; padding: 0; border: none; background: none; }
 .sprite-grand { image-rendering: pixelated; border-radius: 6px; border: 1px solid var(--border); cursor: crosshair; touch-action: none; align-self: flex-start; }
+
+/* ---------- Tafl 0.14 : panneaux à la taille qu'on veut (disposition.js) ---------- */
+/* Une colonne : les deux colonnes s'effacent (display: contents) et « order » remet les panneaux
+   dans l'ordre habituel. Deux colonnes : à gauche les listes, à droite les tampons et les tuiles. */
+.side-col { display: contents; }
+#maps-panel { order: 1; } #layers-panel { order: 2; } #stamps-panel { order: 3; } #events-panel { order: 4; }
+#color-panel { order: 5; } #tiles-panel { order: 6; } #frames-panel { order: 7; } #preview-panel { order: 8; }
+#sidepanel.deux-colonnes { flex-direction: row; }
+#sidepanel.deux-colonnes .side-col { display: flex; flex-direction: column; gap: 8px; flex: 1 1 0; min-width: 0; min-height: 0; }
+/* Les tuiles prennent toute la place qui reste, sans jamais être écrasées en bas. */
+#tiles-panel { min-height: 160px; }
+#sidepanel.deux-colonnes #tiles-panel { min-height: 0; }
+/* Un panneau qu'on a agrandi à la main garde sa hauteur (style posé par disposition.js). */
+.panel.sized { max-height: none !important; }
+.panel > .rows, .panel > #stamps { flex: 1 1 auto; min-height: 0; }
+/* Replier un panneau : un clic sur son titre. */
+.panel-header { cursor: pointer; }
+.panel-header .panel-actions { cursor: default; }
+.panel-fold { margin: 0 4px 0 -4px; color: var(--muted); font-size: 14px; transition: transform 0.12s; }
+.panel.folded .panel-fold { transform: rotate(-90deg); }
+.panel.folded > :not(.panel-header) { display: none !important; }
+.panel.folded { flex: 0 0 auto !important; min-height: 0 !important; }
+.panel.folded .panel-actions { visibility: hidden; }
+/* La poignée en bas d'un panneau : glisser pour changer sa hauteur, double-clic pour revenir à l'automatique. */
+.panel-grip { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: row-resize; z-index: 2; }
+.panel-grip::after { content: ''; position: absolute; left: 50%; bottom: 2px; width: 36px; height: 3px; margin-left: -18px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); opacity: 0; transition: opacity 0.12s; }
+.panel:hover > .panel-grip::after { opacity: 1; }
+.panel-grip:hover::after, .panel-grip.dragging::after { opacity: 1; background: var(--accent); }
+body.resizing, body.resizing * { cursor: inherit !important; }
+body.resizing-col { cursor: col-resize; }
+body.resizing-row { cursor: row-resize; }
+/* Les calques ne s'étirent plus dans le vide : la place libre va aux tuiles. */
+#layers-panel { flex: 0 0 auto; }
+#color-panel:not(.sized) { flex-shrink: 0; }
+
+/* Réglages > Interface du jeu (Tafl 0.15) : le nuancier de l'accent et son bouton « Celle de Saga » */
+.accent-jeu { display: flex; align-items: center; gap: 8px; }
+.accent-jeu input[type="color"] { width: 44px; height: 30px; padding: 0 2px; border: 1px solid var(--border); border-radius: 7px; background: transparent; cursor: pointer; }
+.accent-jeu .button { white-space: nowrap; }

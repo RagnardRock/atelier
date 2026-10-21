@@ -38,6 +38,8 @@ const Moteur = (() => {
       }
       const action = ACTIONS[e.code];
       if (action && !e.ctrlKey && !e.altKey) { e.preventDefault(); if (!e.repeat) appuis.push(action); }
+      // Échap : la pause (dans app.js), mais en combat c'est un Retour comme les autres.
+      if (e.code === 'Escape' && !e.repeat) appuis.push('echap');
       if (e.key === 'Shift') course = true;
     });
     window.addEventListener('keyup', (e) => {
@@ -560,7 +562,8 @@ const Moteur = (() => {
       if (!enPause) {
         // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
         for (const a of entrees.appuis()) {
-          if (enCombat) ecranCombat.touche(a);
+          if (a === 'echap') { if (enCombat) ecranCombat.touche('retour'); }
+          else if (enCombat) ecranCombat.touche(a);
           else if (enScript) dialogue.touche(a);
           else if (a === 'action') actionDemandee = true;
         }

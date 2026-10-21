@@ -271,9 +271,12 @@ const Combat = (() => {
       k.peur = false;
       if (k.joueur) nous.participants.add(actif(nous));
       montrer(k);
+      // Le message s'écrit pendant que la créature entre (la balle part sur « En avant ! »).
+      const texte = k.joueur ? (premier ? `En avant, ${C.nom(jeu, actif(k))} !` : `À toi, ${C.nom(jeu, actif(k))} !`)
+        : dresseur ? `${nomDresseur()} envoie ${C.nom(jeu, actif(k))} !` : '';
+      const lu = texte ? ui.message(texte) : null;
       await ui.animer(k.joueur ? 'joueur' : 'adversaire', 'entree');
-      if (k.joueur) await ui.message(premier ? `En avant, ${C.nom(jeu, actif(k))} !` : `À toi, ${C.nom(jeu, actif(k))} !`);
-      else if (dresseur) await ui.message(`${nomDresseur()} envoie ${C.nom(jeu, actif(k))} !`);
+      await lu;
     }
 
     // --- Le choix d'une créature de l'équipe (pour changer, ou après un K.O.) ---
@@ -427,11 +430,12 @@ const Combat = (() => {
 
     // ======================= Le combat =======================
     if (nous.actif < 0) return { issue: 'defaite' };
-    ui.ouvrir({ fond, dresseur: dresseur ? { nom: nomDresseur(), portrait: jeu.personnages.get(dresseur.personnage)?.portraits?.[0]?.png || '' } : null });
+    await ui.ouvrir({ fond, dresseur: dresseur ? { nom: nomDresseur(), portrait: jeu.personnages.get(dresseur.personnage)?.portraits?.[0]?.png || '' } : null });
     montrer(eux);
     montrer(nous);
     nous.participants.add(actif(nous));
-    await ui.animer('adversaire', 'entree');
+    // Une créature sauvage est là tout de suite ; celle d'un dresseur arrive quand il l'envoie.
+    if (!dresseur) await ui.animer('adversaire', 'entree');
     if (dresseur) await ui.message(`${nomDresseur()} veut se battre !`);
     else {
       await ui.message(`Un ${C.nom(jeu, actif(eux))} sauvage apparaît !`);

@@ -68,6 +68,9 @@ const DEFAULT_CONFIG = {
   tileGrid: true,
   exportScale: 1,
   historySteps: 60,
+  panelZoom: 100, // taille des panneaux de droite, en %
+  vignette: 44, // taille des vignettes de tuiles, en px
+  colonnes: 'auto', // panneau de droite : 'auto', '1' ou '2' colonnes
   recentFiles: [],
   lastFolder: '',
 };

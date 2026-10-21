@@ -167,8 +167,10 @@ const App = (() => {
   }
 
   // --- Tuiles ---
-  function selectTile(i) {
+  // keep : garder les autres tuiles choisies (Ctrl+clic, Maj+clic dans le panneau Tuiles).
+  function selectTile(i, keep = false) {
     if (!api.doc) return;
+    if (!keep) Panels.clearSelection();
     const changed = api.doc.current !== clamp(i, 0, api.doc.tiles.length - 1);
     api.doc.current = clamp(i, 0, api.doc.tiles.length - 1);
     if (changed) api.frame = 0;
@@ -177,7 +179,7 @@ const App = (() => {
     Panels.renderLive();
     renderOptions();
     Stage.render();
-    const item = $('#tiles').children[api.doc.current];
+    const item = $(`#tiles .tile-item[data-index="${api.doc.current}"]`);
     item?.scrollIntoView({ block: 'nearest' });
   }
   function newTile() {
@@ -192,6 +194,8 @@ const App = (() => {
   }
   async function deleteTile() {
     const doc = api.doc;
+    const lot = Panels.selection();
+    if (lot.length > 1) return deleteTiles(lot);
     const i = doc.current;
     const used = Doc.tileUses(doc, i);
     if (used) {
@@ -203,6 +207,179 @@ const App = (() => {
     }
     Doc.change(doc, 'Supprimer la tuile', () => Doc.removeTile(doc, i));
   }
+  // Supprime plusieurs tuiles choisies d'un coup (une seule annulation).
+  async function deleteTiles(lot) {
+    const doc = api.doc;
+    const used = lot.reduce((n, i) => n + Doc.tileUses(doc, i), 0);
+    const go = await Dialogs.ask(`Supprimer ${lot.length} tuiles`, `${used ? `Elles sont posées sur ${used} case(s) ; ces cases deviendront vides.` : 'Aucune n\'est posée sur une carte.'}\n\nCtrl+Z annule la suppression.`, [
+      { label: 'Annuler', value: false },
+      { label: 'Supprimer', value: true, primary: true },
+    ]);
+    if (!go) return;
+    Panels.clearSelection();
+    Doc.change(doc, `Supprimer ${lot.length} tuiles`, () => Doc.removeTiles(doc, new Set(lot)));
+  }
+
+  // --- Tafl 0.13 : ranger et trier les tuiles ---
+  // Range les tuiles « indices » juste avant la tuile n° before (doc.tiles.length = tout au bout),
+  // en leur donnant la catégorie (undefined = la garder). La carte suit : rien ne change à l'écran.
+  function placeTiles(indices, before, categorie) {
+    const doc = api.doc;
+    const lot = [...indices].sort((a, b) => a - b);
+    const moving = new Set(lot);
+    const order = [];
+    doc.tiles.forEach((_t, i) => { if (i === before) order.push(...lot); if (!moving.has(i)) order.push(i); });
+    if (before >= doc.tiles.length) order.push(...lot);
+    const recat = categorie !== undefined && lot.some((i) => (doc.tiles[i].categorie || '') !== categorie);
+    if (!recat && order.every((o, n) => o === n)) return;
+    const what = lot.length > 1 ? `${lot.length} tuiles` : 'la tuile';
+    Doc.change(doc, recat ? (categorie ? `Ranger ${what} dans ${categorie}` : `Sortir ${what} de sa catégorie`) : `Déplacer ${what}`, () => {
+      if (recat) for (const i of lot) doc.tiles[i] = { ...doc.tiles[i], categorie };
+      Doc.reorderTiles(doc, order);
+    });
+  }
+  const categoryList = () => ({ type: 'element', element: el('datalist', { id: 'tafl-categories' }, Panels.categoryNames(api.doc).map((c) => el('option', { value: c }))) });
+  // Range les tuiles choisies dans une catégorie (elles rejoignent les autres tuiles de la catégorie).
+  async function setTileCategory(lot = Panels.selection()) {
+    const doc = api.doc;
+    const v = await Dialogs.form({
+      title: lot.length > 1 ? `Ranger ${lot.length} tuiles` : `Ranger « ${doc.tiles[lot[0]].name} »`,
+      okLabel: 'Ranger',
+      fields: [
+        { key: 'categorie', label: 'Catégorie', type: 'text', value: doc.tiles[lot[0]].categorie || '', list: 'tafl-categories', placeholder: 'aucune' },
+        categoryList(),
+        { type: 'info', text: 'Choisis une catégorie existante dans la liste ou écris un nouveau nom (« Herbe », « Eau », « Maisons »…). Vide = sans catégorie. Tu peux aussi glisser les tuiles sur le titre d\'une catégorie.' },
+      ],
+    });
+    if (!v) return;
+    const categorie = v.categorie.trim().slice(0, 60);
+    const last = doc.tiles.reduce((k, t, j) => ((t.categorie || '') === categorie && !lot.includes(j) ? j : k), -1);
+    placeTiles(lot, last >= 0 ? last + 1 : lot[0], categorie);
+  }
+  async function renameCategory(nom) {
+    const doc = api.doc;
+    const v = await Dialogs.form({ title: 'Renommer la catégorie', okLabel: 'Renommer', fields: [{ key: 'name', label: 'Nom', type: 'text', value: nom }] });
+    const name = v?.name.trim().slice(0, 60);
+    if (!name || name === nom) return;
+    // Un nom déjà pris fusionne les deux catégories.
+    Doc.change(doc, 'Renommer la catégorie', () => { doc.tiles = doc.tiles.map((t) => (t.categorie === nom ? { ...t, categorie: name } : t)); });
+  }
+  function uncategorize(nom) {
+    const doc = api.doc;
+    Doc.change(doc, `Défaire la catégorie ${nom}`, () => { doc.tiles = doc.tiles.map((t) => (t.categorie === nom ? { ...t, categorie: '' } : t)); });
+    notify(`Catégorie « ${nom} » défaite : ses tuiles sont toujours là, sans catégorie.`, 'info', 3000);
+  }
+  const categoryMembers = (nom) => api.doc.tiles.map((t, i) => ((t.categorie || '') === nom ? i : -1)).filter((i) => i >= 0);
+  function selectCategory(nom) {
+    const lot = categoryMembers(nom);
+    if (!lot.length) return;
+    if (!lot.includes(api.doc.current)) selectTile(lot[0]);
+    Panels.setSelection(lot);
+  }
+  function categoryMenuItems(nom, folded) {
+    const items = [
+      { label: folded ? 'Déplier' : 'Replier', run: () => Panels.toggleCategory(nom) },
+      { label: 'Choisir toutes ses tuiles', run: () => selectCategory(nom) },
+      { label: 'Trier par nom', run: () => sortTiles('nom', categoryMembers(nom)) },
+      { label: 'Trier par couleur', run: () => sortTiles('couleur', categoryMembers(nom)) },
+    ];
+    if (nom) items.push(null, { label: 'Renommer la catégorie…', run: () => run(() => renameCategory(nom)) }, { label: 'Défaire la catégorie (garder les tuiles)', run: () => uncategorize(nom) });
+    return items;
+  }
+
+  // La couleur moyenne d'une tuile (pixels visibles de sa première image), en teinte / clarté.
+  function tileColor(tile) {
+    const d = tile.frames[0];
+    let r = 0; let g = 0; let b = 0; let n = 0;
+    for (let o = 0; o < d.length; o += 4) if (d[o + 3] > 0) { r += d[o]; g += d[o + 1]; b += d[o + 2]; n++; }
+    if (!n) return { vide: 1, gris: 0, h: 0, l: 0 };
+    [r, g, b] = [r / n / 255, g / n / 255, b / n / 255];
+    const max = Math.max(r, g, b); const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    const sat = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    let h = 0;
+    if (max !== min) h = max === r ? ((g - b) / (max - min) + 6) % 6 : max === g ? (b - r) / (max - min) + 2 : (r - g) / (max - min) + 4;
+    // Les gris (presque sans teinte) viennent après les couleurs, du sombre au clair.
+    return { vide: 0, gris: sat < 0.12 ? 1 : 0, h: Math.floor(h * 2), l };
+  }
+  const SORTS = {
+    nom: ['par nom', (a, b) => a.t.name.localeCompare(b.t.name, 'fr', { numeric: true, sensitivity: 'base' })],
+    couleur: ['par couleur', (a, b) => { const x = a.c; const y = b.c; return x.vide - y.vide || x.gris - y.gris || (x.gris ? 0 : x.h - y.h) || x.l - y.l; }],
+    utilisation: ['par utilisation', (a, b) => b.u - a.u],
+    animees: ['animées d\'abord', (a, b) => Number(Doc.animated(b.t)) - Number(Doc.animated(a.t))],
+    categorie: ['par catégorie', () => 0],
+  };
+  // Trie les tuiles. Avec un lot (les tuiles choisies, une catégorie), seules elles changent de place,
+  // entre elles. Sinon, toutes, et chaque catégorie reste groupée (« par catégorie » les met dans
+  // l'ordre alphabétique, les tuiles sans catégorie à la fin).
+  function sortTiles(kind, lot = null) {
+    const doc = api.doc;
+    const [label, cmp] = SORTS[kind];
+    const all = !lot || lot.length < 2;
+    const slots = all ? doc.tiles.map((_t, i) => i) : [...lot].sort((a, b) => a - b);
+    const uses = kind === 'utilisation' ? doc.tiles.map((_t, i) => Doc.tileUses(doc, i)) : null;
+    const cats = [...new Set(doc.tiles.map((t) => t.categorie || ''))];
+    if (kind === 'categorie') cats.sort((a, b) => (!a) - (!b) || a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' }));
+    const rank = new Map(cats.map((c, k) => [c, k]));
+    const items = slots.map((i) => ({ i, t: doc.tiles[i], c: kind === 'couleur' ? tileColor(doc.tiles[i]) : null, u: uses?.[i] }));
+    items.sort((a, b) => (all ? rank.get(a.t.categorie || '') - rank.get(b.t.categorie || '') : 0) || cmp(a, b) || a.i - b.i);
+    const order = doc.tiles.map((_t, i) => i);
+    slots.forEach((slot, k) => { order[slot] = items[k].i; });
+    if (order.every((o, n) => o === n)) return notify('Les tuiles sont déjà dans cet ordre.', 'info', 2500);
+    Doc.change(doc, `Trier ${label}`, () => Doc.reorderTiles(doc, order));
+    notify(`${all ? 'Tuiles' : `${slots.length} tuiles`} triées ${label}. La carte ne change pas ; Ctrl+Z annule.`, 'success', 3000);
+  }
+  // Les tuiles identiques (mêmes pixels, mêmes images) n'en font plus qu'une : la première gardée.
+  function mergeDuplicates() {
+    const doc = api.doc;
+    const first = new Map();
+    const replace = new Map();
+    doc.tiles.forEach((t, i) => { const k = Doc.tileKey(t); if (first.has(k)) replace.set(i, first.get(k)); else first.set(k, i); });
+    if (!replace.size) return notify('Aucune tuile en double.', 'info', 2500);
+    Panels.clearSelection();
+    Doc.change(doc, 'Fusionner les doublons', () => Doc.removeTiles(doc, new Set(replace.keys()), replace));
+    notify(`${replace.size} tuile(s) en double retirée(s) ; sur les cartes, la tuile gardée prend leur place.`, 'success', 4000);
+  }
+  async function removeUnused() {
+    const doc = api.doc;
+    const used = Doc.usedTiles(doc);
+    const unused = doc.tiles.map((_t, i) => i).filter((i) => !used.has(i));
+    if (!unused.length) return notify('Toutes les tuiles servent (cartes, tampons, événements ou personnages).', 'info', 3000);
+    const go = await Dialogs.ask('Supprimer les tuiles inutilisées', `${unused.length} tuile(s) sur ${doc.tiles.length} ne servent nulle part : ni sur une carte, ni dans un tampon, ni pour un événement ou un personnage.\n\nCtrl+Z annule la suppression.`, [
+      { label: 'Annuler', value: false },
+      { label: 'Choisir ces tuiles', value: 'choisir' },
+      { label: 'Supprimer', value: true, primary: true },
+    ]);
+    if (go === 'choisir') { if (!unused.includes(doc.current)) selectTile(unused[0]); return Panels.setSelection(unused); }
+    if (go !== true) return;
+    Panels.clearSelection();
+    Doc.change(doc, 'Supprimer les tuiles inutilisées', () => Doc.removeTiles(doc, new Set(unused)));
+  }
+  function sortMenuItems() {
+    const lot = Panels.selection();
+    const n = lot.length > 1 ? lot.length : 0;
+    const sur = n ? ` (les ${n} choisies)` : '';
+    return [
+      { label: n ? `Ranger les ${n} tuiles dans une catégorie…` : 'Ranger la tuile dans une catégorie…', keys: 'Ctrl+G', run: () => run(() => setTileCategory(lot)) },
+      { label: 'Choisir toutes les tuiles affichées', keys: 'Ctrl+A', run: selectAllShown },
+      null,
+      { label: `Trier par nom${sur}`, run: () => sortTiles('nom', lot) },
+      { label: `Trier par couleur${sur}`, run: () => sortTiles('couleur', lot) },
+      { label: `Trier par utilisation, les plus posées d'abord${sur}`, run: () => sortTiles('utilisation', lot) },
+      { label: `Les tuiles animées d'abord${sur}`, run: () => sortTiles('animees', lot) },
+      { label: 'Grouper par catégorie (ordre alphabétique)', run: () => sortTiles('categorie') },
+      null,
+      { label: 'Fusionner les tuiles en double', run: mergeDuplicates },
+      { label: 'Supprimer les tuiles inutilisées…', run: () => run(removeUnused) },
+    ];
+  }
+  function selectAllShown() {
+    const shown = [...document.querySelectorAll('#tiles .tile-item')].map((n) => Number(n.dataset.index));
+    if (!shown.length) return;
+    if (!shown.includes(api.doc.current)) selectTile(shown[0]);
+    Panels.setSelection(shown);
+  }
+
   async function renameTile(i) {
     const doc = api.doc;
     const v = await Dialogs.form({
@@ -230,11 +407,13 @@ const App = (() => {
   }
   function tileMenuItems() {
     const doc = api.doc;
+    const lot = Panels.selection();
     return [
       { label: 'Nouvelle tuile', keys: 'Ctrl+Maj+N', run: newTile },
       { label: 'Dupliquer la tuile', keys: 'Ctrl+D', run: duplicateTile },
       { label: 'Renommer…', keys: 'F2', run: () => renameTile(doc.current) },
-      { label: 'Supprimer la tuile', run: deleteTile },
+      { label: lot.length > 1 ? `Supprimer les ${lot.length} tuiles choisies` : 'Supprimer la tuile', run: () => run(deleteTile) },
+      { label: lot.length > 1 ? `Ranger les ${lot.length} tuiles dans une catégorie…` : 'Ranger dans une catégorie…', keys: 'Ctrl+G', run: () => run(() => setTileCategory(lot)) },
       null,
       { label: 'Miroir horizontal', keys: 'Maj+H', run: () => transform('flipH', 'Miroir horizontal') },
       { label: 'Miroir vertical', keys: 'Maj+V', run: () => transform('flipV', 'Miroir vertical') },
@@ -1060,7 +1239,7 @@ const App = (() => {
       null,
       { label: 'Réglages de Tafl…', keys: 'Ctrl+,', run: () => run(openSettings) },
     ],
-    Tuile: () => (api.doc ? tileMenuItems() : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
+    Tuile: () => (api.doc ? [...tileMenuItems(), null, ...sortMenuItems()] : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
     Carte: () => (api.doc ? [
       ...mapMenuItems(),
       null,
@@ -1098,6 +1277,10 @@ const App = (() => {
       { label: 'Carte monde…', keys: 'Ctrl+Maj+M', disabled: !api.doc, run: () => run(openWorld) },
       { label: 'Zoom avant', keys: 'Ctrl++', disabled: !api.doc, run: () => Stage.zoomBy(1) },
       { label: 'Zoom arrière', keys: 'Ctrl+-', disabled: !api.doc, run: () => Stage.zoomBy(-1) },
+      null,
+      { label: 'Panneaux plus grands', run: () => run(() => panelZoomBy(10)) },
+      { label: 'Panneaux plus petits', run: () => run(() => panelZoomBy(-10)) },
+      { label: 'Disposition des panneaux par défaut', run: () => Disposition.reinitialiser() },
     ],
   };
   const menuBar = $('#menus');
@@ -1111,6 +1294,13 @@ const App = (() => {
     // Survoler un autre menu pendant qu'un menu est ouvert l'ouvre à sa place.
     b.onmouseenter = () => { if (Menus.isOpen() && !b.classList.contains('open') && $('#menus .open')) b.click(); };
     menuBar.append(b);
+  }
+
+  // Affichage › Panneaux plus grands / plus petits (comme Ctrl+molette sur le panneau).
+  async function panelZoomBy(d) {
+    const z = Math.min(Disposition.ZOOM.max, Math.max(Disposition.ZOOM.min, (api.config.panelZoom ?? 100) + d));
+    api.config = await window.tafl.writeConfig({ panelZoom: z });
+    Disposition.appliquer(api.config);
   }
 
   function toggleMosaic() {
@@ -1134,6 +1324,7 @@ const App = (() => {
   $('#tile-duplicate').onclick = needDoc(duplicateTile);
   $('#tile-delete').onclick = needDoc(deleteTile);
   $('#tile-more').onclick = (e) => { if (api.doc) Menus.open(tileMenuItems(), e.clientX, e.clientY); };
+  $('#tile-sort').onclick = (e) => { if (api.doc) Menus.open(sortMenuItems(), e.clientX, e.clientY, e.currentTarget); };
 
   async function renderWelcome() {
     const recents = await window.tafl.recentFiles();
@@ -1221,6 +1412,9 @@ const App = (() => {
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
+      if (k === 'a') return go(needDoc(selectAllShown));
+      if (k === 'g') return go(needDoc(() => setTileCategory()));
+      if (k === 'f') return go(needDoc(() => { $('#tiles-filter').focus(); $('#tiles-filter').select(); }));
       if (k === ',') return go(() => run(openSettings));
       if (k === '0' || e.code === 'Digit0' || e.code === 'Numpad0') return go(() => Stage.fit());
       if (k === '+' || k === '=' || e.code === 'NumpadAdd') return go(() => Stage.zoomBy(1));
@@ -1271,6 +1465,7 @@ const App = (() => {
     document.body.classList.toggle('glass', Boolean(config.glass));
     api.options.pixelGrid = config.pixelGrid !== false;
     api.options.tileGrid = config.tileGrid !== false;
+    Disposition.appliquer(config);
     const { blur, needsRestart } = await window.tafl.setWindowTheme({ glass: config.glass, blur: config.windowBlur });
     document.body.classList.toggle('window-blur', blur);
     return needsRestart;
@@ -1292,6 +1487,10 @@ const App = (() => {
         { key: 'palette', label: 'Palette par défaut', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]) },
         { key: 'pixelGrid', label: 'Grille des pixels (mode Tuile)', type: 'checkbox', value: api.config.pixelGrid },
         { key: 'tileGrid', label: 'Grille des cases (mode Carte)', type: 'checkbox', value: api.config.tileGrid },
+        { key: 'panelZoom', label: 'Taille des panneaux de droite (texte, boutons)', type: 'range', value: api.config.panelZoom ?? 100, min: Disposition.ZOOM.min, max: Disposition.ZOOM.max, step: 10, unit: '%' },
+        { key: 'vignette', label: 'Taille des vignettes (tuiles, tampons)', type: 'range', value: api.config.vignette ?? 44, min: Disposition.VIGNETTE.min, max: Disposition.VIGNETTE.max, step: 4, unit: 'px' },
+        { key: 'colonnes', label: 'Colonnes du panneau de droite', type: 'select', value: api.config.colonnes || 'auto', choices: [['auto', 'Automatique : deux quand il est large'], ['1', 'Toujours une'], ['2', 'Toujours deux']] },
+        { type: 'info', text: 'Astuces : glisse le bord gauche du panneau pour l\'élargir, clique sur le titre d\'un panneau pour le replier, glisse le bas d\'un panneau pour sa hauteur. Ctrl+molette sur le panneau : sa taille ; sur les tuiles : les vignettes.' },
         { key: 'historySteps', label: 'Étapes d\'annulation gardées', type: 'number', value: api.config.historySteps, min: 5, max: 500 },
         { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
         { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude' },
@@ -1309,9 +1508,11 @@ const App = (() => {
         // Aperçu immédiat de la couleur et du verre.
         document.documentElement.style.setProperty('--accent', values.accentColor);
         document.body.classList.toggle('glass', values.glass);
+        Disposition.appliquer({ ...api.config, ...values });
+        Panels.renderStamps();
       },
     });
-    if (!v) return applyTheme(api.config);
+    if (!v) { await applyTheme(api.config); return Panels.renderStamps(); }
     api.config = await window.tafl.writeConfig({ ...v, tileSize: Number(v.tileSize) });
     if (await applyTheme(api.config)) notify('Le flou de Windows 11 sera actif au prochain démarrage de Tafl.', 'info', 6000);
     refresh();
@@ -1362,7 +1563,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

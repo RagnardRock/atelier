@@ -4,7 +4,7 @@
 // combat.js lui demande tout avec des promesses : un message (attendu jusqu'à la touche Action),
 // le menu (Attaque, Sac, Équipe, Fuite), une attaque, une créature dans une liste, une animation.
 // Le moteur lui passe les touches (action, retour, haut, bas, gauche, droite) : clavier et manette
-// marchent pareil, et la souris aussi.
+// marchent pareil, et la souris aussi (clic droit = retour). Retour : Retour arrière, X, Échap, B.
 
 const EcranCombat = (() => {
   const VITESSE = 70; // lettres par seconde
@@ -44,6 +44,8 @@ const EcranCombat = (() => {
     const liste = el('div', { className: 'combat-liste', hidden: true });
     const flash = el('div', { className: 'combat-flash' });
     racine.append(scene, bas, liste, flash);
+    // Clic droit : comme la touche Retour (revenir en arrière dans les menus).
+    racine.addEventListener('contextmenu', (e) => { e.preventDefault(); touche('retour'); });
     conteneur.append(racine);
 
     let attente = null; // ce que le joueur doit faire : { type, … }
@@ -104,7 +106,6 @@ const EcranCombat = (() => {
 
     // --- Les animations (Web Animations : on attend leur fin) ---
     const ANIMS = {
-      entree: (c, cote) => [c.place, [{ transform: `translateX(${cote === 'joueur' ? '-60%' : '60%'})`, opacity: 0 }, { transform: 'none', opacity: 1 }], 420],
       sortie: (c) => [c.place, [{ transform: 'none', opacity: 1 }, { transform: 'scale(0.2)', opacity: 0 }], 320],
       touche: (c) => [c.sprite.hidden ? c.vide : c.sprite, [{ opacity: 1 }, { opacity: 0.1 }, { opacity: 1 }, { opacity: 0.1 }, { opacity: 1 }], 380],
       ko: (c) => [c.place, [{ transform: 'none', opacity: 1 }, { transform: 'translateY(45%)', opacity: 0 }], 480],
@@ -112,9 +113,37 @@ const EcranCombat = (() => {
       baisse: (c) => [c.sprite.hidden ? c.vide : c.sprite, [{ filter: 'none' }, { filter: 'drop-shadow(0 0 14px #4aa8ff) brightness(0.8)' }, { filter: 'none' }], 520],
       evolution: (c) => [c.sprite.hidden ? c.vide : c.sprite, [{ filter: 'brightness(1)' }, { filter: 'brightness(8)' }, { filter: 'brightness(1)' }, { filter: 'brightness(8)' }, { filter: 'brightness(8)' }, { filter: 'brightness(1)' }], 1800],
     };
+    // Faire apparaître une créature (et sa carte). Celle de l'adversaire glisse depuis la droite ;
+    // celle du joueur sort d'une balle lancée depuis la gauche, dans un éclair blanc.
+    async function entree(c, cote, cible) {
+      for (const e of [c.place, c.sprite, c.vide, c.carte]) e.getAnimations().forEach((x) => x.cancel());
+      if (cote === 'joueur') {
+        c.place.style.opacity = '';
+        cible.style.opacity = '0';
+        c.balle.hidden = false;
+        await c.balle.animate([
+          { transform: 'translate(-260%, -160%) rotate(-360deg) scale(0.7)', opacity: 0 },
+          { transform: 'translate(-60%, -120%) rotate(-120deg)', opacity: 1, offset: 0.5 },
+          { transform: 'none', opacity: 1 },
+        ], { duration: 520, easing: 'ease-in' }).finished;
+        c.balle.hidden = true;
+        cible.style.opacity = '';
+        await cible.animate([
+          { transform: 'scale(0.1)', transformOrigin: '50% 100%', opacity: 0, filter: 'brightness(6)' },
+          { transform: 'scale(1.08)', transformOrigin: '50% 100%', opacity: 1, filter: 'brightness(3)', offset: 0.6 },
+          { transform: 'none', transformOrigin: '50% 100%', opacity: 1, filter: 'none' },
+        ], { duration: 460, easing: 'ease-out' }).finished;
+      } else {
+        c.place.style.opacity = '';
+        await c.place.animate([{ transform: 'translateX(70%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 560, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' }).finished;
+      }
+      c.carte.style.opacity = '';
+      await c.carte.animate([{ transform: `translateX(${cote === 'joueur' ? '24px' : '-24px'})`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'ease-out' }).finished;
+    }
     async function animer(cote, nom) {
       const c = cotes[cote];
       const cible = c.sprite.hidden ? c.vide : c.sprite;
+      if (nom === 'entree') { await entree(c, cote, cible); return; }
       if (nom === 'capture') {
         c.balle.hidden = false;
         await Promise.all([
@@ -143,8 +172,11 @@ const EcranCombat = (() => {
       const [elmt, images, duree] = a(c, cote);
       const anim = elmt.animate(images, { duration: duree, easing: 'ease-out', fill: nom === 'ko' || nom === 'sortie' ? 'forwards' : 'none' });
       await anim.finished;
-      // Après une entrée, on efface les restes d'un K.O. ou d'une sortie précédente.
-      if (nom === 'entree') { c.place.getAnimations().forEach((x) => { if (x !== anim) x.cancel(); }); anim.cancel(); }
+      // Une créature partie ou K.O. emporte sa carte : la suivante la ramènera en entrant.
+      if (nom === 'ko' || nom === 'sortie') {
+        await c.carte.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200 }).finished;
+        c.carte.style.opacity = '0';
+      }
     }
 
     // --- Les messages ---
@@ -205,7 +237,7 @@ const EcranCombat = (() => {
           el('span', { className: 'combat-attaque-nom', textContent: a.nom }),
           el('span', { className: 'combat-attaque-info' }, el('span', { className: 'combat-type', textContent: a.type || '—', style: `background: ${a.couleur}` }), el('span', { className: a.pp ? '' : 'vide', textContent: `PP ${a.pp}/${a.ppMax}` }))),
       }));
-      complet = 'Quelle attaque ?';
+      complet = 'Quelle attaque ?  (Échap : revenir)';
       ecrit = complet.length;
       texte.textContent = complet;
       menu.classList.add('attaques');
@@ -224,7 +256,7 @@ const EcranCombat = (() => {
         liste.append(l);
         return l;
       });
-      if (annulable) liste.append(el('div', { className: 'combat-liste-aide', textContent: 'Retour arrière ou X : revenir' }));
+      if (annulable) liste.append(el('div', { className: 'combat-liste-aide', textContent: 'Échap, Retour arrière, X ou clic droit : revenir' }));
       liste.hidden = false;
       return new Promise((resoudre) => {
         const premier = items.findIndex((it) => !it.desactive);
@@ -289,14 +321,21 @@ const EcranCombat = (() => {
       liste.hidden = true;
       menu.hidden = true;
       texte.textContent = '';
+      // Les créatures et leurs cartes restent cachées jusqu'à leur entrée (animer('…', 'entree')).
       for (const c of Object.values(cotes)) {
         c.balle.hidden = true;
-        c.place.getAnimations().forEach((a) => a.cancel());
-        c.sprite.getAnimations().forEach((a) => a.cancel());
+        for (const e of [c.place, c.sprite, c.vide, c.carte, c.balle]) e.getAnimations().forEach((a) => a.cancel());
+        c.place.style.opacity = '0';
+        c.carte.style.opacity = '0';
       }
       badge.hidden = !dresseur;
-      if (dresseur) badge.replaceChildren(dresseur.portrait ? el('img', { src: dresseur.portrait, alt: '' }) : null, el('span', { textContent: dresseur.nom }));
-      flash.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 0.85 }, { opacity: 0 }], { duration: 650 });
+      if (dresseur) badge.replaceChildren(...(dresseur.portrait ? [el('img', { src: dresseur.portrait, alt: '' })] : []), el('span', { textContent: dresseur.nom }));
+      // Le flash d'entrée en combat, puis le fond qui s'ouvre (le combat attend la fin).
+      await Promise.all([
+        flash.animate([{ opacity: 1 }, { opacity: 0 }, { opacity: 0.85 }, { opacity: 0 }], { duration: 650 }).finished,
+        scene.animate([{ clipPath: 'inset(50% 0 50% 0)' }, { clipPath: 'inset(50% 0 50% 0)', offset: 0.4 }, { clipPath: 'inset(0 0 0 0)' }], { duration: 750, easing: 'ease-out' }).finished,
+        dresseur ? badge.animate([{ transform: 'translate(-50%, -150%)', opacity: 0 }, { transform: 'translate(-50%, 0)', opacity: 1 }], { duration: 400, delay: 500, easing: 'ease-out', fill: 'backwards' }).finished : null,
+      ]);
     }
     function fermer() {
       racine.hidden = true;
