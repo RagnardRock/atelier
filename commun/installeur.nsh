@@ -87,17 +87,20 @@ FunctionEnd
 !macro customUnInstallCheck
   ClearErrors
   StrCpy $R3 0
-  ${While} $R0 != 0
-  ${AndIf} $R3 < 3
+  ${Do}
+    ${If} $R0 == 0
+    ${OrIf} $R3 >= 3
+      ${ExitDo}
+    ${EndIf}
     IntOp $R3 $R3 + 1
     Call atelierDebloquer
     ${If} $R1 == 0
-      ${ExitWhile}
+      ${ExitDo}
     ${EndIf}
     Push $rootKey_uninstallResult
     Call uninstallOldVersion
     ClearErrors
-  ${EndWhile}
+  ${Loop}
   ${if} $R0 != 0
     MessageBox MB_OK|MB_ICONEXCLAMATION "$(uninstallFailed): $R0"
     DetailPrint `Uninstall was not successful. Uninstaller error code: $R0.`
