@@ -18,6 +18,7 @@
     <nav id="menus"></nav>
     <span id="doc-name"></span>
     <div class="title-actions">
+      <button id="btn-donnees" class="button small" title="Données du jeu : créatures, attaques, objets, types, talents, dresseurs, boutiques, personnages, quêtes… (Ctrl+Maj+D)" hidden><i class="codicon codicon-database"></i> Données</button>
       <button id="btn-jouer" class="button primary small" title="Jouer au jeu dans Saga, depuis le départ (F5). Maj+F5 : depuis la case sous la souris" hidden><i class="codicon codicon-play"></i> Jouer</button>
       <button id="btn-undo" class="icon-button" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
       <button id="btn-redo" class="icon-button" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
@@ -75,6 +76,7 @@
       <section class="panel map-only" id="maps-panel">
         <div class="panel-header"><span class="panel-title">Cartes</span><span id="maps-count" class="panel-count"></span>
           <div class="panel-actions">
+            <button id="map-world" class="icon-button" title="Carte monde : les villes et routes ensemble (Ctrl+Maj+M)"><i class="codicon codicon-globe"></i></button>
             <button id="map-add" class="icon-button" title="Nouvelle carte"><i class="codicon codicon-add"></i></button>
             <button id="map-duplicate" class="icon-button" title="Dupliquer la carte"><i class="codicon codicon-copy"></i></button>
             <button id="map-delete" class="icon-button" title="Supprimer la carte"><i class="codicon codicon-trash"></i></button>
@@ -191,6 +193,7 @@
   <script src="panels.js"></script>
   <script src="planche.js"></script>
   <script src="io.js"></script>
+  <script src="monde.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
   <!-- Panneau Claude, commun à Skald, Tafl et Brokk (../commun/LISEZMOI.md) -->

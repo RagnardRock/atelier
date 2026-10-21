@@ -33,6 +33,8 @@ const App = (() => {
     $('#btn-undo').disabled = !doc?.undo.length;
     $('#btn-redo').disabled = !doc?.redo.length;
     $('#btn-jouer').hidden = !doc?.game;
+    // Tafl 0.11 : les données du jeu à portée de clic, en mode Tuile comme en mode Carte.
+    $('#btn-donnees').hidden = !doc;
     renderModes();
     renderToolbar();
     renderOptions();
@@ -359,12 +361,15 @@ const App = (() => {
         { key: 'name', label: 'Nom', type: 'text', value: `Carte ${doc.maps.length + 1}` },
         { key: 'width', label: 'Largeur', type: 'number', value: doc.map.width, min: 1, max: 256, unit: 'cases' },
         { key: 'height', label: 'Hauteur', type: 'number', value: doc.map.height, min: 1, max: 256, unit: 'cases' },
-        { type: 'info', text: 'Une carte par lieu : une ville, une route, l\'intérieur d\'une maison… Elles partagent toutes les tuiles du jeu. Relie-les ensuite avec des téléporteurs (outil T).' },
+        { key: 'groupe', label: 'Groupe', type: 'text', value: doc.map.groupe, list: 'tafl-groupes', placeholder: 'aucun' },
+        { key: 'interieur', label: 'Intérieur (maison, grotte…)', type: 'checkbox', value: false },
+        groupList(doc),
+        { type: 'info', text: 'Une carte par lieu : une ville, une route, l\'intérieur d\'une maison… Elles partagent toutes les tuiles du jeu. Relie-les ensuite avec des téléporteurs (outil T). Les intérieurs ne vont pas sur la carte monde.' },
       ],
     });
     if (!v) return;
     const name = v.name.trim() || `Carte ${doc.maps.length + 1}`;
-    Doc.change(doc, 'Nouvelle carte', () => Doc.addMap(doc, { name, width: clamp(Math.round(v.width), 1, 256), height: clamp(Math.round(v.height), 1, 256) }));
+    Doc.change(doc, 'Nouvelle carte', () => Doc.addMap(doc, { name, width: clamp(Math.round(v.width), 1, 256), height: clamp(Math.round(v.height), 1, 256), groupe: v.groupe.trim().slice(0, 60), interieur: v.interieur }));
     api.mode = 'map';
     Stage.reset();
     refresh();
@@ -432,6 +437,76 @@ const App = (() => {
     if (to < 0 || to >= doc.maps.length) return;
     Doc.change(doc, 'Déplacer la carte', () => Doc.moveMap(doc, doc.mapIndex, to));
   }
+  // --- Groupes de cartes et carte monde (Tafl 0.11) ---
+  const groupNames = (doc) => [...new Set(doc.maps.map((m) => m.groupe).filter(Boolean))];
+  // La liste des groupes existants, proposée sous le champ « Groupe » des fenêtres.
+  const groupList = (doc) => ({ type: 'element', element: el('datalist', { id: 'tafl-groupes' }, groupNames(doc).map((g) => el('option', { value: g }))) });
+  // Range la carte « from » à la place « before » (avant la carte qui y était), dans le groupe donné.
+  function placeMap(from, before, groupe) {
+    const doc = api.doc;
+    const m = doc.maps[from];
+    if (!m) return;
+    const to = clamp(before > from ? before - 1 : before, 0, doc.maps.length - 1);
+    if (to === from && m.groupe === groupe) return;
+    const shown = doc.map;
+    Doc.change(doc, groupe && groupe !== m.groupe ? `Ranger la carte dans ${groupe}` : 'Déplacer la carte', () => {
+      doc.maps.splice(from, 1);
+      doc.maps.splice(to, 0, { ...m, groupe });
+      Doc.selectMap(doc, doc.maps.findIndex((o) => o.id === shown.id));
+    });
+  }
+  async function setMapGroup(i = api.doc.mapIndex) {
+    const doc = api.doc;
+    const m = doc.maps[i];
+    const v = await Dialogs.form({
+      title: `Groupe de ${m.name}`,
+      okLabel: 'Ranger',
+      fields: [
+        { key: 'groupe', label: 'Groupe', type: 'text', value: m.groupe, list: 'tafl-groupes', placeholder: 'aucun' },
+        groupList(doc),
+        { type: 'info', text: 'Choisis un groupe existant dans la liste, ou écris un nouveau nom (« Ville 1 », « Routes », « Grotte Azur »…). Vide = sans groupe. Tu peux aussi glisser la carte sur le titre d\'un groupe dans le panneau Cartes.' },
+      ],
+    });
+    if (!v) return;
+    const groupe = v.groupe.trim().slice(0, 60);
+    if (groupe === m.groupe) return;
+    // La carte rejoint les autres cartes du groupe (juste après la dernière).
+    const last = doc.maps.reduce((k, o, j) => (o.groupe === groupe && groupe && j !== i ? j : k), -1);
+    placeMap(i, last >= 0 ? last + 1 : i, groupe);
+  }
+  async function renameGroup(nom) {
+    const doc = api.doc;
+    const v = await Dialogs.form({ title: 'Renommer le groupe', okLabel: 'Renommer', fields: [{ key: 'name', label: 'Nom', type: 'text', value: nom }] });
+    const name = v?.name.trim().slice(0, 60);
+    if (!name || name === nom) return;
+    const folded = Panels.isGroupFolded(nom);
+    Doc.change(doc, 'Renommer le groupe', () => { doc.maps = doc.maps.map((m) => (m.groupe === nom ? { ...m, groupe: name } : m)); Doc.selectMap(doc, doc.mapIndex); });
+    if (folded) { Panels.toggleGroup(nom); Panels.toggleGroup(name); }
+  }
+  function ungroup(nom) {
+    const doc = api.doc;
+    Doc.change(doc, `Défaire le groupe ${nom}`, () => { doc.maps = doc.maps.map((m) => (m.groupe === nom ? { ...m, groupe: '' } : m)); Doc.selectMap(doc, doc.mapIndex); });
+    notify(`Groupe « ${nom} » défait : ses cartes sont toujours là, sans groupe.`, 'info', 3000);
+  }
+  function groupMenuItems(nom, folded) {
+    return [
+      { label: folded ? 'Déplier le groupe' : 'Replier le groupe', run: () => Panels.toggleGroup(nom) },
+      { label: 'Renommer le groupe…', run: () => run(() => renameGroup(nom)) },
+      { label: 'Défaire le groupe (garder les cartes)', run: () => ungroup(nom) },
+    ];
+  }
+  function toggleInterior(i = api.doc.mapIndex) {
+    const doc = api.doc;
+    const m = doc.maps[i];
+    Doc.change(doc, m.interieur ? 'Carte extérieure' : 'Carte intérieure', () => { doc.maps[i] = { ...m, interieur: !m.interieur }; Doc.selectMap(doc, doc.mapIndex); });
+    notify(m.interieur ? `${m.name} est une carte extérieure : elle apparaît sur la carte monde.` : `${m.name} est un intérieur : elle n'apparaît plus sur la carte monde.`, 'info', 3000);
+  }
+  async function openWorld() {
+    const doc = api.doc;
+    if (!doc) return;
+    const choix = await Monde.open(doc);
+    if (choix?.ouvrir !== undefined) selectMap(choix.ouvrir);
+  }
   function mapMenuItems() {
     const doc = api.doc;
     return [
@@ -440,12 +515,18 @@ const App = (() => {
       { label: 'Renommer la carte…', run: () => run(() => renameMap()) },
       { label: 'Taille de la carte…', run: () => run(resizeMap) },
       { label: 'Ambiance (météo, teinte)…', run: () => run(() => mapAmbiance()) },
+      null,
+      { label: 'Mettre dans un groupe…', run: () => run(() => setMapGroup()) },
+      { label: 'Carte intérieure (pas sur la carte monde)', checked: Boolean(doc.map.interieur), run: () => toggleInterior() },
+      { label: 'Carte monde…', keys: 'Ctrl+Maj+M', run: () => run(openWorld) },
+      null,
       { label: 'Monter la carte dans la liste', disabled: doc.mapIndex === 0, run: () => moveMap(-1) },
       { label: 'Descendre la carte dans la liste', disabled: doc.mapIndex >= doc.maps.length - 1, run: () => moveMap(1) },
       { label: 'Supprimer la carte', disabled: doc.maps.length < 2, run: () => run(deleteMap) },
     ];
   }
   $('#map-add').onclick = () => { if (api.doc) run(newMap); };
+  $('#map-world').onclick = () => { if (api.doc) run(openWorld); };
   $('#map-duplicate').onclick = () => { if (api.doc) duplicateMap(); };
   $('#map-delete').onclick = () => { if (api.doc) run(deleteMap); };
   $('#map-more').onclick = (e) => { if (api.doc) Menus.open(mapMenuItems(), e.clientX, e.clientY); };
@@ -1016,6 +1097,7 @@ const App = (() => {
       null,
       { label: 'Mosaïque (raccords)', keys: 'Ctrl+M', checked: api.options.mosaic, disabled: !api.doc, run: toggleMosaic },
       { label: 'Ajuster à la fenêtre', keys: 'Ctrl+0', disabled: !api.doc, run: () => Stage.fit() },
+      { label: 'Carte monde…', keys: 'Ctrl+Maj+M', disabled: !api.doc, run: () => run(openWorld) },
       { label: 'Zoom avant', keys: 'Ctrl++', disabled: !api.doc, run: () => Stage.zoomBy(1) },
       { label: 'Zoom arrière', keys: 'Ctrl+-', disabled: !api.doc, run: () => Stage.zoomBy(-1) },
     ],
@@ -1043,6 +1125,7 @@ const App = (() => {
   $('#btn-undo').onclick = undo;
   $('#btn-redo').onclick = redo;
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
+  $('#btn-donnees').onclick = () => { if (api.doc) run(() => openData()); };
   $('#btn-jouer').onclick = (e) => needDoc(() => jouer(e.shiftKey))();
   $('#btn-export').onclick = needDoc(IO.exportSheet);
   $('#btn-settings').onclick = () => run(openSettings);
@@ -1137,6 +1220,7 @@ const App = (() => {
       if (k === 'z') return go(undo);
       if (k === 'y') return go(redo);
       if (k === 'd' && e.shiftKey) return go(needDoc(() => openData()));
+      if (k === 'm' && e.shiftKey) return go(needDoc(openWorld));
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
@@ -1280,7 +1364,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

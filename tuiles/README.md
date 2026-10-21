@@ -206,6 +206,24 @@ Une ombre dessinée par-dessus le damier garde le damier assombri (ce sont des p
 - Clic droit sur un tampon : réglages, ordre, supprimer (ses tuiles restent dans le jeu, et sur la carte).
 - Les tampons sont enregistrés avec les tuiles (dans le `.tafl`, ou le `tuiles.tafl` d'un dossier de jeu), et `Ctrl+Z` annule tout. Le moteur n'en a pas besoin : sur la carte, ce sont des tuiles comme les autres.
 
+## Groupes de cartes et carte monde (Tafl 0.11)
+
+**Ranger les cartes en groupes.** Quand un jeu a beaucoup de cartes (chaque ville avec ses maisons, son centre, sa boutique…), le panneau Cartes les range en **groupes** repliables, comme des dossiers.
+
+- Clic droit sur une carte › **Mettre dans un groupe…** : choisis un groupe existant ou écris un nouveau nom (« Ville 1 », « Routes »…). Vide = sans groupe. La fenêtre **Nouvelle carte** propose aussi le groupe (celui de la carte affichée, par défaut).
+- **Glisser-déposer** : glisse une carte sur le titre d'un groupe pour l'y ranger, ou sur une autre carte pour la placer juste à côté (elle prend son groupe).
+- Clic sur le titre d'un groupe : le replier ou le déplier (Tafl s'en souvient). Replié, il montre quand même la carte affichée. Double-clic : renommer. Clic droit : renommer, défaire le groupe (les cartes restent).
+- Le groupe est enregistré dans chaque carte (`groupe`). Il ne change ni l'id ni le fichier de la carte.
+
+**La carte monde** (bouton globe du panneau Cartes, Carte › Carte monde, ou `Ctrl+Maj+M`) : une grande vue de toutes les **cartes extérieures** posées ensemble, comme vues d'avion : ville 1, route 1, ville 2, route 2…
+
+- **Les intérieurs n'y sont pas** : maisons, centres, grottes… Une carte est un intérieur si on coche « Intérieur » en la créant, avec clic droit › **Carte intérieure**, ou en la décochant dans la liste à gauche de la carte monde. Les intérieurs ont une petite maison dans le panneau Cartes.
+- **Placement automatique** : Tafl pose les cartes d'après les **téléporteurs** entre elles. Une route dont le bord droit mène au bord gauche d'une ville se pose juste à gauche de la ville, alignée sur le passage. Un bâtiment de passage entre deux routes (un intérieur relié aux deux) compte aussi.
+- **À la main** : glisse une carte pour la déplacer (case par case). Glisse le fond pour te déplacer, molette pour zoomer, double-clic sur une carte pour l'ouvrir. **Replacer tout seul** recommence le placement automatique.
+- **Repères** : un point vert = un passage entre deux cartes dont les bords se touchent ; en pointillés orange, les deux bouts du passage ne se touchent pas (la carte est mal placée, ou le téléporteur mène loin). Un bord rouge = deux cartes qui se chevauchent.
+- **Exporter en image…** : toute la région en un seul PNG (pour un écran « carte de la région » dans le jeu, ou pour le montrer).
+- **Valider** garde les places (`monde` dans chaque carte, en cases) ; `Ctrl+Z` annule. Le moteur pourra s'en servir pour enchaîner les cartes voisines sans écran noir.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -228,6 +246,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - **Depuis Tafl 0.7, il écrit l'histoire** : il crée les personnages (avec leurs portraits, depuis une image du projet), les quêtes et leurs étapes, les interrupteurs, et pose les événements avec leur script complet (dialogues, choix, conditions, objets, combats, quêtes…). Tafl vérifie chaque script avant de l'accepter et lui dit précisément ce qui ne va pas. Il relit tout avec `donnees` et `evenement` (voir), et voit les portraits.
 - **Depuis Tafl 0.8, il remplit les bases de données** : il cherche et lit les créatures, attaques, objets… (`voir_donnees`), en ajoute, modifie ou supprime (`donnee`), met un sprite ou une icône depuis une image du projet, lance l'import officiel, règle les rencontres des zones et l'ambiance des cartes.
 - **Depuis Tafl 0.10, il pose les objets** : il importe une planche avec tous les nouveaux réglages (fond, marge, espacement, zone, tampons), regarde les tampons (`voir_tampons`), en pose ou en efface sur la carte, en crée (depuis des numéros de tuiles ou un rectangle de la carte), les renomme et règle leurs rangées au-dessus du joueur.
+- **Depuis Tafl 0.11, il range les cartes** : il les met en groupes, marque les intérieurs, regarde la carte monde (une image de toute la région avec la place de chaque carte, action `carte_monde`), place une carte ou relance le placement automatique.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
 ## La suite

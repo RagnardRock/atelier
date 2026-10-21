@@ -93,6 +93,8 @@
     g.drawImage(canvas, 0, 0, out.width, out.height);
     return out;
   }
+  // Tafl 0.11 : avec le groupe, intérieur ou non, et la place sur la carte monde.
+  const listeCartes = (doc) => doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}${m.groupe ? ` [groupe ${m.groupe}]` : ''}${m.interieur ? ' [intérieur]' : m.monde ? ` [monde ${m.monde.x}, ${m.monde.y}]` : ''}`).join(', ');
   const decrireCarte = (doc) => {
     const m = doc.map;
     return [
@@ -118,7 +120,7 @@
         return [
           `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
           `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
-          `Cartes (${doc.maps.length}) : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
+          `Cartes (${doc.maps.length}) : ${listeCartes(doc)}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
           `Tampons (objets de plusieurs tuiles, action tampon) : ${doc.stamps.length ? doc.stamps.map((st, k) => `${k} « ${st.name} » ${st.w} × ${st.h}`).join(', ') : 'aucun'}.`,
           `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
           `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees) ; ${Donnees.SORTES.filter((k) => k !== 'reglages').map((k) => `${doc.data[k].length} ${k}`).join(', ')} (action donnee). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
@@ -650,14 +652,14 @@
     cartes: {
       icone: 'map',
       libelle: (a) => `Cartes : ${a.action}${a.nom ? ` « ${a.nom} »` : ''}`,
-      description: 'Les cartes du jeu (une ville, une route, une maison… ; elles partagent les tuiles). carte : id, nom ou numéro (sinon la carte affichée). action : choisir (l\'afficher), nouvelle (nom, largeur, hauteur : elle devient la carte affichée), dupliquer (nom), renommer (nom ; l\'id et le fichier ne changent pas), supprimer (les téléporteurs qui y mènent sont retirés), deplacer (position dans la liste).',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'nouvelle', 'dupliquer', 'renommer', 'supprimer', 'deplacer'] }, carte: { type: ['string', 'number'] }, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, position: nombre }, required: ['action'] },
+      description: 'Les cartes du jeu (une ville, une route, une maison… ; elles partagent les tuiles). carte : id, nom ou numéro (sinon la carte affichée). action : choisir (l\'afficher), nouvelle (nom, largeur, hauteur, et facultatifs groupe, interieur : elle devient la carte affichée), dupliquer (nom), renommer (nom ; l\'id et le fichier ne changent pas), supprimer (les téléporteurs qui y mènent sont retirés), deplacer (position dans la liste), grouper (groupe : le nom du groupe dans la liste des cartes, "" = sans groupe ; la carte rejoint les autres cartes du groupe), interieur (interieur : true pour une maison, une grotte… qui ne va pas sur la carte monde, false pour une ville ou une route).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['choisir', 'nouvelle', 'dupliquer', 'renommer', 'supprimer', 'deplacer', 'grouper', 'interieur'] }, carte: { type: ['string', 'number'] }, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, position: nombre, groupe: { type: 'string' }, interieur: { type: 'boolean' } }, required: ['action'] },
       faire: (a) => {
         const doc = besoinJeu();
         const map = choisirCarte(doc, a.carte);
         if (a.action === 'nouvelle' || a.action === 'dupliquer') {
           const name = String(a.nom || (a.action === 'dupliquer' ? `${map.name} (copie)` : `Carte ${doc.maps.length + 1}`));
-          Doc.change(doc, a.action === 'nouvelle' ? 'Nouvelle carte (Claude)' : 'Dupliquer la carte (Claude)', () => Doc.addMap(doc, a.action === 'dupliquer' ? { name, copyOf: map } : { name, width: clamp(Math.round(a.largeur || map.width), 1, 256), height: clamp(Math.round(a.hauteur || map.height), 1, 256) }));
+          Doc.change(doc, a.action === 'nouvelle' ? 'Nouvelle carte (Claude)' : 'Dupliquer la carte (Claude)', () => Doc.addMap(doc, a.action === 'dupliquer' ? { name, copyOf: map } : { name, width: clamp(Math.round(a.largeur || map.width), 1, 256), height: clamp(Math.round(a.hauteur || map.height), 1, 256), groupe: a.groupe === undefined ? map.groupe : String(a.groupe).trim().slice(0, 60), interieur: a.interieur === true }));
           Stage.reset();
         } else if (a.action === 'renommer') {
           if (!a.nom) throw new Error('nom : le nouveau nom de la carte.');
@@ -670,9 +672,57 @@
           const to = Math.round(a.position);
           if (!(to >= 0 && to < doc.maps.length)) throw new Error(`position : de 0 à ${doc.maps.length - 1}.`);
           Doc.change(doc, 'Déplacer la carte (Claude)', () => Doc.moveMap(doc, doc.mapIndex, to));
+        } else if (a.action === 'grouper') {
+          if (a.groupe === undefined) throw new Error('groupe : le nom du groupe ("" = sans groupe).');
+          const groupe = String(a.groupe).trim().slice(0, 60);
+          const i = doc.maps.indexOf(map);
+          const last = doc.maps.reduce((k, o, j) => (o.groupe === groupe && groupe && j !== i ? j : k), -1);
+          App.placeMap(i, last >= 0 ? last + 1 : i, groupe);
+        } else if (a.action === 'interieur') {
+          if (typeof a.interieur !== 'boolean') throw new Error('interieur : true (maison, grotte…) ou false (ville, route).');
+          const i = doc.maps.indexOf(map);
+          if (Boolean(map.interieur) !== a.interieur) Doc.change(doc, a.interieur ? 'Carte intérieure (Claude)' : 'Carte extérieure (Claude)', () => { doc.maps[i] = { ...map, interieur: a.interieur }; Doc.selectMap(doc, doc.mapIndex); });
         } else if (a.action !== 'choisir') throw new Error(`Action inconnue : ${a.action}`);
         App.refresh();
-        return `Cartes : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}.\n${decrireCarte(doc)}`;
+        return `Cartes : ${listeCartes(doc)}.\n${decrireCarte(doc)}`;
+      },
+    },
+    carte_monde: {
+      icone: 'globe',
+      libelle: (a) => (a.action === 'voir' ? 'Regarde la carte monde' : a.action === 'replacer' ? 'Replace les cartes sur la carte monde' : `Place ${a.carte} sur la carte monde`),
+      description: 'La carte monde (Tafl 0.11) : les cartes extérieures (villes, routes ; pas les intérieurs) posées ensemble, en cases. action : voir (une image de toute la carte monde et la place de chaque carte), placer (carte, x, y : la case du coin haut gauche de la carte sur la carte monde), replacer (efface les places et les recalcule à partir des téléporteurs entre cartes ; carte : seulement celle-là). Les cartes sans place sont posées toutes seules d\'après les téléporteurs. Ragna voit et ajuste tout dans Carte › Carte monde (Ctrl+Maj+M).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['voir', 'placer', 'replacer'] }, carte: { type: ['string', 'number'] }, x: nombre, y: nombre }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        if (a.action === 'placer') {
+          const map = choisirCarte(doc, a.carte);
+          if (map.interieur) throw new Error(`${map.id} est un intérieur : passe-la d'abord en extérieur (action cartes, interieur false).`);
+          if (!Number.isFinite(Number(a.x)) || !Number.isFinite(Number(a.y))) throw new Error('x, y : la place de la carte en cases.');
+          const i = doc.maps.indexOf(map);
+          Doc.change(doc, 'Placer la carte sur la carte monde (Claude)', () => { doc.maps[i] = { ...map, monde: { x: Math.round(a.x), y: Math.round(a.y) } }; Doc.selectMap(doc, doc.mapIndex); });
+        } else if (a.action === 'replacer') {
+          const seule = a.carte !== undefined ? choisirCarte(doc, a.carte) : null;
+          Doc.change(doc, 'Replacer les cartes sur la carte monde (Claude)', () => {
+            doc.maps = doc.maps.map((m) => (!seule || m === seule ? { ...m, monde: null } : m));
+            const pos = Monde.positions(doc);
+            doc.maps = doc.maps.map((m) => (pos.has(m.id) && !m.monde ? { ...m, monde: pos.get(m.id) } : m));
+            Doc.selectMap(doc, doc.mapIndex);
+          });
+        } else if (a.action !== 'voir') throw new Error(`Action inconnue : ${a.action}`);
+        App.refresh();
+        const pos = Monde.positions(doc);
+        const texte = `Carte monde : ${doc.maps.filter((m) => pos.has(m.id)).map((m) => `${m.id} à (${pos.get(m.id).x}, ${pos.get(m.id).y}) ${m.width} × ${m.height}${m.monde ? '' : ' (place calculée)'}`).join(' ; ') || 'aucune carte extérieure'}. Intérieurs : ${doc.maps.filter((m) => m.interieur).map((m) => m.id).join(', ') || 'aucun'}.`;
+        const d = a.action === 'voir' ? Monde.dessin(doc, pos) : null;
+        if (!d) return texte;
+        // Une grande région est réduite (au plus 1600 px de côté) pour rester lisible.
+        let image = agrandir(d.canvas, 1024);
+        const k = 1600 / Math.max(image.width, image.height);
+        if (k < 1) {
+          const petit = el('canvas', { width: Math.round(image.width * k), height: Math.round(image.height * k) });
+          petit.getContext('2d').drawImage(image, 0, 0, petit.width, petit.height);
+          image = petit;
+        }
+        return { texte: `${texte} L'image commence à la case (${d.x0}, ${d.y0}), ${doc.tileSize} px par case${k < 1 ? ` (réduite à ${Math.round(k * 100)} %)` : ''}.`, image };
       },
     },
     peindre_passage: {

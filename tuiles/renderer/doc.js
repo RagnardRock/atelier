@@ -37,6 +37,9 @@
 //   zones: [{ id, name, type, x, y, w, h, objet }],   herbes hautes, eau, grotte… (objet = objet requis)
 //   warps: [{ id, x, y, carte, tx, ty, direction }],  téléporteurs : la case (x, y) mène à (tx, ty) de la carte « carte »
 //   events: [événement],  personnages, panneaux, coffres… avec leur script (Tafl 0.7, voir events.js)
+//   groupe,    le groupe de la carte dans la liste (« Ville 1 », « Routes »… ; '' = aucun) (Tafl 0.11)
+//   interieur, true pour une maison, une grotte… : elle n'apparaît pas sur la carte monde (Tafl 0.11)
+//   monde,     { x, y } : sa place sur la carte monde, en cases (null = placée toute seule)
 // }
 //
 // Règle importante (la même que dans Skald) : on ne modifie JAMAIS un tableau de pixels, la liste
@@ -68,7 +71,7 @@ const Doc = (() => {
     return { name, visible: true, cells: new Int32Array(width * height).fill(-1), profondeur: 'dessous', opacite: 1, fusion: 'normal', parallaxe: { x: 1, y: 1 }, ...props };
   }
   // Une carte neuve : Sol et Décor sous le joueur, et un calque devant lui (haut des arbres, toits).
-  function newMap({ id, name = 'Carte', width = 20, height = 15 } = {}) {
+  function newMap({ id, name = 'Carte', width = 20, height = 15, groupe = '', interieur = false } = {}) {
     return {
       id: id || 'carte',
       name,
@@ -85,6 +88,10 @@ const Doc = (() => {
       events: [],
       // Tafl 0.8 : météo et teinte de la carte ({ meteo, intensite, teinte, force }, voir donnees.js).
       ambiance: { meteo: 'aucune', intensite: 50, teinte: '', force: 30 },
+      // Tafl 0.11 : rangement dans la liste et place sur la carte monde.
+      groupe,
+      interieur,
+      monde: null,
     };
   }
   // Identifiant d'une carte : son nom en minuscules sans accents (« Bourg Palette » → bourg-palette).
@@ -445,11 +452,11 @@ const Doc = (() => {
   }
 
   // Ajouter une carte (vide, ou la copie d'une autre) juste après la carte affichée ; elle devient la carte affichée.
-  function addMap(doc, { name, width = doc.map.width, height = doc.map.height, copyOf = null } = {}) {
+  function addMap(doc, { name, width = doc.map.width, height = doc.map.height, copyOf = null, groupe = doc.map.groupe, interieur = false } = {}) {
     const id = uniqueMapId(doc, name);
     const map = copyOf
-      ? { ...copyOf, id, name, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z, rencontres: (z.rencontres || []).map((r) => ({ ...r })) })), ambiance: { ...copyOf.ambiance }, warps: copyOf.warps.map((w) => ({ ...w })), events: structuredClone(copyOf.events) }
-      : newMap({ id, name, width, height });
+      ? { ...copyOf, id, name, monde: null, layers: copyOf.layers.map((l) => ({ ...l, parallaxe: { ...l.parallaxe } })), zones: copyOf.zones.map((z) => ({ ...z, rencontres: (z.rencontres || []).map((r) => ({ ...r })) })), ambiance: { ...copyOf.ambiance }, warps: copyOf.warps.map((w) => ({ ...w })), events: structuredClone(copyOf.events) }
+      : newMap({ id, name, width, height, groupe, interieur });
     doc.maps.splice(doc.mapIndex + 1, 0, map);
     selectMap(doc, doc.mapIndex + 1);
     return map;
