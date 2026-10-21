@@ -14,7 +14,7 @@
 // Comme les zones, on ne le modifie jamais sur place : on remplace la liste (map.events = [...]).
 //
 // doc.data, les données du jeu, suit la même règle (on remplace doc.data en entier) :
-//   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }], sprite }],
+//   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }], sprite, tenues: [{ id, nom, sprite }] }],
 //     quetes: [{ id, titre, description, secondaire, suivante, personnages, etapes: [{ texte }] }],
 //     interrupteurs: [{ id, nom, description }] }
 //
@@ -82,6 +82,16 @@ const Events = (() => {
     if (actuelle && !list.some(([k]) => k === actuelle)) list.unshift([actuelle, `${actuelle} (n'existe plus)`]);
     return list.length ? list : [['', 'Aucune quête : crée-la dans Jeu › Données du jeu']];
   };
+  // Tafl 0.16 : les badges (Réglages), les tenues du héros, la monnaie.
+  const badges = (doc) => doc.data.reglages?.badges || [];
+  const nomBadge = (doc, id) => badges(doc).find((b) => b.id === id)?.nom || id || '…';
+  const choixBadges = (doc, actuel) => {
+    const list = badges(doc).map((b) => [b.id, b.nom]);
+    if (actuel && !list.some(([k]) => k === actuel)) list.unshift([actuel, `${actuel} (n'existe plus)`]);
+    return list.length ? list : [['', 'Aucun badge : crée-les dans Jeu › Données du jeu › Réglages']];
+  };
+  const tenues = (doc) => doc.data.personnages.find((p) => p.heros)?.tenues || [];
+  const monnaie = (doc) => doc.data.reglages?.monnaie || 'Pokédollars';
   const choixTuiles = (doc) => [['-1', 'Aucune'], ...doc.tiles.map((t, i) => [String(i), `${i}. ${t.name}`])];
 
   // Parcourt toutes les commandes d'une liste, y compris celles rangées dans un choix ou un « si ».
@@ -260,6 +270,17 @@ const Events = (() => {
       valide: (c) => (c.dresseur ? null : 'Quel dresseur ?'),
       resume: (doc, c) => `Combat contre le dresseur ${nomData(doc, 'dresseurs', c.dresseur)}`,
     },
+    argent: {
+      nom: 'Donner ou retirer de l\'argent', icone: 'credit-card', groupe: 'Objets et créatures',
+      nouveau: () => ({ type: 'argent', action: 'donner', montant: 500 }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['donner', 'Donner au joueur'], ['retirer', 'Retirer au joueur']] },
+        { key: 'montant', label: 'Combien', type: 'number', value: c.montant, min: 1, max: 9999999, unit: monnaie(doc) },
+        { type: 'info', text: 'Une récompense de quête, un pourboire, un péage… Retirer ne descend jamais sous 0 : teste d\'abord avec la condition « Le joueur a assez d\'argent ».' },
+      ],
+      depuis: (v) => ({ type: 'argent', action: v.action === 'retirer' ? 'retirer' : 'donner', montant: clamp(Math.round(v.montant) || 1, 1, 9999999) }),
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Donner'} ${c.montant} ${monnaie(doc)}`,
+    },
     teleporter: {
       nom: 'Téléporter le joueur', icone: 'debug-step-into', groupe: 'Déplacements',
       nouveau: () => ({ type: 'teleporter', carte: '', x: 0, y: 0, direction: 'bas' }),
@@ -276,7 +297,7 @@ const Events = (() => {
       resume: (doc, c) => `Téléporter vers ${Doc.mapById(doc, c.carte)?.name || c.carte} (${c.x}, ${c.y})`,
     },
     quete: {
-      nom: 'Avancer une quête', icone: 'book', groupe: 'Quêtes',
+      nom: 'Avancer une quête', icone: 'book', groupe: 'Progression',
       nouveau: () => ({ type: 'quete', quete: '', action: 'commencer', etape: 1 }),
       champs: (doc, c) => [
         { key: 'quete', label: 'Quête', type: 'select', value: c.quete || doc.data.quetes[0]?.id || '', choices: choixQuetes(doc, c.quete) },
@@ -292,6 +313,39 @@ const Events = (() => {
         if (c.action === 'etape') return `Quête « ${t} » : étape ${c.etape}${q?.etapes[c.etape - 1] ? ` (${court(q.etapes[c.etape - 1].texte, 40)})` : ''}`;
         return `${c.action === 'finir' ? 'Finir' : 'Commencer'} la quête « ${t} »`;
       },
+    },
+    badge: {
+      nom: 'Donner un badge', icone: 'star-full', groupe: 'Progression',
+      nouveau: (doc) => ({ type: 'badge', badge: badges(doc)[0]?.id || '' }),
+      champs: (doc, c) => [
+        { key: 'badge', label: 'Badge', type: 'select', value: c.badge, choices: choixBadges(doc, c.badge) },
+        { type: 'info', text: 'Le joueur reçoit ce badge (une seule fois, même si le script repasse). Le compteur « Badges » vaut le nombre de badges différents reçus : c\'est lui qui fait monter le niveau maximum de l\'équipe et celui des dresseurs (Jeu › Données du jeu › Réglages).' },
+      ],
+      depuis: (v) => ({ type: 'badge', badge: v.badge }),
+      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Jeu › Données du jeu › Réglages.'),
+      resume: (doc, c) => `Donner le badge « ${nomBadge(doc, c.badge)} »`,
+    },
+    personnaliser: {
+      nom: 'Personnaliser le héros (nom, tenue)', icone: 'account', groupe: 'Héros',
+      nouveau: () => ({ type: 'personnaliser', nom: true, tenue: true }),
+      champs: (doc, c) => [
+        { key: 'nom', label: 'Le joueur choisit son nom', type: 'checkbox', value: c.nom },
+        { key: 'tenue', label: 'Le joueur choisit sa tenue', type: 'checkbox', value: c.tenue },
+        { type: 'info', text: tenues(doc).length ? `Tenues proposées : la tenue de base et ${tenues(doc).map((t) => t.nom).join(', ')}. Elles se créent dans la fiche du héros (Jeu › Données du jeu › Personnages).` : 'Le héros n\'a pas encore de tenue en plus : crée-les dans sa fiche (Jeu › Données du jeu › Personnages, section Tenues).' },
+      ],
+      depuis: (v) => ({ type: 'personnaliser', nom: Boolean(v.nom), tenue: Boolean(v.tenue) }),
+      valide: (c) => (c.nom || c.tenue ? null : 'Coche au moins le nom ou la tenue.'),
+      resume: (doc, c) => `Le joueur choisit ${[c.nom ? 'son nom' : '', c.tenue ? 'sa tenue' : ''].filter(Boolean).join(' et ')}`,
+    },
+    tenue: {
+      nom: 'Changer la tenue du héros', icone: 'person', groupe: 'Héros',
+      nouveau: (doc) => ({ type: 'tenue', tenue: tenues(doc)[0]?.id || '' }),
+      champs: (doc, c) => [
+        { key: 'tenue', label: 'Tenue', type: 'select', value: c.tenue, choices: [['', 'Sa tenue de base'], ...tenues(doc).map((t) => [t.id, t.nom]), ...(c.tenue && !tenues(doc).some((t) => t.id === c.tenue) ? [[c.tenue, `${c.tenue} (n'existe plus)`]] : [])] },
+        { type: 'info', text: 'Pour l\'histoire : un uniforme pour s\'infiltrer, une tenue de plongée… Le héros garde ses portraits.' },
+      ],
+      depuis: (v) => ({ type: 'tenue', tenue: v.tenue }),
+      resume: (doc, c) => `Le héros met ${c.tenue ? `la tenue « ${tenues(doc).find((t) => t.id === c.tenue)?.nom || c.tenue} »` : 'sa tenue de base'}`,
     },
     soigner: {
       nom: 'Soigner l\'équipe', icone: 'heart-filled', groupe: 'Services',
@@ -367,6 +421,22 @@ const Events = (() => {
       ],
       depuis: (v) => ({ type: 'compteur', compteur: v.compteur, min: clamp(Math.round(v.min) || 0, 0, 99999) }),
     },
+    argent: {
+      nom: 'Le joueur a assez d\'argent',
+      nouveau: () => ({ type: 'argent', min: 500 }),
+      champs: (doc, c) => [{ key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 9999999, unit: monnaie(doc) }],
+      depuis: (v) => ({ type: 'argent', min: clamp(Math.round(v.min) || 0, 0, 9999999) }),
+    },
+    badge: {
+      nom: 'Le joueur a un badge',
+      nouveau: (doc) => ({ type: 'badge', badge: badges(doc)[0]?.id || '' }),
+      champs: (doc, c) => [
+        { key: 'badge', label: 'Badge', type: 'select', value: c.badge, choices: choixBadges(doc, c.badge) },
+        { type: 'info', text: 'Pour un garde qui ne laisse passer qu\'avec le badge de la ville. Pour « au moins 3 badges », prends plutôt la condition « Un compteur du joueur ».' },
+      ],
+      depuis: (v) => ({ type: 'badge', badge: v.badge }),
+      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Jeu › Données du jeu › Réglages.'),
+    },
   };
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
@@ -376,6 +446,8 @@ const Events = (() => {
     if (c.type === 'objet') return `a ${c.min > 1 ? `au moins ${c.min} × ` : ''}${c.objet}`;
     if (c.type === 'quete') return `quête « ${quete(doc, c.quete)?.titre || c.quete} » ${libelle(ETATS_QUETE, c.etat).toLowerCase()}${c.etat === 'en_cours' && c.etape ? `, étape ${c.etape} ou plus` : ''}`;
     if (c.type === 'compteur') return `${libelle(COMPTEURS, c.compteur).toLowerCase()} ≥ ${c.min}`;
+    if (c.type === 'argent') return `a au moins ${c.min} ${monnaie(doc)}`;
+    if (c.type === 'badge') return `a le badge « ${nomBadge(doc, c.badge)} »`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -389,6 +461,8 @@ const Events = (() => {
       case 'objet': return { type: 'objet', objet: str(c.objet), min: Math.max(1, int(c.min, 1)) };
       case 'quete': return { type: 'quete', quete: str(c.quete), etat: pick(c.etat, ETATS_QUETE, 'en_cours'), etape: Math.max(0, int(c.etape, 0)) };
       case 'compteur': return { type: 'compteur', compteur: pick(c.compteur, COMPTEURS, 'captures'), min: Math.max(0, int(c.min, 1)) };
+      case 'argent': return { type: 'argent', min: clamp(int(c.min, 0), 0, 9999999) };
+      case 'badge': return { type: 'badge', badge: str(c.badge) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -410,6 +484,10 @@ const Events = (() => {
       case 'teleporter': return { type: 'teleporter', carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)), direction: pick(c.direction, Doc.DIRECTIONS, 'bas') };
       case 'quete': return { type: 'quete', quete: str(c.quete), action: pick(c.action, [['commencer'], ['etape'], ['finir']], 'commencer'), etape: Math.max(1, int(c.etape, 1)) };
       case 'boutique': return { type: 'boutique', boutique: str(c.boutique) };
+      case 'argent': return { type: 'argent', action: c.action === 'retirer' ? 'retirer' : 'donner', montant: clamp(int(c.montant, 1), 1, 9999999) };
+      case 'badge': return { type: 'badge', badge: str(c.badge) };
+      case 'personnaliser': return { type: 'personnaliser', nom: c.nom !== false, tenue: c.tenue !== false };
+      case 'tenue': return { type: 'tenue', tenue: str(c.tenue) };
       default: return { ...c };
     }
   }
@@ -463,6 +541,10 @@ const Events = (() => {
           tuile: tuile >= 0 && tuile < tileCount ? tuile : -1,
           portraits: arr(p?.portraits).filter((x) => /^data:image\/(png|gif|webp|jpeg|bmp);base64,/.test(x?.png)).map((x) => ({ expression: Doc.slug(x.expression, 'normal'), png: x.png })),
           sprite: Sprites.norm(p?.sprite), // Tafl 0.12 : sa planche de marche (voir sprites.js), ou null
+          // Tafl 0.16 : les tenues que le joueur peut choisir pour le héros (chacune son sprite).
+          tenues: uniques(arr(p?.tenues).filter((t) => t && typeof t === 'object').map((t, k) => ({
+            id: Doc.slug(t.id || t.nom, `tenue-${k + 1}`), nom: str(t.nom || t.id, `Tenue ${k + 1}`), sprite: Sprites.norm(t.sprite),
+          }))),
         };
       })),
       quetes: uniques(arr(d?.quetes).map((q, i) => ({
@@ -796,7 +878,7 @@ const Events = (() => {
         addCond.onclick = async (e) => {
           const r = addCond.getBoundingClientRect();
           const type = await choisir(menuConditions(), r.left, r.bottom + 4);
-          const c = await formCondition(doc, CONDITIONS[type].nouveau());
+          const c = await formCondition(doc, CONDITIONS[type].nouveau(doc));
           if (c) { p.conditions.push(c); renderPage(); }
           e.stopPropagation();
         };
@@ -849,10 +931,10 @@ const Events = (() => {
           let c;
           if (type === 'si') {
             const ct = await choisir(menuConditions(), r.left, r.bottom + 4);
-            const cond = await formCondition(doc, CONDITIONS[ct].nouveau());
+            const cond = await formCondition(doc, CONDITIONS[ct].nouveau(doc));
             if (cond) c = { type: 'si', condition: cond, alors: [], sinon: [] };
           } else {
-            const neuf = COMMANDES[type].nouveau();
+            const neuf = COMMANDES[type].nouveau(doc);
             c = COMMANDES[type].champs ? await formCommande(doc, neuf, work) : neuf;
           }
           if (c) { liste.push(c); renderPage(); }
@@ -886,7 +968,7 @@ const Events = (() => {
   // Les onglets de Tafl 0.8 viennent de donnees.js (Donnees.ONGLETS).
   const ONGLETS = [
     { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
-      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null }),
+      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null, tenues: [] }),
       meta: (o) => (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
       vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
     { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
@@ -1100,19 +1182,59 @@ const Events = (() => {
           champ('C\'est le héros (le joueur, qui parle et a sa personnalité)', (() => {
             // Un seul héros : le cocher ici le retire aux autres.
             const c = coche(p, 'heros');
-            c.addEventListener('change', () => { if (c.checked) for (const o of items) if (o !== p) o.heros = false; renderListe(); });
+            c.addEventListener('change', () => { if (c.checked) for (const o of items) if (o !== p) o.heros = false; render(); });
             return c;
           })()),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur du nom' }), couleur, sansCouleur, el('span', { className: 'unit', textContent: 'dans les boîtes de dialogue' })]),
           section('Sprite sur la carte : 4 directions et la marche'),
           Sprites.editeur(p, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe, tuile: () => (doc.tiles[p.tuile] ? Doc.tileCanvas(doc.tiles[p.tuile], doc.tileSize) : null) }),
           champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'Sans sprite : la tuile qui le montre sur la carte (une seule image, quelle que soit sa direction)'),
+          ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,
           section('Utilisation'),
           usages('personnage', p.id),
         );
+      }
+
+      // Les tenues du héros (Tafl 0.16) : chacune a son nom et son sprite. La commande « Personnaliser
+      // le héros » les propose au joueur ; « Changer la tenue » en met une pour l'histoire.
+      function tenuesHeros(p) {
+        const sertTenue = (id) => { let oui = false; parcourirJeu(doc, ({ commande }) => { if (commande?.type === 'tenue' && commande.tenue === id) oui = true; }); return oui; };
+        const box = el('div', { className: 'tenues' });
+        const rendre = () => {
+          box.replaceChildren(el('p', { className: 'modal-info', textContent: 'Le sprite du dessus est sa tenue de base. Chaque tenue ici est une autre planche de marche (même format) ; ses portraits ne changent pas. Astuce : « Partir de la tenue de base » copie le sprite pour ne changer que les couleurs.' }));
+          p.tenues.forEach((t, k) => {
+            const nom = el('input', { type: 'text', value: t.nom, placeholder: 'Sportive, Hiver, Uniforme…' });
+            // L'identifiant suit le nom, sauf si un script met déjà cette tenue (il ne la retrouverait plus).
+            nom.oninput = () => {
+              t.nom = nom.value;
+              const id = Doc.slug(nom.value, '');
+              if (id && !sertTenue(t.id) && !p.tenues.some((o) => o !== t && o.id === id)) t.id = id;
+              idTexte.textContent = t.id;
+            };
+            const idTexte = el('code', { textContent: t.id });
+            box.append(el('div', { className: 'tenue' }, [
+              el('div', { className: 'tenue-tete' }, [
+                nom, idTexte,
+                p.sprite && !t.sprite ? petitBouton('copy', 'Partir de la tenue de base', () => { t.sprite = { ...p.sprite }; rendre(); }) : null,
+                petitBouton('trash', 'Supprimer la tenue', () => { p.tenues.splice(k, 1); rendre(); }),
+              ]),
+              Sprites.editeur(t, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe }),
+            ]));
+          });
+          const add = el('button', { className: 'cmd-add', textContent: '+ Tenue' });
+          add.onclick = (e) => {
+            e.preventDefault();
+            const nom = `Tenue ${p.tenues.length + 2}`;
+            p.tenues.push({ id: ident(nom, p.tenues, 'tenue'), nom, sprite: p.sprite ? { ...p.sprite } : null });
+            rendre();
+          };
+          box.append(add);
+        };
+        rendre();
+        return box;
       }
 
       function formQuete(q, items, i) {

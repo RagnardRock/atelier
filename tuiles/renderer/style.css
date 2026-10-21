@@ -846,6 +846,16 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .portrait-add:hover { border-color: var(--accent); color: var(--text-strong); }
 .portrait-add .codicon { font-size: 20px; }
 .etapes { display: flex; flex-direction: column; gap: 4px; }
+/* Les tenues du héros (Tafl 0.16) : une carte par tenue, son nom puis son éditeur de sprite. */
+.tenues { display: flex; flex-direction: column; gap: 10px; }
+.tenue { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 10px; background: rgba(255, 255, 255, 0.02); }
+.tenue-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tenue-tete input { flex: 1; min-width: 0; }
+.tenue-tete code { color: var(--muted); font-size: 11px; }
+/* Les badges (Réglages) : une petite icône cliquable dans la table. */
+.badge-icone { width: 32px; height: 32px; padding: 0; border: 1px dashed rgba(255, 255, 255, 0.18); border-radius: 8px; background: transparent; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+.badge-icone img { width: 28px; height: 28px; image-rendering: pixelated; object-fit: contain; }
+.badge-icone:hover { border-color: var(--accent); }
 .etape { display: flex; align-items: center; gap: 6px; }
 .etape input { flex: 1; min-width: 0; }
 .etape .icon-button { width: 24px; height: 24px; }

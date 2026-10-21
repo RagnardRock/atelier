@@ -959,7 +959,17 @@
     },
   });
   // --- Événements et données du jeu (Tafl 0.7) ---
-  const CMDS_AIDE = 'Commandes ({ "type": …, champs }) : dire {qui: id d\'un personnage, "@evenement" (le personnage de l\'événement) ou "" (texte seul : panneau, narration), expression (normal, content, triste…), texte ({joueur} = nom du joueur ; une ligne vide = boîte suivante)} ; choix {options: [{texte, commandes: [...]}], 2 à 4} ; si {condition, alors: [...], sinon: [...]} ; commentaire {texte} ; fin {} ; interrupteur {id, valeur: true|false} (un nom nouveau crée l\'interrupteur) ; local {valeur} (l\'interrupteur « déjà fait » propre à l\'événement) ; attendre {ms} ; objet {action: donner|retirer, objet, nombre} ; creature {creature, niveau} (la donner) ; combat_sauvage {creature, niveau} ; combat_dresseur {dresseur} ; teleporter {carte, x, y, direction} ; quete {quete, action: commencer|etape|finir, etape (numéro, à partir de 1)} ; soigner {} ; boutique {boutique} ; ecran_ev {}. Conditions : interrupteur {id, valeur} ; local {valeur} ; objet {objet, min} ; quete {quete, etat: pas_commencee|en_cours|finie, etape (au moins, 0 = peu importe)} ; compteur {compteur: captures|dresseurs_battus|evolutions|badges|pas, min}.';
+  // Ce qui porte un sprite : le personnage a.id, ou sa tenue a.tenue (Tafl 0.16). Renvoie { id, nom, sprite,
+  // tuile, personnage } ; nom dit « Léa (tenue Hiver) » pour les messages.
+  function porteur(doc, a) {
+    const p = Events.perso(doc, a.id);
+    if (!p) throw new Error(`Pas de personnage « ${a.id} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+    if (!a.tenue) return { ...p, personnage: p.id };
+    const t = (p.tenues || []).find((x) => x.id === a.tenue);
+    if (!t) throw new Error(`${p.nom} n'a pas de tenue « ${a.tenue} » (${(p.tenues || []).map((x) => x.id).join(', ') || 'aucune : personnage action tenue'}).`);
+    return { id: t.id, nom: `${p.nom} (tenue ${t.nom})`, sprite: t.sprite, tuile: -1, personnage: p.id };
+  }
+  const CMDS_AIDE = 'Commandes ({ "type": …, champs }) : dire {qui: id d\'un personnage, "@evenement" (le personnage de l\'événement) ou "" (texte seul : panneau, narration), expression (normal, content, triste…), texte ({joueur} = nom du joueur ; une ligne vide = boîte suivante)} ; choix {options: [{texte, commandes: [...]}], 2 à 4} ; si {condition, alors: [...], sinon: [...]} ; commentaire {texte} ; fin {} ; interrupteur {id, valeur: true|false} (un nom nouveau crée l\'interrupteur) ; local {valeur} (l\'interrupteur « déjà fait » propre à l\'événement) ; attendre {ms} ; objet {action: donner|retirer, objet, nombre} ; creature {creature, niveau} (la donner) ; combat_sauvage {creature, niveau} ; combat_dresseur {dresseur} ; teleporter {carte, x, y, direction} ; quete {quete, action: commencer|etape|finir, etape (numéro, à partir de 1)} ; soigner {} ; boutique {boutique} ; ecran_ev {} ; argent {action: donner|retirer, montant} (retirer ne descend pas sous 0) ; badge {badge: id d\'un badge des réglages} (une seule fois ; le compteur badges = nombre de badges différents, il fait monter le niveau maximum) ; personnaliser {nom: true|false, tenue: true|false} (le joueur choisit son nom et/ou la tenue du héros) ; tenue {tenue: id d\'une tenue du héros, "" = sa tenue de base}. Conditions : interrupteur {id, valeur} ; local {valeur} ; objet {objet, min} ; quete {quete, etat: pas_commencee|en_cours|finie, etape (au moins, 0 = peu importe)} ; compteur {compteur: captures|dresseurs_battus|evolutions|badges|pas, min} ; argent {min} ; badge {badge}.';
   const evenementSchema = {
     type: 'object',
     properties: {
@@ -1007,7 +1017,7 @@
     const d = doc.data;
     return [
       `Personnages (${d.personnages.length}) :`,
-      ...d.personnages.map((p) => `- ${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}${p.couleur ? `, couleur ${p.couleur}` : ''}${p.tuile >= 0 ? `, tuile ${p.tuile}` : ''}${p.sprite ? `, sprite ${p.sprite.largeur} × ${p.sprite.hauteur} px, ${p.sprite.images} image(s) par direction` : ', pas de sprite'}, portraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}${p.description ? `\n  ${p.description.replace(/\n/g, '\n  ')}` : ''}`),
+      ...d.personnages.map((p) => `- ${p.id} « ${p.nom} »${p.heros ? ' [héros]' : ''}${p.couleur ? `, couleur ${p.couleur}` : ''}${p.tuile >= 0 ? `, tuile ${p.tuile}` : ''}${p.sprite ? `, sprite ${p.sprite.largeur} × ${p.sprite.hauteur} px, ${p.sprite.images} image(s) par direction` : ', pas de sprite'}, portraits : ${p.portraits.map((x) => x.expression).join(', ') || 'aucun'}${p.tenues?.length ? `, tenues : ${p.tenues.map((t) => `${t.id} « ${t.nom} »${t.sprite ? '' : ' (sans sprite)'}`).join(', ')}` : ''}${p.description ? `\n  ${p.description.replace(/\n/g, '\n  ')}` : ''}`),
       '',
       `Quêtes (${d.quetes.length}) :`,
       ...d.quetes.map((q) => `- ${q.id} « ${q.titre} » (${q.secondaire ? 'secondaire' : 'principale'})${q.suivante ? `, suite : ${q.suivante}` : ''}${q.personnages.length ? `, personnages : ${q.personnages.join(', ')}` : ''}${q.description ? `\n  ${q.description.replace(/\n/g, '\n  ')}` : ''}\n${q.etapes.map((e, i) => `  ${i + 1}. ${e.texte}`).join('\n')}`),
@@ -1141,15 +1151,15 @@
     personnage: {
       icone: 'person',
       libelle: (a) => `Personnage : ${String(a.action || '').replace(/_/g, ' ')}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
-      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression), sprite (id, chemin : une planche PNG du projet, 4 rangées face/gauche/droite/dos, images : nombre d\'images par rangée, deviné sinon), retirer_sprite (id). Pour voir les portraits : action donnees avec personnage ; pour le sprite : voir_sprite ; pour le dessiner pixel par pixel : dessiner_sprite.',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait', 'sprite', 'retirer_sprite'] }, images: nombre, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' } }, required: ['action'] },
+      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression), sprite (id, chemin : une planche PNG du projet, 4 rangées face/gauche/droite/dos, images : nombre d\'images par rangée, deviné sinon), retirer_sprite (id), tenue (id du héros, nom de la tenue ; chemin : sa planche PNG, sinon une copie du sprite de base à retoucher ; une tenue du même nom est remplacée), retirer_tenue (id, nom). Les tenues : les autres apparences du héros, que le joueur choisit (commande personnaliser) ou que l\'histoire lui met (commande tenue) ; voir_sprite et dessiner_sprite les touchent avec le champ tenue. Pour voir les portraits : action donnees avec personnage ; pour le sprite : voir_sprite ; pour le dessiner pixel par pixel : dessiner_sprite.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait', 'sprite', 'retirer_sprite', 'tenue', 'retirer_tenue'] }, images: nombre, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' } }, required: ['action'] },
       faire: async (a) => {
         const doc = besoinJeu();
         const liste = doc.data.personnages;
         if (a.action === 'ajouter') {
           if (!a.nom) throw new Error('nom : le nom du personnage.');
           const id = Events.ident(a.id || a.nom, liste, 'personnage');
-          const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [], sprite: null };
+          const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [], sprite: null, tenues: [] };
           changerDonnees(doc, 'Nouveau personnage (Claude)', (d) => ({ ...d, personnages: [...d.personnages.map((o) => (p.heros ? { ...o, heros: false } : o)), p] }));
           return `Personnage ${id} « ${p.nom} » ajouté.`;
         }
@@ -1186,6 +1196,23 @@
           changerDonnees(doc, 'Retirer le sprite (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: null } : p)) }));
           return `Sprite de ${p0.nom} retiré : sur la carte, il reprend sa tuile.`;
         }
+        if (a.action === 'tenue') {
+          if (!p0.heros) throw new Error(`${p0.nom} n'est pas le héros : seules les tenues du héros servent dans le jeu.`);
+          if (!a.nom) throw new Error('nom : le nom de la tenue (Sportive, Hiver…).');
+          let sprite = p0.sprite ? { ...p0.sprite } : null;
+          if (a.chemin) sprite = await Sprites.depuisPlanche((await Events.imagePortrait(await window.claude.lireFichier(a.chemin))).png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
+          const id = Doc.slug(a.nom, 'tenue');
+          const tenue = { id, nom: String(a.nom), sprite };
+          const autres = (p0.tenues || []).filter((t) => t.id !== id);
+          changerDonnees(doc, 'Tenue du héros (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: [...autres, tenue] } : p)) }));
+          return `Tenue ${id} « ${tenue.nom} » de ${p0.nom} : ${sprite ? `${sprite.images} image(s) de ${sprite.largeur} × ${sprite.hauteur} px par direction${a.chemin ? '' : ' (copie du sprite de base : retouche-la avec dessiner_sprite et tenue)'}` : 'pas encore de sprite (dessiner_sprite avec tenue)'}.`;
+        }
+        if (a.action === 'retirer_tenue') {
+          const id = Doc.slug(a.nom, '');
+          if (!(p0.tenues || []).some((t) => t.id === id)) throw new Error(`${p0.nom} n'a pas de tenue « ${a.nom} » (${(p0.tenues || []).map((t) => t.id).join(', ') || 'aucune'}).`);
+          changerDonnees(doc, 'Retirer une tenue (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: p.tenues.filter((t) => t.id !== id) } : p)) }));
+          return `Tenue ${id} retirée.`;
+        }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
         const p = { ...p0 };
         if (a.nom !== undefined) p.nom = String(a.nom);
@@ -1202,12 +1229,11 @@
       lecture: true,
       icone: 'person',
       libelle: (a) => `Regarde le sprite de ${a.id}`,
-      description: 'Le sprite d\'un personnage sur la carte : sa taille, et les pixels de chaque image (face, gauche, droite, dos ; image 0 = debout, puis les pas), avec la planche agrandie. direction : une seule direction (bas, gauche, droite, haut), sinon toutes.',
-      schema: { type: 'object', properties: { id: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS } }, required: ['id'] },
+      description: 'Le sprite d\'un personnage sur la carte : sa taille, et les pixels de chaque image (face, gauche, droite, dos ; image 0 = debout, puis les pas), avec la planche agrandie. direction : une seule direction (bas, gauche, droite, haut), sinon toutes. tenue : l\'id d\'une tenue du héros, pour voir celle-ci.',
+      schema: { type: 'object', properties: { id: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS }, tenue: { type: 'string' } }, required: ['id'] },
       faire: async (a) => {
         const doc = besoinJeu();
-        const p = Events.perso(doc, a.id);
-        if (!p) throw new Error(`Pas de personnage « ${a.id} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+        const p = porteur(doc, a);
         if (!p.sprite) return `${p.nom} n'a pas encore de sprite${p.tuile >= 0 ? ` (sur la carte : la tuile ${p.tuile})` : ''}. Dessine-le avec dessiner_sprite (une image à la fois), ou importe une planche avec personnage action sprite.`;
         const { largeur, hauteur, images } = p.sprite;
         const frames = await Sprites.decouper(p.sprite);
@@ -1225,12 +1251,11 @@
     dessiner_sprite: {
       icone: 'edit',
       libelle: (a) => `Dessine le sprite de ${a.id} : ${Sprites.NOMS[a.direction] || a.direction}, image ${a.image ?? 0}${a.miroir ? ' (et son miroir)' : ''}`,
-      description: 'Dessine une image du sprite d\'un personnage (comment il apparaît sur la carte), pixel par pixel comme dessiner_tuile. direction : bas (face), gauche, droite ou haut (dos). image : 0 = debout, 1 et 2 = les pas (pied gauche, pied droit). pixels : une ligne par rangée de pixels (« . » = transparent, sinon un code de la palette) ; la première image dessinée fixe la taille de toutes (souvent largeur de la tuile × 2 fois sa hauteur, les pieds en bas). images : nombre d\'images par direction, à la création du sprite (3 par défaut). miroir : true pour gauche ou droite, dessine aussi l\'autre côté en miroir. couleurs_en_plus : { "caractère": "#rrggbb" }.',
-      schema: { type: 'object', properties: { id: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS }, image: nombre, pixels: lignesSchema, images: nombre, miroir: { type: 'boolean' }, couleurs_en_plus: { type: 'object' } }, required: ['id', 'direction', 'pixels'] },
+      description: 'Dessine une image du sprite d\'un personnage (comment il apparaît sur la carte), pixel par pixel comme dessiner_tuile. tenue : l\'id d\'une tenue du héros, pour dessiner celle-ci (sinon son sprite de base). direction : bas (face), gauche, droite ou haut (dos). image : 0 = debout, 1 et 2 = les pas (pied gauche, pied droit). pixels : une ligne par rangée de pixels (« . » = transparent, sinon un code de la palette) ; la première image dessinée fixe la taille de toutes (souvent largeur de la tuile × 2 fois sa hauteur, les pieds en bas). images : nombre d\'images par direction, à la création du sprite (3 par défaut). miroir : true pour gauche ou droite, dessine aussi l\'autre côté en miroir. couleurs_en_plus : { "caractère": "#rrggbb" }.',
+      schema: { type: 'object', properties: { id: { type: 'string' }, tenue: { type: 'string' }, direction: { type: 'string', enum: Sprites.DIRECTIONS }, image: nombre, pixels: lignesSchema, images: nombre, miroir: { type: 'boolean' }, couleurs_en_plus: { type: 'object' } }, required: ['id', 'direction', 'pixels'] },
       faire: async (a) => {
         const doc = besoinJeu();
-        const p0 = Events.perso(doc, a.id);
-        if (!p0) throw new Error(`Pas de personnage « ${a.id} » : ${doc.data.personnages.map((o) => o.id).join(', ') || 'aucun'}.`);
+        const p0 = porteur(doc, a);
         const r = Sprites.DIRECTIONS.indexOf(a.direction);
         if (r < 0) throw new Error(`direction : ${Sprites.DIRECTIONS.join(', ')}.`);
         const lignes = Array.isArray(a.pixels) ? a.pixels.map(String) : [];
@@ -1251,7 +1276,7 @@
         const nouveau = { ...sprite, planche: Sprites.assembler(frames, w, h) };
         Doc.change(doc, 'Dessiner le sprite (Claude)', () => {
           for (const hex of Object.values(enPlus)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
-          doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: nouveau } : p)) };
+          doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.id !== p0.personnage ? p : a.tenue ? { ...p, tenues: p.tenues.map((t) => (t.id === p0.id ? { ...t, sprite: nouveau } : t)) } : { ...p, sprite: nouveau })) };
         });
         Stage.render();
         const planche = el('canvas', { width: w * sprite.images, height: h * 4 });
@@ -1351,7 +1376,7 @@
     donnee: {
       icone: 'database',
       libelle: (a) => `${{ ajouter: 'Ajoute', modifier: 'Modifie', supprimer: 'Supprime' }[a.action] || a.action} ${a.sorte}${a.id ? ` ${a.id}` : a.valeurs?.nom ? ` « ${a.valeurs.nom} »` : ''}`,
-      description: `Les bases de données du jeu (Jeu › Données du jeu). sorte : ${Donnees.SORTES.join(', ')}. action : ajouter (valeurs : l'élément ; id facultatif tiré du nom), modifier (id + valeurs : seulement les champs à changer ; l'id ne change pas), supprimer (id). Pour reglages : modifier, sans id (dont interface : { theme : verre ou pixel, accent : #rrggbb ou \"\" }). Pour lire : voir_donnees. Les clés de chaque sorte sont celles de FORMAT.md (« Données du jeu ») : voir_donnees sur un élément existant en montre un exemple. Les éléments importés ont « officiel » (leur nom anglais PokeAPI) ; ceux que Ragna crée n'en ont pas. Références : une créature cite ses types, talents, attaques (attaques par niveau, ct) et ses évolutions (vers, objet) par leur id ; un dresseur ses créatures ; une boutique ses articles (sorte objet ou creature, condition de déblocage : une condition des événements, par exemple { type: "compteur", compteur: "captures", min: 10 }). Natures : ${Donnees.NATURES.map(([k]) => k).join(', ')}.`,
+      description: `Les bases de données du jeu (Jeu › Données du jeu). sorte : ${Donnees.SORTES.join(', ')}. action : ajouter (valeurs : l'élément ; id facultatif tiré du nom), modifier (id + valeurs : seulement les champs à changer ; l'id ne change pas), supprimer (id). Pour reglages : modifier, sans id (dont interface : { theme : verre ou pixel, accent : #rrggbb ou \"\" } ; badges : [{ id, nom, icone }] la liste complète, donnés par la commande badge ; regles : le pack de règles, \"pokemon\"). Pour lire : voir_donnees. Les clés de chaque sorte sont celles de FORMAT.md (« Données du jeu ») : voir_donnees sur un élément existant en montre un exemple. Les éléments importés ont « officiel » (leur nom anglais PokeAPI) ; ceux que Ragna crée n'en ont pas. Références : une créature cite ses types, talents, attaques (attaques par niveau, ct) et ses évolutions (vers, objet) par leur id ; un dresseur ses créatures ; une boutique ses articles (sorte objet ou creature, condition de déblocage : une condition des événements, par exemple { type: "compteur", compteur: "captures", min: 10 }). Natures : ${Donnees.NATURES.map(([k]) => k).join(', ')}.`,
       schema: { type: 'object', properties: { sorte: { type: 'string', enum: Donnees.SORTES }, action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, valeurs: { type: 'object' } }, required: ['sorte', 'action'] },
       faire: (a) => {
         if (!['ajouter', 'modifier', 'supprimer'].includes(a.action)) throw new Error('action : ajouter, modifier ou supprimer (pour lire : voir_donnees).');
