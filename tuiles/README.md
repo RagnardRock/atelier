@@ -240,6 +240,21 @@ Dans **Jeu › Données du jeu › Personnages**, partie **Sprite sur la carte**
 
 Le format est décrit dans `FORMAT.md` (`sprite` dans `personnages.json`).
 
+## Ranger et trier les tuiles (Tafl 0.13)
+
+Le panneau **Tuiles** sait maintenant ranger un jeu de plusieurs centaines de tuiles.
+
+- **Catégories** : clic droit sur une tuile › *Ranger dans une catégorie…* (`Ctrl+G`), puis choisis une catégorie existante ou écris un nouveau nom (« Herbe », « Eau », « Maisons »…). Les tuiles se rangent sous un titre qu'on replie d'un clic (comme les groupes de cartes). Double-clic sur le titre : renommer ; clic droit : choisir toutes ses tuiles, la trier, la défaire.
+- **Les planches importées** arrivent rangées dans une catégorie au nom du fichier (`foret.png` → « foret »).
+- **Plusieurs tuiles à la fois** : `Ctrl+clic` en ajoute ou en retire une, `Maj+clic` prend toutes celles entre deux, `Ctrl+A` toutes celles affichées. On les glisse ensemble, on les range ou on les supprime d'un coup.
+- **Glisser-déposer** : sur une autre tuile, la ou les tuiles se placent à côté (et prennent sa catégorie) ; sur un titre, elles rejoignent cette catégorie ; sur « Sans catégorie », elles en sortent.
+- **Chercher** (`Ctrl+F`) : le champ au-dessus des tuiles filtre par nom, catégorie ou numéro. `Échap` le vide.
+- **Trier** (bouton à droite du champ, ou menu Tuile) : par nom, par couleur, par utilisation (les plus posées d'abord), les animées d'abord, ou grouper par catégorie. Avec plusieurs tuiles choisies, seules elles changent de place entre elles ; sinon tout le jeu, chaque catégorie restant groupée.
+- **Faire le ménage** : *Fusionner les tuiles en double* (les tuiles aux pixels identiques n'en font plus qu'une, la carte utilise celle gardée) et *Supprimer les tuiles inutilisées* (posées nulle part : ni carte, ni tampon, ni événement, ni personnage ; on peut aussi juste les choisir pour les regarder d'abord).
+- **La carte suit toujours** : ranger ou trier change les numéros des tuiles, mais Tafl met à jour les cartes, les tampons, les événements et les personnages. Rien ne bouge à l'écran du jeu. `Ctrl+Z` annule chaque rangement.
+- **Claude** range aussi (`ranger_tuiles`) : catégories, tris, doublons, tuiles inutilisées ; `voir_tuiles` lui donne les catégories.
+- La catégorie est enregistrée dans le `.tafl` (champ `categorie` de chaque tuile, voir `FORMAT.md`). Saga l'ignore.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
