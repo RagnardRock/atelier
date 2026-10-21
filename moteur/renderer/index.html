@@ -51,12 +51,21 @@
       <div class="pause-carte">
         <div class="pause-titre"><img src="saga.svg" alt=""><span id="pause-jeu"></span></div>
         <button class="pause-choix" data-action="reprendre"><i class="codicon codicon-play"></i>Reprendre<kbd>Échap</kbd></button>
+        <button class="pause-choix" data-action="carnet"><i class="codicon codicon-book"></i>Carnet : équipe, sac, quêtes<kbd>Tab</kbd></button>
+        <button class="pause-choix" data-action="sauvegarder"><i class="codicon codicon-save"></i>Sauvegarder<kbd>Ctrl+S</kbd></button>
         <button class="pause-choix" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
         <button class="pause-choix" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
         <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Réglages</button>
         <button class="pause-choix" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
         <button class="pause-choix" data-action="quitter"><i class="codicon codicon-home"></i>Changer de jeu</button>
-        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Plein écran : F11</p>
+        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11</p>
+      </div>
+    </div>
+    <!-- Tab : le carnet du joueur -->
+    <div id="carnet" hidden>
+      <div class="carnet-carte">
+        <div class="carnet-tete"><span id="carnet-titre"></span><span id="carnet-argent"></span><button class="icon-button carnet-fermer" title="Fermer (Tab ou Échap)"><i class="codicon codicon-close"></i></button></div>
+        <div id="carnet-corps"></div>
       </div>
     </div>
   </main>
@@ -70,6 +79,8 @@
   <script src="moteur/monde.js"></script>
   <script src="moteur/sprites.js"></script>
   <script src="moteur/ambiance.js"></script>
+  <script src="moteur/dialogue.js"></script>
+  <script src="moteur/scripts.js"></script>
   <script src="moteur/moteur.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>

@@ -158,6 +158,24 @@ handle('jeu:montrer', async (_event, dossier) => {
   if (err) throw new Error(err);
 });
 
+// --- Sauvegardes ---
+// Une sauvegarde par jeu, dans %APPDATA%\atelier-moteur\sauvegardes (jamais dans le dossier du jeu :
+// Saga ne l'écrit pas, et la sauvegarde ne doit pas partir dans Git avec le jeu). Le nom du fichier
+// vient du chemin du dossier du jeu.
+const crypto = require('node:crypto');
+const sauvegardePath = (dossier) => path.join(app.getPath('userData'), 'sauvegardes',
+  `${crypto.createHash('sha1').update(dossierDuJeu(dossier).toLowerCase()).digest('hex').slice(0, 16)}.json`);
+handle('sauvegarde:lire', async (_event, dossier) => {
+  try { return JSON.parse(await fs.readFile(sauvegardePath(dossier), 'utf8')); } catch { return null; }
+});
+handle('sauvegarde:ecrire', async (_event, dossier, donnees) => {
+  const file = sauvegardePath(dossier);
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temp = `${file}.tmp`;
+  await fs.writeFile(temp, JSON.stringify({ ...donnees, dossier: dossierDuJeu(dossier) }, null, 1), 'utf8');
+  await fs.rename(temp, file);
+});
+
 // --- Mise à jour ---
 // Comme Brokk et Tafl, Saga tourne de deux façons et se met à jour selon celle utilisée :
 // - Installé avec Saga-Setup.exe (app.isPackaged) : on cherche sur GitHub la Release saga-vX.Y.Z

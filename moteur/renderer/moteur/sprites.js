@@ -5,7 +5,7 @@
 //
 // Les modèles ci-dessous se lisent comme des images : une lettre = un pixel.
 //   o contour   h casquette   H ombre de la casquette   w reflet   x cheveux
-//   s peau      e œil         c haut                    C ombre du haut   p pantalon   b chaussures
+//   s peau      e œil         c haut                    C ombre du haut   p pantalon   P jambe du fond   b chaussures
 
 const Sprites = (() => {
   const TETE_FACE = [
@@ -56,10 +56,12 @@ const Sprites = (() => {
     '....oCccccCo....',
     '....oopppoo.....',
   ];
+  // De côté : debout, puis les deux pas, jambe avant et jambe arrière inversées (la jambe du fond
+  // est plus sombre), pour que la marche se lise bien à chaque case.
   const JAMBES_COTE = [
     ['.....oppo.......', '.....obbo.......'],
-    ['....oppppo......', '...obo..obo.....'],
-    ['.....oppo.......', '....obbo........'],
+    ['....oppopo......', '...obboobbo.....'],
+    ['....opoppo......', '...oPPooobbo....'],
   ];
   const VIDE = '................';
 
@@ -86,7 +88,7 @@ const Sprites = (() => {
     const c = /^#[0-9a-f]{6}$/i.test(couleur || '') ? couleur : '#d94a4a';
     return {
       o: '#1b1822', h: c, H: melange(c, '#000000', 0.3), w: melange(c, '#ffffff', 0.45), x: '#4a3326',
-      s: '#f2c9a0', e: '#1b1822', c: melange(c, '#2a3550', 0.55), C: melange(c, '#141826', 0.7), p: '#3b4763', b: '#2a2230',
+      s: '#f2c9a0', e: '#1b1822', c: melange(c, '#2a3550', 0.55), C: melange(c, '#141826', 0.7), p: '#3b4763', P: '#2a3247', b: '#2a2230',
     };
   }
 
