@@ -17,13 +17,11 @@ jobs:
           $base = 'https://github.com/RagnardRock/atelier/releases/download'
           curl.exe -sSL -o old.exe "$base/brokk-v0.4.1/Brokk-Setup-0.4.1.exe"
           curl.exe -sSL -o new.exe "$base/brokk-v0.4.2/Brokk-Setup-0.4.2.exe"
-          npm i --no-save --prefix el electron@44.5.1 | Out-Null
-          $electron = (Resolve-Path 'el/node_modules/electron/dist/electron.exe').Path
           curl.exe -sSL -o handle.zip https://download.sysinternals.com/files/Handle.zip
           Expand-Archive handle.zip -DestinationPath h -Force
           $dir = "$env:LOCALAPPDATA\Programs\Brokk"
           function Reset-Old {
-            Get-Process Brokk,electron,cmd -ErrorAction SilentlyContinue | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
+            Get-Process Brokk,pwsh,cmd,PING -ErrorAction SilentlyContinue | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
             Start-Sleep 1
             $p = Start-Process .\old.exe -ArgumentList '/S' -Wait -PassThru
             "  (ancienne installée, code $($p.ExitCode), version $((Get-Item "$dir\Brokk.exe").VersionInfo.ProductVersion))"
@@ -38,20 +36,15 @@ jobs:
             "### $nom => code $($p.ExitCode)  (version après : $((Get-Item "$dir\Brokk.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion))"
             Get-Process | ? { $_.Path -like "$dir*" } | % { "    encore là : $($_.Name) $($_.Id)" }
           }
-          Try-Update 'S1 rien d ouvert' { }
-          Try-Update 'S2 Brokk ouvert' { Start-Process "$dir\Brokk.exe" -WorkingDirectory $dir }
-          Try-Update 'S3 Brokk en mode Node lancé par un autre programme (serveur MCP)' {
-            $env:ELECTRON_RUN_AS_NODE = '1'
-            Start-Process "$dir\Brokk.exe" -ArgumentList '-e','setInterval(()=>{},1000)'
-            Remove-Item Env:ELECTRON_RUN_AS_NODE
-          }
-          Try-Update 'S4 programme extérieur dont le dossier courant est celui de Brokk' {
-            Start-Process cmd -ArgumentList '/c','ping -n 600 127.0.0.1' -WorkingDirectory "$dir\resources" -WindowStyle Hidden
-          }
+          Reset-Old
+          Copy-Item $dir C:\autre-electron -Recurse
+          $electron = 'C:\autre-electron\Brokk.exe'
           Try-Update 'S5 autre Electron qui a lu app.asar de Brokk (comme Atelier)' {
             $env:ELECTRON_RUN_AS_NODE = '1'
-            $js = "console.log(require('fs').readFileSync(process.argv[1],'utf8').length); setInterval(()=>{},1000)"
-            Start-Process $electron -ArgumentList '-e',"`"$js`"","`"$dir\resources\app.asar\package.json`""
+            Set-Content C:\lire.js "console.log(require('fs').readFileSync(process.argv[2],'utf8').length); setInterval(()=>{},1000)"
+            Start-Process $electron -ArgumentList 'C:\lire.js',"`"$dir\resources\app.asar\package.json`""
             Remove-Item Env:ELECTRON_RUN_AS_NODE
           }
-          Try-Update 'S6 explorateur ouvert sur le dossier' { Start-Process explorer.exe $dir }
+          Try-Update 'S7 un fichier de Brokk ouvert par un autre programme' {
+            Start-Process pwsh -ArgumentList '-NoProfile','-Command',"`$f=[IO.File]::Open('$dir\resources\app.asar','Open','Read','Read'); Start-Sleep 600" -WindowStyle Hidden
+          }
