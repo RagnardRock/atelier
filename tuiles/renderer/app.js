@@ -9,7 +9,7 @@ const App = (() => {
     colors: { primary: '#38a048', secondary: null }, // null = transparent
     // layer : le calque où l'on pose les tuiles (-1 = la ligne Passage) ; passage : le code peint (2 = bloqué) ;
     // showPassage / showObjects : montrer le passage, et les zones / téléporteurs / départ, sur la carte.
-    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, showAmbiance: true, direction: 'bas' },
+    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, showAmbiance: true, direction: 'bas', stamp: 0 },
     frame: 0,              // l'image de l'animation qu'on dessine (0 pour une tuile fixe)
     playing: true,         // les tuiles animées bougent dans l'aperçu, les vignettes et la carte
     config: null,
@@ -26,6 +26,7 @@ const App = (() => {
     document.body.classList.toggle('no-doc', !doc);
     document.body.classList.toggle('mode-map', Boolean(doc) && api.mode === 'map');
     if (doc) api.options.layer = clamp(api.options.layer, -1, doc.map.layers.length - 1);
+    if (doc) api.options.stamp = clamp(api.options.stamp, 0, Math.max(0, doc.stamps.length - 1));
     const title = doc ? `${doc.dirty ? '● ' : ''}${doc.name} — Tafl` : 'Tafl';
     if (document.title !== title) document.title = title;
     $('#doc-name').textContent = doc ? `${doc.name}${doc.dirty ? ' ●' : ''}` : '';
@@ -75,6 +76,7 @@ const App = (() => {
     api.tool = id;
     renderToolbar();
     renderOptions();
+    Panels.renderStamps();
     Stage.render();
   }
 
@@ -124,6 +126,16 @@ const App = (() => {
           bar.append(box);
         }
         if (api.tool === 'rect') bar.append(check('Plein', 'filled'));
+      }
+      if (api.tool === 'stamp') {
+        const st = currentStamp();
+        const target = api.options.layer < 0 ? null : map.layers[api.options.layer];
+        bar.append(el('span', { className: 'option' }, [el('span', { textContent: 'Sur' }), el('strong', { textContent: target ? target.name : 'choisis un calque' })]));
+        if (st) {
+          const top = st.dessus ? Doc.stampTopLayer(map, api.options.layer) : -1;
+          bar.append(el('span', { className: 'option', title: 'Double-clic sur le tampon (panneau Tampons) : le renommer, choisir ses rangées au-dessus du joueur' }, [el('span', { textContent: 'Tampon' }), el('strong', { textContent: `${st.name} (${st.w} × ${st.h})` })]));
+          if (st.dessus) bar.append(el('span', { className: 'option', textContent: top >= 0 && top !== api.options.layer ? `${st.dessus} rangée(s) du haut sur ${map.layers[top].name}` : `${st.dessus} rangée(s) au-dessus, mais pas de calque « au-dessus du joueur » plus haut` }));
+        }
       }
       if (api.tool === 'start') {
         const select = el('select', { title: 'Où regarde le joueur au début du jeu' });
@@ -593,6 +605,78 @@ const App = (() => {
   $('#layer-props').onclick = () => { if (api.doc) run(() => layerProperties()); };
   $('#layer-delete').onclick = () => { if (api.doc) run(deleteLayer); };
 
+  // --- Tampons : les objets de plusieurs tuiles (Tafl 0.10) ---
+  const currentStamp = () => api.doc?.stamps[api.options.stamp] || null;
+  function selectStamp(i) {
+    if (!api.doc?.stamps[i]) return;
+    api.options.stamp = i;
+    api.tool = 'stamp';
+    if (api.options.layer < 0) api.options.layer = 0;
+    if (api.mode !== 'map') api.mode = 'map';
+    refresh();
+  }
+  // Maj+glisser avec l'outil Tampon : les tuiles du rectangle (calque choisi) deviennent un tampon.
+  function stampFromRect(r) {
+    const doc = api.doc, li = api.options.layer;
+    if (li < 0) return;
+    const cells = Doc.stampFromRect(doc, doc.map, li, r);
+    if (!cells.some((c) => c >= 0)) return notify(`Le rectangle est vide sur le calque ${doc.map.layers[li].name}.`, 'info', 3000);
+    const st = Doc.newStamp(doc, { name: 'tampon', w: r.w, h: r.h, cells });
+    Doc.change(doc, 'Nouveau tampon', () => { doc.stamps = [...doc.stamps, st]; });
+    api.options.stamp = doc.stamps.length - 1;
+    refresh();
+    notify(`Tampon « ${st.name} » (${r.w} × ${r.h}) créé. Double-clic dessus dans le panneau Tampons pour le renommer.`, 'success', 4000);
+  }
+  async function stampProperties(i = api.options.stamp) {
+    const doc = api.doc;
+    const st = doc.stamps[i];
+    if (!st) return;
+    const v = await Dialogs.form({
+      title: `Tampon ${st.name}`,
+      okLabel: 'Appliquer',
+      fields: [
+        { key: 'name', label: 'Nom', type: 'text', value: st.name },
+        { key: 'dessus', label: 'Rangées du haut au-dessus du joueur', type: 'number', value: st.dessus, min: 0, max: st.h, unit: `sur ${st.h}` },
+        { type: 'info', text: 'Pour un arbre ou une maison : le haut (la cime, le toit) passe devant le joueur quand il marche derrière. Ces rangées vont sur le premier calque « au-dessus du joueur » (Au-dessus) placé plus haut que le calque choisi ; le reste va sur le calque choisi.' },
+      ],
+    });
+    if (!v) return;
+    const name = v.name.trim() || st.name;
+    const dessus = clamp(Math.round(v.dessus) || 0, 0, st.h);
+    if (name === st.name && dessus === st.dessus) return;
+    Doc.change(doc, 'Réglages du tampon', () => { doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o)); });
+  }
+  function deleteStamp(i = api.options.stamp) {
+    const doc = api.doc;
+    if (!doc.stamps[i]) return;
+    // Les tuiles restent dans le jeu, et sur la carte là où le tampon a été posé.
+    Doc.change(doc, 'Supprimer le tampon', () => { doc.stamps = doc.stamps.filter((_o, k) => k !== i); });
+  }
+  function moveStamp(i, to) {
+    const doc = api.doc;
+    if (!doc.stamps[i] || to < 0 || to >= doc.stamps.length || i === to) return;
+    Doc.change(doc, 'Déplacer le tampon', () => {
+      const list = [...doc.stamps];
+      const [st] = list.splice(i, 1);
+      list.splice(to, 0, st);
+      doc.stamps = list;
+    });
+    api.options.stamp = to;
+    refresh();
+  }
+  function stampMenuItems(i = api.options.stamp) {
+    const doc = api.doc;
+    return [
+      { label: 'Poser ce tampon (outil Tampon)', keys: 'S', disabled: !doc.stamps[i], run: () => selectStamp(i) },
+      { label: 'Renommer, rangées au-dessus du joueur…', disabled: !doc.stamps[i], run: () => run(() => stampProperties(i)) },
+      { label: 'Monter dans la liste', disabled: i <= 0, run: () => moveStamp(i, i - 1) },
+      { label: 'Descendre dans la liste', disabled: i >= doc.stamps.length - 1, run: () => moveStamp(i, i + 1) },
+      { label: 'Supprimer le tampon (ses tuiles restent)', disabled: !doc.stamps[i], run: () => deleteStamp(i) },
+    ];
+  }
+  $('#stamp-props').onclick = () => { if (api.doc) run(() => stampProperties()); };
+  $('#stamp-delete').onclick = () => { if (api.doc) deleteStamp(); };
+
   // --- Zones (herbes hautes, eau, grotte…) ---
   const nextObjectId = (prefix, list) => {
     let n = list.length + 1;
@@ -818,6 +902,7 @@ const App = (() => {
     if (api.doc && api.doc !== doc && !(await confirmDiscard())) return;
     api.doc = doc;
     api.options.layer = 0;
+    api.options.stamp = 0;
     api.frame = 0;
     // Un dossier de jeu s'ouvre sur ses cartes ; un jeu de tuiles, sur la tuile.
     if (doc.game) api.mode = 'map';
@@ -901,6 +986,9 @@ const App = (() => {
       ...mapMenuItems(),
       null,
       ...layerMenuItems(),
+      null,
+      { label: 'Outil Tampon (objets de plusieurs tuiles)', keys: 'S', disabled: !api.doc.stamps.length, run: () => selectStamp(api.options.stamp) },
+      { label: 'Réglages du tampon choisi…', disabled: !currentStamp(), run: () => run(() => stampProperties()) },
       null,
       { label: 'Montrer le passage', checked: api.options.showPassage, run: () => toggleOption('showPassage') },
       { label: 'Montrer les zones, téléporteurs et événements', checked: api.options.showObjects, run: () => toggleOption('showObjects') },
@@ -1192,7 +1280,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData });
+  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

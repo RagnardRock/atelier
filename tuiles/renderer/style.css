@@ -918,3 +918,26 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .mini-card + .mini-card { margin-top: 2px; }
 .mini-row > span.ligne2 { flex: 1 0 100%; display: flex; align-items: center; gap: 8px; }
 .ligne2-titre { width: 70px; flex-shrink: 0; color: var(--muted); font-size: 11px; }
+
+/* ---------- Tafl 0.10 : import de planches, tampons ---------- */
+/* La fenêtre d'import : l'aperçu à gauche, les réglages à droite. */
+.modal.import-sheet .modal-body { display: grid; grid-template-columns: auto minmax(300px, 1fr); column-gap: 18px; row-gap: 8px; align-items: center; }
+.modal.import-sheet .modal-body > * { grid-column: 2; }
+.modal.import-sheet .modal-body > .import-preview { grid-column: 1; grid-row: 1 / span 40; align-self: start; }
+.modal.import-sheet .field-label { width: 150px; }
+.import-preview { display: flex; flex-direction: column; gap: 6px; }
+.import-canvas { display: block; border-radius: 6px; cursor: crosshair; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08); touch-action: none; }
+.import-hint { margin: 0; max-width: 700px; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+/* Le panneau Tampons */
+#stamps-panel { flex-shrink: 0; max-height: 30%; }
+#stamps { overflow-y: auto; padding: 0 8px 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.stamp-item {
+  display: flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 7px;
+  background: rgba(255, 255, 255, 0.03); cursor: pointer;
+}
+.stamp-item:hover { background: var(--hover); }
+.stamp-item.chosen { border-color: rgba(255, 255, 255, 0.25); }
+.stamp-item.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.stamp-item canvas { max-width: 100%; max-height: 100%; image-rendering: pixelated; }

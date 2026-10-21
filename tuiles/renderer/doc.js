@@ -19,6 +19,10 @@
 //   depart,                  { carte, x, y, direction } : où le joueur commence le jeu (ou null)
 //   data,                    les données du jeu (Tafl 0.7) : { personnages, quetes, interrupteurs },
 //                            utilisées par les scripts des événements (voir events.js)
+//   stamps: [tampon],        les tampons (Tafl 0.10) : des objets de plusieurs tuiles (arbre, maison,
+//                            fontaine…) qu'on pose d'un clic sur la carte. tampon = { id, name, w, h,
+//                            cells, dessus } : cells = un numéro de tuile par case (-1 = rien),
+//                            dessus = combien de rangées du haut vont sur le calque au-dessus du joueur
 //   current,                 la tuile choisie (celle qu'on dessine, ou qu'on pose sur la carte)
 //   dirty,                   modifié depuis le dernier enregistrement
 // }
@@ -40,8 +44,8 @@
 // Doc.tileForEdit(), Doc.layerForEdit() ou Doc.passageForEdit(), qui en font une copie au début de
 // chaque action. Ainsi, l'historique garde les anciens tableaux tels quels, sans recopier tout le jeu
 // à chaque coup de crayon : annuler revient juste à remettre l'ancien tableau. Les zones, les
-// téléporteurs, les événements et les données du jeu, eux, sont remplacés en entier
-// (map.zones = [...], doc.data = {...}), jamais modifiés sur place.
+// téléporteurs, les événements, les données du jeu et les tampons, eux, sont remplacés en entier
+// (map.zones = [...], doc.data = {...}, doc.stamps = [...]), jamais modifiés sur place.
 
 const Doc = (() => {
   let nextId = 1;
@@ -109,6 +113,7 @@ const Doc = (() => {
       map: null,
       depart: null,
       data: Events.emptyData(),
+      stamps: [],
       current: 0,
       dirty: false,
       undo: [],
@@ -142,6 +147,7 @@ const Doc = (() => {
       mapIndex: doc.mapIndex,
       depart: doc.depart,
       data: doc.data,
+      stamps: doc.stamps,
       current: doc.current,
     };
   }
@@ -154,6 +160,7 @@ const Doc = (() => {
     selectMap(doc, s.mapIndex);
     doc.depart = s.depart;
     doc.data = s.data;
+    doc.stamps = s.stamps;
     doc.current = clamp(s.current, 0, Math.max(0, doc.tiles.length - 1));
   }
 
@@ -333,6 +340,8 @@ const Doc = (() => {
       if (map.events.some((e) => e.apparence.tuile >= 0)) map.events = map.events.map((e) => (e.apparence.tuile >= 0 ? { ...e, apparence: { ...e.apparence, tuile: fn(e.apparence.tuile) } } : e));
     }
     if (doc.data.personnages.some((p) => p.tuile >= 0)) doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.tuile >= 0 ? { ...p, tuile: fn(p.tuile) } : p)) };
+    // Les tampons aussi ; un tampon dont toutes les tuiles ont disparu est retiré.
+    if (doc.stamps.length) doc.stamps = doc.stamps.map((st) => ({ ...st, cells: st.cells.map((c) => (c >= 0 ? fn(c) : c)) })).filter((st) => st.cells.some((c) => c >= 0));
   }
   // Combien de cases (toutes cartes confondues) utilisent la tuile n° index.
   const tileUses = (doc, index) => doc.maps.reduce((n, m) => n + m.layers.reduce((k, l) => k + l.cells.filter((c) => c === index).length, 0), 0);
@@ -481,6 +490,46 @@ const Doc = (() => {
     map.layers[index] = { ...map.layers[index], ...props };
   }
 
+  // --- Tampons (Tafl 0.10) ---
+  function newStamp(doc, { name, w, h, cells, dessus = 0 }) {
+    const names = new Set(doc.stamps.map((st) => st.name));
+    let n = doc.stamps.length + 1, nom = name;
+    if (!nom || names.has(nom)) {
+      const base = name || 'tampon';
+      while (names.has(`${base}-${n}`)) n++;
+      nom = `${base}-${n}`;
+    }
+    return { id: newId(), name: nom, w, h, cells: [...cells], dessus: clamp(Math.round(dessus) || 0, 0, h) };
+  }
+  // Les calques où va un tampon posé sur le calque li : ses rangées du haut (dessus) vont sur le premier
+  // calque « au-dessus du joueur » placé plus haut dans la liste (s'il y en a un), le reste sur li.
+  function stampTopLayer(map, li) {
+    for (let k = li + 1; k < map.layers.length; k++) if (map.layers[k].profondeur === 'dessus') return k;
+    return map.layers[li]?.profondeur === 'dessus' ? li : -1;
+  }
+  // Poser (ou effacer, erase = true) un tampon avec son coin en haut à gauche sur la case (x, y).
+  // Les cases vides du tampon ne touchent pas la carte : on voit ce qu'il y a dessous.
+  function placeStamp(doc, stamp, x, y, li, erase = false, map = doc.map) {
+    const top = stamp.dessus ? stampTopLayer(map, li) : -1;
+    let n = 0;
+    for (let j = 0; j < stamp.h; j++) {
+      for (let i = 0; i < stamp.w; i++) {
+        const t = stamp.cells[j * stamp.w + i], mx = x + i, my = y + j;
+        if (t < 0 || mx < 0 || my < 0 || mx >= map.width || my >= map.height) continue;
+        const target = j < stamp.dessus && top >= 0 ? top : li;
+        layerForEdit(doc, target, map).cells[my * map.width + mx] = erase ? -1 : t;
+        n++;
+      }
+    }
+    return n;
+  }
+  // Un tampon fait d'un rectangle d'un calque de la carte (les cases vides restent vides).
+  function stampFromRect(doc, map, li, r) {
+    const cells = [];
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) cells.push(map.layers[li].cells[y * map.width + x]);
+    return cells;
+  }
+
   // Remplacer une couleur par une autre dans toutes les tuiles (modifier une couleur de la palette).
   function replaceColor(doc, fromHex, toHex) {
     const from = packHex(fromHex);
@@ -500,5 +549,5 @@ const Doc = (() => {
     });
   }
 
-  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
+  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, newStamp, placeStamp, stampTopLayer, stampFromRect, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
 })();

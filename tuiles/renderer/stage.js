@@ -5,7 +5,8 @@
 // - « Carte » : les cartes du jeu, où l'on pose les tuiles sur autant de calques qu'on veut (Sol, Décor,
 //   Au-dessus du joueur…). On y peint aussi le passage (où le joueur peut marcher), et on y place les
 //   zones (herbes hautes, eau…), les téléporteurs (portes, sorties), le départ du joueur, et les
-//   événements (personnages, panneaux, coffres… avec leur script, voir events.js).
+//   événements (personnages, panneaux, coffres… avec leur script, voir events.js). L'outil Tampon
+//   (Tafl 0.10) y pose d'un clic les objets de plusieurs tuiles (arbre, maison, fontaine…).
 //
 // Les outils (crayon, gomme, pot, pipette, ligne, rectangle) marchent pareil dans les deux modes :
 // ils travaillent sur une « grille » de cases. En mode Tuile, une case est un pixel et sa valeur
@@ -19,6 +20,7 @@ const TOOLS = [
   { id: 'picker', nom: 'Pipette', key: 'I', icone: 'eye', modes: ['tile', 'map'], aide: 'Clic gauche : prend la couleur principale, clic droit : la secondaire.', aideCarte: 'Reprend la tuile d\'une case.' },
   { id: 'line', nom: 'Ligne', key: 'L', icone: 'dash', modes: ['tile', 'map'], aide: 'Glisser pour tracer une ligne droite.', aideCarte: 'Glisser pour poser une ligne de tuiles.' },
   { id: 'rect', nom: 'Rectangle', key: 'U', icone: 'primitive-square', modes: ['tile', 'map'], aide: 'Glisser pour tracer un rectangle (plein ou contour, dans la barre d\'options).', aideCarte: 'Glisser pour couvrir un rectangle de tuiles.' },
+  { id: 'stamp', nom: 'Tampon', key: 'S', icone: 'package', modes: ['map'], aideCarte: 'Clic : pose le tampon choisi (panneau Tampons), son coin en haut à gauche sur la case. Glisser : en pose d\'autres côte à côte. Clic droit : l\'efface. Maj+glisser : un nouveau tampon fait des tuiles du rectangle (calque choisi).' },
   { id: 'zone', nom: 'Zone', key: 'Z', icone: 'symbol-namespace', modes: ['map'], aideCarte: 'Glisser pour tracer une zone (herbes hautes, eau, grotte…). Clic sur une zone : la modifier ou la supprimer.' },
   { id: 'warp', nom: 'Téléporteur', key: 'T', icone: 'debug-step-into', modes: ['map'], aideCarte: 'Clic sur une case : elle mène vers une autre carte (porte, escalier, sortie de route). Clic sur un téléporteur : le modifier.' },
   { id: 'event', nom: 'Événement', key: 'N', icone: 'person', modes: ['map'], aideCarte: 'Clic sur une case vide : nouveau personnage, panneau, coffre, objet ou déclencheur. Clic sur un événement : modifier son script. Glisser : le déplacer. Clic droit : dupliquer, supprimer.' },
@@ -384,9 +386,34 @@ const Stage = (() => {
     if (hover && !action && !preview && hover.x >= 0 && hover.y >= 0 && hover.x < map.width && hover.y < map.height) {
       if (App.tool === 'pencil' && passageMode) passageCell(hover.x, hover.y, App.options.passage, cell, true);
       else if (App.tool === 'pencil') ghost(hover.x, hover.y, doc.current);
+      const st = App.tool === 'stamp' && !passageMode ? App.currentStamp() : null;
+      if (st) drawStampGhost(st, hover.x, hover.y, cell, canvases);
       ctx.strokeStyle = accent();
       ctx.lineWidth = 2;
-      ctx.strokeRect(v.x + hover.x * cell, v.y + hover.y * cell, cell, cell);
+      ctx.strokeRect(v.x + hover.x * cell, v.y + hover.y * cell, (st ? st.w : 1) * cell, (st ? st.h : 1) * cell);
+    }
+  }
+
+  // Le tampon sous la souris, en transparence (ses rangées « au-dessus du joueur » marquées d'un trait).
+  function drawStampGhost(st, x0, y0, cell, canvases) {
+    const v = view();
+    ctx.globalAlpha = 0.75;
+    for (let j = 0; j < st.h; j++) {
+      for (let i = 0; i < st.w; i++) {
+        const t = st.cells[j * st.w + i];
+        if (t >= 0 && canvases[t]) ctx.drawImage(canvases[t], v.x + (x0 + i) * cell, v.y + (y0 + j) * cell, cell, cell);
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (st.dessus > 0 && st.dessus < st.h) {
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = 'rgba(255, 208, 64, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(v.x + x0 * cell, v.y + (y0 + st.dessus) * cell + 0.5);
+      ctx.lineTo(v.x + (x0 + st.w) * cell, v.y + (y0 + st.dessus) * cell + 0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
@@ -685,6 +712,25 @@ const Stage = (() => {
       if (ev) preview = { event: ev.id, x: c.x, y: c.y };
       return;
     }
+    if (tool === 'stamp') {
+      const li = App.options.layer;
+      if (li < 0) return notify('Choisis un calque (pas la ligne Passage) pour y poser un tampon.', 'info', 3000);
+      // Maj+glisser : un nouveau tampon fait du rectangle.
+      if (e.shiftKey) {
+        const p = { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
+        action = { tool, capture: true, start: p };
+        preview = { rect: normRect(p, p) };
+        render();
+        return;
+      }
+      const st = App.currentStamp();
+      if (!st) return notify('Pas encore de tampon : importe une planche (les objets deviennent des tampons) ou Maj+glisse sur la carte.', 'info', 4500);
+      Doc.begin(doc, e.button === 2 ? 'Effacer un tampon' : 'Poser un tampon');
+      Doc.placeStamp(doc, st, c.x, c.y, li, e.button === 2);
+      action = { tool, stamp: st, origin: c, erase: e.button === 2, done: new Set(['0,0']) };
+      App.refreshLive();
+      return;
+    }
     if (tool === 'warp' || tool === 'start') {
       if (onMap(c)) {
         if (tool === 'warp') App.editWarpAt(c.x, c.y);
@@ -750,6 +796,19 @@ const Stage = (() => {
       const { map } = App.doc;
       preview = { event: action.id, x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
       render();
+    } else if (action.tool === 'stamp' && action.capture) {
+      const { map } = App.doc;
+      preview.rect = normRect(action.start, { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) });
+      render();
+    } else if (action.tool === 'stamp') {
+      // Glisser pose d'autres exemplaires côte à côte, alignés sur le premier (une forêt d'arbres).
+      const st = action.stamp;
+      const i = Math.floor((c.x - action.origin.x) / st.w), j = Math.floor((c.y - action.origin.y) / st.h);
+      if (!action.done.has(`${i},${j}`)) {
+        action.done.add(`${i},${j}`);
+        Doc.placeStamp(App.doc, st, action.origin.x + i * st.w, action.origin.y + j * st.h, App.options.layer, action.erase);
+        App.refreshLive();
+      }
     } else if (action.tool === 'zone') {
       const { map } = App.doc;
       preview.rect = normRect(action.start, { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) });
@@ -783,6 +842,13 @@ const Stage = (() => {
       if (!done.id) return App.eventMenu(done.start.x, done.start.y, done.cx, done.cy);
       if (p && (p.x !== done.start.x || p.y !== done.start.y)) return App.moveEvent(done.id, p.x, p.y);
       return App.editEvent(done.id);
+    }
+    if (done.tool === 'stamp' && done.capture) {
+      const r = preview?.rect;
+      preview = null;
+      render();
+      if (r) App.stampFromRect(r);
+      return;
     }
     if (done.tool === 'zone') {
       const r = preview?.rect;

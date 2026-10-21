@@ -119,6 +119,7 @@
           `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
           `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
           `Cartes (${doc.maps.length}) : ${doc.maps.map((m, i) => `${i} = ${m.id} « ${m.name} » ${m.width} × ${m.height}`).join(', ')}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
+          `Tampons (objets de plusieurs tuiles, action tampon) : ${doc.stamps.length ? doc.stamps.map((st, k) => `${k} « ${st.name} » ${st.w} × ${st.h}`).join(', ') : 'aucun'}.`,
           `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
           `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees) ; ${Donnees.SORTES.filter((k) => k !== 'reglages').map((k) => `${doc.data[k].length} ${k}`).join(', ')} (action donnee). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
           decrireCarte(doc),
@@ -268,6 +269,90 @@
         });
         if (App.mode !== 'map') App.setMode('map');
         return `${(x1 - x0) * (y1 - y0)} case(s) du calque ${map.layers[li].name} ${t === -1 ? 'effacée(s)' : `remplie(s) avec la tuile ${t}`}.`;
+      },
+    },
+    voir_tampons: {
+      lecture: true,
+      icone: 'eye',
+      libelle: () => 'Regarde les tampons',
+      description: 'Montre les tampons (objets de plusieurs tuiles : arbres, maisons…) : numéro, nom, taille, numéros de tuile de chaque rangée, et leur image.',
+      faire: () => {
+        const doc = besoinJeu();
+        if (!doc.stamps.length) return 'Aucun tampon.';
+        const texte = doc.stamps.map((st, k) => `${k} « ${st.name} » ${st.w} × ${st.h}${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''} : ${Array.from({ length: st.h }, (_v, j) => st.cells.slice(j * st.w, (j + 1) * st.w).map((c) => (c < 0 ? '.' : c)).join(' ')).join(' / ')}`).join('\n');
+        // Une planche des tampons, côte à côte, pour les voir.
+        const s = doc.tileSize, montres = doc.stamps.slice(0, 48);
+        const largeur = Math.min(1024, montres.reduce((n, st) => n + (st.w * s + 4), 0));
+        const out = el('canvas', { width: Math.max(1, largeur), height: 1 });
+        let x = 0, y = 0, haut = 0;
+        const places = montres.map((st) => {
+          if (x && x + st.w * s > largeur) { x = 0; y += haut + 4; haut = 0; }
+          const p = { st, x, y };
+          x += st.w * s + 4;
+          haut = Math.max(haut, st.h * s);
+          return p;
+        });
+        out.height = y + haut;
+        const g = out.getContext('2d');
+        for (const p of places) g.drawImage(Panels.stampCanvas(doc, p.st, Math.max(p.st.w, p.st.h) * s), p.x, p.y);
+        return { texte: `${doc.stamps.length} tampon(s) (numéros de tuile par rangée, « / » entre les rangées) :\n${texte}`, image: agrandir(out, 768) };
+      },
+    },
+    tampon: {
+      icone: 'package',
+      libelle: (a) => ({ poser: `Pose le tampon ${a.tampon} en (${a.x}, ${a.y})`, effacer: `Efface le tampon ${a.tampon} en (${a.x}, ${a.y})`, creer: `Crée le tampon « ${a.nom || 'tampon'} »`, reglages: `Règle le tampon ${a.tampon}`, supprimer: `Supprime le tampon ${a.tampon}` }[a.action] || 'Tampons'),
+      description: 'Les tampons : des objets de plusieurs tuiles (arbre, maison, fontaine…) posés d\'un coup. action : poser ou effacer (tampon : numéro ou nom ; x, y : la case du coin en haut à gauche ; calque : numéro ou nom, sinon le calque choisi ; carte), creer (nom ; soit tuiles = une chaîne par rangée avec des numéros de tuile séparés par des espaces, « . » = vide, soit x, y, largeur, hauteur = un rectangle d\'un calque de la carte ; dessus), reglages (tampon ; nom, dessus = nombre de rangées du haut posées sur le calque au-dessus du joueur, comme la cime d\'un arbre), supprimer (ses tuiles restent).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['poser', 'effacer', 'creer', 'reglages', 'supprimer'] }, tampon: { type: ['string', 'number'] }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, calque: { type: ['string', 'number'] }, carte: { type: ['string', 'number'] }, nom: { type: 'string' }, tuiles: lignesSchema, dessus: nombre }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const numero = () => {
+          const t = String(a.tampon ?? App.options.stamp);
+          const i = /^\d+$/.test(t) && doc.stamps[Number(t)] ? Number(t) : doc.stamps.findIndex((st) => st.name.toLowerCase() === t.toLowerCase());
+          if (i < 0) throw new Error(`Pas de tampon « ${a.tampon} » : ${doc.stamps.map((st, k) => `${k} = ${st.name}`).join(', ') || 'aucun tampon'}.`);
+          return i;
+        };
+        if (a.action === 'creer') {
+          let w, h, cells;
+          if (Array.isArray(a.tuiles)) {
+            const rangees = a.tuiles.map((l) => String(l).trim().split(/\s+/));
+            h = rangees.length;
+            w = Math.max(...rangees.map((r) => r.length));
+            cells = [];
+            rangees.forEach((r, j) => { for (let i = 0; i < w; i++) { const v = r[i]; const t = v === undefined || v === '.' ? -1 : Number(v); if (!Number.isInteger(t) || t < -1 || t >= doc.tiles.length) throw new Error(`« ${v} » (rangée ${j + 1}) n'est pas un numéro de tuile.`); cells.push(t); } });
+          } else {
+            choisirCarte(doc, a.carte);
+            const li = calqueNumero(doc, a.calque);
+            const { map } = doc;
+            const x = clamp(Math.round(a.x || 0), 0, map.width - 1), y = clamp(Math.round(a.y || 0), 0, map.height - 1);
+            w = clamp(Math.round(a.largeur || 1), 1, map.width - x);
+            h = clamp(Math.round(a.hauteur || 1), 1, map.height - y);
+            cells = Doc.stampFromRect(doc, map, li, { x, y, w, h });
+          }
+          if (!cells.some((c) => c >= 0)) throw new Error('Ce tampon serait vide.');
+          const st = Doc.newStamp(doc, { name: a.nom || 'tampon', w, h, cells, dessus: a.dessus || 0 });
+          Doc.change(doc, 'Nouveau tampon (Claude)', () => { doc.stamps = [...doc.stamps, st]; });
+          return `Tampon ${doc.stamps.length - 1} « ${st.name} » (${w} × ${h}) créé.`;
+        }
+        const i = numero();
+        const st = doc.stamps[i];
+        if (a.action === 'reglages') {
+          const name = a.nom ? String(a.nom) : st.name, dessus = a.dessus === undefined ? st.dessus : clamp(Math.round(a.dessus), 0, st.h);
+          Doc.change(doc, 'Réglages du tampon (Claude)', () => { doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o)); });
+          return `Tampon ${i} : « ${name} », ${dessus} rangée(s) au-dessus du joueur.`;
+        }
+        if (a.action === 'supprimer') {
+          App.deleteStamp(i);
+          return `Tampon « ${st.name} » supprimé (ses tuiles restent dans le jeu).`;
+        }
+        if (a.action === 'poser' || a.action === 'effacer') {
+          choisirCarte(doc, a.carte);
+          const li = calqueNumero(doc, a.calque);
+          if (li < 0) throw new Error('Choisis un calque (calque : numéro ou nom).');
+          let n = 0;
+          Doc.change(doc, a.action === 'poser' ? 'Poser un tampon (Claude)' : 'Effacer un tampon (Claude)', () => { n = Doc.placeStamp(doc, st, Math.round(a.x || 0), Math.round(a.y || 0), li, a.action === 'effacer'); });
+          return `Tampon « ${st.name} » ${a.action === 'poser' ? 'posé' : 'effacé'} en (${Math.round(a.x || 0)}, ${Math.round(a.y || 0)}) : ${n} case(s).`;
+        }
+        throw new Error(`Action inconnue : ${a.action}`);
       },
     },
     ecrire_carte: {
@@ -707,7 +792,7 @@
     importer_planche: {
       icone: 'cloud-download',
       libelle: (a) => `Importe la planche ${a.chemin}`,
-      description: 'Découpe une image PNG du projet en tuiles (chemin relatif), comme Fichier › Importer une planche. valeurs : les réglages de la fenêtre d\'import (appelle d\'abord avec apercu: true pour les connaître, sans rien changer). Si le jeu en cours a des modifications non enregistrées, l\'import s\'arrête : enregistre-le d\'abord.',
+      description: 'Découpe une image PNG du projet en tuiles (chemin relatif), comme Fichier › Importer une planche. valeurs : les réglages de la fenêtre d\'import (appelle d\'abord avec apercu: true pour les connaître, sans rien changer) : size (taille des tuiles), marge et espacement (px), la zone en tuiles (zx, zy, zw, zh), fond (auto = le damier ou la couleur unie détectés, couleur = la couleur « couleur », aucun), petits, target, skipEmpty, dedupe, tampons (un tampon par objet de plusieurs tuiles), asMap. Si le jeu en cours a des modifications non enregistrées, l\'import vers un nouveau jeu s\'arrête : enregistre-le d\'abord.',
       schema: { type: 'object', properties: { chemin: { type: 'string' }, valeurs: { type: 'object' }, apercu: { type: 'boolean' } }, required: ['chemin'] },
       faire: async (a) => {
         const fichier = await window.claude.lireFichier(a.chemin);

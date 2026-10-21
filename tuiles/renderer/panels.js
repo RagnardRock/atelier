@@ -316,6 +316,34 @@ const Panels = (() => {
     $('#layer-delete').disabled = li < 0 || map.layers.length < 2;
   }
 
+  // --- Tampons (Tafl 0.10) : les objets de plusieurs tuiles, en vignettes ---
+  const stampsEl = $('#stamps');
+  function stampCanvas(doc, st, max) {
+    const s = doc.tileSize;
+    const k = Math.max(1, Math.floor(max / (Math.max(st.w, st.h) * s)));
+    const c = el('canvas', { width: st.w * s * k, height: st.h * s * k, className: 'tile-canvas' });
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    st.cells.forEach((t, i) => { if (t >= 0 && doc.tiles[t]) g.drawImage(Doc.tileCanvas(doc.tiles[t], s), (i % st.w) * s * k, Math.floor(i / st.w) * s * k, s * k, s * k); });
+    return c;
+  }
+  function renderStamps() {
+    const doc = App.doc;
+    stampsEl.innerHTML = '';
+    if (!doc) return;
+    doc.stamps.forEach((st, i) => {
+      const item = el('button', { className: `stamp-item${App.tool === 'stamp' && i === App.options.stamp ? ' active' : i === App.options.stamp ? ' chosen' : ''}`, title: `${st.name} : ${st.w} × ${st.h} tuiles${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''}\nClic : le poser (outil Tampon) · double-clic : réglages · clic droit : plus d'actions` }, [stampCanvas(doc, st, 56)]);
+      item.onclick = () => App.selectStamp(i);
+      item.ondblclick = () => App.stampProperties(i);
+      item.oncontextmenu = (e) => { e.preventDefault(); Menus.open(App.stampMenuItems(i), e.clientX, e.clientY); };
+      stampsEl.append(item);
+    });
+    if (!doc.stamps.length) stampsEl.append(el('p', { className: 'rows-empty', textContent: 'Aucun tampon. Importe une planche (les objets de plusieurs tuiles deviennent des tampons), ou outil Tampon (S) et Maj+glisser sur la carte.' }));
+    $('#stamps-count').textContent = doc.stamps.length || '';
+    $('#stamp-props').disabled = !doc.stamps.length;
+    $('#stamp-delete').disabled = !doc.stamps.length;
+  }
+
   // Les événements de la carte affichée. Clic : l'ouvrir ; clic droit : dupliquer, supprimer.
   const eventsEl = $('#events');
   function renderEvents() {
@@ -347,6 +375,7 @@ const Panels = (() => {
     renderPreview();
     renderMaps();
     renderLayers();
+    renderStamps();
   }
   function renderLive() {
     refreshCurrentThumb();
@@ -359,5 +388,5 @@ const Panels = (() => {
     }
   }
 
-  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, tick, usedColors };
+  return { render, renderLive, renderColors, renderTiles, renderFrames, renderMaps, renderLayers, renderEvents, renderStamps, stampCanvas, tick, usedColors };
 })();
