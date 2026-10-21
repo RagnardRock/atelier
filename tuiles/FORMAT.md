@@ -95,6 +95,7 @@ Le même format que les fichiers `.tafl` de Tafl, sans les cartes :
 - Le **numéro** d'une tuile est sa place dans `tiles` (la première vaut 0). Les cartes posent des numéros de tuile.
 - `png` : l'image de la tuile (PNG encodé en texte). Une tuile **animée** a aussi `frames` (toutes ses images, dans l'ordre) et `duration` (durée de chaque image, en millisecondes). Toutes les tuiles animées partagent la même horloge, pour que toute l'eau ondule en même temps.
 - `passage` (facultatif) : `"libre"` ou `"bloque"`, ce que fait la tuile partout où elle est posée. Absent = `"auto"` (elle ne décide rien). Voir « Passage et collisions ».
+- `tampons` (facultatif, Tafl 0.10) : les objets de plusieurs tuiles qu'on pose d'un clic dans Tafl (`{ "nom", "largeur", "hauteur", "dessus", "cases" }`, `cases` = un numéro de tuile par case, rangée par rangée, `-1` = rien ; `dessus` = combien de rangées du haut vont sur le calque au-dessus du joueur). **Le moteur peut l'ignorer** : une fois posés, ce sont des tuiles ordinaires sur les calques de la carte.
 
 Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme une petite texture, ou les recoller dans une planche au chargement.
 

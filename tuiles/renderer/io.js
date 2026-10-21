@@ -116,6 +116,8 @@ const IO = (() => {
         return tile;
       }),
     };
+    // Tafl 0.10 : les tampons (objets de plusieurs tuiles), avec les tuiles (donc aussi dans tuiles.tafl).
+    if (doc.stamps.length) data.tampons = doc.stamps.map((st) => ({ nom: st.name, largeur: st.w, hauteur: st.h, dessus: st.dessus, cases: st.cells }));
     if (tilesOnly) return JSON.stringify(data);
     // « map » : la première carte, comme avant (Tafl 0.5 et plus ancien ne lisent que celle-là).
     const first = doc.maps[0];
@@ -151,6 +153,11 @@ const IO = (() => {
       doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto' });
     }
     if (!doc.tiles.length) Doc.addTile(doc);
+    doc.stamps = (Array.isArray(data.tampons) ? data.tampons : []).map((t) => {
+      const w = clamp(int(t?.largeur, 1), 1, 64), h = clamp(int(t?.hauteur, 1), 1, 64);
+      const cells = Array.from({ length: w * h }, (_v, i) => (Number.isInteger(t.cases?.[i]) && t.cases[i] >= 0 && t.cases[i] < doc.tiles.length ? t.cases[i] : -1));
+      return Doc.newStamp(doc, { name: String(t.nom || 'tampon'), w, h, cells, dessus: int(t.dessus) });
+    }).filter((st) => st.cells.some((c) => c >= 0));
     if (Array.isArray(data.maps) && data.maps.length) {
       setMaps(doc, data.maps.map((m, i) => mapFromJSON(m, doc.tiles.length, `carte-${i + 1}`)));
       doc.depart = cleanDepart(doc, data.depart);
@@ -325,86 +332,156 @@ const IO = (() => {
   }
 
   // --- Importer une planche de tuiles (PNG) ---
-  // Découpe l'image en tuiles. Options : sauter les cases vides, ne garder qu'un exemplaire des tuiles
-  // identiques, et refaire l'image sous forme de carte (pratique pour reprendre une capture d'écran).
+  // Découpe l'image en tuiles (le calcul est dans planche.js). Options : la taille des tuiles, la marge
+  // et l'espacement, la zone de l'image, le fond à rendre transparent (damier ou couleur unie peints
+  // dans l'image), sauter les cases vides, ne garder qu'un exemplaire des tuiles identiques, faire un
+  // tampon de chaque objet de plusieurs tuiles, et refaire l'image sous forme de carte.
   async function importSheet(file) {
     const img = await decodeBytes(file.bytes);
     const W = img.naturalWidth, H = img.naturalHeight;
     const doc = App.doc;
+    const source = pixelsOf(img);
+    const fond = Planche.detecterFond(source);
+    const FONDS = [['auto', fond.couleurs.length ? (fond.sorte === 'damier' ? 'Le damier détecté' : 'La couleur unie détectée') : fond.sorte === 'transparent' ? 'Déjà transparent' : 'Aucun fond détecté'], ['couleur', 'Une couleur choisie'], ['aucun', 'Garder l\'image telle quelle']];
+    const fondTexte = fond.sorte === 'damier' ? ` Son fond est un damier peint (${fond.couleurs.join(' et ')}) : Tafl le rend transparent.` : fond.sorte === 'uni' ? ` Son fond est une couleur unie (${fond.couleurs[0]}) : Tafl la rend transparente.` : fond.sorte === 'transparent' ? ' Son fond est déjà transparent.' : '';
+    const size0 = doc ? doc.tileSize : App.config.tileSize;
+    const g0 = Planche.grille(W, H, size0);
+
+    // Le travail est refait seulement quand ses réglages changent (le fond ne dépend pas de la zone…).
+    let cache = {};
+    const memo = (nom, cle, fn) => {
+      if (cache[nom]?.cle !== cle) cache[nom] = { cle, valeur: fn() };
+      return cache[nom].valeur;
+    };
+    const couleursFond = (v) => (v.fond === 'auto' ? fond.couleurs : v.fond === 'couleur' ? [normalizeHex(v.couleur) || '#ff00ff'] : []);
+    const calcul = (v) => {
+      const s = clamp(Math.round(v.size) || 16, 4, 128), m = clamp(Math.round(v.marge) || 0, 0, 256), e = clamp(Math.round(v.espacement) || 0, 0, 64);
+      const { cols, rows } = Planche.grille(W, H, s, m, e);
+      const zone = { x: clamp(Math.round(v.zx) || 0, 0, Math.max(0, cols - 1)), y: clamp(Math.round(v.zy) || 0, 0, Math.max(0, rows - 1)) };
+      zone.w = clamp(Math.round(v.zw) || cols, 1, Math.max(1, cols - zone.x));
+      zone.h = clamp(Math.round(v.zh) || rows, 1, Math.max(1, rows - zone.y));
+      const couleurs = couleursFond(v);
+      const pixels = memo('fond', `${couleurs}|${v.petits}`, () => Planche.rendreTransparent(source, couleurs, v.petits));
+      const ok = cols > 0 && rows > 0;
+      const cases = ok ? memo('cases', `${couleurs}|${v.petits}|${s}|${m}|${e}|${zone.x},${zone.y},${zone.w},${zone.h}`, () => Planche.decouper(pixels, W, { s, m, e, zone })) : [];
+      const objets = ok && v.tampons ? memo('objets', cache.cases?.cle, () => Planche.objets(pixels, W, { s, m, e, zone })) : null;
+      return { s, m, e, cols, rows, zone, pixels, cases, objets };
+    };
+
+    let dessinerApercu = null, form = null;
+    const apercu = Planche.apercu(source, {
+      onZone: (z) => { for (const [k, val] of [['zx', z.x], ['zy', z.y], ['zw', z.w], ['zh', z.h]]) form.inputs[k].input.value = val; form.inputs.zh.input.dispatchEvent(new Event('input', { bubbles: true })); },
+      onCouleur: (hex) => { form.inputs.couleur.input.value = hex; form.setValue('fond', 'couleur'); },
+    });
+    dessinerApercu = apercu.dessiner;
+    let avant = null;
     const v = await Dialogs.form({
       title: `Importer ${file.name}`,
       okLabel: 'Importer',
-      width: 470,
+      width: Math.min(1120, innerWidth - 60),
       fields: [
-        { type: 'info', text: `Image de ${W} × ${H} pixels. Elle est découpée en tuiles carrées, de gauche à droite puis de haut en bas.` },
-        { key: 'size', label: 'Taille des tuiles', type: 'number', value: doc ? doc.tileSize : App.config.tileSize, min: 4, max: 128, unit: 'px' },
+        { type: 'element', element: apercu.element },
+        { type: 'info', text: `Image de ${W} × ${H} pixels, découpée en tuiles carrées de gauche à droite puis de haut en bas.${fondTexte}` },
+        { key: 'size', label: 'Taille des tuiles', type: 'number', value: size0, min: 4, max: 128, unit: 'px' },
+        { key: 'marge', label: 'Marge autour', type: 'number', value: 0, min: 0, max: 256, unit: 'px' },
+        { key: 'espacement', label: 'Espace entre tuiles', type: 'number', value: 0, min: 0, max: 64, unit: 'px' },
+        { key: 'zx', label: 'Zone : colonne', type: 'number', value: 0, min: 0 },
+        { key: 'zy', label: 'Zone : rangée', type: 'number', value: 0, min: 0 },
+        { key: 'zw', label: 'Zone : largeur', type: 'number', value: g0.cols, min: 1, unit: 'tuiles' },
+        { key: 'zh', label: 'Zone : hauteur', type: 'number', value: g0.rows, min: 1, unit: 'tuiles' },
+        { key: 'fond', label: 'Fond à rendre transparent', type: 'select', value: fond.couleurs.length ? 'auto' : 'aucun', choices: FONDS },
+        { key: 'couleur', label: 'Couleur du fond', type: 'color', value: fond.couleurs[0] || '#ff00ff' },
+        { key: 'petits', label: 'Garder les petits morceaux de cette couleur au milieu des objets', type: 'checkbox', value: true },
         { key: 'target', label: 'Destination', type: 'select', value: doc ? 'add' : 'new', choices: doc ? [['add', `Ajouter au jeu ouvert (${doc.name})`], ['new', 'Nouveau jeu de tuiles']] : [['new', 'Nouveau jeu de tuiles']] },
         { key: 'skipEmpty', label: 'Ignorer les cases entièrement transparentes', type: 'checkbox', value: true },
         { key: 'dedupe', label: 'Une seule fois chaque tuile identique', type: 'checkbox', value: true },
+        { key: 'tampons', label: 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: true },
         { key: 'asMap', label: 'Refaire l\'image en carte (nouveau jeu seulement)', type: 'checkbox', value: false },
       ],
       onInput(values, f) {
-        const cols = Math.floor(W / values.size), rows = Math.floor(H / values.size);
-        f.card.querySelector('.modal-extra').textContent = cols && rows ? `${cols} × ${rows} = ${cols * rows} cases${W % values.size || H % values.size ? ' (les bords en trop sont ignorés)' : ''}` : 'Image plus petite qu\'une tuile';
+        form = f;
+        f.card.classList.add('import-sheet');
+        if (doc && values.target === 'add' && values.size !== doc.tileSize) return f.setValue('size', doc.tileSize);
+        // La taille, la marge ou l'espacement changent la grille : la zone reprend toute l'image si elle
+        // la prenait déjà (sinon elle est seulement recoupée).
+        const g = Planche.grille(W, H, clamp(Math.round(values.size) || 16, 4, 128), clamp(Math.round(values.marge) || 0, 0, 256), clamp(Math.round(values.espacement) || 0, 0, 64));
+        if (avant && (avant.cols !== g.cols || avant.rows !== g.rows)) {
+          const plein = values.zx === 0 && values.zy === 0 && values.zw === avant.cols && values.zh === avant.rows;
+          for (const [k, val] of plein ? [['zx', 0], ['zy', 0], ['zw', g.cols], ['zh', g.rows]] : [['zw', Math.min(values.zw, g.cols)], ['zh', Math.min(values.zh, g.rows)]]) f.inputs[k].input.value = val;
+          values = f.values();
+        }
+        avant = g;
         f.inputs.asMap.row.hidden = values.target !== 'new';
-        if (doc && values.target === 'add' && values.size !== doc.tileSize) f.setValue('size', doc.tileSize);
+        f.inputs.couleur.row.hidden = values.fond !== 'couleur';
+        f.inputs.petits.row.hidden = values.fond === 'aucun' || (values.fond === 'auto' && !fond.couleurs.length);
+        const c = calcul(values);
+        dessinerApercu({ ...c, objets: c.objets });
+        const extra = f.card.querySelector('.modal-extra');
+        if (!c.cols || !c.rows) { extra.textContent = 'Image plus petite qu\'une tuile'; return; }
+        const vides = c.cases.filter((k) => k.vide).length;
+        const uniques = values.dedupe ? memo('uniques', cache.cases?.cle, () => new Set(c.cases.filter((k) => !k.vide).map((k) => k.data.join(','))).size) : c.cases.length - vides;
+        extra.textContent = `${c.zone.w} × ${c.zone.h} = ${c.cases.length} cases, ${vides} vide(s) · ${uniques} tuile(s)${values.dedupe ? ' différente(s)' : ''}${c.objets ? ` · ${c.objets.length} tampon(s)` : ''}`;
       },
     });
     if (!v) return;
-    const s = v.size, cols = Math.floor(W / s), rows = Math.floor(H / s);
-    if (!cols || !rows) return notify('L\'image est plus petite qu\'une tuile.', 'warning');
-    const pixels = pixelsOf(img);
-    const cut = (cx, cy) => {
-      const data = new Uint8ClampedArray(s * s * 4);
-      let empty = true;
-      for (let y = 0; y < s; y++) {
-        const from = ((cy * s + y) * W + cx * s) * 4;
-        data.set(pixels.data.subarray(from, from + s * 4), y * s * 4);
-      }
-      for (let o = 3; o < data.length; o += 4) if (data[o]) { empty = false; break; }
-      return { data, empty };
-    };
+    const c = calcul(v);
+    if (!c.cols || !c.rows) return notify('L\'image est plus petite qu\'une tuile.', 'warning');
+    cache = {};
+    const { s, zone } = c;
 
     const target = v.target === 'new' || !doc
-      ? Doc.create({ name: file.name.replace(/\.[^.]+$/, ''), tileSize: s, tiles: 0, palette: paletteById(App.config.palette).couleurs, mapWidth: v.asMap ? cols : 20, mapHeight: v.asMap ? rows : 15 })
+      ? Doc.create({ name: file.name.replace(/\.[^.]+$/, ''), tileSize: s, tiles: 0, palette: paletteById(App.config.palette).couleurs, mapWidth: v.asMap ? zone.w : 20, mapHeight: v.asMap ? zone.h : 15 })
       : doc;
+    const base = Doc.slug(file.name.replace(/\.[^.]+$/, ''), 'objet');
     const add = () => {
       const known = new Map(); // empreinte des pixels → numéro de tuile (pour les doublons)
       if (v.dedupe) target.tiles.forEach((t, i) => { if (!Doc.animated(t)) known.set(t.frames[0].join(','), i); });
       let added = 0;
-      for (let cy = 0; cy < rows; cy++) {
-        for (let cx = 0; cx < cols; cx++) {
-          const { data, empty } = cut(cx, cy);
-          let index = -1;
-          if (!(empty && v.skipEmpty)) {
-            const key = v.dedupe ? data.join(',') : null;
-            if (key && known.has(key)) index = known.get(key);
-            else {
-              index = Doc.addTile(target, data, Doc.uniqueName(target, 'tuile'));
-              added++;
-              if (key) known.set(key, index);
-            }
+      const index = c.cases.map(({ cx, cy, data, vide }) => {
+        let i = -1;
+        if (!(vide && v.skipEmpty)) {
+          const key = v.dedupe ? data.join(',') : null;
+          if (key && known.has(key)) i = known.get(key);
+          else {
+            i = Doc.addTile(target, data, Doc.uniqueName(target, 'tuile'));
+            added++;
+            if (key) known.set(key, i);
           }
-          if (v.asMap && target !== doc) target.map.layers[0].cells[cy * cols + cx] = index;
         }
+        if (v.asMap && target !== doc) target.map.layers[0].cells[cy * zone.w + cx] = i;
+        return i;
+      });
+      // Un tampon par objet : ses cases, à leur place, les autres vides.
+      let stamps = 0;
+      if (c.objets?.length) {
+        const nouveaux = [];
+        c.objets.forEach((o, n) => {
+          const cells = [];
+          for (let y = o.y; y < o.y + o.h; y++) for (let x = o.x; x < o.x + o.w; x++) cells.push(index[y * zone.w + x]);
+          // Les noms déjà pris (par d'autres tampons du jeu) reçoivent un numéro.
+          if (cells.some((t) => t >= 0)) nouveaux.push(Doc.newStamp({ stamps: [...target.stamps, ...nouveaux] }, { name: `${base}-${n + 1}`, w: o.w, h: o.h, cells }));
+        });
+        target.stamps = [...target.stamps, ...nouveaux];
+        stamps = nouveaux.length;
       }
-      return added;
+      return { added, stamps };
     };
+    const bilan = (r) => `${r.added} tuile(s)${r.stamps ? ` et ${r.stamps} tampon(s)` : ''}`;
 
     if (target === doc) {
-      let added = 0;
-      Doc.change(doc, `Importer ${file.name}`, () => { added = add(); });
-      notify(`${added} tuile(s) ajoutée(s) depuis ${file.name}.`, 'success');
+      let r;
+      Doc.change(doc, `Importer ${file.name}`, () => { r = add(); });
+      notify(`${bilan(r)} ajouté(s) depuis ${file.name}.${r.stamps ? ' Les tampons sont dans le panneau Tampons (mode Carte).' : ''}`, 'success', 5000);
     } else {
-      const added = add();
+      const r = add();
       if (!target.tiles.length) Doc.addTile(target);
       // Peu de couleurs : la palette devient celle de l'image.
       const used = Panels.usedColors(target);
       if (used.length && used.length <= 64) target.palette = used;
       target.dirty = true;
       App.setDocument(target);
-      if (v.asMap) App.setMode('map');
-      notify(`${added} tuile(s) importée(s) depuis ${file.name}${v.asMap ? ', et la carte refaite à partir de l\'image' : ''}.`, 'success');
+      if (v.asMap || r.stamps) App.setMode('map');
+      notify(`${bilan(r)} importé(s) depuis ${file.name}${v.asMap ? ', et la carte refaite à partir de l\'image' : ''}.`, 'success', 5000);
     }
   }
 

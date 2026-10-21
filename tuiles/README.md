@@ -76,7 +76,7 @@ Molette : zoom autour de la souris. Espace ou bouton du milieu : déplacer la vu
 
 **Fichiers**
 - **Enregistrer** (`Ctrl+S`) : un fichier `.tafl`. C'est du JSON lisible (taille, palette, chaque tuile en petite image PNG avec son nom, ses images d'animation et leur durée, la carte), que tu peux ouvrir dans Rune. Les fichiers de la v0.1 s'ouvrent toujours.
-- **Importer une planche** (`Ctrl+I`, ou glisser un PNG sur la fenêtre) : une image est découpée en tuiles. C'est ainsi qu'on reprend des tuiles dessinées dans **Skald** (ou Photoshop) : exporter en PNG, puis importer. Une image de la taille d'une tuile donne une seule tuile. Options : ignorer les cases vides, ne garder qu'une fois chaque tuile identique, et **refaire l'image en carte** (pratique pour reprendre une capture d'écran de carte : Tafl en tire les tuiles uniques et la carte qui les utilise).
+- **Importer une planche** (`Ctrl+I`, ou glisser un PNG sur la fenêtre) : une image est découpée en tuiles. C'est ainsi qu'on reprend des tuiles dessinées dans **Skald** (ou Photoshop) : exporter en PNG, puis importer. Une image de la taille d'une tuile donne une seule tuile. Options : ignorer les cases vides, ne garder qu'une fois chaque tuile identique, et **refaire l'image en carte** (pratique pour reprendre une capture d'écran de carte : Tafl en tire les tuiles uniques et la carte qui les utilise). Depuis Tafl 0.10 : aperçu, fond en damier rendu transparent, marge, espacement, zone et tampons (voir « Importer des planches et poser des objets »).
 - **Exporter la planche** (`Ctrl+E`) : toutes les tuiles dans un seul PNG, en grille (nombre de colonnes, agrandissement, espace entre tuiles). Une case à cocher ajoute à la fin les images des tuiles animées. C'est le format que lisent Tiled, Godot, Phaser, Unity, RPG Maker…
 - **Exporter les tuiles séparées** : un PNG par tuile (`00-herbe.png`, `01-hautes-herbes.png`…), et un par image pour les tuiles animées (`03-eau-1.png`, `03-eau-2.png`…).
 - **Exporter la carte pour Tiled** (`Ctrl+Maj+E`) : dans un dossier, `<nom>.tmj` (la carte au format de [Tiled](https://www.mapeditor.org), avec ses deux calques et les animations des tuiles, que Tiled, Phaser et Godot savent jouer), `<nom>-tuiles.png` (la planche) et `<nom>-carte.png` (l'image de la carte). Phaser et Godot savent charger ce `.tmj` directement : c'est la passerelle vers le futur jeu.
@@ -184,6 +184,28 @@ Le bouton **Jouer** de la barre de titre (ou `F5`, ou Jeu › Jouer) lance le je
 - Saga déjà ouvert : il recharge le jeu dans sa fenêtre, avec ce que Tafl vient d'enregistrer.
 - Lancé depuis le clone (`npm start`), Tafl lance le Saga du clone (`moteur/`, après un `npm install` dans `moteur`) ; installé, il lance le Saga installé (depuis Atelier).
 
+## Importer des planches et poser des objets (Tafl 0.10)
+
+Pour reprendre des planches de tuiles trouvées sur Internet ou extraites d'un jeu, même « sales ».
+
+**La fenêtre d'import** (`Ctrl+I`, ou glisser l'image sur Tafl) montre l'image à gauche, avec la grille des tuiles par-dessus, et les réglages à droite. Tout se met à jour en direct.
+
+- **Le fond peint dans l'image** : beaucoup de planches ont un damier (ou une couleur unie) dessiné dans l'image, au lieu d'une vraie transparence. Tafl le reconnaît tout seul (il cherche les une ou deux couleurs qui forment de grands carrés unis) et le rend transparent. Seuls les grands morceaux de ces couleurs disparaissent : un reflet de la même couleur au milieu d'un objet est gardé (case « Garder les petits morceaux », à décocher si besoin). Si Tafl se trompe : « Une couleur choisie », ou **Alt+clic** sur le fond dans l'aperçu. « Garder l'image telle quelle » ne touche à rien.
+- **Taille, marge, espacement** : la taille des tuiles (16 px pour Pokémon), la marge autour de la planche et l'espace entre deux tuiles (souvent 1 px sur les planches téléchargées). La grille de l'aperçu montre tout de suite si c'est juste.
+- **La zone** : **glisse sur l'aperçu** pour ne prendre qu'une partie de l'image (par exemple sans les maquettes de pièces à droite d'une planche d'intérieur) ; le reste est assombri. Double-clic : toute l'image. Elle se règle aussi en nombres (colonne, rangée, largeur, hauteur, en tuiles).
+- **Tampons** : chaque objet de plusieurs tuiles (un arbre, un lampadaire, une fontaine, un étal…) devient un **tampon**, entouré de pointillés jaunes dans l'aperçu. Tafl les trouve par leurs pixels : entre deux objets voisins, il reste toujours un peu de fond. Deux objets qui se touchent vraiment (des feuillages qui se chevauchent) font un seul tampon : on le découpe ensuite (voir plus bas).
+- En bas : le nombre de cases, de cases vides, de tuiles différentes et de tampons.
+
+Une ombre dessinée par-dessus le damier garde le damier assombri (ce sont des pixels opaques, mélange d'ombre et de damier) : à retoucher dans Skald si elle gêne.
+
+**L'outil Tampon** (`S`, mode Carte) et le panneau **Tampons** :
+
+- Clic sur un tampon du panneau : il est choisi avec l'outil Tampon. Sur la carte, il suit la souris en transparence ; **clic** = le poser (son coin en haut à gauche sur la case), **glisser** = en poser d'autres côte à côte (une rangée d'arbres, une forêt), **clic droit** = l'effacer. Les cases vides du tampon laissent voir ce qu'il y a dessous.
+- **Rangées au-dessus du joueur** (double-clic sur le tampon) : pour un arbre ou une maison, les rangées du haut (la cime, le toit) vont sur le calque « au-dessus du joueur » (Au-dessus), le reste sur le calque choisi. Le joueur passe alors derrière l'arbre. Un trait pointillé jaune les sépare sur la carte.
+- **Créer un tampon soi-même** : outil Tampon, **Maj+glisser** sur la carte : les tuiles du rectangle (calque choisi) deviennent un nouveau tampon. C'est aussi comme ça qu'on découpe un tampon trop grand : on le pose, on Maj+glisse sur la partie voulue, puis on supprime le grand.
+- Clic droit sur un tampon : réglages, ordre, supprimer (ses tuiles restent dans le jeu, et sur la carte).
+- Les tampons sont enregistrés avec les tuiles (dans le `.tafl`, ou le `tuiles.tafl` d'un dossier de jeu), et `Ctrl+Z` annule tout. Le moteur n'en a pas besoin : sur la carte, ce sont des tuiles comme les autres.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -205,6 +227,7 @@ Claude **voit** le jeu de tuiles et **travaille dedans** avec les mêmes fonctio
 - **Depuis Tafl 0.6, il construit aussi le jeu** : créer un dossier de jeu et l'enregistrer dans le projet, les cartes (nouvelle, dupliquer, renommer, supprimer, ordre), les calques (ajouter, supprimer, ordre, profondeur, opacité, fusion, parallaxe), peindre le passage, le passage des tuiles, les zones, les téléporteurs (avec le retour) et le départ du joueur. Il voit le passage final de chaque case dans `voir_carte`. Il peut ainsi relier toutes les maisons d'une ville à leur intérieur en une demande.
 - **Depuis Tafl 0.7, il écrit l'histoire** : il crée les personnages (avec leurs portraits, depuis une image du projet), les quêtes et leurs étapes, les interrupteurs, et pose les événements avec leur script complet (dialogues, choix, conditions, objets, combats, quêtes…). Tafl vérifie chaque script avant de l'accepter et lui dit précisément ce qui ne va pas. Il relit tout avec `donnees` et `evenement` (voir), et voit les portraits.
 - **Depuis Tafl 0.8, il remplit les bases de données** : il cherche et lit les créatures, attaques, objets… (`voir_donnees`), en ajoute, modifie ou supprime (`donnee`), met un sprite ou une icône depuis une image du projet, lance l'import officiel, règle les rencontres des zones et l'ambiance des cartes.
+- **Depuis Tafl 0.10, il pose les objets** : il importe une planche avec tous les nouveaux réglages (fond, marge, espacement, zone, tampons), regarde les tampons (`voir_tampons`), en pose ou en efface sur la carte, en crée (depuis des numéros de tuiles ou un rectangle de la carte), les renomme et règle leurs rangées au-dessus du joueur.
 - **Depuis Tafl 0.5, il a accès à tout** : toutes les commandes des menus (les fenêtres de réglages se remplissent et se valident toutes seules), l'animation des tuiles (ajouter ou supprimer une image, la durée, l'ordre), déplacer une tuile ou la décaler d'une demi-tuile, la palette (changer de modèle, remplacer une couleur partout), les calques de la carte (remplir, vider, afficher, masquer), ouvrir et enregistrer sous dans le projet, importer une planche, exporter les tuiles séparées et la carte pour Tiled dans le projet, rétablir.
 
 ## La suite
@@ -229,7 +252,8 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur, Événement et Départ. |
 | `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques, événements. |
 | `renderer/events.js` | Les événements et leurs scripts (commandes, conditions, vérification), l'éditeur d'un événement et la fenêtre Données du jeu (personnages, quêtes, interrupteurs). |
-| `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), l'import de planches et les exports (PNG, Tiled). |
+| `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), la fenêtre d'import de planches et les exports (PNG, Tiled). |
+| `renderer/planche.js` | Le découpage d'une planche : détection du fond peint et transparence, marge, espacement, zone, recherche des objets (tampons), et l'aperçu de la fenêtre d'import. |
 | `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |
 | `renderer/palettes.js` | Les palettes proposées : une ligne par palette, facile à compléter. |
 | `renderer/samples.js` | Les tuiles d'exemple, dessinées en texte (une lettre par pixel). |

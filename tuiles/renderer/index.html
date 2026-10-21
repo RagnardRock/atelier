@@ -97,6 +97,17 @@
         <div id="layers" class="rows"></div>
       </section>
 
+      <!-- Les tampons : objets de plusieurs tuiles (arbre, maison…) posés d'un clic (outil Tampon, S) -->
+      <section class="panel map-only" id="stamps-panel">
+        <div class="panel-header"><span class="panel-title">Tampons</span><span id="stamps-count" class="panel-count"></span>
+          <div class="panel-actions">
+            <button id="stamp-props" class="icon-button" title="Renommer, rangées au-dessus du joueur"><i class="codicon codicon-settings"></i></button>
+            <button id="stamp-delete" class="icon-button" title="Supprimer le tampon (ses tuiles restent)"><i class="codicon codicon-trash"></i></button>
+          </div>
+        </div>
+        <div id="stamps"></div>
+      </section>
+
       <!-- Les événements de la carte affichée : personnages, panneaux, coffres… (outil Événement, N) -->
       <section class="panel map-only" id="events-panel">
         <div class="panel-header"><span class="panel-title">Événements</span><span id="events-count" class="panel-count"></span>
@@ -178,6 +189,7 @@
   <script src="samples.js"></script>
   <script src="stage.js"></script>
   <script src="panels.js"></script>
+  <script src="planche.js"></script>
   <script src="io.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
