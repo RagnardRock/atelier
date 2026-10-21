@@ -16,6 +16,23 @@ const PALETTES = [
     ],
   },
   {
+    id: 'brume',
+    nom: 'Brume (16 bits sombre, en rampes)',
+    // Tafl 0.17 : d'après la référence de Ragna (pluie, verts éteints, ardoises sombres, bois).
+    // Rangée par rampes, de la plus sombre à la plus claire : les ombres tirent vers le violet,
+    // les lumières vers le jaune. Claude s'en sert pour ombrer sans changer de famille de couleurs.
+    couleurs: [
+      '#120c1e', '#231a2e', '#3a2c40', // ombres profondes et contours
+      '#2c3f3a', '#3f5a4f', '#567563', '#739281', '#9bb5a0', // herbe
+      '#1d2a2e', '#2a3d40', '#3d5655', '#587470', // feuillage des sapins
+      '#2e1f26', '#4a3238', '#6b4a47', '#8e6a5a', '#b08c72', // bois
+      '#24222f', '#383747', '#524f62', '#706c7e', '#9590a0', // pierre et ardoise
+      '#3b3036', '#57484a', '#776560', '#998676', // terre et chemins
+      '#172338', '#23395a', '#345a7e', '#4f86a8', '#8bc0d4', // eau
+      '#d8d0c0', '#f2ead6', '#c8503e', '#e6b45a', '#7fb3e0', // lumières : pierre claire, blanc chaud, rouge, lampe, vitre
+    ],
+  },
+  {
     id: 'gameboy',
     nom: 'Game Boy (4 verts)',
     couleurs: ['#0f380f', '#306230', '#8bac0f', '#9bbc0f'],

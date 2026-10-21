@@ -282,6 +282,19 @@ Dans **Jeu › Données du jeu › Réglages**, partie **Interface du jeu** :
 - **Claude** sait tout faire aussi : commandes `argent`, `badge`, `personnaliser`, `tenue` dans les scripts, `personnage` action `tenue` (et `retirer_tenue`), `voir_sprite` et `dessiner_sprite` avec `tenue`, les badges et le pack dans `donnee` sorte `reglages`.
 - Saga lira ces nouveautés dans sa prochaine version.
 
+## De plus belles tuiles par Claude (Tafl 0.17)
+
+Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais plates. Il a maintenant les outils et les réflexes d'un pixel artiste :
+
+- **Des consignes de pixel art** (dans ses instructions de départ) : rampes de couleurs, lumière en haut à gauche, contours de la teinte la plus sombre plutôt que noirs, textures en amas sans pixels isolés, sols qui se raccordent, profondeur. Il suit la méthode : rampes → base → formes et volumes → détails → regarder → corriger.
+- **Palette « Brume (16 bits sombre, en rampes) »** : d'après ta référence (verts éteints, ardoises, bois, pluie), rangée en rampes du plus sombre au plus clair.
+- **`rampe`** : à partir d'une couleur, 3 à 8 teintes avec le décalage de teinte (les ombres vers le bleu violet, les lumières vers le jaune), ajoutées à la palette.
+- **`peindre_tuile`** : peint une tuile par opérations — remplir, rectangle, ellipse, ligne, pot, dégradé tramé façon 16 bits, taches douces, nettoyer (enlève les pixels isolés), marques (amas, brins, touffes d'herbe, traits, espacées ; se raccordent d'un bord à l'autre), contour, ombrage selon la lumière, ombre portée, pixels, symétrie, remplacer, décaler.
+- **`dessiner_objet`** : un grand objet d'un seul tenant (sapin, maison, falaise…) sur plusieurs tuiles, avec les mêmes opérations plus `polygone` (silhouettes nettes, dents de scie) et `repeter` (un motif soigné posé en rangées). L'image est découpée en tuiles et devient un tampon prêt à poser ; Claude peut la reprendre et la retoucher.
+- **`animer_tuile`** : fabrique toutes les images d'une animation à partir d'une seule — défilement (eau qui coule), cycle de couleurs (reflets), balancement (herbes au vent), scintillement.
+- **Il voit son résultat** : après chaque dessin, il reçoit la tuile, toutes ses images et une mosaïque 3 × 3 (pour les raccords), avec un regard critique (nombre de couleurs, agitation — au-delà d'un tiers ça fait brouillon —, pixels isolés, contraste, raccords visibles). La consigne : un sol calme, le détail sur les objets et les bordures. `voir_tuile` le montre aussi.
+- **Variantes** : `poser_tuiles` accepte `variantes` (d'autres versions de la même herbe…) mélangées au hasard pour casser la répétition.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
