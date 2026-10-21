@@ -4,55 +4,59 @@ on:
   push:
     branches: [claude/project-thread-uzu8ff]
     paths: ['.github/workflows/diagnostic-maj.yml']
+defaults:
+  run:
+    shell: pwsh
 jobs:
   repro:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
-      - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - name: Scénarios
-        shell: pwsh
+      - name: Préparer
         run: |
-          $ErrorActionPreference = 'Continue'
           $base = 'https://github.com/RagnardRock/atelier/releases/download'
-          curl.exe -sSL -o old.exe "$base/brokk-v0.4.1/Brokk-Setup-0.4.1.exe"
-          curl.exe -sSL -o new.exe "$base/brokk-v0.4.2/Brokk-Setup-0.4.2.exe"
-          curl.exe -sSL -o handle.zip https://download.sysinternals.com/files/Handle.zip
-          Expand-Archive handle.zip -DestinationPath h -Force
+          curl.exe -sSL -o C:\old.exe "$base/brokk-v0.4.1/Brokk-Setup-0.4.1.exe"
+          curl.exe -sSL -o C:\new.exe "$base/brokk-v0.4.2/Brokk-Setup-0.4.2.exe"
+          curl.exe -sSL -o h.zip https://download.sysinternals.com/files/Handle.zip
+          Expand-Archive h.zip -DestinationPath C:\h -Force
+          Set-Content C:\lire.js "console.log('lu', require('fs').readFileSync(process.argv[2],'utf8').length); setInterval(()=>{},1000)"
+          @'
           $dir = "$env:LOCALAPPDATA\Programs\Brokk"
-          function Reset-Old {
-            Get-Process Brokk,pwsh,cmd,PING -ErrorAction SilentlyContinue | ? { $_.Id -ne $PID } | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep 1
-            $p = Start-Process .\old.exe -ArgumentList '/S' -Wait -PassThru
-            "  (ancienne installée, code $($p.ExitCode), version $((Get-Item "$dir\Brokk.exe").VersionInfo.ProductVersion))"
-          }
-          function Try-Update($nom, $setup) {
-            Reset-Old
-            & $setup
-            Start-Sleep 5
-            Write-Host "  poignées dans le dossier :"
-            & .\h\handle64.exe -accepteula -nobanner $dir 2>$null | Select-Object -First 15 | % { "    $_" }
-            $p = Start-Process .\new.exe -ArgumentList '/S','--updated' -PassThru
-            if (-not $p.WaitForExit(150000)) {
-              "### $nom => BLOQUÉ après 150 s (une fenêtre d'erreur attend un clic)"
-              Get-Process | ? { $_.MainWindowTitle } | % { "    fenêtre : $($_.Name) « $($_.MainWindowTitle) »" }
-              Get-Process Brokk-Setup*,new,old-uninstaller,Un_A -ErrorAction SilentlyContinue | Stop-Process -Force
-              Get-Process | ? { $_.Path -like "$env:TEMP*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-              Start-Sleep 2
-              return
+          function Lancer($exe, $args, $sec) {
+            $p = Start-Process $exe -ArgumentList $args -PassThru
+            if (-not $p.WaitForExit($sec * 1000)) {
+              "  >> $([IO.Path]::GetFileName($exe)) BLOQUÉ après $sec s (fenêtre d'erreur en attente)"
+              Get-Process | ? { $_.MainWindowTitle } | % { "     fenêtre : $($_.Name) « $($_.MainWindowTitle) »" }
+              Get-Process | ? { $_.Path -like "$env:TEMP*" -or $_.Path -like 'C:\*.exe' -and $_.Path -notlike 'C:\Windows*' -and $_.Path -notlike 'C:\Program*' -and $_.Path -notlike 'C:\h*' } | Stop-Process -Force -ErrorAction SilentlyContinue
+              return -1
             }
-            "### $nom => code $($p.ExitCode)  (version après : $((Get-Item "$dir\Brokk.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion))"
-            Get-Process | ? { $_.Path -like "$dir*" } | % { "    encore là : $($_.Name) $($_.Id)" }
+            return $p.ExitCode
           }
-          Reset-Old
-          Copy-Item $dir C:\autre-electron -Recurse
-          $electron = 'C:\autre-electron\Brokk.exe'
-          Try-Update 'S5 autre Electron qui a lu app.asar de Brokk (comme Atelier)' {
-            $env:ELECTRON_RUN_AS_NODE = '1'
-            Set-Content C:\lire.js "console.log(require('fs').readFileSync(process.argv[2],'utf8').length); setInterval(()=>{},1000)"
-            Start-Process $electron -ArgumentList 'C:\lire.js',"`"$dir\resources\app.asar\package.json`""
-            Remove-Item Env:ELECTRON_RUN_AS_NODE
-          }
-          Try-Update 'S7 un fichier de Brokk ouvert par un autre programme' {
-            Start-Process pwsh -ArgumentList '-NoProfile','-Command',"`$f=[IO.File]::Open('$dir\resources\app.asar','Open','Read','Read'); Start-Sleep 600" -WindowStyle Hidden
-          }
+          $c = Lancer C:\old.exe @('/S') 120
+          "  ancienne installée : code $c, version $((Get-Item "$dir\Brokk.exe").VersionInfo.ProductVersion)"
+          '@ | Set-Content C:\commun.ps1
+          @'
+          Start-Sleep 5
+          "  poignées dans le dossier de Brokk :"
+          & C:\h\handle64.exe -accepteula -nobanner $dir 2>$null | Select-Object -First 12 | % { "    $_" }
+          $c = Lancer C:\new.exe @('/S','--updated') 150
+          "### RÉSULTAT : code $c (version après : $((Get-Item "$dir\Brokk.exe" -ErrorAction SilentlyContinue).VersionInfo.ProductVersion))"
+          '@ | Set-Content C:\fin.ps1
+      - name: S5 un autre Electron a lu app.asar de Brokk (comme Atelier)
+        timeout-minutes: 6
+        run: |
+          . C:\commun.ps1
+          Copy-Item $dir C:\autre -Recurse
+          $env:ELECTRON_RUN_AS_NODE = '1'
+          Start-Process C:\autre\Brokk.exe -ArgumentList 'C:\lire.js',"`"$dir\resources\app.asar\package.json`"" -RedirectStandardOutput C:\lire.txt
+          Remove-Item Env:ELECTRON_RUN_AS_NODE
+          . C:\fin.ps1
+          Get-Content C:\lire.txt
+          Get-Process Brokk -ErrorAction SilentlyContinue | Stop-Process -Force
+      - name: S7 un fichier de Brokk ouvert par un autre programme
+        if: always()
+        timeout-minutes: 6
+        run: |
+          . C:\commun.ps1
+          Start-Process pwsh -ArgumentList '-NoProfile','-Command',"`$f=[IO.File]::Open('$dir\resources\app.asar','Open','Read','Read'); Start-Sleep 300" -WindowStyle Hidden
+          . C:\fin.ps1
