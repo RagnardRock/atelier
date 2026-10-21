@@ -172,7 +172,11 @@ const Donnees = (() => {
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
     ajustement: 'badges', ecart: 0, chance_chromatique: 4096,
     interface: { theme: 'verre', accent: '' },
+    regles: 'pokemon', badges: [],
   });
+  // Le pack de règles du jeu (Tafl 0.16) : ce qui décide des combats, des captures, des statistiques.
+  // Saga choisit regles/<nom>/ d'après lui. Un seul pour l'instant ; d'autres viendront.
+  const REGLES = [['pokemon', 'Pokémon : types, créatures, captures, natures, EV et IV, badges']];
   // L'interface en jeu (Tafl 0.15, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
   const THEMES = [['verre', 'Verre : sombre et flou, coins arrondis'], ['pixel', 'Pixel : police pixel, cadres nets, rétro']];
   function normReglages(r) {
@@ -190,6 +194,17 @@ const Donnees = (() => {
         theme: pick(r.interface?.theme, THEMES, 'verre'),
         accent: /^#[0-9a-f]{6}$/i.test(r.interface?.accent || '') ? r.interface.accent.toLowerCase() : '',
       },
+      // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
+      regles: typeof r.regles === 'string' && /^[a-z0-9-]+$/.test(r.regles) ? r.regles : 'pokemon',
+      badges: (() => {
+        const out = [];
+        arr(r.badges).filter((b) => b && typeof b === 'object').forEach((b, i) => {
+          const n = { id: Doc.slug(b.id || b.nom, `badge-${i + 1}`), nom: str(b.nom || b.id, `Badge ${i + 1}`), icone: /^data:image\/(png|gif|webp);base64,/.test(b.icone || '') ? b.icone : '' };
+          n.id = Events.ident(n.id, out, n.id);
+          out.push(n);
+        });
+        return out;
+      })(),
     };
   }
   const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], reglages: reglagesVides() });
@@ -823,7 +838,7 @@ const Donnees = (() => {
             ], e.clientX, e.clientY);
             if (!choix) return;
             if (choix === 'aucune') { a.condition = null; rendre(); return; }
-            const c = await Events.formCondition({ ...doc, data: work }, a.condition?.type === choix ? a.condition : Events.CONDITIONS[choix].nouveau());
+            const c = await Events.formCondition({ ...doc, data: work }, a.condition?.type === choix ? a.condition : Events.CONDITIONS[choix].nouveau({ ...doc, data: work }));
             if (c) { a.condition = c; rendre(); }
           };
           return b2;
@@ -845,6 +860,33 @@ const Donnees = (() => {
     maj();
     return el('div', { className: 'accent-jeu' }, [entree, defaut]);
   }
+  // Les badges : icône (clic = importer), nom, identifiant (il suit le nom tant qu'aucun script ne s'en sert).
+  function tableBadges(r, ctx) {
+    const sert = (id) => { let oui = false; Events.parcourirJeu(ctx.doc, ({ commande, condition }) => { const c = commande || condition; if (c?.type === 'badge' && c.badge === id) oui = true; }); return oui; };
+    return table(r.badges, [
+      ['Icône', (b, k, rendre) => {
+        const bouton = el('button', { className: 'badge-icone', title: b.icone ? 'Remplacer l\'icône (clic droit : retirer)' : 'Importer une icône (PNG, fond transparent)' }, [b.icone ? el('img', { src: b.icone, alt: '' }) : icon('add')]);
+        bouton.onclick = async (e) => {
+          e.preventDefault();
+          const f = await window.tafl.openFile({ kind: 'image', titre: `Icône du badge ${b.nom}` });
+          if (!f) return;
+          try { b.icone = (await Events.imagePortrait(f)).png; rendre(); } catch (err) { notify(cleanError(err), 'error'); }
+        };
+        bouton.oncontextmenu = (e) => { e.preventDefault(); b.icone = ''; rendre(); };
+        return bouton;
+      }],
+      ['Nom', (b) => {
+        const code = el('code', { className: 'unit', textContent: b.id });
+        const i = el('input', { type: 'text', value: b.nom, placeholder: 'Badge Roche' });
+        i.oninput = () => {
+          b.nom = i.value;
+          const id = Doc.slug(i.value, '');
+          if (id && !sert(b.id) && !r.badges.some((o) => o !== b && o.id === id)) { b.id = id; code.textContent = id; }
+        };
+        return el('span', { className: 'ref-wrap' }, [i, code]);
+      }, true],
+    ], () => { const nom = `Badge ${r.badges.length + 1}`; return { id: Events.ident(nom, r.badges, 'badge'), nom, icone: '' }; }, { ajouter: '+ Badge', vide: 'Aucun badge pour l\'instant.' });
+  }
   function formReglages(r, ctx) {
     const natures = el('table', { className: 'natures' }, [
       el('tr', {}, [el('th', { textContent: 'Nature' }), el('th', { textContent: '+10 %' }), el('th', { textContent: '−10 %' })]),
@@ -855,6 +897,12 @@ const Donnees = (() => {
       info('Le style des dialogues, du combat et des menus quand on joue dans Saga. Le joueur peut aussi le forcer dans les réglages de Saga.'),
       champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
       champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
+      section('Règles du jeu'),
+      info('Le pack de règles décide des combats, des captures et des statistiques ; Saga le suit. Les onglets du groupe Combat (types, talents, attaques, créatures, objets) sont ses données. Pour l\'instant il n\'y a que Pokémon, mais un autre jeu pourra en choisir un autre sans rien changer aux cartes, aux événements ni aux quêtes.'),
+      champ('Règles', sel(REGLES.some(([k]) => k === r.regles) ? REGLES : [...REGLES, [r.regles, `${r.regles} (inconnu de ce Tafl)`]], r.regles, (v) => { r.regles = v; })),
+      section('Badges'),
+      info('Les badges que le joueur gagne (commande « Donner un badge »). Leur nombre fait monter le niveau maximum de l\'équipe (ci-dessous) et le niveau des dresseurs qui s\'ajustent. Saga les montre dans le carnet, avec leur icône.'),
+      tableBadges(r, ctx),
       section('Argent et équipe'),
       el('div', { className: 'field-grid' }, [
         champ('Monnaie', ctx.input(r, 'monnaie', 'Pokédollars')),
@@ -905,7 +953,7 @@ const Donnees = (() => {
   }
 
   return {
-    SORTES, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
+    SORTES, REGLES, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
     METEOS, ambianceVide, normAmbiance, tableRencontres, normRencontres,
     vides, normer, normElement, reglagesVides, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };

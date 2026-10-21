@@ -273,6 +273,15 @@ Dans **Jeu › Données du jeu › Réglages**, partie **Interface du jeu** :
 - Le joueur peut toujours forcer un thème dans les réglages de Saga.
 - **Claude** le règle aussi (action `donnee`, sorte `reglages`, `interface`).
 
+## Progression, héros et règles (Tafl 0.16)
+
+- **Badges** : dans **Jeu › Données du jeu › Réglages**, partie **Badges**, la liste des badges du jeu (nom, icône : clic pour importer un PNG, clic droit pour la retirer). La commande **Donner un badge** (groupe Progression) les donne ; la condition **Le joueur a un badge** les teste (un garde qui ne laisse passer qu'avec le badge de la ville). Leur nombre fait monter le **niveau maximum** de l'équipe et celui des dresseurs qui s'ajustent : avant, rien ne donnait de badge, donc ces plafonds restaient bloqués.
+- **Argent** : la commande **Donner ou retirer de l'argent** (une récompense, un péage) et la condition **Le joueur a assez d'argent**.
+- **Personnaliser le héros** : dans la fiche du héros (Personnages, case « C'est le héros » cochée), la partie **Tenues** : chaque tenue a son nom et son sprite (4 directions et la marche), en partant d'une copie de la tenue de base pour ne changer que les couleurs. La commande **Personnaliser le héros** ouvre dans le jeu l'écran où le joueur tape son nom et choisit sa tenue ; **Changer la tenue du héros** lui en met une pour l'histoire.
+- **Pack de règles** : dans Réglages, partie **Règles du jeu**. Pour l'instant : Pokémon. Ce choix dit au moteur quelles règles de combat, de capture et de statistiques suivre ; un autre pack pourra venir plus tard sans toucher aux cartes, aux événements ni aux quêtes.
+- **Claude** sait tout faire aussi : commandes `argent`, `badge`, `personnaliser`, `tenue` dans les scripts, `personnage` action `tenue` (et `retirer_tenue`), `voir_sprite` et `dessiner_sprite` avec `tenue`, les badges et le pack dans `donnee` sorte `reglages`.
+- Saga lira ces nouveautés dans sa prochaine version.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
