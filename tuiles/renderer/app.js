@@ -1233,6 +1233,7 @@ const App = (() => {
       { label: 'Enregistrer comme dossier de jeu…', disabled: !api.doc || Boolean(api.doc.game), run: needDoc(IO.saveAsGame) },
       null,
       { label: 'Exporter la planche de tuiles (PNG)…', keys: 'Ctrl+E', disabled: !api.doc, run: needDoc(IO.exportSheet) },
+      { label: 'Exporter la planche nommée (PNG + noms)…', disabled: !api.doc, run: needDoc(IO.exportNamedSheet) },
       { label: 'Exporter les tuiles séparées…', disabled: !api.doc, run: needDoc(IO.exportTiles) },
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', disabled: !api.doc, run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', disabled: !api.doc, run: needDoc(IO.exportMapImage) },

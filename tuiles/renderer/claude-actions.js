@@ -842,7 +842,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         });
         App.refresh();
         const reste = doc.tiles.filter(sansNom).length;
-        return `${n} tuile(s) et ${tampons.length} tampon(s) nommés.${reste ? ` Encore ${reste} tuiles sans nom.` : ''} Enregistre le jeu pour garder les noms.`;
+        return `${n} tuile(s) et ${tampons.length} tampon(s) nommés.${reste ? ` Encore ${reste} tuiles sans nom.` : ''} Enregistre le jeu pour garder les noms (et exporter_planche_nommee pour les reprendre dans un autre jeu).`;
       },
     },
     // Tafl 0.19 : toute une carte (ou une partie) en un appel, à partir d'un plan en texte.
@@ -991,6 +991,21 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const c = IO.sheetCanvas(doc, Math.round(a.colonnes || doc.columns), clamp(Math.round(a.echelle || 1), 1, 8));
         const chemin = await window.claude.ecrireFichier(a.chemin, await IO.canvasBytes(c));
         return `Planche exportée : ${chemin} (${c.width} × ${c.height} px).`;
+      },
+    },
+    // Tafl 0.20 : la planche et ses noms, pour les reprendre dans un autre jeu sans les renommer.
+    exporter_planche_nommee: {
+      icone: 'export',
+      libelle: (a) => `Exporte la planche nommée vers ${a.chemin}`,
+      description: 'Exporte des tuiles en planche PNG (taille réelle) avec, à côté, un fichier .tuiles.json : noms, passage, catégories, animations et tampons. Importer ce PNG dans un autre jeu (importer_planche) reprend tout, sans avoir à renommer. chemin : relatif au dossier du projet, en .png ; categorie : seulement ces tuiles (souvent celles d\'une planche importée), sinon toutes ; colonnes (par défaut celles du jeu).',
+      schema: { type: 'object', properties: { chemin: { type: 'string' }, categorie: { type: 'string' }, colonnes: nombre }, required: ['chemin'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        if (!/\.png$/i.test(a.chemin)) throw new Error('Le fichier doit finir par .png.');
+        const p = IO.plancheNommee(doc, { categorie: a.categorie === undefined ? null : String(a.categorie), colonnes: a.colonnes || doc.columns });
+        const png = await window.claude.ecrireFichier(a.chemin, await IO.canvasBytes(p.canvas));
+        const json = await window.claude.ecrireFichier(a.chemin.replace(/\.png$/i, '') + '.tuiles.json', IO.textBytes(JSON.stringify(p.json)));
+        return `Planche nommée exportée : ${png} (${p.nombre} tuiles, dont ${p.nommees} nommées ; ${p.json.tampons.length} tampons) et ${json}.${p.nommees < p.nombre ? ` ${p.nombre - p.nommees} tuiles n'ont pas encore de nom.` : ''}`;
       },
     },
     exporter_carte: {
@@ -1402,7 +1417,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     importer_planche: {
       icone: 'cloud-download',
       libelle: (a) => `Importe la planche ${a.chemin}`,
-      description: 'Découpe une image PNG du projet en tuiles (chemin relatif), comme Fichier › Importer une planche. valeurs : les réglages de la fenêtre d\'import (appelle d\'abord avec apercu: true pour les connaître, sans rien changer) : size (taille des tuiles), marge et espacement (px), la zone en tuiles (zx, zy, zw, zh), fond (auto = le damier ou la couleur unie détectés, couleur = la couleur « couleur », aucun), petits, target, skipEmpty, dedupe, tampons (un tampon par objet de plusieurs tuiles), asMap. Si le jeu en cours a des modifications non enregistrées, l\'import vers un nouveau jeu s\'arrête : enregistre-le d\'abord.',
+      description: 'Découpe une image PNG du projet en tuiles (chemin relatif), comme Fichier › Importer une planche. Si un fichier .tuiles.json du même nom est à côté (planche nommée, voir exporter_planche_nommee), les tuiles arrivent nommées, avec leur passage, leurs animations et les tampons : pas besoin de les regarder ni de les nommer. valeurs : les réglages de la fenêtre d\'import (appelle d\'abord avec apercu: true pour les connaître, sans rien changer) : size (taille des tuiles), marge et espacement (px), la zone en tuiles (zx, zy, zw, zh), fond (auto = le damier ou la couleur unie détectés, couleur = la couleur « couleur », aucun), petits, target, skipEmpty, dedupe, tampons (un tampon par objet de plusieurs tuiles), asMap. Si le jeu en cours a des modifications non enregistrées, l\'import vers un nouveau jeu s\'arrête : enregistre-le d\'abord.',
       schema: { type: 'object', properties: { chemin: { type: 'string' }, valeurs: { type: 'object' }, apercu: { type: 'boolean' } }, required: ['chemin'] },
       faire: async (a) => {
         const fichier = await window.claude.lireFichier(a.chemin);

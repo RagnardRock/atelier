@@ -344,15 +344,152 @@ const IO = (() => {
   // et l'espacement, la zone de l'image, le fond à rendre transparent (damier ou couleur unie peints
   // dans l'image), sauter les cases vides, ne garder qu'un exemplaire des tuiles identiques, faire un
   // tampon de chaque objet de plusieurs tuiles, et refaire l'image sous forme de carte.
+  // --- Planche nommée (Tafl 0.20) ---
+  // Exporter la planche nommée écrit planche.png (les tuiles en grille, taille réelle, sans espace) et
+  // planche.tuiles.json : pour chaque case de la grille, le nom, le passage, la catégorie et les autres
+  // images d'une tuile animée ; et les tampons, en cases de la grille. Importer planche.png relit le
+  // .tuiles.json : les tuiles arrivent nommées dans n'importe quel jeu (même celles déjà présentes,
+  // grâce à « une seule fois chaque tuile identique »). Le travail de nommer n'est fait qu'une fois.
+  const NOMS_FORMAT = 'tafl-planche-nommee';
+  const sansNom = (t) => /^tuile-\d+$/.test(t.name);
+
+  function plancheNommee(doc, { categorie = null, colonnes = doc.columns } = {}) {
+    const s = doc.tileSize;
+    const liste = doc.tiles.map((t, i) => [t, i]).filter(([t]) => categorie === null || (t.categorie || '') === categorie);
+    if (!liste.length) throw new Error(categorie === null ? 'Aucune tuile à exporter.' : `Aucune tuile dans la catégorie « ${categorie} ».`);
+    const cols = clamp(Math.round(colonnes) || 8, 1, 64);
+    const c = el('canvas', { width: Math.min(cols, liste.length) * s, height: Math.ceil(liste.length / cols) * s });
+    const g = c.getContext('2d');
+    const position = new Map(); // numéro de tuile -> case de la grille
+    liste.forEach(([t, i], n) => { position.set(i, n); g.drawImage(Doc.tileCanvas(t, s, 0), (n % cols) * s, Math.floor(n / cols) * s); });
+    const tuiles = liste.map(([t]) => ({
+      ...(sansNom(t) ? {} : { nom: t.name }),
+      ...(t.passage && t.passage !== 'auto' ? { passage: t.passage } : {}),
+      ...(t.categorie ? { categorie: t.categorie } : {}),
+      ...(Doc.animated(t) ? { images: t.frames.slice(1).map((_f, k) => Doc.tileCanvas(t, s, k + 1).toDataURL('image/png')), duree: t.duration } : {}),
+    }));
+    // Un tampon part avec la planche si toutes ses tuiles y sont.
+    const tampons = doc.stamps.filter((st) => st.cells.every((k) => k < 0 || position.has(k)))
+      .map((st) => ({ nom: st.name, largeur: st.w, hauteur: st.h, dessus: st.dessus, cases: st.cells.map((k) => (k < 0 ? -1 : position.get(k))) }));
+    const json = { format: NOMS_FORMAT, version: 1, outil: 'Tafl', taille: s, colonnes: cols, tuiles, tampons };
+    return { canvas: c, json, nombre: liste.length, nommees: tuiles.filter((t) => t.nom).length };
+  }
+
+  async function lireNoms(file, doc) {
+    if (!file.path || !window.tafl.nomsPlanche) return null;
+    const d = await window.tafl.nomsPlanche(file.path);
+    if (!d || d.format !== NOMS_FORMAT || !Array.isArray(d.tuiles)) return null;
+    const taille = clamp(Math.round(d.taille) || 16, 4, 128);
+    if (doc && doc.tileSize !== taille) {
+      notify(`${file.name} est une planche nommée en tuiles de ${taille} px, mais le jeu ouvert est en ${doc.tileSize} px : les noms ne pourront pas être repris.`, 'warning', 8000);
+    }
+    // Les autres images des tuiles animées, décodées d'avance (l'import, lui, ne peut pas attendre).
+    const toile = el('canvas', { width: taille, height: taille });
+    const g = toile.getContext('2d', { willReadFrequently: true });
+    const tuiles = [];
+    for (const t of d.tuiles.slice(0, 65536)) {
+      const images = [];
+      for (const src of (Array.isArray(t?.images) ? t.images.slice(0, 15) : [])) {
+        try {
+          g.clearRect(0, 0, taille, taille);
+          g.drawImage(await loadImage(String(src)), 0, 0);
+          images.push(g.getImageData(0, 0, taille, taille).data);
+        } catch { /* image illisible : la tuile reste fixe */ }
+      }
+      tuiles.push({
+        nom: typeof t?.nom === 'string' ? t.nom.trim().slice(0, 80) : '',
+        passage: ['libre', 'bloque'].includes(t?.passage) ? t.passage : null,
+        categorie: typeof t?.categorie === 'string' ? t.categorie.trim().slice(0, 60) : '',
+        images,
+        duree: clamp(Math.round(t?.duree) || Doc.DEFAULT_DURATION, 30, 5000),
+      });
+    }
+    const tampons = (Array.isArray(d.tampons) ? d.tampons : []).slice(0, 2000).map((t) => ({
+      nom: String(t?.nom || 'tampon').slice(0, 80),
+      w: clamp(Math.round(t?.largeur) || 1, 1, 64),
+      h: clamp(Math.round(t?.hauteur) || 1, 1, 64),
+      dessus: Math.max(0, Math.round(t?.dessus) || 0),
+      cases: Array.isArray(t?.cases) ? t.cases : [],
+    }));
+    return { taille, colonnes: clamp(Math.round(d.colonnes) || 1, 1, 4096), tuiles, tampons };
+  }
+
+  // Après le découpage : la case (cx, cy) de la zone est la case n de la planche nommée, et index[…]
+  // le numéro de tuile qu'elle a donné (nouvelle, ou déjà dans le jeu). Les noms ne remplacent pas
+  // ceux que Ragna a déjà donnés.
+  function appliquerNoms(target, noms, c, index, taille) {
+    const { zone } = c;
+    if (Math.round(taille) !== noms.taille || c.m || c.e) return { tuiles: 0, tampons: 0, erreur: 'taille, marge ou espace différents de la planche exportée' };
+    const numeroDeCase = new Map(); // case de la planche -> numéro de tuile
+    c.cases.forEach(({ cx, cy }, k) => {
+      if (index[k] >= 0) numeroDeCase.set((zone.y + cy) * noms.colonnes + zone.x + cx, index[k]);
+    });
+    const faites = new Set();
+    let tuiles = 0;
+    for (const [n, i] of numeroDeCase) {
+      const e = noms.tuiles[n];
+      const t = target.tiles[i];
+      if (!e || !t || faites.has(i)) continue;
+      faites.add(i);
+      const maj = { ...t };
+      if (e.nom && sansNom(t)) { maj.name = e.nom; tuiles++; }
+      if (e.passage && (t.passage || 'auto') === 'auto') maj.passage = e.passage;
+      if (e.categorie) maj.categorie = e.categorie;
+      if (e.images.length && t.frames.length === 1) { maj.frames = [t.frames[0], ...e.images.filter((f) => f.length === t.frames[0].length)]; maj.duration = e.duree; }
+      target.tiles[i] = maj;
+    }
+    const nouveaux = [];
+    for (const st of noms.tampons) {
+      const cells = Array.from({ length: st.w * st.h }, (_v, k) => (Number.isInteger(st.cases[k]) && numeroDeCase.has(st.cases[k]) ? numeroDeCase.get(st.cases[k]) : -1));
+      if (!cells.some((k) => k >= 0)) continue;
+      const deja = [...target.stamps, ...nouveaux].some((o) => o.w === st.w && o.h === st.h && o.cells.every((k, j) => k === cells[j]));
+      if (!deja) nouveaux.push(Doc.newStamp({ stamps: [...target.stamps, ...nouveaux] }, { name: st.nom, w: st.w, h: st.h, cells, dessus: Math.min(st.dessus, st.h) }));
+    }
+    target.stamps = [...target.stamps, ...nouveaux];
+    return { tuiles, tampons: nouveaux.length };
+  }
+
+  async function exportNamedSheet(doc) {
+    const categories = [...new Set(doc.tiles.map((t) => t.categorie || ''))];
+    const v = await Dialogs.form({
+      title: 'Exporter la planche nommée',
+      okLabel: 'Exporter',
+      width: 480,
+      fields: [
+        { type: 'info', text: 'Les tuiles en PNG, et à côté un fichier .tuiles.json avec leurs noms, leur passage, leur catégorie, leurs animations et les tampons. En important ce PNG dans un autre jeu, Tafl reprend tout : il n\'y a plus à les nommer.' },
+        { key: 'categorie', label: 'Tuiles', type: 'select', value: '*', choices: [['*', `Toutes (${doc.tiles.length})`], ...categories.map((k) => [k, `${k || 'Sans catégorie'} (${doc.tiles.filter((t) => (t.categorie || '') === k).length})`])] },
+        { key: 'colonnes', label: 'Colonnes', type: 'number', value: doc.columns, min: 1, max: 64 },
+      ],
+    });
+    if (!v) return;
+    const categorie = v.categorie === '*' ? null : v.categorie;
+    const p = plancheNommee(doc, { categorie, colonnes: v.colonnes });
+    const chemin = await window.tafl.saveDialog({ defaultName: `${safeName(categorie || doc.name)}.png`, format: 'png' });
+    if (!chemin) return;
+    const saved = await window.tafl.writeFile(chemin, await canvasBytes(p.canvas));
+    await window.tafl.writeFile(chemin.replace(/\.png$/i, '') + '.tuiles.json', textBytes(JSON.stringify(p.json)));
+    notify(`Planche nommée exportée : ${saved.name} (${p.nombre} tuiles dont ${p.nommees} nommées, ${p.json.tampons.length} tampons) et ses noms à côté.`, 'success', 7000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
+  }
+
+  // L'empreinte des pixels d'une tuile, pour reconnaître une tuile identique. Un pixel transparent
+  // compte pour transparent quelle que soit sa couleur (un PNG réenregistré la met à 0).
+  function empreinte(data) {
+    const d = Uint8ClampedArray.from(data);
+    for (let k = 3; k < d.length; k += 4) if (d[k] === 0) { d[k - 3] = 0; d[k - 2] = 0; d[k - 1] = 0; }
+    return d.join(',');
+  }
+
   async function importSheet(file) {
     const img = await decodeBytes(file.bytes);
     const W = img.naturalWidth, H = img.naturalHeight;
     const doc = App.doc;
+    // Tafl 0.20 : une planche nommée (exportée par Tafl) a ses noms à côté, dans planche.tuiles.json.
+    const noms = await lireNoms(file, doc);
     const source = pixelsOf(img);
     const fond = Planche.detecterFond(source);
     const FONDS = [['auto', fond.couleurs.length ? (fond.sorte === 'damier' ? 'Le damier détecté' : 'La couleur unie détectée') : fond.sorte === 'transparent' ? 'Déjà transparent' : 'Aucun fond détecté'], ['couleur', 'Une couleur choisie'], ['aucun', 'Garder l\'image telle quelle']];
     const fondTexte = fond.sorte === 'damier' ? ` Son fond est un damier peint (${fond.couleurs.join(' et ')}) : Tafl le rend transparent.` : fond.sorte === 'uni' ? ` Son fond est une couleur unie (${fond.couleurs[0]}) : Tafl la rend transparente.` : fond.sorte === 'transparent' ? ' Son fond est déjà transparent.' : '';
-    const size0 = doc ? doc.tileSize : App.config.tileSize;
+    const size0 = doc ? doc.tileSize : noms ? noms.taille : App.config.tileSize;
     const g0 = Planche.grille(W, H, size0);
 
     // Le travail est refait seulement quand ses réglages changent (le fond ne dépend pas de la zone…).
@@ -390,6 +527,7 @@ const IO = (() => {
       fields: [
         { type: 'element', element: apercu.element },
         { type: 'info', text: `Image de ${W} × ${H} pixels, découpée en tuiles carrées de gauche à droite puis de haut en bas.${fondTexte}` },
+        ...(noms ? [{ type: 'info', text: `Planche nommée : ${noms.tuiles.filter((t) => t?.nom).length} tuile(s) et ${noms.tampons.length} tampon(s) décrits dans ${file.name.replace(/\.png$/i, '')}.tuiles.json. Tafl reprend leurs noms, passages, catégories, animations et tampons (tuiles de ${noms.taille} px, sans marge ni espace).` }] : []),
         { key: 'size', label: 'Taille des tuiles', type: 'number', value: size0, min: 4, max: 128, unit: 'px' },
         { key: 'marge', label: 'Marge autour', type: 'number', value: 0, min: 0, max: 256, unit: 'px' },
         { key: 'espacement', label: 'Espace entre tuiles', type: 'number', value: 0, min: 0, max: 64, unit: 'px' },
@@ -403,7 +541,7 @@ const IO = (() => {
         { key: 'target', label: 'Destination', type: 'select', value: doc ? 'add' : 'new', choices: doc ? [['add', `Ajouter au jeu ouvert (${doc.name})`], ['new', 'Nouveau jeu de tuiles']] : [['new', 'Nouveau jeu de tuiles']] },
         { key: 'skipEmpty', label: 'Ignorer les cases entièrement transparentes', type: 'checkbox', value: true },
         { key: 'dedupe', label: 'Une seule fois chaque tuile identique', type: 'checkbox', value: true },
-        { key: 'tampons', label: 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: true },
+        { key: 'tampons', label: noms ? 'Chercher en plus les objets de plusieurs tuiles (la planche nommée a déjà ses tampons)' : 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: !noms },
         { key: 'asMap', label: 'Refaire l\'image en carte (nouveau jeu seulement)', type: 'checkbox', value: false },
       ],
       onInput(values, f) {
@@ -444,12 +582,12 @@ const IO = (() => {
     const categorie = file.name.replace(/\.[^.]+$/, '').slice(0, 60);
     const add = () => {
       const known = new Map(); // empreinte des pixels → numéro de tuile (pour les doublons)
-      if (v.dedupe) target.tiles.forEach((t, i) => { if (!Doc.animated(t)) known.set(t.frames[0].join(','), i); });
+      if (v.dedupe) target.tiles.forEach((t, i) => { if (!Doc.animated(t) || noms) known.set(empreinte(t.frames[0]), i); });
       let added = 0;
       const index = c.cases.map(({ cx, cy, data, vide }) => {
         let i = -1;
         if (!(vide && v.skipEmpty)) {
-          const key = v.dedupe ? data.join(',') : null;
+          const key = v.dedupe ? empreinte(data) : null;
           if (key && known.has(key)) i = known.get(key);
           else {
             i = Doc.addTile(target, data, Doc.uniqueName(target, 'tuile'));
@@ -475,9 +613,11 @@ const IO = (() => {
         target.stamps = [...target.stamps, ...nouveaux];
         stamps = nouveaux.length;
       }
-      return { added, stamps };
+      const nommees = noms ? appliquerNoms(target, noms, c, index, v.size) : null;
+      if (nommees) stamps += nommees.tampons;
+      return { added, stamps, nommees };
     };
-    const bilan = (r) => `${r.added} tuile(s)${r.stamps ? ` et ${r.stamps} tampon(s)` : ''}`;
+    const bilan = (r) => `${r.added} tuile(s)${r.stamps ? ` et ${r.stamps} tampon(s)` : ''}${r.nommees ? ` (${r.nommees.tuiles} tuile(s) nommée(s) d'après la planche${r.nommees.erreur ? `, ${r.nommees.erreur}` : ''})` : ''}`;
 
     if (target === doc) {
       let r;
@@ -644,7 +784,16 @@ const IO = (() => {
       tilesets: [{
         firstgid: 1, name: base, image: `${base}-tuiles.png`, imagewidth: sheet.width, imageheight: sheet.height, tilewidth: s, tileheight: s, tilecount: cells.length, columns: cols, margin: 0, spacing: 0,
         // Les tuiles animées : la suite de leurs images dans la planche, avec la durée de chacune (format de Tiled).
-        ...(anims.length ? { tiles: anims.map((a) => ({ id: a.id, animation: a.ids.map((tileid) => ({ tileid, duration: a.duration })) })) } : {}),
+        // Tafl 0.20 : avec le nom (classe de la tuile dans Tiled) et le passage des tuiles nommées.
+        ...(() => {
+          const tiles = new Map();
+          doc.tiles.forEach((t, i) => {
+            if (sansNom(t) && (t.passage || 'auto') === 'auto') return;
+            tiles.set(i, { id: i, ...(sansNom(t) ? {} : { type: t.name }), properties: [...(sansNom(t) ? [] : [{ name: 'nom', type: 'string', value: t.name }]), ...(t.passage && t.passage !== 'auto' ? [{ name: 'passage', type: 'string', value: t.passage }] : [])] });
+          });
+          for (const a of anims) tiles.set(a.id, { ...(tiles.get(a.id) || { id: a.id }), animation: a.ids.map((tileid) => ({ tileid, duration: a.duration })) });
+          return tiles.size ? { tiles: [...tiles.values()].sort((x, y) => x.id - y.id) } : {};
+        })(),
       }],
     };
     return [
@@ -682,5 +831,5 @@ const IO = (() => {
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
+  return { open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportNamedSheet, plancheNommee, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
 })();
