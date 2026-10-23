@@ -125,6 +125,143 @@
   const nombre = { type: 'number' };
   const lignesSchema = { type: 'array', items: { type: 'string' } };
 
+  // --- Tafl 0.18 : économiser les jetons ---
+  // Chaque action de Claude relit toute la conversation : une réponse de 20 000 jetons (la liste
+  // de 2 500 tuiles importées) se paie à chaque appel suivant. D'où un catalogue en texte, des
+  // listes en plages (« 12-40 ») au lieu de numéros un par un, et des images seulement sur demande.
+
+  // [0, 1, 2, 5, 7, 8] -> « 0-2, 5, 7-8 »
+  const plages = (indices) => {
+    const out = [];
+    const tri = [...indices].sort((a, b) => a - b);
+    for (let k = 0; k < tri.length; k++) {
+      const debut = tri[k];
+      while (k + 1 < tri.length && tri[k + 1] === tri[k] + 1) k++;
+      out.push(debut === tri[k] ? `${debut}` : `${debut}-${tri[k]}`);
+    }
+    return out.join(', ');
+  };
+  // « 12-15, 40 », [12, 13] ou 12 -> les numéros de tuile (vérifiés).
+  const lirePlages = (doc, v) => {
+    const morceaux = Array.isArray(v) ? v : String(v ?? '').split(',');
+    const out = [];
+    for (const m of morceaux) {
+      const s = String(m).trim();
+      if (!s) continue;
+      const r = /^(\d+)\s*-\s*(\d+)$/.exec(s);
+      if (r) {
+        const a = Number(r[1]), b = Number(r[2]);
+        if (b < a || b - a > 5000) throw new Error(`Plage « ${s} » impossible.`);
+        for (let i = a; i <= b; i++) out.push(tuileNumero(doc, i));
+      } else out.push(tuileNumero(doc, Number(s)));
+    }
+    return out;
+  };
+  // Un nom donné par l'import ou la création (« tuile-12 ») : la tuile n'est pas encore décrite.
+  const sansNom = (t) => /^tuile-\d+$/.test(t.name);
+  // Une tuile par numéro ou par nom (celui du catalogue).
+  const tuileParNumeroOuNom = (doc, v) => {
+    if (typeof v === 'number' || /^-?\d+$/.test(String(v))) {
+      const t = Math.round(Number(v));
+      return t === -1 ? -1 : tuileNumero(doc, t);
+    }
+    const nom = String(v).trim().toLowerCase();
+    const i = doc.tiles.findIndex((t) => t.name.toLowerCase() === nom);
+    if (i < 0) throw new Error(`Pas de tuile nommée « ${v} » (voir catalogue).`);
+    return i;
+  };
+  const tamponParNumeroOuNom = (doc, v) => {
+    const t = String(v);
+    const i = /^\d+$/.test(t) && doc.stamps[Number(t)] ? Number(t) : doc.stamps.findIndex((st) => st.name.toLowerCase() === t.toLowerCase());
+    if (i < 0) throw new Error(`Pas de tampon « ${v} » : ${doc.stamps.length > 40 ? 'voir catalogue' : doc.stamps.map((st, k) => `${k} = ${st.name}`).join(', ') || 'aucun tampon'}.`);
+    return i;
+  };
+  // Les tuiles en lignes de catalogue : les tuiles voisines de même nom et même passage tiennent en
+  // une ligne (« 120-131 sans nom », « 40-43 eau [bloque] {animée} »).
+  const lignesTuiles = (doc, indices) => {
+    const cle = (i) => {
+      const t = doc.tiles[i];
+      return `${sansNom(t) ? 'sans nom' : t.name}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${t.frames.length > 1 ? ' {animée}' : ''}`;
+    };
+    const out = [];
+    for (let k = 0; k < indices.length; k++) {
+      const debut = indices[k], c = cle(debut);
+      while (k + 1 < indices.length && indices[k + 1] === indices[k] + 1 && cle(indices[k + 1]) === c) k++;
+      out.push(`${debut === indices[k] ? debut : `${debut}-${indices[k]}`} ${c}`);
+    }
+    return out;
+  };
+  // Les catégories en plages, et combien de tuiles n'ont pas encore de nom.
+  const resumeTuiles = (doc) => {
+    const parCat = new Map();
+    doc.tiles.forEach((t, i) => { const c = t.categorie || 'sans catégorie'; if (!parCat.has(c)) parCat.set(c, []); parCat.get(c).push(i); });
+    const n = doc.tiles.filter(sansNom).length;
+    return `${[...parCat].map(([c, l]) => `${c} (${plages(l)})`).join(' ; ')}.${n ? ` ${n} sans nom : regarde-les par pages (voir_tuiles de, nombre) et décris-les une fois pour toutes avec nommer.` : ''}`;
+  };
+  const ligneTampon = (st, k) => `${k} « ${st.name} » ${st.w}×${st.h}${st.dessus ? `, cime ${st.dessus}` : ''}`;
+  // Une rangée de numéros, compressée : « 12*5 » = 5 fois la tuile 12, « .*3 » = 3 cases vides.
+  const rangeeCompacte = (valeurs) => {
+    const out = [];
+    for (let k = 0; k < valeurs.length; k++) {
+      let n = 1;
+      while (k + 1 < valeurs.length && valeurs[k + 1] === valeurs[k]) { k++; n++; }
+      out.push(n > 1 ? `${valeurs[k]}*${n}` : String(valeurs[k]));
+    }
+    return out.join(' ');
+  };
+  // Une planche de tuiles numérotée pour Claude : 16 par rangée, le numéro de la première tuile de
+  // chaque rangée à gauche, la colonne (0 à 15) en haut. Il lit ainsi le numéro de chaque tuile.
+  function plancheNumerotee(doc, indices, colonnes = 16) {
+    const s = doc.tileSize, k = Math.max(1, Math.round(32 / s)), c = s * k;
+    const marge = 36, haut = 14;
+    const rangees = Math.ceil(indices.length / colonnes);
+    const out = el('canvas', { width: marge + colonnes * (c + 1), height: haut + rangees * (c + 1) });
+    const g = out.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = '#16161c';
+    g.fillRect(0, 0, out.width, out.height);
+    g.font = '10px monospace';
+    g.textBaseline = 'middle';
+    g.fillStyle = '#c8c8d0';
+    for (let col = 0; col < colonnes; col++) g.fillText(String(col), marge + col * (c + 1) + c / 2 - 3, haut / 2);
+    indices.forEach((i, n) => {
+      const col = n % colonnes, row = Math.floor(n / colonnes);
+      const x = marge + col * (c + 1), y = haut + row * (c + 1);
+      if (col === 0) { g.fillStyle = '#c8c8d0'; g.fillText(String(i), 2, y + c / 2); }
+      g.fillStyle = (col + row) % 2 ? '#2a2a33' : '#33333d';
+      g.fillRect(x, y, c, c);
+      g.drawImage(Doc.tileCanvas(doc.tiles[i], s), x, y, c, c);
+    });
+    out.pixelArt = true;
+    return out;
+  }
+  // Les tampons côte à côte, chacun avec son numéro en haut à gauche.
+  function plancheTampons(doc, liste) {
+    const s = doc.tileSize, z = s < 32 ? 2 : 1, largeur = 1024;
+    let x = 0, y = 0, haut = 0;
+    const places = liste.map(([st, k]) => {
+      const w = st.w * s * z, h = st.h * s * z + 12;
+      if (x && x + w > largeur) { x = 0; y += haut + 6; haut = 0; }
+      const p = { st, k, x, y };
+      x += Math.max(w, 24) + 6;
+      haut = Math.max(haut, h);
+      return p;
+    });
+    const out = el('canvas', { width: largeur, height: Math.max(1, y + haut) });
+    const g = out.getContext('2d');
+    g.fillStyle = '#16161c';
+    g.fillRect(0, 0, out.width, out.height);
+    g.font = '10px monospace';
+    g.textBaseline = 'top';
+    for (const p of places) {
+      g.fillStyle = '#ffd36b';
+      g.fillText(String(p.k), p.x, p.y);
+      g.drawImage(Panels.stampCanvas(doc, p.st, Math.max(p.st.w, p.st.h) * s * z), p.x, p.y + 12);
+    }
+    out.pixelArt = true;
+    return out;
+  }
+
   ClaudePanneau.actions({
     infos: {
       lecture: true,
@@ -135,25 +272,71 @@
         const doc = besoinJeu();
         return [
           `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
-          `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`,
+          // Tafl 0.18 : au-delà de 40 tuiles, un résumé (le détail est dans catalogue).
+          doc.tiles.length <= 40
+            ? `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`
+            : `Tuiles (${doc.tiles.length}, choisie : ${doc.current}) : ${resumeTuiles(doc)} La liste par nom : action catalogue.`,
           `Cartes (${doc.maps.length}) : ${listeCartes(doc)}. Départ du joueur : ${doc.depart ? `${doc.depart.carte} (${doc.depart.x}, ${doc.depart.y}), regard ${doc.depart.direction}` : 'pas encore placé'}.`,
-          `Tampons (objets de plusieurs tuiles, action tampon) : ${doc.stamps.length ? doc.stamps.map((st, k) => `${k} « ${st.name} » ${st.w} × ${st.h}`).join(', ') : 'aucun'}.`,
-          `Palette : ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}.`,
+          `Tampons (objets de plusieurs tuiles, action tampon) : ${!doc.stamps.length ? 'aucun' : doc.stamps.length <= 30 ? doc.stamps.map(ligneTampon).join(', ') : `${doc.stamps.length}, la liste : action catalogue`}.`,
+          `Palette : ${doc.palette.slice(0, 62).map((c, i) => `${CODES[i] ?? '?'} ${c}`).join(', ')}${doc.palette.length > 62 ? ` (+ ${doc.palette.length - 62})` : ''}.`,
           `Données du jeu : ${doc.data.personnages.length} personnage(s), ${doc.data.quetes.length} quête(s), ${doc.data.interrupteurs.length} interrupteur(s) (détails : action donnees) ; ${Donnees.SORTES.filter((k) => k !== 'reglages').map((k) => `${doc.data[k].length} ${k}`).join(', ')} (action donnee). Événements : ${doc.maps.reduce((n, m) => n + m.events.length, 0)} sur toutes les cartes.`,
           decrireCarte(doc),
         ].join('\n');
       },
     },
+    // Tafl 0.18 : le catalogue en texte des tuiles et des tampons. Claude le lit au lieu de regarder
+    // les planches en images ; les noms sont donnés une fois (nommer) et gardés dans le jeu.
+    catalogue: {
+      lecture: true,
+      icone: 'list-tree',
+      libelle: (a) => `Lit le catalogue des tuiles${a.filtre ? ` (« ${a.filtre} »)` : ''}`,
+      description: 'Le catalogue en texte des tuiles (par catégorie : « numéros nom [passage] {animée} », les tuiles voisines de même nom en une ligne) et des tampons (numéro « nom » largeur×hauteur). À lire avant de construire : c\'est bien moins cher que les images. filtre : un mot cherché dans les noms et catégories ; categorie : une seule catégorie ; debut : la ligne où reprendre (300 lignes à la fois). Les tuiles « sans nom » se décrivent une fois avec nommer, après les avoir regardées avec voir_tuiles.',
+      schema: { type: 'object', properties: { filtre: { type: 'string' }, categorie: { type: 'string' }, debut: nombre } },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const filtre = String(a.filtre || '').trim().toLowerCase();
+        const garde = (t) => (a.categorie === undefined || (t.categorie || '') === String(a.categorie))
+          && (!filtre || t.name.toLowerCase().includes(filtre) || (t.categorie || '').toLowerCase().includes(filtre));
+        const parCat = new Map();
+        doc.tiles.forEach((t, i) => { if (!garde(t)) return; const c = t.categorie || ''; if (!parCat.has(c)) parCat.set(c, []); parCat.get(c).push(i); });
+        const lignes = [];
+        for (const [c, liste] of parCat) lignes.push(`## ${c || 'Sans catégorie'} (${liste.length})`, ...lignesTuiles(doc, liste));
+        const tampons = doc.stamps.map((st, k) => [st, k]).filter(([st]) => !filtre || st.name.toLowerCase().includes(filtre));
+        if (tampons.length && a.categorie === undefined) lignes.push(`## Tampons (${tampons.length}, action tampon ou plan_carte)`, ...tampons.map(([st, k]) => ligneTampon(st, k)));
+        const debut = clamp(Math.round(a.debut || 0), 0, Math.max(0, lignes.length - 1));
+        const page = lignes.slice(debut, debut + 300);
+        const sans = doc.tiles.filter(sansNom).length;
+        return [`Catalogue de « ${doc.name} » : ${doc.tiles.length} tuiles de ${doc.tileSize} px, ${doc.stamps.length} tampons${filtre ? `, filtre « ${a.filtre} »` : ''}.${sans ? ` ${sans} tuiles sans nom.` : ''}`,
+          ...page, ...(debut + 300 < lignes.length ? [`(… suite : debut ${debut + 300}, ${lignes.length} lignes en tout)`] : []),
+          ...(lignes.length ? [] : ['Rien ne correspond.'])].join('\n');
+      },
+    },
     voir_tuiles: {
       lecture: true,
       icone: 'eye',
-      libelle: () => 'Regarde toutes les tuiles',
-      description: 'Montre la planche de toutes les tuiles (agrandie), dans l\'ordre de leurs numéros, de gauche à droite puis de haut en bas.',
-      faire: () => {
+      libelle: (a) => `Regarde les tuiles${a.categorie ? ` « ${a.categorie} »` : a.tuiles ? ` ${a.tuiles}` : ` à partir de ${a.de || 0}`}`,
+      description: 'Montre une page de tuiles (une image, 16 par rangée : le numéro de la première tuile de chaque rangée est à gauche, la colonne 0 à 15 en haut) avec leur nom. de : premier numéro (0 par défaut) ; nombre : 1 à 256 (128 par défaut) ; ou categorie : les tuiles d\'une catégorie ; ou tuiles : « 12-15, 40 ». Une image coûte cher : pour trouver une tuile, lis d\'abord catalogue (texte) ; ne regarde des pages que pour décrire des tuiles sans nom (puis nommer).',
+      schema: { type: 'object', properties: { de: nombre, nombre, categorie: { type: 'string' }, tuiles: { type: ['string', 'array'] } } },
+      faire: (a) => {
         const doc = besoinJeu();
-        const colonnes = Math.min(doc.tiles.length, 8);
-        const cats = [...new Set(doc.tiles.map((t) => t.categorie || ''))].filter(Boolean).map((c) => `${c} : ${doc.tiles.map((t, i) => (t.categorie === c ? i : -1)).filter((i) => i >= 0).join(', ')}`);
-        return { texte: `${doc.tiles.length} tuiles, ${colonnes} par ligne, numérotées à partir de 0.${cats.length ? `\nCatégories (numéros des tuiles) :\n${cats.join('\n')}` : ' Aucune catégorie (action ranger_tuiles pour en créer).'}`, image: agrandir(IO.sheetCanvas(doc, colonnes, 1, 0, false), 768) };
+        let liste;
+        if (a.tuiles !== undefined) liste = lirePlages(doc, a.tuiles);
+        else if (a.categorie !== undefined) {
+          liste = doc.tiles.map((t, i) => ((t.categorie || '') === String(a.categorie) ? i : -1)).filter((i) => i >= 0);
+          if (!liste.length) throw new Error(`Pas de catégorie « ${a.categorie} » (voir catalogue).`);
+        } else liste = doc.tiles.map((_t, i) => i);
+        const de = clamp(Math.round(a.de || 0), 0, Math.max(0, doc.tiles.length - 1));
+        const nb = clamp(Math.round(a.nombre || 128), 1, 256);
+        if (a.tuiles === undefined) liste = liste.filter((i) => i >= de);
+        const page = liste.slice(0, nb);
+        const reste = liste.length - page.length;
+        const suivi = page.length > 1 && page.every((i, k) => k === 0 || i === page[k - 1] + 1);
+        return {
+          texte: [`Tuiles ${plages(page)} (${page.length} sur ${doc.tiles.length}).${suivi ? ' Numéro d\'une tuile = le nombre à gauche de sa rangée + sa colonne.' : ' Elles sont dans l\'ordre de cette liste, 16 par rangée.'}${reste > 0 ? ` Suite : de ${liste[page.length]}.` : ''}`,
+            ...lignesTuiles(doc, page)].join('\n'),
+          image: plancheNumerotee(doc, page),
+          max: 1100,
+        };
       },
     },
     voir_tuile: {
@@ -167,8 +350,14 @@
         const i = tuileNumero(doc, a.index);
         const t = doc.tiles[i];
         const k = clamp(Number(a.image) || 0, 0, t.frames.length - 1);
+        // Une tuile importée a souvent ses couleurs hors de la palette : ses pixels ne seraient que
+        // des « ? », qui coûtent sans rien apprendre. On ne les donne alors pas.
+        const pixels = versTexte(doc, t.frames[k]);
+        const inconnus = pixels.join('').split('?').length - 1;
+        const lisible = inconnus <= pixels.length * pixels.length * 0.1;
         return {
-          texte: [`Tuile ${i} « ${t.name} », image ${k + 1} sur ${t.frames.length}.`, legende(doc), '', ...versTexte(doc, t.frames[k]), '',
+          texte: [`Tuile ${i} « ${t.name} », image ${k + 1} sur ${t.frames.length}.`,
+            ...(lisible ? [legende(doc), '', ...pixels] : [`(Pixels non donnés en texte : ${inconnus} pixels de couleurs hors de la palette. Regarde l'image.)`]), '',
             `Regard critique : ${PixelArt.analyse(t.frames[k], doc.tileSize, doc.tileSize).join(' ')}`].join('\n'),
           image: PixelArt.apercu(t.frames, doc.tileSize, doc.tileSize),
           max: 1024,
@@ -178,23 +367,33 @@
     voir_carte: {
       lecture: true,
       icone: 'eye',
-      libelle: () => 'Regarde la carte',
-      description: 'Montre une carte (calques visibles ; carte : id, nom ou numéro, sinon la carte affichée, qui devient affichée), la liste de ses zones, téléporteurs et événements, et pour une carte de 40 × 40 cases au plus, le numéro de tuile de chaque case par calque (« . » = vide) et le passage final (. libre, # bloqué, v ^ < > rebords).',
-      schema: { type: 'object', properties: { carte: { type: ['string', 'number'] } } },
+      libelle: (a) => `Regarde la carte${a.image ? ' (image)' : ''}`,
+      description: 'Décrit une carte (carte : id, nom ou numéro, sinon la carte affichée, qui devient affichée) : calques, zones, téléporteurs, événements, et les numéros de tuile de chaque calque, une ligne par rangée (« 12*5 » = 5 fois la tuile 12, « . » = vide), sur 64 × 64 cases au plus (x, y, largeur, hauteur : la partie à lire, toute la carte par défaut). passage: true ajoute le passage final (. libre, # bloqué, v ^ < > rebords). image: true ajoute une image de la carte : elle coûte cher, garde-la pour vérifier le résultat à la fin.',
+      schema: { type: 'object', properties: { carte: { type: ['string', 'number'] }, x: nombre, y: nombre, largeur: nombre, hauteur: nombre, passage: { type: 'boolean' }, image: { type: 'boolean' } } },
       faire: (a) => {
         const doc = besoinJeu();
         const map = choisirCarte(doc, a.carte);
         const lignes = [decrireCarte(doc)];
-        if (map.width <= 40 && map.height <= 40) {
-          for (const layer of map.layers) {
-            lignes.push('', `Calque ${layer.name} (numéros séparés par des espaces, une ligne par rangée) :`);
-            for (let y = 0; y < map.height; y++) lignes.push(Array.from(layer.cells.subarray(y * map.width, (y + 1) * map.width), (c) => (c < 0 ? '.' : String(c))).join(' '));
-          }
-          const final = Doc.collisions(doc, map);
-          lignes.push('', 'Passage final (. libre, # bloqué, v ^ < > rebord à sauter dans ce sens) :');
-          for (let y = 0; y < map.height; y++) lignes.push(Array.from(final.subarray(y * map.width, (y + 1) * map.width), (c) => PASSAGE_CARS[c]).join(''));
+        const x0 = clamp(Math.round(a.x || 0), 0, map.width - 1), y0 = clamp(Math.round(a.y || 0), 0, map.height - 1);
+        const x1 = clamp(x0 + Math.round(a.largeur || map.width), x0 + 1, Math.min(map.width, x0 + 64));
+        const y1 = clamp(y0 + Math.round(a.hauteur || map.height), y0 + 1, Math.min(map.height, y0 + 64));
+        const partie = x0 > 0 || y0 > 0 || x1 < map.width || y1 < map.height;
+        lignes.push('', partie ? `Cases (${x0}, ${y0}) à (${x1 - 1}, ${y1 - 1}) sur ${map.width} × ${map.height}${x1 - x0 === 64 || y1 - y0 === 64 ? ' (64 × 64 au plus : x, y pour lire la suite)' : ''}.` : `Toute la carte (${map.width} × ${map.height}).`);
+        const rangee = (cells, y) => rangeeCompacte(Array.from(cells.subarray(y * map.width + x0, y * map.width + x1), (c) => (c < 0 ? '.' : c)));
+        for (const layer of map.layers) {
+          let vide = true;
+          for (let y = y0; y < y1 && vide; y++) for (let x = x0; x < x1; x++) if (layer.cells[y * map.width + x] >= 0) { vide = false; break; }
+          if (vide) { lignes.push(`Calque ${layer.name} : vide.`); continue; }
+          lignes.push(`Calque ${layer.name} :`);
+          for (let y = y0; y < y1; y++) lignes.push(rangee(layer.cells, y));
         }
-        return { texte: lignes.join('\n'), image: agrandir(IO.mapCanvas(doc, 1), 1024), max: 1024 };
+        if (a.passage) {
+          const final = Doc.collisions(doc, map);
+          lignes.push('Passage final (. libre, # bloqué, v ^ < > rebord à sauter dans ce sens) :');
+          for (let y = y0; y < y1; y++) lignes.push(Array.from(final.subarray(y * map.width + x0, y * map.width + x1), (c) => PASSAGE_CARS[c]).join(''));
+        }
+        if (!a.image) return lignes.join('\n');
+        return { texte: lignes.join('\n'), image: agrandir(IO.mapCanvas(doc, 1), 768), max: 768 };
       },
     },
     nouveau_jeu: {
@@ -503,28 +702,25 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     voir_tampons: {
       lecture: true,
       icone: 'eye',
-      libelle: () => 'Regarde les tampons',
-      description: 'Montre les tampons (objets de plusieurs tuiles : arbres, maisons…) : numéro, nom, taille, numéros de tuile de chaque rangée, et leur image.',
-      faire: () => {
+      libelle: (a) => (a.tampon !== undefined ? `Regarde le tampon ${a.tampon}` : 'Regarde les tampons'),
+      description: 'Montre les tampons (objets de plusieurs tuiles : arbres, maisons…) en image, chacun avec son numéro, et leur nom et taille. de : premier numéro (0 par défaut) ; nombre : 1 à 48 (24 par défaut). tampon : un seul tampon (numéro ou nom), avec aussi ses numéros de tuile par rangée. Pour les retrouver par nom, catalogue suffit (texte, sans image).',
+      schema: { type: 'object', properties: { de: nombre, nombre, tampon: { type: ['string', 'number'] } } },
+      faire: (a) => {
         const doc = besoinJeu();
         if (!doc.stamps.length) return 'Aucun tampon.';
-        const texte = doc.stamps.map((st, k) => `${k} « ${st.name} » ${st.w} × ${st.h}${st.dessus ? `, ${st.dessus} rangée(s) au-dessus du joueur` : ''} : ${Array.from({ length: st.h }, (_v, j) => st.cells.slice(j * st.w, (j + 1) * st.w).map((c) => (c < 0 ? '.' : c)).join(' ')).join(' / ')}`).join('\n');
-        // Une planche des tampons, côte à côte, pour les voir.
-        const s = doc.tileSize, montres = doc.stamps.slice(0, 48);
-        const largeur = Math.min(1024, montres.reduce((n, st) => n + (st.w * s + 4), 0));
-        const out = el('canvas', { width: Math.max(1, largeur), height: 1 });
-        let x = 0, y = 0, haut = 0;
-        const places = montres.map((st) => {
-          if (x && x + st.w * s > largeur) { x = 0; y += haut + 4; haut = 0; }
-          const p = { st, x, y };
-          x += st.w * s + 4;
-          haut = Math.max(haut, st.h * s);
-          return p;
-        });
-        out.height = y + haut;
-        const g = out.getContext('2d');
-        for (const p of places) g.drawImage(Panels.stampCanvas(doc, p.st, Math.max(p.st.w, p.st.h) * s), p.x, p.y);
-        return { texte: `${doc.stamps.length} tampon(s) (numéros de tuile par rangée, « / » entre les rangées) :\n${texte}`, image: agrandir(out, 768) };
+        if (a.tampon !== undefined) {
+          const k = tamponParNumeroOuNom(doc, a.tampon), st = doc.stamps[k];
+          const rangees = Array.from({ length: st.h }, (_v, j) => st.cells.slice(j * st.w, (j + 1) * st.w).map((c) => (c < 0 ? '.' : c)).join(' '));
+          return { texte: [`Tampon ${ligneTampon(st, k)}${st.dessus ? ` (les ${st.dessus} rangée(s) du haut passent devant le joueur)` : ''}. Tuiles par rangée :`, ...rangees].join('\n'), image: plancheTampons(doc, [[st, k]]), max: 768 };
+        }
+        const de = clamp(Math.round(a.de || 0), 0, doc.stamps.length - 1);
+        const page = doc.stamps.slice(de, de + clamp(Math.round(a.nombre || 24), 1, 48)).map((st, n) => [st, de + n]);
+        const fin = de + page.length;
+        return {
+          texte: [`Tampons ${de} à ${fin - 1} sur ${doc.stamps.length} (numéro « nom » largeur×hauteur en tuiles)${fin < doc.stamps.length ? `. Suite : de ${fin}` : ''} :`, ...page.map(([st, k]) => ligneTampon(st, k))].join('\n'),
+          image: plancheTampons(doc, page),
+          max: 1024,
+        };
       },
     },
     tampon: {
@@ -587,7 +783,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     ecrire_carte: {
       icone: 'symbol-array',
       libelle: (a) => `Écrit ${a.lignes?.length || 0} rangée(s) de la carte`,
-      description: 'Écrit plusieurs cases d\'un coup : lignes = une chaîne par rangée, avec les numéros de tuile séparés par des espaces (« . » = vide, « _ » = ne pas toucher). x, y : où commence la première case (0, 0 par défaut) ; calque : numéro ou nom, sinon le calque choisi ; carte : id, nom ou numéro, sinon la carte affichée.',
+      description: 'Écrit plusieurs cases d\'un coup : lignes = une chaîne par rangée, avec les numéros de tuile séparés par des espaces (« . » = vide, « _ » = ne pas toucher, « 12*5 » = 5 fois la tuile 12, comme voir_carte). Pour toute une ville ou une route, plan_carte est plus simple. x, y : où commence la première case (0, 0 par défaut) ; calque : numéro ou nom, sinon le calque choisi ; carte : id, nom ou numéro, sinon la carte affichée.',
       schema: { type: 'object', properties: { lignes: lignesSchema, x: nombre, y: nombre, calque: { type: ['string', 'number'] }, carte: { type: ['string', 'number'] } }, required: ['lignes'] },
       faire: (a) => {
         const doc = besoinJeu();
@@ -599,7 +795,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         Doc.change(doc, 'Écrire la carte (Claude)', () => {
           const { cells } = Doc.layerForEdit(doc, li);
           (a.lignes || []).forEach((ligne, dy) => {
-            String(ligne).trim().split(/\s+/).forEach((v, dx) => {
+            String(ligne).trim().split(/\s+/).flatMap((v) => { const r = /^(.+)\*(\d+)$/.exec(v); return r ? Array(Math.min(Number(r[2]), 256)).fill(r[1]) : [v]; }).forEach((v, dx) => {
               const x = x0 + dx, y = y0 + dy;
               if (v === '_' || x < 0 || y < 0 || x >= map.width || y >= map.height) return;
               const t = v === '.' ? -1 : Number(v);
@@ -611,6 +807,143 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         });
         if (App.mode !== 'map') App.setMode('map');
         return `${n} case(s) écrite(s) sur le calque ${map.layers[li].name}.`;
+      },
+    },
+    // Tafl 0.18 : décrire beaucoup de tuiles et de tampons d'un coup, une fois pour toutes.
+    nommer: {
+      icone: 'tag',
+      libelle: (a) => `Nomme ${(a.tuiles || []).length + (a.tampons || []).length} groupe(s) de tuiles et tampons`,
+      description: 'Donne un nom court et parlant (« herbe haute », « toit rouge coin haut gauche », « porte d\'arène ») à des tuiles et des tampons, en un seul appel ; le nom est gardé dans le jeu et sert ensuite au catalogue et à plan_carte. tuiles : [{ tuiles : « 12-15, 40 » ou [numéros], nom, passage : auto, libre ou bloque (facultatif) }] (des tuiles qui vont ensemble peuvent garder le même nom) ; tampons : [{ tampon : numéro ou nom, nom, dessus : rangées du haut devant le joueur (facultatif) }]. Les numéros ne changent pas.',
+      schema: { type: 'object', properties: {
+        tuiles: { type: 'array', items: { type: 'object', properties: { tuiles: { type: ['string', 'array', 'number'] }, nom: { type: 'string' }, passage: { type: 'string', enum: ['auto', 'libre', 'bloque'] } }, required: ['tuiles'] } },
+        tampons: { type: 'array', items: { type: 'object', properties: { tampon: { type: ['string', 'number'] }, nom: { type: 'string' }, dessus: nombre }, required: ['tampon'] } },
+      } },
+      faire: (a) => {
+        const doc = besoinJeu();
+        // Tout est vérifié avant de changer quoi que ce soit.
+        const tuiles = (a.tuiles || []).map((e) => ({ liste: lirePlages(doc, e.tuiles), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), passage: e.passage }));
+        const tampons = (a.tampons || []).map((e) => ({ k: tamponParNumeroOuNom(doc, e.tampon), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), dessus: e.dessus }));
+        let n = 0;
+        Doc.change(doc, 'Nommer des tuiles (Claude)', () => {
+          const copie = doc.tiles.slice();
+          for (const e of tuiles) {
+            for (const i of e.liste) {
+              copie[i] = { ...copie[i], ...(e.nom ? { name: e.nom } : {}), ...(['auto', 'libre', 'bloque'].includes(e.passage) ? { passage: e.passage } : {}) };
+              n++;
+            }
+          }
+          doc.tiles = copie;
+          if (tampons.length) {
+            doc.stamps = doc.stamps.map((st, k) => {
+              const e = tampons.findLast((t) => t.k === k);
+              return e ? { ...st, ...(e.nom ? { name: e.nom } : {}), ...(e.dessus !== undefined ? { dessus: clamp(Math.round(e.dessus), 0, st.h) } : {}) } : st;
+            });
+          }
+        });
+        App.refresh();
+        const reste = doc.tiles.filter(sansNom).length;
+        return `${n} tuile(s) et ${tampons.length} tampon(s) nommés.${reste ? ` Encore ${reste} tuiles sans nom.` : ''} Enregistre le jeu pour garder les noms.`;
+      },
+    },
+    // Tafl 0.18 : toute une carte (ou une partie) en un appel, à partir d'un plan en texte.
+    // Au lieu de cent poser_tuiles et tampon, qui relisent chacun toute la conversation.
+    plan_carte: {
+      icone: 'map',
+      libelle: (a) => `Construit ${a.nouvelle ? `la carte « ${a.nouvelle.nom || 'nouvelle'} »` : 'la carte'} d'après un plan de ${a.plan?.length || 0} rangée(s)`,
+      description: `Construit une carte (ou une partie) d'un seul coup, à partir d'un plan en texte : la bonne façon de faire une ville, une route, un intérieur. plan : une chaîne par rangée de cases, un caractère par case ; legende : { "caractère": ce qu'il pose } ; l'espace ne pose rien. Une entrée de légende : { tuile : numéro ou nom (catalogue), variantes : [numéros ou noms] mélangées au hasard, calque } pour une tuile ; { tampon : numéro ou nom, calque } pour un objet de plusieurs tuiles (maison, arbre, arène) : il est posé là où son caractère apparaît en premier (coin haut gauche) et couvre sa taille, donc dessine-le comme un bloc de son caractère (une maison 5×4 = 4 rangées de 5 « M ») ; { effacer: true, calque } vide la case ; passage (${Object.keys(Doc.PASSAGE).join(', ')}) peint aussi le passage de la case. Une liste d'entrées pose plusieurs choses sur la même case (par exemple l'herbe sur Sol et une fleur sur Décor). calque : numéro ou nom (Sol par défaut pour une tuile, Décor pour un tampon). fond : une entrée (ou une liste) posée d'abord sous tout le plan (l'herbe partout). x, y : la case où commence le plan (0, 0). carte : id, nom ou numéro, sinon la carte affichée ; nouvelle : { nom, groupe, interieur } crée d'abord une carte à la taille du plan. Tout s'annule d'un seul Ctrl+Z. image: true renvoie une image du résultat (chère : seulement pour vérifier).`,
+      schema: { type: 'object', properties: {
+        plan: lignesSchema,
+        legende: { type: 'object', additionalProperties: { type: ['object', 'array'] } },
+        fond: { type: ['object', 'array'] },
+        x: nombre, y: nombre,
+        carte: { type: ['string', 'number'] },
+        nouvelle: { type: 'object', properties: { nom: { type: 'string' }, groupe: { type: 'string' }, interieur: { type: 'boolean' } } },
+        image: { type: 'boolean' },
+      }, required: ['plan', 'legende'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const plan = (a.plan || []).map((l) => [...String(l)]);
+        if (!plan.length) throw new Error('plan : une chaîne par rangée de cases.');
+        const largeurPlan = Math.max(...plan.map((l) => l.length)), hauteurPlan = plan.length;
+        if (largeurPlan > 256 || hauteurPlan > 256) throw new Error('Un plan fait 256 × 256 cases au plus.');
+        if (!a.nouvelle) choisirCarte(doc, a.carte);
+        // Les calques d'une carte neuve sont Sol, Décor, Au-dessus (Doc.newMap) : on peut tout vérifier avant.
+        const calquesDe = (m) => (m ? m.layers.map((l) => l.name) : Doc.newMap().layers.map((l) => l.name));
+        const noms = calquesDe(a.nouvelle ? null : doc.map);
+        const calque = (v, defaut) => {
+          if (v === undefined || v === null) return Math.min(defaut, noms.length - 1);
+          if (typeof v === 'number' || /^\d+$/.test(v)) { const i = Number(v); if (noms[i] === undefined) throw new Error(`Pas de calque n° ${v} : ${noms.map((n, k) => `${k} = ${n}`).join(', ')}.`); return i; }
+          const i = noms.findIndex((n) => n.toLowerCase() === String(v).toLowerCase());
+          if (i < 0) throw new Error(`Pas de calque « ${v} » : ${noms.join(', ')}.`);
+          return i;
+        };
+        // Une entrée de légende -> { sorte, … } vérifiée.
+        const entree = (e, ou) => {
+          if (!e || typeof e !== 'object') throw new Error(`${ou} : une entrée { tuile }, { tampon } ou { effacer: true }.`);
+          const passage = e.passage === undefined ? null : Doc.PASSAGE[e.passage];
+          if (passage === undefined) throw new Error(`${ou} : passage ${Object.keys(Doc.PASSAGE).join(', ')}.`);
+          if (e.tampon !== undefined) return { sorte: 'tampon', st: doc.stamps[tamponParNumeroOuNom(doc, e.tampon)], li: calque(e.calque, 1), passage };
+          if (e.effacer) return { sorte: 'tuile', choix: [-1], li: calque(e.calque, 0), passage };
+          if (e.tuile !== undefined) {
+            const t = tuileParNumeroOuNom(doc, e.tuile);
+            const variantes = (e.variantes || []).map((v) => tuileParNumeroOuNom(doc, v));
+            return { sorte: 'tuile', choix: t === -1 || !variantes.length ? [t] : [t, t, ...variantes], li: calque(e.calque, 0), passage };
+          }
+          if (passage !== null) return { sorte: 'passage', passage };
+          throw new Error(`${ou} : il faut tuile, tampon, effacer ou passage.`);
+        };
+        const liste = (v, ou) => (Array.isArray(v) ? v : [v]).map((e, k) => entree(e, Array.isArray(v) ? `${ou} n° ${k + 1}` : ou));
+        const legende = new Map(Object.entries(a.legende || {}).map(([c, v]) => {
+          if ([...c].length !== 1) throw new Error(`legende : « ${c} » doit être un seul caractère.`);
+          return [c, liste(v, `legende « ${c} »`)];
+        }));
+        const fond = a.fond ? liste(a.fond, 'fond') : [];
+        const inconnus = new Set();
+        const decales = new Set(); // tampons dont le bloc dans le plan n'a pas leur taille
+        const compte = { cases: 0, passage: 0, tampons: new Map() };
+        Doc.change(doc, 'Construire d\'après un plan (Claude)', () => {
+          if (a.nouvelle) {
+            Doc.addMap(doc, { name: String(a.nouvelle.nom || `Carte ${doc.maps.length + 1}`), width: Math.max(largeurPlan + Math.round(a.x || 0), 1), height: Math.max(hauteurPlan + Math.round(a.y || 0), 1), groupe: a.nouvelle.groupe === undefined ? doc.map.groupe : String(a.nouvelle.groupe).trim().slice(0, 60), interieur: a.nouvelle.interieur === true });
+          }
+          const { map } = doc;
+          const x0 = Math.round(a.x || 0), y0 = Math.round(a.y || 0);
+          const dans = (x, y) => x >= 0 && y >= 0 && x < map.width && y < map.height;
+          const poser = (e, x, y) => {
+            if (e.passage !== null && e.sorte !== 'tampon' && dans(x, y)) { Doc.passageForEdit(doc, map)[y * map.width + x] = e.passage; compte.passage++; }
+            if (e.sorte !== 'tuile' || !dans(x, y)) return;
+            Doc.layerForEdit(doc, e.li, map).cells[y * map.width + x] = e.choix[Math.floor(Math.random() * e.choix.length)];
+            compte.cases++;
+          };
+          for (const e of fond) for (let j = 0; j < hauteurPlan; j++) for (let i = 0; i < largeurPlan; i++) poser(e, x0 + i, y0 + j);
+          const couvert = new Set(); // « caractère:x,y » déjà couverts par un tampon de ce caractère
+          plan.forEach((ligne, j) => ligne.forEach((c, i) => {
+            if (c === ' ') return;
+            const entrees = legende.get(c);
+            if (!entrees) { inconnus.add(c); return; }
+            for (const e of entrees) {
+              if (e.sorte !== 'tampon') { poser(e, x0 + i, y0 + j); continue; }
+              if (couvert.has(`${c}:${i},${j}`)) continue;
+              for (let dy = 0; dy < e.st.h; dy++) {
+                for (let dx = 0; dx < e.st.w; dx++) {
+                  couvert.add(`${c}:${i + dx},${j + dy}`);
+                  if (plan[j + dy]?.[i + dx] !== c) decales.add(`« ${c} » (${e.st.name}, ${e.st.w}×${e.st.h})`);
+                }
+              }
+              Doc.placeStamp(doc, e.st, x0 + i, y0 + j, e.li, false, map);
+              if (e.passage !== null) for (let dy = 0; dy < e.st.h; dy++) for (let dx = 0; dx < e.st.w; dx++) poser({ sorte: 'passage', passage: e.passage }, x0 + i + dx, y0 + j + dy);
+              compte.tampons.set(e.st.name, (compte.tampons.get(e.st.name) || 0) + 1);
+            }
+          }));
+        });
+        if (a.nouvelle) Stage.reset();
+        if (App.mode !== 'map') App.setMode('map');
+        App.refresh();
+        const map = doc.map;
+        const texte = [`Carte ${doc.mapIndex} = ${map.id} « ${map.name} » (${map.width} × ${map.height}) : ${compte.cases} case(s) de tuiles posées${compte.tampons.size ? `, tampons ${[...compte.tampons].map(([n, k]) => `${n} ×${k}`).join(', ')}` : ''}${compte.passage ? `, passage peint sur ${compte.passage} case(s)` : ''}. Un seul Ctrl+Z annule tout.`,
+          ...(inconnus.size ? [`Caractères sans légende, ignorés : ${[...inconnus].map((c) => `« ${c} »`).join(' ')}.`] : []),
+          ...(decales.size ? [`Attention : les blocs de ${[...decales].join(', ')} n'ont pas la taille de leur tampon, qui a pu être posé plusieurs fois ou déborder. Un bloc = la taille exacte du tampon.`] : []),
+          ...(largeurPlan + Math.round(a.x || 0) > map.width || hauteurPlan + Math.round(a.y || 0) > map.height ? [`Le plan dépasse la carte : ce qui sort de ${map.width} × ${map.height} est ignoré (taille_carte pour l'agrandir).`] : [])].join('\n');
+        return a.image ? { texte, image: agrandir(IO.mapCanvas(doc, 1), 768), max: 768 } : texte;
       },
     },
     taille_carte: {

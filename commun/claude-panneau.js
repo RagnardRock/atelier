@@ -291,6 +291,7 @@ const ClaudePanneau = (() => {
       if (item.t === 'user') addUserBubble(item.text);
       if (item.t === 'assistant') { appendText(item.text); endText(); }
       if (item.t === 'tool') addToolRow(item.icon, item.label, item.state);
+      if (item.t === 'jetons') addJetons(item.jetons);
     }
     replaying = false;
     if (!saved.sessionId) addNotice('info', "Claude Code n'avait pas encore répondu dans cette conversation : elle repart de zéro.");
@@ -322,6 +323,24 @@ const ClaudePanneau = (() => {
     el.innerHTML = `<i class="codicon codicon-${type === 'error' ? 'error' : 'info'}"></i><div></div>`;
     el.lastChild.innerHTML = html;
     list.appendChild(el);
+    scrollDown();
+  }
+
+  // Ce qu'a coûté une réponse, en jetons (les unités que compte la limite d'utilisation de Claude).
+  // Chaque action de Claude relit toute la conversation : avec 30 actions et une conversation de
+  // 60 000 jetons, une seule réponse en lit près de 2 millions (la plupart en cache, moins cher).
+  const LONGUE = 80000;
+  const kilo = (n) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} M` : n >= 1000 ? `${Math.round(n / 1000)} k` : String(n));
+  function addJetons(j) {
+    record({ t: 'jetons', jetons: j });
+    const ligne = document.createElement('div');
+    ligne.className = 'cp-jetons';
+    ligne.title = 'Jetons lus : la conversation, relue à chaque action (la partie en cache coûte moins). Jetons écrits : la réponse et les actions de Claude.';
+    ligne.textContent = `${kilo(j.lus)} jetons lus${j.lus ? ` (${Math.round((100 * j.enCache) / j.lus)} % en cache)` : ''} · ${kilo(j.ecrits)} écrits · ${j.appels} appel${j.appels > 1 ? 's' : ''}${j.conversation ? ` · conversation : ${kilo(j.conversation)}` : ''}`;
+    list.appendChild(ligne);
+    if (j.conversation > LONGUE && !replaying) {
+      addNotice('info', `La conversation pèse ${kilo(j.conversation)} jetons, et Claude la relit à chaque action. Pour une nouvelle tâche, commence une nouvelle conversation (bouton +) : elle coûtera bien moins.`);
+    }
     scrollDown();
   }
 
@@ -549,6 +568,7 @@ const ClaudePanneau = (() => {
         for (const t of tools.values()) {
           if (t.row.classList.contains('running')) { t.row.className = 'cp-outil stopped'; t.row.querySelector('.state').className = 'codicon state codicon-circle-slash'; }
         }
+        if (e.jetons) addJetons(e.jetons);
         saveConversation();
         if (e.isError) {
           const text = e.text || '';

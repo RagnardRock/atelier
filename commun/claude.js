@@ -34,6 +34,7 @@ let nextRequestId = 1;
 let lastSession = null;   // { id, cwd } : pour reprendre la conversation si Claude Code s'arrête
 let dossierDonne = null;  // dossier passé par Atelier au lancement (ou plus tard, s'il rouvre l'outil)
 let tourEnCours = false;  // un message envoyé, sa réponse pas encore finie
+let tailleConversation = 0; // jetons de la conversation au dernier appel (relus à chaque appel)
 
 function emit(event) {
   if (sender && !sender.isDestroyed()) sender.send('claude:event', event);
@@ -237,6 +238,9 @@ function handleMessage(m) {
     return emit({ kind: 'retry', attempt: m.attempt, max: m.max_retries, delayMs: m.retry_delay_ms, status: m.error_status, error: m.error });
   }
   if (m.type === 'assistant' && !m.parent_tool_use_id) {
+    // La taille de la conversation, telle que Claude la relit à chaque appel (jetons).
+    const u = m.message.usage;
+    if (u) tailleConversation = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
     for (const block of m.message.content || []) {
       if (block.type === 'tool_use') emit({ kind: 'tool', id: block.id, name: block.name, input: block.input });
     }
@@ -260,7 +264,16 @@ function handleMessage(m) {
   }
   if (m.type === 'result') {
     tourEnCours = false;
-    return emit({ kind: 'result', isError: Boolean(m.is_error) || m.subtype !== 'success', text: m.result });
+    // Ce qu'a coûté la réponse (tous ses appels réunis) : le panneau l'affiche sous la réponse.
+    const u = m.usage || {};
+    const jetons = {
+      lus: (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0),
+      enCache: u.cache_read_input_tokens || 0,
+      ecrits: u.output_tokens || 0,
+      appels: m.num_turns || 0,
+      conversation: tailleConversation,
+    };
+    return emit({ kind: 'result', isError: Boolean(m.is_error) || m.subtype !== 'success', text: m.result, jetons: jetons.lus ? jetons : null });
   }
 }
 

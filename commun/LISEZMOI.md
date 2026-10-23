@@ -34,6 +34,11 @@ Le panneau dit ce que fait Claude quand il n'écrit rien (il réfléchit, prépa
 serveurs de Claude ne répondent pas et Claude Code réessaie), avec le temps écoulé. ■ l'arrête,
 même s'il est bloqué (au bout de 5 s, Claude Code est arrêté ; le message suivant reprend la conversation).
 
+Sous chaque réponse, une petite ligne dit ce qu'elle a coûté en jetons (l'unité de la limite d'utilisation) :
+les jetons lus (toute la conversation, relue à chaque action ; la part en cache coûte moins), écrits, le
+nombre d'appels et la taille de la conversation. Au-delà de 80 000 jetons, le panneau conseille d'en
+commencer une nouvelle. Ces chiffres viennent du résumé (`result`) que Claude Code envoie à la fin.
+
 ## Les actions de l'outil
 
 Chaque outil décrit ce que Claude peut y faire dans `renderer/claude-actions.js`, avec
