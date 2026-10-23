@@ -6,11 +6,11 @@
 ClaudePanneau.familles({
   tuiles: {
     libelle: 'Dessiner et ranger les tuiles',
-    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'dessiner_objet', 'animer_tuile', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite'],
+    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'dessiner_objet', 'animer_tuile', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite', 'nommer'],
   },
   cartes: {
     libelle: 'Construire les cartes',
-    actions: ['poser_tuiles', 'tampon', 'ecrire_carte', 'taille_carte', 'calque_carte', 'cartes', 'carte_monde', 'peindre_passage', 'passage_tuile', 'zone', 'teleporteur', 'depart', 'ambiance'],
+    actions: ['poser_tuiles', 'plan_carte', 'tampon', 'ecrire_carte', 'taille_carte', 'calque_carte', 'cartes', 'carte_monde', 'peindre_passage', 'passage_tuile', 'zone', 'teleporteur', 'depart', 'ambiance'],
   },
   jeu: {
     libelle: 'Les données du jeu (événements, personnages, quêtes…)',

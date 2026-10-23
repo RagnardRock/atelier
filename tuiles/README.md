@@ -295,6 +295,20 @@ Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais pla
 - **Il voit son résultat** : après chaque dessin, il reçoit la tuile, toutes ses images et une mosaïque 3 × 3 (pour les raccords), avec un regard critique (nombre de couleurs, agitation — au-delà d'un tiers ça fait brouillon —, pixels isolés, contraste, raccords visibles). La consigne : un sol calme, le détail sur les objets et les bordures. `voir_tuile` le montre aussi.
 - **Variantes** : `poser_tuiles` accepte `variantes` (d'autres versions de la même herbe…) mélangées au hasard pour casser la répétition.
 
+## Claude consomme moins (Tafl 0.19)
+
+Une démo de villes avec les planches de DeviantArt épuisait la limite d'utilisation. La mesure (4 planches, 2 589 tuiles) a montré pourquoi : chaque action de Claude relit **toute** la conversation, et certaines réponses étaient énormes. `infos` listait les 2 589 tuiles une par une (~22 000 jetons, relus à chaque action suivante), `voir_tuiles` rendait une planche de 25 px de large (illisible, donc Claude regardait les tuiles une à une), `voir_carte` renvoyait toujours une image et toutes les cases, et une ville se posait en centaines de petites actions.
+
+- **Le catalogue** (`catalogue`) : les tuiles par catégorie et par nom, en plages (« 120-131 herbe haute [libre] »), et les tampons. Claude le lit au lieu de regarder des images. `infos` ne liste plus les tuiles au-delà de 40 (un résumé de ~500 jetons au lieu de ~22 000).
+- **`nommer`** : Claude décrit d'un coup beaucoup de tuiles et de tampons (nom, passage). Les noms sont gardés dans le jeu : la planche importée est regardée **une fois**, les conversations suivantes lisent le catalogue.
+- **`voir_tuiles` par pages** : 16 tuiles par rangée, numérotées (le numéro de la rangée à gauche, la colonne en haut), 256 au plus (~400 jetons l'image).
+- **`plan_carte`** : toute une ville en un appel. Claude écrit un plan, un caractère par case, et une légende (« = » le chemin, « M » la maison (un tampon), « ~ » l'eau qui bloque…), avec un fond (l'herbe partout). Ça crée la carte si besoin, pose tuiles, variantes, tampons et passage, et s'annule d'un seul `Ctrl+Z`. Les tuiles et tampons se désignent par leur nom.
+- **Images sur demande** : `voir_carte` donne du texte compressé (« 12*5 » = 5 fois la tuile 12, jusqu'à 64 × 64 cases, `x`, `y` pour lire une partie), l'image seulement avec `image: true` ; `voir_tampons` par pages, `voir_tuile` ne donne plus de pixels en texte quand ils seraient tous « ? ».
+- **Le compteur de jetons** : sous chaque réponse, le panneau Claude affiche ce qu'elle a coûté (jetons lus, dont en cache, écrits, nombre d'appels, taille de la conversation). Au-delà de 80 000 jetons, il conseille de commencer une nouvelle conversation.
+- **Des consignes d'économie** pour Claude : texte d'abord, nommer les planches une fois, un plan puis `plan_carte`, une carte après l'autre.
+
+(Claude Code met déjà en cache les instructions et la conversation : c'est la part « en cache » du compteur. Ce qui coûte, c'est le nombre d'actions multiplié par la taille de la conversation.)
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
