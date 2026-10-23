@@ -125,7 +125,7 @@
   const nombre = { type: 'number' };
   const lignesSchema = { type: 'array', items: { type: 'string' } };
 
-  // --- Tafl 0.18 : économiser les jetons ---
+  // --- Tafl 0.19 : économiser les jetons ---
   // Chaque action de Claude relit toute la conversation : une réponse de 20 000 jetons (la liste
   // de 2 500 tuiles importées) se paie à chaque appel suivant. D'où un catalogue en texte, des
   // listes en plages (« 12-40 ») au lieu de numéros un par un, et des images seulement sur demande.
@@ -272,7 +272,7 @@
         const doc = besoinJeu();
         return [
           `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
-          // Tafl 0.18 : au-delà de 40 tuiles, un résumé (le détail est dans catalogue).
+          // Tafl 0.19 : au-delà de 40 tuiles, un résumé (le détail est dans catalogue).
           doc.tiles.length <= 40
             ? `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`
             : `Tuiles (${doc.tiles.length}, choisie : ${doc.current}) : ${resumeTuiles(doc)} La liste par nom : action catalogue.`,
@@ -284,7 +284,7 @@
         ].join('\n');
       },
     },
-    // Tafl 0.18 : le catalogue en texte des tuiles et des tampons. Claude le lit au lieu de regarder
+    // Tafl 0.19 : le catalogue en texte des tuiles et des tampons. Claude le lit au lieu de regarder
     // les planches en images ; les noms sont donnés une fois (nommer) et gardés dans le jeu.
     catalogue: {
       lecture: true,
@@ -809,7 +809,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return `${n} case(s) écrite(s) sur le calque ${map.layers[li].name}.`;
       },
     },
-    // Tafl 0.18 : décrire beaucoup de tuiles et de tampons d'un coup, une fois pour toutes.
+    // Tafl 0.19 : décrire beaucoup de tuiles et de tampons d'un coup, une fois pour toutes.
     nommer: {
       icone: 'tag',
       libelle: (a) => `Nomme ${(a.tuiles || []).length + (a.tampons || []).length} groupe(s) de tuiles et tampons`,
@@ -845,7 +845,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return `${n} tuile(s) et ${tampons.length} tampon(s) nommés.${reste ? ` Encore ${reste} tuiles sans nom.` : ''} Enregistre le jeu pour garder les noms.`;
       },
     },
-    // Tafl 0.18 : toute une carte (ou une partie) en un appel, à partir d'un plan en texte.
+    // Tafl 0.19 : toute une carte (ou une partie) en un appel, à partir d'un plan en texte.
     // Au lieu de cent poser_tuiles et tampon, qui relisent chacun toute la conversation.
     plan_carte: {
       icone: 'map',
