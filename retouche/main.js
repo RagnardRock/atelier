@@ -58,6 +58,7 @@ const DEFAULT_CONFIG = {
   claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
   claudeModel: '',
   claudeCommandes: false, // Claude peut-il lancer des commandes (PowerShell, Python…) ?
+  claudeSansDemander: {}, // familles d'actions que Claude fait sans demander (voir ../commun/claude.js)
   accentColor: '#e0a526',
   glass: true,
   windowBlur: false,
@@ -197,7 +198,7 @@ const CLAUDE_CONSIGNES = [
   '  avec les actions (retoucher, calque, peindre, menu…), plutôt que de traiter des fichiers toi-même.',
   '- Pour écrire un fichier dans le projet : exporter, enregistrer_sous ou pack_icones.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD, export web)", consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), outil: { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD, export web)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {

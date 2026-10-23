@@ -61,6 +61,7 @@ const DEFAULT_CONFIG = {
   claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
   claudeModel: '',
   claudeCommandes: false, // Claude peut-il lancer des commandes (PowerShell, Python…) ?
+  claudeSansDemander: {}, // familles d'actions que Claude fait sans demander (voir ../commun/claude.js)
   accentColor: '#ff7a3d',
   glass: true,
   windowBlur: false,
@@ -95,7 +96,7 @@ const CLAUDE_CONSIGNES = [
   '- Les images à exporter et leurs réglages vivent dans la fenêtre de Brokk : lis-les et change-les avec ses',
   '  actions (ajouter_asset, regler_asset, retirer_asset, exporter…), plutôt que de convertir des images toi-même.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Brokk', role: "l'outil d'export d'assets web de Ragna (favicons, icônes, WebP, @2x, Open Graph)", consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Brokk', role: "l'outil d'export d'assets web de Ragna (favicons, icônes, WebP, @2x, Open Graph)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 // Les modifications des réglages passent une par une (lire, changer, écrire) : deux modifications
