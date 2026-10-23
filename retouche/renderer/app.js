@@ -674,6 +674,8 @@ const App = (() => {
     const version = await window.skald.version();
     const swatches = document.createElement('div');
     swatches.className = 'accent-swatches';
+    // Ce que Claude fait sans demander, pour de bon (les familles d'actions, voir ../commun/claude.js).
+    const familles = ((await window.claude.autorisations?.().catch(() => [])) || []).filter((f) => f.gardable);
     const v = await Dialogs.form({
       title: 'Réglages de Skald',
       okLabel: 'Enregistrer',
@@ -688,6 +690,11 @@ const App = (() => {
         { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
         { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude' },
         { key: 'claudeCommandes', label: 'Claude peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(api.config.claudeCommandes) },
+        ...(familles.length ? [
+          { type: 'info', text: 'Claude fait sans me demander la permission, pour de bon :' },
+          ...familles.map((f) => ({ key: `sansDemander-${f.id}`, label: f.libelle, type: 'checkbox', value: f.toujours })),
+          { type: 'info', text: 'Lire et regarder ne demande jamais. Ce qui est permis seulement pour la conversation en cours se voit et se retire avec le bouclier, en haut du panneau Claude.' },
+        ] : []),
         { type: 'info', text: `Skald ${version}. Réglages enregistrés dans ${api.configPath}.` },
       ],
       onInput(values, f) {
@@ -707,6 +714,11 @@ const App = (() => {
       },
     });
     if (!v) return applyTheme(api.config);
+    // Les cases « sansDemander-… » deviennent config.claudeSansDemander = { dessin: true, … }.
+    if (familles.length) {
+      v.claudeSansDemander = {};
+      for (const f of familles) { if (v[`sansDemander-${f.id}`]) v.claudeSansDemander[f.id] = true; delete v[`sansDemander-${f.id}`]; }
+    }
     api.config = await window.skald.writeConfig(v);
     if (await applyTheme(api.config)) {
       notify('Le flou de Windows 11 sera actif au prochain démarrage de Skald.', 'info', 6000);

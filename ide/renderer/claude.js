@@ -3,6 +3,8 @@
 // - La réponse s'affiche au fil de l'eau, en Markdown.
 // - Chaque outil utilisé par Claude (lire, modifier, lancer une commande…) apparaît sur une ligne.
 // - Avant une modification ou une commande, une carte te demande d'autoriser ou de refuser.
+//   « Ne plus demander » vaut pour une famille (les fichiers, le web, une commande par son début…),
+//   pendant la conversation ou pour de bon ; le bouclier de l'en-tête montre tout et permet de le retirer.
 // - Quand Claude modifie un fichier ouvert, l'éditeur le recharge (Ctrl+Z pour annuler).
 
 const claudePanel = (() => {
@@ -211,9 +213,65 @@ const claudePanel = (() => {
   }
   historyButton.onclick = (e) => {
     e.stopPropagation();
+    autorisationsList.hidden = true;
     if (historyList.hidden) showHistory(); else historyList.hidden = true;
   };
-  document.addEventListener('click', (e) => { if (!historyList.contains(e.target)) historyList.hidden = true; });
+  document.addEventListener('click', (e) => {
+    if (!historyList.contains(e.target)) historyList.hidden = true;
+    if (!autorisationsList.contains(e.target) && e.target.isConnected) autorisationsList.hidden = true;
+  });
+
+  // --- Ce que Claude peut faire sans demander (bouclier) ---
+  const autorisationsList = document.querySelector('#claude-autorisations-list');
+  // Les réglages affichés suivent : « toujours » et « Redemander » changent config.json.
+  const relireConfig = async () => { try { state.config = (await window.atelier.getConfig()).config; } catch { /* rien */ } };
+
+  async function showAutorisations() {
+    const liste = await window.atelier.claudeAutorisations();
+    const conversation = liste.filter((f) => f.conversation);
+    const toujours = liste.filter((f) => f.toujours);
+    autorisationsList.innerHTML = '';
+    const titre = (texte) => autorisationsList.insertAdjacentHTML('beforeend', `<div class="history-title">${escapeHtml(texte)}</div>`);
+    const hint = (texte) => autorisationsList.insertAdjacentHTML('beforeend', `<p class="hint">${escapeHtml(texte)}</p>`);
+    const ligne = (f, portee) => {
+      const row = document.createElement('div');
+      row.className = 'autorisation-item';
+      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="autorisation-nom"></span><button title="Claude te redemandera">Redemander</button>';
+      row.querySelector('.autorisation-nom').textContent = f.libelle;
+      row.querySelector('button').onclick = async (e) => {
+        e.stopPropagation();
+        await window.atelier.claudeRetirerAutorisation({ famille: f.id, portee });
+        await relireConfig();
+        showAutorisations();
+      };
+      autorisationsList.appendChild(row);
+    };
+    titre('Sans demander, pendant cette conversation');
+    if (conversation.length) for (const f of conversation) ligne(f, 'conversation');
+    else hint('Rien : Claude demande avant chaque modification ou commande.');
+    titre('Sans demander, pour de bon');
+    if (toujours.length) for (const f of toujours) ligne(f, 'toujours');
+    else hint('Rien. Se règle aussi dans les réglages, section Claude.');
+    hint('Lire et chercher dans le projet ne demande jamais. Une commande enchaînée (&&, |, ;) demande toujours.');
+    if (conversation.length || toujours.length) {
+      const tout = document.createElement('button');
+      tout.className = 'autorisations-tout';
+      tout.textContent = 'Tout redemander';
+      tout.onclick = async (e) => {
+        e.stopPropagation();
+        await window.atelier.claudeRetirerAutorisation({});
+        await relireConfig();
+        showAutorisations();
+      };
+      autorisationsList.appendChild(tout);
+    }
+    autorisationsList.hidden = false;
+  }
+  document.querySelector('#claude-autorisations').onclick = (e) => {
+    e.stopPropagation();
+    historyList.hidden = true;
+    if (autorisationsList.hidden) showAutorisations(); else autorisationsList.hidden = true;
+  };
 
   // Réaffiche une ancienne conversation, et la reprend : ton prochain message relance Claude Code
   // sur cette session (--resume), il se souvient donc de tout ce qui a été dit.
@@ -437,27 +495,37 @@ const claudePanel = (() => {
       <div class="perm-title"><i class="codicon codicon-${icon}"></i><span></span></div>
       <div class="perm-actions">
         <button class="allow primary-button">Autoriser</button>
-        <button class="always" title="Ne plus demander pour ce genre d'action pendant cette conversation">Toujours autoriser</button>
         <button class="deny">Refuser</button>
+      </div>
+      <div class="perm-famille">
+        <span>Ne plus demander pour <strong></strong> :</span>
+        <button class="always" title="Jusqu'à la fin de cette conversation">cette conversation</button>
+        <button class="toujours" title="Gardé dans les réglages ; se retire avec le bouclier, en haut du panneau">toujours</button>
       </div>`;
     card.querySelector('.perm-title span').textContent = `Claude veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
     card.insertBefore(permissionDetails(req.toolName, req.input), card.querySelector('.perm-actions'));
-    if (!req.suggestions.length) card.querySelector('.always').remove();
+    card.querySelector('.perm-famille strong').textContent = `« ${req.familleLibelle} »`;
+    if (!req.famille) card.querySelector('.perm-famille').remove();
+    else if (!req.gardable) card.querySelector('.toujours').remove();
 
-    const answer = (decision) => {
-      window.atelier.claudePermission({
+    const REPONSES = { deny: 'Refusé', allow: 'Autorisé', always: 'Autorisé, et sans demander jusqu\'à la fin de la conversation', toujours: 'Autorisé, et sans demander pour de bon' };
+    const answer = async (decision) => {
+      card.classList.add('answered', decision === 'deny' ? 'denied' : 'allowed');
+      card.querySelector('.perm-famille')?.remove();
+      card.querySelector('.perm-actions').innerHTML = `<span class="perm-answer">${REPONSES[decision]}${decision === 'always' || decision === 'toujours' ? ` (${escapeHtml(req.familleLibelle)})` : ''}</span>`;
+      setBusy(true);
+      await window.atelier.claudePermission({
         requestId: req.requestId,
         toolUseId: req.toolUseId,
         decision,
         input: req.input,
-        suggestions: req.suggestions,
+        famille: req.famille,
       });
-      card.classList.add('answered', decision === 'deny' ? 'denied' : 'allowed');
-      card.querySelector('.perm-actions').innerHTML = `<span class="perm-answer">${decision === 'deny' ? 'Refusé' : decision === 'always' ? 'Autorisé (et pour la suite)' : 'Autorisé'}</span>`;
-      setBusy(true);
+      if (decision === 'toujours') relireConfig();
     };
     card.querySelector('.allow').onclick = () => answer('allow');
     card.querySelector('.always')?.addEventListener('click', () => answer('always'));
+    card.querySelector('.toujours')?.addEventListener('click', () => answer('toujours'));
     card.querySelector('.deny').onclick = () => answer('deny');
 
     list.appendChild(card);
@@ -493,6 +561,12 @@ const claudePanel = (() => {
       case 'permission':
         askPermission(e);
         break;
+      case 'permission-auto': {
+        // Autorisé sans te demander : on le dit au survol de la ligne de l'action.
+        const tool = tools.get(e.toolUseId);
+        if (tool) tool.row.title = `${tool.row.title || ''}\nAutorisé sans demander (${e.libelle}, ${e.pourDeBon ? 'pour de bon' : 'pour cette conversation'})`.trim();
+        break;
+      }
       case 'result': {
         endText();
         setBusy(false);

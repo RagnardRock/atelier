@@ -577,7 +577,7 @@ body.has-tabs #welcome { display: none; }
 .claude-welcome p.hint { padding: 0; color: var(--muted); font-size: 12px; }
 
 #claude-panel { position: relative; }
-#claude-history-list {
+#claude-history-list, #claude-autorisations-list {
   position: absolute;
   top: 38px;
   left: 10px;
@@ -592,8 +592,8 @@ body.has-tabs #welcome { display: none; }
   box-shadow: var(--shadow);
   backdrop-filter: blur(30px) saturate(150%);
 }
-body:not(.glass) #claude-history-list { background: var(--panel); }
-body.glass #claude-history-list { background: rgba(22, 23, 30, 0.96); } /* presque opaque : la conversation derrière ne doit pas gêner la lecture */
+body:not(.glass) #claude-history-list, body:not(.glass) #claude-autorisations-list { background: var(--panel); }
+body.glass #claude-history-list, body.glass #claude-autorisations-list { background: rgba(22, 23, 30, 0.96); } /* presque opaque : la conversation derrière ne doit pas gêner la lecture */
 .history-title { padding: 6px 8px 4px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .history-item { display: flex; align-items: center; gap: 6px; padding: 6px 4px 6px 8px; border-radius: 6px; cursor: pointer; }
 .history-item:hover { background: var(--hover); }
@@ -715,6 +715,17 @@ body.glass #claude-history-list { background: rgba(22, 23, 30, 0.96); } /* presq
 .claude-permission.answered { border-color: var(--border); background: var(--hover); }
 .claude-permission.answered .perm-details { display: none; }
 .perm-answer { font-size: 12px; color: var(--muted); }
+.perm-famille { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; color: var(--muted); }
+.perm-famille strong { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.perm-famille button, .autorisation-item button, .autorisations-tout { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.perm-famille button:hover, .autorisation-item button:hover, .autorisations-tout:hover { background: var(--hover); border-color: var(--accent); }
+/* Ce que Claude peut faire sans demander (bouclier) */
+.autorisation-item { display: flex; align-items: center; gap: 8px; padding: 5px 4px 5px 8px; border-radius: 6px; }
+.autorisation-item:hover { background: var(--hover); }
+.autorisation-item .codicon { color: var(--success); }
+.autorisation-nom { flex: 1; min-width: 0; color: var(--text-strong); overflow-wrap: anywhere; }
+.autorisations-tout { display: block; margin: 6px 8px 6px auto; }
+#claude-autorisations-list .hint { padding: 4px 8px; color: var(--muted); font-size: 12px; margin: 0; }
 .claude-permission.allowed .perm-answer { color: var(--success); }
 .claude-permission.denied .perm-answer { color: var(--error); }
 
