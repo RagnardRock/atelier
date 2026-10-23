@@ -18,7 +18,7 @@ ClaudePanneau.familles({
   },
   fichiers_tafl: {
     libelle: 'Ouvrir, enregistrer, importer et exporter',
-    actions: ['nouveau_jeu', 'ouvrir', 'importer_planche', 'enregistrer', 'enregistrer_sous', 'enregistrer_jeu', 'exporter_planche', 'exporter_carte', 'exporter_tuiles', 'exporter_tiled'],
+    actions: ['nouveau_jeu', 'ouvrir', 'importer_planche', 'enregistrer', 'enregistrer_sous', 'enregistrer_jeu', 'exporter_planche', 'exporter_planche_nommee', 'exporter_carte', 'exporter_tuiles', 'exporter_tiled'],
   },
   menus: {
     libelle: 'Les commandes des menus, annuler et rétablir',

@@ -155,7 +155,16 @@ handle('file:saveDialog', async (event, { defaultName, format }) => {
   });
   if (result.canceled || !result.filePath) return null;
   writable.add(path.resolve(result.filePath));
+  // Tafl 0.20 : une planche nommée s'écrit avec ses noms juste à côté (planche.tuiles.json).
+  if (format === 'png') writable.add(path.resolve(result.filePath.replace(/\.png$/i, '') + '.tuiles.json'));
   return result.filePath;
+});
+
+// Tafl 0.20 : les noms d'une planche (planche.tuiles.json à côté de planche.png), relus à l'import.
+// Seulement le fichier voisin d'une image que Ragna (ou Claude, dans le projet) vient d'ouvrir.
+handle('file:nomsPlanche', async (_event, file) => {
+  if (typeof file !== 'string' || !/\.png$/i.test(file)) return null;
+  try { return JSON.parse(await fs.readFile(file.replace(/\.png$/i, '') + '.tuiles.json', 'utf8')); } catch { return null; }
 });
 
 // Choisir un dossier (tuiles séparées, carte pour Tiled). Ses fichiers deviennent inscriptibles.
@@ -360,7 +369,8 @@ const CLAUDE_CONSIGNES = [
   '- Planche importée : ses tuiles n\'ont pas de nom. Regarde-les par pages de 128 à 256 (voir_tuiles de, nombre) et',
   '  décris-les toutes avec nommer (un appel par page : sol, chemins, eau, murs, toits, portes… et le passage',
   '  bloque des murs et de l\'eau), nomme aussi les tampons, puis enregistre : les conversations suivantes',
-  '  liront le catalogue au lieu des images.',
+  '  liront le catalogue au lieu des images. Propose ensuite exporter_planche_nommee (le PNG et ses noms) : importée',
+  '  dans un autre jeu, la planche arrive déjà nommée.',
   '- Construire une carte : écris d\'abord le plan (où vont les maisons, l\'arène, les chemins, l\'eau), puis',
   '  pose-le avec plan_carte, en un appel par carte (ou par grande partie). Pas de poser_tuiles case par case.',
   '  Vérifie une fois à la fin (voir_carte image: true), corrige avec un petit plan_carte, et passe à la suite.',

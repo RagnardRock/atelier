@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('tafl', {
   saveDialog: (options) => ipcRenderer.invoke('file:saveDialog', options),
   pickFolder: (title) => ipcRenderer.invoke('folder:pick', title),
   writeFile: (file, bytes) => ipcRenderer.invoke('file:write', file, bytes),
+  nomsPlanche: (file) => ipcRenderer.invoke('file:nomsPlanche', file),
   revealFile: (file) => ipcRenderer.invoke('file:reveal', file),
   // Lancer le jeu dans Saga (le moteur) ; depart = { carte, x, y, direction } pour « Jouer ici ».
   jouer: (dossier, depart) => ipcRenderer.invoke('jeu:jouer', dossier, depart),

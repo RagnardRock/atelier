@@ -295,6 +295,15 @@ Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais pla
 - **Il voit son résultat** : après chaque dessin, il reçoit la tuile, toutes ses images et une mosaïque 3 × 3 (pour les raccords), avec un regard critique (nombre de couleurs, agitation — au-delà d'un tiers ça fait brouillon —, pixels isolés, contraste, raccords visibles). La consigne : un sol calme, le détail sur les objets et les bordures. `voir_tuile` le montre aussi.
 - **Variantes** : `poser_tuiles` accepte `variantes` (d'autres versions de la même herbe…) mélangées au hasard pour casser la répétition.
 
+## Les planches nommées (Tafl 0.20)
+
+Nommer les tuiles d'une planche (à la main ou par Claude) se fait une fois, puis sert dans tous les jeux :
+
+- **Fichier › Exporter la planche nommée (PNG + noms)…** : les tuiles (toutes, ou une catégorie, souvent une planche importée) en PNG, et juste à côté `planche.tuiles.json` : le nom, le passage et la catégorie de chaque tuile, les autres images des tuiles animées, et les tampons.
+- **Importer ce PNG** (Ctrl+I) dans n'importe quel jeu : Tafl trouve le `.tuiles.json` et reprend tout. Si les tuiles sont déjà dans le jeu sans nom, « Une seule fois chaque tuile identique » les reconnaît et leur donne leur nom (les noms que tu as déjà donnés ne sont jamais remplacés).
+- Claude a l'action `exporter_planche_nommee`, et `importer_planche` relit les noms tout seul.
+- L'export Tiled donne aussi le nom (la classe de la tuile dans Tiled) et le passage des tuiles nommées.
+
 ## Claude consomme moins (Tafl 0.19)
 
 Une démo de villes avec les planches de DeviantArt épuisait la limite d'utilisation. La mesure (4 planches, 2 589 tuiles) a montré pourquoi : chaque action de Claude relit **toute** la conversation, et certaines réponses étaient énormes. `infos` listait les 2 589 tuiles une par une (~22 000 jetons, relus à chaque action suivante), `voir_tuiles` rendait une planche de 25 px de large (illisible, donc Claude regardait les tuiles une à une), `voir_carte` renvoyait toujours une image et toutes les cases, et une ville se posait en centaines de petites actions.
