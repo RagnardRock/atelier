@@ -1,7 +1,7 @@
 {
   "name": "atelier-ide",
   "productName": "Rune",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Rune, mon IDE perso (Electron + Monaco), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {

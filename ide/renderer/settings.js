@@ -44,7 +44,9 @@ const settings = (() => {
     ] },
     { id: 'claude', title: 'Claude', icon: 'sparkle', fields: [
       { key: 'claudeModel', label: 'Modèle', type: 'segmented', options: [['', 'Par défaut'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']], help: '« Par défaut » = celui choisi dans Claude Code. Opus est le plus fort, Haiku le plus rapide. Pris en compte à la prochaine conversation.' },
-      { key: 'claudePermissionMode', label: 'Modifications de fichiers', type: 'segmented', options: [['ask', 'Demander à chaque fois'], ['acceptEdits', 'Accepter sans demander']], help: 'Les commandes demandent toujours ton accord. Pris en compte à la prochaine conversation.' },
+      { key: 'claudePermissionMode', label: 'Modifications de fichiers', type: 'segmented', options: [['ask', 'Demander à chaque fois'], ['acceptEdits', 'Accepter sans demander']], help: 'Pris en compte tout de suite. Les commandes demandent ton accord, sauf celles que tu as permises pour de bon sur leur carte (bouclier du panneau Claude pour les voir et les retirer).' },
+      { key: 'claudeSansDemander', sub: 'web', label: 'Lire des pages et chercher sur le web sans demander', type: 'toggle' },
+      { key: 'claudeSansDemander', sub: 'memoire', label: 'Retenir ou oublier des infos sur le projet sans demander', type: 'toggle', help: 'Dans la mémoire partagée avec Atelier.' },
       { key: 'claudeAtelier', label: 'Mémoire partagée avec Atelier', type: 'toggle', help: 'Claude lit la mémoire du projet ouvert et tes notes (gardées par Atelier, dans %APPDATA%\\atelier-commun), et peut y retenir une info avec ta permission. Pris en compte à la prochaine conversation.' },
       { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', help: '« claude » si Claude Code est installé avec npm. Sinon, son chemin complet.' },
     ] },
@@ -203,7 +205,9 @@ const settings = (() => {
       text.appendChild(note);
     }
     row.appendChild(text);
-    const control = CONTROLS[field.type](field, state.config[field.key]);
+    // Un champ « sub » : une clé de l'objet (config.claudeSansDemander.web…).
+    const value = field.sub && field.type !== 'shortcut' ? state.config[field.key]?.[field.sub] : state.config[field.key];
+    const control = CONTROLS[field.type](field, value);
     control.classList.add('setting-control');
     row.appendChild(control);
     return row;
@@ -226,7 +230,9 @@ const settings = (() => {
         const next = !button.classList.contains('on');
         button.classList.toggle('on', next);
         button.setAttribute('aria-checked', next);
-        set(field.key, field.on !== undefined ? (next ? field.on : field.off) : next);
+        const v = field.on !== undefined ? (next ? field.on : field.off) : next;
+        if (field.sub) set(field.key, { ...state.config[field.key], [field.sub]: v });
+        else set(field.key, v);
       };
       return button;
     },

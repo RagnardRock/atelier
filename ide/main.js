@@ -375,7 +375,8 @@ handle('config:path', async () => configPath());
 // Fenêtre de réglages : elle envoie seulement les clés modifiées, qu'on fusionne dans ton
 // config.json (les autres clés, et celles que l'interface ne connaît pas, sont gardées).
 // Seules les clés de config.default.json sont acceptées.
-handle('config:save', async (_event, changes) => {
+handle('config:save', async (_event, changes) => saveConfigChanges(changes));
+async function saveConfigChanges(changes) {
   const defaults = JSON.parse(await fs.readFile(DEFAULT_CONFIG, 'utf8'));
   let user = {};
   const text = await fs.readFile(configPath(), 'utf8').catch(() => '{}');
@@ -392,7 +393,7 @@ handle('config:save', async (_event, changes) => {
   const result = await loadConfig();
   applyShortcuts(result.config.shortcuts);
   return result;
-});
+}
 
 // Pendant qu'on enregistre un nouveau raccourci dans les réglages, main.js ne doit pas
 // intercepter les touches (sinon Ctrl+J ouvrirait le terminal au lieu d'être enregistré).
@@ -735,7 +736,7 @@ handle('app:relaunch', async () => {
 handle('window:blurSupported', async () => blurSupported());
 
 // Chat avec Claude (voir claude.js).
-claude.register({ handle, getRoot: () => rootFolder, readConfig, log, dataDir: app.getPath('userData') });
+claude.register({ handle, getRoot: () => rootFolder, readConfig, writeConfig: saveConfigChanges, log, dataDir: app.getPath('userData') });
 search.register({ handle, getRoot: () => rootFolder });
 preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
 gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });

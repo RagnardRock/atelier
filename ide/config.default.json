@@ -19,6 +19,7 @@
   "claudeCommand": "claude",
   "claudeModel": "",
   "claudePermissionMode": "ask",
+  "claudeSansDemander": {},
   "claudeAtelier": true,
   "terminalFontSize": 14,
   "terminalProfiles": [
