@@ -82,6 +82,14 @@ body.glass .cp-liste-historique { background: rgba(22, 23, 30, 0.96); }
 .cp-historique-texte .nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-strong); }
 .cp-historique-texte .date { font-size: 11px; color: var(--muted); }
 .cp-historique-ligne .icon-button { visibility: hidden; }
+/* Ce que Claude peut faire sans demander (bouclier) */
+.cp-autorisation { display: flex; align-items: center; gap: 8px; padding: 5px 4px 5px 8px; border-radius: 6px; }
+.cp-autorisation:hover { background: var(--hover); }
+.cp-autorisation .codicon { color: var(--success); }
+.cp-autorisation .nom { flex: 1; min-width: 0; color: var(--text-strong); }
+.cp-autorisation button, .cp-tout-redemander { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.cp-autorisation button:hover, .cp-tout-redemander:hover { border-color: var(--accent); background: var(--hover); }
+.cp-tout-redemander { display: block; margin: 6px 8px 6px auto; }
 .cp-historique-ligne:hover .icon-button { visibility: visible; }
 
 /* Bulles : les tiennes à droite, celles de Claude en pleine largeur */
@@ -149,6 +157,10 @@ body.glass .cp-liste-historique { background: rgba(22, 23, 30, 0.96); }
 .cp-perm-actions .deny:hover { border-color: var(--error); color: var(--error); }
 .cp-permission.answered { border-color: var(--border); background: var(--hover); }
 .cp-permission.answered .cp-details { display: none; }
+.cp-perm-famille { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; color: var(--muted); }
+.cp-perm-famille strong { color: var(--text); font-weight: 600; }
+.cp-perm-famille button { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text); font: inherit; cursor: pointer; }
+.cp-perm-famille button:hover { background: var(--hover); border-color: var(--accent); }
 .cp-perm-reponse { font-size: 12px; color: var(--muted); }
 .cp-permission.allowed .cp-perm-reponse { color: var(--success); }
 .cp-permission.denied .cp-perm-reponse { color: var(--error); }

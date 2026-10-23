@@ -59,6 +59,7 @@ const DEFAULT_CONFIG = {
   claudeCommand: 'claude', // panneau Claude (../commun/claude.js)
   claudeModel: '',
   claudeCommandes: false, // Claude peut-il lancer des commandes (PowerShell, Python…) ?
+  claudeSansDemander: {}, // familles d'actions que Claude fait sans demander (voir ../commun/claude.js)
   accentColor: '#7bd88f',
   glass: true,
   windowBlur: false,
@@ -379,7 +380,7 @@ const CLAUDE_CONSIGNES = [
   '- Animation : animer_tuile plutôt qu\'image par image : cycle de couleurs pour l\'eau, balancement d\'1 pixel pour',
   '  les herbes, scintillement pour les reflets ; 3 à 6 images de 150 à 300 ms, des mouvements petits et doux.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {

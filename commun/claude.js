@@ -17,6 +17,11 @@
 // décrit dans renderer/claude-actions.js. Claude Code les appelle par mcp-commun.js, qui les transmet
 // ici par un canal local (un « named pipe » de Windows, protégé par un jeton secret) ; on les passe
 // à la fenêtre, qui les fait sous tes yeux, et la réponse repart par le même chemin.
+//
+// Les autorisations : chaque demande appartient à une « famille » (modifier les fichiers du projet,
+// dessiner les tuiles…). « Ne plus demander » vaut pour une famille, pendant la conversation ou pour
+// de bon (config.claudeSansDemander de l'outil). C'est nous qui les gardons, pas Claude Code : on
+// peut ainsi les montrer et les retirer (bouclier du panneau, réglages de l'outil).
 
 const { spawn, execFile } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -134,6 +139,77 @@ function executerAction(nom, args, log) {
   });
 }
 
+// --- Les autorisations ---
+// Les familles communes à tous les outils. Celles de l'outil viennent de ses actions (champ famille).
+const FAMILLES_COMMUNES = {
+  fichiers: { libelle: 'Modifier les fichiers du projet', outils: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] },
+  memoire: { libelle: 'Retenir ou oublier des infos sur le projet', outils: ['mcp__atelier__retenir_projet', 'mcp__atelier__oublier_projet'] },
+  web: { libelle: 'Lire des pages et chercher sur le web', outils: ['WebFetch', 'WebSearch'] },
+  commandes: { libelle: 'Lancer des commandes (PowerShell, Python…)', outils: ['Bash', 'PowerShell'] },
+};
+const FAMILLE_OUTIL = 'outil'; // les actions de l'outil sans famille à elles
+const autoriseesConversation = new Set(); // familles « sans demander » pendant cette conversation
+let lireConfig = null;   // readConfig de l'outil
+let changerConfig = null; // (changements) => écrit la config de l'outil ; sans lui, rien n'est gardé pour de bon
+let nomOutil = 'l\'outil';
+
+function familleDe(toolName) {
+  for (const [id, f] of Object.entries(FAMILLES_COMMUNES)) if (f.outils.includes(toolName)) return id;
+  if (toolName.startsWith('mcp__atelier__')) {
+    const action = actions.find((a) => `mcp__atelier__${a.name}` === toolName);
+    if (action) return action.famille || FAMILLE_OUTIL;
+  }
+  return `autre:${toolName}`; // un outil inattendu : seulement pour la conversation
+}
+
+// Toutes les familles connues : { id: libelle }, dans l'ordre où les montrer.
+function familles() {
+  const liste = {};
+  for (const a of actions) if (!a.lecture && a.famille) liste[a.famille] = a.familleLibelle || a.famille;
+  if (actions.some((a) => !a.lecture && !a.famille)) liste[FAMILLE_OUTIL] = `Les autres actions de ${nomOutil}`;
+  for (const [id, f] of Object.entries(FAMILLES_COMMUNES)) liste[id] = f.libelle;
+  for (const id of autoriseesConversation) if (!liste[id]) liste[id] = id.replace(/^autre:/, '');
+  return liste;
+}
+const libelleFamille = (id) => familles()[id] || id.replace(/^autre:/, '');
+const gardable = (id) => Boolean(changerConfig) && !id.startsWith('autre:');
+
+async function sansDemander() {
+  try { return { ...((await lireConfig?.())?.claudeSansDemander || {}) }; } catch { return {}; }
+}
+
+function repondrePermission(requestId, toolUseId, autoriser, input) {
+  const response = autoriser
+    ? { behavior: 'allow', updatedInput: input, toolUseID: toolUseId }
+    : { behavior: 'deny', message: "L'utilisateur a refusé.", toolUseID: toolUseId };
+  write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
+}
+
+// Une demande de Claude Code : autorisée d'office si sa famille est « sans demander », sinon la carte.
+async function demanderPermission(m) {
+  const { tool_name: toolName, tool_use_id: toolUseId, input } = m.request;
+  const famille = familleDe(toolName);
+  const pourDeBon = Boolean((await sansDemander())[famille]);
+  if (pourDeBon || autoriseesConversation.has(famille)) {
+    repondrePermission(m.request_id, toolUseId, true, input);
+    return emit({ kind: 'permission-auto', toolUseId, famille, libelle: libelleFamille(famille), pourDeBon });
+  }
+  emit({
+    kind: 'permission',
+    requestId: m.request_id,
+    toolUseId,
+    toolName,
+    input,
+    famille,
+    familleLibelle: libelleFamille(famille),
+    gardable: gardable(famille),
+    suggestions: [], // (anciens panneaux : le bouton « Toujours » n'apparaît qu'avec des suggestions)
+  });
+}
+
+// Changer de conversation (nouvelle, reprise, autre projet) : on redemande tout ce qui n'est pas gardé.
+function oublierConversation() { autoriseesConversation.clear(); }
+
 // Les outils de Claude Code qu'il garde dans un outil de l'Atelier : voir et modifier les fichiers du
 // projet, chercher sur le web. Tout le reste (sous-agents, tâches planifiées, worktrees…) ne sert à rien
 // ici et alourdit chaque réponse. Les commandes (PowerShell, Bash, donc Python, Node…) seulement si
@@ -249,14 +325,8 @@ function handleMessage(m) {
     return;
   }
   if (m.type === 'control_request' && m.request?.subtype === 'can_use_tool') {
-    return emit({
-      kind: 'permission',
-      requestId: m.request_id,
-      toolUseId: m.request.tool_use_id,
-      toolName: m.request.tool_name,
-      input: m.request.input,
-      suggestions: m.request.permission_suggestions || [],
-    });
+    demanderPermission(m);
+    return;
   }
   if (m.type === 'result') {
     tourEnCours = false;
@@ -308,7 +378,11 @@ async function writeHistory(list) {
 
 // outil : { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD)", consignes: '…' }
 // (consignes : ce que Claude doit savoir en plus dans cet outil, en Markdown ; facultatif)
-function register({ handle, log, dataDir, readConfig, outil }) {
+// writeConfig (facultatif) : (changements) => enregistre ces réglages ; permet « ne plus demander » pour de bon.
+function register({ handle, log, dataDir, readConfig, writeConfig, outil }) {
+  lireConfig = readConfig;
+  changerConfig = writeConfig || null;
+  nomOutil = outil.nom;
   historyFile = path.join(dataDir, 'claude-conversations.json');
   communDir = path.join(path.dirname(dataDir), 'atelier-commun');
   const mcpFile = path.join(dataDir, 'mcp-atelier.json');
@@ -402,8 +476,10 @@ function register({ handle, log, dataDir, readConfig, outil }) {
   // Les actions de l'outil, décrites par sa fenêtre (renderer/claude-actions.js) au démarrage.
   handle('claude:actions', async (_event, liste) => {
     if (!Array.isArray(liste)) return;
-    actions = liste.filter((a) => /^[a-z_]{1,40}$/.test(a?.name)).map(({ name, description, inputSchema, lecture }) => ({
+    actions = liste.filter((a) => /^[a-z_]{1,40}$/.test(a?.name)).map(({ name, description, inputSchema, lecture, famille, familleLibelle }) => ({
       name, description: String(description || ''), inputSchema: inputSchema || { type: 'object', properties: {} }, lecture: Boolean(lecture),
+      ...(typeof famille === 'string' && /^[a-z_]{1,40}$/.test(famille) && !FAMILLES_COMMUNES[famille]
+        ? { famille, familleLibelle: String(familleLibelle || famille).slice(0, 80) } : {}),
     }));
   });
   handle('claude:actionFaite', async (_event, id, resultat) => enAttente.get(id)?.(resultat));
@@ -445,6 +521,7 @@ function register({ handle, log, dataDir, readConfig, outil }) {
   // Reprendre une ancienne conversation : le prochain message relance Claude Code avec --resume.
   handle('claude:resume', async (_event, sessionId) => {
     stop();
+    oublierConversation();
     lastSession = sessionId && /^[\w-]+$/.test(sessionId) ? { id: sessionId, cwd: (await cwdActuel()).cwd } : null;
   });
 
@@ -452,7 +529,7 @@ function register({ handle, log, dataDir, readConfig, outil }) {
     sender = event.sender;
     const { cwd, nom } = await cwdActuel();
     // Le projet a changé depuis le lancement : conversation neuve dans le bon dossier.
-    if (proc && procCwd !== cwd) stop();
+    if (proc && procCwd !== cwd) { stop(); oublierConversation(); }
     if (!proc) {
       const config = await readConfig();
       const resume = lastSession && lastSession.cwd === cwd && /^[\w-]+$/.test(lastSession.id) ? lastSession.id : null;
@@ -475,18 +552,35 @@ function register({ handle, log, dataDir, readConfig, outil }) {
     write({ type: 'user', message: { role: 'user', content: text }, parent_tool_use_id: null, session_id: '' });
   });
 
-  // Ta réponse à une demande de permission.
-  handle('claude:permission', async (_event, { requestId, toolUseId, decision, input, suggestions }) => {
-    const response = decision === 'deny'
-      ? { behavior: 'deny', message: "L'utilisateur a refusé.", toolUseID: toolUseId }
-      : {
-        behavior: 'allow',
-        updatedInput: input,
-        toolUseID: toolUseId,
-        // « Toujours autoriser » : les règles proposées par Claude Code (pour cette conversation).
-        ...(decision === 'always' && suggestions?.length ? { updatedPermissions: suggestions } : {}),
-      };
-    write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
+  // Ta réponse à une demande de permission. decision : allow, deny, always (ne plus demander pour
+  // cette famille pendant la conversation) ou toujours (pour de bon, gardé dans les réglages).
+  handle('claude:permission', async (_event, { requestId, toolUseId, decision, input, famille }) => {
+    repondrePermission(String(requestId), String(toolUseId), decision !== 'deny', input);
+    if (typeof famille !== 'string' || !famille) return;
+    if (decision === 'always') autoriseesConversation.add(famille);
+    if (decision === 'toujours' && gardable(famille)) {
+      await changerConfig({ claudeSansDemander: { ...(await sansDemander()), [famille]: true } });
+      log('INFO', `Claude : « ${libelleFamille(famille)} » autorisé sans demander, pour de bon`);
+    }
+  });
+
+  // Ce que Claude peut faire sans demander : [{ id, libelle, conversation, toujours, gardable }].
+  handle('claude:autorisations', async () => {
+    const config = await sansDemander();
+    return Object.entries(familles()).map(([id, libelle]) => ({
+      id, libelle, conversation: autoriseesConversation.has(id), toujours: Boolean(config[id]), gardable: gardable(id),
+    }));
+  });
+  // Redemander pour une famille (portee : conversation, toujours ou les deux), ou pour toutes (famille absente).
+  handle('claude:autorisations:retirer', async (_event, { famille, portee } = {}) => {
+    const ids = famille ? [String(famille)] : null;
+    if (portee !== 'toujours') for (const id of ids || [...autoriseesConversation]) autoriseesConversation.delete(id);
+    if (portee !== 'conversation' && changerConfig) {
+      const config = await sansDemander();
+      for (const id of ids || Object.keys(config)) delete config[id];
+      await changerConfig({ claudeSansDemander: config });
+    }
+    log('INFO', `Claude : ${famille ? `« ${libelleFamille(famille)} »` : 'tout'} redemandé`);
   });
 
   handle('claude:interrupt', async () => {
@@ -501,7 +595,7 @@ function register({ handle, log, dataDir, readConfig, outil }) {
       }
     }, 5000);
   });
-  handle('claude:reset', async () => { lastSession = null; stop(); });
+  handle('claude:reset', async () => { lastSession = null; stop(); oublierConversation(); });
 }
 
 module.exports = { register, stop, setProjet };
