@@ -55,6 +55,21 @@ Dans l'outil installé, `mcp-commun.js` est sorti de l'archive `app.asar` (`asar
 `package.json` de l'outil) : Claude Code le lance avec le Node d'Electron, qui ne peut pas lire un
 script resté dans l'archive.
 
+## Les autorisations
+
+Chaque demande de permission appartient à une **famille** : celles de tous les outils (modifier les
+fichiers du projet, retenir ou oublier, le web, les commandes), et celles de l'outil, données par
+`ClaudePanneau.familles({ id: { libelle, actions: [noms] } })` (pour Tafl : `renderer/claude-familles.js`).
+Une action sans famille va dans « Les autres actions de l'outil ».
+
+Sur la carte, « Ne plus demander pour … » vaut pour toute la famille : **cette conversation** (gardé
+par `claude.js`, oublié à la nouvelle conversation, à la reprise d'une autre ou au changement de
+projet) ou **toujours** (`config.claudeSansDemander` de l'outil ; seulement si son `main.js` passe
+`writeConfig` à `register`). C'est `claude.js` qui répond à Claude Code, sans lui confier de règles :
+tout se voit et se retire avec le **bouclier** de l'en-tête du panneau (« Redemander », « Tout
+redemander », si le `preload.js` de l'outil expose `autorisations` et `retirerAutorisation`), et les
+familles « pour de bon » se cochent aussi dans les réglages de l'outil.
+
 ## Les menus et leurs fenêtres
 
 Skald et Tafl donnent aussi à Claude toutes leurs commandes de menu (actions `menus`, `champs_menu`

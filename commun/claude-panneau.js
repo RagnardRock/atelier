@@ -10,6 +10,9 @@
 // - Les actions propres à l'outil (renderer/claude-actions.js) : ClaudePanneau.actions({ nom: {
 //     description, schema, lecture, icone, libelle(args), faire(args) } }). faire() renvoie un texte,
 //   ou { texte, image: canvas } pour montrer une capture à Claude. lecture: true = sans permission.
+// - Les familles d'actions (ClaudePanneau.familles({ id: { libelle, actions: [noms] } })) : « Ne plus
+//   demander » vaut pour toute une famille, pendant la conversation ou pour de bon. Le bouclier de
+//   l'en-tête montre ce que Claude peut faire sans demander, et permet de le retirer.
 //
 // Pour l'utiliser : <link rel="stylesheet" href="../commun/claude-panneau.css"> et, en dernier,
 // <script src="../commun/claude-panneau.js" data-outil="Skald" data-bienvenue="…"></script>.
@@ -17,7 +20,7 @@
 
 const ClaudePanneau = (() => {
   const api = () => window.claude; // exposé par preload.js
-  let panel, list, input, statusEl, stopButton, sendButton, historyList, projetEl, modelEl, titleButton;
+  let panel, list, input, statusEl, stopButton, sendButton, historyList, autorisationsList, projetEl, modelEl, titleButton;
   let outil = 'l\'outil';
   let bienvenue = '';
   let busy = false;
@@ -27,6 +30,7 @@ const ClaudePanneau = (() => {
   const tools = new Map(); // id d'outil -> { name, input, row, item }
   let projetActuel = null; // { dossier, nom, source } ou null
   const mesActions = {};   // nom -> { description, schema, lecture, icone, libelle, faire }
+  const mesFamilles = {};  // nom d'action -> { id, libelle }
 
   // --- Conversation affichée (enregistrée dans l'historique pour y revenir) ---
   const newConversation = () => ({ id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, title: '', sessionId: null, items: [] });
@@ -68,12 +72,14 @@ const ClaudePanneau = (() => {
       <header class="cp-entete">
         <span class="cp-titre"><i class="codicon codicon-sparkle"></i>Claude <span class="cp-modele"></span></span>
         <span class="cp-espace"></span>
+        <button class="icon-button cp-autorisations" title="Ce que Claude peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
         <button class="icon-button cp-historique" title="Conversations précédentes de ce projet"><i class="codicon codicon-history"></i></button>
         <button class="icon-button cp-nouvelle" title="Nouvelle conversation"><i class="codicon codicon-add"></i></button>
         <button class="icon-button cp-fermer" title="Masquer (Ctrl+Maj+K)"><i class="codicon codicon-chevron-right"></i></button>
       </header>
       <div class="cp-projet"></div>
       <div class="cp-liste-historique" hidden></div>
+      <div class="cp-liste-historique cp-liste-autorisations" hidden></div>
       <div class="cp-messages"></div>
       <form class="cp-formulaire">
         <textarea class="cp-saisie" rows="1" placeholder="Écris à Claude… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
@@ -90,7 +96,8 @@ const ClaudePanneau = (() => {
     statusEl = $('.cp-statut');
     stopButton = $('.cp-stop');
     sendButton = $('.cp-envoyer');
-    historyList = $('.cp-liste-historique');
+    historyList = $('.cp-liste-historique:not(.cp-liste-autorisations)');
+    autorisationsList = $('.cp-liste-autorisations');
     projetEl = $('.cp-projet');
     modelEl = $('.cp-modele');
 
@@ -106,9 +113,22 @@ const ClaudePanneau = (() => {
     $('.cp-fermer').onclick = () => toggle(false);
     $('.cp-historique').onclick = (e) => {
       e.stopPropagation();
+      autorisationsList.hidden = true;
       if (historyList.hidden) showHistory(); else historyList.hidden = true;
     };
-    document.addEventListener('click', (e) => { if (!historyList.contains(e.target)) historyList.hidden = true; });
+    // Le bouclier : seulement si l'outil sait lister les autorisations (preload.js à jour).
+    if (!api().autorisations) $('.cp-autorisations').remove();
+    else {
+      $('.cp-autorisations').onclick = (e) => {
+        e.stopPropagation();
+        historyList.hidden = true;
+        if (autorisationsList.hidden) showAutorisations(); else autorisationsList.hidden = true;
+      };
+    }
+    document.addEventListener('click', (e) => {
+      if (!historyList.contains(e.target)) historyList.hidden = true;
+      if (!autorisationsList.contains(e.target) && e.target.isConnected) autorisationsList.hidden = true;
+    });
 
     // Poignée : glisser pour changer la largeur (gardée pour la prochaine fois).
     const poignee = $('.cp-poignee');
@@ -277,6 +297,47 @@ const ClaudePanneau = (() => {
     historyList.hidden = false;
   }
 
+  // --- Ce que Claude peut faire sans demander ---
+  async function showAutorisations() {
+    const liste = await api().autorisations();
+    const conversation = liste.filter((f) => f.conversation);
+    const toujours = liste.filter((f) => f.toujours);
+    autorisationsList.innerHTML = '';
+    const titre = (texte) => autorisationsList.insertAdjacentHTML('beforeend', `<div class="cp-historique-titre">${escapeHtml(texte)}</div>`);
+    const hint = (texte) => autorisationsList.insertAdjacentHTML('beforeend', `<p class="hint">${escapeHtml(texte)}</p>`);
+    const ligne = (f, portee) => {
+      const row = document.createElement('div');
+      row.className = 'cp-autorisation';
+      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="nom"></span><button class="cp-retirer" title="Claude te redemandera">Redemander</button>';
+      row.querySelector('.nom').textContent = f.libelle;
+      row.querySelector('button').onclick = async (e) => {
+        e.stopPropagation();
+        await api().retirerAutorisation({ famille: f.id, portee });
+        showAutorisations();
+      };
+      autorisationsList.appendChild(row);
+    };
+    titre('Sans demander, pendant cette conversation');
+    if (conversation.length) for (const f of conversation) ligne(f, 'conversation');
+    else hint('Rien : Claude demande avant chaque modification.');
+    titre(`Sans demander, pour de bon`);
+    if (toujours.length) for (const f of toujours) ligne(f, 'toujours');
+    else hint(`Rien. Se règle aussi dans les réglages de ${outil}.`);
+    hint('Lire et regarder (tuiles, carte, fichiers…) ne demande jamais.');
+    if (conversation.length || toujours.length) {
+      const tout = document.createElement('button');
+      tout.className = 'cp-tout-redemander';
+      tout.textContent = 'Tout redemander';
+      tout.onclick = async (e) => {
+        e.stopPropagation();
+        await api().retirerAutorisation({});
+        showAutorisations();
+      };
+      autorisationsList.appendChild(tout);
+    }
+    autorisationsList.hidden = false;
+  }
+
   async function openConversation(id) {
     if (id === conv.id) return;
     const saved = await api().historyGet(id);
@@ -385,11 +446,24 @@ const ClaudePanneau = (() => {
   }
 
   // --- Actions de l'outil ---
+  function declarer() {
+    // Les actions d'une même famille ensemble, dans l'ordre des familles : c'est l'ordre des réglages.
+    const ordre = [...new Set(Object.values(mesFamilles).map((f) => f.id))];
+    const rang = (name) => (mesFamilles[name] ? ordre.indexOf(mesFamilles[name].id) : ordre.length);
+    const liste = Object.entries(mesActions).sort(([a], [b]) => rang(a) - rang(b));
+    api().declarerActions(liste.map(([name, a]) => ({
+      name, description: a.description, inputSchema: a.schema || { type: 'object', properties: {} }, lecture: Boolean(a.lecture),
+      ...(mesFamilles[name] ? { famille: mesFamilles[name].id, familleLibelle: mesFamilles[name].libelle } : {}),
+    })));
+  }
   function actions(liste) {
     Object.assign(mesActions, liste);
-    api().declarerActions(Object.entries(mesActions).map(([name, a]) => ({
-      name, description: a.description, inputSchema: a.schema || { type: 'object', properties: {} }, lecture: Boolean(a.lecture),
-    })));
+    declarer();
+  }
+  // { id: { libelle, actions: ['nom', …] } } : les actions qui se valident ensemble.
+  function familles(def) {
+    for (const [id, f] of Object.entries(def)) for (const nom of f.actions || []) mesFamilles[nom] = { id, libelle: f.libelle };
+    declarer();
   }
 
   // Une capture plus petite que 1024 px de côté (Claude n'a pas besoin de plus), en PNG base64.
@@ -513,20 +587,29 @@ const ClaudePanneau = (() => {
       <div class="cp-perm-titre"><i class="codicon codicon-${icon}"></i><span></span></div>
       <div class="cp-perm-actions">
         <button class="allow primary-button">Autoriser</button>
-        <button class="always" title="Ne plus demander pour ce genre d'action pendant cette conversation">Toujours autoriser</button>
         <button class="deny">Refuser</button>
+      </div>
+      <div class="cp-perm-famille">
+        <span>Ne plus demander pour <strong></strong> :</span>
+        <button class="always" title="Jusqu'à la fin de cette conversation">cette conversation</button>
+        <button class="toujours" title="Gardé dans les réglages ; se retire avec le bouclier, en haut du panneau">toujours</button>
       </div>`;
     card.querySelector('.cp-perm-titre span').textContent = `Claude veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
     card.insertBefore(permissionDetails(req.toolName, req.input), card.querySelector('.cp-perm-actions'));
-    if (!req.suggestions.length) card.querySelector('.always').remove();
+    card.querySelector('.cp-perm-famille strong').textContent = `« ${req.familleLibelle || 'ce genre d\'action'} »`;
+    if (!req.famille) card.querySelector('.cp-perm-famille').remove();
+    else if (!req.gardable) card.querySelector('.toujours').remove();
+    const REPONSES = { deny: 'Refusé', allow: 'Autorisé', always: 'Autorisé, et sans demander jusqu\'à la fin de la conversation', toujours: 'Autorisé, et sans demander pour de bon' };
     const answer = (decision) => {
-      api().permission({ requestId: req.requestId, toolUseId: req.toolUseId, decision, input: req.input, suggestions: req.suggestions });
+      api().permission({ requestId: req.requestId, toolUseId: req.toolUseId, decision, input: req.input, famille: req.famille });
       card.classList.add('answered', decision === 'deny' ? 'denied' : 'allowed');
-      card.querySelector('.cp-perm-actions').innerHTML = `<span class="cp-perm-reponse">${decision === 'deny' ? 'Refusé' : decision === 'always' ? 'Autorisé (et pour la suite)' : 'Autorisé'}</span>`;
+      card.querySelector('.cp-perm-famille')?.remove();
+      card.querySelector('.cp-perm-actions').innerHTML = `<span class="cp-perm-reponse">${REPONSES[decision]}${decision === 'always' || decision === 'toujours' ? ` (${escapeHtml(req.familleLibelle || '')})` : ''}</span>`;
       setBusy(true);
     };
     card.querySelector('.allow').onclick = () => answer('allow');
     card.querySelector('.always')?.addEventListener('click', () => answer('always'));
+    card.querySelector('.toujours')?.addEventListener('click', () => answer('toujours'));
     card.querySelector('.deny').onclick = () => answer('deny');
     list.appendChild(card);
     setBusy(true, 'En attente de ta réponse');
@@ -561,6 +644,12 @@ const ClaudePanneau = (() => {
       case 'tool': addTool(e); break;
       case 'tool-result': toolDone(e); break;
       case 'permission': askPermission(e); break;
+      case 'permission-auto': {
+        // Autorisé sans te demander : on le dit au survol de la ligne de l'action.
+        const tool = tools.get(e.toolUseId);
+        if (tool) tool.row.title = `${tool.row.title}\nAutorisé sans demander (${e.libelle}, ${e.pourDeBon ? 'pour de bon' : 'pour cette conversation'})`;
+        break;
+      }
       case 'result': {
         endText();
         setBusy(false);
@@ -655,5 +744,5 @@ const ClaudePanneau = (() => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
   else demarrer();
 
-  return { init, toggle, isOpen, refreshProjet, actions };
+  return { init, toggle, isOpen, refreshProjet, actions, familles };
 })();
