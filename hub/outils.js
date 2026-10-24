@@ -86,6 +86,18 @@ const OUTILS = [
     categorie: 'bureautique',
   },
   {
+    id: 'reikna',
+    categorie: 'bureautique',
+    nom: 'Reikna',
+    glyphe: 'ᛞ',
+    description: 'Mon tableur : xlsx, xls, ods, csv, formules en français',
+    prefixe: 'reikna-v',
+    exe: 'Reikna.exe',
+    icone: 'reikna.svg',
+    dossier: 'tableur',
+    ouvreDossier: '0.1.0',
+  },
+  {
     id: 'edda',
     nom: 'Edda',
     glyphe: 'ᛖ',

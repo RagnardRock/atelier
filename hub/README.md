@@ -18,7 +18,7 @@ Une carte par outil, avec sa version installée et la dernière publiée sur Git
 - **Mettre à jour** : une version plus récente existe. Atelier montre ce qui change, vérifie que l'outil est fermé, puis installe la nouvelle version **en silence** à la place de l'ancienne. Tes réglages sont gardés.
 - **Lancer** : ouvre l'outil (double-clic sur son icône aussi). L'icône dossier ouvre son dossier d'installation.
 
-**Rangés par catégorie** (depuis Atelier 0.11) : Développement (Rune), Graphisme (Skald, Brokk), Bureautique (Mímir, Edda), Jeu (Tafl, Saga), et « Autres » pour un outil sans catégorie. Un clic sur le titre d'une catégorie la replie ou la déplie. En haut, un **filtre façon Steam** : **Tous**, **Installés** (seulement ceux qui sont sur ce PC), et **Mises à jour** (n'apparaît que s'il y en a). Le nombre d'outils est écrit à côté. Atelier retient le filtre et les catégories repliées.
+**Rangés par catégorie** (depuis Atelier 0.11) : Développement (Rune), Graphisme (Skald, Brokk), Bureautique (Mímir, Reikna, Edda), Jeu (Tafl, Saga), et « Autres » pour un outil sans catégorie. Un clic sur le titre d'une catégorie la replie ou la déplie. En haut, un **filtre façon Steam** : **Tous**, **Installés** (seulement ceux qui sont sur ce PC), et **Mises à jour** (n'apparaît que s'il y en a). Le nombre d'outils est écrit à côté. Atelier retient le filtre et les catégories repliées.
 
 Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelier le fait tout seul (réglable).
 

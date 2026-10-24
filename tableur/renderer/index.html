@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+  <title>Reikna</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune, Skald et Brokk) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../commun/claude-panneau.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="reikna.svg" alt="">Reikna</span>
+    <nav id="menus">
+      <button id="menu-fichier">Fichier</button>
+      <button id="menu-edition">Édition</button>
+      <button id="menu-insertion">Insertion</button>
+      <button id="menu-donnees">Données</button>
+      <button id="menu-affichage">Affichage</button>
+    </nav>
+    <span id="doc"><span id="doc-nom">Classeur1</span><span id="doc-modifie" title="Modifications non enregistrées (Ctrl+S)" hidden>●</span></span>
+    <div class="title-actions">
+      <button id="btn-annuler" class="icon-button" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
+      <button id="btn-refaire" class="icon-button" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
+      <button id="btn-chercher" class="icon-button" title="Rechercher et remplacer (Ctrl+F)"><i class="codicon codicon-search"></i></button>
+      <button id="btn-reglages" class="icon-button" title="Réglages de Reikna (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Reikna"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Barre d'outils : presse-papiers, police, alignement, nombres, bordures, données -->
+  <div id="optionsbar">
+    <div class="groupe">
+      <button class="outil" data-action="coller" title="Coller (Ctrl+V)"><i class="codicon codicon-clippy"></i></button>
+      <button class="outil" data-action="couper" title="Couper (Ctrl+X)"><span class="ciseaux">✂</span></button>
+      <button class="outil" data-action="copier" title="Copier (Ctrl+C)"><i class="codicon codicon-copy"></i></button>
+      <button class="outil" data-action="pinceau" title="Reproduire la mise en forme : clique ici, puis sur les cellules à mettre pareil"><i class="codicon codicon-paintcan"></i></button>
+    </div>
+    <div class="groupe">
+      <select id="outil-police" title="Police"></select>
+      <select id="outil-taille" title="Taille du texte"></select>
+      <button class="outil" data-action="gras" title="Gras (Ctrl+B)"><b>G</b></button>
+      <button class="outil" data-action="italique" title="Italique (Ctrl+I)"><i class="lettre-i">I</i></button>
+      <button class="outil" data-action="souligne" title="Souligné (Ctrl+U)"><u>S</u></button>
+      <button class="outil" data-action="barre" title="Barré (Ctrl+5)"><s>ab</s></button>
+      <button class="outil couleur" data-action="couleur" title="Couleur du texte"><span class="lettre-a">A</span><span class="trait" id="trait-couleur"></span></button>
+      <button class="outil couleur" data-action="fond" title="Couleur de fond"><i class="codicon codicon-symbol-color"></i><span class="trait" id="trait-fond"></span></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-action="gauche" title="Aligner à gauche"><i class="codicon codicon-list-flat"></i></button>
+      <button class="outil" data-action="centre" title="Centrer"><i class="codicon codicon-list-selection"></i></button>
+      <button class="outil" data-action="droite" title="Aligner à droite"><i class="codicon codicon-list-flat miroir"></i></button>
+      <button class="outil" data-action="vertical" title="Alignement vertical (haut, milieu, bas)"><i class="codicon codicon-arrow-both rot90"></i></button>
+      <button class="outil" data-action="retour" title="Renvoyer à la ligne automatiquement"><i class="codicon codicon-word-wrap"></i></button>
+      <button class="outil" data-action="fusionner" title="Fusionner et centrer"><i class="codicon codicon-merge"></i></button>
+    </div>
+    <div class="groupe">
+      <select id="outil-format" title="Format des nombres">
+        <option value="">Standard</option>
+        <option value="0.00">Nombre</option>
+        <option value="#,##0.00 &quot;€&quot;">Monétaire (€)</option>
+        <option value="#,##0.00 &quot;€&quot;;[Red]-#,##0.00 &quot;€&quot;">Comptabilité</option>
+        <option value="0%">Pourcentage</option>
+        <option value="dd/mm/yyyy">Date courte</option>
+        <option value="dddd d mmmm yyyy">Date longue</option>
+        <option value="hh:mm">Heure</option>
+        <option value="0.00E+00">Scientifique</option>
+        <option value="@">Texte</option>
+        <option value="autre">Autre format…</option>
+      </select>
+      <button class="outil" data-action="euro" title="Monétaire (€)">€</button>
+      <button class="outil" data-action="pourcent" title="Pourcentage">%</button>
+      <button class="outil" data-action="milliers" title="Séparateur de milliers"><span class="petit">000</span></button>
+      <button class="outil" data-action="plus-decimales" title="Une décimale de plus"><span class="petit">,0→,00</span></button>
+      <button class="outil" data-action="moins-decimales" title="Une décimale de moins"><span class="petit">,00→,0</span></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-action="bordures" title="Bordures"><i class="codicon codicon-layout-centered"></i><i class="codicon codicon-chevron-down mini"></i></button>
+      <button class="outil" data-action="inserer" title="Insérer des lignes, des colonnes ou des cellules"><i class="codicon codicon-diff-added"></i><i class="codicon codicon-chevron-down mini"></i></button>
+      <button class="outil" data-action="supprimer" title="Supprimer des lignes, des colonnes ou des cellules"><i class="codicon codicon-diff-removed"></i><i class="codicon codicon-chevron-down mini"></i></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-action="somme" title="Somme automatique (Alt+=)">Σ<i class="codicon codicon-chevron-down mini"></i></button>
+      <button class="outil" data-action="trier-az" title="Trier de A à Z (plus petit au plus grand)"><i class="codicon codicon-arrow-down"></i><span class="petit">AZ</span></button>
+      <button class="outil" data-action="trier-za" title="Trier de Z à A (plus grand au plus petit)"><i class="codicon codicon-arrow-up"></i><span class="petit">ZA</span></button>
+      <button class="outil" data-action="trier" title="Trier sur plusieurs colonnes…"><i class="codicon codicon-list-ordered"></i></button>
+      <button class="outil" data-action="filtre" title="Filtrer (Ctrl+Maj+L)"><i class="codicon codicon-filter"></i></button>
+      <button class="outil" data-action="figer" title="Figer les volets"><i class="codicon codicon-pinned"></i><i class="codicon codicon-chevron-down mini"></i></button>
+    </div>
+  </div>
+
+  <!-- Barre de formule : la case (nom ou adresse), fx, et le contenu de la cellule -->
+  <div id="formulebar">
+    <input id="nom-case" spellcheck="false" title="Adresse de la cellule. Tape une adresse (B12, A1:C20) puis Entrée pour y aller.">
+    <button id="btn-fx" class="icon-button" title="Toutes les fonctions (Maj+F3)"><i class="fx">fx</i></button>
+    <textarea id="barre-formule" rows="1" spellcheck="false" placeholder="Contenu de la cellule. Commence par = pour une formule."></textarea>
+  </div>
+
+  <main id="layout">
+    <div id="grille">
+      <canvas id="grille-canvas"></canvas>
+      <div id="defil" tabindex="0"><div id="defil-espace"></div></div>
+      <textarea id="editeur" spellcheck="false" hidden></textarea>
+    </div>
+  </main>
+
+  <footer id="statusbar">
+    <button id="feuille-ajouter" class="icon-button" title="Nouvelle feuille (Maj+F11)"><i class="codicon codicon-add"></i></button>
+    <div id="onglets"></div>
+    <span class="spacer"></span>
+    <span id="status-info"></span>
+    <span id="status-calcul"></span>
+    <button id="zoom-moins" class="icon-button" title="Zoom arrière (Ctrl+molette)"><i class="codicon codicon-zoom-out"></i></button>
+    <button id="zoom-valeur" class="zoom" title="Revenir à 100 %">100 %</button>
+    <button id="zoom-plus" class="icon-button" title="Zoom avant (Ctrl+molette)"><i class="codicon codicon-zoom-in"></i></button>
+  </footer>
+
+  <div id="autocompletion" hidden></div>
+  <div id="aide-args" hidden></div>
+  <div id="drop-hint">Lâche pour ouvrir ce classeur</div>
+  <div id="modal-root"></div>
+
+  <script src="../node_modules/hyperformula/dist/hyperformula.full.min.js"></script>
+  <script src="../node_modules/hyperformula/dist/languages/frFR.js"></script>
+  <script src="../node_modules/exceljs/dist/exceljs.min.js"></script>
+  <script src="../node_modules/@e965/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="fonctions.js"></script>
+  <script src="formules.js"></script>
+  <script src="classeur.js"></script>
+  <script src="fichiers.js"></script>
+  <script src="grille.js"></script>
+  <script src="fenetres.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+  <!-- Panneau Claude, commun à Skald, Tafl, Brokk et Reikna (../commun/LISEZMOI.md) -->
+  <script src="../commun/claude-panneau.js" data-outil="Reikna" data-bienvenue="Demande une formule, un tableau tout prêt, ou de l'aide pour analyser tes données."></script>
+  <script src="claude-actions.js"></script>
+  <script src="claude-familles.js"></script>
+</body>
+</html>

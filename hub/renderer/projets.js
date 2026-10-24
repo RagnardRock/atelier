@@ -52,7 +52,7 @@ const Projets = (() => {
     $('#projets-racine').textContent = donnees.racine ? `${donnees.racine}${donnees.total > donnees.projets.length ? ` · ${donnees.projets.length} plus récents sur ${donnees.total}` : ''}` : '';
   }
 
-  const NOMS = { rune: 'Rune', skald: 'Skald', tafl: 'Tafl', brokk: 'Brokk', saga: 'Saga', edda: 'Edda', explorateur: 'l\'Explorateur' };
+  const NOMS = { rune: 'Rune', skald: 'Skald', tafl: 'Tafl', brokk: 'Brokk', saga: 'Saga', reikna: 'Reikna', edda: 'Edda', explorateur: 'l\'Explorateur' };
   const ICONES = { rune: 'outils/rune.svg', skald: 'outils/skald.svg', tafl: 'outils/tafl.svg' };
 
   async function ouvrir(p, outil) {
