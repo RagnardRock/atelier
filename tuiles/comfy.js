@@ -346,6 +346,17 @@ function creer({ log, dossierTafl }) {
     if (!modelesDossier || !estDossier(modelesDossier)) throw new Error('Tafl ne connaît pas encore le dossier des modèles de ComfyUI.');
     // Hugging Face : la page d'un fichier (/blob/) devient son adresse de téléchargement (/resolve/).
     if (u.hostname === 'huggingface.co') u.pathname = u.pathname.replace('/blob/', '/resolve/');
+    // Civitai : la page d'un modèle (/models/123, avec ou sans ?modelVersionId=) devient le lien de son bouton « Download ».
+    const page = u.hostname.endsWith('civitai.com') && /^\/models\/(\d+)/.exec(u.pathname);
+    if (page) {
+      let version = u.searchParams.get('modelVersionId');
+      if (!version) {
+        const infos = await fetch(`https://civitai.com/api/v1/models/${page[1]}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        version = infos?.modelVersions?.[0]?.id;
+        if (!version) throw new Error(`Civitai ne donne pas la version de ce modèle : ${u}. Copie plutôt le lien du bouton « Download » de la page.`);
+      }
+      u.href = `https://civitai.com/api/download/models/${version}`;
+    }
     let nom = fichier || decodeURIComponent(u.pathname.split('/').pop() || 'modele.safetensors');
     nom = path.basename(nom).replace(/[<>:"/\\|?*]/g, '_');
     const cible = path.join(modelesDossier, dossier, nom);
@@ -354,10 +365,16 @@ function creer({ log, dossierTafl }) {
     log('INFO', `ComfyUI : téléchargement de ${u} vers ${cible}`);
     const r = await fetch(u, { redirect: 'follow' });
     if (!r.ok || !r.body) throw new Error(`Téléchargement impossible (${r.status}) : ${u}`);
+    // Une page web au lieu d'un fichier : souvent un lien de page, ou Civitai qui demande d'être connecté.
+    if (/text\/html/i.test(r.headers.get('content-type') || '')) {
+      await r.body.cancel().catch(() => {});
+      throw new Error(`Ce lien mène à une page web, pas à un fichier de modèle : ${u}. Sur Civitai, certains modèles demandent d'être connecté ; télécharge-le alors dans le navigateur et range-le avec « Ouvrir le dossier des modèles ».`);
+    }
     // Civitai donne le vrai nom du fichier dans l'en-tête.
     const dispo = r.headers.get('content-disposition') || '';
     const vrai = /filename="?([^";]+)"?/i.exec(dispo)?.[1];
     const final = !fichier && vrai ? path.join(modelesDossier, dossier, path.basename(vrai)) : cible;
+    if (final !== cible && existe(final)) { await r.body.cancel().catch(() => {}); return { chemin: final, deja: true }; }
     const total = Number(r.headers.get('content-length')) || 0;
     const temp = `${final}.part`;
     const sortie = fsSync.createWriteStream(temp);
