@@ -27,7 +27,7 @@ const HorsCombat = (() => {
   async function apprendre(jeu, ui, c, id) {
     const nom = C.nom(jeu, c), nomA = C.trouver(jeu, 'attaques', id)?.nom || id;
     if (c.attaques.length < 4) { c.attaques.push(C.attaque(jeu, id)); await ui.dire(`${nom} apprend ${nomA} !`); return; }
-    await ui.dire(`${nom} veut apprendre ${nomA}, mais il connaît déjà quatre attaques.`);
+    await ui.dire(`${nom} veut apprendre ${nomA}, mais ${c.sexe === 'f' ? 'elle' : 'il'} connaît déjà quatre attaques.`);
     const i = await ui.liste({ titre: `Oublier quelle attaque pour ${nomA} ?`, items: [
       ...c.attaques.map((a) => ({ texte: C.trouver(jeu, 'attaques', a.id)?.nom || a.id, detail: `PP ${a.pp}/${a.ppMax}` })),
       { texte: `Ne pas apprendre ${nomA}` },

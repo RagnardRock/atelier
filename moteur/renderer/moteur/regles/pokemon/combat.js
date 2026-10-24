@@ -14,6 +14,9 @@ const Combat = (() => {
   const chance = (pourcent) => Math.random() * 100 < pourcent;
   const ETAGES = ['attaque', 'defense', 'att_spe', 'def_spe', 'vitesse', 'precision', 'esquive'];
   const LUTTE = { id: 'lutte', nom: 'Lutte', type: '', categorie: 'physique', puissance: 50, precision: 0, priorite: 0, drain: -25, stats: [], statut: '' };
+  // Accorder au genre de la créature (Saga 0.7) : « gelé » / « gelée », « Il » / « Elle ».
+  const fe = (c) => (c?.sexe === 'f' ? 'e' : '');
+  const il = (c) => (c?.sexe === 'f' ? 'Elle' : 'Il');
   const NOMS_STATUTS = { brulure: 'BRU', paralysie: 'PAR', poison: 'PSN', poison_grave: 'PSN', sommeil: 'SOM', gel: 'GEL' };
 
   async function lancer({ jeu, partie, ui, sauvage = null, dresseur = null, fond = 'herbes' }) {
@@ -122,7 +125,7 @@ const Combat = (() => {
         await ui.message(`${nom} se réveille !`);
       }
       if (c.statut === 'gel') {
-        if (!chance(20)) { await ui.message(`${nom} est gelé !`); return; }
+        if (!chance(20)) { await ui.message(`${nom} est gelé${fe(c)} !`); return; }
         c.statut = '';
         montrer(k);
         await ui.message(`${nom} dégèle !`);
@@ -130,19 +133,19 @@ const Combat = (() => {
       if (k.peur) { k.peur = false; await ui.message(`${nom} a peur et ne bouge pas !`); return; }
       if (k.confusion > 0) {
         k.confusion--;
-        if (!k.confusion) await ui.message(`${nom} n'est plus confus.`);
+        if (!k.confusion) await ui.message(`${nom} n'est plus confus${fe(c)}.`);
         else {
-          await ui.message(`${nom} est confus…`);
+          await ui.message(`${nom} est confus${fe(c)}…`);
           if (chance(33)) {
             const deg = degats(c, stat(k, 'attaque'), stat(k, 'defense'), 40, 1);
-            await ui.message('Il se blesse dans sa confusion !');
+            await ui.message(`${il(c)} se blesse dans sa confusion !`);
             ui.animer(k.joueur ? 'joueur' : 'adversaire', 'touche');
             await pv(k, c, c.pv - deg);
             return;
           }
         }
       }
-      if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé ! Il ne peut pas attaquer !`); return; }
+      if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé${fe(c)} ! ${il(c)} ne peut pas attaquer !`); return; }
 
       const a = slot ? trouver('attaques', slot.id) : null;
       const att = a || LUTTE;
@@ -220,9 +223,9 @@ const Combat = (() => {
     async function infliger(k, statut, annoncer) {
       const c = actif(k), nom = nomDe(k);
       if (statut === 'confusion') {
-        if (k.confusion) { if (annoncer) await ui.message(`${nom} est déjà confus.`); return; }
+        if (k.confusion) { if (annoncer) await ui.message(`${nom} est déjà confus${fe(c)}.`); return; }
         k.confusion = 2 + hasard(4);
-        await ui.message(`${nom} devient confus !`);
+        await ui.message(`${nom} devient confus${fe(c)} !`);
         return;
       }
       if (!NOMS_STATUTS[statut]) { if (annoncer) await ui.message('Mais rien ne se passe…'); return; } // pas encore géré par Saga
@@ -237,8 +240,8 @@ const Combat = (() => {
       if (statut === 'poison_grave') k.toxique = 1;
       montrer(k);
       await ui.message({
-        brulure: `${nom} est brûlé !`, paralysie: `${nom} est paralysé ! Il aura du mal à attaquer !`, poison: `${nom} est empoisonné !`,
-        poison_grave: `${nom} est gravement empoisonné !`, sommeil: `${nom} s'endort !`, gel: `${nom} est gelé !`,
+        brulure: `${nom} est brûlé${fe(c)} !`, paralysie: `${nom} est paralysé${fe(c)} ! ${il(c)} aura du mal à attaquer !`, poison: `${nom} est empoisonné${fe(c)} !`,
+        poison_grave: `${nom} est gravement empoisonné${fe(c)} !`, sommeil: `${nom} s'endort !`, gel: `${nom} est gelé${fe(c)} !`,
       }[statut]);
     }
 
@@ -432,7 +435,7 @@ const Combat = (() => {
     // Elle connaît déjà 4 attaques : le joueur choisit laquelle oublier (ou de ne pas apprendre).
     async function apprendre(c, id) {
       const nomA = trouver('attaques', id)?.nom || id, nom = C.nom(jeu, c);
-      await ui.message(`${nom} veut apprendre ${nomA}, mais il connaît déjà quatre attaques.`);
+      await ui.message(`${nom} veut apprendre ${nomA}, mais ${il(c).toLowerCase()} connaît déjà quatre attaques.`);
       const i = await ui.liste(`Oublier quelle attaque pour ${nomA} ?`, [
         ...c.attaques.map((a) => ({ texte: trouver('attaques', a.id)?.nom || a.id, detail: `${a.pp} / ${a.ppMax} PP` })),
         { texte: `Ne pas apprendre ${nomA}`, detail: '' },

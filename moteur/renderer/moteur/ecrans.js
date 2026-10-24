@@ -69,7 +69,7 @@ const Ecrans = (() => {
 
     async function surnom(c) {
       const espece = r({ ...c, surnom: '' }).nom;
-      const t = await menus.texte({ titre: `Surnom de ${espece}`, valeur: c.surnom || '', max: 12, vide: `il s'appellera ${espece}` });
+      const t = await menus.texte({ titre: `Surnom de ${espece}`, valeur: c.surnom || '', max: 12, vide: `${c.sexe === 'f' ? 'elle' : 'il'} s'appellera ${espece}` });
       if (t != null) c.surnom = t;
     }
 
