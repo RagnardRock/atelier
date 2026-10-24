@@ -16,7 +16,8 @@ const App = (() => {
   }
 
   // --- Widgets affichés (Réglages › Widgets) ---
-  // Chaque widget est un <article id="widget-…"> dans index.html.
+  // Chaque widget est un <article id="widget-…"> dans index.html. Un nouveau widget se décrit aussi à
+  // Loki dans ../claude.js (WIDGETS), pour qu'il sache ce qu'il fait.
   const WIDGETS = [
     ['notes', 'Notes', 'widget-notes'],
     ['projets', 'Projets récents', 'widget-projets'],
@@ -26,7 +27,7 @@ const App = (() => {
     ['calculatrice', 'Calculatrice', 'widget-calculatrice'],
     ['claude', 'Loki', 'widget-claude'],
   ];
-  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets']];
+  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets'], ['installation', 'Installer, mettre à jour ou désinstaller un outil']];
   const LANGUES = [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']];
   const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
   function applyWidgets(c) {
@@ -60,7 +61,7 @@ const App = (() => {
         { key: 'claudeModel', label: 'Modèle', type: 'select', choices: MODELES, value: config.claudeModel || '' },
         { key: 'claudeCommand', label: 'Commande', type: 'text', value: config.claudeCommand || 'claude' },
         { key: 'claudeLitProjets', label: 'Loki peut aussi lire les fichiers de mes projets (pas seulement leur état Git)', type: 'checkbox', value: config.claudeLitProjets !== false },
-        { key: 'claudeActions', label: 'Loki peut agir dans Atelier (notes, calendrier, minuteurs, ouvrir un projet)', type: 'checkbox', value: config.claudeActions !== false },
+        { key: 'claudeActions', label: 'Loki peut agir dans Atelier (notes, calendrier, minuteurs, projets, installer un outil…)', type: 'checkbox', value: config.claudeActions !== false },
         { type: 'info', text: 'Sans me demander la permission, pour :' },
         ...FAMILLES.map(([key, label]) => ({ key: `sansDemander-${key}`, label, type: 'checkbox', value: Boolean(config.claudeSansDemander?.[key]) })),
         { type: 'info', text: 'Widgets affichés :' },

@@ -6,8 +6,10 @@
 //
 // Ce qui change par rapport à Rune :
 // - Il travaille dans %APPDATA%\atelier-hub\claude. Avant chacun de tes messages, Atelier y écrit
-//   tes notes (notes.md), ton calendrier (calendrier.md) et l'état de tes projets récents avec leurs
-//   derniers commits (projets.md). Claude les lit avec son outil Read.
+//   tes notes (notes.md), ton calendrier (calendrier.md), l'état de tes projets récents avec leurs
+//   derniers commits (projets.md) et Atelier lui-même (atelier.md : ses outils, installés ou non, leurs
+//   versions, et ses widgets). Claude les lit avec son outil Read. atelier.md est construit à partir de
+//   hub/outils.js : un nouvel outil ajouté là est connu de Loki sans rien changer ici.
 // - Ses seuls outils « fichiers » sont ceux de lecture (Read, Glob, Grep) : il ne peut ni modifier
 //   un fichier ni lancer une commande.
 // - Il peut aussi lire les fichiers de ton dossier de projets (--add-dir), si le réglage est coché.
@@ -15,7 +17,8 @@
 //   passent par un petit serveur MCP, mcp-atelier.js, le seul qu'il voit (--strict-mcp-config).
 //   Avant chaque action, Claude Code demande la permission : le widget t'affiche une carte
 //   Autoriser / Refuser / Toujours autoriser. « Toujours » vaut pour toute la famille d'actions
-//   (notes, calendrier, minuteurs, projets) et se change dans les réglages d'Atelier.
+//   (notes, calendrier, minuteurs, projets, installation…) et se change dans les réglages d'Atelier.
+//   Les actions qui ne changent rien (calculer, chercher les mises à jour) ne demandent pas.
 //   Toute autre demande de permission est refusée d'office.
 // Le presse-papiers n'est jamais donné à Claude (il peut contenir un mot de passe).
 
@@ -26,6 +29,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const OUTILS = require('./outils');
 
 let proc = null;          // processus Claude Code en cours
 let sender = null;        // webContents de la fenêtre d'Atelier
@@ -47,7 +51,11 @@ const FAMILLES = {
   lancer_minuteur: 'minuteurs',
   ouvrir_projet: 'projets', lancer_outil: 'projets',
   retenir_projet: 'memoire', oublier_projet: 'memoire',
+  installer_outil: 'installation', desinstaller_outil: 'installation',
+  calculer: 'lecture', verifier_mises_a_jour: 'lecture',
 };
+// Celles qu'on peut autoriser pour toujours (la famille « lecture » est toujours autorisée : rien ne change).
+const FAMILLES_TOUJOURS = ['notes', 'calendrier', 'minuteurs', 'projets', 'memoire', 'installation'];
 const actionsActives = (config) => config.claudeActions !== false;
 
 function emit(event) {
@@ -218,6 +226,7 @@ function handleMessage(m, log) {
     // sinon la carte Autoriser / Refuser du widget.
     lireConfig().then((config) => {
       if (!actionsActives(config)) return repondrePermission(m.request_id, toolUseId, false, input);
+      if (famille === 'lecture') return repondrePermission(m.request_id, toolUseId, true, input);
       if (config.claudeSansDemander?.[famille]) return repondrePermission(m.request_id, toolUseId, true, input);
       emit({ kind: 'permission', requestId: m.request_id, toolUseId, action, famille, input });
     });
@@ -381,7 +390,7 @@ async function projetsMd(liste, run) {
     '# Projets de Ragna',
     '',
     `Dossier des projets : ${liste.racine}. Du plus récemment touché au plus ancien (${liste.projets.length} sur ${liste.total}).`,
-    'Pour chaque projet : type, outil qui l\'ouvre (Rune = IDE, Skald = retouche d\'images), dernière activité,',
+    'Pour chaque projet : type, outil d\'Atelier qui l\'ouvre (voir atelier.md), dernière activité,',
     'état Git (branche, fichiers modifiés pas encore commités, commits pas encore poussés / à récupérer)',
     'et les commits des 30 derniers jours, toutes branches confondues.',
     '« Mémoire » : ce que tu as retenu toi-même sur le projet (actions retenir_projet / oublier_projet),',
@@ -397,7 +406,7 @@ async function projetsMd(liste, run) {
     const d = details[i];
     lignes.push(`## ${p.nom}`, '');
     lignes.push(`- Dossier : ${p.dossier}`);
-    lignes.push(`- Type : ${p.type || 'inconnu'} · s'ouvre dans ${p.outil === 'skald' ? 'Skald' : p.outil === 'explorateur' ? 'l\'Explorateur' : 'Rune'}`);
+    lignes.push(`- Type : ${p.type || 'inconnu'} · s'ouvre dans ${p.outil === 'explorateur' ? 'l\'Explorateur' : OUTILS.find((o) => o.id === p.outil)?.nom || 'Rune'}`);
     lignes.push(`- Dernière activité : ${p.activite ? dateHeure(p.activite) : 'inconnue'}`);
     if (p.git) {
       lignes.push(`- Git : branche ${p.git.branche}, ${p.git.modifies} fichier(s) modifié(s) non commité(s)`
@@ -430,6 +439,74 @@ async function projetsMd(liste, run) {
   return lignes.join('\n');
 }
 
+// Les widgets d'Atelier (mêmes clés que WIDGETS dans renderer/app.js, et config.widgets) : ce qu'ils
+// font, et ce que Loki peut y faire. À compléter ici quand un widget arrive ou change.
+const WIDGETS = [
+  ['notes', 'Notes', 'notes rapides en Markdown ; la première ligne est le titre ; épingler une note la garde en haut ; correction d\'orthographe au clic droit.', 'Lire (notes.md), ajouter, modifier, supprimer.'],
+  ['projets', 'Projets récents', 'les dossiers du dossier des projets, du plus récent au plus ancien, avec leur état Git ; clic = ouvrir dans l\'outil choisi ; clic droit = choisir l\'outil (Rune, Skald, Tafl…) ou l\'Explorateur ; signet = la mémoire du projet.', 'Lire (projets.md), ouvrir un projet, retenir / oublier des infos.'],
+  ['pressePapiers', 'Presse-papiers et couleurs', 'historique de ce que Ragna copie (texte), et une palette de couleurs partagée avec Skald et Rune, avec une pipette.', 'aucun accès (il peut contenir des mots de passe).'],
+  ['minuteurs', 'Minuteurs', 'comptes à rebours qui tournent en même temps (raccourcis 5, 15, 25 min, Pomodoro), carillon et notification à la fin, gardés si Atelier se ferme.', 'Lancer un minuteur.'],
+  ['calendrier', 'Calendrier', 'évènements à une date, avec ou sans heure, et une note.', 'Lire (calendrier.md), ajouter, modifier, supprimer.'],
+  ['calculatrice', 'Calculatrice', 'calcul tapé ou cliqué, résultat pendant la frappe ; + − × ÷, ^, √, parenthèses, %, π, « Rés » ; historique des 30 derniers calculs.', 'Calculer (action calculer, même interpréteur que le widget).'],
+  ['claude', 'Loki', 'toi : cette conversation ; « + » nouvelle conversation, horloge = conversations précédentes.', ''],
+];
+
+// atelier.md : Atelier lui-même, construit à partir de hub/outils.js et de l'état réel du PC.
+function atelierMd(etat, config, version) {
+  const outils = etat?.outils || [];
+  const versionDe = (o) => {
+    if (!o.installe) return `Pas installé${o.derniere ? ` (dernière version publiée : ${o.derniere})` : ' (aucune version publiée)'}`;
+    const v = `Installé${o.version ? `, version ${o.version}` : ''}`;
+    if (o.miseAJour) return `${v}, mise à jour disponible : ${o.derniere}`;
+    return o.derniere && o.derniere === o.version ? `${v}, à jour` : v;
+  };
+  const lignes = [
+    `# Atelier ${version}`,
+    '',
+    'Atelier est le hub de Ragna : il lance, installe, met à jour et désinstalle ses outils (colonne Outils),',
+    'et affiche des widgets. Tous les outils sont faits pour Ragna, dans un seul dépôt GitHub',
+    '(RagnardRock/atelier) ; chacun publie ses versions (Releases) tout seul après une fusion sur main,',
+    'en 2 à 5 minutes.',
+    '',
+    '## Les outils',
+    '',
+    'Rangés par catégorie dans la colonne Outils. Un filtre en haut montre Tous / Installés / Mises à jour.',
+    'Sur chaque carte : Installer, Mettre à jour ou Lancer ; un outil installé a aussi un bouton dossier',
+    '(dossier d\'installation) et une corbeille (Désinstaller : réglages et fichiers de Ragna gardés).',
+    'Si une version est en préparation sur GitHub, Atelier propose d\'attendre et de l\'installer dès sa publication.',
+    'Le bouton ↻ relit les versions sur GitHub (les versions « dernière publiée » ci-dessous datent de la dernière',
+    'lecture ; l\'action verifier_mises_a_jour les relit).',
+    'Chaque outil a aussi son propre Loki (sauf Saga), qui partage la mémoire des projets avec toi.',
+    '',
+  ];
+  for (const c of OUTILS.CATEGORIES) {
+    const dedans = outils.filter((o) => o.categorie === c.id);
+    if (!dedans.length) continue;
+    lignes.push(`### ${c.nom}`, '');
+    for (const o of dedans) lignes.push(`- **${o.nom}** ${o.glyphe} (id : ${o.id}) : ${o.description}. ${versionDe(o)}${o.enPreparation ? ` ; ${o.enPreparation} en préparation sur GitHub` : ''}.`);
+    lignes.push('');
+  }
+  if (!outils.length) lignes.push('(état des outils indisponible)', '');
+  if (etat?.erreurGithub) lignes.push(`GitHub n'a pas répondu à la dernière lecture : ${etat.erreurGithub}.`, '');
+  lignes.push('## Les widgets', '', 'Affichés ou cachés dans Réglages (Ctrl+,) › Widgets affichés.', '');
+  for (const [cle, nom, quoi, loki] of WIDGETS) {
+    lignes.push(`- **${nom}**${config.widgets?.[cle] === false ? ' (caché en ce moment)' : ''} : ${quoi}${loki ? ` Toi : ${loki}` : ''}`);
+  }
+  const sans = FAMILLES_TOUJOURS.filter((f) => config.claudeSansDemander?.[f]);
+  lignes.push(
+    '',
+    '## Réglages (bouton engrenage ou Ctrl+,)',
+    '',
+    'Couleur d\'accent, verre dépoli, flou de Windows 11, recherche des mises à jour au démarrage, dossier',
+    `des projets (${config.dossierProjets || 'non choisi'}), orthographe, historique du presse-papiers, et pour Loki :`,
+    `modèle, accès aux fichiers des projets, actions dans Atelier, actions autorisées sans demander${sans.length ? ` (en ce moment : ${sans.join(', ')})` : ' (aucune en ce moment)'}.`,
+    'Le bouton « Dossier partagé avec les outils » ouvre %APPDATA%\\atelier-commun (mémoire des projets, notes, projet en cours).',
+    'Atelier se met lui-même à jour : bouton « Mise à jour » de la barre de titre (notification au démarrage si une version existe).',
+    '',
+  );
+  return lignes.join('\n');
+}
+
 // Instructions pour Claude, lues par Claude Code au lancement (CLAUDE.md du dossier de travail).
 function claudeMd(addDir, actions) {
   return [
@@ -439,21 +516,26 @@ function claudeMd(addDir, actions) {
     'Dans l\'Atelier, l\'assistant s\'appelle Loki (il est propulsé par Claude) : présente-toi sous ce nom.',
     'Réponds en français, simplement et brièvement, avec des listes quand c\'est plus clair.',
     '',
-    'Ce dossier contient trois fichiers, réécrits par Atelier avant chaque message de Ragna :',
+    'Ce dossier contient quatre fichiers, réécrits par Atelier avant chaque message de Ragna :',
+    '- atelier.md : Atelier lui-même, ses outils (installés ou non, versions) et ses widgets ;',
     '- notes.md : toutes les notes du widget Notes ;',
     '- calendrier.md : les évènements du calendrier, avec la date du jour ;',
     '- projets.md : les projets récents, leur état Git et leurs commits des 30 derniers jours.',
     '',
     'Lis le ou les fichiers utiles avant de répondre, et relis-les à chaque question : ils changent.',
+    'Pour toute question sur Atelier, ses outils ou ses widgets, lis atelier.md : ne te fie pas à ta mémoire,',
+    'de nouveaux outils et widgets arrivent souvent.',
     'Pour dire quels projets ont avancé, appuie-toi sur les commits récents, les fichiers modifiés et la date d\'activité.',
     addDir
       ? `Tu peux aussi lire les fichiers des projets eux-mêmes, dans ${addDir}, si la question le demande.`
-      : 'Tu ne peux pas lire les fichiers des projets eux-mêmes : seulement ces trois fichiers.',
+      : 'Tu ne peux pas lire les fichiers des projets eux-mêmes : seulement ces quatre fichiers.',
     ...(actions
       ? [
         'Tu ne peux ni modifier de fichier ni lancer de commande. Mais tu peux agir dans Atelier avec ses outils',
         '(mcp__atelier__…) : ajouter, modifier ou supprimer une note ou un évènement (avec leur id, donné dans',
-        'notes.md et calendrier.md), lancer un minuteur, ouvrir un projet, lancer un des outils d\'Atelier.',
+        'notes.md et calendrier.md), lancer un minuteur, ouvrir un projet, lancer, installer, mettre à jour ou',
+        'désinstaller un des outils d\'Atelier (par son id, voir atelier.md), relire les versions sur GitHub',
+        '(verifier_mises_a_jour), et calculer (calculer) : pour tout calcul, sers-t\'en plutôt que de calculer de tête.',
         'Tu as aussi une mémoire par projet (retenir_projet, oublier_projet), recopiée dans projets.md :',
         'retiens-y ce qui sera utile plus tard (décisions, client, hébergement, étapes restantes…) quand',
         'Ragna te le demande ou te l\'apprend. Une info courte et datée par élément ; oublie ce qui n\'est plus vrai.',
@@ -469,7 +551,7 @@ function claudeMd(addDir, actions) {
   ].join('\n');
 }
 
-function register({ handle, log, dataDir, readConfig, readJson, notesPath, donneesPath, listeProjets, run }) {
+function register({ handle, log, dataDir, readConfig, readJson, notesPath, donneesPath, listeProjets, run, etatOutils, version }) {
   const cwd = path.join(dataDir, 'claude');
   lireConfig = readConfig;
   const empreintes = {}; // contenu de chaque fichier au dernier message, pour dire à Claude ce qui a changé
@@ -478,13 +560,16 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
   async function preparerContexte(addDir, actions) {
     await fsp.mkdir(cwd, { recursive: true });
     const maintenant = Date.now();
-    const [notes, evenements, projets] = await Promise.all([
+    const [notes, evenements, projets, etat, config] = await Promise.all([
       readJson(notesPath(), []),
       readJson(donneesPath('calendrier'), []),
       listeProjets(),
+      etatOutils().catch(() => null),
+      readConfig(),
     ]);
     const fichiers = {
       'CLAUDE.md': claudeMd(addDir, actions),
+      'atelier.md': atelierMd(etat, config, version),
       'notes.md': notesMd(Array.isArray(notes) ? notes : []),
       'calendrier.md': calendrierMd(Array.isArray(evenements) ? evenements : [], maintenant),
       'projets.md': await projetsMd(projets, run),
@@ -559,4 +644,4 @@ async function dossier() {
   return dossierContexte;
 }
 
-module.exports = { register, stop, dossier, notesMd };
+module.exports = { register, stop, dossier, notesMd, atelierMd, FAMILLES_TOUJOURS };
