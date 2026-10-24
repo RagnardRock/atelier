@@ -42,9 +42,9 @@ const Comfy = (() => {
   // Combien de détails : un sol de jeu doit rester calme (un aplat et quelques marques), sinon
   // il fait du bruit une fois posé sur toute une carte. lissage : passes de post-traitement.js.
   const DETAILS = {
-    peu: { nom: 'Peu : calme, de grands aplats (sols)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details, high frequency texture', lissage: 3, rares: 0.04 },
-    moyen: { nom: 'Moyen', positif: '', negatif: 'cluttered, noisy', lissage: 1, rares: 0.015 },
-    beaucoup: { nom: 'Beaucoup (objets riches)', positif: 'intricate details', negatif: '', lissage: 0, rares: 0 },
+    fidele: { nom: 'Fidèle à l\'image de ComfyUI', positif: '', negatif: 'cluttered, noisy', lissage: 0, rares: 0 },
+    calme: { nom: 'Plus calme (moins de bruit, quelques détails en moins)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details', lissage: 1, rares: 0.01 },
+    tres_calme: { nom: 'Très calme (grands aplats, les petits détails disparaissent)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details, high frequency texture', lissage: 3, rares: 0.04 },
   };
   const COMMUN_NEGATIF = 'text, watermark, signature, logo, ui, frame';
 
@@ -78,7 +78,7 @@ const Comfy = (() => {
   function phrases(v) {
     const s = style(v.style), e = ENCADRE[v.sorte] || ENCADRE.sol;
     const sujet = v.traduire === false ? String(v.description).trim() : traduire(v.description);
-    const d = s.id === 'libre' ? DETAILS.moyen : DETAILS[v.details] || DETAILS.peu;
+    const d = s.id === 'libre' ? DETAILS.fidele : DETAILS[v.details] || DETAILS.fidele;
     const positif = [s.id === 'libre' ? sujet : `${e.avant} ${sujet}`, s.id === 'libre' ? '' : e.apres, s.positif, d.positif].filter(Boolean).join(', ');
     const negatif = [s.negatif, s.id === 'libre' ? '' : e.negatif, d.negatif, COMMUN_NEGATIF, v.negatif].filter(Boolean).join(', ');
     return { positif, negatif };
@@ -189,7 +189,7 @@ const Comfy = (() => {
     return PostTraitement.traiter(brute, {
       largeur: v.largeur * taille, hauteur: v.hauteur * taille, sorte: v.sorte, pixel,
       couleurs: couleurs || (doc ? 0 : 16), palette: pixel && !couleurs && doc ? doc.palette : null,
-      tolerance: v.tolerance, marge: pixel ? 0.12 : 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage, rares: (DETAILS[v.details] || DETAILS.peu).rares,
+      tolerance: v.tolerance, marge: pixel ? 0.12 : 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.fidele).lissage, rares: (DETAILS[v.details] || DETAILS.fidele).rares,
     });
   }
   const versCanvas = (img) => {
@@ -405,7 +405,7 @@ const Comfy = (() => {
         { key: 'largeur', label: 'Largeur', type: 'number', value: derniers.largeur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'hauteur', label: 'Hauteur', type: 'number', value: derniers.hauteur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'variantes', label: 'Variantes', type: 'number', value: derniers.variantes, min: 1, max: 4 },
-        { key: 'details', label: 'Détails', type: 'select', value: DETAILS[derniers.details] ? derniers.details : 'peu', choices: Object.entries(DETAILS).map(([k, d]) => [k, d.nom]) },
+        { key: 'details', label: 'Détails', type: 'select', value: DETAILS[derniers.details] ? derniers.details : 'fidele', choices: Object.entries(DETAILS).map(([k, d]) => [k, d.nom]) },
         // Sans jeu ouvert, pas de « palette du jeu » : 16 couleurs.
         { key: 'couleurs', label: 'Couleurs (pixel art)', type: 'select', value: !doc && String(derniers.couleurs) === 'jeu' ? '16' : String(derniers.couleurs), choices: [...(doc ? [['jeu', 'La palette du jeu ouvert']] : []), ['4', '4 couleurs'], ['6', '6 couleurs'], ['8', '8 couleurs'], ['12', '12 couleurs'], ['16', '16 couleurs'], ['24', '24 couleurs'], ['32', '32 couleurs']] },
         { key: 'tolerance', label: 'Détourage du fond (objet)', type: 'range', value: derniers.tolerance ?? 48, min: 8, max: 120 },
