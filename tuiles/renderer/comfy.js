@@ -64,15 +64,26 @@ const Comfy = (() => {
     'gris': 'grey', 'grise': 'grey', 'brun': 'brown', 'marron': 'brown', 'orange': 'orange', 'violet': 'purple', 'rose': 'pink', 'doré': 'golden', 'sombre': 'dark', 'clair': 'light',
     'vieux': 'old', 'vieille': 'old', 'petit': 'small', 'petite': 'small', 'petits': 'small', 'petites': 'small', 'grand': 'big', 'grande': 'big', 'grands': 'big', 'grandes': 'big', 'haut': 'tall', 'hauts': 'tall', 'hautes': 'tall', 'beaucoup': 'many', 'quelques': 'a few', 'mouillé': 'wet', 'sec': 'dry', 'sèche': 'dry',
     'automne': 'autumn', 'hiver': 'winter', 'été': 'summer', 'printemps': 'spring', 'nuit': 'night', 'enneigé': 'snowy', 'enneigée': 'snowy', 'fleuri': 'flowery',
+    'rouges': 'red', 'bleus': 'blue', 'bleues': 'blue', 'verts': 'green', 'vertes': 'green', 'jaunes': 'yellow', 'blancs': 'white', 'blanches': 'white', 'noirs': 'black', 'noires': 'black',
+    'roses': 'pink', 'violets': 'purple', 'violette': 'purple', 'violettes': 'purple', 'claire': 'light', 'claires': 'light', 'foncé': 'dark', 'foncée': 'dark',
+    'court': 'short', 'courte': 'short', 'courts': 'short', 'courtes': 'short', 'rare': 'sparse', 'rares': 'sparse', 'clairsemé': 'sparse', 'clairsemée': 'sparse', 'clairsemées': 'sparse', 'épars': 'sparse', 'éparses': 'sparse',
+    'dense': 'dense', 'touffu': 'thick', 'touffue': 'thick', 'sauvage': 'wild', 'sauvages': 'wild', 'simple': 'simple', 'uni': 'plain', 'unie': 'plain', 'calme': 'calm',
     'avec': 'with', 'et': 'and', 'de': 'of', 'du': 'of', 'des': '', 'le': '', 'la': '', 'les': '', 'un': 'a', 'une': 'a', 'en': 'made of', 'sur': 'on',
   };
+  const APRES_NOM = new Set(['red', 'blue', 'green', 'yellow', 'white', 'black', 'grey', 'brown', 'purple', 'pink', 'golden', 'dark', 'light', 'short', 'sparse', 'dense', 'thick', 'wild', 'plain', 'calm', 'wet', 'dry', 'snowy', 'flowery']);
+  const LIENS = new Set(['with', 'and', 'of', 'a', 'few', 'many', 'made', 'on', 'small', 'big', 'tall', 'old']);
   function traduire(texte) {
     let t = ` ${String(texte).toLowerCase()} `;
     // Les expressions de plusieurs mots d'abord.
     for (const [fr, en] of Object.entries(MOTS).sort((a, b) => b[0].length - a[0].length)) {
       t = t.replace(new RegExp(`(?<![\\p{L}])${fr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}])`, 'gu'), en);
     }
-    return t.replace(/\s+/g, ' ').trim();
+    // En français l'adjectif suit le nom (« fleurs blanches ») ; en anglais il le précède.
+    const mots = t.replace(/\s+/g, ' ').trim().split(' ');
+    for (let i = 1; i < mots.length; i++) {
+      if (APRES_NOM.has(mots[i]) && !APRES_NOM.has(mots[i - 1]) && !LIENS.has(mots[i - 1])) [mots[i - 1], mots[i]] = [mots[i], mots[i - 1]];
+    }
+    return mots.join(' ');
   }
   const style = (id) => STYLES.find((s) => s.id === id) || STYLES[0];
   function phrases(v) {
@@ -453,7 +464,8 @@ const Comfy = (() => {
         f.inputs.tolerance.row.hidden = values.sorte !== 'objet';
         for (const k of ['graine', 'etapes', 'cfg', 'negatif', 'modele', 'lora']) f.inputs[k].row.hidden = !values.avance;
         const p = phrases(values);
-        phrase.textContent = values.description.trim() ? `Envoyé au modèle : ${p.positif}` : '';
+        const prefixe = reglagesModele(choisirModele(checkpoints, style(values.style), values.modele) || '').prefixe;
+        phrase.textContent = values.description.trim() ? `Envoyé au modèle : ${[prefixe, p.positif].filter(Boolean).join(', ')}` : '';
         if (!enCours) afficher(values);
         const ok = f.card.querySelector('footer button[type=submit]');
         if (ok) ok.disabled = !brutes.length;
