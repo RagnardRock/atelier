@@ -307,7 +307,7 @@ handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file
 const comfy = require('./comfy').creer({ log, dossierTafl: app.getPath('userData') });
 const comfyConfig = async () => ({ ...DEFAULT_CONFIG.comfy, ...((await readConfig()).comfy || {}) });
 const envoyer = (event, canal) => (p) => { if (!event.sender.isDestroyed()) event.sender.send(canal, p); };
-handle('comfy:trouver', async () => ({ ...comfy.trouver(await comfyConfig()), ...comfy.infos(), catalogue: comfy.CATALOGUE }));
+handle('comfy:trouver', async () => ({ ...comfy.trouver(await comfyConfig()), ...comfy.infos(), catalogue: comfy.CATALOGUE, cleCivitai: Boolean((await readConfig()).civitaiCle) }));
 handle('comfy:demarrer', async (event) => comfy.demarrer(await comfyConfig(), envoyer(event, 'comfy:progres')));
 handle('comfy:arreter', async () => comfy.arreter());
 handle('comfy:infos', async () => comfy.infos());
@@ -322,7 +322,12 @@ handle('comfy:liberer', async () => comfy.liberer());
 handle('comfy:telecharger', async (event, quoi) => {
   const t = comfy.trouver(await comfyConfig());
   const connu = comfy.CATALOGUE.find((m) => m.id === quoi?.id);
-  return comfy.telecharger(connu || quoi || {}, t.modeles, envoyer(event, 'comfy:telechargement'));
+  return comfy.telecharger(connu || quoi || {}, t.modeles, envoyer(event, 'comfy:telechargement'), { cleCivitai: (await readConfig()).civitaiCle || '' });
+});
+// La clé Civitai de Ragna : rangée à part, « Oublier mes choix » ne l'efface pas. Jamais renvoyée à la fenêtre.
+handle('comfy:cleCivitai', async (_event, cle) => {
+  const config = await readConfig();
+  await writeConfig({ ...config, civitaiCle: String(cle || '').trim() });
 });
 // Choisir à la main : le dossier de ComfyUI, son Python, ou le dossier des modèles.
 handle('comfy:choisir', async (event, quoi) => {
@@ -346,7 +351,7 @@ handle('comfy:oublier', async () => {
   await writeConfig({ ...config, comfy: { ...DEFAULT_CONFIG.comfy, port: config.comfy?.port || DEFAULT_CONFIG.comfy.port } });
 });
 // La page officielle de téléchargement de ComfyUI, dans le navigateur.
-handle('comfy:siteOfficiel', async () => shell.openExternal('https://www.comfy.org/download'));
+handle('comfy:siteOfficiel', async (_event, quoi) => shell.openExternal(quoi === 'civitai' ? 'https://civitai.com/user/account' : 'https://www.comfy.org/download'));
 handle('comfy:ouvrirModeles', async () => {
   const t = comfy.trouver(await comfyConfig());
   if (t.modeles) await shell.openPath(t.modeles);

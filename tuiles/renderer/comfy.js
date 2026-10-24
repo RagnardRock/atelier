@@ -249,6 +249,7 @@ const Comfy = (() => {
         ]);
       });
       const adresse = el('input', { type: 'text', placeholder: 'https://huggingface.co/… ou https://civitai.com/api/download/models/…', className: 'comfy-adresse' });
+      const cle = el('input', { type: 'password', placeholder: t.cleCivitai ? 'Clé Civitai enregistrée (colle-en une autre pour la changer)' : 'Ta clé Civitai (pour les modèles qui demandent d\'être connecté)', className: 'comfy-adresse' });
       const sorte = el('select', {});
       for (const [v, l] of [['checkpoints', 'Modèle complet (checkpoint)'], ['loras', 'LoRA (style)'], ['vae', 'VAE'], ['diffusion_models', 'Modèle de diffusion (Flux…)'], ['text_encoders', 'Encodeur de texte'], ['upscale_models', 'Agrandissement']]) sorte.add(new Option(l, v));
       corps.append(ligne(Boolean(f.checkpoints?.length), 'Modèles', t.modeles
@@ -263,6 +264,14 @@ const Comfy = (() => {
           if (!adresse.value.trim()) throw new Error('Colle d\'abord l\'adresse du fichier du modèle.');
           return telechargerAvec(b, { url: adresse.value.trim(), dossier: sorte.value });
         })]),
+        el('div', { className: 'comfy-modele' }, [cle,
+          bouton(t.cleCivitai ? 'Changer la clé' : 'Enregistrer la clé', async () => {
+            if (!cle.value.trim()) throw new Error('Colle d\'abord ta clé Civitai.');
+            await api.cleCivitai(cle.value);
+            notify('Clé Civitai enregistrée.', 'success');
+          }),
+          ...(t.cleCivitai ? [bouton('Effacer', async () => { await api.cleCivitai(''); notify('Clé Civitai effacée.', 'success'); })] : []),
+          bouton('Créer ma clé Civitai', () => api.siteOfficiel('civitai'))]),
       ]));
       const i = await api.infos();
       corps.append(ligne(i.enMarche, 'Moteur', i.enMarche ? `En marche sur le port ${i.port}${i.nous ? ', lancé par Tafl (il s\'arrêtera avec Tafl)' : ', un ComfyUI déjà ouvert (Tafl ne l\'arrêtera pas)'}.` : 'Arrêté. Il démarre tout seul à la première génération.', [

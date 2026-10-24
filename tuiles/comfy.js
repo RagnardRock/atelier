@@ -339,19 +339,22 @@ function creer({ log, dossierTafl }) {
   const liberer = () => (etat.port ? requete('/free', { methode: 'POST', corps: { unload_models: true, free_memory: true } }).catch(() => null) : null);
 
   // --- Télécharger un modèle dans le dossier des modèles ---
-  async function telecharger({ url, dossier, fichier }, modelesDossier, progres = () => {}) {
+  async function telecharger({ url, dossier, fichier }, modelesDossier, progres = () => {}, { cleCivitai = '' } = {}) {
     const u = new URL(String(url));
     if (u.protocol !== 'https:' || !SITES.some((s) => u.hostname === s || u.hostname.endsWith(`.${s}`))) throw new Error(`Téléchargement refusé : seulement depuis ${SITES.join(' ou ')}.`);
     if (!DOSSIERS_MODELES.includes(dossier)) throw new Error(`Dossier de modèles inconnu : ${dossier}`);
     if (!modelesDossier || !estDossier(modelesDossier)) throw new Error('Tafl ne connaît pas encore le dossier des modèles de ComfyUI.');
     // Hugging Face : la page d'un fichier (/blob/) devient son adresse de téléchargement (/resolve/).
     if (u.hostname === 'huggingface.co') u.pathname = u.pathname.replace('/blob/', '/resolve/');
+    // Civitai demande souvent d'être connecté : la clé de Ragna (gratuite, dans son compte Civitai).
+    // fetch ne la renvoie pas au serveur de fichiers vers lequel Civitai redirige.
+    const entetes = u.hostname.endsWith('civitai.com') && cleCivitai ? { Authorization: `Bearer ${cleCivitai}` } : {};
     // Civitai : la page d'un modèle (/models/123, avec ou sans ?modelVersionId=) devient le lien de son bouton « Download ».
     const page = u.hostname.endsWith('civitai.com') && /^\/models\/(\d+)/.exec(u.pathname);
     if (page) {
       let version = u.searchParams.get('modelVersionId');
       if (!version) {
-        const infos = await fetch(`https://civitai.com/api/v1/models/${page[1]}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+        const infos = await fetch(`https://civitai.com/api/v1/models/${page[1]}`, { headers: entetes }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
         version = infos?.modelVersions?.[0]?.id;
         if (!version) throw new Error(`Civitai ne donne pas la version de ce modèle : ${u}. Copie plutôt le lien du bouton « Download » de la page.`);
       }
@@ -363,7 +366,12 @@ function creer({ log, dossierTafl }) {
     if (existe(cible)) return { chemin: cible, deja: true };
     await fs.mkdir(path.dirname(cible), { recursive: true });
     log('INFO', `ComfyUI : téléchargement de ${u} vers ${cible}`);
-    const r = await fetch(u, { redirect: 'follow' });
+    const r = await fetch(u, { redirect: 'follow', headers: entetes });
+    if ((r.status === 401 || r.status === 403) && u.hostname.endsWith('civitai.com')) {
+      throw new Error(cleCivitai
+        ? `Civitai refuse ta clé (${r.status}) : vérifie-la dans ton compte Civitai, ou ce modèle demande un accès particulier.`
+        : 'Civitai demande d\'être connecté pour ce modèle : crée ta clé gratuite (bouton « Créer ma clé Civitai ») et colle-la dans Tafl.');
+    }
     if (!r.ok || !r.body) throw new Error(`Téléchargement impossible (${r.status}) : ${u}`);
     // Une page web au lieu d'un fichier : souvent un lien de page, ou Civitai qui demande d'être connecté.
     if (/text\/html/i.test(r.headers.get('content-type') || '')) {
