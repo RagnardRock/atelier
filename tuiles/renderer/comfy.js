@@ -15,9 +15,9 @@ const Comfy = (() => {
   // --- Les styles : pas seulement du pixel art ---
   // positif : ajouté à la description ; negatif : ce que le modèle doit éviter ;
   // pixel : post-traitement pixel art (aplats, palette) ; lora : LoRA à prendre s'il est installé ;
-  // modele : modèle à préférer (d'après son nom de fichier).
+  // modele : modèles à préférer (d'après leur nom de fichier), le premier trouvé gagne.
   const STYLES = [
-    { id: 'pixel', nom: 'Pixel art', pixel: true, lora: /pixel/i, modele: /dreamshaper|lightning|turbo/i,
+    { id: 'pixel', nom: 'Pixel art', pixel: true, lora: /pixel/i, modele: [/pixel.?art.?diffusion|sprite.?shaper/i, /dreamshaper|lightning|turbo/i],
       positif: 'pixel art, 16-bit SNES RPG style, clean flat colors, crisp edges, limited palette',
       negatif: 'blurry, smooth gradient, 3d render, photo, noise, jpeg artifacts' },
     { id: 'peint', nom: 'Peint à la main', modele: /dreamshaper/i,
@@ -94,7 +94,11 @@ const Comfy = (() => {
   }
   // Réglages du calcul d'après le nom du modèle : les modèles « Lightning » ou « Turbo » sont
   // faits pour peu d'étapes (rapides) ; les autres en demandent une trentaine.
+  // Les modèles faits pour le pixel art ont leurs mots-clés (prefixe) et n'ont pas besoin du LoRA Pixel Art XL.
   function reglagesModele(nom) {
+    if (/pixel.?art.?diffusion|sprite.?shaper/i.test(nom)) return { etapes: 30, cfg: 6, sampler: 'dpmpp_2m', scheduler: 'karras', prefixe: 'pixel art, 16 bit', pixelNatif: true };
+    // Nova Pixels XL (base Illustrious) : des mots-clés à la manière des images d'anime, Euler a.
+    if (/nova.?pixel/i.test(nom)) return { etapes: 25, cfg: 5, sampler: 'euler_ancestral', scheduler: 'normal', prefixe: '(pixel art, dithering, pixelated, sprite art, 8-bit:1.2)', negatif: 'lowres, worst quality, bad quality, jpeg artifacts', pixelNatif: true };
     if (/lightning|turbo|hyper|lcm/i.test(nom)) return { etapes: 6, cfg: 2, sampler: 'dpmpp_sde', scheduler: 'karras' };
     return { etapes: 28, cfg: 5, sampler: 'dpmpp_2m', scheduler: 'karras' };
   }
@@ -143,7 +147,11 @@ const Comfy = (() => {
     if (!modeles.checkpoints.length) throw new Error('ComfyUI ne voit aucun modèle (checkpoint). Télécharges-en un, ou vérifie le dossier des modèles dans « Installation et réglages de ComfyUI… ».');
     return modeles;
   }
-  const choisirModele = (liste, s, voulu) => (voulu && liste.includes(voulu) ? voulu : liste.find((m) => s.modele?.test(m)) || liste[0]);
+  const choisirModele = (liste, s, voulu) => {
+    if (voulu && liste.includes(voulu)) return voulu;
+    for (const r of [s.modele || []].flat()) { const m = liste.find((x) => r.test(x)); if (m) return m; }
+    return liste[0];
+  };
   const choisirLora = (liste, s, voulu) => (voulu === '' ? '' : voulu && voulu !== 'auto' && liste.includes(voulu) ? voulu : (s.lora && liste.find((m) => s.lora.test(m))) || '');
 
   // Génère les images brutes (une par variante) : [{ data, width, height }].
@@ -151,10 +159,13 @@ const Comfy = (() => {
     const m = await pret(progres);
     const s = style(v.style);
     const modele = choisirModele(m.checkpoints, s, v.modele);
-    const lora = choisirLora(m.loras, s, v.lora);
     const auto = reglagesModele(modele);
+    // En automatique, pas de LoRA pixel art sur un modèle qui fait déjà du pixel art.
+    const lora = auto.pixelNatif && (v.lora ?? 'auto') === 'auto' ? '' : choisirLora(m.loras, s, v.lora);
     const { W, H } = dimensions(v.largeur, v.hauteur);
-    const { positif, negatif } = phrases(v);
+    const p = phrases(v);
+    const positif = [auto.prefixe, p.positif].filter(Boolean).join(', ');
+    const negatif = [p.negatif, auto.negatif].filter(Boolean).join(', ');
     const graine = v.graine > 0 ? Math.round(v.graine) : Math.floor(Math.random() * 2 ** 32);
     const o = { modele, lora, W, H, positif, negatif, graine, lot: clamp(Math.round(v.variantes) || 1, 1, 4), etapes: v.etapes > 0 ? Math.round(v.etapes) : auto.etapes, cfg: v.cfg > 0 ? v.cfg : auto.cfg, sampler: auto.sampler, scheduler: auto.scheduler };
     // Partir de la tuile choisie (sol) : elle est répétée à l'échelle du pixel art (un pixel de la
@@ -420,7 +431,7 @@ const Comfy = (() => {
         { key: 'tolerance', label: 'Détourage du fond (objet)', type: 'range', value: derniers.tolerance ?? 48, min: 8, max: 120 },
         { key: 'negatif', label: 'À éviter (facultatif)', type: 'text', value: derniers.negatif || '' },
         { key: 'modele', label: 'Modèle', type: 'select', value: checkpoints.includes(derniers.modele) ? derniers.modele : '', choices: [['', 'Automatique (selon le style)'], ...checkpoints.map((m) => [m, m])] },
-        { key: 'lora', label: 'LoRA (style en plus)', type: 'select', value: derniers.lora === '' || loras.includes(derniers.lora) ? derniers.lora : 'auto', choices: [['auto', 'Automatique (Pixel Art XL pour le pixel art)'], ['', 'Aucun'], ...loras.map((m) => [m, m])] },
+        { key: 'lora', label: 'LoRA (style en plus)', type: 'select', value: derniers.lora === '' || loras.includes(derniers.lora) ? derniers.lora : 'auto', choices: [['auto', 'Automatique (Pixel Art XL pour le pixel art, sauf modèle déjà pixel art)'], ['', 'Aucun'], ...loras.map((m) => [m, m])] },
         { key: 'repete', label: 'Aperçu répété 2 × 2 (voir les raccords du sol)', type: 'checkbox', value: Boolean(derniers.repete) },
         { key: 'base', label: 'Partir de', type: 'select', value: derniers.base === 'tuile' && doc ? 'tuile' : 'rien', choices: [['rien', 'Rien : le modèle invente tout'], ...(doc ? [['tuile', 'La tuile choisie dans Tafl (plus calme, mêmes couleurs)']] : [])] },
         { key: 'force', label: 'Liberté du modèle', type: 'range', value: derniers.force ?? 55, min: 20, max: 95, unit: '%' },
