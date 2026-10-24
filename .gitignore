@@ -10,6 +10,8 @@ export/commun/
 hub/commun/
 moteur/dist/
 moteur/commun/
+texte/dist/
+texte/commun/
 lecteur/dist/
 lecteur/commun/
 tableur/dist/

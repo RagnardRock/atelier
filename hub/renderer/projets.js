@@ -52,7 +52,7 @@ const Projets = (() => {
     $('#projets-racine').textContent = donnees.racine ? `${donnees.racine}${donnees.total > donnees.projets.length ? ` · ${donnees.projets.length} plus récents sur ${donnees.total}` : ''}` : '';
   }
 
-  const NOMS = { rune: 'Rune', skald: 'Skald', tafl: 'Tafl', brokk: 'Brokk', saga: 'Saga', reikna: 'Reikna', explorateur: 'l\'Explorateur' };
+  const NOMS = { rune: 'Rune', skald: 'Skald', tafl: 'Tafl', brokk: 'Brokk', saga: 'Saga', reikna: 'Reikna', edda: 'Edda', explorateur: 'l\'Explorateur' };
   const ICONES = { rune: 'outils/rune.svg', skald: 'outils/skald.svg', tafl: 'outils/tafl.svg' };
 
   async function ouvrir(p, outil) {
@@ -81,6 +81,8 @@ const Projets = (() => {
       ['Ouvrir dans l\'Explorateur', () => ouvrir(p, 'explorateur')],
       // Brokk ne remplace pas l'outil du projet : il s'ouvre sur le projet pour en exporter les images.
       ['Exporter les assets avec Brokk', () => ouvrir(p, 'brokk')],
+      // Edda s'ouvre sur le projet : son accueil liste les documents du dossier (Word, LibreOffice, Markdown…).
+      ['Écrire un document avec Edda', () => ouvrir(p, 'edda')],
       // Un dossier de jeu de Tafl : Saga, le moteur, le fait tourner.
       ...(p.jeu ? [['Jouer dans Saga', () => ouvrir(p, 'saga')]] : []),
       null,
