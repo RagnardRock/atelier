@@ -1068,3 +1068,29 @@ body.resizing-row { cursor: row-resize; }
 /* La forme des menus du jeu (Tafl 0.21) : les pages du résumé, cochées */
 .menus-pages { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .menus-page { gap: 6px; }
+
+/* --- Tafl 0.21 : ComfyUI (comfy.js) --- */
+.modal.comfy .modal-body { max-height: min(78vh, 900px); overflow: auto; gap: 10px; }
+.comfy-installation { display: flex; flex-direction: column; gap: 10px; }
+.comfy-etape { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; background: rgba(255, 255, 255, 0.02); }
+.comfy-etape h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13px; color: var(--text-strong); }
+.comfy-etape.ok h3 .codicon { color: var(--success); }
+.comfy-etape.manque h3 .codicon { color: var(--warning); }
+.comfy-etape .modal-info { word-break: break-all; }
+.comfy-boutons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.comfy-catalogue { display: flex; flex-direction: column; gap: 6px; padding: 0 10px; }
+.comfy-modele { display: flex; align-items: center; gap: 8px; }
+.comfy-modele > span { flex: 1; color: var(--muted); }
+.comfy-adresse { flex: 1; min-width: 0; }
+.comfy-journal { margin: 0; max-height: 180px; overflow: auto; padding: 8px; border-radius: var(--radius); background: rgba(0, 0, 0, 0.35); color: var(--muted); font: 11px Consolas, monospace; white-space: pre-wrap; user-select: text; }
+.modal.comfy-generer .modal-body { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 420px); column-gap: 18px; row-gap: 8px; align-items: center; max-height: min(82vh, 900px); overflow: auto; }
+.modal.comfy-generer .modal-body > * { grid-column: 2; }
+.modal.comfy-generer .modal-body > .comfy-resultats { grid-column: 1; grid-row: 1 / span 40; align-self: start; }
+.modal.comfy-generer .field-label { width: 150px; }
+.comfy-resultats { display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; min-height: 220px; }
+.comfy-variante { position: relative; padding: 4px; border: 2px solid transparent; border-radius: var(--radius); background: rgba(0, 0, 0, 0.25); cursor: pointer; }
+.comfy-variante:hover { border-color: var(--hover); }
+.comfy-variante.choisie { border-color: var(--accent); }
+.comfy-variante canvas { display: block; image-rendering: pixelated; }
+.comfy-brute { position: absolute; right: 6px; bottom: 6px; width: 34px; height: auto; border-radius: 3px; box-shadow: var(--shadow); image-rendering: auto !important; opacity: 0.9; }
+.comfy-phrase { font-size: 11px; font-style: italic; }

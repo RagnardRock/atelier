@@ -1269,6 +1269,14 @@ const App = (() => {
       null,
       { label: 'Enregistrer comme dossier de jeu…', disabled: Boolean(api.doc.game), run: needDoc(IO.saveAsGame) },
     ] : [{ label: 'Ouvre ou crée d\'abord un jeu', disabled: true, run() {} }]),
+    // Tafl 0.22 : ComfyUI, caché (comfy.js). Ça marche aussi sans jeu ouvert (nouveau jeu de tuiles).
+    Générer: () => [
+      { label: 'Générer des tuiles avec ComfyUI…', keys: 'Ctrl+Maj+G', run: () => run(() => Comfy.fenetre()) },
+      { label: 'Installation et réglages de ComfyUI…', run: () => run(() => Comfy.installation()) },
+      null,
+      { label: 'Libérer la carte graphique (ComfyUI garde ses modèles en mémoire)', run: () => run(async () => { await window.tafl.comfy.liberer(); notify('Mémoire de la carte graphique libérée.', 'success'); }) },
+      { label: 'Arrêter ComfyUI', run: () => run(async () => notify(await window.tafl.comfy.arreter() ? 'ComfyUI est arrêté.' : 'ComfyUI n\'était pas lancé par Tafl.', 'info')) },
+    ],
     Affichage: () => [
       { label: 'Mode Tuile', keys: 'Tab', checked: api.mode === 'tile', disabled: !api.doc, run: () => setMode('tile') },
       { label: 'Mode Carte', keys: 'Tab', checked: api.mode === 'map', disabled: !api.doc, run: () => setMode('map') },
@@ -1414,6 +1422,7 @@ const App = (() => {
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
       if (k === 'a') return go(needDoc(selectAllShown));
+      if (k === 'g' && e.shiftKey) return go(() => run(() => Comfy.fenetre()));
       if (k === 'g') return go(needDoc(() => setTileCategory()));
       if (k === 'f') return go(needDoc(() => { $('#tiles-filter').focus(); $('#tiles-filter').select(); }));
       if (k === ',') return go(() => run(openSettings));

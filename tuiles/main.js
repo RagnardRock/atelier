@@ -74,6 +74,9 @@ const DEFAULT_CONFIG = {
   colonnes: 'auto', // panneau de droite : 'auto', '1' ou '2' colonnes
   recentFiles: [],
   lastFolder: '',
+  // Tafl 0.22 : ComfyUI (comfy.js). Vides = Tafl cherche tout seul.
+  comfy: { dossier: '', code: '', python: '', modeles: '', port: 8189 },
+  comfyDerniers: {}, // les derniers choix de la fenêtre « Générer »
 };
 
 async function readConfig() {
@@ -300,6 +303,55 @@ handle('game:write', async (_event, folder, files, remove = []) => {
 
 handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file)));
 
+// --- Tafl 0.22 : générer des tuiles avec ComfyUI, caché (voir comfy.js) ---
+const comfy = require('./comfy').creer({ log, dossierTafl: app.getPath('userData') });
+const comfyConfig = async () => ({ ...DEFAULT_CONFIG.comfy, ...((await readConfig()).comfy || {}) });
+const envoyer = (event, canal) => (p) => { if (!event.sender.isDestroyed()) event.sender.send(canal, p); };
+handle('comfy:trouver', async () => ({ ...comfy.trouver(await comfyConfig()), ...comfy.infos(), catalogue: comfy.CATALOGUE }));
+handle('comfy:demarrer', async (event) => comfy.demarrer(await comfyConfig(), envoyer(event, 'comfy:progres')));
+handle('comfy:arreter', async () => comfy.arreter());
+handle('comfy:infos', async () => comfy.infos());
+handle('comfy:modeles', async () => comfy.modeles());
+handle('comfy:generer', async (event, graphe) => {
+  const images = await comfy.generer(graphe, envoyer(event, 'comfy:progres'));
+  return images.map((b) => new Uint8Array(b));
+});
+handle('comfy:interrompre', async () => comfy.interrompre());
+handle('comfy:liberer', async () => comfy.liberer());
+handle('comfy:telecharger', async (event, quoi) => {
+  const t = comfy.trouver(await comfyConfig());
+  const connu = comfy.CATALOGUE.find((m) => m.id === quoi?.id);
+  return comfy.telecharger(connu || quoi || {}, t.modeles, envoyer(event, 'comfy:telechargement'));
+});
+// Choisir à la main : le dossier de ComfyUI, son Python, ou le dossier des modèles.
+handle('comfy:choisir', async (event, quoi) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const options = quoi === 'python'
+    ? { title: 'Le Python de ComfyUI (python.exe, dans .venv\\Scripts ou python_embeded)', properties: ['openFile'], filters: [{ name: 'Python', extensions: process.platform === 'win32' ? ['exe'] : ['*'] }] }
+    : { title: quoi === 'modeles' ? 'Le dossier « models » de ComfyUI' : 'Le dossier où ComfyUI est installé', properties: ['openDirectory'] };
+  const r = await dialog.showOpenDialog(win, options);
+  if (r.canceled || !r.filePaths[0]) return null;
+  const config = await readConfig();
+  const c = { ...DEFAULT_CONFIG.comfy, ...(config.comfy || {}) };
+  if (quoi === 'python') c.python = r.filePaths[0];
+  else if (quoi === 'modeles') c.modeles = r.filePaths[0];
+  else Object.assign(c, { dossier: r.filePaths[0], code: '', python: '', modeles: '' });
+  await writeConfig({ ...config, comfy: c });
+  return r.filePaths[0];
+});
+// Oublier les choix faits à la main : Tafl recherche tout seul.
+handle('comfy:oublier', async () => {
+  const config = await readConfig();
+  await writeConfig({ ...config, comfy: { ...DEFAULT_CONFIG.comfy, port: config.comfy?.port || DEFAULT_CONFIG.comfy.port } });
+});
+// La page officielle de téléchargement de ComfyUI, dans le navigateur.
+handle('comfy:siteOfficiel', async () => shell.openExternal('https://www.comfy.org/download'));
+handle('comfy:ouvrirModeles', async () => {
+  const t = comfy.trouver(await comfyConfig());
+  if (t.modeles) await shell.openPath(t.modeles);
+  return t.modeles;
+});
+
 // --- Jouer : lancer le jeu dans Saga, le moteur (atelier/moteur) ---
 // Saga reçoit le dossier du jeu en ligne de commande, et pour « Jouer ici » la carte et la case :
 //   Saga.exe D:\Jeux\MonJeu --carte=route-1 --x=4 --y=7
@@ -377,6 +429,13 @@ const CLAUDE_CONSIGNES = [
   '- Pour une grande demande (plusieurs villes), fais une carte après l\'autre et enregistre entre deux ; dis à',
   '  Ragna qu\'une nouvelle conversation par grosse étape coûte moins (la mémoire de la précédente est le jeu',
   '  lui-même : catalogue, infos et voir_carte la retrouvent).',
+  '',
+  '### Générer avec ComfyUI (gratuit en jetons)',
+  '',
+  '- generer_tuiles fait dessiner ComfyUI sur la carte graphique de Ragna (moteur caché, lancé par Tafl) : un sol',
+  '  qui se répète ou un objet détouré, en pixel art ou dans un autre style. Ça ne coûte que le texte de l\'appel.',
+  '  Préfère-le pour les grandes surfaces et les objets détaillés ; retouche ensuite à la main si besoin.',
+  '  Si ComfyUI manque, dis à Ragna d\'ouvrir « Générer › Installation et réglages de ComfyUI… ».',
   '',
   '### Dessiner de belles tuiles (pixel art)',
   '',
@@ -640,5 +699,5 @@ if (!app.requestSingleInstanceLock()) {
     createWindow(config);
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('will-quit', () => claude.stop());
+  app.on('will-quit', () => { claude.stop(); comfy.arreter(); });
 }
