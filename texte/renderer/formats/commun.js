@@ -112,6 +112,7 @@ const Formats = (() => {
       for (const n of node.childNodes) {
         if (n.nodeType === 3 || (n.nodeType === 1 && !estBloc(n))) { attente.push(n); continue; }
         if (n.nodeType !== 1) continue;
+        if (n.dataset.sentinelle !== undefined && !n.textContent.trim()) continue; // voir Editeur.insererA
         vider();
         const c = enfantCtx(n, ctx);
         switch (n.tagName) {

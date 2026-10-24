@@ -32,39 +32,12 @@
   const versHtml = (a) => (a.html ? String(a.contenu ?? '') : marked.parse(String(a.contenu ?? ''), { gfm: true }));
   const mots = (t) => (t.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
 
-  // Écrire au début ou à la fin de la page, dans un paragraphe à part (sans se mêler au titre du
-  // début ou au dernier paragraphe). Au début : la page est réécrite avec le nouveau contenu devant
-  // (en une seule étape, annulable). À la fin : le curseur va sur une nouvelle ligne vide.
-  function placer(d, ou) {
-    const s = window.getSelection();
-    const curseur = (noeud, debut) => {
-      const r = document.createRange();
-      r.selectNodeContents(noeud);
-      r.collapse(debut);
-      s.removeAllRanges();
-      s.addRange(r);
-    };
-    d.page.focus({ preventScroll: true });
-    const dernier = d.page.lastElementChild;
-    const vide = (b) => !b.textContent.trim() && !b.querySelector('img, video, audio, hr, table');
-    if (dernier && /^(P|H[1-6]|BLOCKQUOTE|PRE)$/.test(dernier.tagName)) {
-      curseur(dernier, false);
-      if (!vide(dernier)) document.execCommand('insertParagraph');
-      if (/^H[1-6]$/.test(Editeur.blocCourant()?.tagName || '')) document.execCommand('formatBlock', false, 'p');
-    } else {
-      // Après un tableau ou une liste : une ligne vide est ajoutée en dessous.
-      Editeur.remplacerTout(`${d.page.innerHTML}<p><br></p>`);
-      curseur(d.page.lastElementChild, true);
-    }
-    Editeur.memoriser();
-  }
+  // Au début ou à la fin : dans un paragraphe à part (voir Editeur.insererA). Au curseur : là où il
+  // est (s'il n'est pas dans la page : à la fin).
   function ecrireA(d, ou, html) {
-    if (ou === 'debut') {
-      Editeur.remplacerTout(html + d.page.innerHTML);
-      return;
-    }
-    if (ou === 'fin' || !Editeur.selection() || !d.page.contains(Editeur.selection().startContainer)) placer(d, 'fin');
-    Editeur.inserer(html);
+    const curseur = Editeur.selection() && d.page.contains(Editeur.selection().startContainer);
+    if (ou === 'debut' || ou === 'fin' || !curseur) Editeur.insererA(html, ou === 'debut' ? 'debut' : 'fin');
+    else Editeur.inserer(html);
   }
 
   // Un chemin donné par Claude : absolu, ou relatif au dossier du projet (celui du panneau Claude).
@@ -104,7 +77,7 @@
       faire: (a) => {
         const d = docDe(a.document);
         const f = a.format || 'markdown';
-        const tout = f === 'html' ? d.page.innerHTML : f === 'texte' ? d.page.innerText : Formats.versMarkdown(d.page);
+        const tout = f === 'html' ? d.page.innerHTML.replace(/<p data-sentinelle=""[^>]*>(<br>)?<\/p>/g, '') : f === 'texte' ? d.page.innerText : Formats.versMarkdown(d.page);
         const debut = Math.max(0, Number(a.debut) || 0);
         const morceau = tout.slice(debut, debut + LIMITE);
         const suite = debut + LIMITE < tout.length ? `\n\n[… ${tout.length - debut - LIMITE} caractères de plus : lire_document avec debut ${debut + LIMITE}]` : '';
@@ -239,15 +212,17 @@
         const d = docEcrit();
         const chemin = await cheminDe(a.chemin);
         if (!(await window.edda.decrireMedia(chemin))) throw new Error(`Ce n'est pas une image, une vidéo ou un son (ou le fichier n'existe pas) : ${chemin}`);
-        if (a.ou === 'debut') {
-          // Au début : une ligne vide devant, puis le média dedans.
-          Editeur.remplacerTout(`<p><br></p>${d.page.innerHTML}`);
+        const curseur = Editeur.selection() && d.page.contains(Editeur.selection().startContainer);
+        if (a.ou === 'debut' || a.ou === 'fin' || !curseur) {
+          // Une ligne vide au début ou à la fin, puis le média dedans.
+          Editeur.insererA('<p data-place-media><br></p>', a.ou === 'debut' ? 'debut' : 'fin');
+          const ligne = a.ou === 'debut' ? d.page.firstElementChild : d.page.lastElementChild;
           const r = document.createRange();
-          r.selectNodeContents(d.page.firstElementChild);
+          r.selectNodeContents(ligne);
           window.getSelection().removeAllRanges();
           window.getSelection().addRange(r);
           Editeur.memoriser();
-        } else if (a.ou === 'fin' || !Editeur.selection() || !d.page.contains(Editeur.selection().startContainer)) placer(d, 'fin');
+        }
         await MediasPage.insererFichiers([chemin]);
         return `Inséré dans ${d.nom}.`;
       },

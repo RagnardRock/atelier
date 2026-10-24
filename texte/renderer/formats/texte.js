@@ -95,6 +95,7 @@
     // La copie vit dans un document à part : ses images ne se chargent pas (leurs adresses rangées sont
     // relatives au document enregistré, pas à la fenêtre d'Edda).
     const page = document.implementation.createHTMLDocument('').importNode(ctx.page, true);
+    for (const x of page.querySelectorAll('p[data-sentinelle]')) if (!x.textContent.trim()) x.remove();
     for (const m of page.querySelectorAll('img, video, audio')) {
       const src = m.getAttribute('src');
       if (!src) { m.remove(); continue; }
@@ -261,6 +262,7 @@ ${corps}
   Formats.versMarkdown = (noeud) => {
     const copie = noeud.cloneNode(true);
     for (const m of copie.querySelectorAll('[contenteditable]')) m.removeAttribute('contenteditable');
+    for (const x of copie.querySelectorAll('p[data-sentinelle]')) if (!x.textContent.trim()) x.remove();
     return convertisseur().turndown(copie).trim();
   };
 })();

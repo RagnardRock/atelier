@@ -156,23 +156,35 @@ const Editeur = (() => {
     memoriser();
     changement();
   }
-  // Remplacer tout le contenu de la page (Claude, « ecrire_document »). Annulable avec Ctrl+Z.
-  function remplacerTout(html) {
+  // Écrire un morceau de HTML au début ou à la fin de la page, ou à la place de tout son contenu
+  // (Claude : inserer, ecrire_document). Annulable avec Ctrl+Z, en une seule fois.
+  //
+  // Chromium mêle le HTML inséré au paragraphe où commence la sélection : inséré dans un titre ou une
+  // liste, tout le contenu finirait dans ce titre ou cette liste. On pose donc d'abord un paragraphe
+  // vide (une « sentinelle ») là où écrire, et l'insertion commence dedans. Après Ctrl+Z, la sentinelle
+  // revient, cachée : ni affichée, ni enregistrée (formats/commun.js et texte.js la sautent).
+  function insererA(html, ou = 'tout') {
     const p = page();
     if (!p) return;
+    const sentinelle = document.createElement('p');
+    sentinelle.dataset.sentinelle = '';
+    sentinelle.innerHTML = '<br>';
+    if (ou === 'fin') p.append(sentinelle); else p.prepend(sentinelle);
     p.focus({ preventScroll: true });
     const r = document.createRange();
-    r.selectNodeContents(p);
+    if (ou === 'tout') { r.setStart(sentinelle, 0); r.setEnd(p, p.childNodes.length); } else r.selectNodeContents(sentinelle);
     const s = window.getSelection();
     s.removeAllRanges();
     s.addRange(r);
     const propre = Nettoyage.html(html, { racine: doc?.dossierUrl });
     if (propre.trim()) document.execCommand('insertHTML', false, propre);
-    else document.execCommand('delete');
+    else if (ou === 'tout') document.execCommand('insertHTML', false, '<p><br></p>');
+    else sentinelle.remove();
     if (!p.firstElementChild) p.innerHTML = '<p><br></p>';
     memoriser();
     changement();
   }
+  const remplacerTout = (html) => insererA(html, 'tout');
 
   // --- État du ruban à l'endroit du curseur ---
   function etat() {
@@ -336,7 +348,12 @@ const Editeur = (() => {
     const p = el('div', { className: 'feuille', contentEditable: 'true', spellcheck: true });
     p.setAttribute('role', 'textbox');
     p.setAttribute('aria-multiline', 'true');
-    p.addEventListener('input', () => { changement(); verifierVide(p); });
+    p.addEventListener('input', (e) => {
+      // Ctrl+Z après une écriture de Claude : la sentinelle revenue reste cachée (voir insererA).
+      if (e.inputType === 'historyUndo') for (const x of p.querySelectorAll(':scope > p[data-sentinelle]')) if (!x.textContent.trim()) x.hidden = true;
+      changement();
+      verifierVide(p);
+    });
     p.addEventListener('paste', coller);
     p.addEventListener('keydown', clavier);
     p.addEventListener('focus', () => document.execCommand('defaultParagraphSeparator', false, 'p'));
@@ -447,6 +464,7 @@ const Editeur = (() => {
     inserer,
     remplacerNoeud,
     remplacerTout,
+    insererA,
     restaurer,
     memoriser,
     etat,
