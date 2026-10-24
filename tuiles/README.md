@@ -295,6 +295,12 @@ Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais pla
 - **Il voit son résultat** : après chaque dessin, il reçoit la tuile, toutes ses images et une mosaïque 3 × 3 (pour les raccords), avec un regard critique (nombre de couleurs, agitation — au-delà d'un tiers ça fait brouillon —, pixels isolés, contraste, raccords visibles). La consigne : un sol calme, le détail sur les objets et les bordures. `voir_tuile` le montre aussi.
 - **Variantes** : `poser_tuiles` accepte `variantes` (d'autres versions de la même herbe…) mélangées au hasard pour casser la répétition.
 
+## Le PC (Tafl 0.21)
+
+- Nouvelle commande d'événement **PC : les boîtes du joueur** (`ecran_boites`, groupe Services) : à mettre sur l'ordinateur du centre de soins. Dans Saga 0.6, elle ouvre le PC, où le joueur range ses créatures dans des boîtes de 30 places. Claude la connaît aussi.
+- **Jeu › Données du jeu › Réglages › Menus du jeu** : la forme des menus dans Saga. Le pack de règles en donne une (Pokémon : Équipe, Pokédex, PC, boîtes de 30 places en grille de 6, résumé Infos / Statistiques / Attaques), en gris ; tu peux renommer les menus, cacher le Pokédex, changer la taille et la forme des boîtes (grille ou liste) et choisir les pages du résumé.
+- Saga 0.6 garde maintenant les boîtes et le Pokédex (espèces vues et attrapées) dans la sauvegarde (voir `FORMAT.md`).
+
 ## Les planches nommées (Tafl 0.20)
 
 Nommer les tuiles d'une planche (à la main ou par Claude) se fait une fois, puis sert dans tous les jeux :

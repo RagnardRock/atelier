@@ -270,6 +270,7 @@ const Combat = (() => {
       k.toxique = actif(k).statut === 'poison_grave' ? 1 : 0;
       k.peur = false;
       if (k.joueur) nous.participants.add(actif(nous));
+      else Collection.voir(partie, actif(k).creature); // le Pokédex : vue (Saga 0.6)
       montrer(k);
       // Le message s'écrit pendant que la créature entre (la balle part sur « En avant ! »).
       const texte = k.joueur ? (premier ? `En avant, ${C.nom(jeu, actif(k))} !` : `À toi, ${C.nom(jeu, actif(k))} !`)
@@ -357,9 +358,8 @@ const Combat = (() => {
         await ui.animer('adversaire', 'attrape');
         await ui.message(`Et hop ! ${C.nom(jeu, d)} est attrapé !`);
         partie.compteurs.captures = (partie.compteurs.captures || 0) + 1;
-        const max6 = Number(jeu.donnees.reglages?.reglages?.equipe_max) || 6;
-        if (partie.equipe.length < max6) partie.equipe.push(d);
-        else { (partie.boite ||= []).push(d); await ui.message(`Ton équipe est pleine : ${C.nom(jeu, d)} part dans ta boîte.`); }
+        const place = Collection.ranger(jeu, partie, d);
+        if (place.ou === 'boite') await ui.message(`Ton équipe est pleine : ${C.nom(jeu, d)} part dans ${place.nom} (${place.pc}).`);
         return true;
       }
       await ui.animer('adversaire', 'sort');

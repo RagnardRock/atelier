@@ -13,7 +13,6 @@ const Boutique = (() => {
     if (!b) { await ui.dire(`(La boutique « ${id} » n'existe pas dans les données du jeu.)`); return; }
     const reglages = jeu.donnees.reglages?.reglages || {};
     const monnaie = reglages.monnaie || '₽';
-    const equipeMax = Number(reglages.equipe_max) || 6;
     const argent = () => `${partie.argent} ${monnaie}`;
 
     // Les articles visibles maintenant, avec leur prix (0 = le prix de l'objet).
@@ -45,9 +44,8 @@ const Boutique = (() => {
           const ok = await ui.liste({ titre: `${o.nom} pour ${prix} ${monnaie} ?`, items: [{ texte: 'Oui' }, { texte: 'Non' }] });
           if (ok !== 0) continue;
           partie.argent -= prix;
-          const c = Regles.creer(jeu, a.id, Number(a.niveau) || 5);
-          if (partie.equipe.length < equipeMax) { partie.equipe.push(c); await ui.dire(`${o.nom} rejoint ton équipe !`); }
-          else { (partie.boite ||= []).push(c); await ui.dire(`Ton équipe est pleine : ${o.nom} part dans ta boîte.`); }
+          const place = Collection.ranger(jeu, partie, Regles.creer(jeu, a.id, Number(a.niveau) || 5));
+          await ui.dire(place.ou === 'equipe' ? `${o.nom} rejoint ton équipe !` : `Ton équipe est pleine : ${o.nom} part dans ${place.nom} (${place.pc}).`);
           continue;
         }
         const n = await ui.quantite({ titre: `${o.nom} : combien ?`, prix, max: Math.max(1, Math.min(99, Math.floor(partie.argent / prix))), monnaie });
@@ -83,13 +81,13 @@ const Boutique = (() => {
     // Vendre une créature : de la boîte, ou de l'équipe tant qu'il en reste une autre en état de se battre.
     async function vendreCreature() {
       for (;;) {
-        const toutes = [...partie.equipe.map((c, i) => ({ c, ou: 'equipe', i })), ...(partie.boite || []).map((c, i) => ({ c, ou: 'boite', i }))];
+        const toutes = Collection.toutes(partie);
         const r = (c) => Regles.resume(jeu, c);
-        const garde = (x) => x.ou === 'equipe' && !partie.equipe.some((d, j) => j !== x.i && d.pv > 0);
+        const garde = (x) => x.ou === 'equipe' && !Collection.peutQuitterEquipe(partie, x.i);
         const i = await ui.liste({
           titre: 'Vendre une créature', entete: argent(),
           items: toutes.map((x) => ({
-            texte: `${r(x.c).nom}${x.ou === 'boite' ? ' (boîte)' : ''}`, image: r(x.c).espece?.sprites?.face || '',
+            texte: `${r(x.c).nom}${x.ou === 'boite' ? ` (${partie.boites[x.b].nom})` : ''}`, image: r(x.c).espece?.sprites?.face || '',
             detail: `N.${x.c.niveau} · ${Regles.prixCreature(jeu, x.c)} ${monnaie}`, desactive: garde(x),
           })),
           note: 'Une créature vendue ne revient pas.',
@@ -98,7 +96,7 @@ const Boutique = (() => {
         const x = toutes[i], nom = r(x.c).nom, prix = Regles.prixCreature(jeu, x.c);
         const ok = await ui.liste({ titre: `Vendre ${nom} pour ${prix} ${monnaie} ?`, items: [{ texte: 'Oui, la vendre' }, { texte: 'Non' }] });
         if (ok !== 0) continue;
-        (x.ou === 'equipe' ? partie.equipe : partie.boite).splice(x.i, 1);
+        Collection.enlever(partie, x);
         partie.argent += prix;
         await ui.dire(`${nom} part avec son nouveau dresseur. Tu reçois ${prix} ${monnaie}.`);
       }

@@ -292,6 +292,7 @@ Le moteur joue les `commandes` de la page dans l'ordre. Pendant un script, le jo
 | `soigner` | | Soigne toute l'équipe (le centre de soins). |
 | `boutique` | `boutique` | Ouvre une boutique de `boutiques.json`. |
 | `ecran_ev` | | Ouvre l'écran où le joueur répartit les points d'effort (EV) de ses créatures. |
+| `ecran_boites` | | (Tafl 0.21) Ouvre le PC : le joueur range ses créatures dans des boîtes (30 places pour Pokémon, voir `reglages.interface.menus`), en prend dans son équipe, en dépose, en relâche, renomme ses boîtes. Une créature reçue quand l'équipe est pleine part toute seule dans la première place libre. |
 | `argent` | `action` (`"donner"` ou `"retirer"`), `montant` | (Tafl 0.16) Ajoute ou retire de l'argent. Retirer ne descend jamais sous 0 : s'il n'a pas assez, le joueur tombe à 0 et le script continue. Pour un péage, teste d'abord avec la condition `argent`. |
 | `badge` | `badge` | (Tafl 0.16) Donne au joueur le badge `badge` (un id de `reglages.badges`). Un badge déjà reçu ne compte pas deux fois. Le compteur `badges` vaut toujours le nombre de badges différents reçus : c'est lui qui fait monter les `plafonds` et le niveau des dresseurs qui s'ajustent. |
 | `personnaliser` | `nom` (`true`/`false`), `tenue` (`true`/`false`) | (Tafl 0.16) Ouvre l'écran où le joueur tape son nom (`nom`) et/ou choisit la tenue du héros parmi sa tenue de base et ses `tenues` (`tenue`). Le nom devient `{joueur}` dans les dialogues. |
@@ -313,7 +314,7 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base).
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées).
 
 ## Données du jeu (`donnees/`)
 
@@ -539,7 +540,7 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
   "monnaie": "Pokédollars", "argent_depart": 3000, "equipe_max": 6,
   "plafonds": [{ "badges": 0, "niveau": 15 }, { "badges": 1, "niveau": 20 }, { "badges": 8, "niveau": 100 }],
   "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096,
-  "interface": { "theme": "verre", "accent": "#ffb347" },
+  "interface": { "theme": "verre", "accent": "#ffb347", "menus": { "equipe": "", "dex": "", "pc": "", "boite": "", "dex_visible": true, "places": 0, "colonnes": 0, "forme_boites": "", "pages": [] } },
   "regles": "pokemon",
   "badges": [{ "id": "badge-roche", "nom": "Badge Roche", "icone": "data:image/png;base64,..." }]
 } }
@@ -550,7 +551,7 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
 - `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. Seule valeur pour l'instant : `"pokemon"` (les types, talents, attaques, créatures et objets de `donnees/` sont ses données). Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
 - `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
-- `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga.
+- `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga. `menus` (Tafl 0.21, lu par Saga 0.6) : la forme des menus. Le pack de règles en donne une par défaut (Pokémon : « Équipe », « Pokédex », « PC », « Boîte », 30 places par boîte en grille de 6 colonnes, résumé en pages `infos`, `stats`, `attaques`) ; chaque champ la remplace s'il n'est pas vide : `equipe`, `dex`, `pc`, `boite` (les noms ; une boîte s'appelle « Boîte 1 », « Boîte 2 »…), `dex_visible` (`false` cache le Pokédex), `places` et `colonnes` (`0` = ceux du pack), `forme_boites` (`"grille"`, `"liste"` ou `""`), `pages` (les pages du résumé, dans l'ordre ; `[]` = celles du pack).
 
 ## Exemple de lecture (JavaScript)
 
@@ -573,3 +574,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.12** : `sprite` dans les personnages (planche de 4 directions avec la marche). Un champ en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.15** : `interface` dans les réglages (thème verre ou pixel, couleur d'accent). Un champ en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.16** : les commandes `argent`, `badge`, `personnaliser` et `tenue`, les conditions `argent` et `badge`, `tenues` dans les personnages, `regles` et `badges` dans les réglages. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.21** : la commande `ecran_boites` et `interface.menus` dans les réglages. Des champs en plus, donc la version reste 1.

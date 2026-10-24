@@ -368,6 +368,12 @@ const Events = (() => {
       nouveau: () => ({ type: 'ecran_ev' }),
       resume: () => 'Ouvrir l\'écran des EV (répartir les points d\'effort)',
     },
+    // Tafl 0.21 (Saga 0.6) : le PC, où le joueur range ses créatures dans des boîtes.
+    ecran_boites: {
+      nom: 'PC : les boîtes du joueur', icone: 'archive', groupe: 'Services',
+      nouveau: () => ({ type: 'ecran_boites' }),
+      resume: () => 'Ouvrir le PC (ranger les créatures dans les boîtes)',
+    },
   };
 
   // --- Les conditions (d'une page, ou d'un « si ») ---
@@ -474,7 +480,7 @@ const Events = (() => {
       case 'choix': return { type: 'choix', options: (Array.isArray(c.options) ? c.options : []).slice(0, 4).map((o) => ({ texte: str(o?.texte ?? o), commandes: normListe(o?.commandes) })) };
       case 'si': return { type: 'si', condition: normCondition(c.condition) || { type: 'local', valeur: true }, alors: normListe(c.alors), sinon: normListe(c.sinon) };
       case 'commentaire': return { type: 'commentaire', texte: str(c.texte) };
-      case 'fin': case 'soigner': case 'ecran_ev': return { type: c.type };
+      case 'fin': case 'soigner': case 'ecran_ev': case 'ecran_boites': return { type: c.type };
       case 'interrupteur': return { type: 'interrupteur', id: str(c.id), valeur: vrai(c.valeur) };
       case 'local': return { type: 'local', valeur: vrai(c.valeur) };
       case 'attendre': return { type: 'attendre', ms: clamp(int(c.ms, 500), 0, 60000) };

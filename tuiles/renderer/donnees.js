@@ -171,12 +171,34 @@ const Donnees = (() => {
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
     ajustement: 'badges', ecart: 0, chance_chromatique: 4096,
-    interface: { theme: 'verre', accent: '' },
+    interface: { theme: 'verre', accent: '', menus: menusVides() },
     regles: 'pokemon', badges: [],
   });
   // Le pack de règles du jeu (Tafl 0.16) : ce qui décide des combats, des captures, des statistiques.
   // Saga choisit regles/<nom>/ d'après lui. Un seul pour l'instant ; d'autres viendront.
   const REGLES = [['pokemon', 'Pokémon : types, créatures, captures, natures, EV et IV, badges']];
+  // La forme des menus que chaque pack donne par défaut dans Saga 0.6 (regles.js › menus) : Tafl la
+  // montre en gris ; ce que le jeu règle dans Interface › Menus passe par-dessus (vide = celle du pack).
+  const FORMES_MENUS = {
+    pokemon: {
+      equipe: 'Équipe', dex: 'Pokédex', pc: 'PC', boite: 'Boîte', places: 30, colonnes: 6, forme_boites: 'grille',
+      pages: [['infos', 'Infos'], ['stats', 'Statistiques'], ['attaques', 'Attaques']],
+    },
+  };
+  const FORMES_BOITES = [['', 'Celle du pack de règles'], ['grille', 'Grille (des cases, comme les PC Pokémon)'], ['liste', 'Liste (une ligne par créature, avec son nom)']];
+  function menusVides() { return { equipe: '', dex: '', pc: '', boite: '', dex_visible: true, places: 0, colonnes: 0, forme_boites: '', pages: [] }; }
+  function normMenus(m) {
+    const d = menusVides();
+    if (!m || typeof m !== 'object') return d;
+    const court = (v) => str(v).trim().slice(0, 20);
+    return {
+      equipe: court(m.equipe), dex: court(m.dex), pc: court(m.pc), boite: court(m.boite),
+      dex_visible: m.dex_visible !== false,
+      places: int(m.places, 0, 0, 120), colonnes: int(m.colonnes, 0, 0, 12),
+      forme_boites: pick(m.forme_boites, FORMES_BOITES, ''),
+      pages: [...new Set(arr(m.pages).map((x) => str(x)).filter((x) => /^[a-z0-9_-]+$/.test(x)))],
+    };
+  }
   // L'interface en jeu (Tafl 0.15, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
   const THEMES = [['verre', 'Verre : sombre et flou, coins arrondis'], ['pixel', 'Pixel : police pixel, cadres nets, rétro']];
   function normReglages(r) {
@@ -193,6 +215,7 @@ const Donnees = (() => {
       interface: {
         theme: pick(r.interface?.theme, THEMES, 'verre'),
         accent: /^#[0-9a-f]{6}$/i.test(r.interface?.accent || '') ? r.interface.accent.toLowerCase() : '',
+        menus: normMenus(r.interface?.menus),
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
       regles: typeof r.regles === 'string' && /^[a-z0-9-]+$/.test(r.regles) ? r.regles : 'pokemon',
@@ -887,6 +910,53 @@ const Donnees = (() => {
       }, true],
     ], () => { const nom = `Badge ${r.badges.length + 1}`; return { id: Events.ident(nom, r.badges, 'badge'), nom, icone: '' }; }, { ajouter: '+ Badge', vide: 'Aucun badge pour l\'instant.' });
   }
+  // La forme des menus (Saga 0.6) : leurs noms, le Pokédex, les boîtes du PC, les pages du résumé.
+  // Chaque champ vide garde ce que donne le pack de règles (montré en gris).
+  function formMenus(r, ctx) {
+    const m = r.interface.menus, d = FORMES_MENUS[r.regles] || FORMES_MENUS.pokemon;
+    const nombre = (key, max) => {
+      const i = el('input', { type: 'number', value: m[key] || '', min: 0, max, placeholder: String(d[key]), className: 'num-input' });
+      i.oninput = () => { m[key] = i.value === '' ? 0 : clamp(Math.round(Number(i.value)), 0, max); };
+      return i;
+    };
+    const visible = el('input', { type: 'checkbox', checked: m.dex_visible });
+    visible.onchange = () => { m.dex_visible = visible.checked; };
+    // Les pages du résumé : cochées et dans l'ordre ; rien de coché = celles du pack.
+    const pages = el('div', { className: 'menus-pages' });
+    const choisies = () => (m.pages.length ? m.pages : d.pages.map(([id]) => id));
+    const rendrePages = () => {
+      pages.replaceChildren(...d.pages.map(([id, nom]) => {
+        const c = el('input', { type: 'checkbox', checked: choisies().includes(id) });
+        c.onchange = () => {
+          const l = choisies().filter((x) => x !== id);
+          if (c.checked) l.push(id);
+          // L'ordre est celui du pack ; au moins une page.
+          const ordre = d.pages.map(([k]) => k).filter((k) => l.includes(k));
+          m.pages = ordre.length ? ordre : [id];
+          rendrePages();
+        };
+        return el('label', { className: 'checkbox-row menus-page' }, [c, el('span', { textContent: nom })]);
+      }));
+    };
+    rendrePages();
+    return [
+      section('Menus du jeu'),
+      info('La forme des menus dans Saga : leurs noms, le Pokédex, les boîtes du PC et les pages du résumé d\'une créature. Le pack de règles en donne une par défaut (en gris) ; un champ vide la garde.'),
+      el('div', { className: 'field-grid' }, [
+        champ('Menu de l\'équipe', ctx.input(m, 'equipe', d.equipe)),
+        champ('Encyclopédie', ctx.input(m, 'dex', d.dex)),
+        champ('Ordinateur', ctx.input(m, 'pc', d.pc)),
+        champ('Nom d\'une boîte', ctx.input(m, 'boite', d.boite), '« Boîte 1 », « Boîte 2 »…'),
+      ]),
+      champ(`Montrer le ${m.dex || d.dex} (menu de pause et carnet)`, visible),
+      el('div', { className: 'field-grid' }, [
+        champ('Forme des boîtes', sel(FORMES_BOITES, m.forme_boites, (v) => { m.forme_boites = v; })),
+        champ('Places par boîte', nombre('places', 120)),
+        champ('Colonnes (grille)', nombre('colonnes', 12)),
+      ]),
+      champ('Pages du résumé', pages),
+    ];
+  }
   function formReglages(r, ctx) {
     const natures = el('table', { className: 'natures' }, [
       el('tr', {}, [el('th', { textContent: 'Nature' }), el('th', { textContent: '+10 %' }), el('th', { textContent: '−10 %' })]),
@@ -897,6 +967,7 @@ const Donnees = (() => {
       info('Le style des dialogues, du combat et des menus quand on joue dans Saga. Le joueur peut aussi le forcer dans les réglages de Saga.'),
       champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
       champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
+      ...formMenus(r, ctx),
       section('Règles du jeu'),
       info('Le pack de règles décide des combats, des captures et des statistiques ; Saga le suit. Les onglets du groupe Combat (types, talents, attaques, créatures, objets) sont ses données. Pour l\'instant il n\'y a que Pokémon, mais un autre jeu pourra en choisir un autre sans rien changer aux cartes, aux événements ni aux quêtes.'),
       champ('Règles', sel(REGLES.some(([k]) => k === r.regles) ? REGLES : [...REGLES, [r.regles, `${r.regles} (inconnu de ce Tafl)`]], r.regles, (v) => { r.regles = v; })),

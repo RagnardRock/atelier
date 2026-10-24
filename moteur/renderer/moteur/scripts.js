@@ -6,7 +6,8 @@
 // version plus récente de Tafl) est sautée sans planter.
 //
 // Les combats se jouent depuis Saga 0.3 (combat.js), les boutiques et l'écran des EV depuis Saga 0.5
-// (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js.
+// (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js ; le PC depuis Saga 0.6
+// (ecrans.js).
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -104,17 +105,11 @@ const Scripts = (() => {
         }
         case 'creature': {
           const niveau = Math.max(1, Number(c.niveau) || 5);
-          const max = Number(jeu.donnees.reglages?.reglages?.equipe_max) || 6;
           const nom = nomDe('creatures', c.creature);
           if (!trouver('creatures', c.creature)) { await narrer(`(La créature « ${c.creature} » n'existe pas dans les données du jeu.)`); break; }
-          const nouvelle = Regles.creer(jeu, c.creature, niveau);
-          if (partie.equipe.length < max) {
-            partie.equipe.push(nouvelle);
-            await narrer(`${nom} (niveau ${niveau}) rejoint ton équipe !`);
-          } else {
-            (partie.boite ||= []).push(nouvelle);
-            await narrer(`Ton équipe est pleine : ${nom} part dans ta boîte.`);
-          }
+          const place = Collection.ranger(jeu, partie, Regles.creer(jeu, c.creature, niveau));
+          if (place.ou === 'equipe') await narrer(`${nom} (niveau ${niveau}) rejoint ton équipe !`);
+          else await narrer(`Ton équipe est pleine : ${nom} part dans ${place.nom} (${place.pc}).`);
           break;
         }
         // Les combats (Saga 0.3). Perdu : le script s'arrête là (le joueur se réveille au dernier soin).
@@ -216,6 +211,11 @@ const Scripts = (() => {
         case 'ecran_ev':
           dialogue.fermer();
           await Regles.ecranEv({ jeu, partie, ui });
+          break;
+        // Saga 0.6 : le PC et ses boîtes (Tafl 0.21).
+        case 'ecran_boites':
+          dialogue.fermer();
+          await moteur.ecrans.boites();
           break;
         default:
           break; // commande inconnue : on la saute
