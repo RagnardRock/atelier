@@ -23,6 +23,7 @@ const App = (() => {
     ['pressePapiers', 'Presse-papiers et couleurs', 'widget-presse-papiers'],
     ['minuteurs', 'Minuteurs', 'widget-minuteurs'],
     ['calendrier', 'Calendrier', 'widget-calendrier'],
+    ['calculatrice', 'Calculatrice', 'widget-calculatrice'],
     ['claude', 'Claude', 'widget-claude'],
   ];
   const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets']];
@@ -125,12 +126,14 @@ const App = (() => {
     ({ config, path: configPath } = await window.atelier.readConfig());
     await applyTheme(config);
     applyWidgets(config);
+    Outils.reglages(config);
     salut();
     await Notes.start();
     Projets.refresh();
     await PressePapiers.start();
     await Minuteurs.start();
     await Calendrier.start();
+    await Calculatrice.start();
     await ClaudeWidget.start();
     // Les versions installées s'affichent tout de suite ; GitHub n'est contacté au démarrage que si
     // le réglage est coché (sinon seulement quand tu cliques ↻).

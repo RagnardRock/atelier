@@ -479,7 +479,8 @@ const IO = (() => {
     return d.join(',');
   }
 
-  async function importSheet(file) {
+  // defauts : les premières valeurs de la fenêtre (Tafl 0.22 : un sol généré garde son fond, par exemple).
+  async function importSheet(file, defauts = {}) {
     const img = await decodeBytes(file.bytes);
     const W = img.naturalWidth, H = img.naturalHeight;
     const doc = App.doc;
@@ -535,13 +536,13 @@ const IO = (() => {
         { key: 'zy', label: 'Zone : rangée', type: 'number', value: 0, min: 0 },
         { key: 'zw', label: 'Zone : largeur', type: 'number', value: g0.cols, min: 1, unit: 'tuiles' },
         { key: 'zh', label: 'Zone : hauteur', type: 'number', value: g0.rows, min: 1, unit: 'tuiles' },
-        { key: 'fond', label: 'Fond à rendre transparent', type: 'select', value: fond.couleurs.length ? 'auto' : 'aucun', choices: FONDS },
+        { key: 'fond', label: 'Fond à rendre transparent', type: 'select', value: defauts.fond ?? (fond.couleurs.length ? 'auto' : 'aucun'), choices: FONDS },
         { key: 'couleur', label: 'Couleur du fond', type: 'color', value: fond.couleurs[0] || '#ff00ff' },
         { key: 'petits', label: 'Garder les petits morceaux de cette couleur au milieu des objets', type: 'checkbox', value: true },
         { key: 'target', label: 'Destination', type: 'select', value: doc ? 'add' : 'new', choices: doc ? [['add', `Ajouter au jeu ouvert (${doc.name})`], ['new', 'Nouveau jeu de tuiles']] : [['new', 'Nouveau jeu de tuiles']] },
         { key: 'skipEmpty', label: 'Ignorer les cases entièrement transparentes', type: 'checkbox', value: true },
         { key: 'dedupe', label: 'Une seule fois chaque tuile identique', type: 'checkbox', value: true },
-        { key: 'tampons', label: noms ? 'Chercher en plus les objets de plusieurs tuiles (la planche nommée a déjà ses tampons)' : 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: !noms },
+        { key: 'tampons', label: noms ? 'Chercher en plus les objets de plusieurs tuiles (la planche nommée a déjà ses tampons)' : 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: defauts.tampons ?? !noms },
         { key: 'asMap', label: 'Refaire l\'image en carte (nouveau jeu seulement)', type: 'checkbox', value: false },
       ],
       onInput(values, f) {
@@ -831,5 +832,5 @@ const IO = (() => {
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportNamedSheet, plancheNommee, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
+  return { decodeBytes, pixelsOf, open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportNamedSheet, plancheNommee, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
 })();

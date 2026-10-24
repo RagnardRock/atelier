@@ -10,10 +10,13 @@
 // - dossier : son dossier dans le dépôt ; Atelier y lit la version en cours de fabrication sur GitHub.
 // - ouvreDossier : à partir de quelle version l'outil sait ouvrir un dossier passé en ligne de commande
 //   (« Rune.exe D:\Projets\site ») ; c'est ce qu'utilise le widget Projets récents.
+// - categorie : le rayon où l'outil est rangé dans la colonne Outils (voir CATEGORIES plus bas).
+//   Un outil sans catégorie (ou avec une catégorie inconnue) va dans « Autres ».
 
-module.exports = [
+const OUTILS = [
   {
     id: 'rune',
+    categorie: 'developpement',
     nom: 'Rune',
     glyphe: 'ᚱ',
     description: 'Mon IDE : code, terminal, Git, aperçu web et Claude',
@@ -25,6 +28,7 @@ module.exports = [
   },
   {
     id: 'skald',
+    categorie: 'graphisme',
     nom: 'Skald',
     glyphe: 'ᛋ',
     description: 'Retouche d\'images et de logos, PSD compris',
@@ -36,6 +40,7 @@ module.exports = [
   },
   {
     id: 'brokk',
+    categorie: 'graphisme',
     nom: 'Brokk',
     glyphe: 'ᛒ',
     description: 'Export d\'assets : un PSD ou un logo vers toutes les tailles web',
@@ -47,6 +52,7 @@ module.exports = [
   },
   {
     id: 'tafl',
+    categorie: 'jeu',
     nom: 'Tafl',
     glyphe: 'ᛏ',
     description: 'Tuiles et cartes en pixel art, façon Pokémon',
@@ -58,6 +64,7 @@ module.exports = [
   },
   {
     id: 'saga',
+    categorie: 'jeu',
     nom: 'Saga',
     glyphe: 'ᛃ',
     description: 'Le moteur du jeu : joue les jeux faits avec Tafl',
@@ -67,4 +74,39 @@ module.exports = [
     dossier: 'moteur',
     ouvreDossier: '0.1.0',
   },
+  {
+    id: 'mimir',
+    nom: 'Mimir', // sans accent : c'est aussi le nom de l'installeur et celui inscrit dans Windows
+    glyphe: 'ᛗ',
+    description: 'Lecteur de documents : PDF (annoter, signer, remplir), EPUB, BD, Word',
+    prefixe: 'mimir-v',
+    exe: 'Mimir.exe',
+    icone: 'mimir.svg',
+    dossier: 'lecteur',
+    categorie: 'bureautique',
+  },
+  {
+    id: 'edda',
+    nom: 'Edda',
+    glyphe: 'ᛖ',
+    description: 'Traitement de texte : Word (.docx), LibreOffice (.odt), RTF, Markdown, HTML, texte, avec images, vidéos et sons',
+    prefixe: 'edda-v',
+    exe: 'Edda.exe',
+    icone: 'edda.svg',
+    dossier: 'texte',
+    ouvreDossier: '0.1.0',
+    categorie: 'bureautique',
+  },
 ];
+
+// Les rayons de la colonne Outils, dans l'ordre d'affichage.
+const CATEGORIES = [
+  { id: 'developpement', nom: 'Développement', icone: 'code' },
+  { id: 'graphisme', nom: 'Graphisme', icone: 'symbol-color' },
+  { id: 'bureautique', nom: 'Bureautique', icone: 'file-text' },
+  { id: 'jeu', nom: 'Jeu', icone: 'game' },
+  { id: 'autres', nom: 'Autres', icone: 'extensions' },
+];
+
+module.exports = OUTILS;
+module.exports.CATEGORIES = CATEGORIES;

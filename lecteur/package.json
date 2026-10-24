@@ -1,0 +1,82 @@
+{
+  "name": "atelier-lecteur",
+  "productName": "Mimir",
+  "version": "0.1.0",
+  "description": "Mímir, mon lecteur de documents : PDF (annotations, signature, formulaires), EPUB, BD, Word, images et textes, un des outils d'Atelier",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node ../commun/copier.js",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "author": "Ragna",
+  "build": {
+    "appId": "fr.ragna.mimir",
+    "productName": "Mimir",
+    "copyright": "Ragna",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asarUnpack": [
+      "commun/mcp-commun.js"
+    ],
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "!node_modules/pdfjs-dist/{legacy,types,image_decoders}/**",
+      "!node_modules/pdfjs-dist/**/*.map",
+      "!mettre-a-jour.*"
+    ],
+    "fileAssociations": [
+      { "ext": "pdf", "name": "Document PDF", "description": "Document PDF", "role": "Viewer", "icon": "build/icon.ico" },
+      { "ext": "epub", "name": "Livre EPUB", "description": "Livre numérique EPUB", "role": "Viewer", "icon": "build/icon.ico" },
+      { "ext": ["cbz", "cbr"], "name": "Bande dessinée", "description": "Bande dessinée (CBZ, CBR)", "role": "Viewer", "icon": "build/icon.ico" }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "executableName": "Mimir"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Mímir",
+      "artifactName": "Mimir-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Mimir",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "@fontsource/caveat": "5.3.0",
+    "@fontsource/great-vibes": "5.3.0",
+    "@vscode/codicons": "0.0.45",
+    "dompurify": "3.4.16",
+    "electron-updater": "6.8.9",
+    "epubjs": "0.3.93",
+    "jszip": "3.10.2",
+    "mammoth": "1.13.0",
+    "marked": "18.0.14",
+    "node-unrar-js": "2.0.2",
+    "pdfjs-dist": "6.4.299"
+  },
+  "private": true
+}

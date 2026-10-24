@@ -6,7 +6,7 @@
 ClaudePanneau.familles({
   tuiles: {
     libelle: 'Dessiner et ranger les tuiles',
-    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'dessiner_objet', 'animer_tuile', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite', 'nommer'],
+    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'dessiner_objet', 'animer_tuile', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite', 'nommer', 'generer_tuiles'],
   },
   cartes: {
     libelle: 'Construire les cartes',

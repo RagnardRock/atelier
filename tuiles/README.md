@@ -324,6 +324,33 @@ Une démo de villes avec les planches de DeviantArt épuisait la limite d'utilis
 
 (Claude Code met déjà en cache les instructions et la conversation : c'est la part « en cache » du compteur. Ce qui coûte, c'est le nombre d'actions multiplié par la taille de la conversation.)
 
+## Générer des tuiles avec ComfyUI (Tafl 0.22)
+
+Tafl fait dessiner des tuiles par **ComfyUI**, sur ta carte graphique (une RTX 4070 suffit), **sans que tu voies ComfyUI** et sans dépenser de jetons Claude.
+
+**Comment ça marche.** ComfyUI, c'est un moteur en Python (qui calcule sur la carte graphique) et une page web avec des nœuds. Tafl n'utilise que le moteur : à la première génération, il le démarre **en arrière-plan, sans fenêtre**, sur ton ordinateur seulement (127.0.0.1, port 8189), et il l'arrête quand tu fermes Tafl. Si l'application ComfyUI est déjà ouverte, Tafl se sert d'elle et ne la ferme pas.
+
+**Installer (une fois)** : menu **Générer › Installation et réglages de ComfyUI…**. Tafl cherche tout seul ComfyUI Desktop (`%LOCALAPPDATA%\Comfy-Desktop`, `%USERPROFILE%\ComfyUI-Installs`, `%APPDATA%\ComfyUI\config.json`…), la version portable, son Python et le dossier des modèles. La fenêtre montre ce qui est trouvé, et pour chaque chose qui manque un bouton : télécharger ComfyUI (site officiel), choisir son dossier, son `python.exe` ou son dossier `models`, **télécharger Pixel Art XL** (un LoRA de 170 Mo qui donne un vrai pixel art aux modèles SDXL), ou n'importe quel modèle depuis une adresse Hugging Face ou Civitai (le lien de la page suffit). Beaucoup de modèles Civitai demandent d'être connecté : colle ta clé Civitai gratuite (bouton « Créer ma clé Civitai », rubrique API Keys de ton compte) ; elle reste sur ton ordinateur, dans les réglages de Tafl. Les modèles pixel art **Pixel Art Diffusion XL** et **Nova Pixels XL** sont reconnus à leur nom de fichier : Tafl ajoute leurs mots-clés, règle étapes et CFG, et ne leur ajoute pas le LoRA Pixel Art XL. Pixel Art Diffusion XL est choisi d'office pour le style Pixel art. Elle montre aussi l'état du moteur et ses dernières lignes, en cas de souci.
+
+**Générer** : **Générer › Générer des tuiles avec ComfyUI…** (`Ctrl+Maj+G`).
+
+- **Description** : en français ou en anglais. Les modèles comprennent mal le français : Tafl traduit les mots courants (herbe, sapin, maison, toit, pavés, neige…) et affiche la phrase envoyée au modèle.
+- **Style** : pixel art, peint à la main, dessin (cel shading), réaliste, ou libre (seulement ta description). Pas seulement du pixel art : chaque style choisit le modèle qui lui va (DreamShaper XL Lightning, rapide, pour le pixel art et le peint ; Juggernaut XL pour le réaliste) et le LoRA Pixel Art XL s'il est installé.
+- **Sorte** : un **sol qui se répète** (les bords sont fondus pour raccorder sans couture : le résultat est montré répété 2 × 2) ou un **objet détouré** (le fond uni est retiré, l'objet est posé en bas de sa case).
+- **Taille** en tuiles, **1 à 4 variantes** côte à côte (la petite vignette dans le coin : l'image brute de ComfyUI). Clique sur la meilleure puis **Ajouter au jeu** : la fenêtre d'import habituelle s'ouvre (découpe en tuiles, catégorie « ia-… », tampon pour un objet).
+- **Détails** : fidèle (par défaut : l'image de ComfyUI telle quelle, à l'échelle des tuiles), plus calme ou très calme (la phrase demande moins de détails, et Tafl lisse et retire les couleurs rares : les petits détails disparaissent).
+- **Pixel art** : Tafl mesure la grille des « gros pixels » de l'image de ComfyUI (environ 8 pixels avec Pixel Art XL, mais pas exactement, et décalée), prend un pixel au milieu de chaque case, puis la taille voulue sans la tasser ; chaque bloc prend sa couleur dominante (des aplats nets, pas de flou), puis les couleurs sont ramenées à la **palette du jeu ouvert** (ou à 8 à 32 couleurs), la transparence est franche et les pixels isolés sont retirés. Les autres styles gardent leurs nuances.
+- Pendant le calcul : une barre de progression (démarrage, chargement du modèle, dessin en %), le temps écoulé, une carte animée par variante attendue, et le bouton Arrêter.
+- **Partir de la tuile choisie** (sol, jeu ouvert) : la tuile est répétée et donnée au modèle, qui la redessine (« image vers image ») avec plus ou moins de liberté. Le résultat garde le calme et les couleurs du jeu.
+- **Aperçu** : la tuile telle qu'elle sera ; « Aperçu répété 2 × 2 » pour vérifier les raccords. Clic sur la vignette du coin : l'image de ComfyUI en grand.
+- **Réglages avancés** : modèle, LoRA, à éviter, graine (pour refaire la même image), étapes, fidélité.
+
+**Claude** a l'action `generer_tuiles` : il écrit la description, ComfyUI dessine, les tuiles arrivent dans le jeu. Seul le texte de l'appel coûte des jetons.
+
+Le moteur garde ses modèles dans la mémoire de la carte graphique : **Générer › Libérer la carte graphique** la rend (pour jouer, ou pour Photoshop), **Arrêter ComfyUI** l'arrête tout de suite.
+
+Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuile ou une planche existante à partir d'une image.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -374,6 +401,9 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `renderer/events.js` | Les événements et leurs scripts (commandes, conditions, vérification), l'éditeur d'un événement et la fenêtre Données du jeu (personnages, quêtes, interrupteurs). |
 | `renderer/sprites.js` | Les sprites des personnages (Tafl 0.12) : lire et assembler les planches, l'éditeur pixel par pixel de la fiche du personnage, et le dessin sur la carte. |
 | `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), la fenêtre d'import de planches et les exports (PNG, Tiled). |
+| `comfy.js` | Tafl 0.22 : trouver ComfyUI, démarrer son moteur caché (sans fenêtre), lui envoyer une recette, télécharger des modèles, l'arrêter avec Tafl. |
+| `renderer/comfy.js` | Les fenêtres Générer et Installation de ComfyUI, les styles, la traduction des mots courants et la recette (le graphe) envoyée au moteur. |
+| `renderer/post-traitement.js` | Rendre une image de ComfyUI utilisable : détourage, réduction (moyenne ou couleur dominante), raccord sans couture, palette, nettoyage. |
 | `renderer/planche.js` | Le découpage d'une planche : détection du fond peint et transparence, marge, espacement, zone, recherche des objets (tampons), et l'aperçu de la fenêtre d'import. |
 | `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |
 | `renderer/palettes.js` | Les palettes proposées : une ligne par palette, facile à compléter. |

@@ -1,13 +1,19 @@
 // Colonne « Outils » : une carte par outil (Rune, Skald…), avec sa version installée,
 // la dernière publiée sur GitHub, et un bouton qui change selon le cas :
 // Installer (pas encore sur ce PC), Mettre à jour (une version plus récente existe), Lancer.
-// La liste des outils est dans hub/outils.js ; tout le travail (registre, GitHub, installeur)
-// se fait dans main.js.
+// Les outils sont rangés par catégorie (Développement, Graphisme…), chaque catégorie se replie d'un clic,
+// et un filtre façon Steam (Tous / Installés / Mises à jour) en haut de la colonne. Le filtre et les
+// catégories repliées sont gardés dans config.json (filtreOutils, categoriesRepliees).
+// La liste des outils et des catégories est dans hub/outils.js ; tout le travail (registre, GitHub,
+// installeur) se fait dans main.js.
 
 const Outils = (() => {
   const liste = $('#liste-outils');
   const info = $('#outils-info');
   let outils = [];
+  let categories = [];
+  let filtre = 'tous';
+  let repliees = new Set();
   const enCours = new Map(); // id → { step, percent } pendant un téléchargement / une installation
   // Outils que tu as choisi d'installer dès que leur nouvelle version, en cours de fabrication
   // sur GitHub, sera publiée : id → version attendue.
@@ -72,8 +78,63 @@ const Outils = (() => {
     return card;
   }
 
+  const FILTRES = {
+    tous: () => true,
+    installes: (o) => o.installe,
+    majs: (o) => o.miseAJour,
+  };
+  const VIDE = {
+    installes: 'Aucun outil installé pour l\'instant. Le filtre « Tous » montre ceux que tu peux installer.',
+    majs: 'Aucune mise à jour à faire : tout est à jour.',
+  };
+
   function render() {
-    liste.replaceChildren(...outils.map(carte));
+    for (const b of document.querySelectorAll('#outils-filtres .filtre')) {
+      b.classList.toggle('actif', b.dataset.filtre === filtre);
+      b.setAttribute('aria-selected', String(b.dataset.filtre === filtre));
+      const n = outils.filter(FILTRES[b.dataset.filtre]).length;
+      b.querySelector('.compte').textContent = n;
+      // « Mises à jour » ne se montre que s'il y en a (ou si c'est le filtre choisi).
+      if (b.dataset.filtre === 'majs') b.hidden = !n && filtre !== 'majs';
+    }
+    const visibles = outils.filter(FILTRES[filtre] || FILTRES.tous);
+    const groupes = [];
+    for (const c of categories) {
+      const dedans = visibles.filter((o) => o.categorie === c.id);
+      if (!dedans.length) continue;
+      const replie = repliees.has(c.id);
+      const titre = el('button', { className: 'categorie-titre', title: replie ? 'Déplier' : 'Replier' },
+        el('i', { className: `codicon codicon-chevron-${replie ? 'right' : 'down'}` }),
+        el('i', { className: `codicon codicon-${c.icone}` }),
+        el('span', { textContent: c.nom }),
+        el('span', { className: 'compte', textContent: dedans.length }));
+      titre.setAttribute('aria-expanded', String(!replie));
+      titre.onclick = () => basculer(c.id);
+      const groupe = el('div', { className: `categorie${replie ? ' repliee' : ''}` }, titre);
+      if (!replie) groupe.append(el('div', { className: 'categorie-outils' }, ...dedans.map(carte)));
+      groupes.push(groupe);
+    }
+    if (!groupes.length && outils.length) groupes.push(el('p', { className: 'discret outils-vide', textContent: VIDE[filtre] || 'Aucun outil.' }));
+    liste.replaceChildren(...groupes);
+  }
+
+  function basculer(id) {
+    if (repliees.has(id)) repliees.delete(id); else repliees.add(id);
+    window.atelier.writeConfig({ categoriesRepliees: [...repliees] });
+    render();
+  }
+
+  function choisirFiltre(f) {
+    filtre = FILTRES[f] ? f : 'tous';
+    window.atelier.writeConfig({ filtreOutils: filtre });
+    render();
+  }
+  for (const b of document.querySelectorAll('#outils-filtres .filtre')) b.onclick = () => choisirFiltre(b.dataset.filtre);
+
+  // Appelé au démarrage par app.js avec config.json.
+  function reglages(c) {
+    filtre = FILTRES[c.filtreOutils] ? c.filtreOutils : 'tous';
+    repliees = new Set(c.categoriesRepliees || []);
   }
 
   async function refresh({ refresh = false, github = true, silencieux = false, auto = false } = {}) {
@@ -82,6 +143,9 @@ const Outils = (() => {
     try {
       const etat = await window.atelier.etatOutils({ refresh, github, suivi: auto });
       outils = etat.outils;
+      categories = etat.categories || [];
+      // Plus de mise à jour à faire : le filtre « Mises à jour » vide revient sur « Tous ».
+      if (filtre === 'majs' && !outils.some((o) => o.miseAJour)) filtre = 'tous';
       render();
       const dispo = outils.filter((o) => o.miseAJour);
       info.textContent = etat.erreurGithub ? `${etat.erreurGithub}. Les versions installées restent lançables.`
@@ -203,5 +267,5 @@ const Outils = (() => {
 
   $('#btn-actualiser').onclick = () => refresh({ refresh: true }).catch((err) => notify(cleanError(err), 'error'));
 
-  return { refresh, get liste() { return outils; } };
+  return { refresh, reglages, get liste() { return outils; } };
 })();

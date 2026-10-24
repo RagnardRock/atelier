@@ -29,6 +29,12 @@
         <span class="spacer"></span>
         <button id="btn-actualiser" class="icon-button" title="Regarder à nouveau sur GitHub s'il y a des nouvelles versions"><i class="codicon codicon-refresh"></i></button>
       </header>
+      <!-- Filtre façon Steam : tous les outils, seulement ceux installés, ou ceux à mettre à jour -->
+      <div id="outils-filtres" role="tablist">
+        <button class="filtre" data-filtre="tous" role="tab">Tous <span class="compte"></span></button>
+        <button class="filtre" data-filtre="installes" role="tab">Installés <span class="compte"></span></button>
+        <button class="filtre" data-filtre="majs" role="tab">Mises à jour <span class="compte"></span></button>
+      </div>
       <div id="liste-outils"></div>
       <p id="outils-info" class="discret"></p>
     </section>
@@ -109,6 +115,24 @@
         </div>
       </article>
 
+      <!-- Calculatrice : on tape ou on clique, le résultat s'affiche pendant la frappe (voir calculatrice.js) -->
+      <article id="widget-calculatrice" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-symbol-operator"></i><span>Calculatrice</span>
+          <span class="spacer"></span>
+          <button id="btn-calc-copier" class="icon-button" title="Copier le résultat"><i class="codicon codicon-copy"></i></button>
+          <button id="btn-calc-vider" class="icon-button" title="Vider l'historique des calculs"><i class="codicon codicon-clear-all"></i></button>
+        </header>
+        <div class="calc-ecran">
+          <input id="calc-saisie" type="text" placeholder="12,5 × 4 + 10 %" spellcheck="false" autocomplete="off" aria-label="Calcul">
+          <div id="calc-resultat" aria-live="polite">0</div>
+        </div>
+        <div class="calc-corps">
+          <div id="calc-touches"></div>
+          <ul id="calc-historique" class="widget-liste"></ul>
+        </div>
+      </article>
+
       <!-- Claude : il lit tes notes, ton calendrier et l'état de tes projets (voir claude.js) -->
       <article id="widget-claude" class="widget plaque">
         <header class="plaque-titre">
@@ -147,6 +171,7 @@
   <script src="presse-papiers.js"></script>
   <script src="minuteurs.js"></script>
   <script src="calendrier.js"></script>
+  <script src="calculatrice.js"></script>
   <script src="claude.js"></script>
   <script src="update.js"></script>
   <script src="app.js"></script>
