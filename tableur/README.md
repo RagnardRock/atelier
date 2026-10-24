@@ -14,8 +14,8 @@ Reikna (« compter », en vieux norrois) est le tableur d'Atelier : il ouvre et 
 
 | Format | Ouvrir | Enregistrer |
 |---|---|---|
-| **Excel** `.xlsx` / `.xlsm` | Valeurs, formules, formats de nombre, police, couleurs, bordures, alignements, fusions, largeurs et hauteurs, volets figés, filtre, couleur des onglets, liens | Tout cela |
-| **LibreOffice** `.ods` | Valeurs, formules, formats de nombre, fusions | Valeurs, formules, fusions, tailles (pas les couleurs) |
+| **Excel** `.xlsx` / `.xlsm` | Valeurs, formules, formats de nombre, police, couleurs, bordures, alignements, fusions, largeurs et hauteurs, volets figés, filtre, couleur des onglets, liens, mise en forme conditionnelle, graphiques | Tout cela |
+| **LibreOffice** `.ods` | Valeurs, formules, formats de nombre, fusions | Valeurs, formules, fusions, tailles (pas les couleurs, ni la mise en forme conditionnelle, ni les graphiques) |
 | **Excel 97-2003** `.xls` | Valeurs, formules, formats de nombre, fusions | Valeurs seulement |
 | **CSV** `.csv`, `.tsv`, `.txt` | Le séparateur (`;`, `,`, tabulation) et l'encodage (UTF-8 ou Windows-1252) sont devinés | Une feuille, en UTF-8 avec le séparateur et la virgule décimale choisis dans les Réglages (`;` et `,` par défaut, ce qu'attend un Excel français) |
 
@@ -29,6 +29,8 @@ Dans un fichier, les formules sont toujours écrites en anglais (c'est ce que fo
 - **Recopie** : la poignée en bas à droite de la sélection prolonge les suites (1, 2 → 3, 4 ; lundi → mardi ; janvier → février ; Article 1 → Article 2) et adapte les formules. Ctrl en glissant : recopie sans suite. Ctrl+D et Ctrl+R recopient vers le bas et vers la droite.
 - **Feuilles** : ajouter (Maj+F11), renommer (double-clic sur l'onglet), déplacer (glisser l'onglet), dupliquer, colorer, supprimer (clic droit sur l'onglet).
 - **Copier-coller** avec Excel, LibreOffice, Google Sheets et les pages web : Reikna écrit et lit le presse-papiers en tableau (texte et HTML). Collage spécial (Ctrl+Maj+V) : valeurs seulement ou formats seulement.
+- **Mise en forme conditionnelle** (bouton palette de la barre d'outils, ou Données › Mise en forme conditionnelle) : colorer les cellules supérieures, inférieures, entre deux valeurs, égales, contenant un texte, les dates (aujourd'hui, cette semaine, le mois dernier…), les doublons ou valeurs uniques, les cellules vides ou en erreur, les 10 plus grandes ou plus petites, au-dessus ou en dessous de la moyenne, ou selon une formule (`=$C2>1000`). Aussi des **barres de données** et des **nuances de couleurs** (2 ou 3 couleurs). « Gérer les règles » liste les règles de la feuille : changer leur plage, leur ordre (la première l'emporte), les modifier ou les supprimer.
+- **Graphiques** (Insertion › Graphique, Alt+F1, ou le bouton de la barre d'outils) : choisis des données (ou laisse Reikna prendre le tableau autour de la cellule), puis un type (colonnes, barres, lignes, aires, secteurs, anneau, nuage de points) avec un aperçu en direct. Reikna devine si la première ligne et la première colonne sont des titres et si les séries sont en colonnes ou en lignes. Le graphique flotte sur la feuille : glisser pour le déplacer, poignée en bas à droite pour le redimensionner, double-clic pour le modifier (titre, type, empilé, légende, données), Suppr pour l'enlever. Il se met à jour dès que les données changent, et suit les lignes et colonnes insérées ou supprimées.
 - **Annuler** sans limite pratique (Ctrl+Z, Ctrl+Y) : tout s'annule, y compris ce que fait Claude.
 - **Barre d'état** : moyenne, somme et nombre des cellules choisies ; zoom (Ctrl+molette).
 
@@ -45,12 +47,13 @@ Couleur d'accent, effet verre et flou, grille claire ou sombre, quadrillage, **l
 Le panneau Claude est le même que dans Skald, Tafl et Brokk (bouton étincelles en haut à droite). Claude regarde le classeur sans demander (infos, lire une plage, capture de la grille) ; pour le reste, il affiche une carte **Autoriser / Refuser** :
 
 - écrire des valeurs et des formules (en français ou en anglais, il choisit), recopier une formule vers le bas, effacer ;
-- mettre en forme (gras, couleurs, formats de nombre, bordures), largeurs et hauteurs, fusionner, figer les volets, poser un filtre ;
+- mettre en forme (gras, couleurs, formats de nombre, bordures), poser ou effacer des règles de mise en forme conditionnelle, largeurs et hauteurs, fusionner, figer les volets, poser un filtre ;
+- créer, modifier et supprimer des graphiques (et il voit les graphiques dans la capture) ;
 - insérer, supprimer et trier des lignes ou des colonnes ;
 - ajouter, renommer et supprimer des feuilles ;
 - ouvrir un classeur, enregistrer (seulement un classeur déjà enregistré : choisir où reste ton choix), commencer un nouveau classeur.
 
-« Ne plus demander » vaut pour une famille d'actions (cellules, mise en forme, structure, feuilles, fichier), pour la conversation ou pour de bon ; ça se reprend dans les Réglages ou avec le bouclier du panneau. Tout ce que fait Claude s'annule avec Ctrl+Z.
+« Ne plus demander » vaut pour une famille d'actions (cellules, mise en forme, graphiques, structure, feuilles, fichier), pour la conversation ou pour de bon ; ça se reprend dans les Réglages ou avec le bouclier du panneau. Tout ce que fait Claude s'annule avec Ctrl+Z.
 
 ## Lancer Reikna depuis le clone
 
@@ -86,6 +89,10 @@ Electron, sans framework ni outil de compilation, comme Brokk. La grille est des
 | `renderer/classeur.js` | Le classeur : le moteur de calcul, la mise en forme, les feuilles, et l'historique pour annuler |
 | `renderer/fichiers.js` | Lire et écrire xlsx, xlsm, xls, ods, csv, tsv |
 | `renderer/grille.js` | La grille : dessin, sélection, saisie, auto-complétion, poignée de recopie, redimensionnement |
+| `renderer/mfc.js` | La mise en forme conditionnelle : les types de règles, et le calcul du style de chaque cellule |
+| `renderer/regles.js` | Les menus et fenêtres des règles (nouvelle règle, gérer les règles) |
+| `renderer/graphiques.js` | Les graphiques : lire les données, les dessiner avec Chart.js, les déplacer et redimensionner |
+| `renderer/xlsx-extras.js` | Ce qu'ExcelJS ne sait pas faire : écrire et relire les graphiques d'un `.xlsx`, et relire certaines règles (doublons, cellules vides…) |
 | `renderer/fenetres.js` | Menus, palette de couleurs, Toutes les fonctions, Format de cellule, Trier, Filtre |
 | `renderer/app.js` | L'interface : barre d'outils, menus, onglets, raccourcis, presse-papiers, réglages |
 | `renderer/claude-actions.js`, `claude-familles.js` | Ce que Claude peut faire, et les familles de permissions |
@@ -95,11 +102,11 @@ Les bibliothèques :
 
 - **HyperFormula** (moteur de calcul, près de 400 fonctions compatibles Excel). Licence GPL v3 : Reikna est un outil personnel au code public, ce qui est permis.
 - **ExcelJS** pour les `.xlsx` (styles compris).
+- **Chart.js** pour dessiner les graphiques, et **JSZip** pour les glisser dans le `.xlsx`.
 - **SheetJS** (paquet `@e965/xlsx`, la version officielle 0.20 republiée sur npm) pour `.xls` et `.ods`, et en secours pour un `.xlsx` qu'ExcelJS ne sait pas lire.
 
 ## Pas encore
 
-- Graphiques et mise en forme conditionnelle (prévus pour la 0.2).
 - Tableaux croisés dynamiques, validation des données (listes déroulantes), commentaires de cellules.
 - Images insérées dans la feuille.
 - Impression et export PDF.

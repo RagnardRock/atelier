@@ -550,3 +550,40 @@ body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 .menu-item.desactive:hover { background: transparent; color: inherit; }
 .menu .codicon-blank { visibility: hidden; }
 #optionsbar .ciseaux { font-size: 15px; line-height: 1; }
+
+/* --- Graphiques posés sur la feuille --- */
+#graphiques { position: absolute; right: 0; bottom: 0; overflow: hidden; pointer-events: none; z-index: 2; }
+.graphique {
+  position: absolute; pointer-events: auto; cursor: move;
+  background: #1b1c23; border: 1px solid rgba(255, 255, 255, 0.10); border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); overflow: hidden;
+}
+body.grille-claire .graphique { background: #ffffff; border-color: #d4d4da; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12); }
+.graphique canvas { display: block; }
+.graphique.choisi { outline: 2px solid var(--accent); outline-offset: 1px; }
+.graphique-poignee {
+  position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); opacity: 0; border-bottom-right-radius: 8px;
+}
+.graphique.choisi .graphique-poignee, .graphique:hover .graphique-poignee { opacity: 0.9; }
+.graphique-message { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; padding: 16px; text-align: center; }
+.graphique-message[hidden] { display: none; }
+
+/* Fenêtre « Graphique » */
+.graphique-types { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 10px; }
+.graphique-type {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px;
+  background: var(--hover); border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font-size: 11.5px;
+}
+.graphique-type .codicon { font-size: 20px; }
+.graphique-type:hover { background: var(--active); }
+.graphique-type.actif { border-color: var(--accent); color: var(--text-strong); box-shadow: 0 0 0 1px var(--accent) inset; }
+.graphique-apercu { background: #1b1c23; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: center; padding: 6px; }
+body.grille-claire .graphique-apercu { background: #ffffff; }
+
+/* Mise en forme conditionnelle : la liste des règles */
+.mfc-liste { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow: auto; }
+.mfc-ligne { display: grid; grid-template-columns: 1fr 86px 150px auto auto auto auto; gap: 6px; align-items: center; padding: 6px 8px; background: var(--hover); border-radius: 6px; }
+.mfc-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mfc-apercu { display: inline-block; height: 20px; line-height: 20px; padding: 0 6px; border-radius: 4px; border: 1px solid var(--border); font-size: 12px; text-align: center; color: var(--text); }
+.mfc-ligne input[type=text] { min-width: 0; }

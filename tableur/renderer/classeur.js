@@ -48,6 +48,8 @@ const Classeur = (() => {
       filtre: null,             // { plage, criteres: { colonne: [valeurs cachées] } }
       cachees: new Set(),       // lignes cachées par le filtre
       couleurOnglet: null,
+      mfc: [],                  // règles de mise en forme conditionnelle (mfc.js), par priorité
+      graphiques: [],           // graphiques posés sur la feuille (graphiques.js)
     };
   }
   function clonerMeta(m) {
@@ -62,6 +64,8 @@ const Classeur = (() => {
       filtre: m.filtre ? { plage: { ...m.filtre.plage }, criteres: JSON.parse(JSON.stringify(m.filtre.criteres)) } : null,
       cachees: new Set(m.cachees),
       couleurOnglet: m.couleurOnglet,
+      mfc: JSON.parse(JSON.stringify(m.mfc || [])),
+      graphiques: JSON.parse(JSON.stringify(m.graphiques || [])),
     };
   }
 
@@ -88,7 +92,15 @@ const Classeur = (() => {
       if (f.figer) m.figer = { lignes: f.figer.lignes || 0, colonnes: f.figer.colonnes || 0 };
       if (f.filtre) m.filtre = { plage: f.filtre, criteres: {} };
       m.couleurOnglet = f.couleurOnglet || null;
+      m.mfc = (f.mfc || []).map((x) => ({ ...x, id: x.id || MFC.nouvelId() }));
       metas.set(ordre[i], m);
+    });
+    // Les graphiques citent leurs données par nom de feuille dans les fichiers : on passe aux id.
+    feuilles.forEach((f, i) => {
+      metas.get(ordre[i]).graphiques = (f.graphiques || []).map((g) => {
+        const id = g.donnees?.nomFeuille ? hf.getSheetId(g.donnees.nomFeuille) : ordre[i];
+        return { ...g, id: g.id || MFC.nouvelId(), donnees: { feuille: id ?? ordre[i], plage: g.donnees.plage } };
+      }).filter((g) => g.donnees?.plage);
     });
     hf.clearUndoStack();
     annuler = [];
@@ -98,7 +110,10 @@ const Classeur = (() => {
 
   // --- Les écouteurs (la grille se redessine, le titre montre « non enregistré »…) ---
   const ecouter = (fn) => { ecouteurs.add(fn); return () => ecouteurs.delete(fn); };
-  function signaler(evt) { for (const fn of ecouteurs) fn(evt); }
+  // version : change à chaque modification (les caches de mfc.js et graphiques.js s'y fient).
+  let versionCourante = 0;
+  const version = () => versionCourante;
+  function signaler(evt) { versionCourante++; for (const fn of ecouteurs) fn(evt); }
 
   // --- Faire une modification (et pouvoir l'annuler) ---
   // nom : ce que dit « Annuler … ». moteur : fonction qui modifie le moteur (dans un lot unique).
@@ -243,6 +258,15 @@ const Classeur = (() => {
     const sc = m.stylesColonnes.get(c), sl = m.stylesLignes.get(r), s = m.styles.get(`${r}:${c}`);
     if (!sc && !sl) return s || null;
     return { ...sc, ...sl, ...s };
+  }
+  // Le style tel qu'on le voit : avec la mise en forme conditionnelle (et sa barre de données, _barre).
+  function styleAffiche(feuille, r, c) {
+    const s = style(feuille, r, c);
+    const m = metas.get(feuille);
+    if (!m.mfc.length) return s;
+    const x = MFC.evaluer(feuille, r, c);
+    if (!x) return s;
+    return { ...s, ...x.style, ...(x.barre ? { _barre: x.barre } : {}) };
   }
 
   // Le texte affiché dans la cellule (valeur mise en forme).
@@ -445,7 +469,8 @@ const Classeur = (() => {
 
   // --- Insérer / supprimer des lignes et des colonnes ---
   // Le moteur décale les formules ; ici on décale la mise en forme, les tailles, les fusions, le filtre.
-  function decaler(m, axe, index, delta) {
+  // feuille : pour décaler aussi les données des graphiques (de toutes les feuilles) qui la citent.
+  function decaler(m, axe, index, delta, feuille) {
     const ligne = axe === 'lignes';
     const bouge = (i) => (i >= index ? (delta < 0 && i < index - delta ? null : i + delta) : i);
     const styles = new Map();
@@ -479,23 +504,37 @@ const Classeur = (() => {
       return q;
     };
     m.fusions = m.fusions.map(decalerPlage).filter((p) => p && taillePlage(p) > 1);
+    m.mfc = m.mfc.map((x) => ({ ...x, plages: x.plages.map(decalerPlage).filter(Boolean) })).filter((x) => x.plages.length);
+    for (const g of m.graphiques) {
+      const a = decalerPlage({ r1: g.ancre.r, c1: g.ancre.c, r2: g.ancre.r, c2: g.ancre.c });
+      if (a) g.ancre = { ...g.ancre, r: a.r1, c: a.c1 };
+    }
+    for (const autre of metas.values()) {
+      for (const g of autre.graphiques) {
+        if (g.donnees.feuille !== feuille) continue;
+        const p = decalerPlage(g.donnees.plage);
+        if (p) g.donnees = { ...g.donnees, plage: p };
+      }
+    }
     if (m.filtre) {
       const p = decalerPlage(m.filtre.plage);
       m.filtre = p ? { ...m.filtre, plage: p } : null;
     }
   }
+  // La feuille, et celles dont un graphique montre ses données (leur meta change aussi).
+  const feuillesTouchees = (feuille) => [feuille, ...[...metas].filter(([id, m]) => id !== feuille && m.graphiques.some((g) => g.donnees.feuille === feuille)).map(([id]) => id)];
   function inserer(feuille, axe, index, nombre) {
     faire(axe === 'lignes' ? `insérer ${nombre > 1 ? `${nombre} lignes` : 'une ligne'}` : `insérer ${nombre > 1 ? `${nombre} colonnes` : 'une colonne'}`, {
-      feuilles: [feuille],
+      feuilles: feuillesTouchees(feuille),
       moteur: (h) => (axe === 'lignes' ? h.addRows(feuille, [index, nombre]) : h.addColumns(feuille, [index, nombre])),
-      meta: () => decaler(metas.get(feuille), axe, index, nombre),
+      meta: () => decaler(metas.get(feuille), axe, index, nombre, feuille),
     });
   }
   function supprimer(feuille, axe, index, nombre) {
     faire(axe === 'lignes' ? `supprimer ${nombre > 1 ? `${nombre} lignes` : 'la ligne'}` : `supprimer ${nombre > 1 ? `${nombre} colonnes` : 'la colonne'}`, {
-      feuilles: [feuille],
+      feuilles: feuillesTouchees(feuille),
       moteur: (h) => (axe === 'lignes' ? h.removeRows(feuille, [index, nombre]) : h.removeColumns(feuille, [index, nombre])),
-      meta: () => decaler(metas.get(feuille), axe, index, -nombre),
+      meta: () => decaler(metas.get(feuille), axe, index, -nombre, feuille),
     });
   }
   // Insérer des cellules en décalant vers le bas ou la droite : le moteur ne sait pas le faire pour
@@ -849,6 +888,8 @@ const Classeur = (() => {
         filtre: m.filtre?.plage || null,
         cachees: [...m.cachees],
         couleurOnglet: m.couleurOnglet,
+        mfc: m.mfc,
+        graphiques: m.graphiques.map((g) => ({ ...g, donnees: { nomFeuille: hf.getSheetName(g.donnees.feuille), plage: g.donnees.plage } })),
       };
     });
   }
@@ -856,7 +897,7 @@ const Classeur = (() => {
   return {
     LARGEUR, HAUTEUR, charger, ecouter, faire, defaire, refaire: refaireAction, peutAnnuler, peutRefaire,
     feuilles, nomFeuille, idFeuille, meta, ajouterFeuille, renommerFeuille, supprimerFeuille, deplacerFeuille, dupliquerFeuille, couleurOnglet,
-    valeur, brut, aFormule, typeValeur, dimensions, style, texte, texteEdition, dansTableauDebordant,
+    version, valeur, brut, aFormule, typeValeur, dimensions, style, styleAffiche, texte, texteEdition, dansTableauDebordant,
     saisir, ecrireContenus, effacer, styler, bordures, largeur, hauteur, changerLargeurs, changerHauteurs, afficherTout,
     inserer, supprimer, decalerCellules, fusionner, defusionner, fusionDe, figer, recopier, copier, coller, copieEnCours, oublierCopie,
     trier, comparer, basculerFiltre, filtrerColonne, valeursColonne, chercher, exporter,

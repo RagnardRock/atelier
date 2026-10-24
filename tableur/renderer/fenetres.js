@@ -16,7 +16,11 @@ const Fenetres = (() => {
         el('i', { className: `codicon codicon-${opts.coche ? 'check' : opts.icone || 'blank'} menu-icone` }),
         el('span', { className: 'menu-label', textContent: label }),
         keys ? el('span', { className: 'menu-keys', textContent: keys }) : null);
-      if (opts.desactive) { b.disabled = true; b.classList.add('desactive'); } else b.onclick = () => { m.remove(); run(); };
+      if (opts.sous) {
+        // Un sous-menu : il remplace le menu, à côté de l'élément.
+        b.append(el('i', { className: 'codicon codicon-chevron-right menu-keys' }));
+        b.onclick = () => { const r = b.getBoundingClientRect(); menu({ x: r.right + 2, y: r.top - 4 }, opts.sous); };
+      } else if (opts.desactive) { b.disabled = true; b.classList.add('desactive'); } else b.onclick = () => { m.remove(); run(); };
       b.onmousedown = (e) => e.preventDefault(); // la grille garde le clavier
       m.append(b);
     }

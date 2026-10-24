@@ -1,7 +1,7 @@
 {
   "name": "atelier-tableur",
   "productName": "Reikna",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reikna, mon tableur : ouvre et enregistre les classeurs Excel (xlsx, xls), LibreOffice (ods) et CSV, avec toutes les formules en français, un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
@@ -68,9 +68,11 @@
   "dependencies": {
     "@e965/xlsx": "^0.20.3",
     "@vscode/codicons": "^0.0.45",
+    "chart.js": "^4.6.1",
     "electron-updater": "^6.8.9",
     "exceljs": "^4.4.0",
-    "hyperformula": "^3.5.0"
+    "hyperformula": "^3.5.0",
+    "jszip": "^3.10.2"
   },
   "private": true
 }

@@ -129,7 +129,7 @@ const Grille = (() => {
   function redessiner() {
     if (demande) return;
     demande = true;
-    requestAnimationFrame(() => { demande = false; dessiner(); });
+    requestAnimationFrame(() => { demande = false; dessiner(); options.apresDessin?.(); });
   }
 
   function dessiner() {
@@ -202,6 +202,20 @@ const Grille = (() => {
     return couleurs.texte;
   }
 
+  // Une barre de données (mise en forme conditionnelle) : dégradé de la couleur vers le transparent.
+  function dessinerBarre(x, y, w, h, b) {
+    const m = 2 * zoom;
+    const x1 = x + m + (w - 2 * m) * b.debut, x2 = x + m + (w - 2 * m) * b.fin;
+    if (x2 - x1 < 0.5) return;
+    const g = ctx.createLinearGradient(x1, 0, x2, 0);
+    g.addColorStop(0, `${b.couleur}d0`);
+    g.addColorStop(1, `${b.couleur}40`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x1, y + m, x2 - x1, h - 2 * m);
+    ctx.fillStyle = b.couleur;
+    ctx.fillRect(b.debut > 0 ? x1 : x2 - Math.max(1, zoom), y + m, Math.max(1, zoom), h - 2 * m);
+  }
+
   function dessinerCellules(r1, r2, c1, c2) {
     const m = Classeur.meta(feuille);
     const fusions = m.fusions.filter((p) => p.r2 >= r1 && p.r1 <= r2 && p.c2 >= c1 && p.c1 <= c2);
@@ -212,11 +226,12 @@ const Grille = (() => {
       if (!taille('r', r)) continue;
       const y = ecranY(r), hh = taille('r', r) * z;
       for (let c = c1; c <= c2; c++) {
-        const s = Classeur.style(feuille, r, c);
+        const s = Classeur.styleAffiche(feuille, r, c);
         if (s?.fond && !couvertes(r, c)) {
           ctx.fillStyle = s.fond;
           ctx.fillRect(ecranX(c), y, taille('c', c) * z, hh);
         }
+        if (s?._barre && !couvertes(r, c)) dessinerBarre(ecranX(c), y, taille('c', c) * z, hh, s._barre);
       }
     }
     // 2. Quadrillage
@@ -237,7 +252,7 @@ const Grille = (() => {
     // 4. Cellules fusionnées (même si leur coin est hors de la zone visible)
     for (const p of fusions) {
       const rc = rect(p.r1, p.c1, p);
-      const s = Classeur.style(feuille, p.r1, p.c1);
+      const s = Classeur.styleAffiche(feuille, p.r1, p.c1);
       ctx.fillStyle = s?.fond || couleurs.fond;
       ctx.fillRect(rc.x + 0.5, rc.y + 0.5, rc.w - 1, rc.h - 1);
       if (options.quadrillage !== false && !s?.fond) { ctx.strokeStyle = couleurs.ligne; ctx.lineWidth = 1; ctx.strokeRect(Math.round(rc.x) - 0.5, Math.round(rc.y) - 0.5, Math.round(rc.w), Math.round(rc.h)); }
@@ -275,7 +290,7 @@ const Grille = (() => {
   function dessinerTexte(r, c, fusion, cMaxVisible) {
     const v = Classeur.valeur(feuille, r, c);
     if (v === null || v === undefined || v === '') return;
-    const s = Classeur.style(feuille, r, c);
+    const s = Classeur.styleAffiche(feuille, r, c);
     let texte = Classeur.texte(feuille, r, c);
     if (!texte) return;
     const rc = rect(r, c, fusion);
@@ -1334,6 +1349,11 @@ const Grille = (() => {
     ajusterColonnes,
     focus: () => (edition ? champActif() : defil).focus({ preventScroll: true }),
     canvas: () => canvas,
+    zoom: () => zoom,
+    // Le coin des cellules (sous les lettres, à droite des numéros), en pixels de la grille.
+    zoneCellules: () => ({ x: largeurEntete, y: ENTETE_H * zoom }),
+    // La cellule sous un point de la grille, et le décalage dans la cellule (en pixels à 100 %).
+    celluleA: (x, y) => { const c = colonneA(x), r = ligneA(y); return { r, c, dx: (x - ecranX(c)) / zoom, dy: (y - ecranY(r)) / zoom }; },
     rectCellule: (r, c) => rect(r, c),
   };
 })();
