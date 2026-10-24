@@ -378,12 +378,14 @@ const PostTraitement = (() => {
     let choix = scores[0];
     // Un pas double (16 au lieu de 8) tombe aussi sur les sauts : on garde le plus petit s'il marche presque aussi bien.
     for (const s of scores) if (s.r >= choix.r * 0.85 && s.pas < choix.pas - 1 && Math.abs(choix.pas / s.pas - Math.round(choix.pas / s.pas)) < 0.08) choix = s;
-    return choix.r >= 1.4 ? choix : null;
+    return choix.r >= (min === max ? 1 : 1.4) ? choix : null;
   }
   // Ramène une image de pixel art à ses vrais pixels : un pixel par case de la grille mesurée, pris
   // au milieu de la case (couleur dominante du centre). Sans grille nette : blocs de `defaut`.
   function versGrille(img, defaut = 8) {
-    const gx = pasDeGrille(sauts(img, false)), gy = pasDeGrille(sauts(img, true));
+    const ex = sauts(img, false), ey = sauts(img, true);
+    // Sans grille nette, on garde le pas attendu mais on cherche quand même où elle commence.
+    const gx = pasDeGrille(ex) || pasDeGrille(ex, defaut, defaut), gy = pasDeGrille(ey) || pasDeGrille(ey, defaut, defaut);
     const px = gx?.pas || gy?.pas || defaut, py = gy?.pas || gx?.pas || defaut;
     const ox = gx ? gx.depart : 0, oy = gy ? gy.depart : 0;
     const w = Math.max(1, Math.floor((img.width - ox) / px)), h = Math.max(1, Math.floor((img.height - oy) / py));
