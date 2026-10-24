@@ -357,7 +357,7 @@ const PostTraitement = (() => {
   }
   // Le pas (en pixels, pas forcément entier) et le départ de la grille sur un axe ; null si l'image
   // n'a pas de grille nette (un style peint, par exemple).
-  function pasDeGrille(e, min = 3, max = 24) {
+  function pasDeGrille(e, min = 5, max = 24) {
     const n = e.length;
     let moyenne = 0;
     for (let i = 1; i < n; i++) moyenne += e[i];
@@ -367,9 +367,14 @@ const PostTraitement = (() => {
     for (let pas = min; pas <= max; pas += 0.05) {
       let best = 0, depart = 0;
       for (let o = 0; o < pas; o += 0.5) {
+        // Les sauts SUR les lignes de la grille comparés à ceux ENTRE elles : dans du vrai pixel art,
+        // la couleur ne change presque jamais à l'intérieur d'un gros pixel.
+        const sur = new Uint8Array(n);
         let t = 0, k = 0;
-        for (let x = o; x < n; x += pas) { const i = Math.round(x); if (i > 0 && i < n) { t += e[i]; k++; } }
-        const r = k ? t / k / moyenne : 0;
+        for (let x = o; x < n; x += pas) { const i = Math.round(x); if (i > 0 && i < n) { t += e[i]; k++; sur[i] = 1; if (i > 1) sur[i - 1] = 1; if (i < n - 1) sur[i + 1] = 1; } }
+        let hors = 0, kh = 0;
+        for (let i = 1; i < n; i++) if (!sur[i]) { hors += e[i]; kh++; }
+        const r = k ? (t / k) / Math.max(moyenne * 0.05, kh ? hors / kh : 0) : 0;
         if (r > best) { best = r; depart = o; }
       }
       scores.push({ pas, depart, r: best });
@@ -378,7 +383,7 @@ const PostTraitement = (() => {
     let choix = scores[0];
     // Un pas double (16 au lieu de 8) tombe aussi sur les sauts : on garde le plus petit s'il marche presque aussi bien.
     for (const s of scores) if (s.r >= choix.r * 0.85 && s.pas < choix.pas - 1 && Math.abs(choix.pas / s.pas - Math.round(choix.pas / s.pas)) < 0.08) choix = s;
-    return choix.r >= (min === max ? 1 : 1.4) ? choix : null;
+    return choix.r >= (min === max ? 1 : 3) ? choix : null;
   }
   // Ramène une image de pixel art à ses vrais pixels : un pixel par case de la grille mesurée, pris
   // au milieu de la case (couleur dominante du centre). Sans grille nette : blocs de `defaut`.
