@@ -57,13 +57,33 @@ const OUTILS = [
   },
   {
     name: 'ouvrir_projet',
-    description: 'Ouvre un projet du dossier des projets (nom du dossier, voir projets.md) dans un outil d\'Atelier (rune, skald, brokk…) ou l\'Explorateur (explorateur). Sans outil : celui choisi pour ce projet.',
-    inputSchema: { type: 'object', properties: { nom: { type: 'string' }, outil: { type: 'string', description: 'rune, skald, brokk… ou explorateur' } }, required: ['nom'] },
+    description: 'Ouvre un projet du dossier des projets (nom du dossier, voir projets.md) dans un outil d\'Atelier (son id, voir atelier.md) ou l\'Explorateur (explorateur). Sans outil : celui choisi pour ce projet.',
+    inputSchema: { type: 'object', properties: { nom: { type: 'string' }, outil: { type: 'string', description: 'id d\'un outil (voir atelier.md) ou explorateur' } }, required: ['nom'] },
   },
   {
     name: 'lancer_outil',
-    description: 'Lance un des outils d\'Atelier par son id : rune (l\'IDE), skald (retouche d\'images), brokk (export d\'assets)…',
+    description: 'Lance un des outils d\'Atelier installés, par son id (la liste est dans atelier.md).',
     inputSchema: { type: 'object', properties: { outil: { type: 'string' } }, required: ['outil'] },
+  },
+  {
+    name: 'installer_outil',
+    description: 'Installe un outil d\'Atelier pas encore installé, ou le met à jour s\'il a une nouvelle version (id dans atelier.md). Si une version est en préparation sur GitHub, l\'action le dit : demande alors à Ragna s\'il veut l\'attendre (attendre: true) ou installer tout de suite la dernière publiée (attendre: false).',
+    inputSchema: { type: 'object', properties: { outil: { type: 'string' }, attendre: { type: 'boolean', description: 'Seulement si une version est en préparation : true = l\'installer dès sa publication, false = installer la dernière publiée' } }, required: ['outil'] },
+  },
+  {
+    name: 'desinstaller_outil',
+    description: 'Désinstalle un outil d\'Atelier (id dans atelier.md). Les réglages et fichiers de Ragna sont gardés. Seulement si Ragna le demande.',
+    inputSchema: { type: 'object', properties: { outil: { type: 'string' } }, required: ['outil'] },
+  },
+  {
+    name: 'verifier_mises_a_jour',
+    description: 'Relit sur GitHub les dernières versions des outils (comme le bouton ↻) et renvoie l\'état de chacun. Ne change rien.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'calculer',
+    description: 'Calcule une expression avec l\'interpréteur de la calculatrice d\'Atelier : + - * / (ou × ÷), ^, √, parenthèses, %, pi. Ne change rien. Utilise-le pour tout calcul.',
+    inputSchema: { type: 'object', properties: { calcul: { type: 'string', description: 'Par exemple « (1200 + 15 %) / 12 » ou « 2^10 »' } }, required: ['calcul'] },
   },
   {
     name: 'retenir_projet',

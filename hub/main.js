@@ -454,7 +454,9 @@ const notesToList = (notes) => notes.split('\n').map((l) => l.replace(/^\s*[-*�
 
 // État de chaque outil pour l'interface : installé ou non, quelle version, une plus récente ?
 // github: false → on ne lit que ce qui est installé, sans contacter GitHub (réglage décoché au démarrage).
-handle('outils:etat', async (_event, { refresh = false, github = true, suivi = false } = {}) => {
+// L'état de chaque outil (installé ? quelle version ? une plus récente ?). Aussi lu par Loki
+// (claude.js › atelier.md), sans contacter GitHub : il se sert des Releases déjà lues.
+async function etatOutils({ refresh = false, github = true, suivi = false } = {}) {
   const registry = await readUninstallRegistry();
   let releases = null;
   let githubError = null;
@@ -486,7 +488,8 @@ handle('outils:etat', async (_event, { refresh = false, github = true, suivi = f
     });
   }
   return { outils: result, categories: OUTILS.CATEGORIES, erreurGithub: githubError };
-});
+}
+handle('outils:etat', async (_event, options) => etatOutils(options));
 
 const toolById = (id) => {
   const tool = OUTILS.find((t) => t.id === id);
@@ -811,11 +814,11 @@ handle('projets:choisirDossier', async (event) => {
 });
 
 // --- Widget Claude (voir claude.js) ---
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, readJson, notesPath, donneesPath, listeProjets, run });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, readJson, notesPath, donneesPath, listeProjets, run, etatOutils: () => etatOutils({ github: false }), version: app.getVersion() });
 // « Toujours autoriser » sur une carte du widget : cette famille d'actions ne demande plus
 // (Réglages › Sans me demander la permission, pour décocher).
 handle('claude:toujours', async (_event, famille) => {
-  if (!['notes', 'calendrier', 'minuteurs', 'projets', 'memoire'].includes(famille)) throw new Error(`Famille d'actions inconnue : ${famille}`);
+  if (!claude.FAMILLES_TOUJOURS.includes(famille)) throw new Error(`Famille d'actions inconnue : ${famille}`);
   const config = await readConfig();
   await writeJson(configPath(), { ...config, claudeSansDemander: { ...config.claudeSansDemander, [famille]: true } });
 });

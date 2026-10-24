@@ -20,6 +20,7 @@ const Outils = (() => {
   // sur GitHub, sera publiée : id → version attendue.
   const attente = new Map();
   let suivi = null; // minuteur qui relit GitHub tant qu'une version est en fabrication
+  let erreurGithub = null; // GitHub n'a pas répondu à la dernière lecture (pour Loki)
 
   function ligneVersion(o) {
     if (enCours.has(o.id)) {
@@ -147,6 +148,7 @@ const Outils = (() => {
     try {
       const etat = await window.atelier.etatOutils({ refresh, github, suivi: auto });
       outils = etat.outils;
+      erreurGithub = etat.erreurGithub || null;
       categories = etat.categories || [];
       // Plus de mise à jour à faire : le filtre « Mises à jour » vide revient sur « Tous ».
       if (filtre === 'majs' && !outils.some((o) => o.miseAJour)) filtre = 'tous';
@@ -196,6 +198,7 @@ const Outils = (() => {
     }
   }
 
+  // Renvoie null si tu annules, { version }, { attente } ou { erreur } sinon (Loki s'en sert, voir pourLoki).
   async function installer(o, { confirme = false } = {}) {
     if (!confirme) {
       // On relit GitHub d'abord : la carte peut dater de plusieurs minutes.
@@ -209,12 +212,12 @@ const Outils = (() => {
         ...(o.derniere && (!o.installe || o.miseAJour) ? [{ label: `Installer la ${o.derniere}`, value: 'maintenant' }] : []),
         { label: `Attendre la ${o.enPreparation}`, value: 'attendre', primary: true },
       ]);
-      if (!choix) return;
+      if (!choix) return null;
       if (choix === 'attendre') {
         if (o.installe && await window.atelier.estOuvert(o.id)) notify(`Pense à fermer ${o.nom} avant que la ${o.enPreparation} arrive.`, 'info', 8000);
         attente.set(o.id, o.enPreparation);
         suivre();
-        return;
+        return { attente: o.enPreparation };
       }
       confirme = true; // « Installer la <ancienne> » : déjà confirmé, pas de deuxième question
     }
@@ -226,13 +229,13 @@ const Outils = (() => {
         { label: 'Plus tard', value: false },
         { label: 'Mettre à jour', value: true, primary: true },
       ]);
-      if (!ok) return;
+      if (!ok) return null;
       while (await window.atelier.estOuvert(o.id)) {
         const encore = await Dialogs.ask(`${o.nom} est ouvert`, `Ferme ${o.nom} (en enregistrant ton travail), puis clique Réessayer.`, [
           { label: 'Annuler', value: false },
           { label: 'Réessayer', value: true, primary: true },
         ]);
-        if (!encore) return;
+        if (!encore) return null;
       }
     } else if (o.installe) {
       // Mise à jour que tu as demandée en attendant la nouvelle version : l'outil doit être fermé.
@@ -241,22 +244,24 @@ const Outils = (() => {
           { label: 'Annuler', value: false },
           { label: 'Réessayer', value: true, primary: true },
         ]);
-        if (!encore) return;
+        if (!encore) return null;
       }
     } else if (!confirme) {
       const ok = await Dialogs.ask(`Installer ${o.nom}`, `Atelier va télécharger ${o.nom}-Setup-${o.derniere}.exe depuis GitHub et l'ouvrir. Tu choisiras le dossier d'installation dans l'installeur, comme d'habitude.\n\nSi Windows affiche « Windows a protégé votre ordinateur », clique Informations complémentaires puis Exécuter quand même : l'installeur n'est simplement pas signé par un certificat payant.`, [
         { label: 'Annuler', value: false },
         { label: 'Installer', value: true, primary: true },
       ]);
-      if (!ok) return;
+      if (!ok) return null;
     }
     enCours.set(o.id, { step: 'telechargement', percent: 0 });
     render();
     try {
       const { version } = await window.atelier.installer(o.id);
       notify(`${o.nom} ${version} est installé.`, 'success', 6000, [{ label: `Lancer ${o.nom}`, run: () => lancer(o) }]);
+      return { version };
     } catch (err) {
       notify(cleanError(err), 'error');
+      return { erreur: cleanError(err) };
     } finally {
       enCours.delete(o.id);
       await refresh().catch(() => render());
@@ -265,18 +270,19 @@ const Outils = (() => {
 
   // Désinstaller : on demande confirmation, on vérifie que l'outil est fermé (Windows ne laisse pas
   // effacer un programme ouvert), puis main.js lance le désinstalleur de l'outil en silence.
-  async function desinstaller(o) {
-    const ok = await Dialogs.ask(`Désinstaller ${o.nom}`, `${o.nom}${o.version ? ` ${o.version}` : ''} va être retiré de ce PC, comme depuis « Paramètres › Applications » de Windows.\n\nTes réglages et tes fichiers sont gardés : si tu réinstalles ${o.nom} plus tard, tu les retrouves.`, [
+  // Renvoie null si tu annules, { ok } ou { erreur } sinon (Loki s'en sert, voir pourLoki).
+  async function desinstaller(o, { confirme = false } = {}) {
+    const ok = confirme || await Dialogs.ask(`Désinstaller ${o.nom}`, `${o.nom}${o.version ? ` ${o.version}` : ''} va être retiré de ce PC, comme depuis « Paramètres › Applications » de Windows.\n\nTes réglages et tes fichiers sont gardés : si tu réinstalles ${o.nom} plus tard, tu les retrouves.`, [
       { label: 'Annuler', value: false },
       { label: 'Désinstaller', value: true, primary: true, danger: true },
     ]);
-    if (!ok) return;
+    if (!ok) return null;
     while (await window.atelier.estOuvert(o.id)) {
       const encore = await Dialogs.ask(`${o.nom} est ouvert`, `Ferme ${o.nom} (en enregistrant ton travail), puis clique Réessayer.`, [
         { label: 'Annuler', value: false },
         { label: 'Réessayer', value: true, primary: true },
       ]);
-      if (!encore) return;
+      if (!encore) return null;
     }
     attente.delete(o.id);
     enCours.set(o.id, { step: 'desinstallation' });
@@ -284,8 +290,10 @@ const Outils = (() => {
     try {
       await window.atelier.desinstaller(o.id);
       notify(`${o.nom} est désinstallé.`, 'success', 6000, o.derniere ? [{ label: 'Réinstaller', run: () => installer({ ...o, installe: false }) }] : []);
+      return { ok: true };
     } catch (err) {
       notify(cleanError(err), 'error');
+      return { erreur: cleanError(err) };
     } finally {
       enCours.delete(o.id);
       await refresh().catch(() => render());
@@ -300,5 +308,48 @@ const Outils = (() => {
 
   $('#btn-actualiser').onclick = () => refresh({ refresh: true }).catch((err) => notify(cleanError(err), 'error'));
 
-  return { refresh, reglages, get liste() { return outils; } };
+  // --- Pour Loki (renderer/claude.js) ---
+  // Tu as déjà validé l'action sur la carte Autoriser / Refuser : pas de deuxième confirmation. Il reste
+  // seulement la demande de fermer l'outil s'il est ouvert. Chaque fonction renvoie le texte que Loki reçoit.
+  function trouver(id) {
+    const o = outils.find((x) => x.id === id);
+    if (!o) throw new Error(`Outil inconnu : ${id} (outils : ${outils.map((x) => x.id).join(', ')})`);
+    if (enCours.has(o.id)) throw new Error(`${o.nom} est déjà en cours d'installation ou de désinstallation`);
+    return o;
+  }
+  const resultat = (o, r, fait) => {
+    if (!r) return `Ragna a annulé (${o.nom} était peut-être ouvert).`;
+    if (r.erreur) throw new Error(r.erreur);
+    return fait(r);
+  };
+  const pourLoki = {
+    async installer(id, attendre) {
+      await refresh({ refresh: true, silencieux: true }).catch(() => {});
+      const o = trouver(id);
+      if (attente.has(o.id)) return `Atelier attend déjà ${o.nom} ${attente.get(o.id)} pour l'installer dès sa publication.`;
+      if (o.enPreparation && attendre === undefined) {
+        return `${o.nom} ${o.enPreparation} est en préparation sur GitHub (prête dans quelques minutes).`
+          + `${o.derniere ? ` La dernière publiée est la ${o.derniere}.` : ''} Demande à Ragna s'il faut l'attendre (attendre: true)`
+          + `${o.derniere && (!o.installe || o.miseAJour) ? ' ou installer la dernière publiée (attendre: false)' : ''}.`;
+      }
+      if (o.enPreparation && attendre) {
+        if (o.installe && await window.atelier.estOuvert(o.id)) notify(`Pense à fermer ${o.nom} avant que la ${o.enPreparation} arrive.`, 'info', 8000);
+        attente.set(o.id, o.enPreparation);
+        suivre();
+        return `D'accord : Atelier installera ${o.nom} ${o.enPreparation} dès sa publication (la carte de ${o.nom} le montre).`;
+      }
+      if (!o.derniere) throw new Error(erreurGithub ? `Impossible de lire les versions sur GitHub : ${erreurGithub}` : `${o.nom} n'a encore aucune version publiée sur GitHub`);
+      if (o.installe && !o.miseAJour) return `${o.nom}${o.version ? ` ${o.version}` : ''} est déjà installé et à jour.`;
+      const r = await installer(o, { confirme: true });
+      return resultat(o, r, ({ version }) => `${o.nom} ${version} est installé.`);
+    },
+    async desinstaller(id) {
+      const o = trouver(id);
+      if (!o.installe) return `${o.nom} n'est pas installé.`;
+      const r = await desinstaller(o, { confirme: true });
+      return resultat(o, r, () => `${o.nom} est désinstallé (ses réglages et fichiers sont gardés).`);
+    },
+  };
+
+  return { refresh, reglages, pourLoki, get liste() { return outils; }, get erreurGithub() { return erreurGithub; } };
 })();

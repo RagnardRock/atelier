@@ -1,9 +1,11 @@
 // Widget « Claude » : une conversation avec Claude Code, qui tourne dans main.js (voir ../claude.js).
-// - Claude connaît tes notes, ton calendrier et tes projets récents (avec leurs derniers commits) :
-//   Atelier les lui prépare avant chacun de tes messages.
+// - Claude connaît tes notes, ton calendrier, tes projets récents (avec leurs derniers commits) et
+//   Atelier lui-même (ses outils, leurs versions, ses widgets) : Atelier les lui prépare avant chacun
+//   de tes messages.
 // - Il ne modifie aucun fichier et ne lance aucune commande. Il peut agir dans Atelier (ajouter une
-//   note, un évènement, lancer un minuteur, ouvrir un projet…) : une carte te demande d'abord ton accord
-//   (réglage « Actions » de Claude). L'action est faite ici, par les widgets, qui se mettent à jour.
+//   note, un évènement, lancer un minuteur, ouvrir un projet, installer un outil…) : une carte te demande
+//   d'abord ton accord (réglage « Actions » de Claude). Calculer et chercher les mises à jour ne
+//   changent rien : pas de carte. L'action est faite ici, par les widgets, qui se mettent à jour.
 // - La réponse s'affiche au fil de l'eau, en Markdown. Chaque fichier qu'il lit apparaît sur une ligne.
 // - Les conversations sont gardées dans %APPDATA%\atelier-hub\claude-conversations.json : la dernière
 //   est toujours là au prochain démarrage d'Atelier, et Claude s'en souvient (--resume).
@@ -60,8 +62,8 @@ const ClaudeWidget = (() => {
     });
     liste.replaceChildren(el('div', { className: 'claude-accueil' },
       el('i', { className: 'codicon rune-loki', textContent: 'ᛚ' }),
-      el('p', { textContent: 'Demande-moi ce que tu veux sur tes notes, ton calendrier ou tes projets.' }),
-      el('p', { className: 'discret', textContent: 'Je peux aussi ajouter une note, un évènement, lancer un minuteur ou ouvrir un projet : tu valides chaque action.' }),
+      el('p', { textContent: 'Demande-moi ce que tu veux sur tes notes, ton calendrier, tes projets ou les outils d\'Atelier.' }),
+      el('p', { className: 'discret', textContent: 'Je peux aussi ajouter une note, un évènement, lancer un minuteur, ouvrir un projet, installer ou mettre à jour un outil : tu valides chaque action.' }),
       el('div', { className: 'claude-suggestions' }, ...chips)));
   }
 
@@ -137,6 +139,14 @@ const ClaudeWidget = (() => {
       case 'lancer_minuteur': return ['watch', `Lancer un minuteur${a.nom ? ` « ${a.nom} »` : ''} de ${a.minutes} min`];
       case 'ouvrir_projet': return ['folder-opened', `Ouvrir le projet ${a.nom}${a.outil ? ` dans ${nomOutil(a.outil)}` : ''}`];
       case 'lancer_outil': return ['rocket', `Lancer ${nomOutil(a.outil)}`];
+      case 'installer_outil': {
+        const o = Outils.liste.find((x) => x.id === a.outil);
+        const verbe = o?.installe ? 'Mettre à jour' : 'Installer';
+        return ['desktop-download', a.attendre ? `${verbe} ${nomOutil(a.outil)} dès que sa nouvelle version est publiée` : `${verbe} ${nomOutil(a.outil)}${o?.derniere ? ` (version ${o.derniere})` : ''}`];
+      }
+      case 'desinstaller_outil': return ['trash', `Désinstaller ${nomOutil(a.outil)} (tes réglages et fichiers sont gardés)`];
+      case 'verifier_mises_a_jour': return ['refresh', 'Cherche les nouvelles versions sur GitHub'];
+      case 'calculer': return ['symbol-operator', `Calcule ${a.calcul}`];
       case 'retenir_projet': return ['bookmark', `Retenir sur ${a.projet} : « ${debut(a.texte)} »`, a.texte];
       case 'oublier_projet': return ['bookmark', `Oublier sur ${a.projet} : « ${debut(Projets.infoMemoire(a.projet, a.id)?.texte || a.id)} »`];
       default: return ['tools', action];
@@ -165,6 +175,20 @@ const ClaudeWidget = (() => {
       await window.atelier.lancer(a.outil);
       return `${nomOutil(a.outil)} se lance.`;
     },
+    installer_outil: (a) => Outils.pourLoki.installer(a.outil, a.attendre),
+    desinstaller_outil: (a) => Outils.pourLoki.desinstaller(a.outil),
+    async verifier_mises_a_jour() {
+      const liste = await Outils.refresh({ refresh: true, silencieux: true });
+      if (Outils.erreurGithub) throw new Error(`GitHub n'a pas répondu : ${Outils.erreurGithub}`);
+      return liste.map((o) => `${o.nom} (${o.id}) : ${o.installe ? `installé${o.version ? ` ${o.version}` : ''}` : 'pas installé'}`
+        + `${o.derniere ? `, dernière publiée ${o.derniere}` : ', aucune version publiée'}${o.miseAJour ? ' → mise à jour disponible' : ''}`
+        + `${o.enPreparation ? `, ${o.enPreparation} en préparation` : ''}`).join('\n');
+    },
+    calculer(a) {
+      const r = Calculatrice.evaluer(String(a.calcul || ''));
+      if (r === null) throw new Error('Calcul vide');
+      return `${a.calcul} = ${r}`;
+    },
     retenir_projet: (a) => Projets.retenir(a.projet, a.texte),
     oublier_projet: (a) => Projets.oublier(a.projet, a.id),
   };
@@ -185,7 +209,7 @@ const ClaudeWidget = (() => {
     const [icone, phrase, detail] = decrireAction(e.action, e.input);
     const refuser = el('button', { className: 'button small', textContent: 'Refuser' });
     const autoriser = el('button', { className: 'button small primary', textContent: 'Autoriser' });
-    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets' };
+    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets', installation: 'installer, mettre à jour ou désinstaller un outil' };
     const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Loki ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
     const carte = el('div', { className: 'claude-carte' },
       el('div', { className: 'claude-carte-titre' }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: phrase })),
@@ -219,7 +243,7 @@ const ClaudeWidget = (() => {
   function decrireOutil(nom, inp = {}) {
     if (nom.startsWith('mcp__atelier__')) return decrireAction(nom.slice('mcp__atelier__'.length), inp).slice(0, 2);
     const fichier = String(inp.file_path || '').split(/[\\/]/).pop();
-    const CONTEXTE = { 'notes.md': 'Lit tes notes', 'calendrier.md': 'Lit ton calendrier', 'projets.md': 'Lit l\'état de tes projets', 'CLAUDE.md': 'Relit ses consignes' };
+    const CONTEXTE = { 'atelier.md': 'Regarde les outils et widgets d\'Atelier', 'notes.md': 'Lit tes notes', 'calendrier.md': 'Lit ton calendrier', 'projets.md': 'Lit l\'état de tes projets', 'CLAUDE.md': 'Relit ses consignes' };
     switch (nom) {
       case 'Read': return ['eye', CONTEXTE[fichier] || `Lit ${inp.file_path || ''}`];
       case 'Grep': return ['search', `Cherche « ${inp.pattern || ''} »`];
