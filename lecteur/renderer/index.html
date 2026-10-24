@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts de Mímir s'exécutent (adresse mimir://, voir main.js). Les pages des
+       documents passent par des adresses blob: et data: ; les livres EPUB s'affichent dans des cadres
+       sans scripts. -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' blob:; font-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' data: blob:; frame-src 'self' blob:">
+  <title>Mímir</title>
+  <!-- Les textes de pdf.js en français (l10n/fr.ftl) -->
+  <link rel="localization" type="application/l10n" href="l10n/langues.json">
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans les autres outils) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <!-- Le style des pages PDF (calques de texte, formulaires, outils d'annotation) vient de pdf.js -->
+  <link rel="stylesheet" href="../node_modules/pdfjs-dist/web/pdf_viewer.css">
+  <!-- Polices manuscrites pour les signatures tapées au clavier -->
+  <link rel="stylesheet" href="../node_modules/@fontsource/great-vibes/index.css">
+  <link rel="stylesheet" href="../node_modules/@fontsource/caveat/index.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../commun/claude-panneau.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="mimir.svg" alt="">Mímir</span>
+    <nav id="onglets"></nav>
+    <button id="btn-ouvrir" class="icon-button" title="Ouvrir des documents (Ctrl+O)"><i class="codicon codicon-add"></i></button>
+    <div class="title-actions">
+      <button id="btn-reglages" class="icon-button" title="Réglages de Mímir (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Mímir"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Accueil : aucun document ouvert -->
+  <section id="accueil">
+    <img class="welcome-logo" src="mimir.svg" alt="">
+    <h1>Mímir</h1>
+    <p class="welcome-sub">Lis, annote, signe et remplis tes documents : PDF, livres EPUB, BD, Word, images et textes.</p>
+    <div class="welcome-actions">
+      <button id="accueil-ouvrir" class="button primary"><i class="codicon codicon-folder-opened"></i> Ouvrir un document <kbd>Ctrl+O</kbd></button>
+    </div>
+    <p class="welcome-hint">Tu peux aussi glisser des fichiers sur la fenêtre.</p>
+    <h2 id="accueil-recents-titre" hidden>Documents récents</h2>
+    <div id="accueil-recents"></div>
+  </section>
+
+  <main id="layout" hidden>
+    <!-- La barre d'outils du document affiché (chaque lecteur a la sienne) -->
+    <div id="barre"></div>
+    <div id="corps">
+      <!-- Gauche : miniatures, sommaire… (selon le type de document) -->
+      <aside id="cote" class="panel"></aside>
+      <!-- Le document. Chaque onglet a sa propre vue, les autres sont cachées. -->
+      <section id="vues" class="panel"></section>
+    </div>
+    <div id="drop-hint">Lâche pour ouvrir ces documents</div>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-doc"></span>
+    <span class="spacer"></span>
+    <span id="status-info"></span>
+    <span id="status-page"></span>
+    <span id="status-zoom"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+  <!-- Les pages à imprimer, préparées juste avant d'ouvrir la fenêtre d'impression de Windows -->
+  <div id="impression"></div>
+
+  <script src="../node_modules/jszip/dist/jszip.min.js"></script>
+  <script src="../node_modules/epubjs/dist/epub.min.js"></script>
+  <script src="../node_modules/mammoth/mammoth.browser.min.js"></script>
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="lecteurs/commun.js"></script>
+  <script src="lecteurs/image.js"></script>
+  <script src="lecteurs/texte.js"></script>
+  <script src="lecteurs/word.js"></script>
+  <script src="lecteurs/bd.js"></script>
+  <script src="lecteurs/epub.js"></script>
+  <script src="signature.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+  <!-- Panneau Claude, commun aux outils de l'Atelier (../commun/LISEZMOI.md) -->
+  <script src="../commun/claude-panneau.js" data-outil="Mímir" data-bienvenue="Demande un résumé du document, pose une question dessus, ou fais-toi aider pour remplir un formulaire."></script>
+  <script src="claude-actions.js"></script>
+  <script src="claude-familles.js"></script>
+</body>
+</html>
