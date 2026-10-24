@@ -34,7 +34,7 @@ const Projets = (() => {
           ICONES[p.outil] ? el('img', { className: 'projet-outil', src: ICONES[p.outil], alt: NOMS[p.outil] })
             : el('i', { className: 'codicon codicon-folder projet-outil' }),
           el('span', { className: 'projet-nom', textContent: p.nom }),
-          p.memoire?.length ? el('i', { className: 'codicon codicon-bookmark projet-memoire', title: `Ce que Claude retient :\n${p.memoire.map((m) => `• ${m.texte}`).join('\n')}` }) : null,
+          p.memoire?.length ? el('i', { className: 'codicon codicon-bookmark projet-memoire', title: `Ce que Loki retient :\n${p.memoire.map((m) => `• ${m.texte}`).join('\n')}` }) : null,
           p.type ? el('span', { className: `type type-${p.type.toLowerCase()}`, textContent: p.type }) : null,
           el('span', { className: 'spacer' }),
           el('span', { className: 'discret', textContent: dateRelative(p.activite) }),
@@ -93,7 +93,7 @@ const Projets = (() => {
       ['Tafl', () => choix('tafl'), choisi && p.outil === 'tafl'],
       ['L\'Explorateur', () => choix('explorateur'), choisi && p.outil === 'explorateur'],
       null,
-      [`Ce que Claude retient…${p.memoire?.length ? ` (${p.memoire.length})` : ''}`, () => editerMemoire(p.nom)],
+      [`Ce que Loki retient…${p.memoire?.length ? ` (${p.memoire.length})` : ''}`, () => editerMemoire(p.nom)],
     ]);
   }
 
@@ -141,11 +141,11 @@ const Projets = (() => {
     const memoire = await lireMemoire();
     const infos = memoire[nom] || [];
     const v = await Dialogs.form({
-      title: `Ce que Claude retient sur ${nom}`,
+      title: `Ce que Loki retient sur ${nom}`,
       okLabel: 'Enregistrer',
       width: 560,
       fields: [
-        { type: 'info', text: 'Une info par ligne. Claude les voit à chaque message, et peut en ajouter ou en oublier quand tu le lui demandes.' },
+        { type: 'info', text: 'Une info par ligne. Loki les voit à chaque message, et peut en ajouter ou en oublier quand tu le lui demandes.' },
         { key: 'texte', label: 'Infos', type: 'textarea', value: infos.map((m) => m.texte).join('\n'), rows: 10 },
       ],
     });

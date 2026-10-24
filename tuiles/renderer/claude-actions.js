@@ -422,7 +422,7 @@
         const enPlus = Object.fromEntries(Object.entries(a.couleurs_en_plus || {}).map(([k, v]) => [k, normalizeHex(v)]).filter(([k, v]) => k.length === 1 && v));
         const data = depuisTexte(doc, a.pixels, enPlus);
         let i;
-        Doc.change(doc, a.index === undefined || a.index === null ? 'Nouvelle tuile (Claude)' : 'Dessiner la tuile (Claude)', () => {
+        Doc.change(doc, a.index === undefined || a.index === null ? 'Nouvelle tuile (Loki)' : 'Dessiner la tuile (Loki)', () => {
           for (const hex of Object.values(enPlus)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
           if (a.index === undefined || a.index === null) {
             i = Doc.addTile(doc, data, a.nom ? (doc.tiles.some((t) => t.name === a.nom) ? Doc.uniqueName(doc, a.nom) : String(a.nom)) : null);
@@ -453,7 +453,7 @@
         const couleurs = PixelArt.rampe(base, a.nombre || 5, { ecart: clamp(Number(a.ecart ?? 0.42), 0.1, 0.8), decalage: clamp(Number(a.decalage ?? 0.5), 0, 1) });
         if (a.ajouter !== false) {
           const nouvelles = couleurs.filter((c) => !doc.palette.includes(c));
-          if (nouvelles.length) Doc.change(doc, 'Ajouter une rampe (Claude)', () => doc.palette.push(...new Set(nouvelles)));
+          if (nouvelles.length) Doc.change(doc, 'Ajouter une rampe (Loki)', () => doc.palette.push(...new Set(nouvelles)));
           App.refresh();
         }
         const code = (c) => { const i = doc.palette.indexOf(c); return i >= 0 && CODES[i] ? ` (code ${CODES[i]})` : ''; };
@@ -496,7 +496,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           peintes.set(j, data);
         }
         let i = i0;
-        Doc.change(doc, nouvelle ? 'Nouvelle tuile peinte (Claude)' : 'Peindre la tuile (Claude)', () => {
+        Doc.change(doc, nouvelle ? 'Nouvelle tuile peinte (Loki)' : 'Peindre la tuile (Loki)', () => {
           ajouterCouleurs(doc, nouvelles);
           if (nouvelle) i = Doc.addTile(doc, peintes.get(0), a.nom ? (doc.tiles.some((t) => t.name === a.nom) ? Doc.uniqueName(doc, a.nom) : String(a.nom)) : null);
           else {
@@ -552,7 +552,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (!morceaux.some(Boolean)) throw new Error('L\'objet est vide : aucune opération n\'a peint de pixel.');
         const nom = st ? st.name : (a.nom || 'objet');
         let index = si;
-        Doc.change(doc, st ? 'Retoucher l\'objet (Claude)' : 'Nouvel objet (Claude)', () => {
+        Doc.change(doc, st ? 'Retoucher l\'objet (Loki)' : 'Nouvel objet (Loki)', () => {
           ajouterCouleurs(doc, nouvelles);
           const cells = morceaux.map((f, k) => {
             if (!f) return -1;
@@ -597,7 +597,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const src = t0.frames[clamp(Number(a.source) || 0, 0, t0.frames.length - 1)];
         const { nouvelles, lire } = lecteurCouleurs(doc);
         const images = PixelArt.animer(src, doc.tileSize, doc.tileSize, a.mode, a, lire);
-        Doc.change(doc, 'Animer la tuile (Claude)', () => {
+        Doc.change(doc, 'Animer la tuile (Loki)', () => {
           ajouterCouleurs(doc, nouvelles);
           const t = Doc.tileForEdit(doc, i);
           t.frames = images;
@@ -669,7 +669,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         else if (a.action === 'inutilisees') {
           const used = Doc.usedTiles(doc);
           const unused = doc.tiles.map((_t, i) => i).filter((i) => !used.has(i));
-          if (unused.length) Doc.change(doc, 'Supprimer les tuiles inutilisées (Claude)', () => Doc.removeTiles(doc, new Set(unused)));
+          if (unused.length) Doc.change(doc, 'Supprimer les tuiles inutilisées (Loki)', () => Doc.removeTiles(doc, new Set(unused)));
         } else throw new Error(`Action inconnue : ${a.action}`);
         return `Fait. ${avant !== doc.tiles.length ? `${avant - doc.tiles.length} tuile(s) en moins, ` : ''}${doc.tiles.length} tuiles maintenant (les numéros ont pu changer).`;
       },
@@ -691,7 +691,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const { map } = doc;
         const x0 = clamp(Math.round(a.x), 0, map.width - 1), y0 = clamp(Math.round(a.y), 0, map.height - 1);
         const x1 = clamp(x0 + Math.round(a.largeur || 1), 1, map.width), y1 = clamp(y0 + Math.round(a.hauteur || 1), 1, map.height);
-        Doc.change(doc, 'Poser des tuiles (Claude)', () => {
+        Doc.change(doc, 'Poser des tuiles (Loki)', () => {
           const { cells } = Doc.layerForEdit(doc, li);
           for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) cells[y * map.width + x] = choix[Math.floor(Math.random() * choix.length)];
         });
@@ -755,14 +755,14 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           }
           if (!cells.some((c) => c >= 0)) throw new Error('Ce tampon serait vide.');
           const st = Doc.newStamp(doc, { name: a.nom || 'tampon', w, h, cells, dessus: a.dessus || 0 });
-          Doc.change(doc, 'Nouveau tampon (Claude)', () => { doc.stamps = [...doc.stamps, st]; });
+          Doc.change(doc, 'Nouveau tampon (Loki)', () => { doc.stamps = [...doc.stamps, st]; });
           return `Tampon ${doc.stamps.length - 1} « ${st.name} » (${w} × ${h}) créé.`;
         }
         const i = numero();
         const st = doc.stamps[i];
         if (a.action === 'reglages') {
           const name = a.nom ? String(a.nom) : st.name, dessus = a.dessus === undefined ? st.dessus : clamp(Math.round(a.dessus), 0, st.h);
-          Doc.change(doc, 'Réglages du tampon (Claude)', () => { doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o)); });
+          Doc.change(doc, 'Réglages du tampon (Loki)', () => { doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o)); });
           return `Tampon ${i} : « ${name} », ${dessus} rangée(s) au-dessus du joueur.`;
         }
         if (a.action === 'supprimer') {
@@ -774,7 +774,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           const li = calqueNumero(doc, a.calque);
           if (li < 0) throw new Error('Choisis un calque (calque : numéro ou nom).');
           let n = 0;
-          Doc.change(doc, a.action === 'poser' ? 'Poser un tampon (Claude)' : 'Effacer un tampon (Claude)', () => { n = Doc.placeStamp(doc, st, Math.round(a.x || 0), Math.round(a.y || 0), li, a.action === 'effacer'); });
+          Doc.change(doc, a.action === 'poser' ? 'Poser un tampon (Loki)' : 'Effacer un tampon (Loki)', () => { n = Doc.placeStamp(doc, st, Math.round(a.x || 0), Math.round(a.y || 0), li, a.action === 'effacer'); });
           return `Tampon « ${st.name} » ${a.action === 'poser' ? 'posé' : 'effacé'} en (${Math.round(a.x || 0)}, ${Math.round(a.y || 0)}) : ${n} case(s).`;
         }
         throw new Error(`Action inconnue : ${a.action}`);
@@ -792,7 +792,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const { map } = doc;
         const x0 = Math.round(a.x || 0), y0 = Math.round(a.y || 0);
         let n = 0;
-        Doc.change(doc, 'Écrire la carte (Claude)', () => {
+        Doc.change(doc, 'Écrire la carte (Loki)', () => {
           const { cells } = Doc.layerForEdit(doc, li);
           (a.lignes || []).forEach((ligne, dy) => {
             String(ligne).trim().split(/\s+/).flatMap((v) => { const r = /^(.+)\*(\d+)$/.exec(v); return r ? Array(Math.min(Number(r[2]), 256)).fill(r[1]) : [v]; }).forEach((v, dx) => {
@@ -824,7 +824,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const tuiles = (a.tuiles || []).map((e) => ({ liste: lirePlages(doc, e.tuiles), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), passage: e.passage }));
         const tampons = (a.tampons || []).map((e) => ({ k: tamponParNumeroOuNom(doc, e.tampon), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), dessus: e.dessus }));
         let n = 0;
-        Doc.change(doc, 'Nommer des tuiles (Claude)', () => {
+        Doc.change(doc, 'Nommer des tuiles (Loki)', () => {
           const copie = doc.tiles.slice();
           for (const e of tuiles) {
             for (const i of e.liste) {
@@ -901,7 +901,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const inconnus = new Set();
         const decales = new Set(); // tampons dont le bloc dans le plan n'a pas leur taille
         const compte = { cases: 0, passage: 0, tampons: new Map() };
-        Doc.change(doc, 'Construire d\'après un plan (Claude)', () => {
+        Doc.change(doc, 'Construire d\'après un plan (Loki)', () => {
           if (a.nouvelle) {
             Doc.addMap(doc, { name: String(a.nouvelle.nom || `Carte ${doc.maps.length + 1}`), width: Math.max(largeurPlan + Math.round(a.x || 0), 1), height: Math.max(hauteurPlan + Math.round(a.y || 0), 1), groupe: a.nouvelle.groupe === undefined ? doc.map.groupe : String(a.nouvelle.groupe).trim().slice(0, 60), interieur: a.nouvelle.interieur === true });
           }
@@ -1182,7 +1182,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         }
         if (a.action === 'ajouter') {
           const at = a.calque === undefined || a.calque === null ? map.layers.length : calqueNumero(doc, a.calque) + 1;
-          Doc.change(doc, 'Nouveau calque (Claude)', () => Doc.addLayer(doc, at, { name: a.nom || `Calque ${map.layers.length + 1}`, profondeur: Doc.PROFONDEURS.some(([k]) => k === a.profondeur) ? a.profondeur : 'dessous' }));
+          Doc.change(doc, 'Nouveau calque (Loki)', () => Doc.addLayer(doc, at, { name: a.nom || `Calque ${map.layers.length + 1}`, profondeur: Doc.PROFONDEURS.some(([k]) => k === a.profondeur) ? a.profondeur : 'dessous' }));
           App.selectLayer(at);
           return `Calque ${at} « ${doc.map.layers[at].name} » ajouté.\n${decrireCarte(doc)}`;
         }
@@ -1194,16 +1194,16 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           const t = a.action === 'vider' ? -1 : tuileNumero(doc, a.tuile);
           Doc.change(doc, a.action === 'vider' ? 'Vider le calque' : 'Remplir le calque', () => Doc.layerForEdit(doc, li).cells.fill(t));
         } else if (a.action === 'dupliquer') {
-          Doc.change(doc, 'Dupliquer le calque (Claude)', () => Doc.addLayer(doc, li + 1, { ...l, name: a.nom || `${l.name} (copie)`, cells: l.cells.slice(), parallaxe: { ...l.parallaxe } }));
+          Doc.change(doc, 'Dupliquer le calque (Loki)', () => Doc.addLayer(doc, li + 1, { ...l, name: a.nom || `${l.name} (copie)`, cells: l.cells.slice(), parallaxe: { ...l.parallaxe } }));
           App.selectLayer(li + 1);
         } else if (a.action === 'supprimer') {
           if (map.layers.length < 2) throw new Error('C\'est le dernier calque de la carte.');
-          Doc.change(doc, 'Supprimer le calque (Claude)', () => Doc.removeLayer(doc, li));
+          Doc.change(doc, 'Supprimer le calque (Loki)', () => Doc.removeLayer(doc, li));
           App.selectLayer(clamp(li - 1, 0, doc.map.layers.length - 1));
         } else if (a.action === 'monter' || a.action === 'descendre') {
           const to = li + (a.action === 'monter' ? 1 : -1);
           if (to < 0 || to >= map.layers.length) throw new Error(`Le calque est déjà tout ${a.action === 'monter' ? 'en haut' : 'en bas'}.`);
-          Doc.change(doc, 'Déplacer le calque (Claude)', () => Doc.moveLayer(doc, li, to));
+          Doc.change(doc, 'Déplacer le calque (Loki)', () => Doc.moveLayer(doc, li, to));
           App.selectLayer(to);
         } else if (a.action === 'regler') {
           const props = {};
@@ -1218,7 +1218,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
             props.fusion = a.fusion;
           }
           if (a.parallaxe_x !== undefined || a.parallaxe_y !== undefined) props.parallaxe = { x: Number(a.parallaxe_x ?? l.parallaxe.x), y: Number(a.parallaxe_y ?? l.parallaxe.y) };
-          Doc.change(doc, 'Réglages du calque (Claude)', () => Doc.setLayer(doc, li, props));
+          Doc.change(doc, 'Réglages du calque (Loki)', () => Doc.setLayer(doc, li, props));
         } else throw new Error(`Action inconnue : ${a.action}`);
         App.refresh();
         return decrireCarte(doc);
@@ -1234,19 +1234,19 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const map = choisirCarte(doc, a.carte);
         if (a.action === 'nouvelle' || a.action === 'dupliquer') {
           const name = String(a.nom || (a.action === 'dupliquer' ? `${map.name} (copie)` : `Carte ${doc.maps.length + 1}`));
-          Doc.change(doc, a.action === 'nouvelle' ? 'Nouvelle carte (Claude)' : 'Dupliquer la carte (Claude)', () => Doc.addMap(doc, a.action === 'dupliquer' ? { name, copyOf: map } : { name, width: clamp(Math.round(a.largeur || map.width), 1, 256), height: clamp(Math.round(a.hauteur || map.height), 1, 256), groupe: a.groupe === undefined ? map.groupe : String(a.groupe).trim().slice(0, 60), interieur: a.interieur === true }));
+          Doc.change(doc, a.action === 'nouvelle' ? 'Nouvelle carte (Loki)' : 'Dupliquer la carte (Loki)', () => Doc.addMap(doc, a.action === 'dupliquer' ? { name, copyOf: map } : { name, width: clamp(Math.round(a.largeur || map.width), 1, 256), height: clamp(Math.round(a.hauteur || map.height), 1, 256), groupe: a.groupe === undefined ? map.groupe : String(a.groupe).trim().slice(0, 60), interieur: a.interieur === true }));
           Stage.reset();
         } else if (a.action === 'renommer') {
           if (!a.nom) throw new Error('nom : le nouveau nom de la carte.');
-          Doc.change(doc, 'Renommer la carte (Claude)', () => { doc.maps[doc.mapIndex] = { ...map, name: String(a.nom) }; Doc.selectMap(doc, doc.mapIndex); });
+          Doc.change(doc, 'Renommer la carte (Loki)', () => { doc.maps[doc.mapIndex] = { ...map, name: String(a.nom) }; Doc.selectMap(doc, doc.mapIndex); });
         } else if (a.action === 'supprimer') {
           if (doc.maps.length < 2) throw new Error('C\'est la seule carte du jeu.');
-          Doc.change(doc, 'Supprimer la carte (Claude)', () => Doc.removeMap(doc, doc.mapIndex));
+          Doc.change(doc, 'Supprimer la carte (Loki)', () => Doc.removeMap(doc, doc.mapIndex));
           Stage.reset();
         } else if (a.action === 'deplacer') {
           const to = Math.round(a.position);
           if (!(to >= 0 && to < doc.maps.length)) throw new Error(`position : de 0 à ${doc.maps.length - 1}.`);
-          Doc.change(doc, 'Déplacer la carte (Claude)', () => Doc.moveMap(doc, doc.mapIndex, to));
+          Doc.change(doc, 'Déplacer la carte (Loki)', () => Doc.moveMap(doc, doc.mapIndex, to));
         } else if (a.action === 'grouper') {
           if (a.groupe === undefined) throw new Error('groupe : le nom du groupe ("" = sans groupe).');
           const groupe = String(a.groupe).trim().slice(0, 60);
@@ -1256,7 +1256,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         } else if (a.action === 'interieur') {
           if (typeof a.interieur !== 'boolean') throw new Error('interieur : true (maison, grotte…) ou false (ville, route).');
           const i = doc.maps.indexOf(map);
-          if (Boolean(map.interieur) !== a.interieur) Doc.change(doc, a.interieur ? 'Carte intérieure (Claude)' : 'Carte extérieure (Claude)', () => { doc.maps[i] = { ...map, interieur: a.interieur }; Doc.selectMap(doc, doc.mapIndex); });
+          if (Boolean(map.interieur) !== a.interieur) Doc.change(doc, a.interieur ? 'Carte intérieure (Loki)' : 'Carte extérieure (Loki)', () => { doc.maps[i] = { ...map, interieur: a.interieur }; Doc.selectMap(doc, doc.mapIndex); });
         } else if (a.action !== 'choisir') throw new Error(`Action inconnue : ${a.action}`);
         App.refresh();
         return `Cartes : ${listeCartes(doc)}.\n${decrireCarte(doc)}`;
@@ -1274,10 +1274,10 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           if (map.interieur) throw new Error(`${map.id} est un intérieur : passe-la d'abord en extérieur (action cartes, interieur false).`);
           if (!Number.isFinite(Number(a.x)) || !Number.isFinite(Number(a.y))) throw new Error('x, y : la place de la carte en cases.');
           const i = doc.maps.indexOf(map);
-          Doc.change(doc, 'Placer la carte sur la carte monde (Claude)', () => { doc.maps[i] = { ...map, monde: { x: Math.round(a.x), y: Math.round(a.y) } }; Doc.selectMap(doc, doc.mapIndex); });
+          Doc.change(doc, 'Placer la carte sur la carte monde (Loki)', () => { doc.maps[i] = { ...map, monde: { x: Math.round(a.x), y: Math.round(a.y) } }; Doc.selectMap(doc, doc.mapIndex); });
         } else if (a.action === 'replacer') {
           const seule = a.carte !== undefined ? choisirCarte(doc, a.carte) : null;
-          Doc.change(doc, 'Replacer les cartes sur la carte monde (Claude)', () => {
+          Doc.change(doc, 'Replacer les cartes sur la carte monde (Loki)', () => {
             doc.maps = doc.maps.map((m) => (!seule || m === seule ? { ...m, monde: null } : m));
             const pos = Monde.positions(doc);
             doc.maps = doc.maps.map((m) => (pos.has(m.id) && !m.monde ? { ...m, monde: pos.get(m.id) } : m));
@@ -1312,7 +1312,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (code === undefined) throw new Error(`valeur : ${Object.keys(Doc.PASSAGE).join(', ')}.`);
         const x0 = clamp(Math.round(a.x), 0, map.width - 1), y0 = clamp(Math.round(a.y), 0, map.height - 1);
         const x1 = clamp(x0 + Math.round(a.largeur || 1), 1, map.width), y1 = clamp(y0 + Math.round(a.hauteur || 1), 1, map.height);
-        Doc.change(doc, 'Peindre le passage (Claude)', () => {
+        Doc.change(doc, 'Peindre le passage (Loki)', () => {
           const p = Doc.passageForEdit(doc);
           for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) p[y * map.width + x] = code;
         });
@@ -1344,7 +1344,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const z0 = a.id ? map.zones.find((z) => z.id === a.id) : null;
         if (a.action !== 'ajouter' && !z0) throw new Error(`Pas de zone « ${a.id} » sur ${map.id} : ${map.zones.map((z) => z.id).join(', ') || 'aucune zone'}.`);
         if (a.action === 'supprimer') {
-          Doc.change(doc, 'Supprimer la zone (Claude)', () => { map.zones = map.zones.filter((z) => z !== z0); });
+          Doc.change(doc, 'Supprimer la zone (Loki)', () => { map.zones = map.zones.filter((z) => z !== z0); });
           return decrireCarte(doc);
         }
         const base = z0 || { id: (() => { let n = map.zones.length + 1; while (map.zones.some((z) => z.id === `zone-${n}`)) n++; return `zone-${n}`; })(), name: '', type: 'herbes', objet: '', x: 0, y: 0, w: 1, h: 1 };
@@ -1354,7 +1354,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const zone = { ...base, name: String(a.nom ?? base.name), type, objet: String(a.objet_requis ?? base.objet ?? ''), x, y, w: clamp(Math.round(a.largeur ?? base.w), 1, map.width - x), h: clamp(Math.round(a.hauteur ?? base.h), 1, map.height - y), taux: clamp(Math.round(a.taux ?? base.taux ?? 10), 0, 100), rencontres: a.rencontres !== undefined ? Donnees.normRencontres(a.rencontres) : base.rencontres || [] };
         const inconnues = zone.rencontres.filter((r) => doc.data.creatures.length && !doc.data.creatures.some((c) => c.id === r.creature)).map((r) => r.creature);
         if (inconnues.length) throw new Error(`Créatures inconnues : ${inconnues.join(', ')} (cherche avec voir_donnees, sorte creatures, action liste).`);
-        Doc.change(doc, z0 ? 'Modifier la zone (Claude)' : 'Nouvelle zone (Claude)', () => { map.zones = z0 ? map.zones.map((z) => (z === z0 ? zone : z)) : [...map.zones, zone]; });
+        Doc.change(doc, z0 ? 'Modifier la zone (Loki)' : 'Nouvelle zone (Loki)', () => { map.zones = z0 ? map.zones.map((z) => (z === z0 ? zone : z)) : [...map.zones, zone]; });
         return decrireCarte(doc);
       },
     },
@@ -1369,7 +1369,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const w0 = a.id ? map.warps.find((w) => w.id === a.id) : map.warps.find((w) => w.x === Math.round(a.x) && w.y === Math.round(a.y));
         if (a.action !== 'ajouter' && !w0) throw new Error(`Pas de téléporteur ${a.id || `en (${a.x}, ${a.y})`} sur ${map.id}.`);
         if (a.action === 'supprimer') {
-          Doc.change(doc, 'Supprimer le téléporteur (Claude)', () => { map.warps = map.warps.filter((w) => w !== w0); });
+          Doc.change(doc, 'Supprimer le téléporteur (Loki)', () => { map.warps = map.warps.filter((w) => w !== w0); });
           return decrireCarte(doc);
         }
         const x = clamp(Math.round(a.x ?? w0?.x ?? 0), 0, map.width - 1), y = clamp(Math.round(a.y ?? w0?.y ?? 0), 0, map.height - 1);
@@ -1379,7 +1379,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         // Même fenêtre que l'outil Téléporteur, remplie et validée toute seule.
         const valeurs = { carte: dest.id, tx: Math.round(a.vers_x ?? w0?.tx ?? 0), ty: Math.round(a.vers_y ?? w0?.ty ?? 0), direction: a.direction ?? w0?.direction ?? 'bas' };
         if (!w0) valeurs.retour = Boolean(a.retour);
-        if (w0 && (w0.x !== x || w0.y !== y)) Doc.change(doc, 'Déplacer le téléporteur (Claude)', () => { map.warps = map.warps.map((w) => (w === w0 ? { ...w, x, y } : w)); });
+        if (w0 && (w0.x !== x || w0.y !== y)) Doc.change(doc, 'Déplacer le téléporteur (Loki)', () => { map.warps = map.warps.map((w) => (w === w0 ? { ...w, x, y } : w)); });
         await Dialogs.automatique({ valeurs }, () => App.editWarpAt(x, y));
         App.selectMap(doc.maps.indexOf(map));
         return decrireCarte(doc);
@@ -1620,7 +1620,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       if (a.action === 'voir' || a.action === 'liste') return JSON.stringify(doc.data.reglages, null, 1);
       if (a.action !== 'modifier') throw new Error('reglages : voir ou modifier.');
       const r = Donnees.normElement('reglages', { ...doc.data.reglages, ...(a.valeurs || {}) });
-      changerDonnees(doc, 'Réglages du jeu (Claude)', (d) => ({ ...d, reglages: r }));
+      changerDonnees(doc, 'Réglages du jeu (Loki)', (d) => ({ ...d, reglages: r }));
       return JSON.stringify(r, null, 1);
     }
     const liste = doc.data[sorte];
@@ -1637,7 +1637,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       if (!v.nom) throw new Error('valeurs.nom : le nom de l\'élément.');
       const o = Donnees.normElement(sorte, { ...v, officiel: undefined }, liste.length);
       o.id = Events.ident(v.id || v.nom, liste, kind);
-      changerDonnees(doc, `Nouveau : ${o.nom} (Claude)`, (d) => ({ ...d, [sorte]: [...d[sorte], o] }));
+      changerDonnees(doc, `Nouveau : ${o.nom} (Loki)`, (d) => ({ ...d, [sorte]: [...d[sorte], o] }));
       return `Ajouté : ${Donnees.resumer(doc, sorte, o)}`;
     }
     const o0 = liste.find((o) => o.id === a.id);
@@ -1649,13 +1649,13 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     }
     if (a.action === 'supprimer') {
       const u = Donnees.utilisations(doc, kind, o0.id);
-      changerDonnees(doc, `Supprimer ${o0.nom} (Claude)`, (d) => ({ ...d, [sorte]: d[sorte].filter((o) => o.id !== o0.id) }));
+      changerDonnees(doc, `Supprimer ${o0.nom} (Loki)`, (d) => ({ ...d, [sorte]: d[sorte].filter((o) => o.id !== o0.id) }));
       return `${o0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.slice(0, 20).join(', ')}.` : ''}`;
     }
     if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
     const o = Donnees.normElement(sorte, { ...o0, ...(a.valeurs || {}), id: o0.id });
     o.id = o0.id;
-    changerDonnees(doc, `Modifier ${o.nom} (Claude)`, (d) => ({ ...d, [sorte]: d[sorte].map((x) => (x.id === o.id ? o : x)) }));
+    changerDonnees(doc, `Modifier ${o.nom} (Loki)`, (d) => ({ ...d, [sorte]: d[sorte].map((x) => (x.id === o.id ? o : x)) }));
     return `Modifié : ${Donnees.resumer(doc, sorte, o)}`;
   }
 
@@ -1679,7 +1679,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           if (Doc.eventAt(map, x, y)) throw new Error(`La case (${x}, ${y}) a déjà un événement (${Doc.eventAt(map, x, y).id}) : modifie-le, ou choisis une autre case.`);
           const base = Events.create(doc, a.type || 'pnj', x, y, Events.nextId('ev', map.events));
           const ev = champsEvenement(doc, map, base, { ...a, x: undefined, y: undefined });
-          Doc.change(doc, 'Nouvel événement (Claude)', () => {
+          Doc.change(doc, 'Nouvel événement (Loki)', () => {
             map.events = [...map.events, ev];
             const nouveaux = Events.interrupteursManquants(doc, ev);
             if (nouveaux.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...nouveaux] };
@@ -1689,21 +1689,21 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         }
         const ev0 = trouverEvenement(map, a);
         if (a.action === 'supprimer') {
-          Doc.change(doc, 'Supprimer l\'événement (Claude)', () => { map.events = map.events.filter((e) => e !== ev0); });
+          Doc.change(doc, 'Supprimer l\'événement (Loki)', () => { map.events = map.events.filter((e) => e !== ev0); });
           return `${ev0.id} supprimé.\n${decrireCarte(doc)}`;
         }
         if (a.action === 'deplacer') {
           const x = clamp(Math.round(a.vers_x ?? ev0.x), 0, map.width - 1), y = clamp(Math.round(a.vers_y ?? ev0.y), 0, map.height - 1);
           const autre = Doc.eventAt(map, x, y);
           if (autre && autre !== ev0) throw new Error(`La case (${x}, ${y}) a déjà un événement (${autre.id}).`);
-          Doc.change(doc, 'Déplacer l\'événement (Claude)', () => { map.events = map.events.map((e) => (e === ev0 ? { ...e, x, y } : e)); });
+          Doc.change(doc, 'Déplacer l\'événement (Loki)', () => { map.events = map.events.map((e) => (e === ev0 ? { ...e, x, y } : e)); });
           return `${ev0.id} est maintenant en (${x}, ${y}).`;
         }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
         const ev = champsEvenement(doc, map, ev0, a);
         const autre = Doc.eventAt(map, ev.x, ev.y);
         if (autre && autre !== ev0) throw new Error(`La case (${ev.x}, ${ev.y}) a déjà un événement (${autre.id}).`);
-        Doc.change(doc, 'Modifier l\'événement (Claude)', () => {
+        Doc.change(doc, 'Modifier l\'événement (Loki)', () => {
           map.events = map.events.map((e) => (e === ev0 ? ev : e));
           const nouveaux = Events.interrupteursManquants(doc, ev);
           if (nouveaux.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...nouveaux] };
@@ -1723,27 +1723,27 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           if (!a.nom) throw new Error('nom : le nom du personnage.');
           const id = Events.ident(a.id || a.nom, liste, 'personnage');
           const p = { id, nom: String(a.nom), description: String(a.description || ''), heros: Boolean(a.heros), couleur: normalizeHex(a.couleur) || '', tuile: a.tuile === undefined || Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile), portraits: [], sprite: null, tenues: [] };
-          changerDonnees(doc, 'Nouveau personnage (Claude)', (d) => ({ ...d, personnages: [...d.personnages.map((o) => (p.heros ? { ...o, heros: false } : o)), p] }));
+          changerDonnees(doc, 'Nouveau personnage (Loki)', (d) => ({ ...d, personnages: [...d.personnages.map((o) => (p.heros ? { ...o, heros: false } : o)), p] }));
           return `Personnage ${id} « ${p.nom} » ajouté.`;
         }
         const p0 = liste.find((p) => p.id === a.id);
         if (!p0) throw new Error(`Pas de personnage « ${a.id} » : ${liste.map((p) => p.id).join(', ') || 'aucun'}.`);
         if (a.action === 'supprimer') {
           const u = Events.utilisations(doc, 'personnage', p0.id);
-          changerDonnees(doc, 'Supprimer le personnage (Claude)', (d) => ({ ...d, personnages: d.personnages.filter((p) => p.id !== p0.id) }));
+          changerDonnees(doc, 'Supprimer le personnage (Loki)', (d) => ({ ...d, personnages: d.personnages.filter((p) => p.id !== p0.id) }));
           return `${p0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.join(', ')}.` : ''}`;
         }
         if (a.action === 'portrait') {
           if (!a.chemin) throw new Error('chemin : l\'image du portrait, dans le projet.');
           const expression = Doc.slug(a.expression, 'normal');
           const { png, largeur, hauteur } = await Events.imagePortrait(await window.claude.lireFichier(a.chemin));
-          changerDonnees(doc, 'Portrait (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: [...p.portraits.filter((x) => x.expression !== expression), { expression, png }] } : p)) }));
+          changerDonnees(doc, 'Portrait (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: [...p.portraits.filter((x) => x.expression !== expression), { expression, png }] } : p)) }));
           return `Portrait « ${expression} » de ${p0.nom} : ${largeur} × ${hauteur} px.`;
         }
         if (a.action === 'retirer_portrait') {
           const expression = Doc.slug(a.expression, 'normal');
           if (!p0.portraits.some((x) => x.expression === expression)) throw new Error(`${p0.nom} n'a pas de portrait « ${expression} » (${p0.portraits.map((x) => x.expression).join(', ') || 'aucun'}).`);
-          changerDonnees(doc, 'Retirer un portrait (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: p.portraits.filter((x) => x.expression !== expression) } : p)) }));
+          changerDonnees(doc, 'Retirer un portrait (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, portraits: p.portraits.filter((x) => x.expression !== expression) } : p)) }));
           return `Portrait « ${expression} » retiré.`;
         }
         if (a.action === 'sprite') {
@@ -1751,12 +1751,12 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           const f = await window.claude.lireFichier(a.chemin);
           const png = await Events.imagePortrait(f);
           const sprite = await Sprites.depuisPlanche(png.png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
-          changerDonnees(doc, 'Sprite (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite } : p)) }));
+          changerDonnees(doc, 'Sprite (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite } : p)) }));
           return `Sprite de ${p0.nom} : ${sprite.images} image(s) de ${sprite.largeur} × ${sprite.hauteur} px par direction (face, gauche, droite, dos).`;
         }
         if (a.action === 'retirer_sprite') {
           if (!p0.sprite) throw new Error(`${p0.nom} n'a pas de sprite.`);
-          changerDonnees(doc, 'Retirer le sprite (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: null } : p)) }));
+          changerDonnees(doc, 'Retirer le sprite (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite: null } : p)) }));
           return `Sprite de ${p0.nom} retiré : sur la carte, il reprend sa tuile.`;
         }
         if (a.action === 'tenue') {
@@ -1767,13 +1767,13 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           const id = Doc.slug(a.nom, 'tenue');
           const tenue = { id, nom: String(a.nom), sprite };
           const autres = (p0.tenues || []).filter((t) => t.id !== id);
-          changerDonnees(doc, 'Tenue du héros (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: [...autres, tenue] } : p)) }));
+          changerDonnees(doc, 'Tenue du héros (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: [...autres, tenue] } : p)) }));
           return `Tenue ${id} « ${tenue.nom} » de ${p0.nom} : ${sprite ? `${sprite.images} image(s) de ${sprite.largeur} × ${sprite.hauteur} px par direction${a.chemin ? '' : ' (copie du sprite de base : retouche-la avec dessiner_sprite et tenue)'}` : 'pas encore de sprite (dessiner_sprite avec tenue)'}.`;
         }
         if (a.action === 'retirer_tenue') {
           const id = Doc.slug(a.nom, '');
           if (!(p0.tenues || []).some((t) => t.id === id)) throw new Error(`${p0.nom} n'a pas de tenue « ${a.nom} » (${(p0.tenues || []).map((t) => t.id).join(', ') || 'aucune'}).`);
-          changerDonnees(doc, 'Retirer une tenue (Claude)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: p.tenues.filter((t) => t.id !== id) } : p)) }));
+          changerDonnees(doc, 'Retirer une tenue (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, tenues: p.tenues.filter((t) => t.id !== id) } : p)) }));
           return `Tenue ${id} retirée.`;
         }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
@@ -1783,7 +1783,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (a.heros !== undefined) p.heros = Boolean(a.heros);
         if (a.couleur !== undefined) p.couleur = normalizeHex(a.couleur) || '';
         if (a.tuile !== undefined) p.tuile = Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile);
-        changerDonnees(doc, 'Modifier le personnage (Claude)', (d) => ({ ...d, personnages: d.personnages.map((o) => (o.id === p.id ? p : p.heros ? { ...o, heros: false } : o)) }));
+        changerDonnees(doc, 'Modifier le personnage (Loki)', (d) => ({ ...d, personnages: d.personnages.map((o) => (o.id === p.id ? p : p.heros ? { ...o, heros: false } : o)) }));
         return `Personnage ${p.id} modifié.`;
       },
     },
@@ -1837,7 +1837,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const autre = { gauche: 'droite', droite: 'gauche' }[a.direction];
         if (a.miroir && autre) frames[Sprites.DIRECTIONS.indexOf(autre)][k] = Sprites.miroir(c);
         const nouveau = { ...sprite, planche: Sprites.assembler(frames, w, h) };
-        Doc.change(doc, 'Dessiner le sprite (Claude)', () => {
+        Doc.change(doc, 'Dessiner le sprite (Loki)', () => {
           for (const hex of Object.values(enPlus)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
           doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.id !== p0.personnage ? p : a.tenue ? { ...p, tenues: p.tenues.map((t) => (t.id === p0.id ? { ...t, sprite: nouveau } : t)) } : { ...p, sprite: nouveau })) };
         });
@@ -1864,14 +1864,14 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (a.action === 'ajouter') {
           if (!a.titre) throw new Error('titre : le titre de la quête.');
           const q = verifier({ id: Events.ident(a.id || a.titre, liste, 'quete'), titre: String(a.titre), description: String(a.description || ''), secondaire: Boolean(a.secondaire), suivante: String(a.suivante || ''), personnages: (a.personnages || []).map(String), etapes: (a.etapes || []).map((t) => ({ texte: String(t) })) });
-          changerDonnees(doc, 'Nouvelle quête (Claude)', (d) => ({ ...d, quetes: [...d.quetes, q] }));
+          changerDonnees(doc, 'Nouvelle quête (Loki)', (d) => ({ ...d, quetes: [...d.quetes, q] }));
           return `Quête ${q.id} « ${q.titre} » ajoutée (${q.etapes.length} étape(s)).`;
         }
         const q0 = liste.find((q) => q.id === a.id);
         if (!q0) throw new Error(`Pas de quête « ${a.id} » : ${liste.map((q) => q.id).join(', ') || 'aucune'}.`);
         if (a.action === 'supprimer') {
           const u = Events.utilisations(doc, 'quete', q0.id);
-          changerDonnees(doc, 'Supprimer la quête (Claude)', (d) => ({ ...d, quetes: d.quetes.filter((q) => q.id !== q0.id) }));
+          changerDonnees(doc, 'Supprimer la quête (Loki)', (d) => ({ ...d, quetes: d.quetes.filter((q) => q.id !== q0.id) }));
           return `${q0.id} supprimée.${u.length ? ` Attention, elle était utilisée par : ${u.join(', ')}.` : ''}`;
         }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
@@ -1881,7 +1881,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (a.personnages !== undefined) q.personnages = a.personnages.map(String);
         if (a.etapes !== undefined) q.etapes = a.etapes.map((t) => ({ texte: String(t) }));
         verifier(q);
-        changerDonnees(doc, 'Modifier la quête (Claude)', (d) => ({ ...d, quetes: d.quetes.map((o) => (o.id === q.id ? q : o)) }));
+        changerDonnees(doc, 'Modifier la quête (Loki)', (d) => ({ ...d, quetes: d.quetes.map((o) => (o.id === q.id ? q : o)) }));
         return `Quête ${q.id} modifiée.`;
       },
     },
@@ -1896,19 +1896,19 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (a.action === 'ajouter') {
           if (!a.nom) throw new Error('nom : ce que retient l\'interrupteur.');
           const s0 = { id: Events.ident(a.id || a.nom, liste, 'interrupteur'), nom: String(a.nom), description: String(a.description || '') };
-          changerDonnees(doc, 'Nouvel interrupteur (Claude)', (d) => ({ ...d, interrupteurs: [...d.interrupteurs, s0] }));
+          changerDonnees(doc, 'Nouvel interrupteur (Loki)', (d) => ({ ...d, interrupteurs: [...d.interrupteurs, s0] }));
           return `Interrupteur ${s0.id} « ${s0.nom} » ajouté.`;
         }
         const s0 = liste.find((s) => s.id === a.id);
         if (!s0) throw new Error(`Pas d'interrupteur « ${a.id} » : ${liste.map((s) => s.id).join(', ') || 'aucun'}.`);
         if (a.action === 'supprimer') {
           const u = Events.utilisations(doc, 'interrupteur', s0.id);
-          changerDonnees(doc, 'Supprimer l\'interrupteur (Claude)', (d) => ({ ...d, interrupteurs: d.interrupteurs.filter((s) => s.id !== s0.id) }));
+          changerDonnees(doc, 'Supprimer l\'interrupteur (Loki)', (d) => ({ ...d, interrupteurs: d.interrupteurs.filter((s) => s.id !== s0.id) }));
           return `${s0.id} supprimé.${u.length ? ` Attention, il était utilisé par : ${u.join(', ')}.` : ''}`;
         }
         if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
         const s = { ...s0, ...(a.nom !== undefined ? { nom: String(a.nom) } : {}), ...(a.description !== undefined ? { description: String(a.description) } : {}) };
-        changerDonnees(doc, 'Modifier l\'interrupteur (Claude)', (d) => ({ ...d, interrupteurs: d.interrupteurs.map((o) => (o.id === s.id ? s : o)) }));
+        changerDonnees(doc, 'Modifier l\'interrupteur (Loki)', (d) => ({ ...d, interrupteurs: d.interrupteurs.map((o) => (o.id === s.id ? s : o)) }));
         return `Interrupteur ${s.id} modifié.`;
       },
     },
@@ -1957,7 +1957,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         if (!o0) throw new Error(`Pas de ${a.sorte} « ${a.id} ».`);
         const png = a.chemin ? (await Events.imagePortrait(await window.claude.lireFichier(a.chemin))).png : '';
         const o = a.sorte === 'objets' ? { ...o0, icone: png } : { ...o0, sprites: { ...o0.sprites, [a.cle === 'dos' ? 'dos' : 'face']: png } };
-        changerDonnees(doc, `Image de ${o0.nom} (Claude)`, (d) => ({ ...d, [a.sorte]: d[a.sorte].map((x) => (x.id === o.id ? o : x)) }));
+        changerDonnees(doc, `Image de ${o0.nom} (Loki)`, (d) => ({ ...d, [a.sorte]: d[a.sorte].map((x) => (x.id === o.id ? o : x)) }));
         return png ? `Image mise sur ${o0.id}.` : `Image retirée de ${o0.id}.`;
       },
     },
@@ -1970,7 +1970,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const doc = besoinJeu();
         const imp = await Donnees.telechargerOfficiel({ generations: (a.generations || []).map(Number).filter((g) => g >= 1 && g <= 9), sprites: a.sprites !== false, icones: a.icones !== false });
         const { data, bilan } = Donnees.fusionner(doc.data, imp, { maj: a.maj !== false });
-        Doc.change(doc, 'Importer les données officielles (Claude)', () => { doc.data = Events.normData(data, doc.tiles.length); });
+        Doc.change(doc, 'Importer les données officielles (Loki)', () => { doc.data = Events.normData(data, doc.tiles.length); });
         return `Importé : ${Object.entries(bilan).map(([k, b]) => `${k} ${b.ajoutes} ajoutés, ${b.misAJour} mis à jour`).join(' ; ')}.`;
       },
     },
@@ -1984,7 +1984,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         const map = choisirCarte(doc, a.carte);
         const i = doc.maps.indexOf(map);
         const ambiance = Donnees.normAmbiance({ ...map.ambiance, ...Object.fromEntries(['meteo', 'intensite', 'teinte', 'force'].filter((k) => a[k] !== undefined).map((k) => [k, a[k]])) });
-        Doc.change(doc, 'Ambiance de la carte (Claude)', () => { doc.maps[i] = { ...map, ambiance }; Doc.selectMap(doc, doc.mapIndex); });
+        Doc.change(doc, 'Ambiance de la carte (Loki)', () => { doc.maps[i] = { ...map, ambiance }; Doc.selectMap(doc, doc.mapIndex); });
         return `Ambiance de ${map.id} : ${JSON.stringify(ambiance)}.`;
       },
     },

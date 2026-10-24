@@ -187,8 +187,8 @@ async function ecrireConfigMcp(cwd) {
 // Claude sait ainsi qu'il a une mémoire du projet et des notes à sa disposition.
 function introAtelier(cwd) {
   return [
-    `(Rune : tu travailles dans le projet « ${path.basename(cwd)} ». Ragna utilise aussi Atelier, son hub, dont le Claude`,
-    'garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :',
+    `(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude). Tu travailles dans le projet « ${path.basename(cwd)} ».`,
+    'Ragna utilise aussi Atelier, son hub, dont l\'assistant Loki garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :',
     'lire_contexte (la mémoire de ce projet : décisions, client, hébergement… ; lis-la avant de répondre à ce premier message,',
     'puis relis-la si Ragna parle de ce qui a été décidé), lire_notes (ses notes, quand la question s\'y rapporte),',
     'retenir_projet et oublier_projet (garde une info courte et utile plus tard quand Ragna te la demande ou te l\'apprend ;',
@@ -367,7 +367,7 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
 
   handle('claude:send', async (event, text) => {
     const root = getRoot();
-    if (!root) throw new Error("Ouvre d'abord un dossier : Claude travaille dans le projet ouvert.");
+    if (!root) throw new Error("Ouvre d'abord un dossier : Loki travaille dans le projet ouvert.");
     sender = event.sender;
     // Le projet a changé depuis le lancement : on repart sur une conversation neuve dans le bon dossier.
     if (proc && procCwd !== root) { stop(); autoriseesConversation.clear(); }
@@ -385,6 +385,7 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
           log('ERREUR', `Claude : dossier partagé de l'Atelier indisponible : ${err.message}`);
         }
       }
+      if (!intro) intro = "(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude).)\n\n";
       if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd: root, log, resume, mcpConfig })) return;
     }
     write({ type: 'user', message: { role: 'user', content: intro + text }, parent_tool_use_id: null, session_id: '' });

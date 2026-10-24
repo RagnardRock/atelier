@@ -184,7 +184,7 @@
         const largeur = Math.max(...valeurs.map((l) => l.length));
         const matrice = valeurs.map((l) => Array.from({ length: largeur }, (_, j) => (l[j] === undefined ? null : l[j])));
         montrer(feuille);
-        Classeur.saisir(feuille, depart.r1, depart.c1, matrice, 'Claude : écrire', { formulesAuto: true });
+        Classeur.saisir(feuille, depart.r1, depart.c1, matrice, 'Loki : écrire', { formulesAuto: true });
         const fin = { r1: depart.r1, c1: depart.c1, r2: depart.r1 + matrice.length - 1, c2: depart.c1 + largeur - 1 };
         Grille.selectionner(fin, { r: fin.r1, c: fin.c1 });
         // Les formules en erreur : Claude doit le savoir tout de suite.
@@ -251,7 +251,7 @@
         if ('format' in a) patch.format = a.format && a.format !== 'General' ? String(a.format) : null;
         if (!Object.keys(patch).length && !a.bordures) throw new Error('Rien à changer : donne au moins un réglage (gras, fond, format, bordures…).');
         montrer(feuille);
-        if (Object.keys(patch).length) Classeur.styler(feuille, plage, patch, 'Claude : mettre en forme');
+        if (Object.keys(patch).length) Classeur.styler(feuille, plage, patch, 'Loki : mettre en forme');
         if (a.bordures) {
           const p = plage.r2 - plage.r1 > 100000 || plage.c2 - plage.c1 > 1000 ? null : plage;
           if (!p) throw new Error('Les bordures se posent sur une plage précise (ex. A1:F20), pas sur des colonnes entières.');
@@ -472,7 +472,7 @@
           if (a.arreter) r.arreter = true;
         }
         montrer(feuille);
-        MFC.ajouter(feuille, r, 'Claude : mise en forme conditionnelle');
+        MFC.ajouter(feuille, r, 'Loki : mise en forme conditionnelle');
         return `Règle ajoutée : ${MFC.decrire(r)} sur ${adressePlage(plage)}.`;
       },
     },
@@ -486,7 +486,7 @@
         montrer(feuille);
         if (a.numeros?.length) {
           const garder = Classeur.meta(feuille).mfc.filter((_, i) => !a.numeros.includes(i));
-          MFC.remplacerTout(feuille, garder, 'Claude : retirer des règles');
+          MFC.remplacerTout(feuille, garder, 'Loki : retirer des règles');
           return `${Classeur.meta(feuille).mfc.length} règle(s) restante(s).`;
         }
         const n = MFC.effacer(feuille, a.plage ? plageDe(a.plage) : null);
@@ -545,7 +545,7 @@
         if (a.largeur) patch.largeur = Math.max(160, Math.min(2000, a.largeur));
         if (a.hauteur) patch.hauteur = Math.max(110, Math.min(1500, a.hauteur));
         montrer(feuille);
-        Graphiques.changer(feuille, g.id, patch, 'Claude : modifier le graphique');
+        Graphiques.changer(feuille, g.id, patch, 'Loki : modifier le graphique');
         return `Graphique modifié : ${decrireGraphique(Graphiques.trouver(g.id).g)}.`;
       },
     },

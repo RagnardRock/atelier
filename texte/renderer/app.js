@@ -57,13 +57,13 @@ const App = (() => {
         { key: 'formatParDefaut', label: 'Enregistrer en', type: 'select', value: config.formatParDefaut, choices: Object.values(Formats.liste).map((f) => [f.id, `${f.nom} (.${f.extensions[0]})`]) },
         { key: 'orthographe', label: 'Souligner les fautes d\'orthographe', type: 'checkbox', value: config.orthographe !== false },
         { key: 'languesOrthographe', label: 'Langue', type: 'select', value: config.languesOrthographe || 'fr', choices: [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']] },
-        { key: 'claudeModel', label: 'Modèle de Claude', type: 'select', value: config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
+        { key: 'claudeModel', label: 'Modèle de Loki (propulsé par Claude)', type: 'select', value: config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
         { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: config.claudeCommand || 'claude' },
-        { key: 'claudeCommandes', label: 'Claude peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(config.claudeCommandes) },
+        { key: 'claudeCommandes', label: 'Loki peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(config.claudeCommandes) },
         ...(familles.length ? [
-          { type: 'info', text: 'Claude fait sans me demander la permission, pour de bon :' },
+          { type: 'info', text: 'Loki fait sans me demander la permission, pour de bon :' },
           ...familles.map((f) => ({ key: `sansDemander-${f.id}`, label: f.libelle, type: 'checkbox', value: f.toujours })),
-          { type: 'info', text: 'Lire le document ne demande jamais. Ce qui est permis seulement pour la conversation en cours se voit et se retire avec le bouclier, en haut du panneau Claude.' },
+          { type: 'info', text: 'Lire le document ne demande jamais. Ce qui est permis seulement pour la conversation en cours se voit et se retire avec le bouclier, en haut du panneau Loki.' },
         ] : []),
         { type: 'info', text: `La police et la taille servent aux nouveaux documents ; un document ouvert garde les siennes (Format › Mise en page).\n\nEdda ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
@@ -659,7 +659,7 @@ const App = (() => {
       { label: 'Page blanche', coche: config.page !== 'sombre', run: () => changerPage('claire') },
       { label: 'Page sombre', coche: config.page === 'sombre', run: () => changerPage('sombre') },
       null,
-      { label: 'Panneau Claude', keys: `${ctrl}Maj+K`, icone: 'sparkle', run: () => document.querySelector('.claude-bouton-titre')?.click() },
+      { label: 'Panneau Loki', keys: `${ctrl}Maj+K`, icone: 'sparkle', run: () => document.querySelector('.claude-bouton-titre')?.click() },
     ],
   };
   async function changerPage(p) {

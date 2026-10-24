@@ -195,10 +195,10 @@ const memoirePath = () => path.join(communDir(), 'memoire-projets.json');
 
 const LISEZMOI = `# Dossier partagé de l'Atelier
 
-Écrit par Atelier, lu par Claude dans Rune, Skald et Tafl : quand Ragna passe d'un outil à l'autre,
-Claude sait sur quoi Ragna travaille et ce qui a déjà été décidé.
+Écrit par Atelier, lu par Loki dans Rune, Skald et Tafl : quand Ragna passe d'un outil à l'autre,
+Loki sait sur quoi Ragna travaille et ce qui a déjà été décidé.
 
-- memoire-projets.json : ce que Claude retient sur chaque projet.
+- memoire-projets.json : ce que Loki retient sur chaque projet.
   { "NomDuDossierDuProjet": [{ "id": "a1b2c3d4", "texte": "…", "quand": 1760000000000 }] }
   Le nom est celui du dossier du projet. « quand » est en millisecondes depuis 1970.
   Les outils peuvent y ajouter ou retirer des éléments : toujours relire le fichier juste avant

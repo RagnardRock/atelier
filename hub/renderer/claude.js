@@ -42,10 +42,10 @@ const ClaudeWidget = (() => {
 
   function setOccupe(valeur, texte = '') {
     occupe = valeur;
-    btnEnvoyer.title = valeur ? 'Arrêter Claude (Échap)' : 'Envoyer (Entrée)';
+    btnEnvoyer.title = valeur ? 'Arrêter Loki (Échap)' : 'Envoyer (Entrée)';
     btnEnvoyer.firstChild.className = `codicon codicon-${valeur ? 'debug-stop' : 'send'}`;
     btnEnvoyer.classList.toggle('stop', valeur);
-    etat.replaceChildren(...(valeur ? [el('i', { className: 'codicon codicon-loading codicon-modifier-spin' }), texte || 'Claude réfléchit…'] : []));
+    etat.replaceChildren(...(valeur ? [el('i', { className: 'codicon codicon-loading codicon-modifier-spin' }), texte || 'Loki réfléchit…'] : []));
   }
 
   function enBas() {
@@ -59,7 +59,7 @@ const ClaudeWidget = (() => {
       return b;
     });
     liste.replaceChildren(el('div', { className: 'claude-accueil' },
-      el('i', { className: 'codicon codicon-sparkle' }),
+      el('i', { className: 'codicon rune-loki', textContent: 'ᛚ' }),
       el('p', { textContent: 'Demande-moi ce que tu veux sur tes notes, ton calendrier ou tes projets.' }),
       el('p', { className: 'discret', textContent: 'Je peux aussi ajouter une note, un évènement, lancer un minuteur ou ouvrir un projet : tu valides chaque action.' }),
       el('div', { className: 'claude-suggestions' }, ...chips)));
@@ -186,7 +186,7 @@ const ClaudeWidget = (() => {
     const refuser = el('button', { className: 'button small', textContent: 'Refuser' });
     const autoriser = el('button', { className: 'button small primary', textContent: 'Autoriser' });
     const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets' };
-    const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Claude ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
+    const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Loki ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
     const carte = el('div', { className: 'claude-carte' },
       el('div', { className: 'claude-carte-titre' }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: phrase })),
       detail ? el('pre', { className: 'claude-carte-detail', textContent: detail }) : null,
@@ -202,7 +202,7 @@ const ClaudeWidget = (() => {
     toujours.onclick = async () => {
       try {
         await window.atelier.claudeToujours(e.famille);
-        notify(`Claude ne te demandera plus pour ${LIBELLES[e.famille]}. Tu peux changer ça dans les réglages (Ctrl+,).`, 'success', 5000);
+        notify(`Loki ne te demandera plus pour ${LIBELLES[e.famille]}. Tu peux changer ça dans les réglages (Ctrl+,).`, 'success', 5000);
       } catch (err) {
         notify(cleanError(err), 'error');
       }
@@ -210,7 +210,7 @@ const ClaudeWidget = (() => {
     };
     autoriser.onclick = () => repondre(true);
     liste.append(carte);
-    setOccupe(true, 'Claude attend ton accord');
+    setOccupe(true, 'Loki attend ton accord');
     liste.scrollTop = liste.scrollHeight;
     autoriser.focus();
   }
@@ -269,11 +269,11 @@ const ClaudeWidget = (() => {
       case 'text': texte(e.text); break;
       case 'tool': outil(e); break;
       case 'tool-result': outilFini(e); break;
-      case 'denied': avis('info', `Claude voulait utiliser ${e.toolName} : refusé (il ne peut pas modifier de fichier ni lancer de commande).`); break;
+      case 'denied': avis('info', `Loki voulait utiliser ${e.toolName} : refusé (il ne peut pas modifier de fichier ni lancer de commande).`); break;
       case 'permission': carteAction(e); break;
       case 'notice': avis('info', e.message); break;
       case 'oubliee':
-        avis('info', 'Claude Code ne retrouve plus cette conversation (il efface les plus anciennes) : Claude repart de ton message, sans se souvenir du début.');
+        avis('info', 'Claude Code ne retrouve plus cette conversation (il efface les plus anciennes) : Loki repart de ton message, sans se souvenir du début.');
         break;
       case 'result':
         finTexte();
@@ -290,7 +290,7 @@ const ClaudeWidget = (() => {
         if (e.notInstalled) {
           avis('erreur', 'Claude Code est introuvable sur ce PC. Installe-le (claude.com/claude-code), ou indique le chemin de la commande dans les réglages d\'Atelier (Ctrl+,).');
         } else if (e.kind === 'error' || (occupe && e.code)) {
-          avis('erreur', `Claude s'est arrêté${e.code ? ` (code ${e.code})` : ''}. ${e.stderr || e.message || ''}`.trim());
+          avis('erreur', `Loki s'est arrêté${e.code ? ` (code ${e.code})` : ''}. ${e.stderr || e.message || ''}`.trim());
         }
         setOccupe(false);
         enregistrer();
@@ -381,7 +381,7 @@ const ClaudeWidget = (() => {
       li.onclick = () => (c === conv ? fermerListe() : ouvrirConv(c));
       return li;
     }));
-    if (!visibles.length) listeConv.append(el('li', { className: 'vide', textContent: q ? 'Aucune conversation ne contient ce texte.' : 'Pas encore de conversation. Écris à Claude pour en commencer une.' }));
+    if (!visibles.length) listeConv.append(el('li', { className: 'vide', textContent: q ? 'Aucune conversation ne contient ce texte.' : 'Pas encore de conversation. Écris à Loki pour en commencer une.' }));
   }
 
   function ouvrirListe() {
@@ -416,7 +416,7 @@ const ClaudeWidget = (() => {
   }
 
   async function supprimerConv(c) {
-    const ok = await Dialogs.ask('Supprimer la conversation', `Supprimer « ${titreConv(c)} » ? Elle disparaît de la liste et Claude ne pourra plus la reprendre.`, [
+    const ok = await Dialogs.ask('Supprimer la conversation', `Supprimer « ${titreConv(c)} » ? Elle disparaît de la liste et Loki ne pourra plus la reprendre.`, [
       { label: 'Annuler', value: false },
       { label: 'Supprimer', value: true, primary: true },
     ]);

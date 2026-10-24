@@ -58,8 +58,8 @@ const ClaudePanneau = (() => {
   function build() {
     titleButton = document.createElement('button');
     titleButton.className = 'icon-button claude-bouton-titre';
-    titleButton.title = 'Discuter avec Claude (Ctrl+Maj+K)';
-    titleButton.innerHTML = '<i class="codicon codicon-sparkle"></i>';
+    titleButton.title = 'Discuter avec Loki (Ctrl+Maj+K)';
+    titleButton.innerHTML = '<i class="codicon rune-loki">ᛚ</i>';
     titleButton.onclick = () => toggle();
     const actions = document.querySelector('#titlebar .title-actions');
     if (actions) actions.appendChild(titleButton);
@@ -70,9 +70,9 @@ const ClaudePanneau = (() => {
     panel.innerHTML = `
       <div class="cp-poignee" title="Glisser pour changer la largeur"></div>
       <header class="cp-entete">
-        <span class="cp-titre"><i class="codicon codicon-sparkle"></i>Claude <span class="cp-modele"></span></span>
+        <span class="cp-titre"><i class="codicon rune-loki">ᛚ</i>Loki <span class="cp-modele"></span></span>
         <span class="cp-espace"></span>
-        <button class="icon-button cp-autorisations" title="Ce que Claude peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
+        <button class="icon-button cp-autorisations" title="Ce que Loki peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
         <button class="icon-button cp-historique" title="Conversations précédentes de ce projet"><i class="codicon codicon-history"></i></button>
         <button class="icon-button cp-nouvelle" title="Nouvelle conversation"><i class="codicon codicon-add"></i></button>
         <button class="icon-button cp-fermer" title="Masquer (Ctrl+Maj+K)"><i class="codicon codicon-chevron-right"></i></button>
@@ -82,7 +82,7 @@ const ClaudePanneau = (() => {
       <div class="cp-liste-historique cp-liste-autorisations" hidden></div>
       <div class="cp-messages"></div>
       <form class="cp-formulaire">
-        <textarea class="cp-saisie" rows="1" placeholder="Écris à Claude… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+        <textarea class="cp-saisie" rows="1" placeholder="Écris à Loki… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
         <div class="cp-actions">
           <span class="cp-statut"></span>
           <button type="button" class="icon-button cp-stop" title="Arrêter" hidden><i class="codicon codicon-debug-stop"></i></button>
@@ -177,7 +177,7 @@ const ClaudePanneau = (() => {
     const label = document.createElement('span');
     label.textContent = projetActuel
       ? `Projet : ${projetActuel.nom}${projetActuel.source === 'dernier' ? ' (le dernier ouvert depuis Atelier)' : ''}`
-      : 'Aucun projet : ouvre-en un depuis Atelier pour que Claude s\'en souvienne';
+      : 'Aucun projet : ouvre-en un depuis Atelier pour que Loki s\'en souvienne';
     projetEl.title = projetActuel ? projetActuel.dossier : '';
     projetEl.append(icon, label);
   }
@@ -185,9 +185,9 @@ const ClaudePanneau = (() => {
   function showWelcome() {
     const el = document.createElement('div');
     el.className = 'cp-bienvenue';
-    el.innerHTML = '<i class="codicon codicon-sparkle"></i><p></p><p class="hint"></p>';
+    el.innerHTML = '<i class="codicon rune-loki">ᛚ</i><p></p><p class="hint"></p>';
     el.children[1].textContent = bienvenue;
-    el.children[2].textContent = `Claude connaît la mémoire du projet et tes notes (gardées par Atelier), peut lire les fichiers du projet, et te demande ton accord avant de modifier quoi que ce soit.`;
+    el.children[2].textContent = `Loki connaît la mémoire du projet et tes notes (gardées par Atelier), peut lire les fichiers du projet, et te demande ton accord avant de modifier quoi que ce soit.`;
     list.appendChild(el);
   }
 
@@ -208,7 +208,7 @@ const ClaudePanneau = (() => {
     const silence = now - lastEvent;
     const enAttente = busyLabel === 'En attente de ta réponse';
     statusEl.lastChild.textContent = !enAttente && silence > 3 * 60_000
-      ? `Aucune nouvelle de Claude depuis ${duree(silence)} : ■ pour l'arrêter`
+      ? `Aucune nouvelle de Loki depuis ${duree(silence)} : ■ pour l'arrêter`
       : `${busyLabel} · ${duree(now - busySince)}`;
   }
   function setBusy(value, label = '') {
@@ -220,7 +220,7 @@ const ClaudePanneau = (() => {
     clearInterval(busyTimer);
     statusEl.innerHTML = value ? '<i class="codicon codicon-loading codicon-modifier-spin"></i><span></span>' : '';
     if (!value) return;
-    busyLabel = label || 'Claude réfléchit…';
+    busyLabel = label || 'Loki réfléchit…';
     showBusy();
     busyTimer = setInterval(showBusy, 1000);
   }
@@ -308,7 +308,7 @@ const ClaudePanneau = (() => {
     const ligne = (f, portee) => {
       const row = document.createElement('div');
       row.className = 'cp-autorisation';
-      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="nom"></span><button class="cp-retirer" title="Claude te redemandera">Redemander</button>';
+      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="nom"></span><button class="cp-retirer" title="Loki te redemandera">Redemander</button>';
       row.querySelector('.nom').textContent = f.libelle;
       row.querySelector('button').onclick = async (e) => {
         e.stopPropagation();
@@ -319,7 +319,7 @@ const ClaudePanneau = (() => {
     };
     titre('Sans demander, pendant cette conversation');
     if (conversation.length) for (const f of conversation) ligne(f, 'conversation');
-    else hint('Rien : Claude demande avant chaque modification.');
+    else hint('Rien : Loki demande avant chaque modification.');
     titre(`Sans demander, pour de bon`);
     if (toujours.length) for (const f of toujours) ligne(f, 'toujours');
     else hint(`Rien. Se règle aussi dans les réglages de ${outil}.`);
@@ -396,11 +396,11 @@ const ClaudePanneau = (() => {
     record({ t: 'jetons', jetons: j });
     const ligne = document.createElement('div');
     ligne.className = 'cp-jetons';
-    ligne.title = 'Jetons lus : la conversation, relue à chaque action (la partie en cache coûte moins). Jetons écrits : la réponse et les actions de Claude.';
+    ligne.title = 'Jetons lus : la conversation, relue à chaque action (la partie en cache coûte moins). Jetons écrits : la réponse et les actions de Loki.';
     ligne.textContent = `${kilo(j.lus)} jetons lus${j.lus ? ` (${Math.round((100 * j.enCache) / j.lus)} % en cache)` : ''} · ${kilo(j.ecrits)} écrits · ${j.appels} appel${j.appels > 1 ? 's' : ''}${j.conversation ? ` · conversation : ${kilo(j.conversation)}` : ''}`;
     list.appendChild(ligne);
     if (j.conversation > LONGUE && !replaying) {
-      addNotice('info', `La conversation pèse ${kilo(j.conversation)} jetons, et Claude la relit à chaque action. Pour une nouvelle tâche, commence une nouvelle conversation (bouton +) : elle coûtera bien moins.`);
+      addNotice('info', `La conversation pèse ${kilo(j.conversation)} jetons, et Loki la relit à chaque action. Pour une nouvelle tâche, commence une nouvelle conversation (bouton +) : elle coûtera bien moins.`);
     }
     scrollDown();
   }
@@ -594,7 +594,7 @@ const ClaudePanneau = (() => {
         <button class="always" title="Jusqu'à la fin de cette conversation">cette conversation</button>
         <button class="toujours" title="Gardé dans les réglages ; se retire avec le bouclier, en haut du panneau">toujours</button>
       </div>`;
-    card.querySelector('.cp-perm-titre span').textContent = `Claude veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+    card.querySelector('.cp-perm-titre span').textContent = `Loki veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
     card.insertBefore(permissionDetails(req.toolName, req.input), card.querySelector('.cp-perm-actions'));
     card.querySelector('.cp-perm-famille strong').textContent = `« ${req.familleLibelle || 'ce genre d\'action'} »`;
     if (!req.famille) card.querySelector('.cp-perm-famille').remove();
@@ -632,13 +632,13 @@ const ClaudePanneau = (() => {
         break;
       case 'text':
         appendText(e.text);
-        setBusy(true, 'Claude écrit…');
+        setBusy(true, 'Loki écrit…');
         break;
       case 'status': setBusy(true, e.text); break;
       case 'retry': {
         const raison = e.status === 429 ? 'limite d\'utilisation atteinte' : e.status === 529 || e.status === 503 ? 'serveurs surchargés'
           : e.status ? `erreur ${e.status}` : 'pas de connexion';
-        setBusy(true, `Claude ne répond pas (${raison}), nouvel essai ${e.attempt || '?'}/${e.max || '?'}`);
+        setBusy(true, `Loki ne répond pas (${raison}), nouvel essai ${e.attempt || '?'}/${e.max || '?'}`);
         break;
       }
       case 'tool': addTool(e); break;
@@ -662,7 +662,7 @@ const ClaudePanneau = (() => {
         if (e.isError) {
           const text = e.text || '';
           const hint = /log ?in|auth|credential/i.test(text) ? '<br>Lance <code>claude</code> une fois dans un terminal pour te connecter.' : '';
-          addNotice('error', `${escapeHtml(text || 'Claude a rencontré une erreur.')}${hint}`);
+          addNotice('error', `${escapeHtml(text || 'Loki a rencontré une erreur.')}${hint}`);
         }
         break;
       }

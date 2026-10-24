@@ -1184,7 +1184,7 @@ const Events = (() => {
         form.append(
           champ('Nom', input(p, 'nom', 'Maman, Prof. Chêne, Léo (rival)…', idl.maj)),
           idl.el,
-          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(p, 'description', 3, 'Son rôle et sa personnalité : pour t\'en souvenir, et pour Claude quand il écrit ses dialogues.')]),
+          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(p, 'description', 3, 'Son rôle et sa personnalité : pour t\'en souvenir, et pour Loki quand il écrit ses dialogues.')]),
           champ('C\'est le héros (le joueur, qui parle et a sa personnalité)', (() => {
             // Un seul héros : le cocher ici le retire aux autres.
             const c = coche(p, 'heros');
