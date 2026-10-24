@@ -39,6 +39,13 @@ const Comfy = (() => {
     sol: { avant: 'seamless tileable texture of', apres: 'ground seen from directly above, top-down, flat, uniform, no objects, no horizon, no perspective', negatif: 'perspective, horizon, sky, objects, frame, border' },
     objet: { avant: 'a single', apres: 'centered, whole object visible, isolated on a plain flat white background, simple background, game sprite, top-down three-quarter view', negatif: 'multiple objects, cropped, cut off, ground, scenery, landscape, cast shadow, frame' },
   };
+  // Combien de détails : un sol de jeu doit rester calme (un aplat et quelques marques), sinon
+  // il fait du bruit une fois posé sur toute une carte. lissage : passes de post-traitement.js.
+  const DETAILS = {
+    peu: { nom: 'Peu : calme, de grands aplats (sols)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details, high frequency texture', lissage: 2 },
+    moyen: { nom: 'Moyen', positif: '', negatif: 'cluttered, noisy', lissage: 1 },
+    beaucoup: { nom: 'Beaucoup (objets riches)', positif: 'intricate details', negatif: '', lissage: 0 },
+  };
   const COMMUN_NEGATIF = 'text, watermark, signature, logo, ui, frame';
 
   // Les modèles comme SDXL comprennent mal le français : les mots courants d'un jeu sont traduits
@@ -71,8 +78,9 @@ const Comfy = (() => {
   function phrases(v) {
     const s = style(v.style), e = ENCADRE[v.sorte] || ENCADRE.sol;
     const sujet = v.traduire === false ? String(v.description).trim() : traduire(v.description);
-    const positif = [s.id === 'libre' ? sujet : `${e.avant} ${sujet}`, s.id === 'libre' ? '' : e.apres, s.positif].filter(Boolean).join(', ');
-    const negatif = [s.negatif, s.id === 'libre' ? '' : e.negatif, COMMUN_NEGATIF, v.negatif].filter(Boolean).join(', ');
+    const d = s.id === 'libre' ? DETAILS.moyen : DETAILS[v.details] || DETAILS.peu;
+    const positif = [s.id === 'libre' ? sujet : `${e.avant} ${sujet}`, s.id === 'libre' ? '' : e.apres, s.positif, d.positif].filter(Boolean).join(', ');
+    const negatif = [s.negatif, s.id === 'libre' ? '' : e.negatif, d.negatif, COMMUN_NEGATIF, v.negatif].filter(Boolean).join(', ');
     return { positif, negatif };
   }
 
@@ -157,7 +165,7 @@ const Comfy = (() => {
     return PostTraitement.traiter(brute, {
       largeur: v.largeur * taille, hauteur: v.hauteur * taille, sorte: v.sorte, pixel,
       couleurs: couleurs || (doc ? 0 : 16), palette: pixel && !couleurs && doc ? doc.palette : null,
-      tolerance: v.tolerance, marge: 0.25,
+      tolerance: v.tolerance, marge: 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage,
     });
   }
   const versCanvas = (img) => {
@@ -297,13 +305,31 @@ const Comfy = (() => {
       enCours = true;
       const bouton = [...f.card.querySelectorAll('footer .button')].find((b) => b.textContent === 'Générer');
       if (bouton) bouton.textContent = 'Arrêter';
+      // Pendant le calcul : une barre de progression bien visible, la phase en cours, le temps
+      // écoulé, et une carte qui « respire » à la place de chaque variante attendue.
+      const barre = el('div', { className: 'comfy-barre' }, [el('span')]);
+      const phase = el('strong', { textContent: 'Préparation…' });
+      const temps = el('span', { className: 'comfy-temps' });
+      const n = clamp(Math.round(v.variantes) || 1, 1, 4);
+      resultats.replaceChildren(el('div', { className: 'comfy-progres' }, [el('div', { className: 'comfy-progres-titre' }, [phase, temps]), barre]),
+        ...Array.from({ length: n }, () => el('div', { className: 'comfy-attente' })));
+      const debut = Date.now();
+      const avancer = (pourcent, texte) => {
+        barre.firstChild.style.width = `${clamp(pourcent, 2, 100)}%`;
+        if (texte) phase.textContent = texte;
+      };
+      const minuteur = setInterval(() => { temps.textContent = `${Math.round((Date.now() - debut) / 1000)} s`; }, 250);
+      avancer(3, 'Préparation…');
       try {
-        const debut = Date.now();
         const r = await generer(v, (p) => {
-          if (p.texte) etat(p.texte);
-          else if (p.etape === 'calcul') etat(`Calcul sur la carte graphique : étape ${p.valeur} sur ${p.max}`);
-          else if (p.etape === 'attente') etat('Chargement du modèle sur la carte graphique…');
+          if (p.texte) { avancer(8, 'Démarrage du moteur ComfyUI (la première fois, ça peut prendre une minute)'); etat(p.texte); }
+          else if (p.etape === 'attente') avancer(18, 'Chargement du modèle sur la carte graphique…');
+          else if (p.etape === 'calcul') {
+            avancer(20 + (75 * p.valeur) / Math.max(1, p.max), `La carte graphique dessine : ${Math.round((100 * p.valeur) / Math.max(1, p.max))} %`);
+            etat(`Étape ${p.valeur} sur ${p.max}`);
+          }
         });
+        avancer(100, 'Mise en tuiles…');
         brutes = r.images;
         choisie = 0;
         afficher(f.values());
@@ -313,8 +339,10 @@ const Comfy = (() => {
         await window.tafl.writeConfig({ comfyDerniers: { ...v, description: v.description } }).then((c) => { App.config = c; });
       } catch (err) {
         etat('');
+        resultats.replaceChildren(el('p', { className: 'modal-info', textContent: `Pas d'image : ${err.message}` }));
         notify(err.message, 'error', 12000);
       } finally {
+        clearInterval(minuteur);
         enCours = false;
         if (bouton) bouton.textContent = 'Générer';
       }
@@ -338,11 +366,14 @@ const Comfy = (() => {
         { key: 'largeur', label: 'Largeur', type: 'number', value: derniers.largeur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'hauteur', label: 'Hauteur', type: 'number', value: derniers.hauteur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'variantes', label: 'Variantes', type: 'number', value: derniers.variantes, min: 1, max: 4 },
-        { key: 'couleurs', label: 'Couleurs (pixel art)', type: 'select', value: String(derniers.couleurs), choices: [...(doc ? [['jeu', 'La palette du jeu ouvert']] : []), ['8', '8 couleurs'], ['12', '12 couleurs'], ['16', '16 couleurs'], ['24', '24 couleurs'], ['32', '32 couleurs']] },
+        { key: 'details', label: 'Détails', type: 'select', value: DETAILS[derniers.details] ? derniers.details : 'peu', choices: Object.entries(DETAILS).map(([k, d]) => [k, d.nom]) },
+        // Sans jeu ouvert, pas de « palette du jeu » : 16 couleurs.
+        { key: 'couleurs', label: 'Couleurs (pixel art)', type: 'select', value: !doc && String(derniers.couleurs) === 'jeu' ? '16' : String(derniers.couleurs), choices: [...(doc ? [['jeu', 'La palette du jeu ouvert']] : []), ['8', '8 couleurs'], ['12', '12 couleurs'], ['16', '16 couleurs'], ['24', '24 couleurs'], ['32', '32 couleurs']] },
         { key: 'tolerance', label: 'Détourage du fond (objet)', type: 'range', value: derniers.tolerance ?? 48, min: 8, max: 120 },
         { key: 'negatif', label: 'À éviter (facultatif)', type: 'text', value: derniers.negatif || '' },
         { key: 'modele', label: 'Modèle', type: 'select', value: checkpoints.includes(derniers.modele) ? derniers.modele : '', choices: [['', 'Automatique (selon le style)'], ...checkpoints.map((m) => [m, m])] },
         { key: 'lora', label: 'LoRA (style en plus)', type: 'select', value: derniers.lora === '' || loras.includes(derniers.lora) ? derniers.lora : 'auto', choices: [['auto', 'Automatique (Pixel Art XL pour le pixel art)'], ['', 'Aucun'], ...loras.map((m) => [m, m])] },
+        { key: 'echelle', label: 'Taille d\'un pixel dans l\'image de ComfyUI', type: 'select', value: String(derniers.echelle || 8), choices: [['4', '4 px (plus de détails)'], ['6', '6 px'], ['8', '8 px (Pixel Art XL)'], ['12', '12 px'], ['16', '16 px (plus gros pixels)']] },
         { key: 'avance', label: 'Réglages avancés', type: 'checkbox', value: false },
         { key: 'graine', label: 'Graine (0 = au hasard)', type: 'number', value: 0, min: 0 },
         { key: 'etapes', label: 'Étapes (0 = selon le modèle)', type: 'number', value: 0, min: 0, max: 80 },
@@ -353,6 +384,7 @@ const Comfy = (() => {
         f.card.classList.add('comfy-generer');
         const s = style(values.style);
         f.inputs.couleurs.row.hidden = !s.pixel;
+        f.inputs.echelle.row.hidden = !s.pixel;
         f.inputs.tolerance.row.hidden = values.sorte !== 'objet';
         for (const k of ['graine', 'etapes', 'cfg', 'negatif', 'modele', 'lora']) f.inputs[k].row.hidden = !values.avance;
         const p = phrases(values);

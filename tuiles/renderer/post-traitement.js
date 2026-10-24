@@ -266,28 +266,66 @@ const PostTraitement = (() => {
     return changes;
   }
 
+  // Lissage (pixel art) : un pixel prend la couleur majoritaire autour de lui (5 voisins sur 9 au
+  // moins). Les petits grains disparaissent, les formes et les aplats restent.
+  function lisser(img, boucle = false) {
+    const { data, width: W, height: H } = img;
+    const copie = Uint32Array.from(new Uint32Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)));
+    const sortie = new Uint32Array(data.buffer, data.byteOffset, W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const compte = new Map();
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        let nx = x + dx, ny = y + dy;
+        if (boucle) { nx = (nx + W) % W; ny = (ny + H) % H; } else if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const c = copie[ny * W + nx];
+        compte.set(c, (compte.get(c) || 0) + 1);
+      }
+      for (const [c, n] of compte) if (n >= 5) { sortie[y * W + x] = c; break; }
+    }
+    return img;
+  }
+  // Le milieu d'une image, w × h (ou toute l'image si elle est plus petite).
+  function milieu(img, w, h) {
+    const cw = Math.min(w, img.width), ch = Math.min(h, img.height);
+    return couper(img, { x: Math.floor((img.width - cw) / 2), y: Math.floor((img.height - ch) / 2), w: cw, h: ch });
+  }
+
   // --- Tout ---
   // o = { largeur, hauteur (en pixels), sorte: 'sol' | 'objet', pixel: bool,
   //       couleurs: nombre (0 = garder), palette: ['#rrggbb'] (pixel art : celle du jeu),
-  //       tolerance (fond), marge (sol : part de l'image fondue dans les bords, 0.1 à 0.5) }
+  //       tolerance (fond), marge (sol : part de l'image fondue dans les bords, 0.1 à 0.5),
+  //       echelle (pixel art : taille d'un pixel dans l'image de ComfyUI, 8 avec Pixel Art XL),
+  //       lissage (pixel art : 0 à 3 passes) }
+  //
+  // Pixel art : l'image de ComfyUI est d'abord ramenée à SON échelle (1024 px / 8 = 128 pixels de
+  // pixel art), puis on y prend la taille voulue, sans la tasser. Tasser toute l'image dans
+  // 4 × 4 tuiles mettait un pré entier dans 64 pixels : du bruit au lieu d'herbe.
   function traiter(source, o) {
     const w = Math.max(1, Math.round(o.largeur)), h = Math.max(1, Math.round(o.hauteur));
     let img = { width: source.width, height: source.height, data: Uint8ClampedArray.from(source.data) };
     const mode = o.pixel ? 'dominante' : 'moyenne';
+    const e = o.pixel ? Math.max(1, Math.round(o.echelle || 8)) : 0;
     const infos = {};
     if (o.sorte === 'objet') {
       infos.fond = retirerFond(img, o.tolerance ?? 48).fond;
       const r = cadre(img);
       if (!r) return { img: image(w, h), infos: { ...infos, vide: true } };
       img = couper(img, r);
-      // L'objet garde ses proportions, centré, posé en bas (il se tient sur le sol).
-      const echelle = Math.min(w / img.width, h / img.height);
+      // À l'échelle du pixel art d'abord ; puis l'objet garde ses proportions s'il faut le réduire.
+      if (e) img = reduire(img, Math.max(1, Math.round(img.width / e)), Math.max(1, Math.round(img.height / e)), mode);
+      const echelle = Math.min(w / img.width, h / img.height, e ? 1 : Infinity);
       const ow = Math.max(1, Math.round(img.width * echelle)), oh = Math.max(1, Math.round(img.height * echelle));
-      img = poser(reduire(img, ow, oh, mode), w, h, Math.floor((w - ow) / 2), h - oh);
+      // Centré, posé en bas (il se tient sur le sol).
+      img = poser(ow === img.width && oh === img.height ? img : reduire(img, ow, oh, mode), w, h, Math.floor((w - ow) / 2), h - oh);
     } else {
       const marge = Math.min(0.5, Math.max(0.05, o.marge ?? 0.25));
       const mx = Math.max(1, Math.round(w * marge)), my = Math.max(1, Math.round(h * marge));
-      img = raccorder(reduire(img, w + mx, h + my, mode), w, h, Boolean(o.pixel));
+      if (e) {
+        img = reduire(img, Math.max(1, Math.round(img.width / e)), Math.max(1, Math.round(img.height / e)), mode);
+        img = milieu(img, w + mx, h + my);
+      }
+      if (img.width !== w + mx || img.height !== h + my) img = reduire(img, w + mx, h + my, mode);
+      img = raccorder(img, w, h, Boolean(o.pixel));
       // Un sol est plein : aucune transparence.
       for (let k = 3; k < img.data.length; k += 4) img.data[k] = 255;
     }
@@ -295,13 +333,14 @@ const PostTraitement = (() => {
       const jeu = (o.palette || []).map(hexVersRgb).filter(Boolean);
       const couleurs = o.couleurs > 0 ? palette(img, o.couleurs) : jeu.length ? jeu : palette(img, 16);
       versPalette(img, couleurs);
+      for (let n = 0; n < (o.lissage ?? 1); n++) lisser(img, o.sorte !== 'objet');
       infos.nettoyes = nettoyer(img, o.sorte !== 'objet');
       infos.couleurs = couleurs.map(rgbVersHex);
     }
     return { img, infos };
   }
 
-  return { image, traiter, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
+  return { image, traiter, lisser, milieu, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
 })();
 
 if (typeof module !== 'undefined') module.exports = PostTraitement;

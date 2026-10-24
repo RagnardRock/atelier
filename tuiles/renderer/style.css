@@ -1094,3 +1094,10 @@ body.resizing-row { cursor: row-resize; }
 .comfy-variante canvas { display: block; image-rendering: pixelated; }
 .comfy-brute { position: absolute; right: 6px; bottom: 6px; width: 34px; height: auto; border-radius: 3px; box-shadow: var(--shadow); image-rendering: auto !important; opacity: 0.9; }
 .comfy-phrase { font-size: 11px; font-style: italic; }
+.comfy-progres { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: var(--radius); background: rgba(0, 0, 0, 0.25); }
+.comfy-progres-titre { display: flex; justify-content: space-between; gap: 12px; color: var(--text-strong); }
+.comfy-temps { color: var(--muted); font-variant-numeric: tabular-nums; }
+.comfy-barre { height: 10px; border-radius: 5px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.comfy-barre > span { display: block; width: 2%; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, white)); box-shadow: 0 0 12px var(--accent); transition: width 0.35s ease; }
+.comfy-attente { width: 200px; height: 200px; border-radius: var(--radius); background: linear-gradient(110deg, rgba(255, 255, 255, 0.03) 30%, color-mix(in srgb, var(--accent) 22%, transparent) 50%, rgba(255, 255, 255, 0.03) 70%); background-size: 250% 100%; animation: comfy-respire 1.6s linear infinite; }
+@keyframes comfy-respire { from { background-position: 120% 0; } to { background-position: -120% 0; } }
