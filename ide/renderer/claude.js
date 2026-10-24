@@ -57,9 +57,9 @@ const claudePanel = (() => {
     const el = document.createElement('div');
     el.className = 'claude-welcome';
     el.innerHTML = `
-      <i class="codicon codicon-sparkle"></i>
+      <i class="codicon rune-loki">ᛚ</i>
       <p>Pose une question sur ton code, ou demande une modification.</p>
-      <p class="hint">Claude voit le fichier ouvert et ta sélection, peut lire tout le projet, et te demande ton accord avant de modifier un fichier ou de lancer une commande.</p>`;
+      <p class="hint">Loki voit le fichier ouvert et ta sélection, peut lire tout le projet, et te demande ton accord avant de modifier un fichier ou de lancer une commande.</p>`;
     list.appendChild(el);
   }
 
@@ -117,13 +117,13 @@ const claudePanel = (() => {
     busy = value;
     stopButton.hidden = !value;
     sendButton.disabled = value;
-    statusEl.innerHTML = value ? `<i class="codicon codicon-loading codicon-modifier-spin"></i>${label || 'Claude réfléchit…'}` : '';
+    statusEl.innerHTML = value ? `<i class="codicon codicon-loading codicon-modifier-spin"></i>${label || 'Loki réfléchit…'}` : '';
   }
 
   async function send() {
     const text = input.value.trim();
     if (!text || busy) return;
-    if (!state.root) return notify.info("Ouvre d'abord un dossier : Claude travaille dans le projet ouvert.");
+    if (!state.root) return notify.info("Ouvre d'abord un dossier : Loki travaille dans le projet ouvert.");
     // Le projet a changé depuis le début de cette conversation : on en commence une nouvelle.
     if (conv.root !== state.root) await startNew();
     list.querySelector('.claude-welcome')?.remove();
@@ -236,7 +236,7 @@ const claudePanel = (() => {
     const ligne = (f, portee) => {
       const row = document.createElement('div');
       row.className = 'autorisation-item';
-      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="autorisation-nom"></span><button title="Claude te redemandera">Redemander</button>';
+      row.innerHTML = '<i class="codicon codicon-pass"></i><span class="autorisation-nom"></span><button title="Loki te redemandera">Redemander</button>';
       row.querySelector('.autorisation-nom').textContent = f.libelle;
       row.querySelector('button').onclick = async (e) => {
         e.stopPropagation();
@@ -248,10 +248,10 @@ const claudePanel = (() => {
     };
     titre('Sans demander, pendant cette conversation');
     if (conversation.length) for (const f of conversation) ligne(f, 'conversation');
-    else hint('Rien : Claude demande avant chaque modification ou commande.');
+    else hint('Rien : Loki demande avant chaque modification ou commande.');
     titre('Sans demander, pour de bon');
     if (toujours.length) for (const f of toujours) ligne(f, 'toujours');
-    else hint('Rien. Se règle aussi dans les réglages, section Claude.');
+    else hint('Rien. Se règle aussi dans les réglages, section Loki.');
     hint('Lire et chercher dans le projet ne demande jamais. Une commande enchaînée (&&, |, ;) demande toujours.');
     if (conversation.length || toujours.length) {
       const tout = document.createElement('button');
@@ -502,7 +502,7 @@ const claudePanel = (() => {
         <button class="always" title="Jusqu'à la fin de cette conversation">cette conversation</button>
         <button class="toujours" title="Gardé dans les réglages ; se retire avec le bouclier, en haut du panneau">toujours</button>
       </div>`;
-    card.querySelector('.perm-title span').textContent = `Claude veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
+    card.querySelector('.perm-title span').textContent = `Loki veut : ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
     card.insertBefore(permissionDetails(req.toolName, req.input), card.querySelector('.perm-actions'));
     card.querySelector('.perm-famille strong').textContent = `« ${req.familleLibelle} »`;
     if (!req.famille) card.querySelector('.perm-famille').remove();
@@ -540,7 +540,7 @@ const claudePanel = (() => {
   const INSTALL_HELP = `Claude Code n'est pas installé (ou la commande <code>claude</code> est introuvable).<br>
     Pour l'installer, dans le terminal : <code>npm install -g @anthropic-ai/claude-code</code>,
     puis lance <code>claude</code> une fois pour te connecter à ton compte Claude.
-    Si Claude Code est installé ailleurs, indique son chemin dans Réglages › Claude.`;
+    Si Claude Code est installé ailleurs, indique son chemin dans Réglages › Loki.`;
 
   window.atelier.onClaudeEvent((e) => {
     switch (e.kind) {
@@ -550,7 +550,7 @@ const claudePanel = (() => {
         break;
       case 'text':
         appendText(e.text);
-        setBusy(true, 'Claude écrit…');
+        setBusy(true, 'Loki écrit…');
         break;
       case 'tool':
         addTool(e);
@@ -579,7 +579,7 @@ const claudePanel = (() => {
         if (e.isError) {
           const text = e.text || '';
           const hint = /log ?in|auth|credential/i.test(text) ? '<br>Lance <code>claude</code> une fois dans le terminal pour te connecter.' : '';
-          addNotice('error', `${escapeHtml(text || 'Claude a rencontré une erreur.')}${hint}`);
+          addNotice('error', `${escapeHtml(text || 'Loki a rencontré une erreur.')}${hint}`);
         }
         break;
       }

@@ -591,3 +591,6 @@ input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px s
 .calc-ligne-calcul { max-width: 100%; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .calc-ligne-resultat { max-width: 100%; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #calc-historique li.calc-vide { align-items: flex-start; cursor: default; background: none; line-height: 1.45; }
+
+/* Loki, l'assistant de l'Atelier : sa rune ᛚ (Laguz) à la place de l'icône étincelle */
+.codicon.rune-loki { font-family: 'Segoe UI Historic', 'Segoe UI Symbol', 'Noto Sans Runic', sans-serif; font-weight: 700; font-style: normal; line-height: 1; }

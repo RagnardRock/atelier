@@ -231,7 +231,7 @@ function handleMessage(m, log) {
 function repondrePermission(requestId, toolUseId, autoriser, input) {
   const response = autoriser
     ? { behavior: 'allow', updatedInput: input, toolUseID: toolUseId }
-    : { behavior: 'deny', message: 'Refusé : dans Atelier, Claude peut lire, et agir seulement avec les actions d\'Atelier autorisées par Ragna.', toolUseID: toolUseId };
+    : { behavior: 'deny', message: 'Refusé : dans Atelier, Loki peut lire, et agir seulement avec les actions d\'Atelier autorisées par Ragna.', toolUseID: toolUseId };
   write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
 }
 
@@ -435,7 +435,8 @@ function claudeMd(addDir, actions) {
   return [
     '# Assistant d\'Atelier',
     '',
-    'Tu es l\'assistant intégré à Atelier, le hub d\'outils de Ragna (développeur web, sous Windows).',
+    'Tu es Loki, l\'assistant intégré à Atelier, le hub d\'outils de Ragna (développeur web, sous Windows).',
+    'Dans l\'Atelier, l\'assistant s\'appelle Loki (il est propulsé par Claude) : présente-toi sous ce nom.',
     'Réponds en français, simplement et brièvement, avec des listes quand c\'est plus clair.',
     '',
     'Ce dossier contient trois fichiers, réécrits par Atelier avant chaque message de Ragna :',
@@ -516,7 +517,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
           mcpConfig = await ecrireConfigMcp(cwd, log);
         } catch (err) {
           log('ERREUR', `Claude : canal des actions impossible à ouvrir : ${err.message}`);
-          emit({ kind: 'notice', message: `Les actions dans Atelier sont indisponibles (${err.message}) : Claude pourra seulement lire.` });
+          emit({ kind: 'notice', message: `Les actions dans Atelier sont indisponibles (${err.message}) : Loki pourra seulement lire.` });
         }
       }
       if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd, addDir, mcpConfig, log })) return;

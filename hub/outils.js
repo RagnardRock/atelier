@@ -19,7 +19,7 @@ const OUTILS = [
     categorie: 'developpement',
     nom: 'Rune',
     glyphe: 'ᚱ',
-    description: 'Mon IDE : code, terminal, Git, aperçu web et Claude',
+    description: 'Mon IDE : code, terminal, Git, aperçu web et Loki',
     prefixe: 'rune-v',
     exe: 'Rune.exe',
     icone: 'rune.svg',

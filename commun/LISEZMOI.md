@@ -2,6 +2,8 @@
 
 Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude**, et le moyen pour Claude d'**agir dans l'outil**.
 
+> Dans l'interface, l'assistant s'appelle **Loki** (rune ᛚ) : seuls les libellés ont changé. Le code garde le nom `claude` (fichiers, réglages `claude*`, `ClaudePanneau`), et c'est toujours Claude Code qui tourne derrière.
+
 | Fichier | Rôle |
 | --- | --- |
 | `claude.js` | Processus principal : lance Claude Code, transmet tes messages et ses demandes de permission, garde l'historique des conversations par projet. |

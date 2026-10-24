@@ -1430,3 +1430,6 @@ body.glass .np-card { border-color: var(--glass-border); }
 #status-live .codicon { font-size: 13px; }
 #status-live.running { color: var(--text); }
 #status-live.running .codicon { color: var(--accent); }
+
+/* Loki, l'assistant de l'Atelier : sa rune ᛚ (Laguz) à la place de l'icône étincelle */
+.codicon.rune-loki { font-family: 'Segoe UI Historic', 'Segoe UI Symbol', 'Noto Sans Runic', sans-serif; font-weight: 700; font-style: normal; line-height: 1; }

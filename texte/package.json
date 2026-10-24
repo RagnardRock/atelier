@@ -1,7 +1,7 @@
 {
   "name": "atelier-texte",
   "productName": "Edda",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Edda, mon traitement de texte à la Word (docx, odt, rtf, md, html, txt), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {

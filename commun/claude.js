@@ -303,9 +303,9 @@ function handleMessage(m) {
     if (e.type === 'content_block_delta' && e.delta.type === 'text_delta') return emit({ kind: 'text', text: e.delta.text });
     // Ce qu'il fait quand il n'écrit rien : réfléchir, ou préparer une action (une grande carte à
     // écrire peut prendre une minute). Sans ça, le panneau semble figé.
-    if (e.type === 'content_block_start' && e.content_block?.type === 'thinking') return emit({ kind: 'status', text: 'Claude réfléchit…' });
-    if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') return emit({ kind: 'status', text: 'Claude prépare une action…' });
-    if (e.type === 'message_start') return emit({ kind: 'status', text: 'Claude réfléchit…' });
+    if (e.type === 'content_block_start' && e.content_block?.type === 'thinking') return emit({ kind: 'status', text: 'Loki réfléchit…' });
+    if (e.type === 'content_block_start' && e.content_block?.type === 'tool_use') return emit({ kind: 'status', text: 'Loki prépare une action…' });
+    if (e.type === 'message_start') return emit({ kind: 'status', text: 'Loki réfléchit…' });
     return;
   }
   // Les serveurs de Claude ne répondent pas (surchargés, limite d'utilisation…) : Claude Code
@@ -449,8 +449,9 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil }) {
     const texte = [
       `# Tu es dans ${outil.nom}`,
       '',
-      `Tu es le Claude intégré à ${outil.nom}, ${outil.role}, un des outils de l'Atelier de Ragna. Ragna te parle`,
-      `depuis le panneau Claude de ${outil.nom}, en français : réponds en français, simplement et brièvement.`,
+      `Tu es Loki, l'assistant intégré à ${outil.nom}, ${outil.role}, un des outils de l'Atelier de Ragna (dans l'Atelier,`,
+      `l'assistant s'appelle Loki ; il est propulsé par Claude). Ragna te parle depuis le panneau Loki de ${outil.nom},`,
+      'en français : réponds en français, simplement et brièvement.',
       'Tu n\'es pas ici pour coder : tu aides Ragna à faire son travail dans cet outil.',
       '',
       nom
@@ -502,7 +503,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil }) {
     const { cwd } = await cwdActuel();
     const full = path.resolve(cwd, String(chemin));
     const rel = path.relative(cwd, full);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Claude ne peut écrire que dans le dossier du projet (${cwd})`);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Loki ne peut écrire que dans le dossier du projet (${cwd})`);
     await fsp.mkdir(path.dirname(full), { recursive: true });
     await fsp.writeFile(full, Buffer.from(bytes));
     return full;
@@ -512,7 +513,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil }) {
     const { cwd } = await cwdActuel();
     const full = path.resolve(cwd, String(chemin));
     const rel = path.relative(cwd, full);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Claude ne peut ouvrir que des fichiers du projet (${cwd})`);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error(`Loki ne peut ouvrir que des fichiers du projet (${cwd})`);
     return { path: full, name: path.basename(full), bytes: await fsp.readFile(full) };
   });
 

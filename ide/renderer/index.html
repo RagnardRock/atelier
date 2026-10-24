@@ -21,7 +21,7 @@
       <button id="btn-split" class="icon-button" title="Diviser l'éditeur (Ctrl+Alt+D)"><i class="codicon codicon-split-horizontal"></i></button>
       <button id="btn-terminal" class="icon-button" title="Afficher / masquer le terminal (Ctrl+J)"><i class="codicon codicon-terminal"></i></button>
       <button id="btn-preview" class="icon-button" title="Aperçu dans le navigateur (Ctrl+Alt+P)"><i class="codicon codicon-open-preview"></i></button>
-      <button id="btn-claude" class="icon-button" title="Discuter avec Claude (Ctrl+Shift+I)"><i class="codicon codicon-sparkle"></i></button>
+      <button id="btn-claude" class="icon-button" title="Discuter avec Loki (Ctrl+Shift+I)"><i class="codicon rune-loki">ᛚ</i></button>
     </div>
     <span id="folder-name"></span>
   </header>
@@ -184,7 +184,7 @@
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>D</kbd></dt><dd>Diviser l'écran</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>W</kbd></dt><dd>Fermer la colonne</dd>
               <dt><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>P</kbd></dt><dd>Aperçu dans le navigateur</dd>
-              <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>I</kbd></dt><dd>Discuter avec Claude</dd>
+              <dt><kbd>Ctrl</kbd><kbd>Maj</kbd><kbd>I</kbd></dt><dd>Discuter avec Loki</dd>
               <dt><kbd>Molette</kbd></dt><dd>Ouvrir / fermer un onglet</dd>
             </dl>
           </div>
@@ -224,9 +224,9 @@
     <div id="claude-resizer" hidden></div>
     <aside id="claude-panel" hidden>
       <div class="view-header">
-        <span class="view-title"><i class="codicon codicon-sparkle"></i>Claude <span id="claude-model"></span></span>
+        <span class="view-title"><i class="codicon rune-loki">ᛚ</i>Loki <span id="claude-model"></span></span>
         <span class="view-actions">
-          <button id="claude-autorisations" class="icon-button" title="Ce que Claude peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
+          <button id="claude-autorisations" class="icon-button" title="Ce que Loki peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
           <button id="claude-history" class="icon-button" title="Conversations précédentes"><i class="codicon codicon-history"></i></button>
           <button id="claude-new" class="icon-button" title="Nouvelle conversation"><i class="codicon codicon-add"></i></button>
           <button id="claude-close" class="icon-button" title="Masquer (Ctrl+Shift+I)"><i class="codicon codicon-chevron-right"></i></button>
@@ -237,10 +237,10 @@
       <div id="claude-messages"></div>
       <form id="claude-form">
         <div id="claude-context"></div>
-        <textarea id="claude-input" rows="3" spellcheck="false" placeholder="Demande à Claude… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
+        <textarea id="claude-input" rows="3" spellcheck="false" placeholder="Demande à Loki… (Entrée pour envoyer, Maj+Entrée pour aller à la ligne)"></textarea>
         <div class="claude-actions">
           <span id="claude-status"></span>
-          <button type="button" id="claude-stop" class="icon-button" title="Arrêter Claude" hidden><i class="codicon codicon-debug-stop"></i></button>
+          <button type="button" id="claude-stop" class="icon-button" title="Arrêter Loki" hidden><i class="codicon codicon-debug-stop"></i></button>
           <button type="submit" id="claude-send" class="icon-button" title="Envoyer (Entrée)"><i class="codicon codicon-send"></i></button>
         </div>
       </form>

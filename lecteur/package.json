@@ -1,7 +1,7 @@
 {
   "name": "atelier-lecteur",
   "productName": "Mimir",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mímir, mon lecteur de documents : PDF (annotations, signature, formulaires), EPUB, BD, Word, images et textes, un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
@@ -32,9 +32,30 @@
       "!mettre-a-jour.*"
     ],
     "fileAssociations": [
-      { "ext": "pdf", "name": "Document PDF", "description": "Document PDF", "role": "Viewer", "icon": "build/icon.ico" },
-      { "ext": "epub", "name": "Livre EPUB", "description": "Livre numérique EPUB", "role": "Viewer", "icon": "build/icon.ico" },
-      { "ext": ["cbz", "cbr"], "name": "Bande dessinée", "description": "Bande dessinée (CBZ, CBR)", "role": "Viewer", "icon": "build/icon.ico" }
+      {
+        "ext": "pdf",
+        "name": "Document PDF",
+        "description": "Document PDF",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": "epub",
+        "name": "Livre EPUB",
+        "description": "Livre numérique EPUB",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": [
+          "cbz",
+          "cbr"
+        ],
+        "name": "Bande dessinée",
+        "description": "Bande dessinée (CBZ, CBR)",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      }
     ],
     "win": {
       "target": "nsis",
