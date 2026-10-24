@@ -42,9 +42,9 @@ const Comfy = (() => {
   // Combien de détails : un sol de jeu doit rester calme (un aplat et quelques marques), sinon
   // il fait du bruit une fois posé sur toute une carte. lissage : passes de post-traitement.js.
   const DETAILS = {
-    peu: { nom: 'Peu : calme, de grands aplats (sols)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details, high frequency texture', lissage: 2 },
-    moyen: { nom: 'Moyen', positif: '', negatif: 'cluttered, noisy', lissage: 1 },
-    beaucoup: { nom: 'Beaucoup (objets riches)', positif: 'intricate details', negatif: '', lissage: 0 },
+    peu: { nom: 'Peu : calme, de grands aplats (sols)', positif: 'simple, calm, large flat areas of color, sparse details, readable', negatif: 'busy, cluttered, noisy, too many details, tiny details, high frequency texture', lissage: 3, rares: 0.04 },
+    moyen: { nom: 'Moyen', positif: '', negatif: 'cluttered, noisy', lissage: 1, rares: 0.015 },
+    beaucoup: { nom: 'Beaucoup (objets riches)', positif: 'intricate details', negatif: '', lissage: 0, rares: 0 },
   };
   const COMMUN_NEGATIF = 'text, watermark, signature, logo, ui, frame';
 
@@ -165,7 +165,7 @@ const Comfy = (() => {
     return PostTraitement.traiter(brute, {
       largeur: v.largeur * taille, hauteur: v.hauteur * taille, sorte: v.sorte, pixel,
       couleurs: couleurs || (doc ? 0 : 16), palette: pixel && !couleurs && doc ? doc.palette : null,
-      tolerance: v.tolerance, marge: 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage,
+      tolerance: v.tolerance, marge: 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage, rares: (DETAILS[v.details] || DETAILS.peu).rares,
     });
   }
   const versCanvas = (img) => {
@@ -290,12 +290,23 @@ const Comfy = (() => {
         g.imageSmoothingEnabled = false;
         const src = versCanvas(img);
         for (let y = 0; y < rep; y++) for (let x = 0; x < rep; x++) g.drawImage(src, x * img.width * zoom, y * img.height * zoom, img.width * zoom, img.height * zoom);
-        const brute = el('canvas', { width: 64, height: Math.round((64 * brutes[n].height) / brutes[n].width), className: 'comfy-brute', title: 'L\'image rendue par ComfyUI, avant le post-traitement' });
+        const brute = el('canvas', { width: 64, height: Math.round((64 * brutes[n].height) / brutes[n].width), className: 'comfy-brute', title: 'L\'image rendue par ComfyUI, avant le post-traitement (clic : la voir en grand)' });
         brute.getContext('2d').drawImage(versCanvas(brutes[n]), 0, 0, brute.width, brute.height);
+        brute.onclick = (e) => { e.stopPropagation(); voirBrute(brutes[n]); };
         const carte = el('button', { type: 'button', className: `comfy-variante${n === choisie ? ' choisie' : ''}`, title: 'Choisir cette variante' }, [c, brute]);
         carte.onclick = () => { choisie = n; afficher(form.values()); };
         resultats.append(carte);
       });
+    }
+    // L'image de ComfyUI en grand, par-dessus tout (clic ou Échap pour fermer).
+    function voirBrute(img) {
+      const c = versCanvas(img);
+      c.className = 'comfy-brute-grande';
+      const voile = el('div', { className: 'comfy-voile', title: 'Clic pour fermer' }, [c, el('p', { className: 'modal-info', textContent: `L'image rendue par ComfyUI (${img.width} × ${img.height}), avant le post-traitement. Clic pour fermer.` })]);
+      const fermer = (e) => { if (e.type === 'keydown' && e.key !== 'Escape') return; e.stopPropagation(); e.preventDefault(); voile.remove(); removeEventListener('keydown', fermer, true); };
+      voile.onclick = fermer;
+      addEventListener('keydown', fermer, true);
+      document.body.append(voile);
     }
     const etat = (texte) => { const x = form?.card.querySelector('.modal-extra'); if (x) x.textContent = texte; };
     async function lancer(f) {
@@ -368,7 +379,7 @@ const Comfy = (() => {
         { key: 'variantes', label: 'Variantes', type: 'number', value: derniers.variantes, min: 1, max: 4 },
         { key: 'details', label: 'Détails', type: 'select', value: DETAILS[derniers.details] ? derniers.details : 'peu', choices: Object.entries(DETAILS).map(([k, d]) => [k, d.nom]) },
         // Sans jeu ouvert, pas de « palette du jeu » : 16 couleurs.
-        { key: 'couleurs', label: 'Couleurs (pixel art)', type: 'select', value: !doc && String(derniers.couleurs) === 'jeu' ? '16' : String(derniers.couleurs), choices: [...(doc ? [['jeu', 'La palette du jeu ouvert']] : []), ['8', '8 couleurs'], ['12', '12 couleurs'], ['16', '16 couleurs'], ['24', '24 couleurs'], ['32', '32 couleurs']] },
+        { key: 'couleurs', label: 'Couleurs (pixel art)', type: 'select', value: !doc && String(derniers.couleurs) === 'jeu' ? '16' : String(derniers.couleurs), choices: [...(doc ? [['jeu', 'La palette du jeu ouvert']] : []), ['4', '4 couleurs'], ['6', '6 couleurs'], ['8', '8 couleurs'], ['12', '12 couleurs'], ['16', '16 couleurs'], ['24', '24 couleurs'], ['32', '32 couleurs']] },
         { key: 'tolerance', label: 'Détourage du fond (objet)', type: 'range', value: derniers.tolerance ?? 48, min: 8, max: 120 },
         { key: 'negatif', label: 'À éviter (facultatif)', type: 'text', value: derniers.negatif || '' },
         { key: 'modele', label: 'Modèle', type: 'select', value: checkpoints.includes(derniers.modele) ? derniers.modele : '', choices: [['', 'Automatique (selon le style)'], ...checkpoints.map((m) => [m, m])] },

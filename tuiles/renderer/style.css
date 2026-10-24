@@ -1101,3 +1101,6 @@ body.resizing-row { cursor: row-resize; }
 .comfy-barre > span { display: block; width: 2%; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, white)); box-shadow: 0 0 12px var(--accent); transition: width 0.35s ease; }
 .comfy-attente { width: 200px; height: 200px; border-radius: var(--radius); background: linear-gradient(110deg, rgba(255, 255, 255, 0.03) 30%, color-mix(in srgb, var(--accent) 22%, transparent) 50%, rgba(255, 255, 255, 0.03) 70%); background-size: 250% 100%; animation: comfy-respire 1.6s linear infinite; }
 @keyframes comfy-respire { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.comfy-brute { cursor: zoom-in; }
+.comfy-voile { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); cursor: zoom-out; }
+.comfy-brute-grande { max-width: 90vw; max-height: 82vh; border-radius: var(--radius); box-shadow: var(--shadow); }

@@ -215,7 +215,9 @@ const PostTraitement = (() => {
         for (let c = 0; c < 3; c++) {
           let lo = 255, hi = 0;
           for (const p of b) { if (p[c] < lo) lo = p[c]; if (p[c] > hi) hi = p[c]; }
-          if (hi - lo > etendue) { etendue = hi - lo; bi = i; canal = c; }
+          // Étendue × nombre de pixels : on coupe d'abord les grandes familles (les verts d'un pré),
+          // pas quelques pixels très différents (une fleur blanche prendrait 6 couleurs sur 16).
+          if ((hi - lo) * b.length > etendue) { etendue = (hi - lo) * b.length; bi = i; canal = c; }
         }
       });
       if (bi < 0 || etendue <= 0) break;
@@ -223,11 +225,15 @@ const PostTraitement = (() => {
       const m = b.length >> 1;
       boites.splice(bi, 1, b.slice(0, m), b.slice(m));
     }
-    return boites.map((b) => {
+    const moyennes = boites.map((b) => {
       const s = [0, 0, 0];
       for (const p of b) for (let c = 0; c < 3; c++) s[c] += p[c];
       return s.map((v) => Math.round(v / b.length));
     });
+    // Deux couleurs presque pareilles n'en font qu'une.
+    const gardees = [];
+    for (const m of moyennes) if (!gardees.some((g) => dist2(m[0], m[1], m[2], g) < 300)) gardees.push(m);
+    return gardees;
   }
   // Chaque pixel prend la couleur la plus proche de la palette ; transparence franche.
   function versPalette(img, couleurs) {
@@ -284,6 +290,32 @@ const PostTraitement = (() => {
     }
     return img;
   }
+  // Les couleurs rares (moins de `seuil` des pixels opaques) prennent la couleur fréquente la plus
+  // proche : il reste de grands aplats et les marques assez grandes pour se voir.
+  function retirerRares(img, seuil) {
+    const { data } = img;
+    const compte = new Map();
+    let total = 0;
+    for (let k = 0; k < data.length; k += 4) {
+      if (!data[k + 3]) continue;
+      const c = (data[k] << 16) | (data[k + 1] << 8) | data[k + 2];
+      compte.set(c, (compte.get(c) || 0) + 1);
+      total++;
+    }
+    const frequentes = [...compte].filter(([, n]) => n >= seuil * total).map(([c]) => [(c >> 16) & 255, (c >> 8) & 255, c & 255]);
+    if (!frequentes.length || frequentes.length === compte.size) return 0;
+    let changes = 0;
+    for (let k = 0; k < data.length; k += 4) {
+      if (!data[k + 3]) continue;
+      const c = (data[k] << 16) | (data[k + 1] << 8) | data[k + 2];
+      if (compte.get(c) >= seuil * total) continue;
+      let best = Infinity, p = null;
+      for (const f of frequentes) { const d = dist2(data[k], data[k + 1], data[k + 2], f); if (d < best) { best = d; p = f; } }
+      data[k] = p[0]; data[k + 1] = p[1]; data[k + 2] = p[2];
+      changes++;
+    }
+    return changes;
+  }
   // Le milieu d'une image, w × h (ou toute l'image si elle est plus petite).
   function milieu(img, w, h) {
     const cw = Math.min(w, img.width), ch = Math.min(h, img.height);
@@ -295,7 +327,7 @@ const PostTraitement = (() => {
   //       couleurs: nombre (0 = garder), palette: ['#rrggbb'] (pixel art : celle du jeu),
   //       tolerance (fond), marge (sol : part de l'image fondue dans les bords, 0.1 à 0.5),
   //       echelle (pixel art : taille d'un pixel dans l'image de ComfyUI, 8 avec Pixel Art XL),
-  //       lissage (pixel art : 0 à 3 passes) }
+  //       lissage (pixel art : 0 à 3 passes), rares (pixel art : part minimale d'une couleur, 0 = garder) }
   //
   // Pixel art : l'image de ComfyUI est d'abord ramenée à SON échelle (1024 px / 8 = 128 pixels de
   // pixel art), puis on y prend la taille voulue, sans la tasser. Tasser toute l'image dans
@@ -334,13 +366,14 @@ const PostTraitement = (() => {
       const couleurs = o.couleurs > 0 ? palette(img, o.couleurs) : jeu.length ? jeu : palette(img, 16);
       versPalette(img, couleurs);
       for (let n = 0; n < (o.lissage ?? 1); n++) lisser(img, o.sorte !== 'objet');
+      if (o.rares > 0) { infos.rares = retirerRares(img, o.rares); lisser(img, o.sorte !== 'objet'); }
       infos.nettoyes = nettoyer(img, o.sorte !== 'objet');
       infos.couleurs = couleurs.map(rgbVersHex);
     }
     return { img, infos };
   }
 
-  return { image, traiter, lisser, milieu, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
+  return { image, traiter, lisser, milieu, retirerRares, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
 })();
 
 if (typeof module !== 'undefined') module.exports = PostTraitement;
