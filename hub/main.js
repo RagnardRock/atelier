@@ -93,7 +93,10 @@ const DEFAULT_CONFIG = {
   surveillerPressePapiers: true,
   garderPressePapiers: false,
   // Widgets affichés (Réglages › Widgets).
-  widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true, claude: true },
+  widgets: { notes: true, projets: true, pressePapiers: true, minuteurs: true, calendrier: true, calculatrice: true, claude: true },
+  // Colonne Outils : le filtre choisi (« tous », « installes », « majs ») et les catégories repliées.
+  filtreOutils: 'tous',
+  categoriesRepliees: [],
   // Widget Claude : la commande de Claude Code, le modèle ('' = celui de Claude Code) et le droit de
   // lire les fichiers du dossier des projets (en plus des notes, du calendrier et de l'état des projets).
   claudeCommand: 'claude',
@@ -169,7 +172,8 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 // Un fichier JSON par widget dans %APPDATA%\atelier-hub. Seuls les noms listés ici sont permis.
 // projets-memoire : ce que Claude retient sur chaque projet, { nomDuProjet: [{ id, texte, quand }] }.
 // claude-conversations : les conversations du widget Claude (claude : l'ancienne, d'avant la liste).
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire'];
+// calculatrice : les derniers calculs du widget Calculatrice, [{ calcul, resultat, quand }].
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire', 'calculatrice'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   // La mémoire des projets vit dans le dossier partagé (voir plus bas) : Rune, Skald et Tafl la lisent aussi.
@@ -469,6 +473,7 @@ handle('outils:etat', async (_event, { refresh = false, github = true, suivi = f
       id: tool.id,
       nom: tool.nom,
       glyphe: tool.glyphe,
+      categorie: OUTILS.CATEGORIES.some((c) => c.id === tool.categorie) ? tool.categorie : 'autres',
       description: tool.description,
       icone: tool.icone,
       installe: Boolean(installed),
@@ -480,7 +485,7 @@ handle('outils:etat', async (_event, { refresh = false, github = true, suivi = f
       enPreparation: releases ? versionEnPreparation(tool, latest) : null,
     });
   }
-  return { outils: result, erreurGithub: githubError };
+  return { outils: result, categories: OUTILS.CATEGORIES, erreurGithub: githubError };
 });
 
 const toolById = (id) => {
