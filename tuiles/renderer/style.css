@@ -1069,7 +1069,7 @@ body.resizing-row { cursor: row-resize; }
 .menus-pages { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .menus-page { gap: 6px; }
 
-/* --- Tafl 0.21 : ComfyUI (comfy.js) --- */
+/* --- Tafl 0.22 : ComfyUI (comfy.js) --- */
 .modal.comfy .modal-body { max-height: min(78vh, 900px); overflow: auto; gap: 10px; }
 .comfy-installation { display: flex; flex-direction: column; gap: 10px; }
 .comfy-etape { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; background: rgba(255, 255, 255, 0.02); }
