@@ -9,12 +9,16 @@ ClaudePanneau.familles({
     actions: ['ecrire', 'recopier', 'effacer'],
   },
   mise_en_forme: {
-    libelle: 'Mettre en forme (couleurs, formats, bordures, largeurs, fusions, volets, filtre)',
-    actions: ['mettre_en_forme', 'largeur_colonnes', 'hauteur_lignes', 'fusionner', 'figer', 'filtre'],
+    libelle: 'Mettre en forme (couleurs, formats, bordures, largeurs, fusions, volets, filtre, mise en forme conditionnelle)',
+    actions: ['mettre_en_forme', 'largeur_colonnes', 'hauteur_lignes', 'fusionner', 'figer', 'filtre', 'mise_en_forme_conditionnelle', 'effacer_regles'],
   },
   structure: {
     libelle: 'Insérer, supprimer et trier des lignes ou des colonnes',
     actions: ['inserer', 'supprimer', 'trier'],
+  },
+  graphiques: {
+    libelle: 'Insérer, modifier et supprimer des graphiques',
+    actions: ['graphique', 'modifier_graphique', 'supprimer_graphique'],
   },
   feuilles: {
     libelle: 'Ajouter, renommer et supprimer des feuilles',

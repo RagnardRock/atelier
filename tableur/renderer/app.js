@@ -415,6 +415,14 @@ const App = (() => {
   }
 
   // --- Figer les volets ---
+  // Un graphique sur la sélection (ou sur le tableau autour de la cellule active).
+  function insererGraphique() {
+    if (Grille.enEdition()) Grille.valider();
+    const plage = zoneDonnees();
+    if (!plage) { notify('Choisis d\'abord les données du graphique (par exemple A1:C10).', 'error'); return; }
+    Graphiques.inserer(plage).then(() => Grille.focus());
+  }
+
   function figerMenu(ancre) {
     const { actif } = sel();
     const m = Classeur.meta(feuille());
@@ -660,6 +668,7 @@ const App = (() => {
       ['Date du jour', () => saisirDansActive(Formules.texteValeur(Formules.dateVersSerie(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()), 'dd/mm/yyyy')), 'Ctrl+;', { icone: 'calendar' }],
       ['Heure actuelle', () => saisirDansActive(new Date().toTimeString().slice(0, 5)), 'Ctrl+Maj+:', { icone: 'clock' }],
       ['Lien hypertexte…', lien, 'Ctrl+K', { icone: 'link' }],
+      ['Graphique…', insererGraphique, 'Alt+F1', { icone: 'graph' }],
       null,
       ['Lignes au-dessus', () => inserer('lignes'), 'Ctrl++', { icone: 'arrow-up' }],
       ['Colonnes à gauche', () => inserer('colonnes'), null, { icone: 'arrow-left' }],
@@ -675,6 +684,11 @@ const App = (() => {
       null,
       [m.filtre ? 'Retirer le filtre' : 'Filtrer', basculerFiltre, 'Ctrl+Maj+L', { icone: 'filter', coche: Boolean(m.filtre) }],
       null,
+      ['Mise en forme conditionnelle', null, null, { icone: 'color-mode', sous: [
+        ['Règles toutes prêtes…', () => Regles.menu($('#menu-donnees')), null, { icone: 'symbol-color' }],
+        ['Nouvelle règle…', () => Regles.nouvelle({}), null, { icone: 'add' }],
+        ['Gérer les règles…', () => Regles.gerer(), null, { icone: 'list-unordered' }],
+      ] }],
       ['Format des nombres…', formatCellule, 'Ctrl+1', { icone: 'symbol-numeric' }],
       ['Fusionner et centrer', () => fusionner(), null, { icone: 'merge' }],
       ['Annuler la fusion', () => essayer(() => Classeur.defusionner(feuille(), sel().plage)), null, { icone: 'split-horizontal' }],
@@ -739,6 +753,11 @@ const App = (() => {
       ['Trier de A à Z', () => trierRapide(true), null, { icone: 'arrow-down' }],
       ['Trier de Z à A', () => trierRapide(false), null, { icone: 'arrow-up' }],
       null,
+      ['Mise en forme conditionnelle', null, null, { icone: 'color-mode', sous: [
+        ['Règles toutes prêtes…', () => Regles.menu($('#menu-donnees')), null, { icone: 'symbol-color' }],
+        ['Nouvelle règle…', () => Regles.nouvelle({}), null, { icone: 'add' }],
+        ['Gérer les règles…', () => Regles.gerer(), null, { icone: 'list-unordered' }],
+      ] }],
       ['Format des nombres…', formatCellule, 'Ctrl+1', { icone: 'symbol-numeric' }],
       f ? ['Annuler la fusion', () => essayer(() => Classeur.defusionner(feuille(), f)), null, { icone: 'split-horizontal' }] : ['Fusionner et centrer', () => fusionner(), null, { icone: 'merge', desactive: taillePlage(plage) < 2 || colonnes || lignes }],
       ['Lien hypertexte…', lien, 'Ctrl+K', { icone: 'link' }],
@@ -991,9 +1010,11 @@ const App = (() => {
       case 'trier': trierAvance(); break;
       case 'filtre': basculerFiltre(); break;
       case 'figer': figerMenu(b); break;
+      case 'mfc': Regles.menu(b); break;
+      case 'graphique': insererGraphique(); break;
       default:
     }
-    if (!['couleur', 'fond', 'bordures', 'inserer', 'supprimer', 'somme', 'figer'].includes(a)) Grille.focus();
+    if (!['couleur', 'fond', 'bordures', 'inserer', 'supprimer', 'somme', 'figer', 'mfc', 'graphique'].includes(a)) Grille.focus();
   });
   $('#outil-police').onchange = (e) => { styler({ police: e.target.value === 'Calibri' ? null : e.target.value }, 'police'); Grille.focus(); };
   $('#outil-taille').onchange = (e) => { styler({ taille: Number(e.target.value) === 11 ? null : Number(e.target.value) }, 'taille du texte'); Grille.focus(); };
@@ -1010,6 +1031,7 @@ const App = (() => {
   function raccourci(e) {
     const k = e.key.toLowerCase();
     if (e.altKey && !e.ctrlKey && (e.key === '=' || e.code === 'Equal')) { sommeAuto('SUM'); return true; }
+    if (e.altKey && !e.ctrlKey && e.key === 'F1') { insererGraphique(); return true; }
     if (e.shiftKey && e.key === 'F3') { toutesLesFonctions(); return true; }
     if (e.shiftKey && e.key === 'F11') { ajouterFeuille(); return true; }
     if (!e.ctrlKey || e.altKey) return false;
@@ -1193,7 +1215,9 @@ const App = (() => {
         ouvrirFiltre,
         toutesLesFonctions,
         zoomer: (d) => zoomer(d),
+        apresDessin: () => Graphiques.rafraichir(),
       });
+      Graphiques.init();
       demarrerClasseur(null);
       await appliquerTheme(config);
       majTitre();

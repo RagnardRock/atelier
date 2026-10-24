@@ -1,7 +1,8 @@
 // Lire et écrire les classeurs : Excel (xlsx, xls), OpenDocument / LibreOffice (ods), CSV et TSV.
 //
 // - xlsx : ExcelJS, qui lit et écrit aussi la mise en forme (gras, couleurs, bordures, formats de
-//   nombre, largeurs, fusions, volets figés, filtre, couleur des onglets, liens).
+//   nombre, largeurs, fusions, volets figés, filtre, couleur des onglets, liens), et la mise en forme
+//   conditionnelle. Les graphiques passent par xlsx-extras.js (ExcelJS ne les connaît pas).
 // - xls (ancien Excel) et ods : SheetJS, qui sait lire presque tous les formats de tableur. On en tire
 //   les valeurs, les formules, les formats de nombre, les fusions et les tailles (pas les couleurs).
 // - csv / tsv : lus et écrits ici, à la française par défaut (« ; » entre les colonnes, « 12,5 »).
@@ -14,7 +15,7 @@ const Fichiers = (() => {
   // Ce qu'on sait enregistrer, et ce que chaque format garde.
   const FORMATS = {
     xlsx: { nom: 'Classeur Excel (.xlsx)', garde: 'tout' },
-    ods: { nom: 'Classeur LibreOffice (.ods)', garde: 'les valeurs, les formules, les fusions (pas les couleurs)' },
+    ods: { nom: 'Classeur LibreOffice (.ods)', garde: 'les valeurs, les formules, les fusions (pas les couleurs, la mise en forme conditionnelle ni les graphiques)' },
     xls: { nom: 'Excel 97-2003 (.xls)', garde: 'les valeurs seulement (pas les formules ni les couleurs)' },
     csv: { nom: 'CSV (.csv)', garde: 'les valeurs de la feuille affichée seulement' },
     tsv: { nom: 'Texte tabulé (.tsv)', garde: 'les valeurs de la feuille affichée seulement' },
@@ -145,9 +146,122 @@ const Fichiers = (() => {
       let filtre = null;
       if (typeof ws.autoFilter === 'string') filtre = lirePlage(ws.autoFilter);
       else if (ws.autoFilter?.from) filtre = lirePlage(`${typeof ws.autoFilter.from === 'string' ? ws.autoFilter.from : adresse(ws.autoFilter.from.row - 1, ws.autoFilter.from.column - 1)}:${typeof ws.autoFilter.to === 'string' ? ws.autoFilter.to : adresse(ws.autoFilter.to.row - 1, ws.autoFilter.to.column - 1)}`);
-      feuilles.push({ nom: ws.name, cellules, styles, largeurs, hauteurs, fusions, figer, filtre, couleurOnglet: couleur(ws.properties.tabColor), masquee: ws.state === 'hidden' });
+      const mfc = (ws.conditionalFormattings || []).flatMap((cf) => {
+        const plages = String(cf.ref || '').split(/\s+/).map((x) => lirePlage(x)).filter(Boolean);
+        return plages.length ? (cf.rules || []).map((rule) => regleDepuisExcel(rule, plages)).filter(Boolean) : [];
+      });
+      feuilles.push({ nom: ws.name, cellules, styles, largeurs, hauteurs, fusions, figer, filtre, mfc, couleurOnglet: couleur(ws.properties.tabColor), masquee: ws.state === 'hidden' });
+    }
+    // Les graphiques, et les règles qu'ExcelJS ne lit pas : directement dans le fichier.
+    const extras = await XlsxExtras.lire(bytes);
+    for (const f of feuilles) {
+      const x = extras[f.nom];
+      if (!x) continue;
+      f.mfc = [...f.mfc, ...x.regles].sort((a, b) => (a.priorite ?? 99) - (b.priorite ?? 99));
+      const larg = new Map(f.largeurs), haut = new Map(f.hauteurs);
+      const L = (c) => larg.get(c) ?? Classeur.LARGEUR, H = (r) => haut.get(r) ?? Classeur.HAUTEUR;
+      const somme = (de, a, taille) => { let t = -de.d; for (let k = de.k; k < a.k && k < de.k + 2000; k++) t += taille(k); return t + a.d; };
+      f.graphiques = x.graphiques.map((g) => {
+        let ancre, largeur = Graphiques.LARGEUR, hauteur = Graphiques.HAUTEUR;
+        if (g.de) {
+          ancre = { r: g.de.r, c: g.de.c, dx: Math.round(g.de.dx), dy: Math.round(g.de.dy) };
+          if (g.a) {
+            largeur = Math.round(somme({ k: g.de.c, d: g.de.dx }, { k: g.a.c, d: g.a.dx }, L));
+            hauteur = Math.round(somme({ k: g.de.r, d: g.de.dy }, { k: g.a.r, d: g.a.dy }, H));
+          } else if (g.taille) { largeur = Math.round(g.taille.w); hauteur = Math.round(g.taille.h); }
+        } else {
+          ancre = { r: 0, c: 0, dx: Math.round(g.position?.x || 0), dy: Math.round(g.position?.y || 0) };
+          if (g.taille) { largeur = Math.round(g.taille.w); hauteur = Math.round(g.taille.h); }
+        }
+        return { type: g.type, titre: g.titre, legende: g.legende, empile: g.empile, series: g.series, donnees: g.donnees, ancre, largeur: Math.max(160, largeur), hauteur: Math.max(110, hauteur) };
+      });
     }
     return { feuilles };
+  }
+
+  // --- Mise en forme conditionnelle : Excel (ExcelJS) ↔ règles de Reikna (mfc.js) ---
+  const OPS_EXCEL = { greaterThan: 'sup', lessThan: 'inf', greaterThanOrEqual: 'supEgal', lessThanOrEqual: 'infEgal', equal: 'egal', notEqual: 'different', between: 'entre', notBetween: 'horsDe' };
+  const OPS_TEXTE_EXCEL = { containsText: 'contient', notContains: 'neContientPas', beginsWith: 'commencePar', endsWith: 'finitPar' };
+  const PERIODES_EXCEL = { today: 'aujourdhui', yesterday: 'hier', tomorrow: 'demain', last7Days: 'septJours', thisWeek: 'semaine', lastWeek: 'semaineDerniere', nextWeek: 'semaineProchaine', thisMonth: 'mois', lastMonth: 'moisDernier', nextMonth: 'moisProchain' };
+  const inverse = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+  const minuscule = (c) => (c ? c.toLowerCase() : c);
+  // Une borne de règle écrite par Excel : « 10 », « "abc" » ou une formule.
+  function borneDepuisExcel(f) {
+    if (f === undefined || f === null) return null;
+    const t = String(f).trim();
+    if (/^-?\d+(\.\d+)?(E[+-]?\d+)?$/i.test(t)) return Number(t);
+    const m = t.match(/^"((?:[^"]|"")*)"$/);
+    if (m) return m[1].replace(/""/g, '"');
+    return `=${SANS_PREFIXE(t)}`;
+  }
+  function borneVersExcel(x) {
+    if (typeof x === 'number') return String(x);
+    if (typeof x === 'string' && x.startsWith('=')) return avecPrefixes(x.slice(1));
+    return `"${String(x ?? '').replace(/"/g, '""')}"`;
+  }
+  function regleDepuisExcel(rule, plages) {
+    const st = rule.style || {};
+    const style = {};
+    const fond = couleur(st.fill?.bgColor) || couleur(st.fill?.fgColor);
+    if (fond) style.fond = minuscule(fond);
+    if (st.font?.color) { const c = couleur(st.font.color); if (c) style.couleur = minuscule(c); }
+    if (st.font?.bold) style.gras = true;
+    if (st.font?.italic) style.italique = true;
+    const base = { plages, style, priorite: rule.priority ?? 99, ...(rule.stopIfTrue ? { arreter: true } : {}) };
+    const f = rule.formulae || [];
+    switch (rule.type) {
+      case 'cellIs': return { ...base, type: 'valeur', op: OPS_EXCEL[rule.operator] || 'egal', v1: borneDepuisExcel(f[0]), v2: borneDepuisExcel(f[1]) };
+      case 'expression': return f[0] ? { ...base, type: 'formule', formule: SANS_PREFIXE(String(f[0])) } : null;
+      case 'containsText': {
+        const texte = rule.text ?? String(f[0] || '').match(/"((?:[^"]|"")*)"/)?.[1]?.replace(/""/g, '"') ?? '';
+        return { ...base, type: 'texte', op: OPS_TEXTE_EXCEL[rule.operator] || 'contient', texte };
+      }
+      case 'timePeriod': return { ...base, type: 'date', periode: PERIODES_EXCEL[rule.timePeriod] || 'aujourdhui' };
+      case 'top10': return { ...base, type: 'top', sens: rule.bottom ? 'bas' : 'haut', n: rule.rank || 10, pourcent: Boolean(rule.percent) };
+      case 'aboveAverage': return { ...base, type: 'moyenne', sens: rule.aboveAverage === false ? 'dessous' : 'dessus' };
+      case 'colorScale': {
+        const cs = (rule.color || []).map((c) => minuscule(couleur(c)) || '#ffffff');
+        return { plages, priorite: base.priorite, type: 'echelle', couleurs: cs.length >= 3 ? cs.slice(0, 3) : [cs[0] || '#fcfcff', null, cs[1] || '#63be7b'] };
+      }
+      case 'dataBar': return { plages, priorite: base.priorite, type: 'barres', couleur: minuscule(couleur(rule.color)) || '#638ec6' };
+      default: return null; // jeux d'icônes : pas encore
+    }
+  }
+  function regleVersExcel(regle, priority) {
+    const style = {};
+    const s = regle.style || {};
+    if (s.fond) style.fill = { type: 'pattern', pattern: 'solid', bgColor: versArgb(s.fond) };
+    const font = {};
+    if (s.couleur) font.color = versArgb(s.couleur);
+    if (s.gras) font.bold = true;
+    if (s.italique) font.italic = true;
+    if (Object.keys(font).length) style.font = font;
+    const base = { priority, ...(regle.arreter ? { stopIfTrue: true } : {}), style };
+    const coin = regle.plages[0];
+    const cel = adresse(coin.r1, coin.c1);
+    const abs = `$${lettreColonne(coin.c1)}$${coin.r1 + 1}:$${lettreColonne(coin.c2)}$${coin.r2 + 1}`;
+    switch (regle.type) {
+      case 'valeur': return { ...base, type: 'cellIs', operator: inverse(OPS_EXCEL)[regle.op] || 'equal', formulae: [borneVersExcel(regle.v1), ...(regle.op === 'entre' || regle.op === 'horsDe' ? [borneVersExcel(regle.v2)] : [])] };
+      case 'texte': return { ...base, type: 'containsText', operator: inverse(OPS_TEXTE_EXCEL)[regle.op] || 'containsText', text: regle.texte || '' };
+      case 'date': return { ...base, type: 'timePeriod', timePeriod: inverse(PERIODES_EXCEL)[regle.periode] || 'today' };
+      case 'top': return { ...base, type: 'top10', rank: regle.n || 10, percent: Boolean(regle.pourcent), bottom: regle.sens === 'bas' };
+      case 'moyenne': return { ...base, type: 'aboveAverage', aboveAverage: regle.sens !== 'dessous' };
+      case 'formule': return { ...base, type: 'expression', formulae: [avecPrefixes(String(regle.formule || 'FALSE()'))] };
+      // Ce qu'ExcelJS ne sait pas écrire tel quel : une formule qui fait la même chose.
+      case 'doublons': return { ...base, type: 'expression', formulae: [`COUNTIF(${abs},${cel})>1`] };
+      case 'uniques': return { ...base, type: 'expression', formulae: [`COUNTIF(${abs},${cel})=1`] };
+      case 'vides': return { ...base, type: 'expression', formulae: [`LEN(TRIM(${cel}))=0`] };
+      case 'nonVides': return { ...base, type: 'expression', formulae: [`LEN(TRIM(${cel}))>0`] };
+      case 'erreurs': return { ...base, type: 'expression', formulae: [`ISERROR(${cel})`] };
+      case 'echelle': {
+        const [a, m, b] = regle.couleurs;
+        return m
+          ? { priority, type: 'colorScale', cfvo: [{ type: 'min' }, { type: 'percentile', value: 50 }, { type: 'max' }], color: [versArgb(a), versArgb(m), versArgb(b)] }
+          : { priority, type: 'colorScale', cfvo: [{ type: 'min' }, { type: 'max' }], color: [versArgb(a), versArgb(b)] };
+      }
+      case 'barres': return { priority, type: 'dataBar', cfvo: [{ type: 'min' }, { type: 'max' }], color: versArgb(regle.couleur || '#638ec6'), gradient: true };
+      default: return null;
+    }
   }
 
   function styleDe(cell) {
@@ -352,9 +466,25 @@ const Fichiers = (() => {
         try { ws.mergeCells(p.r1 + 1, p.c1 + 1, p.r2 + 1, p.c2 + 1); } catch { /* fusions qui se chevauchent : on garde la première */ }
       }
       if (f.filtre) ws.autoFilter = adressePlage(f.filtre);
+      (f.mfc || []).forEach((regle, i) => {
+        const rule = regleVersExcel(regle, i + 1);
+        if (rule) ws.addConditionalFormatting({ ref: regle.plages.map(adressePlage).join(' '), rules: [rule] });
+      });
     }
     if (!feuilles.length) wb.addWorksheet('Feuil1');
-    return wb.xlsx.writeBuffer();
+    const buffer = await wb.xlsx.writeBuffer();
+    // Les graphiques : ajoutés au fichier d'ExcelJS.
+    const parFeuille = feuilles.map((f, index) => {
+      const larg = new Map(f.largeurs), haut = new Map(f.hauteurs);
+      const graphiques = (f.graphiques || []).map((g) => {
+        const id = Classeur.idFeuille(g.donnees.nomFeuille);
+        if (id === undefined) return null;
+        const d = Graphiques.lire({ ...g, donnees: { feuille: id, plage: g.donnees.plage } });
+        return d.erreur ? null : { g, d, nomFeuilleDonnees: g.donnees.nomFeuille };
+      }).filter(Boolean);
+      return { index, graphiques, largeur: (c) => larg.get(c) ?? Classeur.LARGEUR, hauteur: (r) => haut.get(r) ?? Classeur.HAUTEUR };
+    });
+    return XlsxExtras.ecrireGraphiques(buffer, parFeuille);
   }
 
   function styleXlsx(s) {

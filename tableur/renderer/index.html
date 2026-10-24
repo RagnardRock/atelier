@@ -91,6 +91,10 @@
       <button class="outil" data-action="filtre" title="Filtrer (Ctrl+Maj+L)"><i class="codicon codicon-filter"></i></button>
       <button class="outil" data-action="figer" title="Figer les volets"><i class="codicon codicon-pinned"></i><i class="codicon codicon-chevron-down mini"></i></button>
     </div>
+    <div class="groupe">
+      <button class="outil" data-action="mfc" title="Mise en forme conditionnelle : couleurs selon la valeur, barres, nuances"><i class="codicon codicon-color-mode"></i><i class="codicon codicon-chevron-down mini"></i></button>
+      <button class="outil" data-action="graphique" title="Insérer un graphique (Alt+F1)"><i class="codicon codicon-graph"></i></button>
+    </div>
   </div>
 
   <!-- Barre de formule : la case (nom ou adresse), fx, et le contenu de la cellule -->
@@ -128,15 +132,21 @@
   <script src="../node_modules/hyperformula/dist/languages/frFR.js"></script>
   <script src="../node_modules/exceljs/dist/exceljs.min.js"></script>
   <script src="../node_modules/@e965/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="../node_modules/jszip/dist/jszip.min.js"></script>
+  <script src="../node_modules/chart.js/dist/chart.umd.min.js"></script>
   <script src="base.js"></script>
   <script src="notify.js"></script>
   <script src="dialogs.js"></script>
   <script src="fonctions.js"></script>
   <script src="formules.js"></script>
+  <script src="mfc.js"></script>
   <script src="classeur.js"></script>
+  <script src="xlsx-extras.js"></script>
   <script src="fichiers.js"></script>
   <script src="grille.js"></script>
   <script src="fenetres.js"></script>
+  <script src="regles.js"></script>
+  <script src="graphiques.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
   <!-- Panneau Claude, commun à Skald, Tafl, Brokk et Reikna (../commun/LISEZMOI.md) -->

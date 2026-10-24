@@ -109,6 +109,8 @@ const CLAUDE_CONSIGNES = [
   '  ecrire, mettre_en_forme, trier…), plutôt que de lire ou réécrire le fichier .xlsx toi-même.',
   '- Les formules peuvent s\'écrire en anglais (=SUM(A1:A3, 2.5)) ou en français (=SOMME(A1:A3; 2,5)) :',
   '  Reikna les comprend toutes les deux et les montre à Ragna dans sa langue.',
+  '- Pour un graphique : action graphique (puis capture pour vérifier). Pour colorer selon la valeur :',
+  '  mise_en_forme_conditionnelle (plutôt que des couleurs fixes, qui ne suivent pas les changements).',
 ].join('\n');
 claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Reikna', role: 'le tableur de Ragna (comme Excel : xlsx, xls, ods, csv)', consignes: CLAUDE_CONSIGNES } });
 
