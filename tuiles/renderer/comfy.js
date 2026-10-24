@@ -298,12 +298,15 @@ const Comfy = (() => {
     const checkpoints = t.fichiers?.checkpoints || [];
     const loras = t.fichiers?.loras || [];
     const resultats = el('div', { className: 'comfy-resultats' }, [el('p', { className: 'modal-info', textContent: 'Décris ce que tu veux, choisis un style, puis « Générer ». Les variantes s\'affichent ici : clique sur celle que tu préfères, puis « Ajouter au jeu ».' })]);
-    let brutes = [], traitees = [], choisie = 0, form = null, enCours = false;
+    let brutes = [], traitees = [], grille = '', choisie = 0, form = null, enCours = false;
     const phrase = el('p', { className: 'modal-info comfy-phrase' });
 
     function afficher(v) {
       if (!brutes.length) return;
-      traitees = brutes.map((b) => traiter(b, v).img);
+      const r = brutes.map((b) => traiter(b, v));
+      traitees = r.map((x) => x.img);
+      // La grille de pixels mesurée (pixel art) : pour voir si la détection a marché.
+      grille = r[0]?.infos.grille ? `grille ${r[0].infos.grille.map((p) => String(p).replace('.', ',')).join(' × ')} px` : '';
       resultats.replaceChildren();
       traitees.forEach((img, n) => {
         // Un sol peut être montré répété 2 × 2 (case « Aperçu répété ») : on voit s'il raccorde.
@@ -371,7 +374,7 @@ const Comfy = (() => {
         afficher(f.values());
         const ok = f.card.querySelector('footer button[type=submit]');
         if (ok) ok.disabled = false;
-        etat(`${brutes.length} variante(s) en ${Math.round((Date.now() - debut) / 1000)} s · ${r.recette.modele}${r.recette.lora ? ` + ${r.recette.lora}` : ''} · graine ${r.recette.graine}`);
+        etat(`${brutes.length} variante(s) en ${Math.round((Date.now() - debut) / 1000)} s · ${r.recette.modele}${r.recette.lora ? ` + ${r.recette.lora}` : ''} · graine ${r.recette.graine}${grille ? ` · ${grille}` : ''}`);
         await window.tafl.writeConfig({ comfyDerniers: { ...v, description: v.description } }).then((c) => { App.config = c; });
       } catch (err) {
         etat('');
