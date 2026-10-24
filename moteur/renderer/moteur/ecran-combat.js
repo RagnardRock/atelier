@@ -179,6 +179,32 @@ const EcranCombat = (() => {
       }
     }
 
+    // L'évolution (Saga 0.7) : la créature clignote de blanc de plus en plus vite, puis devient
+    // `image`. Retour (B, Échap, X, clic droit) pendant l'animation l'arrête. Rend true si elle a évolué.
+    async function evolution(cote, image) {
+      const c = cotes[cote];
+      const cible = c.sprite.hidden ? c.vide : c.sprite;
+      complet = 'Retour (B, Échap) : l\'arrêter';
+      ecrit = complet.length;
+      texte.textContent = complet;
+      suite.hidden = true;
+      const anim = cible.animate([
+        { filter: 'brightness(1)' }, { filter: 'brightness(8)', offset: 0.12 }, { filter: 'brightness(1)', offset: 0.24 },
+        { filter: 'brightness(8)', offset: 0.36 }, { filter: 'brightness(1)', offset: 0.46 }, { filter: 'brightness(8)', offset: 0.55 },
+        { filter: 'brightness(1)', offset: 0.62 }, { filter: 'brightness(8)', offset: 0.68 }, { filter: 'brightness(8)' },
+      ], { duration: 3200, easing: 'ease-in', fill: 'forwards' });
+      const arretee = await new Promise((resoudre) => {
+        const a = { type: 'evolution', resoudre: (v) => { if (attente === a) attente = null; resoudre(v); } };
+        attente = a;
+        anim.finished.then(() => a.resoudre(false), () => a.resoudre(true));
+      });
+      if (arretee) { anim.cancel(); return false; }
+      if (image) { c.sprite.src = image; c.sprite.hidden = false; c.vide.hidden = true; }
+      anim.cancel();
+      await cible.animate([{ filter: 'brightness(8)' }, { filter: 'brightness(1)' }], { duration: 500, easing: 'ease-out' }).finished;
+      return true;
+    }
+
     // --- Les messages ---
     function message(t, { qui = '' } = {}) {
       menu.hidden = true;
@@ -285,6 +311,7 @@ const EcranCombat = (() => {
     function touche(t) {
       const a = attente;
       if (!a) return;
+      if (a.type === 'evolution') { if (t === 'retour') a.resoudre(true); return; }
       if (a.type === 'texte') {
         if (t !== 'action' && t !== 'retour') return;
         if (ecrit < complet.length) { ecrit = complet.length; texte.textContent = complet; suite.hidden = false; return; }
@@ -343,7 +370,7 @@ const EcranCombat = (() => {
     }
 
     return {
-      ouvrir, fermer, creature, pv, xp, animer, message, avancer, touche,
+      ouvrir, fermer, creature, pv, xp, animer, evolution, message, avancer, touche,
       menu: menuPrincipal, attaques, liste: choisir,
       get ouvert() { return !racine.hidden; },
     };

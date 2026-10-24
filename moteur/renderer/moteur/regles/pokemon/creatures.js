@@ -4,7 +4,7 @@
 // Une créature dans la partie (partie.equipe, partie.boite, et l'adversaire d'un combat) :
 //   { creature, surnom, niveau, xp, pv, statut, sommeil, nature, talent, sexe, chromatique,
 //     ivs: { pv, attaque, defense, att_spe, def_spe, vitesse }, evs: { … },
-//     attaques: [{ id, pp, ppMax }] }
+//     attaques: [{ id, pp, ppMax }], amitie (0 à 255, Saga 0.7) }
 // `creature` est l'id dans creatures.json ; le reste (nom, types, statistiques de base, sprites) se lit
 // dans les données du jeu, pour qu'un changement fait dans Tafl se voie aussitôt dans la partie.
 //
@@ -90,6 +90,30 @@ const Creatures = (() => {
     return { id, pp: Number(a?.pp) || 10, ppMax: Number(a?.pp) || 10 };
   };
 
+  // --- L'amitié (Saga 0.7) : de 0 à 255, elle part du « bonheur » de l'espèce (70 d'habitude). ---
+  const amitieDepart = (e) => Math.max(0, Math.min(255, Number.isFinite(Number(e?.bonheur)) && e?.bonheur !== '' ? Number(e.bonheur) : 70));
+  const seuilAmitie = (jeu) => Math.max(1, Math.min(255, Number(reglages(jeu).seuil_amitie) || 220));
+  // Changer l'amitié : comme dans les jeux officiels, elle monte moins vite quand elle est déjà haute.
+  // gains : [sous 100, de 100 à 199, 200 et plus] ; un nombre seul vaut pour les trois.
+  function changerAmitie(c, gains) {
+    const g = Array.isArray(gains) ? gains : [gains, gains, gains];
+    const a = Number.isFinite(c.amitie) ? c.amitie : 70;
+    const d = a < 100 ? g[0] : a < 200 ? g[1] : g[2];
+    c.amitie = Math.max(0, Math.min(255, a + (Number(d) || 0)));
+    return c.amitie - a;
+  }
+  // Ce que dit le jeu de l'amitié d'une créature (son résumé), accordé à son genre : « Elle » pour une
+  // femelle, « Il » pour un mâle ou une créature sans genre.
+  function motAmitie(a, sexe = '') {
+    const f = sexe === 'f', il = f ? 'Elle' : 'Il';
+    if (a >= 255) return `${il} t'adore !`;
+    if (a >= 220) return `${il} t'aime beaucoup.`;
+    if (a >= 150) return `${il} t'apprécie.`;
+    if (a >= 70) return `${il} commence à te faire confiance.`;
+    if (a >= 1) return `${il} reste méfiant${f ? 'e' : ''}.`;
+    return `${il} ne t'aime pas du tout…`;
+  }
+
   // Une nouvelle créature. o : { nature, attaques: [ids], chromatique, sexe } (facultatif).
   function creer(jeu, id, niveau, o = {}) {
     const e = trouver(jeu, 'creatures', id);
@@ -111,6 +135,7 @@ const Creatures = (() => {
       chromatique: o.chromatique ?? (chance > 0 && hasard(chance) === 0),
       ivs: Object.fromEntries(STATS.map((s) => [s, hasard(32)])),
       evs: Object.fromEntries(STATS.map((s) => [s, 0])),
+      amitie: amitieDepart(e),
       attaques: (o.attaques?.length ? o.attaques.filter((a) => trouver(jeu, 'attaques', a)).slice(0, 4) : attaquesAuNiveau(jeu, e, niveau)).map((a) => attaque(jeu, a)),
     };
     c.pv = pvMax(jeu, c);
@@ -122,6 +147,7 @@ const Creatures = (() => {
   function completer(jeu, c) {
     if (!c || typeof c !== 'object' || !c.creature) return null;
     if (c.ivs && Array.isArray(c.attaques)) {
+      if (!Number.isFinite(c.amitie)) c.amitie = amitieDepart(espece(jeu, c)); // une partie d'avant Saga 0.7
       c.pv = Math.max(0, Math.min(pvMax(jeu, c), Number(c.pv) || 0));
       return c;
     }
@@ -145,9 +171,60 @@ const Creatures = (() => {
     return Math.max(1, Math.min(100, Number(ok?.niveau) || 100));
   }
 
+  // La Pierre Stase (Saga 0.7) : tenue, elle empêche d'évoluer (effet « stase » dans Tafl, ou l'objet
+  // officiel Everstone importé).
+  function stase(jeu, c) {
+    const o = c.objet ? trouver(jeu, 'objets', c.objet) : null;
+    return Boolean(o && (o.effet?.type === 'stase' || o.officiel === 'everstone'));
+  }
+
+  // L'évolution qu'une créature peut faire tout de suite, sans objet ni échange : au niveau, ou quand
+  // sa quête est finie (Saga 0.7). null s'il n'y en a pas (ou si elle tient une Pierre Stase).
+  function evolutionPrete(jeu, partie, c) {
+    if (stase(jeu, c)) return null;
+    return (espece(jeu, c)?.evolutions || []).find((v) => trouver(jeu, 'creatures', v.vers) && (
+      (v.mode === 'niveau' && Number(v.niveau) > 0 && Number(v.niveau) <= c.niveau)
+      || (v.mode === 'quete' && v.quete && partie?.quetes?.[v.quete]?.etat === 'finie')
+      || (v.mode === 'amitie' && (c.amitie || 0) >= seuilAmitie(jeu) && (!(Number(v.niveau) > 0) || c.niveau >= Number(v.niveau))))) || null;
+  }
+
+  // La forme d'une espèce à un niveau (Saga 0.7) : un Bulbizarre de dresseur monté au niveau 40 par
+  // l'ajustement devient Florizarre. On suit seulement les évolutions au niveau.
+  function formeAuNiveau(jeu, id, niveau) {
+    const vus = new Set([id]);
+    for (;;) {
+      const e = trouver(jeu, 'creatures', id);
+      const v = (e?.evolutions || []).find((x) => x.mode === 'niveau' && Number(x.niveau) > 0 && Number(x.niveau) <= niveau && trouver(jeu, 'creatures', x.vers) && !vus.has(x.vers));
+      if (!v) return id;
+      id = v.vers;
+      vus.add(id);
+    }
+  }
+
+  // Le niveau qui sert de référence aux adversaires qui s'ajustent (Saga 0.7) : « equipe » (le meilleur
+  // niveau de l'équipe), « badges » (le plafond des badges), sinon 0 (pas d'ajustement).
+  function reference(jeu, partie, ajustement) {
+    if (ajustement === 'equipe') return Math.max(0, ...partie.equipe.map((c) => c.niveau));
+    if (ajustement === 'badges') return plafond(jeu, partie);
+    return 0;
+  }
+
+  // Une créature sauvage (Saga 0.7) : niveau tiré entre min et max dans sa zone. Si les sauvages
+  // s'ajustent (Tafl › Réglages), toute la fourchette monte pour que son haut vaille la référence plus
+  // l'écart, sans jamais descendre sous ce que la zone dit ; l'espèce prend alors la forme de ce niveau.
+  function sauvage(jeu, partie, id, niveau, { min = niveau, max = niveau } = {}) {
+    const r = reglages(jeu);
+    const ref = reference(jeu, partie, r.ajustement_sauvages);
+    const decalage = ref ? Math.max(0, ref + (Number(r.ecart_sauvages) || 0) - max) : 0;
+    const n = Math.max(1, Math.min(100, Math.max(min, niveau) + decalage));
+    return creer(jeu, decalage && r.evolution_sauvages ? formeAuNiveau(jeu, id, n) : id, n);
+  }
+
   // Gagner de l'expérience. Rend la liste de ce qui arrive, dans l'ordre, pour l'écran de combat :
-  // [{ type: 'niveau', niveau, avant, apres }, { type: 'apprend', attaque }, { type: 'oublier', attaque }, { type: 'evolue', vers }]
-  // (« oublier » : elle connaît déjà 4 attaques, le joueur choisit ; voir combat.js).
+  // [{ type: 'niveau', niveau, avant, apres }, { type: 'apprend', attaque }, { type: 'oublier', attaque },
+  //  { type: 'evolue', vers }, { type: 'plafond', niveau }]
+  // (« oublier » : elle connaît déjà 4 attaques, le joueur choisit ; voir combat.js. « plafond » : elle
+  // vient d'atteindre le niveau maximum des badges, Saga 0.7).
   function gagnerXp(jeu, partie, c, xp) {
     const e = espece(jeu, c);
     const max = plafond(jeu, partie);
@@ -157,6 +234,7 @@ const Creatures = (() => {
     while (c.niveau < max && c.xp >= xpPour(espece(jeu, c)?.croissance, c.niveau + 1)) {
       const avant = stats(jeu, c);
       c.niveau++;
+      changerAmitie(c, [5, 3, 2]); // monter de niveau rapproche (Saga 0.7)
       const apres = stats(jeu, c);
       // Les PV gagnés s'ajoutent aux PV actuels (une créature blessée le reste).
       if (c.pv > 0) c.pv = Math.min(apres.pv, c.pv + apres.pv - avant.pv);
@@ -166,11 +244,12 @@ const Creatures = (() => {
         evenements.push({ type: c.attaques.length < 4 ? 'apprend' : 'oublier', attaque: a.attaque });
         if (c.attaques.length < 4) c.attaques.push(attaque(jeu, a.attaque));
       }
-      // L'évolution au niveau : tout de suite, même en plein combat.
-      const evo = (espece(jeu, c)?.evolutions || []).find((v) => v.mode === 'niveau' && Number(v.niveau) <= c.niveau && trouver(jeu, 'creatures', v.vers));
+      // L'évolution au niveau (ou de quête finie) : tout de suite, même en plein combat.
+      const evo = evolutionPrete(jeu, partie, c);
       if (evo && !evenements.some((x) => x.type === 'evolue')) evenements.push({ type: 'evolue', vers: evo.vers });
     }
     if (c.niveau >= max) c.xp = Math.min(c.xp, xpPour(e?.croissance, max));
+    if (c.niveau >= max && max < 100 && evenements.length) evenements.push({ type: 'plafond', niveau: max });
     return evenements;
   }
 
@@ -195,5 +274,5 @@ const Creatures = (() => {
     }
   }
 
-  return { STATS, NOMS_STATS, NATURES, trouver, espece, nom, stats, pvMax, xpPour, creer, completer, soigner, plafond, gagnerXp, evoluer, gagnerEv, attaque, attaquesAuNiveau };
+  return { STATS, NOMS_STATS, NATURES, trouver, espece, nom, stats, pvMax, xpPour, creer, completer, soigner, plafond, stase, changerAmitie, motAmitie, seuilAmitie, evolutionPrete, formeAuNiveau, reference, sauvage, gagnerXp, evoluer, gagnerEv, attaque, attaquesAuNiveau };
 })();

@@ -16,7 +16,7 @@ const Monde = (() => {
       interrupteurs: {},   // id → true (les absents sont éteints)
       locaux: {},          // "carte/ev-1" → true
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
-      compteurs: { captures: 0, dresseurs_battus: 0, evolutions: 0, badges: 0, pas: 0 },
+      compteurs: { captures: 0, dresseurs_battus: 0, sauvages_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
       equipe: [],          // les créatures du joueur (voir creatures.js), 6 au plus
       boites: [],          // le PC : celles qui ne tiennent plus dans l'équipe (voir collection.js)
@@ -30,6 +30,17 @@ const Monde = (() => {
     };
   }
 
+  // Un compteur du joueur (FORMAT.md › Conditions › compteur). Ceux de Saga 0.7 se lisent sur la partie :
+  // les espèces vues et attrapées (le Pokédex), les quêtes finies.
+  function compteur(partie, nom) {
+    switch (nom) {
+      case 'especes_vues': return Object.keys(partie.dex?.vus || {}).length;
+      case 'especes_prises': return Object.keys(partie.dex?.pris || {}).length;
+      case 'quetes_finies': return Object.values(partie.quetes || {}).filter((q) => q?.etat === 'finie').length;
+      default: return Number(partie.compteurs?.[nom]) || 0;
+    }
+  }
+
   // Une condition (FORMAT.md › Conditions), pour l'événement ev de la carte.
   function vraie(cond, partie, carte, ev) {
     if (!cond || typeof cond !== 'object') return true;
@@ -37,7 +48,7 @@ const Monde = (() => {
       case 'interrupteur': return Boolean(partie.interrupteurs[cond.id]) === Boolean(cond.valeur);
       case 'local': return Boolean(partie.locaux[`${carte.id}/${ev?.id}`]) === Boolean(cond.valeur);
       case 'objet': return (partie.sac[cond.objet] || 0) >= (Number(cond.min) || 1);
-      case 'compteur': return (partie.compteurs[cond.compteur] || 0) >= (Number(cond.min) || 0);
+      case 'compteur': return compteur(partie, cond.compteur) >= (Number(cond.min) || 0);
       case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
       case 'badge': return (partie.badges || []).includes(cond.badge);
       case 'quete': {
@@ -50,6 +61,32 @@ const Monde = (() => {
     }
   }
 
+  // Une condition dite au joueur (Saga 0.7) : le déblocage d'un article de boutique montré grisé.
+  // Un interrupteur ne se raconte pas (ce serait dévoiler l'histoire).
+  const NOMS_COMPTEURS = {
+    captures: 'captures', dresseurs_battus: 'dresseurs battus', sauvages_battus: 'créatures sauvages battues', evolutions: 'évolutions',
+    badges: 'badges', pas: 'pas', especes_vues: 'espèces vues', especes_prises: 'espèces attrapées', quetes_finies: 'quêtes finies',
+  };
+  function decrire(jeu, cond, partie) {
+    const liste = (sorte) => jeu.donnees[sorte]?.[sorte] || [];
+    const nom = (sorte, id) => liste(sorte).find((x) => x.id === id)?.nom || id;
+    switch (cond?.type) {
+      case 'compteur': {
+        const min = Number(cond.min) || 0;
+        return `Après ${min} ${NOMS_COMPTEURS[cond.compteur] || cond.compteur} (${Math.min(min, compteur(partie, cond.compteur))}/${min})`;
+      }
+      case 'badge': return `Avec le ${(jeu.donnees.reglages?.reglages?.badges || []).find((b) => b.id === cond.badge)?.nom || cond.badge}`;
+      case 'objet': return `Avec ${nom('objets', cond.objet)}`;
+      case 'argent': return `Avec ${Number(cond.min) || 0} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
+      case 'quete': {
+        const q = liste('quetes').find((x) => x.id === cond.quete);
+        const titre = q?.titre || cond.quete;
+        return cond.etat === 'finie' ? `Après la quête « ${titre} »` : cond.etat === 'en_cours' ? `Pendant la quête « ${titre} »` : 'Bientôt';
+      }
+      default: return 'Plus tard dans l\'aventure';
+    }
+  }
+
   // La page active : la DERNIÈRE dont toutes les conditions sont vraies, ou null.
   function pageActive(ev, partie, carte) {
     for (let i = ev.pages.length - 1; i >= 0; i--) {
@@ -59,12 +96,22 @@ const Monde = (() => {
     return null;
   }
 
+  // Les obstacles (Saga 0.7, FORMAT.md › Obstacles) : ce qui remplace les CS sur la carte. Un événement
+  // de type « obstacle » a obstacle: { sorte: 'couper' | 'briser' | 'pousser', objet, message, repousse }.
+  // Couper et briser : avec l'objet, le joueur le fait disparaître (son interrupteur « déjà fait »).
+  // Pousser : avec l'objet, le joueur le pousse d'une case en marchant contre lui.
+  const SORTES_OBSTACLE = ['couper', 'briser', 'pousser'];
+  const obstacle = (ev) => (ev?.type === 'obstacle' && ev.obstacle && SORTES_OBSTACLE.includes(ev.obstacle.sorte) ? ev.obstacle : null);
+  const obstacleFranchi = (ev, partie, carte) => obstacle(ev)?.sorte !== 'pousser' && Boolean(obstacle(ev)) && Boolean(partie.locaux[`${carte.id}/${ev.id}`]);
+
   // Les événements présents sur la carte, avec leur apparence. À refaire après chaque script
   // et à chaque changement de carte. avant : la liste précédente de la même carte, pour garder
   // la place et la direction de ceux qui se sont déplacés (un PNJ qui marche au hasard).
   function evenementsPresents(jeu, carte, partie, avant = []) {
     const out = [];
     for (const ev of carte.evenements) {
+      // Un obstacle franchi (Saga 0.7 : arbre coupé, rocher brisé) n'est plus là.
+      if (obstacleFranchi(ev, partie, carte)) continue;
       const page = pageActive(ev, partie, carte);
       if (!page || page.cache) continue;
       const perso = jeu.personnages.get(ev.apparence?.personnage || '') || null;
@@ -83,7 +130,7 @@ const Monde = (() => {
         attente: 1 + Math.random() * 2,
         tuile: tuile >= 0 ? tuile : -1,
         // Sans tuile mais avec un personnage : son sprite, ou le petit bonhomme à sa couleur.
-        visible: tuile >= 0 || Boolean(perso),
+        visible: tuile >= 0 || Boolean(perso) || Boolean(obstacle(ev)),
         bloque: !ev.traversable,
       });
     }
@@ -130,5 +177,5 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { nouvellePartie, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { nouvellePartie, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

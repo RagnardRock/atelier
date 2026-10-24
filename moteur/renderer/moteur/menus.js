@@ -37,7 +37,8 @@ const Menus = (() => {
       el('span', { textContent: titre }), entete ? el('span', { className: 'menu-entete', textContent: entete }) : null);
     const aide = (texte) => el('div', { className: 'combat-liste-aide', textContent: texte });
 
-    // --- Une liste : items [{ texte, detail, image, pv (0 à 1), desactive }] ---
+    // --- Une liste : items [{ texte, detail, image, pv (0 à 1), desactive, etiquette }] ---
+    // etiquette (Saga 0.7) : un petit mot à côté du texte, à la couleur du jeu (« Nouveau ! »).
     // depart : la ligne choisie au début ; saut : gauche/droite avancent de tant de lignes (le Pokédex).
     function liste({ titre, items, annulable = true, entete = '', note = '', depart = -1, saut = 0, large = false }) {
       return new Promise((resoudre) => {
@@ -46,7 +47,7 @@ const Menus = (() => {
         const lignes = items.map((it, i) => {
           const l = el('button', { className: `combat-liste-ligne${it.desactive ? ' desactive' : ''}` },
             it.image ? el('img', { src: it.image, alt: '' }) : el('span', { className: 'combat-liste-img' }),
-            el('span', { className: 'combat-liste-texte', textContent: it.texte }),
+            el('span', { className: 'combat-liste-texte' }, it.texte, it.etiquette ? el('span', { className: 'menu-etiquette', textContent: it.etiquette }) : null),
             it.pv != null ? el('span', { className: 'combat-liste-pv' }, el('span', { style: `width: ${Math.round(it.pv * 100)}%`, className: `niveau-${it.pv > 0.5 ? 'haut' : it.pv > 0.2 ? 'moyen' : 'bas'}` })) : el('span'),
             el('span', { className: 'combat-liste-detail', textContent: it.detail || '' }));
           l.onclick = () => { if (attente === a && !it.desactive) { a.i = i; valider(); } };

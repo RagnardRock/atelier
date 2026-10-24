@@ -132,6 +132,8 @@ const Moteur = (() => {
       }
       const change = nouvelle !== carte;
       carte = nouvelle;
+      // Un arbre qui « repousse » (Saga 0.7) est de nouveau là quand le joueur revient sur la carte.
+      if (change) for (const ev of carte.evenements) if (Monde.obstacle(ev)?.repousse) delete partie.locaux[`${carte.id}/${ev.id}`];
       joueur = {
         x: Math.min(carte.largeur - 1, Math.max(0, Number(x) || 0)),
         y: Math.min(carte.hauteur - 1, Math.max(0, Number(y) || 0)),
@@ -216,7 +218,8 @@ const Moteur = (() => {
         // Se cogner contre un événement « toucher » qui bloque (un PNJ qui arrête le joueur) le lance.
         const [dx, dy] = DIRECTIONS[dir];
         const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy);
-        if (p && p.bloque && p.ev.declenchement === 'toucher' && joueur.pietine === 0) lancer(p);
+        if (p && p.bloque && joueur.pietine === 0 && Monde.obstacle(p.ev)?.sorte === 'pousser') pousser(p, dir);
+        else if (p && p.bloque && p.ev.declenchement === 'toucher' && joueur.pietine === 0) lancer(p);
         return false;
       }
       joueur.pietine = 0;
@@ -234,6 +237,7 @@ const Moteur = (() => {
       joueur.y = m.vers.y;
       joueur.mouvement = null;
       partie.compteurs.pas++;
+      Regles.marcher(jeu, partie); // Saga 0.7 : l'amitié qui monte en marchant (pack Pokémon)
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       // Un événement « toucher » sous les pieds (une case invisible qui lance une scène).
       const p = Monde.presentEn(presents, joueur.x, joueur.y);
@@ -273,7 +277,8 @@ const Moteur = (() => {
       let tirage = Math.random() * total;
       const r = possibles.find((q) => (tirage -= Math.max(0, Number(q.chance) || 0)) < 0) || possibles[0];
       const min = Number(r.niveau_min) || 2, max = Math.max(min, Number(r.niveau_max) || min);
-      const sauvage = Regles.creer(jeu, r.creature, min + Math.floor(Math.random() * (max - min + 1)));
+      // Saga 0.7 : le pack de règles peut faire suivre la progression du joueur (Tafl › Réglages).
+      const sauvage = Regles.sauvage(jeu, partie, r.creature, min + Math.floor(Math.random() * (max - min + 1)), { min, max });
       (async () => {
         enScript = true;
         await combattre({ sauvage });
@@ -300,6 +305,7 @@ const Moteur = (() => {
       enCombat = false;
       entrees.oublier();
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
+      if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
       if (issue === 'defaite') {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
         const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
@@ -329,6 +335,7 @@ const Moteur = (() => {
         actionDemandee = false;
         const [dx, dy] = DIRECTIONS[joueur.dir];
         const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy) || Monde.presentEn(presents, joueur.x, joueur.y);
+        if (p && Monde.obstacle(p.ev)) { franchir(p); return; }
         if (p && p.ev.declenchement === 'parler') { lancer(p); return; }
       }
       if (!dir) { joueur.attente = 0; return; }
@@ -362,6 +369,58 @@ const Moteur = (() => {
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
       enScript = false;
       entrees.oublier();
+    }
+
+    // --- Les obstacles (Saga 0.7) : les objets qui remplacent les CS ---
+    const nomObjet = (id) => (jeu.donnees.objets?.objets || []).find((o) => o.id === id)?.nom || id;
+    // Action devant un obstacle : couper l'arbre, briser le rocher (avec l'objet, après une question),
+    // ou dire comment pousser le rocher. Après le passage, le script de sa page se joue (un objet caché…).
+    async function franchir(p) {
+      if (enScript) return;
+      const o = Monde.obstacle(p.ev);
+      const a = (o.objet && (partie.sac[o.objet] || 0) > 0);
+      const nom = nomObjet(o.objet);
+      const dire = (t) => dialogue.dire({}, t);
+      enScript = true;
+      entrees.oublier();
+      try {
+        const defaut = {
+          couper: 'Ce petit arbre a l\'air fragile.', briser: 'Ce rocher est fissuré de partout.', pousser: 'Un gros rocher, bien lourd.',
+        }[o.sorte];
+        await dire(o.message || defaut);
+        if (!o.objet) { /* rien à faire de plus : un obstacle sans objet ne s'ouvre pas */ }
+        else if (!a) await dire(o.sorte === 'pousser' ? `Avec ${nom}, tu pourrais le pousser.` : `Avec ${nom}, tu pourrais ${o.sorte === 'couper' ? 'le couper' : 'le briser'}.`);
+        else if (o.sorte === 'pousser') await dire(`Grâce à ${nom}, tu peux le pousser : marche contre lui.`);
+        else if (await dialogue.choisir([`Utiliser ${nom}`, 'Laisser']) === 0) {
+          await dire(o.sorte === 'couper' ? `Tu utilises ${nom} : l'arbre est coupé !` : `Tu utilises ${nom} : le rocher vole en éclats !`);
+          partie.locaux[`${carte.id}/${p.ev.id}`] = true;
+          dialogue.fermer();
+          if (p.page?.commandes?.length) await scripts.executer(p.page.commandes, p.ev);
+        }
+      } catch (err) {
+        rappels.message?.(`Erreur sur l'obstacle « ${p.ev.nom || p.ev.id} » : ${err.message}`);
+      }
+      dialogue.fermer();
+      Collection.noterTout(partie);
+      presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      enScript = false;
+      entrees.oublier();
+    }
+    // Pousser un rocher d'une case (le joueur marche contre lui en ayant l'objet). Il ne va pas sur une
+    // case bloquée, un rebord, un téléporteur, ni sur quelqu'un. S'il s'arrête sur un déclencheur
+    // (« toucher », traversable), celui-ci se lance : un interrupteur au sol pour une énigme.
+    function pousser(p, dir) {
+      const o = Monde.obstacle(p.ev);
+      if (p.mouvement || !o.objet || !((partie.sac[o.objet] || 0) > 0)) return;
+      const autres = presents.filter((q) => q !== p);
+      const d = Monde.destination(carte, partie, autres, p.x, p.y, dir, [{ x: joueur.x, y: joueur.y }]);
+      if (!d || d.saut || Monde.code(carte, d.x, d.y) === Jeu.PASSAGE.bloque || Monde.teleporteur(carte, d.x, d.y)) return;
+      const t = jeu.taille;
+      p.mouvement = { de: { x: p.x * t, y: p.y * t }, t: 0, duree: DUREE_PAS * 1.6 };
+      p.x = d.x;
+      p.y = d.y;
+      const sous = autres.find((q) => q.x === d.x && q.y === d.y && !q.bloque && q.ev.declenchement === 'toucher');
+      if (sous) setTimeout(() => { if (jeu && presents.includes(sous)) lancer(sous); }, DUREE_PAS * 1600);
     }
 
     // Les événements « auto » de la carte, l'un après l'autre (une scène d'arrivée).
@@ -460,6 +519,21 @@ const Moteur = (() => {
       else Sprites.dessiner(ctx, perso?.couleur || couleur, direction, pas ? (pas % 2 ? 1 : 2) : 0, x, hy, t);
     }
 
+    function dessinerObstacle(sorte, x, y) {
+      const t = jeu.taille, u = t / 16;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.fillRect(x + 3 * u, y + 13 * u, 10 * u, 2 * u);
+      if (sorte === 'couper') {
+        ctx.fillStyle = '#6b4a2b'; ctx.fillRect(x + 7 * u, y + 10 * u, 2 * u, 4 * u);
+        ctx.fillStyle = '#2f6b3a'; ctx.fillRect(x + 3 * u, y + 3 * u, 10 * u, 8 * u);
+        ctx.fillStyle = '#4b9150'; ctx.fillRect(x + 4 * u, y + 2 * u, 7 * u, 5 * u);
+      } else {
+        ctx.fillStyle = sorte === 'briser' ? '#7d7466' : '#6e6a64'; ctx.fillRect(x + 2 * u, y + 4 * u, 12 * u, 10 * u);
+        ctx.fillStyle = sorte === 'briser' ? '#a39a89' : '#94908a'; ctx.fillRect(x + 3 * u, y + 3 * u, 9 * u, 5 * u);
+        if (sorte === 'briser') { ctx.fillStyle = '#4a443b'; ctx.fillRect(x + 7 * u, y + 5 * u, u, 5 * u); ctx.fillRect(x + 8 * u, y + 9 * u, 2 * u, u); }
+      }
+    }
+
     // Les personnages (le joueur et les événements visibles), du plus haut au plus bas de l'écran :
     // celui qui est plus bas passe devant.
     function dessinerPersonnages(maintenant) {
@@ -471,6 +545,8 @@ const Moteur = (() => {
         const m = p.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
         const px = m ? Math.round(m.de.x + (p.x * t - m.de.x) * k) : p.x * t;
         const py = m ? Math.round(m.de.y + (p.y * t - m.de.y) * k) : p.y * t;
+        // Un obstacle sans tuile ni personnage (Saga 0.7) : un petit arbre ou un rocher dessiné.
+        if (p.tuile < 0 && !p.perso && Monde.obstacle(p.ev)) { liste.push({ y: py, dessiner: () => dessinerObstacle(Monde.obstacle(p.ev).sorte, px - cam.x, py - cam.y) }); continue; }
         liste.push({ y: py, dessiner: () => dessinerCorps({
           tuile: p.tuile, perso: p.perso, couleur: '#5ec8ff', direction: p.direction,
           pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,

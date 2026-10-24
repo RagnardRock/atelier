@@ -1,6 +1,9 @@
 // Les boutiques (Saga 0.5, FORMAT.md › boutiques.json) : acheter des objets et des créatures,
 // revendre ses objets à moitié prix, vendre ses créatures. Un article n'apparaît que quand sa
 // condition est vraie (les succès du joueur : captures, dresseurs battus, badges, une quête…).
+// Saga 0.7 : un article `verrouille_visible` se montre grisé avant, avec ce qui le débloque ; un
+// article tout juste débloqué porte « Nouveau ! » jusqu'à ce que le joueur l'ait vu une fois
+// (partie.boutiques_vues : { boutique: [clés « sorte:id »] }).
 //
 // Ce fichier ne connaît pas les règles : une créature achetée vient de Regles.creer, le prix d'une
 // créature vendue de Regles.prixCreature. ui : dire, liste, quantite (voir menus.js).
@@ -15,29 +18,39 @@ const Boutique = (() => {
     const monnaie = reglages.monnaie || '₽';
     const argent = () => `${partie.argent} ${monnaie}`;
 
-    // Les articles visibles maintenant, avec leur prix (0 = le prix de l'objet).
+    // Les articles visibles maintenant, avec leur prix (0 = le prix de l'objet). ferme : pas encore
+    // débloqué, mais montré grisé (verrouille_visible).
     const articles = () => (b.articles || [])
-      .filter((a) => !a.condition || vraie(a.condition))
       .map((a) => {
+        const ouvert = !a.condition || vraie(a.condition);
+        if (!ouvert && !a.verrouille_visible) return null;
         const o = a.sorte === 'creature' ? trouver('creatures', a.id) : trouver('objets', a.id);
         const prix = Number(a.prix) || (a.sorte === 'creature' ? 0 : Number(o?.prix) || 0);
-        return o && prix > 0 ? { a, o, prix } : null;
+        return o && prix > 0 ? { a, o, prix, ferme: !ouvert } : null;
       })
       .filter(Boolean);
+    // « Nouveau ! » : seulement pour un article qui avait une condition (le reste est là depuis le début).
+    const cle = (a) => `${a.sorte}:${a.id}`;
+    if (!partie.boutiques_vues || typeof partie.boutiques_vues !== 'object') partie.boutiques_vues = {};
+    const vus = new Set(partie.boutiques_vues[b.id] || []);
 
     async function acheter() {
       for (;;) {
         const l = articles();
         const i = await ui.liste({
           titre: 'Acheter', entete: argent(),
-          items: l.map(({ a, o, prix }) => ({
+          items: l.map(({ a, o, prix, ferme }) => ({
             texte: a.sorte === 'creature' ? `${o.nom} (N.${Number(a.niveau) || 5})` : o.nom,
             image: a.sorte === 'creature' ? o.sprites?.face || '' : o.icone || '',
-            detail: `${prix} ${monnaie}${a.sorte === 'creature' ? '' : partie.sac[a.id] ? ` · ×${partie.sac[a.id]}` : ''}`,
-            desactive: prix > partie.argent,
+            detail: ferme ? `🔒 ${Monde.decrire(jeu, a.condition, partie)}` : `${prix} ${monnaie}${a.sorte === 'creature' ? '' : partie.sac[a.id] ? ` · ×${partie.sac[a.id]}` : ''}`,
+            etiquette: !ferme && a.condition && !vus.has(cle(a)) ? 'Nouveau !' : '',
+            desactive: ferme || prix > partie.argent,
           })),
           note: l.length ? '' : 'Rien à vendre pour l\'instant.',
         });
+        // Ce que le joueur vient de voir n'est plus nouveau la prochaine fois.
+        for (const { a, ferme } of l) if (!ferme && a.condition) vus.add(cle(a));
+        partie.boutiques_vues[b.id] = [...vus];
         if (i == null) return;
         const { a, o, prix } = l[i];
         if (a.sorte === 'creature') {

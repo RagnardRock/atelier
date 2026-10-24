@@ -261,7 +261,7 @@ Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un
 | Champ | Sens |
 |---|---|
 | `id` | Unique **dans la carte** (`ev-1`, `ev-2`…). Avec l'id de la carte, il désigne l'événement dans tout le jeu (pour son interrupteur « déjà fait »). |
-| `type` | `"pnj"` (personnage), `"panneau"`, `"coffre"`, `"objet"` (objet au sol), `"declencheur"` (case invisible). Il sert surtout à Tafl ; le moteur suit les autres champs. |
+| `type` | `"pnj"` (personnage), `"panneau"`, `"coffre"`, `"objet"` (objet au sol), `"declencheur"` (case invisible), `"obstacle"` (Tafl 0.24 : arbre ou rocher, voir « Obstacles » plus bas). Il sert surtout à Tafl ; le moteur suit les autres champs, sauf pour un obstacle. |
 | `apparence` | `personnage` : l'id d'un personnage (`""` = aucun) ; `tuile` : un numéro de tuile à montrer (`-1` = aucune). Le moteur montre la tuile, sinon le sprite du personnage (tourné vers `direction`), sinon sa tuile, sinon rien (un déclencheur est invisible). |
 | `direction` | Où il regarde au départ. |
 | `deplacement` | `"fixe"`, `"regarde"` (se tourne vers le joueur qui lui parle), `"aleatoire"` (marche au hasard autour de sa case), `"tourne"` (regarde autour de lui). |
@@ -270,6 +270,23 @@ Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un
 | `pages` | Au moins une. **Le moteur prend la DERNIÈRE page dont toutes les conditions sont vraies** (une page sans condition est toujours vraie). Si aucune ne l'est, l'événement est absent. `cache: true` : sur cette page, l'événement est absent (invisible, on ne peut ni lui parler ni le toucher, il ne bloque pas). Le moteur refait ce choix après chaque script et à chaque changement de carte. |
 
 Le moteur joue les `commandes` de la page dans l'ordre. Pendant un script, le joueur ne bouge pas.
+
+#### Obstacles
+
+(Tafl 0.24, joués par Saga 0.7.) À la place des CS : un objet du sac ouvre le chemin. Un événement de `type: "obstacle"` a en plus :
+
+```json
+"obstacle": { "sorte": "couper", "objet": "hache", "message": "", "repousse": false }
+```
+
+| Champ | Ce qu'il veut dire |
+|---|---|
+| `sorte` | `"couper"` (un petit arbre) ou `"briser"` (un rocher fissuré) : avec l'objet, le joueur appuie sur A devant lui, le moteur demande s'il veut l'utiliser, puis l'obstacle disparaît (son interrupteur « déjà fait » s'allume). `"pousser"` : avec l'objet, le joueur pousse le rocher d'une case en marchant contre lui. |
+| `objet` | L'id de l'objet qu'il faut avoir (Tafl propose `hache`, `marteau`, `gants-de-force`). Sans lui, le moteur dit lequel il faudrait. `""` = l'obstacle ne s'ouvre jamais (un décor qui parle). |
+| `message` | Ce que le moteur dit quand le joueur le regarde (`""` : une phrase par défaut selon la sorte). |
+| `repousse` | `true` : l'arbre (ou le rocher) revient quand le joueur quitte la carte puis y revient, comme dans les jeux officiels. Pour `"pousser"` : un rocher poussé revient toujours à sa place quand le joueur quitte la carte. |
+
+Le moteur gère tout seul la question et la disparition : la page 1 (la page active) est le script joué **juste après** le passage (vide d'habitude, ou un objet trouvé sous le rocher). Un rocher poussé ne va pas sur une case bloquée, un rebord, un téléporteur ni sur un autre événement qui bloque ; s'il s'arrête sur un événement `"toucher"` traversable (un déclencheur), celui-ci se lance : un interrupteur au sol pour une énigme. Sans `apparence.tuile` ni personnage, le moteur dessine un petit arbre ou un rocher tout simple.
 
 #### Commandes
 
@@ -308,13 +325,13 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `local` | `valeur` | l'interrupteur « déjà fait » de l'événement vaut `valeur`. |
 | `objet` | `objet`, `min` | le joueur a au moins `min` fois cet objet. |
 | `quete` | `quete`, `etat`, `etape` | la quête est `"pas_commencee"`, `"en_cours"` ou `"finie"`. Pour `"en_cours"`, `etape` > 0 demande en plus d'être au moins à cette étape. |
-| `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"evolutions"` (évolutions vues), `"badges"`, `"pas"`. Pour débloquer des boutiques ou des personnages au fil de la progression. |
+| `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"sauvages_battus"` (créatures sauvages battues, Tafl 0.24), `"evolutions"` (évolutions vues), `"especes_vues"` et `"especes_prises"` (les espèces différentes vues et attrapées, comptées sur le Pokédex, Tafl 0.24), `"quetes_finies"` (Tafl 0.24), `"badges"`, `"pas"`. Pour débloquer des boutiques ou des personnages au fil de la progression. |
 | `argent` | `min` | (Tafl 0.16) le joueur a au moins `min` d'argent. |
 | `badge` | `badge` | (Tafl 0.16) le joueur a reçu ce badge. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées).
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`.
 
 ## Données du jeu (`donnees/`)
 
@@ -466,7 +483,7 @@ Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `eff
 | `croissance` | La courbe d'expérience : `"rapide"`, `"moyenne"`, `"parabolique"`, `"lente"`, `"erratique"`, `"fluctuante"` (les courbes officielles). |
 | `male` | % de mâles ; `-1` = asexué. |
 | `legendaire` | `""`, `"legendaire"` ou `"fabuleux"`. Un légendaire s'obtient d'habitude au bout d'une quête (commande `combat_sauvage`). |
-| `evolutions` | `mode` : `"niveau"` (au `niveau`), `"objet"` (avec l'`objet`, par exemple une pierre), `"echange"` (en tenant `objet` s'il y en a un), `"amitie"`, `"quete"` (quand la quête `quete` est finie), `"autre"` (`condition` dit laquelle). Le moteur peut aussi faire évoluer en plein combat. |
+| `evolutions` | `mode` : `"niveau"` (au `niveau`), `"objet"` (avec l'`objet`, par exemple une pierre), `"echange"` (en tenant `objet` s'il y en a un), `"amitie"` (quand son amitié atteint `seuil_amitie` des réglages), `"quete"` (quand la quête `quete` est finie), `"autre"` (`condition` dit laquelle). Le moteur peut aussi faire évoluer en plein combat. Saga 0.7 joue `"niveau"` (en combat, avec le Super Bonbon), `"objet"` (pierre utilisée depuis le sac) `"amitie"` (à la montée de niveau) et `"quete"` (dès que la quête finit, ou à la montée de niveau suivante) ; le joueur peut arrêter une évolution au niveau ou de quête (touche Retour pendant l'animation), et une créature qui tient un objet `stase` n'évolue pas. |
 | `attaques` | Apprises au niveau `niveau` (0 = en évoluant). |
 | `ct` | Les attaques qu'elle peut apprendre par CT ou par un maître des capacités. |
 | `sprites` | Face (vue par le joueur) et dos (sa propre créature en combat), en image encodée en texte. `""` = pas encore d'image. |
@@ -497,7 +514,9 @@ Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `eff
 | `balle` | Capture, avec `valeur` × la chance de base (255 = toujours, Master Ball). |
 | `evolution` | Fait évoluer les créatures dont une évolution a `mode: "objet"` et cet `objet`. |
 | `repousse` | Pas de rencontres pendant `valeur` pas. |
-| `passage` | Ouvre un passage : un objet requis de zone, à la place des CS. |
+| `passage` | Ouvre un passage : un objet requis de zone ou d'obstacle, à la place des CS. |
+| `amitie` | (Tafl 0.24) Fait monter l'amitié de `valeur` points (sur 255). |
+| `stase` | (Tafl 0.24) Tenu par une créature, il l'empêche d'évoluer (la Pierre Stase ; l'objet officiel `everstone` importé compte aussi). Dans Saga, le menu Équipe › Faire tenir un objet. |
 
 Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, `mauvais`, `assure`, `docile`, `relax`, `malin`, `lache`, `timide`, `presse`, `serieux`, `jovial`, `naif`, `modeste`, `doux`, `discret`, `pudique`, `foufou`, `calme`, `gentil`, `malpoli`, `prudent`, `bizarre`) : +10 % sur une statistique, −10 % sur une autre (les cinq neutres ne changent rien).
 
@@ -523,14 +542,15 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
   { "id": "boutique-du-bourg", "nom": "Boutique du bourg", "description": "", "rachete": true, "achete_creatures": false,
     "articles": [
       { "sorte": "objet", "id": "potion", "prix": 0, "condition": null },
-      { "sorte": "objet", "id": "super-ball", "prix": 0, "condition": { "type": "compteur", "compteur": "captures", "min": 10 } },
+      { "sorte": "objet", "id": "super-ball", "prix": 0, "condition": { "type": "compteur", "compteur": "captures", "min": 10 }, "verrouille_visible": true },
       { "sorte": "creature", "id": "evoli", "niveau": 10, "prix": 5000, "condition": { "type": "quete", "quete": "la-pension", "etat": "finie", "etape": 0 } }
     ] }
 ] }
 ```
 
 - `prix` : `0` = le prix de l'objet dans `objets.json`.
-- `condition` : `null` = toujours en vente, sinon une condition des événements (voir « Conditions ») : un compteur (captures, dresseurs battus, évolutions, badges), une quête, un interrupteur, un objet. L'article apparaît quand elle est vraie.
+- `condition` : `null` = toujours en vente, sinon une condition des événements (voir « Conditions ») : un compteur (captures, dresseurs battus, évolutions, badges, espèces…), une quête, un interrupteur, un objet. L'article apparaît quand elle est vraie. Le moteur marque « Nouveau ! » un article à condition que le joueur n'a pas encore vu en vente.
+- `verrouille_visible` (Tafl 0.24) : `true` = avant d'être débloqué, l'article se montre grisé avec ce qui le débloque (« Après 10 captures (4/10) », « Après la quête … », « Avec le Badge Roche » ; un interrupteur se dit « Plus tard dans l'aventure »). `false` ou absent : il reste caché.
 - `rachete` : le joueur peut y revendre ses objets (à moitié prix). `achete_creatures` : il peut y vendre ses créatures.
 
 #### `donnees/reglages.json`
@@ -539,15 +559,18 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 { "format": "tafl-reglages", "version": 1, "reglages": {
   "monnaie": "Pokédollars", "argent_depart": 3000, "equipe_max": 6,
   "plafonds": [{ "badges": 0, "niveau": 15 }, { "badges": 1, "niveau": 20 }, { "badges": 8, "niveau": 100 }],
-  "ajustement": "badges", "ecart": 0, "chance_chromatique": 4096,
+  "ajustement": "badges", "ecart": 0, "ajustement_sauvages": "aucun", "ecart_sauvages": -2, "evolution_dresseurs": false, "evolution_sauvages": false, "seuil_amitie": 220, "chance_chromatique": 4096,
   "interface": { "theme": "verre", "accent": "#ffb347", "menus": { "equipe": "", "dex": "", "pc": "", "boite": "", "dex_visible": true, "places": 0, "colonnes": 0, "forme_boites": "", "pages": [] } },
   "regles": "pokemon",
   "badges": [{ "id": "badge-roche", "nom": "Badge Roche", "icone": "data:image/png;base64,..." }]
 } }
 ```
 
-- `plafonds` : le niveau maximum des créatures du joueur selon ses badges.
+- `plafonds` : le niveau maximum des créatures du joueur selon ses badges. Au plafond, elles ne gagnent plus d'expérience ; Saga 0.7 le dit quand elles l'atteignent et le montre dans le menu Équipe (« Niv. max 20 »).
 - `ajustement` : comment les dresseurs `ajuste: true` règlent leur niveau : `"aucun"`, `"equipe"` (le meilleur niveau de l'équipe du joueur), `"badges"` (le plafond des badges du joueur). Leur niveau devient cette référence plus `ecart`, sans descendre sous celui écrit dans leur équipe.
+- `ajustement_sauvages` (Tafl 0.24) : pareil pour les créatures sauvages des zones (`"aucun"` par défaut). Toute la fourchette de la zone monte pour que son haut vaille la référence plus `ecart_sauvages`, sans descendre sous ce qu'écrit la zone (zone 3 à 5, référence 20, écart −2 : niveaux 16 à 18). Les commandes `combat_sauvage` gardent leur niveau.
+- `evolution_dresseurs` et `evolution_sauvages` (Tafl 0.24, `false` par défaut) : une créature montée par l'ajustement (dresseur, ou sauvage) prend la forme de son niveau en suivant les évolutions `"niveau"` (un Bulbizarre de dresseur monté au niveau 40 devient Florizarre). Ses attaques sont celles de ce niveau, sauf si le dresseur en a choisi.
+- `seuil_amitie` (Tafl 0.24) : l'amitié qu'il faut pour une évolution `"amitie"` (sur 255, 220 par défaut). L'amitié d'une créature part du `bonheur` de son espèce ; elle monte en gagnant des niveaux (+5, +3 au-dessus de 100, +2 au-dessus de 200), en marchant (tous les 128 pas), avec les vitamines et les objets d'effet `amitie` ; elle baisse de 1 quand la créature tombe K.O. L'évolution se fait à la montée de niveau (au `niveau` de l'évolution au moins, s'il est donné).
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
 - `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. Seule valeur pour l'instant : `"pokemon"` (les types, talents, attaques, créatures et objets de `donnees/` sont ses données). Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
 - `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
@@ -575,3 +598,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.15** : `interface` dans les réglages (thème verre ou pixel, couleur d'accent). Un champ en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.16** : les commandes `argent`, `badge`, `personnaliser` et `tenue`, les conditions `argent` et `badge`, `tenues` dans les personnages, `regles` et `badges` dans les réglages. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.21** : la commande `ecran_boites` et `interface.menus` dans les réglages. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.24** : le type d'événement `obstacle` et son champ `obstacle`, les compteurs `sauvages_battus`, `especes_vues`, `especes_prises` et `quetes_finies`, les effets d'objet `stase` et `amitie`, `verrouille_visible` dans les articles de boutique, `ajustement_sauvages`, `ecart_sauvages`, `evolution_dresseurs`, `evolution_sauvages` et `seuil_amitie` dans les réglages, l'`amitie` de chaque créature dans la sauvegarde. Des champs en plus, donc la version reste 1.

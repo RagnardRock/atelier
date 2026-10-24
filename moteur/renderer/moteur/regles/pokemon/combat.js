@@ -14,6 +14,9 @@ const Combat = (() => {
   const chance = (pourcent) => Math.random() * 100 < pourcent;
   const ETAGES = ['attaque', 'defense', 'att_spe', 'def_spe', 'vitesse', 'precision', 'esquive'];
   const LUTTE = { id: 'lutte', nom: 'Lutte', type: '', categorie: 'physique', puissance: 50, precision: 0, priorite: 0, drain: -25, stats: [], statut: '' };
+  // Accorder au genre de la créature (Saga 0.7) : « gelé » / « gelée », « Il » / « Elle ».
+  const fe = (c) => (c?.sexe === 'f' ? 'e' : '');
+  const il = (c) => (c?.sexe === 'f' ? 'Elle' : 'Il');
   const NOMS_STATUTS = { brulure: 'BRU', paralysie: 'PAR', poison: 'PSN', poison_grave: 'PSN', sommeil: 'SOM', gel: 'GEL' };
 
   async function lancer({ jeu, partie, ui, sauvage = null, dresseur = null, fond = 'herbes' }) {
@@ -28,12 +31,14 @@ const Combat = (() => {
     if (dresseur) {
       // Un dresseur qui « suit la progression » du joueur : son niveau monte avec lui.
       const r = jeu.donnees.reglages?.reglages || {};
-      let ref = 0;
-      if (dresseur.ajuste && r.ajustement === 'equipe') ref = Math.max(0, ...partie.equipe.map((c) => c.niveau));
-      if (dresseur.ajuste && r.ajustement === 'badges') ref = C.plafond(jeu, partie);
+      const ref = dresseur.ajuste ? C.reference(jeu, partie, r.ajustement) : 0;
       adverses = (dresseur.equipe || []).filter((m) => trouver('creatures', m.creature)).slice(0, 6).map((m) => {
-        const niveau = Math.max(Number(m.niveau) || 5, ref ? ref + (Number(r.ecart) || 0) : 0);
-        const c = C.creer(jeu, m.creature, niveau, { nature: m.nature || undefined, attaques: m.attaques, chromatique: false });
+        const ecrit = Number(m.niveau) || 5;
+        const niveau = Math.min(100, Math.max(ecrit, ref ? ref + (Number(r.ecart) || 0) : 0));
+        // Monté par l'ajustement (Saga 0.7) : il prend la forme de son nouveau niveau, et les attaques
+        // de ce niveau si Tafl ne lui en a pas choisi.
+        const espece = niveau > ecrit && r.evolution_dresseurs ? C.formeAuNiveau(jeu, m.creature, niveau) : m.creature;
+        const c = C.creer(jeu, espece, niveau, { nature: m.nature || undefined, attaques: m.attaques, chromatique: false });
         c.objet = m.objet || '';
         return c;
       });
@@ -48,8 +53,8 @@ const Combat = (() => {
     const typeDe = (id) => trouver('types', id);
 
     // L'état montré par l'écran pour une créature.
-    function etat(k) {
-      const c = actif(k), e = C.espece(jeu, c);
+    function etat(k, c = actif(k)) {
+      const e = C.espece(jeu, c);
       const xpMin = C.xpPour(e?.croissance, c.niveau), xpMax = C.xpPour(e?.croissance, c.niveau + 1);
       return {
         nom: C.nom(jeu, c), niveau: c.niveau, sexe: c.sexe, pv: c.pv, pvMax: C.pvMax(jeu, c), statut: NOMS_STATUTS[c.statut] || '',
@@ -120,7 +125,7 @@ const Combat = (() => {
         await ui.message(`${nom} se réveille !`);
       }
       if (c.statut === 'gel') {
-        if (!chance(20)) { await ui.message(`${nom} est gelé !`); return; }
+        if (!chance(20)) { await ui.message(`${nom} est gelé${fe(c)} !`); return; }
         c.statut = '';
         montrer(k);
         await ui.message(`${nom} dégèle !`);
@@ -128,19 +133,19 @@ const Combat = (() => {
       if (k.peur) { k.peur = false; await ui.message(`${nom} a peur et ne bouge pas !`); return; }
       if (k.confusion > 0) {
         k.confusion--;
-        if (!k.confusion) await ui.message(`${nom} n'est plus confus.`);
+        if (!k.confusion) await ui.message(`${nom} n'est plus confus${fe(c)}.`);
         else {
-          await ui.message(`${nom} est confus…`);
+          await ui.message(`${nom} est confus${fe(c)}…`);
           if (chance(33)) {
             const deg = degats(c, stat(k, 'attaque'), stat(k, 'defense'), 40, 1);
-            await ui.message('Il se blesse dans sa confusion !');
+            await ui.message(`${il(c)} se blesse dans sa confusion !`);
             ui.animer(k.joueur ? 'joueur' : 'adversaire', 'touche');
             await pv(k, c, c.pv - deg);
             return;
           }
         }
       }
-      if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé ! Il ne peut pas attaquer !`); return; }
+      if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé${fe(c)} ! ${il(c)} ne peut pas attaquer !`); return; }
 
       const a = slot ? trouver('attaques', slot.id) : null;
       const att = a || LUTTE;
@@ -218,9 +223,9 @@ const Combat = (() => {
     async function infliger(k, statut, annoncer) {
       const c = actif(k), nom = nomDe(k);
       if (statut === 'confusion') {
-        if (k.confusion) { if (annoncer) await ui.message(`${nom} est déjà confus.`); return; }
+        if (k.confusion) { if (annoncer) await ui.message(`${nom} est déjà confus${fe(c)}.`); return; }
         k.confusion = 2 + hasard(4);
-        await ui.message(`${nom} devient confus !`);
+        await ui.message(`${nom} devient confus${fe(c)} !`);
         return;
       }
       if (!NOMS_STATUTS[statut]) { if (annoncer) await ui.message('Mais rien ne se passe…'); return; } // pas encore géré par Saga
@@ -235,8 +240,8 @@ const Combat = (() => {
       if (statut === 'poison_grave') k.toxique = 1;
       montrer(k);
       await ui.message({
-        brulure: `${nom} est brûlé !`, paralysie: `${nom} est paralysé ! Il aura du mal à attaquer !`, poison: `${nom} est empoisonné !`,
-        poison_grave: `${nom} est gravement empoisonné !`, sommeil: `${nom} s'endort !`, gel: `${nom} est gelé !`,
+        brulure: `${nom} est brûlé${fe(c)} !`, paralysie: `${nom} est paralysé${fe(c)} ! ${il(c)} aura du mal à attaquer !`, poison: `${nom} est empoisonné${fe(c)} !`,
+        poison_grave: `${nom} est gravement empoisonné${fe(c)} !`, sommeil: `${nom} s'endort !`, gel: `${nom} est gelé${fe(c)} !`,
       }[statut]);
     }
 
@@ -398,12 +403,25 @@ const Combat = (() => {
             await ui.message(`${C.nom(jeu, c)} apprend ${trouver('attaques', ev.attaque)?.nom || ev.attaque} !`);
           } else if (ev.type === 'oublier') {
             await apprendre(c, ev.attaque);
+          } else if (ev.type === 'plafond') {
+            await ui.message(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge ${c.sexe === 'f' ? 'la' : 'le'} laissera progresser.`);
           } else if (ev.type === 'evolue') {
             const avant = C.nom(jeu, c);
+            // L'évolution se montre sur la créature qui évolue, même si elle n'est pas au combat.
+            // Retour (B, Échap) pendant l'animation l'arrête, comme dans les jeux officiels (Saga 0.7).
+            ui.creature('joueur', etat(nous, c));
             await ui.message(`Quoi ? ${avant} évolue !`);
+            const vers = C.trouver(jeu, 'creatures', ev.vers);
+            const ok = await ui.evolution('joueur', vers?.sprites?.dos || vers?.sprites?.face || '');
+            if (!ok) {
+              montrer(nous);
+              await ui.message(`Hein ? L'évolution de ${avant} s'est arrêtée.`);
+              continue;
+            }
             const nouvelles = C.evoluer(jeu, c, ev.vers);
-            if (estActif) { await ui.animer('joueur', 'evolution'); montrer(nous); }
+            ui.creature('joueur', etat(nous, c));
             await ui.message(`Félicitations ! ${avant} a évolué en ${C.espece(jeu, c)?.nom || ev.vers} !`);
+            montrer(nous);
             partie.compteurs.evolutions = (partie.compteurs.evolutions || 0) + 1;
             for (const a of nouvelles) {
               if (c.attaques.length < 4) { c.attaques.push(C.attaque(jeu, a)); await ui.message(`${C.nom(jeu, c)} apprend ${trouver('attaques', a)?.nom || a} !`); }
@@ -417,7 +435,7 @@ const Combat = (() => {
     // Elle connaît déjà 4 attaques : le joueur choisit laquelle oublier (ou de ne pas apprendre).
     async function apprendre(c, id) {
       const nomA = trouver('attaques', id)?.nom || id, nom = C.nom(jeu, c);
-      await ui.message(`${nom} veut apprendre ${nomA}, mais il connaît déjà quatre attaques.`);
+      await ui.message(`${nom} veut apprendre ${nomA}, mais ${il(c).toLowerCase()} connaît déjà quatre attaques.`);
       const i = await ui.liste(`Oublier quelle attaque pour ${nomA} ?`, [
         ...c.attaques.map((a) => ({ texte: trouver('attaques', a.id)?.nom || a.id, detail: `${a.pp} / ${a.ppMax} PP` })),
         { texte: `Ne pas apprendre ${nomA}`, detail: '' },
@@ -525,6 +543,7 @@ const Combat = (() => {
         await envoyer(eux, suivant);
       }
       if (actif(nous).pv <= 0) {
+        C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)
         await ui.animer('joueur', 'ko');
         await ui.message(`${C.nom(jeu, actif(nous))} est K.O. !`);
         if (!vivants(nous).length) {

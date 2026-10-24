@@ -151,6 +151,8 @@ const Scripts = (() => {
             partie.quetes[c.quete] = { etat: 'finie', etape: etat?.etape || 0 };
             const suivante = q?.suivante ? trouver('quetes', q.suivante) : null;
             dialogue.annoncer('Quête terminée', suivante ? `${titre} · la suite : ${suivante.titre}` : titre);
+            // Saga 0.7 : une créature qui évolue « quand cette quête est finie ».
+            await Regles.evolutionsEnAttente({ jeu, partie, ui });
           }
           break;
         }

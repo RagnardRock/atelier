@@ -11,6 +11,8 @@
 // (voir ../FORMAT.md, « Événements ») :
 //   { id, nom, type, x, y, apparence: { personnage, tuile }, direction, deplacement, traversable,
 //     declenchement, pages: [{ conditions: [...], cache, commandes: [...] }] }
+// Un obstacle (Tafl 0.24, type « obstacle ») a en plus obstacle: { sorte, objet, message, repousse } :
+// l'objet qui remplace une CS (couper un arbre, briser ou pousser un rocher), joué par Saga 0.7.
 // Comme les zones, on ne le modifie jamais sur place : on remplace la liste (map.events = [...]).
 //
 // doc.data, les données du jeu, suit la même règle (on remplace doc.data en entier) :
@@ -24,12 +26,15 @@
 
 const Events = (() => {
   // --- Listes de choix ---
-  const TYPES = [['pnj', 'Personnage'], ['panneau', 'Panneau'], ['coffre', 'Coffre'], ['objet', 'Objet au sol'], ['declencheur', 'Déclencheur (case invisible)']];
-  const TYPE_ICONS = { pnj: 'person', panneau: 'note', coffre: 'package', objet: 'gift', declencheur: 'zap' };
+  const TYPES = [['pnj', 'Personnage'], ['panneau', 'Panneau'], ['coffre', 'Coffre'], ['objet', 'Objet au sol'], ['declencheur', 'Déclencheur (case invisible)'], ['obstacle', 'Obstacle (arbre, rocher : à la place des CS)']];
+  const TYPE_ICONS = { pnj: 'person', panneau: 'note', coffre: 'package', objet: 'gift', declencheur: 'zap', obstacle: 'circle-slash' };
+  // Les obstacles (Tafl 0.24) : ce que l'objet permet, et l'objet proposé d'office.
+  const SORTES_OBSTACLE = [['couper', 'Arbre à couper (disparaît)'], ['briser', 'Rocher à briser (disparaît)'], ['pousser', 'Rocher à pousser (d\'une case)']];
+  const OBJETS_OBSTACLE = { couper: 'hache', briser: 'marteau', pousser: 'gants-de-force' };
   const DEPLACEMENTS = [['fixe', 'Immobile'], ['regarde', 'Se tourne vers le joueur qui lui parle'], ['aleatoire', 'Marche au hasard'], ['tourne', 'Regarde autour de lui']];
   const DECLENCHEMENTS = [['parler', 'Le joueur lui parle (touche A)'], ['toucher', 'Le joueur marche dessus ou le touche'], ['auto', 'Tout seul, dès l\'arrivée sur la carte']];
   const EXPRESSIONS = ['normal', 'content', 'rire', 'triste', 'colere', 'surpris', 'inquiet', 'gene', 'determine'];
-  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['evolutions', 'Évolutions vues'], ['badges', 'Badges'], ['pas', 'Pas du joueur']];
+  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur']];
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
 
@@ -130,6 +135,7 @@ const Events = (() => {
   function objetsUtilises(doc) {
     const out = new Set(doc.data.objets?.length ? [] : ['potion', 'super-potion', 'poke-ball', 'planche-de-surf', 'velo', 'canne-a-peche']);
     for (const m of doc.maps) for (const z of m.zones) if (z.objet) out.add(z.objet);
+    for (const m of doc.maps) for (const ev of m.events || []) if (ev.obstacle?.objet) out.add(ev.obstacle.objet);
     parcourirJeu(doc, (u) => { const c = u.commande || u.condition; if (c.type === 'objet' && c.objet) out.add(c.objet); });
     return out;
   }
@@ -512,7 +518,12 @@ const Events = (() => {
       traversable: Boolean(e?.traversable),
       declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
       pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map(normPage),
+      ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
     };
+  }
+  function normObstacle(o) {
+    const sorte = pick(o?.sorte, SORTES_OBSTACLE, 'couper');
+    return { sorte, objet: Doc.slug(o?.objet ?? OBJETS_OBSTACLE[sorte], ''), message: str(o?.message), repousse: Boolean(o?.repousse) };
   }
   function normEvents(list, width, height, tileCount) {
     const out = [];
@@ -652,7 +663,7 @@ const Events = (() => {
     });
     return lignes.join('\n');
   }
-  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}, ${ev.pages.length} page(s)`;
+  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.obstacle ? ` [${ev.obstacle.sorte}, objet ${ev.obstacle.objet || 'aucun'}${ev.obstacle.repousse ? ', repousse' : ''}]` : ''}${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}, ${ev.pages.length} page(s)`;
 
   // --- Un événement neuf, selon son type ---
   function create(doc, type, x, y, id) {
@@ -672,6 +683,9 @@ const Events = (() => {
         { conditions: [{ type: 'local', valeur: true }], cache: true, commandes: [] },
       ] };
     }
+    // Un obstacle : Saga le gère tout seul (message, question, disparition) ; sa page 1 est le script
+    // joué juste après le passage (vide d'habitude, ou un objet caché sous le rocher).
+    if (type === 'obstacle') return { ...base, nom: 'Petit arbre', obstacle: normObstacle({ sorte: 'couper' }) };
     return { ...base, nom: 'Déclencheur', traversable: true, declenchement: 'toucher' };
   }
 
@@ -828,11 +842,34 @@ const Events = (() => {
           coffre: 'La page 2 (« déjà fait ») prend le relais une fois le coffre ouvert.',
           objet: 'Une fois ramassé, la page 2 le fait disparaître (case « absent »).',
           declencheur: 'Une case invisible : une scène se lance quand le joueur marche dessus. Mets une condition pour qu\'elle ne se joue qu\'une fois (déjà fait, ou un interrupteur).',
+          obstacle: 'À la place des CS : avec l\'objet, le joueur coupe l\'arbre ou brise le rocher (touche A, Saga lui demande s\'il veut l\'utiliser), ou pousse le rocher en marchant contre lui. Sans l\'objet, Saga dit lequel il faudrait. Donne-lui une tuile (l\'arbre, le rocher) ; la page 1 se joue juste après le passage (vide d\'habitude). Un rocher poussé sur un déclencheur le lance : une énigme ! Il revient à sa place quand le joueur quitte la carte.',
         }[work.type];
+      };
+      // L'obstacle (Tafl 0.24) : sa sorte, l'objet qu'il faut, son message, s'il repousse.
+      const blocObstacle = el('div');
+      const majObstacle = () => {
+        blocObstacle.replaceChildren();
+        if (work.type !== 'obstacle') { delete work.obstacle; return; }
+        if (!work.obstacle) { work.obstacle = normObstacle({ sorte: 'couper' }); work.traversable = false; traversable.checked = false; }
+        const o = work.obstacle;
+        const objet = el('input', { type: 'text', value: o.objet, placeholder: OBJETS_OBSTACLE[o.sorte] });
+        objet.setAttribute('list', 'tafl-objets');
+        objet.oninput = () => { o.objet = Doc.slug(objet.value, ''); };
+        const message = el('input', { type: 'text', value: o.message, placeholder: { couper: 'Ce petit arbre a l\'air fragile.', briser: 'Ce rocher est fissuré de partout.', pousser: 'Un gros rocher, bien lourd.' }[o.sorte] });
+        message.oninput = () => { o.message = message.value; };
+        const repousse = el('input', { type: 'checkbox', checked: o.repousse });
+        repousse.onchange = () => { o.repousse = repousse.checked; };
+        blocObstacle.append(
+          section('Obstacle'),
+          champ('Sorte', selectEl(SORTES_OBSTACLE, o.sorte, (v) => { const avant = OBJETS_OBSTACLE[o.sorte]; o.sorte = v; if (!o.objet || o.objet === avant) o.objet = OBJETS_OBSTACLE[v]; majObstacle(); })),
+          champ('Objet requis', objet, 'L\'objet du sac qui ouvre le passage (Jeu › Données du jeu › Objets, effet « Ouvre un passage »)'),
+          champ('Message', message, 'Ce que Saga dit quand le joueur le regarde (vide : la phrase grise)'),
+          ...(o.sorte === 'pousser' ? [] : [champ('Repousse quand le joueur quitte la carte', repousse)]),
+        );
       };
       side.append(
         champ('Nom', nom),
-        champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); })),
+        champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); majObstacle(); })),
         champ('Colonne (x)', num('x', map.width - 1)),
         champ('Rangée (y)', num('y', map.height - 1)),
         section('Apparence'),
@@ -843,10 +880,12 @@ const Events = (() => {
         section('Déclenchement'),
         champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
         champ('Le joueur peut passer à travers', traversable),
+        blocObstacle,
         aide,
       );
       majApercu();
       majAide();
+      majObstacle();
 
       // Colonne de droite : les pages, leurs conditions et leur script.
       function renderPage() {

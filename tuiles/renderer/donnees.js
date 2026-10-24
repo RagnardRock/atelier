@@ -46,9 +46,13 @@ const Donnees = (() => {
     ['evolution', 'Fait évoluer (voir les évolutions des créatures)', []],
     ['repousse', 'Repousse les créatures sauvages', ['valeur']],
     ['passage', 'Ouvre un passage (à la place des CS)', []],
+    ['stase', 'Empêche d\'évoluer, tenu (Pierre Stase)', []],
+    ['amitie', 'Fait monter l\'amitié', ['valeur']],
   ];
-  const UNITES_EFFET = { soin: 'PV (9999 = tous)', rappel: '% des PV', pp: 'PP (99 = tous)', pp_toutes: 'PP (99 = tous)', pp_max: 'paliers (1 à 3)', ev: 'EV', niveau: 'niveaux', ivs: 'valeur des IV (31 = parfait)', balle: '× la chance de capture (255 = toujours)', repousse: 'pas' };
+  const UNITES_EFFET = { soin: 'PV (9999 = tous)', rappel: '% des PV', pp: 'PP (99 = tous)', pp_toutes: 'PP (99 = tous)', pp_max: 'paliers (1 à 3)', ev: 'EV', niveau: 'niveaux', ivs: 'valeur des IV (31 = parfait)', balle: '× la chance de capture (255 = toujours)', repousse: 'pas', amitie: 'points d\'amitié (sur 255)' };
   const AJUSTEMENTS = [['aucun', 'Jamais : chaque dresseur garde ses niveaux'], ['equipe', 'Sur l\'équipe du joueur (son meilleur niveau)'], ['badges', 'Sur le niveau maximum des badges du joueur']];
+  // Tafl 0.24 (Saga 0.7) : les créatures sauvages peuvent suivre aussi.
+  const AJUSTEMENTS_SAUVAGES = [['aucun', 'Jamais : les niveaux écrits dans chaque zone'], ['equipe', 'Sur l\'équipe du joueur (son meilleur niveau)'], ['badges', 'Sur le niveau maximum des badges du joueur']];
   const COULEUR_TYPE = '#8a8f98';
 
   const str = (v, d = '') => (v === undefined || v === null ? d : String(v));
@@ -164,13 +168,14 @@ const Donnees = (() => {
         ...(a.sorte === 'creature' ? { niveau: int(a.niveau, 5, 1, 100) } : {}),
         prix: int(a.prix, 0, 0, 9999999),
         condition: a.condition && typeof a.condition === 'object' ? Events.normCondition(a.condition) : null,
+        verrouille_visible: Boolean(a.verrouille_visible),
       })),
     }),
   };
   const reglagesVides = () => ({
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
-    ajustement: 'badges', ecart: 0, chance_chromatique: 4096,
+    ajustement: 'badges', ecart: 0, ajustement_sauvages: 'aucun', ecart_sauvages: -2, evolution_dresseurs: false, evolution_sauvages: false, seuil_amitie: 220, chance_chromatique: 4096,
     interface: { theme: 'verre', accent: '', menus: menusVides() },
     regles: 'pokemon', badges: [],
   });
@@ -211,6 +216,11 @@ const Donnees = (() => {
       plafonds: Array.isArray(r.plafonds) ? r.plafonds.map((p) => ({ badges: int(p?.badges, 0, 0, 99), niveau: int(p?.niveau, 100, 1, 100) })).sort((a, b) => a.badges - b.badges) : d.plafonds,
       ajustement: pick(r.ajustement, AJUSTEMENTS, d.ajustement),
       ecart: int(r.ecart, 0, -20, 20),
+      ajustement_sauvages: pick(r.ajustement_sauvages, AJUSTEMENTS_SAUVAGES, d.ajustement_sauvages),
+      ecart_sauvages: int(r.ecart_sauvages, d.ecart_sauvages, -20, 20),
+      evolution_dresseurs: Boolean(r.evolution_dresseurs),
+      evolution_sauvages: Boolean(r.evolution_sauvages),
+      seuil_amitie: int(r.seuil_amitie, 220, 1, 255),
       chance_chromatique: int(r.chance_chromatique, 4096, 0, 100000),
       interface: {
         theme: pick(r.interface?.theme, THEMES, 'verre'),
@@ -866,8 +876,9 @@ const Donnees = (() => {
           };
           return b2;
         }, true],
-      ], () => ({ sorte: 'objet', id: '', prix: 0, condition: null }), { ajouter: '+ Article', vide: 'Boutique vide.', change: ctx.renderListe }),
-      info('Un article peut attendre un déblocage : un nombre de captures, de dresseurs battus ou d\'évolutions (compteurs), une quête finie, un interrupteur… Une boutique de créatures cachée derrière une quête : un article « créature » avec la condition « quête finie ».'),
+        ['Grisé avant', (a) => { const c = ctx.coche(a, 'verrouille_visible'); c.title = 'Avant son déblocage, l\'article se montre grisé avec ce qui le débloque (« Après 10 captures ») au lieu d\'être caché'; return c; }],
+      ], () => ({ sorte: 'objet', id: '', prix: 0, condition: null, verrouille_visible: false }), { ajouter: '+ Article', vide: 'Boutique vide.', change: ctx.renderListe }),
+      info('Un article peut attendre un déblocage : un nombre de captures, de dresseurs battus ou de créatures sauvages battues, d\'évolutions, d\'espèces vues ou attrapées, de quêtes finies (compteurs), une quête, un badge, un interrupteur… « Grisé avant » : le joueur le voit déjà, grisé, avec ce qu\'il lui manque ; sinon il apparaît d\'un coup. Dans Saga, un article tout juste débloqué porte « Nouveau ! ». Une boutique de créatures cachée derrière une quête : un article « créature » avec la condition « quête finie ».'),
       section('Utilisation'),
       ctx.usages('boutique', b.id),
     );
@@ -991,6 +1002,15 @@ const Donnees = (() => {
       champ('Les dresseurs s\'ajustent', sel(AJUSTEMENTS, r.ajustement, (v) => { r.ajustement = v; })),
       champ('Écart', nombreIn(r, 'ecart', -20, 20), 'niveaux en plus (ou en moins) que la référence'),
       info('Pour les dresseurs qui ont « son équipe suit le niveau du joueur » : leur niveau devient celui de la référence (+ l\'écart), sans jamais descendre sous le niveau écrit dans leur équipe.'),
+      champ('Ils évoluent avec leur niveau', ctx.coche(r, 'evolution_dresseurs'), 'facultatif : un Bulbizarre monté au niveau 40 devient Florizarre (évolutions au niveau seulement)'),
+      section('Niveau des créatures sauvages'),
+      champ('Les sauvages s\'ajustent', sel(AJUSTEMENTS_SAUVAGES, r.ajustement_sauvages, (v) => { r.ajustement_sauvages = v; })),
+      champ('Écart', nombreIn(r, 'ecart_sauvages', -20, 20), 'le haut de la fourchette de la zone vaut la référence plus cet écart'),
+      info('Facultatif (« Jamais » par défaut). Toute la fourchette d\'une zone monte (une zone 3 à 5, référence 20, écart −2 : niveaux 16 à 18), sans jamais descendre sous ce qu\'écrit la zone. Les combats contre une créature précise (un légendaire) gardent leur niveau.'),
+      champ('Elles évoluent avec leur niveau', ctx.coche(r, 'evolution_sauvages'), 'facultatif : un Rattata monté au niveau 25 devient Rattatac'),
+      section('Amitié'),
+      champ('Amitié pour évoluer', nombreIn(r, 'seuil_amitie', 1, 255), 'sur 255 (220 dans les jeux officiels)'),
+      info('Chaque créature a une amitié de 0 à 255 qui part du « bonheur de départ » de son espèce. Elle monte en gagnant des niveaux, en marchant avec le joueur (tous les 128 pas), avec les vitamines et les objets « Fait monter l\'amitié » ; elle baisse un peu quand la créature tombe K.O. Une évolution « Par amitié » se fait à la montée de niveau quand l\'amitié atteint ce seuil (et le niveau de l\'évolution, s\'il y en a un). Saga la montre dans le résumé.'),
       section('Les 25 natures'),
       info('Les natures sont celles du jeu officiel. Une menthe (objet « Change l\'effet de la nature ») remplace l\'effet sur les statistiques, comme dans les jeux récents.'),
       natures,
@@ -1019,7 +1039,7 @@ const Donnees = (() => {
     if (sorte === 'creatures') return `${o.id} « ${o.nom} » #${o.numero} [${o.types.join('/')}] ${STATS.map(([k]) => o.stats[k]).join('/')}${o.legendaire ? ` ${o.legendaire}` : ''}${o.evolutions.length ? `, évolue en ${o.evolutions.map((e) => `${e.vers} (${e.mode}${e.mode === 'niveau' ? ` ${e.niveau}` : e.objet ? ` ${e.objet}` : ''})`).join(', ')}` : ''}${o.sprites.face ? '' : ', sans sprite'}`;
     if (sorte === 'objets') return `${o.id} « ${o.nom} » ${o.categorie} ${o.prix} ${d.reglages.monnaie}, effet ${o.effet.type}${o.effet.valeur !== undefined ? ` ${o.effet.valeur}` : ''}${o.effet.stat ? ` ${o.effet.stat}` : ''}${o.effet.nature ? ` ${o.effet.nature}` : ''}`;
     if (sorte === 'dresseurs') return `${o.id} « ${o.nom} » ${o.classe}${o.personnage ? ` (personnage ${o.personnage})` : ''} : ${o.equipe.map((m) => `${m.creature} niv. ${m.niveau}`).join(', ') || 'équipe vide'}${o.ajuste ? ', s\'ajuste' : ''}`;
-    if (sorte === 'boutiques') return `${o.id} « ${o.nom} » : ${o.articles.map((a) => `${a.id}${a.sorte === 'creature' ? ` (créature niv. ${a.niveau})` : ''}${a.prix ? ` ${a.prix}` : ''}${a.condition ? ` [si ${Events.resumeCondition(doc, a.condition)}]` : ''}`).join(', ') || 'vide'}${o.achete_creatures ? ', achète les créatures' : ''}`;
+    if (sorte === 'boutiques') return `${o.id} « ${o.nom} » : ${o.articles.map((a) => `${a.id}${a.sorte === 'creature' ? ` (créature niv. ${a.niveau})` : ''}${a.prix ? ` ${a.prix}` : ''}${a.condition ? ` [si ${Events.resumeCondition(doc, a.condition)}${a.verrouille_visible ? ', grisé avant' : ''}]` : ''}`).join(', ') || 'vide'}${o.achete_creatures ? ', achète les créatures' : ''}`;
     return JSON.stringify(o);
   }
 

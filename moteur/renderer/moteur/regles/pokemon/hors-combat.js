@@ -9,7 +9,7 @@ const HorsCombat = (() => {
   const C = Creatures;
   const STATS_IV = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Att. Spé.'], ['def_spe', 'Déf. Spé.'], ['vitesse', 'Vitesse']];
   const nomStat = (s) => STATS_IV.find(([k]) => k === s)?.[1] || s;
-  const UTILES = ['soin', 'soin_statut', 'rappel', 'pp', 'pp_toutes', 'pp_max', 'ev', 'niveau', 'ivs', 'menthe', 'evolution', 'repousse'];
+  const UTILES = ['soin', 'soin_statut', 'rappel', 'pp', 'pp_toutes', 'pp_max', 'ev', 'niveau', 'ivs', 'menthe', 'evolution', 'repousse', 'amitie'];
 
   const utilisable = (o) => Boolean(o && UTILES.includes(o.effet?.type));
   const retirer = (partie, id) => { partie.sac[id] = (partie.sac[id] || 0) - 1; if (partie.sac[id] <= 0) delete partie.sac[id]; };
@@ -27,7 +27,7 @@ const HorsCombat = (() => {
   async function apprendre(jeu, ui, c, id) {
     const nom = C.nom(jeu, c), nomA = C.trouver(jeu, 'attaques', id)?.nom || id;
     if (c.attaques.length < 4) { c.attaques.push(C.attaque(jeu, id)); await ui.dire(`${nom} apprend ${nomA} !`); return; }
-    await ui.dire(`${nom} veut apprendre ${nomA}, mais il connaît déjà quatre attaques.`);
+    await ui.dire(`${nom} veut apprendre ${nomA}, mais ${c.sexe === 'f' ? 'elle' : 'il'} connaît déjà quatre attaques.`);
     const i = await ui.liste({ titre: `Oublier quelle attaque pour ${nomA} ?`, items: [
       ...c.attaques.map((a) => ({ texte: C.trouver(jeu, 'attaques', a.id)?.nom || a.id, detail: `PP ${a.pp}/${a.ppMax}` })),
       { texte: `Ne pas apprendre ${nomA}` },
@@ -38,13 +38,36 @@ const HorsCombat = (() => {
     await ui.dire(`1, 2 et… Tadaa ! ${nom} oublie ${oubliee} et apprend ${nomA} !`);
   }
 
-  async function evoluer(jeu, partie, ui, c, vers) {
+  // annulable (Saga 0.7) : une évolution au niveau ou de quête peut être refusée ; celle d'une pierre,
+  // que le joueur vient de choisir, non.
+  async function evoluer(jeu, partie, ui, c, vers, { annulable = false } = {}) {
     const avant = C.nom(jeu, c);
-    await ui.dire(`Quoi ? ${avant} évolue !`);
+    if (annulable) {
+      const i = await ui.liste({ titre: `Quoi ? ${avant} évolue !`, items: [{ texte: 'Le laisser évoluer' }, { texte: 'L\'en empêcher' }] });
+      if (i !== 0) { await ui.dire(`Hein ? L'évolution de ${avant} s'est arrêtée.`); return false; }
+    } else await ui.dire(`Quoi ? ${avant} évolue !`);
     const nouvelles = C.evoluer(jeu, c, vers);
     partie.compteurs.evolutions = (partie.compteurs.evolutions || 0) + 1;
     await ui.dire(`${avant} devient ${C.nom(jeu, c)} !`);
     for (const a of nouvelles) await apprendre(jeu, ui, c, a);
+    return true;
+  }
+
+  // L'amitié en marchant (Saga 0.7) : tous les 128 pas, chaque créature de l'équipe en gagne un peu.
+  function marcher(jeu, partie) {
+    if ((partie.compteurs?.pas || 0) % 128 !== 0) return;
+    for (const c of partie.equipe) if (c.pv > 0) C.changerAmitie(c, [2, 1, 1]);
+  }
+
+  // Après un script (Saga 0.7) : une quête vient peut-être de finir, et une créature de l'équipe
+  // attendait justement ça pour évoluer (évolution « quand une quête est finie » dans Tafl).
+  async function evolutionsEnAttente({ jeu, partie, ui }) {
+    for (const c of partie.equipe) {
+      const v = C.evolutionPrete(jeu, partie, c);
+      if (v?.mode !== 'quete' || c.refusees?.includes(v.vers)) continue;
+      // Refusée : on ne la redemande pas à chaque script (elle reviendra à la prochaine montée de niveau).
+      if (!(await evoluer(jeu, partie, ui, c, v.vers, { annulable: true }))) c.refusees = [...(c.refusees || []), v.vers];
+    }
   }
 
   // Ce qui suit une montée de niveau (Super Bonbon) : les mêmes événements qu'en combat.
@@ -53,7 +76,8 @@ const HorsCombat = (() => {
       if (ev.type === 'niveau') await ui.dire(`${C.nom(jeu, c)} monte au niveau ${ev.niveau} !`);
       else if (ev.type === 'apprend') await ui.dire(`${C.nom(jeu, c)} apprend ${C.trouver(jeu, 'attaques', ev.attaque)?.nom || ev.attaque} !`);
       else if (ev.type === 'oublier') await apprendre(jeu, ui, c, ev.attaque);
-      else if (ev.type === 'evolue') await evoluer(jeu, partie, ui, c, ev.vers);
+      else if (ev.type === 'evolue') await evoluer(jeu, partie, ui, c, ev.vers, { annulable: true });
+      else if (ev.type === 'plafond') await ui.dire(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge ${c.sexe === 'f' ? 'la' : 'le'} laissera progresser.`);
     }
   }
 
@@ -149,8 +173,17 @@ const HorsCombat = (() => {
         if (!C.STATS.includes(s) || gain <= 0) return sansEffet();
         retirer(partie, id);
         c.evs[s] = (c.evs[s] || 0) + gain;
+        C.changerAmitie(c, [5, 3, 2]); // une vitamine fait plaisir (Saga 0.7)
         if (s === 'pv' && c.pv > 0) c.pv += C.pvMax(jeu, c) - max;
         await ui.dire(`${nom} gagne ${gain} points d'effort en ${nomStat(s)}.`);
+        return true;
+      }
+      // Saga 0.7 : un objet qui rapproche (une baie, un grelot à offrir…). valeur : de combien.
+      case 'amitie': {
+        if ((c.amitie || 0) >= 255) return sansEffet();
+        retirer(partie, id);
+        C.changerAmitie(c, v || 10);
+        await ui.dire(`${nom} a l'air ravi${c.sexe === 'f' ? 'e' : ''} ! ${C.motAmitie(c.amitie, c.sexe)}`);
         return true;
       }
       case 'niveau': {
@@ -221,5 +254,5 @@ const HorsCombat = (() => {
   // Ce qu'une boutique paie pour une créature : 100 par niveau, ×5 pour une légendaire.
   const prixCreature = (jeu, c) => Math.max(100, c.niveau * 100 * (C.espece(jeu, c)?.legendaire ? 5 : 1));
 
-  return { utilisable, utiliserObjet, ecranEv, prixCreature };
+  return { utilisable, utiliserObjet, ecranEv, prixCreature, evolutionsEnAttente, marcher };
 })();

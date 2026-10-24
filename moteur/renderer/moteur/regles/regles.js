@@ -23,6 +23,12 @@
 //   ficheEspece(jeu, id, { pris, vus }) la page d'une espèce dans le Pokédex (ou null)
 //   menus                           la forme des menus par défaut (voir FORME ci-dessous) : le jeu peut
 //                                   la changer dans Tafl › Réglages › Interface › Menus (Saga 0.6)
+//
+// Facultatif (Saga 0.7) : un pack qui ne les a pas garde le comportement simple écrit entre parenthèses.
+//   sauvage(jeu, partie, id, niveau, { min, max })   une créature sauvage des herbes (creer tel quel)
+//   plafond(jeu, partie)            le niveau maximum de l'équipe, montré dans le menu Équipe (aucun)
+//   evolutionsEnAttente({ jeu, partie, ui })        après un script : ce qui évolue maintenant (rien)
+//   marcher(jeu, partie)            après chaque pas du joueur (Pokémon : l'amitié monte) (rien)
 
 const Regles = (() => {
   // La forme des menus : leurs noms, le Pokédex montré ou non, la taille et la forme des boîtes du PC,
@@ -54,9 +60,14 @@ const Regles = (() => {
     ecranEv: (o) => HorsCombat.ecranEv(o),
     prixCreature: (jeu, c) => HorsCombat.prixCreature(jeu, c),
     // Les menus (Saga 0.6) : résumé, Pokédex.
-    fiche: (jeu, c) => Fiches.fiche(jeu, c),
+    fiche: (jeu, c, partie) => Fiches.fiche(jeu, c, partie),
     dex: (jeu) => ({ nom: 'Pokédex', especes: Fiches.especes(jeu) }),
     ficheEspece: (jeu, id, etat) => Fiches.ficheEspece(jeu, id, etat),
+    // Saga 0.7 : les sauvages qui suivent le joueur, le plafond des badges, les évolutions de quête.
+    sauvage: (jeu, partie, id, niveau, o) => Creatures.sauvage(jeu, partie, id, niveau, o),
+    plafond: (jeu, partie) => Creatures.plafond(jeu, partie),
+    evolutionsEnAttente: (o) => HorsCombat.evolutionsEnAttente(o),
+    marcher: (jeu, partie) => HorsCombat.marcher(jeu, partie),
   };
   const PACKS = { pokemon };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
@@ -100,5 +111,9 @@ const Regles = (() => {
     },
     dex: (jeu) => ({ ...pack(jeu).dex(jeu), nom: menus(jeu).dex }),
     ficheEspece: (jeu, ...a) => pack(jeu).ficheEspece(jeu, ...a),
+    sauvage: (jeu, partie, id, niveau, o) => (pack(jeu).sauvage ? pack(jeu).sauvage(jeu, partie, id, niveau, o) : pack(jeu).creer(jeu, id, niveau)),
+    plafond: (jeu, partie) => (pack(jeu).plafond ? pack(jeu).plafond(jeu, partie) : null),
+    evolutionsEnAttente: async (o) => { await pack(o.jeu).evolutionsEnAttente?.(o); },
+    marcher: (jeu, partie) => { pack(jeu).marcher?.(jeu, partie); },
   };
 })();
