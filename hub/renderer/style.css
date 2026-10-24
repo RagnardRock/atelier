@@ -88,6 +88,7 @@ kbd {
 .button:hover { background: var(--hover); color: var(--text-strong); }
 .button.primary { background: var(--accent); border-color: transparent; color: var(--accent-text); font-weight: 600; }
 .button.primary:hover { filter: brightness(1.08); }
+.button.primary.danger { background: var(--error); color: #fff; }
 .button.primary kbd { color: inherit; border-color: rgba(0, 0, 0, 0.25); background: rgba(0, 0, 0, 0.08); }
 .button.small { height: 24px; padding: 0 10px; font-size: 12px; }
 
@@ -302,6 +303,7 @@ input[type=range]::-webkit-slider-thumb {
 .outil-version { margin-top: 4px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .outil.a-jour-dispo .outil-version { color: var(--accent); }
 .outil-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.outil-actions .desinstaller:hover { color: var(--error); }
 .button:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
 .icon-button:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
 .progression { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.06); }

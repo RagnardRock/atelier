@@ -531,6 +531,7 @@ handle('outils:ouvert', async (_event, id) => {
 //    - mise à jour : en silence (/S), il remplace l'ancienne version au même endroit.
 // 4. Quand l'installeur a fini, l'interface relit l'état des outils.
 const installing = new Set();
+const desinstallations = new Set(); // voir « Outils : désinstaller » plus bas
 
 async function download(url, file, onProgress) {
   const res = await net.fetch(url, { headers: { 'User-Agent': 'Atelier' } });
@@ -556,7 +557,7 @@ async function download(url, file, onProgress) {
 
 handle('outils:installer', async (_event, id) => {
   const tool = toolById(id);
-  if (installing.has(id)) throw new Error(`${tool.nom} est déjà en cours d'installation`);
+  if (installing.has(id) || desinstallations.has(id)) throw new Error(`${tool.nom} est déjà en cours d'installation ou de désinstallation`);
   installing.add(id);
   const progress = (step, percent = null) => sendToWindow('outils:progression', { id, step, percent });
   try {
@@ -597,6 +598,65 @@ handle('outils:installer', async (_event, id) => {
     return { version: latest.version };
   } finally {
     installing.delete(id);
+    progress('fin');
+  }
+});
+
+// --- Outils : désinstaller ---
+// On utilise le désinstalleur de l'outil lui-même, celui que lance « Paramètres › Applications » :
+// electron-builder l'inscrit dans le registre (QuietUninstallString = version silencieuse avec /S,
+// sinon UninstallString), et le pose dans le dossier de l'outil (« Uninstall <nom>.exe »).
+// Ce désinstalleur se recopie dans le dossier temporaire et se relance de là (pour pouvoir effacer son
+// propre dossier) : le programme lancé se termine donc tout de suite. On attend plutôt que l'outil ait
+// vraiment disparu du disque, au plus 3 minutes. Les réglages de l'outil (%APPDATA%\<nom>) sont gardés,
+// comme quand on désinstalle depuis Windows.
+
+// « "C:\…\Uninstall Rune.exe" /currentuser /S » → { exe, args }
+function decouperCommande(commande) {
+  const m = commande.trim().match(/^"([^"]+)"\s*(.*)$/) || commande.trim().match(/^(\S+)\s*(.*)$/);
+  return { exe: m[1], args: m[2] ? m[2].split(/\s+/).filter(Boolean) : [] };
+}
+
+function commandeDesinstallation(tool, installed, registry) {
+  const entry = registry.find((e) => e.DisplayName === tool.nom);
+  if (entry?.QuietUninstallString) return decouperCommande(entry.QuietUninstallString);
+  if (entry?.UninstallString) {
+    const c = decouperCommande(entry.UninstallString);
+    if (!c.args.includes('/S')) c.args.push('/S');
+    return c;
+  }
+  const exe = path.join(installed.folder, `Uninstall ${tool.nom}.exe`);
+  if (fsSync.existsSync(exe)) return { exe, args: ['/S'] };
+  return null;
+}
+
+handle('outils:desinstaller', async (_event, id) => {
+  const tool = toolById(id);
+  if (installing.has(id) || desinstallations.has(id)) throw new Error(`${tool.nom} est déjà en cours d'installation ou de désinstallation`);
+  const registry = await readUninstallRegistry();
+  const installed = await findInstalled(tool, registry);
+  if (!installed) throw new Error(`${tool.nom} n'est pas installé`);
+  const commande = commandeDesinstallation(tool, installed, registry);
+  if (!commande) throw new Error(`Atelier ne trouve pas le désinstalleur de ${tool.nom}. Passe par « Paramètres › Applications » de Windows.`);
+  desinstallations.add(id);
+  const progress = (step) => sendToWindow('outils:progression', { id, step, percent: null });
+  try {
+    progress('desinstallation');
+    log('INFO', `Désinstallation de ${tool.nom} (${commande.exe} ${commande.args.join(' ')})`);
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn(commande.exe, commande.args, { detached: false, stdio: 'ignore', windowsHide: true });
+      child.on('error', reject);
+      child.on('exit', resolve);
+    });
+    if (code !== 0) throw new Error(`La désinstallation de ${tool.nom} a été annulée ou a échoué (code ${code})`);
+    const limite = Date.now() + 3 * 60_000;
+    while (await findInstalled(tool, await readUninstallRegistry())) {
+      if (Date.now() > limite) throw new Error(`${tool.nom} est toujours là après 3 minutes. Vérifie qu'il est bien fermé, ou passe par « Paramètres › Applications » de Windows.`);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    log('INFO', `${tool.nom} désinstallé`);
+  } finally {
+    desinstallations.delete(id);
     progress('fin');
   }
 });
