@@ -23,6 +23,12 @@ const API_MAX_AGE = 30 * 60_000; // on relit la liste complète (API) au plus un
 
 class LimiteGithub extends Error {}
 
+// [0, 16, 0] plus récente que [0, 15, 2] ?
+function plusRecente(a, b) {
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+}
+
 // « 00:42 » : l'heure (locale) où GitHub acceptera de nouveau des demandes.
 const heure = (ms) => new Date(ms).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 const messageLimite = (jusqua) => `GitHub limite les vérifications à 60 par heure pour ce PC, et elles sont épuisées. Réessaie après ${heure(jusqua)}`;
@@ -124,7 +130,46 @@ function creerGithub({ net, dossier, agent, api = `https://api.github.com/repos/
     const parTag = new Map();
     for (const r of depuisFlux.value || []) parTag.set(r.tag_name, r);
     for (const r of e.list || []) parTag.set(r.tag_name, r); // l'API a plus de détails (fichiers) : elle gagne
+    // La liste gardée peut dater d'une demi-heure, et le flux ne montre pas forcément les toutes
+    // dernières Releases de chaque outil (voir suivantes()) : on va voir si la suivante existe.
+    for (const r of await suivantes([...parTag.keys()])) if (!parTag.has(r.tag_name)) parTag.set(r.tag_name, r);
     return [...parTag.values()];
+  }
+
+  // Le flux ne donne que 10 Releases, et GitHub les trie par jour puis par nom d'étiquette, à
+  // l'envers (tafl, skald, saga, rune… avant atelier, brokk). Un jour où plusieurs outils sortent
+  // une version, celles d'Atelier, Brokk, Edda ou Mímir n'y figurent donc pas : elles n'arrivaient
+  // qu'avec la liste de l'API, jusqu'à une demi-heure plus tard (bien plus si la limite est atteinte).
+  // Pour chaque outil, on demande donc à github.com (pas à l'API : pas compté dans la limite) si la
+  // page de la version suivante existe (0.15.0 → 0.15.1, 0.16.0 ou 1.0.0), et on recommence depuis
+  // celle qu'on trouve (0.15 → 0.16 → 0.17). Ces Releases-là ont des notes vides et assets: null.
+  async function existe(tag) {
+    const res = await net.fetch(`${site}/releases/tag/${encodeURIComponent(tag)}`, { method: 'HEAD', cache: 'no-store', headers: { 'User-Agent': agent } }).catch(() => null);
+    return Boolean(res?.ok);
+  }
+  async function suivantes(tags) {
+    const dernieres = new Map(); // préfixe (« atelier-v ») → [majeur, mineur, correctif]
+    for (const tag of tags) {
+      const m = tag.match(/^(.+-v)(\d+)\.(\d+)\.(\d+)$/);
+      if (!m) continue;
+      const v = m.slice(2).map(Number);
+      const avant = dernieres.get(m[1]);
+      if (!avant || plusRecente(v, avant)) dernieres.set(m[1], v);
+    }
+    const trouvees = [];
+    await Promise.all([...dernieres].map(async ([prefixe, v]) => {
+      for (let essais = 0; essais < 10; essais++) { // 10 : garde-fou, jamais atteint en pratique
+        const [a, b, c] = v;
+        const candidates = [[a, b, c + 1], [a, b + 1, 0], [a + 1, 0, 0]];
+        const ok = await Promise.all(candidates.map((x) => existe(`${prefixe}${x.join('.')}`)));
+        // La plus haute qui existe (0.16.0 plutôt que 0.15.1 si les deux sont sorties).
+        const i = ok.lastIndexOf(true);
+        if (i < 0) return;
+        v = candidates[i];
+        trouvees.push({ tag_name: `${prefixe}${v.join('.')}`, body: '', draft: false, prerelease: false, assets: null });
+      }
+    }));
+    return trouvees;
   }
 
   // L'adresse de téléchargement d'un fichier d'une Release (pas comptée dans la limite de l'API).
