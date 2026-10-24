@@ -260,7 +260,25 @@ input[type=range]::-webkit-slider-thumb {
 .discret.erreur { color: var(--warning); }
 
 /* ---------- Outils ---------- */
-#liste-outils { display: flex; flex-direction: column; gap: 10px; padding: 12px; overflow-y: auto; }
+#liste-outils { display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 12px; overflow-y: auto; }
+/* Filtre façon Steam : Tous / Installés / Mises à jour */
+#outils-filtres { display: flex; gap: 6px; padding: 10px 12px 4px; flex-shrink: 0; }
+.filtre { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--plate-border); border-radius: 13px; background: rgba(255, 255, 255, 0.03); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+.filtre[hidden] { display: none; }
+.filtre:hover { background: var(--hover); color: var(--text-strong); }
+.filtre.actif { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text-strong); }
+.filtre .compte, .categorie-titre .compte { min-width: 18px; padding: 0 5px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 11px; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.filtre.actif .compte { color: var(--accent); }
+/* Une catégorie (Développement, Graphisme…) : un titre qui replie, puis ses cartes */
+.categorie { display: flex; flex-direction: column; gap: 10px; }
+.categorie + .categorie { margin-top: 6px; }
+.categorie-titre { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 4px; border: none; background: none; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer; border-radius: 6px; }
+.categorie-titre:hover { color: var(--text-strong); background: var(--hover); }
+.categorie-titre .codicon { font-size: 14px; }
+.categorie-titre .codicon:nth-child(2) { color: var(--accent); }
+.categorie-titre .compte { margin-left: auto; letter-spacing: 0; }
+.categorie-outils { display: flex; flex-direction: column; gap: 10px; }
+.outils-vide { margin: 8px 4px; line-height: 1.45; }
 #outils-info { margin: 0; padding: 0 14px 12px; line-height: 1.45; }
 .outil {
   position: relative;
@@ -550,3 +568,24 @@ input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px s
 .claude-carte-toujours:hover { color: var(--text-strong); }
 /* Projets récents : marque-page « Claude retient quelque chose sur ce projet » */
 .projet-memoire { font-size: 12px; color: var(--accent); flex-shrink: 0; }
+
+/* Calculatrice */
+.calc-ecran { padding: 10px 14px 6px; flex-shrink: 0; }
+#calc-saisie { width: 100%; height: 34px; font-size: 16px; font-variant-numeric: tabular-nums; }
+#calc-resultat { margin-top: 6px; min-height: 34px; text-align: right; color: var(--text-strong); font-size: 26px; font-weight: 300; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#calc-resultat.erreur { color: var(--warning); font-size: 14px; line-height: 34px; }
+.calc-corps { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(210px, 1.3fr) minmax(130px, 1fr); gap: 8px; padding: 0 10px 10px 14px; }
+#calc-touches { display: grid; grid-template-columns: repeat(5, 1fr); grid-auto-rows: minmax(30px, 52px); align-content: start; gap: 5px; min-height: 0; }
+.calc-touche { min-height: 30px; border: 1px solid var(--plate-border); border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--text-strong); font: inherit; font-size: 15px; cursor: pointer; transition: background 0.1s, transform 0.05s; }
+.calc-touche:hover { background: rgba(255, 255, 255, 0.1); }
+.calc-touche:active { transform: scale(0.96); }
+.calc-touche.fonction { background: rgba(255, 255, 255, 0.025); color: var(--text); font-size: 13px; }
+.calc-touche.operateur { color: var(--accent); font-size: 17px; }
+.calc-touche.zero { grid-column: span 2; }
+.calc-touche.egal { background: color-mix(in srgb, var(--accent) 75%, transparent); border-color: transparent; color: #0b0f0e; font-size: 18px; font-weight: 600; }
+.calc-touche.egal:hover { background: var(--accent); }
+#calc-historique { padding: 0; border-left: 1px solid var(--plate-border); padding-left: 6px; }
+#calc-historique li { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; padding: 5px 8px; font-variant-numeric: tabular-nums; }
+.calc-ligne-calcul { max-width: 100%; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calc-ligne-resultat { max-width: 100%; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#calc-historique li.calc-vide { align-items: flex-start; cursor: default; background: none; line-height: 1.45; }
