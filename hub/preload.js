@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('atelier', {
   etatOutils: (options) => ipcRenderer.invoke('outils:etat', options),
   lancer: (id) => ipcRenderer.invoke('outils:lancer', id),
   installer: (id) => ipcRenderer.invoke('outils:installer', id),
+  desinstaller: (id) => ipcRenderer.invoke('outils:desinstaller', id),
   estOuvert: (id) => ipcRenderer.invoke('outils:ouvert', id),
   ouvrirDossier: (id) => ipcRenderer.invoke('outils:ouvrirDossier', id),
   onProgression: (callback) => ipcRenderer.on('outils:progression', (_event, data) => callback(data)),

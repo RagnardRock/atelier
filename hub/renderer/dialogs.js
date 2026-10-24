@@ -147,7 +147,7 @@ const Dialogs = (() => {
       const finish = (v) => { overlay.remove(); open = null; resolve(v); };
       for (const c of choices) {
         const b = document.createElement('button');
-        b.className = `button${c.primary ? ' primary' : ''}`;
+        b.className = `button${c.primary ? ' primary' : ''}${c.danger ? ' danger' : ''}`;
         b.textContent = c.label;
         b.onclick = () => finish(c.value);
         card.querySelector('footer').appendChild(b);

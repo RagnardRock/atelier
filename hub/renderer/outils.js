@@ -1,6 +1,7 @@
 // Colonne « Outils » : une carte par outil (Rune, Skald…), avec sa version installée,
 // la dernière publiée sur GitHub, et un bouton qui change selon le cas :
 // Installer (pas encore sur ce PC), Mettre à jour (une version plus récente existe), Lancer.
+// Un outil installé a aussi une petite corbeille : Désinstaller (avec confirmation).
 // Les outils sont rangés par catégorie (Développement, Graphisme…), chaque catégorie se replie d'un clic,
 // et un filtre façon Steam (Tous / Installés / Mises à jour) en haut de la colonne. Le filtre et les
 // catégories repliées sont gardés dans config.json (filtreOutils, categoriesRepliees).
@@ -23,6 +24,7 @@ const Outils = (() => {
   function ligneVersion(o) {
     if (enCours.has(o.id)) {
       const { step, percent } = enCours.get(o.id);
+      if (step === 'desinstallation') return 'Désinstallation en cours…';
       return step === 'telechargement' ? `Téléchargement de ${o.nom} ${o.derniere}… ${percent ?? 0} %` : 'Installation en cours…';
     }
     if (attente.has(o.id)) return `En attente de ${o.nom} ${attente.get(o.id)} : installation dès sa publication…`;
@@ -52,7 +54,9 @@ const Outils = (() => {
       if (o.miseAJour) actions.append(bouton('Mettre à jour', 'cloud-download', () => installer(o), true));
       const dossier = el('button', { className: 'icon-button', title: `Ouvrir le dossier d'installation de ${o.nom}` }, el('i', { className: 'codicon codicon-folder-opened' }));
       dossier.onclick = () => window.atelier.ouvrirDossier(o.id);
-      actions.append(el('span', { className: 'spacer' }), dossier);
+      const corbeille = el('button', { className: 'icon-button desinstaller', title: `Désinstaller ${o.nom}`, disabled: busy }, el('i', { className: 'codicon codicon-trash' }));
+      corbeille.onclick = () => desinstaller(o);
+      actions.append(el('span', { className: 'spacer' }), dossier, corbeille);
     } else {
       const b = bouton('Installer', 'desktop-download', () => installer(o), true);
       if (!o.derniere && !o.enPreparation) b.disabled = true;
@@ -71,7 +75,7 @@ const Outils = (() => {
       actions);
     if (busy) {
       const { step, percent } = enCours.get(o.id);
-      const barre = el('div', { className: `progression${step === 'installation' ? ' indeterminee' : ''}` }, el('div'));
+      const barre = el('div', { className: `progression${step !== 'telechargement' ? ' indeterminee' : ''}` }, el('div'));
       barre.firstChild.style.width = `${step === 'telechargement' ? percent ?? 0 : 100}%`;
       card.append(barre);
     }
@@ -251,6 +255,35 @@ const Outils = (() => {
     try {
       const { version } = await window.atelier.installer(o.id);
       notify(`${o.nom} ${version} est installé.`, 'success', 6000, [{ label: `Lancer ${o.nom}`, run: () => lancer(o) }]);
+    } catch (err) {
+      notify(cleanError(err), 'error');
+    } finally {
+      enCours.delete(o.id);
+      await refresh().catch(() => render());
+    }
+  }
+
+  // Désinstaller : on demande confirmation, on vérifie que l'outil est fermé (Windows ne laisse pas
+  // effacer un programme ouvert), puis main.js lance le désinstalleur de l'outil en silence.
+  async function desinstaller(o) {
+    const ok = await Dialogs.ask(`Désinstaller ${o.nom}`, `${o.nom}${o.version ? ` ${o.version}` : ''} va être retiré de ce PC, comme depuis « Paramètres › Applications » de Windows.\n\nTes réglages et tes fichiers sont gardés : si tu réinstalles ${o.nom} plus tard, tu les retrouves.`, [
+      { label: 'Annuler', value: false },
+      { label: 'Désinstaller', value: true, primary: true, danger: true },
+    ]);
+    if (!ok) return;
+    while (await window.atelier.estOuvert(o.id)) {
+      const encore = await Dialogs.ask(`${o.nom} est ouvert`, `Ferme ${o.nom} (en enregistrant ton travail), puis clique Réessayer.`, [
+        { label: 'Annuler', value: false },
+        { label: 'Réessayer', value: true, primary: true },
+      ]);
+      if (!encore) return;
+    }
+    attente.delete(o.id);
+    enCours.set(o.id, { step: 'desinstallation' });
+    render();
+    try {
+      await window.atelier.desinstaller(o.id);
+      notify(`${o.nom} est désinstallé.`, 'success', 6000, o.derniere ? [{ label: 'Réinstaller', run: () => installer({ ...o, installe: false }) }] : []);
     } catch (err) {
       notify(cleanError(err), 'error');
     } finally {
