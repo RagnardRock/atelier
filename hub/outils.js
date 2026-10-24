@@ -97,6 +97,18 @@ const OUTILS = [
     dossier: 'tableur',
     ouvreDossier: '0.1.0',
   },
+  {
+    id: 'edda',
+    nom: 'Edda',
+    glyphe: 'ᛖ',
+    description: 'Traitement de texte : Word (.docx), LibreOffice (.odt), RTF, Markdown, HTML, texte, avec images, vidéos et sons',
+    prefixe: 'edda-v',
+    exe: 'Edda.exe',
+    icone: 'edda.svg',
+    dossier: 'texte',
+    ouvreDossier: '0.1.0',
+    categorie: 'bureautique',
+  },
 ];
 
 // Les rayons de la colonne Outils, dans l'ordre d'affichage.

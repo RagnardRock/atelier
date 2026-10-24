@@ -19,7 +19,7 @@ Une carte par outil, avec sa version installée et la dernière publiée sur Git
 - **Lancer** : ouvre l'outil (double-clic sur son icône aussi). L'icône dossier ouvre son dossier d'installation.
 - **Désinstaller** (corbeille, sur un outil installé, depuis Atelier 0.15) : après confirmation, et une fois l'outil fermé, Atelier lance le désinstalleur de l'outil en silence, le même que « Paramètres › Applications » de Windows (lu dans le registre, sinon `Uninstall <nom>.exe` dans son dossier), puis attend qu'il ait disparu. Les réglages et fichiers de l'outil sont gardés : en le réinstallant, tu les retrouves.
 
-**Rangés par catégorie** (depuis Atelier 0.11) : Développement (Rune), Graphisme (Skald, Brokk), Bureautique, Jeu (Tafl, Saga), et « Autres » pour un outil sans catégorie. Un clic sur le titre d'une catégorie la replie ou la déplie. En haut, un **filtre façon Steam** : **Tous**, **Installés** (seulement ceux qui sont sur ce PC), et **Mises à jour** (n'apparaît que s'il y en a). Le nombre d'outils est écrit à côté. Atelier retient le filtre et les catégories repliées.
+**Rangés par catégorie** (depuis Atelier 0.11) : Développement (Rune), Graphisme (Skald, Brokk), Bureautique (Mímir, Reikna, Edda), Jeu (Tafl, Saga), et « Autres » pour un outil sans catégorie. Un clic sur le titre d'une catégorie la replie ou la déplie. En haut, un **filtre façon Steam** : **Tous**, **Installés** (seulement ceux qui sont sur ce PC), et **Mises à jour** (n'apparaît que s'il y en a). Le nombre d'outils est écrit à côté. Atelier retient le filtre et les catégories repliées.
 
 Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelier le fait tout seul (réglable).
 

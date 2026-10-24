@@ -1,0 +1,96 @@
+# Fabrique l'installeur Windows d'Edda (Edda-Setup-<version>.exe) sur un PC Windows de GitHub.
+# - Sur une pull request qui touche texte/ : l'installeur est fabriqué pour vérifier que tout marche,
+#   et se télécharge depuis l'onglet « Checks » de la PR (rubrique « Artifacts »).
+# - Sur main, quand la version de texte/package.json change (par exemple après la fusion d'une PR) :
+#   GitHub crée lui-même l'étiquette edda-vX.Y.Z et publie l'installeur dans l'onglet « Releases ».
+#   Plus besoin de poser l'étiquette à la main. Si cette version est déjà publiée, rien ne se passe.
+# - On peut encore publier à la main en poussant une étiquette (git tag edda-vX.Y.Z puis git push origin edda-vX.Y.Z).
+#   Important : cette Release n'est PAS marquée « Latest », car Rune cherche ses mises à jour
+#   dans la Release « Latest » du dépôt ; sinon Rune croirait qu'Edda est sa nouvelle version.
+#   Le bouton de mise à jour d'Edda cherche donc lui-même la Release edda-v* la plus récente,
+#   puis y lit latest.yml (version et empreinte de l'installeur).
+name: Edda (installeur Windows)
+
+on:
+  pull_request:
+    paths: ['texte/**', 'commun/**', '.github/workflows/edda.yml']
+  push:
+    branches: [main]
+    paths: ['texte/**', 'commun/**', '.github/workflows/edda.yml']
+    tags: ['edda-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # pour créer l'étiquette, la version (release) et y déposer l'installeur
+
+# Deux poussées rapprochées sur main : la seconde attend la fin de la première (pas de double Release).
+concurrency:
+  group: edda.yml-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: texte
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tout l'historique et les étiquettes, pour écrire les notes de version
+
+      # Faut-il publier une version ? Sur une étiquette : oui. Sur main : oui si l'étiquette de la
+      # version de package.json n'existe pas encore. Sur une pull request : non (on fabrique seulement).
+      - name: Décider s'il faut publier
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="edda-v$VERSION"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "$TAG" != "$GITHUB_REF_NAME" ]; then
+              echo "L'étiquette $GITHUB_REF_NAME ne correspond pas à la version $VERSION de texte/package.json"
+              exit 1
+            fi
+            echo "publier=oui" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_EVENT_NAME" = "push" ] && ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Nouvelle version $VERSION : elle sera publiée sous l'étiquette $TAG"
+            echo "publier=oui" >> "$GITHUB_OUTPUT"
+          else
+            echo "Pas de publication ($TAG existe déjà, ou ce n'est pas une poussée sur main)"
+            echo "publier=non" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: texte/package-lock.json
+      - run: npm ci
+
+      # On fabrique d'abord, puis on crée la Release en une seule fois avec tous ses fichiers.
+      - name: Fabriquer l'installeur
+        run: npx electron-builder --win nsis --publish never
+      - name: Vérifier que latest.yml est fabriqué (les mises à jour en ont besoin)
+        run: cat dist/latest.yml
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.publier == 'non'
+        with:
+          name: Edda-Setup
+          path: texte/dist/Edda-Setup-*.exe
+          retention-days: 14
+
+      # gh release create crée aussi l'étiquette sur ce commit si elle n'existe pas encore.
+      # Notes de version : la liste des commits de texte/ depuis la version précédente.
+      - name: Publier la version (installeur, latest.yml et notes de version)
+        if: steps.version.outputs.publier == 'oui'
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          PREVIOUS=$(git describe --tags --abbrev=0 --match 'edda-v*' --exclude "$TAG" HEAD 2>/dev/null || true)
+          RANGE=${PREVIOUS:+$PREVIOUS..}HEAD
+          git log --no-merges --format='- %s' "$RANGE" -- . > notes.md
+          gh release create "$TAG" dist/Edda-Setup-*.exe dist/Edda-Setup-*.exe.blockmap dist/latest.yml \
+            --target "$GITHUB_SHA" --title "Edda ${TAG#edda-v}" --notes-file notes.md --latest=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

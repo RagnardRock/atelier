@@ -1,0 +1,72 @@
+{
+  "name": "atelier-texte",
+  "productName": "Edda",
+  "version": "0.1.0",
+  "description": "Edda, mon traitement de texte à la Word (docx, odt, rtf, md, html, txt), un des outils d'Atelier",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node ../commun/copier.js",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "author": "Ragna",
+  "build": {
+    "appId": "fr.ragna.edda",
+    "productName": "Edda",
+    "copyright": "Ragna",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asarUnpack": [
+      "commun/mcp-commun.js"
+    ],
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "!node_modules/marked/{src,man,bin}/**",
+      "!node_modules/dompurify/dist/*.map",
+      "!mettre-a-jour.*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "executableName": "Edda"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Edda",
+      "artifactName": "Edda-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Edda",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "@vscode/codicons": "0.0.45",
+    "dompurify": "3.4.15",
+    "electron-updater": "6.8.9",
+    "jszip": "3.10.2",
+    "marked": "18.0.14",
+    "turndown": "7.2.4"
+  },
+  "private": true
+}
