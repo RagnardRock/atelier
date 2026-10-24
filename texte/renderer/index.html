@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts locaux s'exécutent. Les images et les médias de la page viennent
+       du disque (file:), du document lui-même (data:) ou du web (https:, une image collée d'un site). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: file: https:; media-src 'self' data: blob: file: https:; connect-src 'self' data: blob:">
+  <title>Edda</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune, Skald et Brokk) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../commun/claude-panneau.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="edda.svg" alt="">Edda</span>
+    <nav id="menus">
+      <button data-menu="fichier">Fichier</button>
+      <button data-menu="edition">Édition</button>
+      <button data-menu="insertion">Insertion</button>
+      <button data-menu="format">Format</button>
+      <button data-menu="affichage">Affichage</button>
+    </nav>
+    <span id="titre-document"></span>
+    <div class="title-actions">
+      <button id="btn-reglages" class="icon-button" title="Réglages d'Edda (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version d'Edda"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <!-- Onglets : un par document ouvert -->
+  <div id="onglets-barre">
+    <div id="onglets"></div>
+    <button id="onglet-nouveau" class="icon-button" title="Nouveau document (Ctrl+N)"><i class="codicon codicon-add"></i></button>
+  </div>
+
+  <!-- Ruban : la mise en forme, comme la barre « Accueil » de Word -->
+  <div id="ruban">
+    <div class="groupe">
+      <button class="outil" data-cmd="undo" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
+      <button class="outil" data-cmd="redo" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
+    </div>
+    <div class="groupe">
+      <select id="choix-style" title="Style du paragraphe (Ctrl+Alt+1, 2, 3 pour les titres, Ctrl+Alt+0 pour le texte normal)">
+        <option value="p">Texte normal</option>
+        <option value="h1">Titre 1</option>
+        <option value="h2">Titre 2</option>
+        <option value="h3">Titre 3</option>
+        <option value="h4">Titre 4</option>
+        <option value="blockquote">Citation</option>
+        <option value="pre">Code</option>
+      </select>
+      <input id="choix-police" list="liste-polices" title="Police" spellcheck="false">
+      <datalist id="liste-polices"></datalist>
+      <div class="taille">
+        <input id="choix-taille" list="liste-tailles" title="Taille (points)" spellcheck="false">
+        <datalist id="liste-tailles"></datalist>
+      </div>
+      <button class="outil" data-cmd="plusGrand" title="Agrandir le texte (Ctrl+Maj+>)"><span class="lettre">A<sup>+</sup></span></button>
+      <button class="outil" data-cmd="plusPetit" title="Réduire le texte (Ctrl+Maj+<)"><span class="lettre petite">A<sup>−</sup></span></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-cmd="bold" data-etat="bold" title="Gras (Ctrl+G ou Ctrl+B)"><i class="codicon codicon-bold"></i></button>
+      <button class="outil" data-cmd="italic" data-etat="italic" title="Italique (Ctrl+I)"><i class="codicon codicon-italic"></i></button>
+      <button class="outil" data-cmd="underline" data-etat="underline" title="Souligné (Ctrl+U)"><span class="lettre souligne">S</span></button>
+      <button class="outil" data-cmd="strikeThrough" data-etat="strikeThrough" title="Barré"><i class="codicon codicon-strikethrough"></i></button>
+      <button class="outil" data-cmd="subscript" data-etat="subscript" title="Indice (Ctrl+=)"><span class="lettre">x<sub>2</sub></span></button>
+      <button class="outil" data-cmd="superscript" data-etat="superscript" title="Exposant (Ctrl+Maj++)"><span class="lettre">x<sup>2</sup></span></button>
+    </div>
+    <div class="groupe">
+      <div class="couleur-bouton" title="Couleur du texte">
+        <button class="outil" data-cmd="couleur"><span class="lettre">A</span><span class="trait" id="trait-couleur"></span></button>
+        <button class="outil fleche" data-menu-couleur="couleur"><i class="codicon codicon-chevron-down"></i></button>
+      </div>
+      <div class="couleur-bouton" title="Surligner">
+        <button class="outil" data-cmd="surligner"><i class="codicon codicon-paintcan"></i><span class="trait" id="trait-surligner"></span></button>
+        <button class="outil fleche" data-menu-couleur="surligner"><i class="codicon codicon-chevron-down"></i></button>
+      </div>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-cmd="justifyLeft" data-etat="justifyLeft" title="Aligner à gauche (Ctrl+L)"><svg viewBox="0 0 16 16"><path d="M2 3h12M2 6.5h8M2 10h12M2 13.5h8"/></svg></button>
+      <button class="outil" data-cmd="justifyCenter" data-etat="justifyCenter" title="Centrer (Ctrl+E)"><svg viewBox="0 0 16 16"><path d="M2 3h12M4 6.5h8M2 10h12M4 13.5h8"/></svg></button>
+      <button class="outil" data-cmd="justifyRight" data-etat="justifyRight" title="Aligner à droite (Ctrl+R)"><svg viewBox="0 0 16 16"><path d="M2 3h12M6 6.5h8M2 10h12M6 13.5h8"/></svg></button>
+      <button class="outil" data-cmd="justifyFull" data-etat="justifyFull" title="Justifier (Ctrl+J)"><svg viewBox="0 0 16 16"><path d="M2 3h12M2 6.5h12M2 10h12M2 13.5h12"/></svg></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-cmd="insertUnorderedList" data-etat="insertUnorderedList" title="Liste à puces (Ctrl+Maj+L)"><i class="codicon codicon-list-unordered"></i></button>
+      <button class="outil" data-cmd="insertOrderedList" data-etat="insertOrderedList" title="Liste numérotée"><i class="codicon codicon-list-ordered"></i></button>
+      <button class="outil" data-cmd="outdent" title="Diminuer le retrait (Maj+Tab dans une liste)"><i class="codicon codicon-indent miroir"></i></button>
+      <button class="outil" data-cmd="indent" title="Augmenter le retrait (Tab dans une liste)"><i class="codicon codicon-indent"></i></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-cmd="lien" title="Lien (Ctrl+K)"><i class="codicon codicon-link"></i></button>
+      <button class="outil" data-cmd="image" title="Insérer une image"><i class="codicon codicon-file-media"></i></button>
+      <button class="outil" data-cmd="video" title="Insérer une vidéo"><i class="codicon codicon-device-camera-video"></i></button>
+      <button class="outil" data-cmd="son" title="Insérer un son"><i class="codicon codicon-unmute"></i></button>
+      <button class="outil" data-cmd="tableau" title="Insérer un tableau"><i class="codicon codicon-table"></i></button>
+      <button class="outil" data-cmd="ligne" title="Trait horizontal"><i class="codicon codicon-horizontal-rule"></i></button>
+      <button class="outil" data-cmd="saut" title="Saut de page (Ctrl+Entrée)"><i class="codicon codicon-newline"></i></button>
+    </div>
+    <div class="groupe">
+      <button class="outil" data-cmd="removeFormat" title="Effacer la mise en forme (Ctrl+Espace)"><i class="codicon codicon-clear-all"></i></button>
+      <button class="outil" data-cmd="miseEnPage" title="Mise en page : format du papier, orientation, marges"><i class="codicon codicon-layout"></i></button>
+    </div>
+  </div>
+
+  <!-- Accueil : aucun document ouvert -->
+  <section id="accueil" hidden>
+    <img class="welcome-logo" src="edda.svg" alt="">
+    <h1>Edda</h1>
+    <p class="welcome-sub">Écris, mets en page, et ouvre ce que t'envoient les autres : Word, LibreOffice, RTF, Markdown, pages web, texte.</p>
+    <div class="welcome-actions">
+      <button id="accueil-nouveau" class="button primary"><i class="codicon codicon-new-file"></i> Nouveau document <kbd>Ctrl+N</kbd></button>
+      <button id="accueil-ouvrir" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
+    </div>
+    <p class="welcome-hint">Glisse aussi un document sur la fenêtre pour l'ouvrir.</p>
+    <div id="accueil-listes">
+      <div id="accueil-dossier-bloc" hidden>
+        <h2 id="accueil-dossier-titre"></h2>
+        <div id="accueil-dossier" class="liste-docs"></div>
+      </div>
+      <div id="accueil-recents-bloc" hidden>
+        <h2>Documents récents</h2>
+        <div id="accueil-recents" class="liste-docs"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- La zone de travail : la page du document ouvert, sur un fond, comme dans Word -->
+  <main id="zone" hidden>
+    <div id="defilement">
+      <div id="pages"></div>
+      <!-- Petite barre au-dessus d'un média choisi (image, vidéo, son), et sa poignée de taille -->
+      <div id="media-barre" hidden></div>
+      <div id="media-poignee" hidden title="Glisser pour changer la taille"></div>
+    </div>
+    <!-- Barre « Rechercher / Remplacer » (Ctrl+F, Ctrl+H) -->
+    <div id="recherche" hidden>
+      <div class="ligne">
+        <input id="recherche-texte" placeholder="Rechercher" spellcheck="false">
+        <span id="recherche-compte"></span>
+        <button class="icon-button" id="recherche-casse" title="Respecter les majuscules"><span class="lettre petite">Aa</span></button>
+        <button class="icon-button" id="recherche-prec" title="Précédent (Maj+Entrée)"><i class="codicon codicon-arrow-up"></i></button>
+        <button class="icon-button" id="recherche-suiv" title="Suivant (Entrée)"><i class="codicon codicon-arrow-down"></i></button>
+        <button class="icon-button" id="recherche-fermer" title="Fermer (Échap)"><i class="codicon codicon-close"></i></button>
+      </div>
+      <div class="ligne" id="recherche-ligne-remplacer">
+        <input id="recherche-remplacer" placeholder="Remplacer par" spellcheck="false">
+        <button class="icon-button" id="recherche-un" title="Remplacer (Entrée)"><i class="codicon codicon-replace"></i></button>
+        <button class="icon-button" id="recherche-tout" title="Tout remplacer (Ctrl+Alt+Entrée)"><i class="codicon codicon-replace-all"></i></button>
+      </div>
+    </div>
+    <div id="drop-hint">Lâche pour ouvrir ces documents ou insérer ces médias</div>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-pages"></span>
+    <span id="status-mots"></span>
+    <span id="status-format"></span>
+    <span class="spacer"></span>
+    <span id="status-enregistre"></span>
+    <button id="zoom-moins" class="icon-button" title="Zoom arrière (Ctrl+-)"><i class="codicon codicon-zoom-out"></i></button>
+    <input id="zoom" type="range" min="50" max="200" step="10" title="Zoom (Ctrl+molette)">
+    <button id="zoom-plus" class="icon-button" title="Zoom avant (Ctrl++)"><i class="codicon codicon-zoom-in"></i></button>
+    <span id="zoom-valeur"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+
+  <script src="../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="../node_modules/jszip/dist/jszip.min.js"></script>
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../node_modules/turndown/lib/turndown.browser.umd.js"></script>
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="menus.js"></script>
+  <script src="formats/commun.js"></script>
+  <script src="formats/docx.js"></script>
+  <script src="formats/odt.js"></script>
+  <script src="formats/rtf.js"></script>
+  <script src="formats/texte.js"></script>
+  <script src="editeur.js"></script>
+  <script src="medias.js"></script>
+  <script src="recherche.js"></script>
+  <script src="app.js"></script>
+  <script src="update.js"></script>
+  <!-- Panneau Claude, commun aux outils d'Atelier (../commun/LISEZMOI.md) -->
+  <script src="../commun/claude-panneau.js" data-outil="Edda" data-bienvenue="Demande-moi de rédiger, reformuler, corriger ou résumer ton document."></script>
+  <script src="claude-actions.js"></script>
+  <script src="claude-familles.js"></script>
+</body>
+</html>

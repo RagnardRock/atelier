@@ -92,7 +92,9 @@
 
   // Une copie de la page où chaque média pointe vers son fichier rangé à côté du document.
   async function avecMediasRanges(ctx, alertes) {
-    const page = ctx.page.cloneNode(true);
+    // La copie vit dans un document à part : ses images ne se chargent pas (leurs adresses rangées sont
+    // relatives au document enregistré, pas à la fenêtre d'Edda).
+    const page = document.implementation.createHTMLDocument('').importNode(ctx.page, true);
     for (const m of page.querySelectorAll('img, video, audio')) {
       const src = m.getAttribute('src');
       if (!src) { m.remove(); continue; }
@@ -103,7 +105,8 @@
         alertes.add(`${Medias.nom(m)} n'a pas pu être rangé à côté du document : ${err.message}`);
       }
       m.removeAttribute('data-nom');
-      m.classList.remove('media');
+      m.removeAttribute('contenteditable');
+      m.classList.remove('media', 'choisi');
       if (!m.classList.length) m.removeAttribute('class');
     }
     if (page.querySelector('img, video, audio')) alertes.add(`Les images, vidéos et sons sont rangés dans le dossier « ${ctx.dossierMedias} », à côté du document.`);
@@ -254,4 +257,10 @@ ${corps}
   Formats.ajouter('txt', { nom: 'Texte brut', extensions: ['txt', 'text', 'log'], lire: lireTxt, ecrire: ecrireTxt, garde: 'rien' });
   Formats.cssDocument = cssDocument;
   Formats.documentHtml = documentHtml;
+  // Pour Claude : la page (ou une partie) en Markdown, telle qu'elle est à l'écran.
+  Formats.versMarkdown = (noeud) => {
+    const copie = noeud.cloneNode(true);
+    for (const m of copie.querySelectorAll('[contenteditable]')) m.removeAttribute('contenteditable');
+    return convertisseur().turndown(copie).trim();
+  };
 })();
