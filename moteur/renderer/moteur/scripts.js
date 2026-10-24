@@ -109,7 +109,7 @@ const Scripts = (() => {
           if (!trouver('creatures', c.creature)) { await narrer(`(La créature « ${c.creature} » n'existe pas dans les données du jeu.)`); break; }
           const place = Collection.ranger(jeu, partie, Regles.creer(jeu, c.creature, niveau));
           if (place.ou === 'equipe') await narrer(`${nom} (niveau ${niveau}) rejoint ton équipe !`);
-          else await narrer(`Ton équipe est pleine : ${nom} part au PC, dans la ${place.nom}.`);
+          else await narrer(`Ton équipe est pleine : ${nom} part dans ${place.nom} (${place.pc}).`);
           break;
         }
         // Les combats (Saga 0.3). Perdu : le script s'arrête là (le joueur se réveille au dernier soin).

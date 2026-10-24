@@ -45,7 +45,7 @@ const Boutique = (() => {
           if (ok !== 0) continue;
           partie.argent -= prix;
           const place = Collection.ranger(jeu, partie, Regles.creer(jeu, a.id, Number(a.niveau) || 5));
-          await ui.dire(place.ou === 'equipe' ? `${o.nom} rejoint ton équipe !` : `Ton équipe est pleine : ${o.nom} part au PC, dans la ${place.nom}.`);
+          await ui.dire(place.ou === 'equipe' ? `${o.nom} rejoint ton équipe !` : `Ton équipe est pleine : ${o.nom} part dans ${place.nom} (${place.pc}).`);
           continue;
         }
         const n = await ui.quantite({ titre: `${o.nom} : combien ?`, prix, max: Math.max(1, Math.min(99, Math.floor(partie.argent / prix))), monnaie });

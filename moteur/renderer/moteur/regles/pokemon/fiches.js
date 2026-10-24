@@ -2,7 +2,7 @@
 // EV, attaques) et les pages du Pokédex. Ce fichier dit QUOI montrer ; menus.js › fiche le dessine,
 // sans rien savoir des règles. Une fiche :
 //   { titre, sousTitre, image, etiquettes: [{ texte, couleur }],
-//     pages: [{ nom, texte, lignes: [{ nom, valeur, detail, barre (0 à 1), couleur }] }] }
+//     pages: [{ id, nom, texte, lignes: [{ nom, valeur, detail, barre (0 à 1), couleur }] }] }
 
 const Fiches = (() => {
   const C = Creatures;
@@ -64,9 +64,9 @@ const Fiches = (() => {
       image: e?.sprites?.face || '',
       etiquettes: types(jeu, e),
       pages: [
-        { nom: 'Infos', lignes: infos },
-        { nom: 'Statistiques', lignes: stats, texte: '▲ ▼ : ce que sa nature augmente et baisse. La barre montre ses EV (252 au plus).' },
-        { nom: 'Attaques', lignes: attaques, texte: attaques.length ? '' : 'Aucune attaque.' },
+        { id: 'infos', nom: 'Infos', lignes: infos },
+        { id: 'stats', nom: 'Statistiques', lignes: stats, texte: '▲ ▼ : ce que sa nature augmente et baisse. La barre montre ses EV (252 au plus).' },
+        { id: 'attaques', nom: 'Attaques', lignes: attaques, texte: attaques.length ? '' : 'Aucune attaque.' },
       ],
     };
   }

@@ -298,6 +298,7 @@ Claude dessinait pixel par pixel, en texte : ses tuiles étaient justes mais pla
 ## Le PC (Tafl 0.21)
 
 - Nouvelle commande d'événement **PC : les boîtes du joueur** (`ecran_boites`, groupe Services) : à mettre sur l'ordinateur du centre de soins. Dans Saga 0.6, elle ouvre le PC, où le joueur range ses créatures dans des boîtes de 30 places. Claude la connaît aussi.
+- **Jeu › Données du jeu › Réglages › Menus du jeu** : la forme des menus dans Saga. Le pack de règles en donne une (Pokémon : Équipe, Pokédex, PC, boîtes de 30 places en grille de 6, résumé Infos / Statistiques / Attaques), en gris ; tu peux renommer les menus, cacher le Pokédex, changer la taille et la forme des boîtes (grille ou liste) et choisir les pages du résumé.
 - Saga 0.6 garde maintenant les boîtes et le Pokédex (espèces vues et attrapées) dans la sauvegarde (voir `FORMAT.md`).
 
 ## Les planches nommées (Tafl 0.20)

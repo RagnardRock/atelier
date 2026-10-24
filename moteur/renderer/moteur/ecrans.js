@@ -16,14 +16,16 @@ const Ecrans = (() => {
       };
     };
     const lignesEquipe = () => partie().equipe.map((c) => ligne(c));
+    // La forme des menus (Regles.menus) : noms, Pokédex montré ou non, boîtes, pages du résumé.
+    const forme = () => Regles.menus(jeu);
 
     // --- Le menu Équipe ---
     async function equipe(depart = 0) {
       let i = depart;
       for (;;) {
         const p = partie();
-        if (!p.equipe.length) { await menus.liste({ titre: 'Équipe', items: [], note: 'Pas encore de compagnon.' }); return; }
-        i = await menus.liste({ titre: 'Équipe', entete: `${p.equipe.length} / ${Collection.equipeMax(jeu)}`, items: lignesEquipe(), depart: Math.min(i, p.equipe.length - 1) });
+        if (!p.equipe.length) { await menus.liste({ titre: forme().equipe, items: [], note: 'Pas encore de compagnon.' }); return; }
+        i = await menus.liste({ titre: forme().equipe, entete: `${p.equipe.length} / ${Collection.equipeMax(jeu)}`, items: lignesEquipe(), depart: Math.min(i, p.equipe.length - 1) });
         if (i == null) return;
         const c = p.equipe[i], nom = r(c).nom;
         const actions = [['resume', 'Résumé'], ...(p.equipe.length > 1 ? [['place', 'Changer de place']] : []), ['surnom', 'Surnom'], ['retour', 'Retour']];
@@ -51,6 +53,7 @@ const Ecrans = (() => {
 
     // --- Le Pokédex ---
     async function dex() {
+      if (!forme().dex_visible) return;
       const { nom, especes } = Regles.dex(jeu);
       let i = -1;
       for (;;) {
@@ -77,7 +80,8 @@ const Ecrans = (() => {
     // Au clavier : les flèches bougent le curseur (tout en haut : le nom de la boîte, où gauche/droite
     // change de boîte), Action prend une créature puis la pose (sur une autre : elles s'échangent).
     async function boites() {
-      const C = Collection, L = C.COLONNES, N = C.PLACES;
+      const C = Collection, F = forme();
+      const N = F.places, L = F.forme_boites === 'liste' ? 1 : Math.min(F.colonnes, N), lignes = Math.ceil(N / L);
       const p = partie();
       let b = 0;
       let curseur = { zone: 'boite', i: 0 };   // zone : 'tete', 'boite' ou 'equipe'
@@ -117,7 +121,7 @@ const Ecrans = (() => {
         const { c, de } = main;
         if (de.ou === 'equipe' && p.equipe.length < C.equipeMax(jeu)) p.equipe.splice(Math.min(de.i, p.equipe.length), 0, c);
         else if (de.ou === 'boite' && !p.boites[de.b].creatures[de.i]) p.boites[de.b].creatures[de.i] = c;
-        else C.deposer(p, c, de.b || 0);
+        else C.deposer(jeu, p, c, de.b || 0);
         main = null;
       }
       const creatureEn = (zone, i) => (zone === 'equipe' ? p.equipe[i] : zone === 'boite' ? p.boites[b].creatures[i] : null);
@@ -126,7 +130,7 @@ const Ecrans = (() => {
         // L'écran lui-même : il se ferme sur un choix (une créature à qui proposer des actions,
         // le nom de la boîte), ou null pour quitter.
         const choix = await menus.ecran((boite, fermer, aide) => {
-          const grille = el('div', { className: 'pc-grille' });
+          const grille = el('div', { className: `pc-grille${L === 1 ? ' pc-liste' : ''}`, style: `grid-template-columns: repeat(${L}, minmax(0, 1fr))` });
           const colonne = el('div', { className: 'pc-equipe' });
           const nomBoite = el('span', { className: 'pc-nom' });
           const fleche = (d, txt) => el('button', { className: 'perso-fleche', type: 'button', textContent: txt, onclick: () => { changerBoite(d); maj(); } });
@@ -136,19 +140,22 @@ const Ecrans = (() => {
           const enMain = el('div', { className: 'pc-main' });
           const compte = el('span', { className: 'menu-entete' });
           boite.append(
-            el('div', { className: 'combat-liste-titre menu-tete' }, el('span', { textContent: 'PC' }), compte),
-            el('div', { className: 'pc-corps' }, el('div', { className: 'pc-gauche' }, tete, grille), el('div', { className: 'pc-droite' }, el('div', { className: 'pc-equipe-titre', textContent: 'Équipe' }), colonne)),
+            el('div', { className: 'combat-liste-titre menu-tete' }, el('span', { textContent: F.pc }), compte),
+            el('div', { className: 'pc-corps' }, el('div', { className: 'pc-gauche' }, tete, grille), el('div', { className: 'pc-droite' }, el('div', { className: 'pc-equipe-titre', textContent: F.equipe }), colonne)),
             enMain, info, msg,
             aide('Flèches : bouger · Action : prendre / poser / actions · En haut : changer de boîte · Échap : quitter'));
           // Après la dernière boîte : une nouvelle, si la dernière n'est pas déjà vide.
           const changerBoite = (d) => {
-            if (d > 0 && b === p.boites.length - 1 && p.boites[b].creatures.some(Boolean)) p.boites.push({ nom: `Boîte ${p.boites.length + 1}`, creatures: Array(N).fill(null) });
+            if (d > 0 && b === p.boites.length - 1 && p.boites[b].creatures.some(Boolean)) p.boites.push(C.boiteVide(jeu, p.boites.length + 1));
             b = (b + d + p.boites.length) % p.boites.length;
           };
-          const caseDe = (c, actif) => {
+          // Une place : l'image seule dans une grille ; en liste, l'image, le nom et le niveau.
+          const caseDe = (c, actif, enListe = false) => {
             const x = c ? r(c) : null;
             return el('div', { className: `pc-case${actif ? ' actif' : ''}${c && c.pv <= 0 ? ' ko' : ''}`, title: x ? `${x.nom} N.${x.niveau}` : '' },
-              x?.espece?.sprites?.face ? el('img', { src: x.espece.sprites.face, alt: '' }) : c ? el('span', { className: 'pc-sans-image', textContent: x.nom.slice(0, 2) }) : null);
+              x?.espece?.sprites?.face ? el('img', { src: x.espece.sprites.face, alt: '' }) : c ? el('span', { className: 'pc-sans-image', textContent: x.nom.slice(0, 2) }) : null,
+              enListe ? el('span', { className: 'pc-case-nom', textContent: x ? x.nom : '—' }) : null,
+              enListe && x ? el('span', { className: 'pc-case-niveau', textContent: `N.${x.niveau}` }) : null);
           };
           function maj() {
             const bo = p.boites[b];
@@ -157,10 +164,11 @@ const Ecrans = (() => {
             compte.textContent = `${n} créature${n > 1 ? 's' : ''}`;
             tete.classList.toggle('actif', curseur.zone === 'tete');
             grille.replaceChildren(...bo.creatures.map((c, i) => {
-              const d = caseDe(c, curseur.zone === 'boite' && curseur.i === i);
+              const d = caseDe(c, curseur.zone === 'boite' && curseur.i === i, L === 1);
               d.onclick = () => { curseur = { zone: 'boite', i }; agir(); };
               return d;
             }));
+            if (curseur.zone === 'boite') grille.children[curseur.i]?.scrollIntoView({ block: 'nearest' });
             const max = C.equipeMax(jeu);
             colonne.replaceChildren(...Array.from({ length: max }, (_, i) => {
               const d = caseDe(p.equipe[i], curseur.zone === 'equipe' && curseur.i === i);
@@ -188,14 +196,14 @@ const Ecrans = (() => {
             } else if (k.zone === 'boite') {
               const x = k.i % L, y = Math.floor(k.i / L);
               if (t === 'haut') curseur = y === 0 ? { zone: 'tete', i: 0 } : { zone: 'boite', i: k.i - L };
-              else if (t === 'bas' && y < N / L - 1) curseur = { zone: 'boite', i: k.i + L };
+              else if (t === 'bas' && k.i + L < N) curseur = { zone: 'boite', i: k.i + L };
               else if (t === 'gauche' && x > 0) curseur = { zone: 'boite', i: k.i - 1 };
               else if (t === 'droite') curseur = x < L - 1 ? { zone: 'boite', i: k.i + 1 } : { zone: 'equipe', i: Math.min(y, C.equipeMax(jeu) - 1) };
             } else {
               const max = C.equipeMax(jeu);
               if (t === 'haut') curseur = { zone: 'equipe', i: (k.i - 1 + max) % max };
               else if (t === 'bas') curseur = { zone: 'equipe', i: (k.i + 1) % max };
-              else if (t === 'gauche') curseur = { zone: 'boite', i: Math.min(N / L - 1, k.i) * L + L - 1 };
+              else if (t === 'gauche') curseur = { zone: 'boite', i: Math.min(N - 1, Math.min(lignes - 1, k.i) * L + L - 1) };
             }
           }
           maj();
@@ -214,8 +222,8 @@ const Ecrans = (() => {
         if (!choix) { reposer(); return; }
 
         if (choix.type === 'boite') {
-          const t = await menus.texte({ titre: 'Nom de la boîte', valeur: p.boites[b].nom, max: C.NOM_MAX, vide: `Boîte ${b + 1}` });
-          if (t != null) p.boites[b].nom = t || `Boîte ${b + 1}`;
+          const t = await menus.texte({ titre: 'Nom de la boîte', valeur: p.boites[b].nom, max: C.NOM_MAX, vide: C.nomBoite(jeu, b + 1) });
+          if (t != null) p.boites[b].nom = t || C.nomBoite(jeu, b + 1);
           continue;
         }
         // Les actions sur une créature.
@@ -224,7 +232,7 @@ const Ecrans = (() => {
         const max = C.equipeMax(jeu);
         const actions = [
           ['deplacer', 'Déplacer'],
-          zone === 'equipe' ? ['deposer', `Déposer dans la ${p.boites[b].nom}`] : ['retirer', 'Prendre dans l\'équipe'],
+          zone === 'equipe' ? ['deposer', `Déposer dans ${p.boites[b].nom}`] : ['retirer', 'Prendre dans l\'équipe'],
           ['resume', 'Résumé'], ['surnom', 'Surnom'], ['relacher', 'Relâcher'], ['retour', 'Retour'],
         ];
         const bloque = (id) => (id === 'deposer' || id === 'relacher') && zone === 'equipe' && !Collection.peutQuitterEquipe(p, i)
@@ -236,9 +244,9 @@ const Ecrans = (() => {
         if (quoi === 'deplacer') prendre(zone, i);
         else if (quoi === 'deposer') {
           p.equipe.splice(i, 1);
-          const dans = C.deposer(p, c, b);
+          const dans = C.deposer(jeu, p, c, b);
           b = p.boites.indexOf(dans);
-          note = `${nom} va dans la ${dans.nom}.`;
+          note = `${nom} va dans ${dans.nom}.`;
           curseur = { zone: 'equipe', i: Math.min(i, Math.max(0, p.equipe.length - 1)) };
         } else if (quoi === 'retirer') {
           p.boites[b].creatures[i] = null;

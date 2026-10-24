@@ -176,7 +176,11 @@ const App = (() => {
   // --- Pause ---
   function ouvrirPause() {
     if (!ouvert) return;
-    $('#pause-dex').textContent = moteur.nomDex();
+    // Les noms des menus et le Pokédex montré ou non : la forme des menus du jeu (Saga 0.6).
+    const forme = moteur.formeMenus();
+    $('#pause-dex').textContent = forme.dex;
+    $('#pause-equipe').textContent = forme.equipe;
+    $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
     moteur.pause(true);
     $('#pause').hidden = false;
     $('.pause-choix').focus();
@@ -226,12 +230,14 @@ const App = (() => {
       corps.append(ul);
     };
     $('#carnet-titre').textContent = p.nom;
-    const dex = p.dex || { vus: {}, pris: {} };
-    $('#carnet-dex').textContent = `${moteur.nomDex()} · ${Object.keys(dex.pris).length}`;
+    const dex = p.dex || { vus: {}, pris: {} }, forme = moteur.formeMenus();
+    $('#carnet-dex').textContent = `${forme.dex} · ${Object.keys(dex.pris).length}`;
+    $('#carnet-equipe').textContent = forme.equipe;
+    $('.carnet-bouton[data-ecran="dex"]').hidden = !forme.dex_visible;
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
     // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
     // Un clic sur une créature : son résumé (Saga 0.6).
-    section('Équipe', p.equipe.map((c, i) => {
+    section(forme.equipe, p.equipe.map((c, i) => {
       const r = Regles.resume(jeu, c), k = r.pv / Math.max(1, r.pvMax);
       return el('li', { className: 'carnet-creature', title: 'Voir son résumé', onclick: () => { fermerCarnet(); moteur.ouvrirEcran('equipe', i); } },
         r.espece?.sprites?.face ? el('img', { src: r.espece.sprites.face, alt: '' }) : el('span', { className: 'carnet-img' }),

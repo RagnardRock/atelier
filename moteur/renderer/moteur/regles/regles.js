@@ -21,9 +21,21 @@
 //   fiche(jeu, c)                   le résumé d'une créature (menu Équipe, PC), voir pokemon/fiches.js
 //   dex(jeu)                        { nom, especes: [{ id, numero, nom, image }] } dans l'ordre du Pokédex
 //   ficheEspece(jeu, id, { pris, vus }) la page d'une espèce dans le Pokédex (ou null)
+//   menus                           la forme des menus par défaut (voir FORME ci-dessous) : le jeu peut
+//                                   la changer dans Tafl › Réglages › Interface › Menus (Saga 0.6)
 
 const Regles = (() => {
+  // La forme des menus : leurs noms, le Pokédex montré ou non, la taille et la forme des boîtes du PC,
+  // les pages du résumé d'une créature (des ids de pages que la fiche du pack sait faire).
+  //   { equipe, dex, dex_visible, pc, boite, places, colonnes, forme_boites: 'grille' | 'liste',
+  //     pages: [id], toutes_pages: [[id, nom]] }
   const pokemon = {
+    menus: {
+      equipe: 'Équipe', dex: 'Pokédex', dex_visible: true, pc: 'PC', boite: 'Boîte',
+      places: 30, colonnes: 6, forme_boites: 'grille',
+      pages: ['infos', 'stats', 'attaques'],
+      toutes_pages: [['infos', 'Infos'], ['stats', 'Statistiques'], ['attaques', 'Attaques']],
+    },
     nom: 'pokemon',
     existe: (jeu, id) => Boolean(Creatures.trouver(jeu, 'creatures', id)),
     creer: (jeu, id, niveau) => Creatures.creer(jeu, id, niveau),
@@ -48,9 +60,27 @@ const Regles = (() => {
   };
   const PACKS = { pokemon };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
+  // La forme des menus du jeu : celle du pack, et par-dessus ce que le jeu a réglé dans Tafl (un champ
+  // vide ou faux garde celui du pack).
+  const texte = (v, d) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 20) : d);
+  const entier = (v, d, min, max) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.max(min, Math.min(max, Math.round(Number(v)))) : d);
+  function menus(jeu) {
+    const d = pack(jeu).menus, m = jeu?.donnees?.reglages?.reglages?.interface?.menus || {};
+    const connues = d.toutes_pages.map(([id]) => id);
+    const pages = (Array.isArray(m.pages) ? m.pages : []).filter((x) => connues.includes(x));
+    return {
+      ...d,
+      equipe: texte(m.equipe, d.equipe), dex: texte(m.dex, d.dex), pc: texte(m.pc, d.pc), boite: texte(m.boite, d.boite),
+      dex_visible: m.dex_visible === false ? false : d.dex_visible,
+      places: entier(m.places, d.places, 1, 120), colonnes: entier(m.colonnes, d.colonnes, 1, 12),
+      forme_boites: ['grille', 'liste'].includes(m.forme_boites) ? m.forme_boites : d.forme_boites,
+      pages: pages.length ? pages : d.pages,
+    };
+  }
   // Chaque fonction va au pack du jeu (le jeu est toujours le premier argument, ou dans l'objet de combattre).
   return {
     packs: () => Object.keys(PACKS),
+    menus,
     nom: (jeu) => pack(jeu).nom,
     existe: (jeu, ...a) => pack(jeu).existe(jeu, ...a),
     creer: (jeu, ...a) => pack(jeu).creer(jeu, ...a),
@@ -62,8 +92,13 @@ const Regles = (() => {
     utiliserObjet: (o) => pack(o.jeu).utiliserObjet(o),
     ecranEv: (o) => pack(o.jeu).ecranEv(o),
     prixCreature: (jeu, ...a) => pack(jeu).prixCreature(jeu, ...a),
-    fiche: (jeu, ...a) => pack(jeu).fiche(jeu, ...a),
-    dex: (jeu) => pack(jeu).dex(jeu),
+    // Le résumé : seulement les pages choisies, dans leur ordre.
+    fiche(jeu, ...a) {
+      const f = pack(jeu).fiche(jeu, ...a), ordre = menus(jeu).pages;
+      const pages = ordre.map((id) => f.pages.find((p) => p.id === id)).filter(Boolean);
+      return { ...f, pages: pages.length ? pages : f.pages };
+    },
+    dex: (jeu) => ({ ...pack(jeu).dex(jeu), nom: menus(jeu).dex }),
     ficheEspece: (jeu, ...a) => pack(jeu).ficheEspece(jeu, ...a),
   };
 })();

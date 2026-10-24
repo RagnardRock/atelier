@@ -359,7 +359,7 @@ const Combat = (() => {
         await ui.message(`Et hop ! ${C.nom(jeu, d)} est attrapé !`);
         partie.compteurs.captures = (partie.compteurs.captures || 0) + 1;
         const place = Collection.ranger(jeu, partie, d);
-        if (place.ou === 'boite') await ui.message(`Ton équipe est pleine : ${C.nom(jeu, d)} part au PC, dans la ${place.nom}.`);
+        if (place.ou === 'boite') await ui.message(`Ton équipe est pleine : ${C.nom(jeu, d)} part dans ${place.nom} (${place.pc}).`);
         return true;
       }
       await ui.animer('adversaire', 'sort');

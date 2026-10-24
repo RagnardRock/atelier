@@ -638,7 +638,8 @@ const Moteur = (() => {
       utiliserObjet: (id) => horsScript(() => Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id }), 'Erreur avec cet objet'),
       // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
-      nomDex: () => (jeu ? Regles.dex(jeu).nom : ''),
+      // La forme des menus du jeu (leurs noms, le Pokédex montré ou non), pour la pause et le carnet.
+      formeMenus: () => (jeu ? Regles.menus(jeu) : null),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),
       basculerDebug() { debug = !debug; return debug; },
       get debug() { return debug; },
