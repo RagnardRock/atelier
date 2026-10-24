@@ -74,7 +74,7 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **XP et niveaux** : l'XP est partagée entre les créatures qui ont combattu (plus avec un dresseur), avec les 6 courbes officielles et les EV gagnés. En montant de niveau, une créature apprend ses attaques (et propose d'en oublier une si elle en a déjà 4) et **évolue pendant le combat**. Le **plafond de niveau** suit les badges (réglage de Tafl) : au plafond, plus d'XP.
 - **Défaite** : le joueur perd la moitié de son argent, son équipe est soignée, et il se réveille au dernier endroit où il a été soigné (sinon au départ du jeu).
 - **Le carnet** montre maintenant chaque créature de l'équipe avec son sprite, son niveau, son statut et sa barre de PV.
-- **Sauvegarde** : les créatures sont gardées en entier (niveau, XP, PV, IV, EV, nature, attaques et PP), ainsi que la boîte et le dernier lieu de soin. Une sauvegarde de Saga 0.2 est mise à jour toute seule.
+- **Sauvegarde** : les créatures sont gardées en entier (niveau, XP, PV, IV, EV, nature, attaques et PP), ainsi que la boîte (les boîtes du PC depuis Saga 0.6) et le dernier lieu de soin. Une sauvegarde de Saga 0.2 est mise à jour toute seule.
 
 ## Ce que fait Saga 0.4 : deux thèmes pour l'interface en jeu
 
@@ -94,11 +94,18 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **Le pack de règles** : le jeu dit lequel il suit (`reglages.regles`, Pokémon pour l'instant). Tout ce qui touche aux créatures passe par la porte `Regles`, pour qu'un autre pack puisse remplacer Pokémon un jour.
 - Les menus ne se laissent plus voler le choix par une souris immobile sous le menu qui s'ouvre (en combat aussi).
 
+## Ce que fait Saga 0.6 : l'équipe, le Pokédex et le PC
+
+- **Le menu Équipe** (menu de pause, ou bouton **Équipe** du carnet ; un clic sur une créature du carnet ouvre son résumé) : changer l'ordre de l'équipe (la première part au combat), donner un surnom, voir le **résumé** d'une créature en trois pages (infos : espèce, PV, statut, nature, talent, XP jusqu'au niveau suivant ; statistiques avec IV et EV, et ce que la nature monte ▲ et baisse ▼ ; attaques avec type, catégorie, puissance, PP). Gauche/droite change de page, haut/bas passe à la créature suivante.
+- **Le Pokédex** (menu de pause, ou bouton du carnet) : toutes les espèces du jeu par numéro, « ??? » pour celles jamais vues. Une espèce croisée en combat (sauvage ou de dresseur) est **vue** ; une créature reçue, attrapée, achetée ou obtenue par évolution est **attrapée**. Sa page : description, taille, poids, talents, stats de base et évolutions pour une attrapée ; juste son nom, son image et ses types pour une vue. Gauche/droite saute de 10 dans la liste.
+- **Le PC** (nouvelle commande `ecran_boites` de Tafl 0.21, à mettre sur l'ordinateur du centre) : des boîtes de 30 places à gauche, l'équipe à droite. Action prend une créature, Action la pose (sur une autre, elles s'échangent) ; ou, sur une créature : déposer, prendre dans l'équipe, résumé, surnom, relâcher. En haut, gauche/droite change de boîte (une nouvelle boîte s'ajoute après la dernière qui n'est pas vide) et Action renomme la boîte. L'équipe garde toujours au moins une créature en état de se battre.
+- Une créature reçue quand l'équipe est pleine va dans la première place libre du PC, et le jeu dit dans quelle boîte. Une sauvegarde de Saga 0.5 (une seule « boîte » sans places) est rangée dans les boîtes toute seule, et son Pokédex est rempli avec les créatures qu'elle a.
+- Ce qu'une fiche montre vient du pack de règles (`Regles.fiche`, `Regles.dex`, `Regles.ficheEspece`, dans `regles/pokemon/fiches.js`) ; l'équipe, les boîtes et le Pokédex eux-mêmes ne dépendent d'aucune règle (`collection.js`, `ecrans.js`).
+
 ## La suite
 
-1. Le reste des menus du jeu : équipe détaillée, Pokédex, boîte.
-2. Les combats en duo et les talents qui changent le combat.
-3. Un deuxième pack de règles, pour vérifier que Saga n'est pas lié à Pokémon.
+1. Les combats en duo et les talents qui changent le combat.
+2. Un deuxième pack de règles, pour vérifier que Saga n'est pas lié à Pokémon.
 
 ## Comment c'est construit
 
@@ -120,7 +127,10 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |
 | `renderer/moteur/regles/pokemon/combat.js` | Le déroulé d'un combat : tours, dégâts, statuts, sac, capture, fuite, XP, dresseurs. |
 | `renderer/moteur/regles/pokemon/hors-combat.js` | Ce qui touche aux créatures hors combat : les objets du sac, l'écran des EV, le prix d'une créature vendue. |
-| `renderer/moteur/menus.js` | Les menus du jeu hors combat : une liste, le choix d'une quantité, l'écran des EV. |
+| `renderer/moteur/regles/pokemon/fiches.js` | Ce que montrent le résumé d'une créature et les pages du Pokédex. |
+| `renderer/moteur/menus.js` | Les menus du jeu hors combat : une liste, le choix d'une quantité, l'écran des EV, une fiche à pages, un nom à taper, un écran libre. |
+| `renderer/moteur/collection.js` | L'équipe, les boîtes du PC et le Pokédex (vus, attrapés) : où ranger une créature reçue. |
+| `renderer/moteur/ecrans.js` | Le menu Équipe, le Pokédex et le PC. |
 | `renderer/moteur/boutique.js` | Les boutiques : acheter, revendre, vendre des créatures, articles débloqués par les succès. |
 | `renderer/moteur/personnaliser.js` | L'écran du nom et de la tenue du héros. |
 | `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus et animations. |

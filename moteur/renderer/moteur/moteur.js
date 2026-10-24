@@ -105,6 +105,7 @@ const Moteur = (() => {
     const ecranPerso = Personnaliser.creer(canvas.parentElement);
     const menus = Menus.creer(canvas.parentElement);
     let enCombat = false;
+    let ecrans = null; // l'équipe, le Pokédex, le PC (Saga 0.6, ecrans.js)
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
     function redimensionner() {
@@ -154,8 +155,8 @@ const Moteur = (() => {
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
       // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
-      partie.equipe = (partie.equipe || []).map((c) => Regles.completer(jeu, c)).filter(Boolean);
-      partie.boite = (partie.boite || []).map((c) => Regles.completer(jeu, c)).filter(Boolean);
+      // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
+      Collection.preparer(jeu, partie);
       enCombat = false;
       ecranCombat.fermer();
       ecranPerso.fermer();
@@ -167,6 +168,7 @@ const Moteur = (() => {
       enScript = false;
       attentes = [];
       dialogue.fermer();
+      ecrans = Ecrans.creer({ jeu, partie: () => partie, menus });
       scripts = Scripts.creer({
         jeu, dialogue,
         partie: () => partie,
@@ -177,6 +179,7 @@ const Moteur = (() => {
         // L'écran du nom et de la tenue (commande personnaliser, Tafl 0.16).
         personnaliser: (o) => ecranPerso.ouvrir(o),
         menus,
+        ecrans,
         position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
       });
       redimensionner();
@@ -296,6 +299,7 @@ const Moteur = (() => {
       }
       enCombat = false;
       entrees.oublier();
+      Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
       if (issue === 'defaite') {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
         const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
@@ -353,6 +357,7 @@ const Moteur = (() => {
       } catch (err) {
         rappels.message?.(`Erreur dans le script de « ${p.ev.nom || p.ev.id} » : ${err.message}`);
       }
+      Collection.noterTout(partie);
       // Le script a pu changer des interrupteurs : chaque événement reprend sa bonne page.
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
       enScript = false;
@@ -596,6 +601,27 @@ const Moteur = (() => {
       dessiner(maintenant);
     }
 
+    // Un menu ouvert depuis le carnet (un objet du sac, l'équipe, le Pokédex…). Comme un script : le
+    // joueur ne bouge pas pendant ce temps. Rend false si ce n'est pas le moment.
+    async function horsScript(faire, erreur) {
+      if (!jeu || enScript || enCombat || fondu) return false;
+      enScript = true;
+      entrees.oublier();
+      try {
+        await faire();
+      } catch (err) {
+        rappels.message?.(`${erreur} : ${err.message}`);
+      } finally {
+        menus.fermer();
+        dialogue.fermer();
+        Collection.noterTout(partie);
+        presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+        enScript = false;
+        entrees.oublier();
+      }
+      return true;
+    }
+
     return {
       demarrer,
       arreter,
@@ -609,23 +635,10 @@ const Moteur = (() => {
       annoncer: (titre, detail) => dialogue.annoncer(titre, detail),
       // Utiliser un objet du sac sur la carte (depuis le carnet, Saga 0.5). Comme un script : le
       // joueur ne bouge pas pendant ce temps. Rend false si ce n'est pas le moment.
-      async utiliserObjet(id) {
-        if (!jeu || enScript || enCombat || fondu) return false;
-        enScript = true;
-        entrees.oublier();
-        try {
-          await Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id });
-        } catch (err) {
-          rappels.message?.(`Erreur avec cet objet : ${err.message}`);
-        } finally {
-          menus.fermer();
-          dialogue.fermer();
-          presents = Monde.evenementsPresents(jeu, carte, partie, presents);
-          enScript = false;
-          entrees.oublier();
-        }
-        return true;
-      },
+      utiliserObjet: (id) => horsScript(() => Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id }), 'Erreur avec cet objet'),
+      // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
+      ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
+      nomDex: () => (jeu ? Regles.dex(jeu).nom : ''),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),
       basculerDebug() { debug = !debug; return debug; },
       get debug() { return debug; },

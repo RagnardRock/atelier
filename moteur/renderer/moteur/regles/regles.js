@@ -18,6 +18,9 @@
 //   utiliserObjet({ jeu, partie, ui, id }) → true s'il a servi (ui : dire, liste, quantite, ev)
 //   ecranEv({ jeu, partie, ui })    l'écran où le joueur répartit les EV (commande ecran_ev)
 //   prixCreature(jeu, c)            ce qu'une boutique paie pour cette créature
+//   fiche(jeu, c)                   le résumé d'une créature (menu Équipe, PC), voir pokemon/fiches.js
+//   dex(jeu)                        { nom, especes: [{ id, numero, nom, image }] } dans l'ordre du Pokédex
+//   ficheEspece(jeu, id, { pris, vus }) la page d'une espèce dans le Pokédex (ou null)
 
 const Regles = (() => {
   const pokemon = {
@@ -38,6 +41,10 @@ const Regles = (() => {
     utiliserObjet: (o) => HorsCombat.utiliserObjet(o),
     ecranEv: (o) => HorsCombat.ecranEv(o),
     prixCreature: (jeu, c) => HorsCombat.prixCreature(jeu, c),
+    // Les menus (Saga 0.6) : résumé, Pokédex.
+    fiche: (jeu, c) => Fiches.fiche(jeu, c),
+    dex: (jeu) => ({ nom: 'Pokédex', especes: Fiches.especes(jeu) }),
+    ficheEspece: (jeu, id, etat) => Fiches.ficheEspece(jeu, id, etat),
   };
   const PACKS = { pokemon };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
@@ -55,5 +62,8 @@ const Regles = (() => {
     utiliserObjet: (o) => pack(o.jeu).utiliserObjet(o),
     ecranEv: (o) => pack(o.jeu).ecranEv(o),
     prixCreature: (jeu, ...a) => pack(jeu).prixCreature(jeu, ...a),
+    fiche: (jeu, ...a) => pack(jeu).fiche(jeu, ...a),
+    dex: (jeu) => pack(jeu).dex(jeu),
+    ficheEspece: (jeu, ...a) => pack(jeu).ficheEspece(jeu, ...a),
   };
 })();

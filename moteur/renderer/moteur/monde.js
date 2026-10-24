@@ -19,7 +19,8 @@ const Monde = (() => {
       compteurs: { captures: 0, dresseurs_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
       equipe: [],          // les créatures du joueur (voir creatures.js), 6 au plus
-      boite: [],           // celles qui ne tiennent plus dans l'équipe
+      boites: [],          // le PC : celles qui ne tiennent plus dans l'équipe (voir collection.js)
+      dex: { vus: {}, pris: {} }, // le Pokédex : les espèces vues et attrapées
       argent: Number(reglages.argent_depart) || 0,
       badges: [],          // les ids des badges reçus (Tafl 0.16) ; compteurs.badges = leur nombre
       tenue: '',           // la tenue du héros (un id de ses tenues), '' = sa tenue de base

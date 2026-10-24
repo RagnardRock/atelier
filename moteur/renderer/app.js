@@ -176,6 +176,7 @@ const App = (() => {
   // --- Pause ---
   function ouvrirPause() {
     if (!ouvert) return;
+    $('#pause-dex').textContent = moteur.nomDex();
     moteur.pause(true);
     $('#pause').hidden = false;
     $('.pause-choix').focus();
@@ -192,6 +193,7 @@ const App = (() => {
     else if (action === 'recommencer') { fermerPause(); moteur.demarrer(ouvert.jeu, null); }
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'carnet') ouvrirCarnet();
+    else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'quitter') quitter();
@@ -224,11 +226,14 @@ const App = (() => {
       corps.append(ul);
     };
     $('#carnet-titre').textContent = p.nom;
+    const dex = p.dex || { vus: {}, pris: {} };
+    $('#carnet-dex').textContent = `${moteur.nomDex()} · ${Object.keys(dex.pris).length}`;
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
     // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
-    section('Équipe', p.equipe.map((c) => {
+    // Un clic sur une créature : son résumé (Saga 0.6).
+    section('Équipe', p.equipe.map((c, i) => {
       const r = Regles.resume(jeu, c), k = r.pv / Math.max(1, r.pvMax);
-      return el('li', { className: 'carnet-creature' },
+      return el('li', { className: 'carnet-creature', title: 'Voir son résumé', onclick: () => { fermerCarnet(); moteur.ouvrirEcran('equipe', i); } },
         r.espece?.sprites?.face ? el('img', { src: r.espece.sprites.face, alt: '' }) : el('span', { className: 'carnet-img' }),
         el('span', { className: 'carnet-nom', textContent: `${r.nom}${r.statut ? `  ${r.statut}` : ''}` }),
         el('span', { className: 'carnet-pv' }, el('span', { style: `width: ${Math.round(k * 100)}%`, className: `niveau-${k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas'}` })),
@@ -266,7 +271,11 @@ const App = (() => {
     $('#carnet').hidden = true;
     moteur.pause(false);
   }
-  $('#carnet').addEventListener('click', (e) => { if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet(); });
+  $('#carnet').addEventListener('click', (e) => {
+    const ecran = e.target.closest('.carnet-bouton')?.dataset.ecran;
+    if (ecran) { fermerCarnet(); moteur.ouvrirEcran(ecran); }
+    else if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet();
+  });
 
   // --- Infos (F3) ---
   function basculerDebug() {
