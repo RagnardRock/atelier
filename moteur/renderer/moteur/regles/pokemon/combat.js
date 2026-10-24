@@ -28,12 +28,14 @@ const Combat = (() => {
     if (dresseur) {
       // Un dresseur qui « suit la progression » du joueur : son niveau monte avec lui.
       const r = jeu.donnees.reglages?.reglages || {};
-      let ref = 0;
-      if (dresseur.ajuste && r.ajustement === 'equipe') ref = Math.max(0, ...partie.equipe.map((c) => c.niveau));
-      if (dresseur.ajuste && r.ajustement === 'badges') ref = C.plafond(jeu, partie);
+      const ref = dresseur.ajuste ? C.reference(jeu, partie, r.ajustement) : 0;
       adverses = (dresseur.equipe || []).filter((m) => trouver('creatures', m.creature)).slice(0, 6).map((m) => {
-        const niveau = Math.max(Number(m.niveau) || 5, ref ? ref + (Number(r.ecart) || 0) : 0);
-        const c = C.creer(jeu, m.creature, niveau, { nature: m.nature || undefined, attaques: m.attaques, chromatique: false });
+        const ecrit = Number(m.niveau) || 5;
+        const niveau = Math.min(100, Math.max(ecrit, ref ? ref + (Number(r.ecart) || 0) : 0));
+        // Monté par l'ajustement (Saga 0.7) : il prend la forme de son nouveau niveau, et les attaques
+        // de ce niveau si Tafl ne lui en a pas choisi.
+        const espece = niveau > ecrit && r.evolution_ajustee !== false ? C.formeAuNiveau(jeu, m.creature, niveau) : m.creature;
+        const c = C.creer(jeu, espece, niveau, { nature: m.nature || undefined, attaques: m.attaques, chromatique: false });
         c.objet = m.objet || '';
         return c;
       });
@@ -48,8 +50,8 @@ const Combat = (() => {
     const typeDe = (id) => trouver('types', id);
 
     // L'état montré par l'écran pour une créature.
-    function etat(k) {
-      const c = actif(k), e = C.espece(jeu, c);
+    function etat(k, c = actif(k)) {
+      const e = C.espece(jeu, c);
       const xpMin = C.xpPour(e?.croissance, c.niveau), xpMax = C.xpPour(e?.croissance, c.niveau + 1);
       return {
         nom: C.nom(jeu, c), niveau: c.niveau, sexe: c.sexe, pv: c.pv, pvMax: C.pvMax(jeu, c), statut: NOMS_STATUTS[c.statut] || '',
@@ -398,12 +400,25 @@ const Combat = (() => {
             await ui.message(`${C.nom(jeu, c)} apprend ${trouver('attaques', ev.attaque)?.nom || ev.attaque} !`);
           } else if (ev.type === 'oublier') {
             await apprendre(c, ev.attaque);
+          } else if (ev.type === 'plafond') {
+            await ui.message(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge le laissera progresser.`);
           } else if (ev.type === 'evolue') {
             const avant = C.nom(jeu, c);
+            // L'évolution se montre sur la créature qui évolue, même si elle n'est pas au combat.
+            // Retour (B, Échap) pendant l'animation l'arrête, comme dans les jeux officiels (Saga 0.7).
+            ui.creature('joueur', etat(nous, c));
             await ui.message(`Quoi ? ${avant} évolue !`);
+            const vers = C.trouver(jeu, 'creatures', ev.vers);
+            const ok = await ui.evolution('joueur', vers?.sprites?.dos || vers?.sprites?.face || '');
+            if (!ok) {
+              montrer(nous);
+              await ui.message(`Hein ? L'évolution de ${avant} s'est arrêtée.`);
+              continue;
+            }
             const nouvelles = C.evoluer(jeu, c, ev.vers);
-            if (estActif) { await ui.animer('joueur', 'evolution'); montrer(nous); }
+            ui.creature('joueur', etat(nous, c));
             await ui.message(`Félicitations ! ${avant} a évolué en ${C.espece(jeu, c)?.nom || ev.vers} !`);
+            montrer(nous);
             partie.compteurs.evolutions = (partie.compteurs.evolutions || 0) + 1;
             for (const a of nouvelles) {
               if (c.attaques.length < 4) { c.attaques.push(C.attaque(jeu, a)); await ui.message(`${C.nom(jeu, c)} apprend ${trouver('attaques', a)?.nom || a} !`); }

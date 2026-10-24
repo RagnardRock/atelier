@@ -25,10 +25,12 @@ const Ecrans = (() => {
       for (;;) {
         const p = partie();
         if (!p.equipe.length) { await menus.liste({ titre: forme().equipe, items: [], note: 'Pas encore de compagnon.' }); return; }
-        i = await menus.liste({ titre: forme().equipe, entete: `${p.equipe.length} / ${Collection.equipeMax(jeu)}`, items: lignesEquipe(), depart: Math.min(i, p.equipe.length - 1) });
+        // Saga 0.7 : le niveau maximum des badges, s'il bride encore l'équipe.
+        const max = Regles.plafond(jeu, p);
+        i = await menus.liste({ titre: forme().equipe, entete: `${p.equipe.length} / ${Collection.equipeMax(jeu)}${max && max < 100 ? ` · Niv. max ${max}` : ''}`, items: lignesEquipe(), depart: Math.min(i, p.equipe.length - 1) });
         if (i == null) return;
         const c = p.equipe[i], nom = r(c).nom;
-        const actions = [['resume', 'Résumé'], ...(p.equipe.length > 1 ? [['place', 'Changer de place']] : []), ['surnom', 'Surnom'], ['retour', 'Retour']];
+        const actions = [['resume', 'Résumé'], ...(p.equipe.length > 1 ? [['place', 'Changer de place']] : []), ['surnom', 'Surnom'], ['objet', c.objet ? `Objet tenu : ${nomObjet(c.objet)}` : 'Faire tenir un objet'], ['retour', 'Retour']];
         const a = await menus.liste({ titre: nom, items: actions.map(([, t]) => ({ texte: t })) });
         const choix = a == null ? 'retour' : actions[a][0];
         if (choix === 'resume') i = await resume(p.equipe, i);
@@ -36,13 +38,33 @@ const Ecrans = (() => {
           const j = await menus.liste({ titre: `Échanger ${nom} avec…`, items: lignesEquipe(), depart: i });
           if (j != null && j !== i) { [p.equipe[i], p.equipe[j]] = [p.equipe[j], p.equipe[i]]; i = j; }
         } else if (choix === 'surnom') await surnom(c);
+        else if (choix === 'objet') await tenir(c);
       }
     }
 
     // Le résumé : haut/bas passe aux autres créatures de la liste. Rend l'index de la dernière vue.
     async function resume(liste, i) {
-      const j = await menus.fiche({ fiches: liste.map((c) => Regles.fiche(jeu, c)), i });
+      const j = await menus.fiche({ fiches: liste.map((c) => Regles.fiche(jeu, c, partie())), i });
       return j ?? i;
+    }
+
+    // Un objet tenu (Saga 0.7) : la Pierre Stase qui empêche d'évoluer, une baie… L'ancien revient au sac.
+    const nomObjet = (id) => (jeu.donnees.objets?.objets || []).find((o) => o.id === id)?.nom || id;
+    async function tenir(c) {
+      const p = partie(), nom = r(c).nom;
+      const objets = jeu.donnees.objets?.objets || [];
+      const dispo = Object.entries(p.sac).filter(([id, n]) => n > 0 && objets.find((o) => o.id === id && o.categorie !== 'cle'))
+        .map(([id, n]) => ({ id, n, o: objets.find((o) => o.id === id) }));
+      const items = [...(c.objet ? [{ texte: `Reprendre ${nomObjet(c.objet)}`, detail: 'au sac' }] : []), ...dispo.map(({ o, n }) => ({ texte: o.nom, image: o.icone || '', detail: `×${n}` }))];
+      const i = await menus.liste({ titre: `Que doit tenir ${nom} ?`, items, note: items.length ? '' : 'Ton sac est vide.' });
+      if (i == null) return;
+      const rendre = () => { if (c.objet) p.sac[c.objet] = (p.sac[c.objet] || 0) + 1; c.objet = ''; };
+      if (c.objet && i === 0) { rendre(); return; }
+      const { id } = dispo[i - (c.objet ? 1 : 0)];
+      rendre();
+      p.sac[id]--;
+      if (p.sac[id] <= 0) delete p.sac[id];
+      c.objet = id; // le menu de la créature le montre aussitôt (« Objet tenu : … »)
     }
 
     async function surnom(c) {

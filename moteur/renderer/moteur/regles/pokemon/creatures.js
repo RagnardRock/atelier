@@ -145,9 +145,59 @@ const Creatures = (() => {
     return Math.max(1, Math.min(100, Number(ok?.niveau) || 100));
   }
 
+  // La Pierre Stase (Saga 0.7) : tenue, elle empêche d'évoluer (effet « stase » dans Tafl, ou l'objet
+  // officiel Everstone importé).
+  function stase(jeu, c) {
+    const o = c.objet ? trouver(jeu, 'objets', c.objet) : null;
+    return Boolean(o && (o.effet?.type === 'stase' || o.officiel === 'everstone'));
+  }
+
+  // L'évolution qu'une créature peut faire tout de suite, sans objet ni échange : au niveau, ou quand
+  // sa quête est finie (Saga 0.7). null s'il n'y en a pas (ou si elle tient une Pierre Stase).
+  function evolutionPrete(jeu, partie, c) {
+    if (stase(jeu, c)) return null;
+    return (espece(jeu, c)?.evolutions || []).find((v) => trouver(jeu, 'creatures', v.vers) && (
+      (v.mode === 'niveau' && Number(v.niveau) > 0 && Number(v.niveau) <= c.niveau)
+      || (v.mode === 'quete' && v.quete && partie?.quetes?.[v.quete]?.etat === 'finie'))) || null;
+  }
+
+  // La forme d'une espèce à un niveau (Saga 0.7) : un Bulbizarre de dresseur monté au niveau 40 par
+  // l'ajustement devient Florizarre. On suit seulement les évolutions au niveau.
+  function formeAuNiveau(jeu, id, niveau) {
+    const vus = new Set([id]);
+    for (;;) {
+      const e = trouver(jeu, 'creatures', id);
+      const v = (e?.evolutions || []).find((x) => x.mode === 'niveau' && Number(x.niveau) > 0 && Number(x.niveau) <= niveau && trouver(jeu, 'creatures', x.vers) && !vus.has(x.vers));
+      if (!v) return id;
+      id = v.vers;
+      vus.add(id);
+    }
+  }
+
+  // Le niveau qui sert de référence aux adversaires qui s'ajustent (Saga 0.7) : « equipe » (le meilleur
+  // niveau de l'équipe), « badges » (le plafond des badges), sinon 0 (pas d'ajustement).
+  function reference(jeu, partie, ajustement) {
+    if (ajustement === 'equipe') return Math.max(0, ...partie.equipe.map((c) => c.niveau));
+    if (ajustement === 'badges') return plafond(jeu, partie);
+    return 0;
+  }
+
+  // Une créature sauvage (Saga 0.7) : niveau tiré entre min et max dans sa zone. Si les sauvages
+  // s'ajustent (Tafl › Réglages), toute la fourchette monte pour que son haut vaille la référence plus
+  // l'écart, sans jamais descendre sous ce que la zone dit ; l'espèce prend alors la forme de ce niveau.
+  function sauvage(jeu, partie, id, niveau, { min = niveau, max = niveau } = {}) {
+    const r = reglages(jeu);
+    const ref = reference(jeu, partie, r.ajustement_sauvages);
+    const decalage = ref ? Math.max(0, ref + (Number(r.ecart_sauvages) || 0) - max) : 0;
+    const n = Math.max(1, Math.min(100, Math.max(min, niveau) + decalage));
+    return creer(jeu, decalage && r.evolution_ajustee !== false ? formeAuNiveau(jeu, id, n) : id, n);
+  }
+
   // Gagner de l'expérience. Rend la liste de ce qui arrive, dans l'ordre, pour l'écran de combat :
-  // [{ type: 'niveau', niveau, avant, apres }, { type: 'apprend', attaque }, { type: 'oublier', attaque }, { type: 'evolue', vers }]
-  // (« oublier » : elle connaît déjà 4 attaques, le joueur choisit ; voir combat.js).
+  // [{ type: 'niveau', niveau, avant, apres }, { type: 'apprend', attaque }, { type: 'oublier', attaque },
+  //  { type: 'evolue', vers }, { type: 'plafond', niveau }]
+  // (« oublier » : elle connaît déjà 4 attaques, le joueur choisit ; voir combat.js. « plafond » : elle
+  // vient d'atteindre le niveau maximum des badges, Saga 0.7).
   function gagnerXp(jeu, partie, c, xp) {
     const e = espece(jeu, c);
     const max = plafond(jeu, partie);
@@ -166,11 +216,12 @@ const Creatures = (() => {
         evenements.push({ type: c.attaques.length < 4 ? 'apprend' : 'oublier', attaque: a.attaque });
         if (c.attaques.length < 4) c.attaques.push(attaque(jeu, a.attaque));
       }
-      // L'évolution au niveau : tout de suite, même en plein combat.
-      const evo = (espece(jeu, c)?.evolutions || []).find((v) => v.mode === 'niveau' && Number(v.niveau) <= c.niveau && trouver(jeu, 'creatures', v.vers));
+      // L'évolution au niveau (ou de quête finie) : tout de suite, même en plein combat.
+      const evo = evolutionPrete(jeu, partie, c);
       if (evo && !evenements.some((x) => x.type === 'evolue')) evenements.push({ type: 'evolue', vers: evo.vers });
     }
     if (c.niveau >= max) c.xp = Math.min(c.xp, xpPour(e?.croissance, max));
+    if (c.niveau >= max && max < 100 && evenements.length) evenements.push({ type: 'plafond', niveau: max });
     return evenements;
   }
 
@@ -195,5 +246,5 @@ const Creatures = (() => {
     }
   }
 
-  return { STATS, NOMS_STATS, NATURES, trouver, espece, nom, stats, pvMax, xpPour, creer, completer, soigner, plafond, gagnerXp, evoluer, gagnerEv, attaque, attaquesAuNiveau };
+  return { STATS, NOMS_STATS, NATURES, trouver, espece, nom, stats, pvMax, xpPour, creer, completer, soigner, plafond, stase, evolutionPrete, formeAuNiveau, reference, sauvage, gagnerXp, evoluer, gagnerEv, attaque, attaquesAuNiveau };
 })();

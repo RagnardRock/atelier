@@ -102,6 +102,19 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - Une créature reçue quand l'équipe est pleine va dans la première place libre du PC, et le jeu dit dans quelle boîte. Une sauvegarde de Saga 0.5 (une seule « boîte » sans places) est rangée dans les boîtes toute seule, et son Pokédex est rempli avec les créatures qu'elle a.
 - Ce qu'une fiche montre vient du pack de règles (`Regles.fiche`, `Regles.dex`, `Regles.ficheEspece`, dans `regles/pokemon/fiches.js`) ; l'équipe, les boîtes et le Pokédex eux-mêmes ne dépendent d'aucune règle (`collection.js`, `ecrans.js`).
 
+## Ce que fait Saga 0.7 : des combats plus riches, des boutiques à débloquer, les obstacles
+
+- **Les dresseurs qui s'ajustent évoluent** : un Bulbizarre de dresseur monté au niveau 40 par l'ajustement devient Florizarre, avec les attaques de ce niveau (sauf celles choisies dans Tafl). Réglage « Les créatures montées par l'ajustement évoluent » dans Tafl 0.24.
+- **Les sauvages peuvent suivre le joueur** (Tafl › Réglages › Niveau des créatures sauvages) : sur l'équipe ou sur le plafond des badges, avec un écart. Toute la fourchette de la zone monte, jamais en dessous de ce qu'elle dit.
+- **Arrêter une évolution** : pendant l'animation (plus longue, de plus en plus rapide), Retour, Échap, X, B ou clic droit l'arrête, comme dans les jeux officiels. Elle reviendra au niveau suivant. Une créature qui n'est pas au combat évolue aussi à l'écran. Hors combat (Super Bonbon), le jeu demande « Le laisser évoluer / L'en empêcher ». Une pierre utilisée depuis le sac ne se refuse pas.
+- **La Pierre Stase** : un objet tenu (effet « Empêche d'évoluer » de Tafl 0.24, ou l'Everstone importée) bloque l'évolution. Nouveau dans le menu Équipe : **Faire tenir un objet** (l'ancien revient au sac).
+- **L'évolution quand une quête est finie** (mode `quete` de Tafl) : la créature évolue dès que la quête se termine, ou à sa montée de niveau suivante.
+- **Le plafond se voit** : « X atteint le niveau maximum (20) ! Un nouveau badge le laissera progresser. », « Niv. max 20 » en haut du menu Équipe, et l'expérience du résumé le dit.
+- **Nouveaux compteurs** pour les conditions (boutiques, pages d'événements) : créatures sauvages battues, espèces vues, espèces attrapées, quêtes finies.
+- **Boutiques** : un article débloqué depuis la dernière visite porte « Nouveau ! » ; un article « grisé avant » se montre déjà, grisé, avec ce qui le débloque (« 🔒 Après 10 captures (4/10) »).
+- **Les obstacles, à la place des CS** (événement « Obstacle » de Tafl 0.24) : un arbre à couper ou un rocher à briser (A devant lui ; avec l'objet, Saga demande « Utiliser la Hache ? » et il disparaît), un rocher à pousser d'une case en marchant contre lui. Sans l'objet, Saga dit lequel il faudrait. Un arbre peut repousser quand on quitte la carte ; un rocher poussé revient à sa place. Un rocher poussé sur un déclencheur le lance (une énigme).
+- Côté règles : `Regles` gagne trois fonctions facultatives (`sauvage`, `plafond`, `evolutionsEnAttente`) ; un autre pack qui ne les a pas garde le comportement simple.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

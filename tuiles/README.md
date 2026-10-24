@@ -351,6 +351,15 @@ Le moteur garde ses modèles dans la mémoire de la carte graphique : **Génére
 
 Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuile ou une planche existante à partir d'une image.
 
+## Combats, boutiques et obstacles (Tafl 0.24, pour Saga 0.7)
+
+- **Événement « Obstacle »** (outil Événement N, type Obstacle) : un arbre à couper, un rocher à briser ou à pousser, avec l'objet qu'il faut (Hache, Marteau, Gants de force proposés), son message, et « repousse quand le joueur quitte la carte ». Donne-lui une tuile ; sa page 1 se joue juste après le passage (un objet caché sous le rocher). Un rocher poussé sur un déclencheur le lance : de quoi faire des énigmes. C'est la suite des zones « objet requis » (l'eau et la planche de surf) : plus de CS, des objets.
+- **Réglages › Niveau des créatures sauvages** : elles peuvent suivre l'équipe ou le plafond des badges, avec un écart. Et « Les créatures montées par l'ajustement évoluent » (dresseurs et sauvages).
+- **Objets** : nouvel effet « Empêche d'évoluer, tenu (Pierre Stase) ».
+- **Boutiques** : colonne « Grisé avant » dans les articles (l'article se montre grisé avec son déblocage au lieu d'être caché).
+- **Compteurs** : créatures sauvages battues, espèces vues, espèces attrapées, quêtes finies, en plus des captures, dresseurs battus, évolutions, badges et pas.
+- Loki connaît tout ça (actions `evenement` avec `obstacle`, `donnee`).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).

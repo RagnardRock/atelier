@@ -38,13 +38,30 @@ const HorsCombat = (() => {
     await ui.dire(`1, 2 et… Tadaa ! ${nom} oublie ${oubliee} et apprend ${nomA} !`);
   }
 
-  async function evoluer(jeu, partie, ui, c, vers) {
+  // annulable (Saga 0.7) : une évolution au niveau ou de quête peut être refusée ; celle d'une pierre,
+  // que le joueur vient de choisir, non.
+  async function evoluer(jeu, partie, ui, c, vers, { annulable = false } = {}) {
     const avant = C.nom(jeu, c);
-    await ui.dire(`Quoi ? ${avant} évolue !`);
+    if (annulable) {
+      const i = await ui.liste({ titre: `Quoi ? ${avant} évolue !`, items: [{ texte: 'Le laisser évoluer' }, { texte: 'L\'en empêcher' }] });
+      if (i !== 0) { await ui.dire(`Hein ? L'évolution de ${avant} s'est arrêtée.`); return false; }
+    } else await ui.dire(`Quoi ? ${avant} évolue !`);
     const nouvelles = C.evoluer(jeu, c, vers);
     partie.compteurs.evolutions = (partie.compteurs.evolutions || 0) + 1;
     await ui.dire(`${avant} devient ${C.nom(jeu, c)} !`);
     for (const a of nouvelles) await apprendre(jeu, ui, c, a);
+    return true;
+  }
+
+  // Après un script (Saga 0.7) : une quête vient peut-être de finir, et une créature de l'équipe
+  // attendait justement ça pour évoluer (évolution « quand une quête est finie » dans Tafl).
+  async function evolutionsEnAttente({ jeu, partie, ui }) {
+    for (const c of partie.equipe) {
+      const v = C.evolutionPrete(jeu, partie, c);
+      if (v?.mode !== 'quete' || c.refusees?.includes(v.vers)) continue;
+      // Refusée : on ne la redemande pas à chaque script (elle reviendra à la prochaine montée de niveau).
+      if (!(await evoluer(jeu, partie, ui, c, v.vers, { annulable: true }))) c.refusees = [...(c.refusees || []), v.vers];
+    }
   }
 
   // Ce qui suit une montée de niveau (Super Bonbon) : les mêmes événements qu'en combat.
@@ -53,7 +70,8 @@ const HorsCombat = (() => {
       if (ev.type === 'niveau') await ui.dire(`${C.nom(jeu, c)} monte au niveau ${ev.niveau} !`);
       else if (ev.type === 'apprend') await ui.dire(`${C.nom(jeu, c)} apprend ${C.trouver(jeu, 'attaques', ev.attaque)?.nom || ev.attaque} !`);
       else if (ev.type === 'oublier') await apprendre(jeu, ui, c, ev.attaque);
-      else if (ev.type === 'evolue') await evoluer(jeu, partie, ui, c, ev.vers);
+      else if (ev.type === 'evolue') await evoluer(jeu, partie, ui, c, ev.vers, { annulable: true });
+      else if (ev.type === 'plafond') await ui.dire(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge le laissera progresser.`);
     }
   }
 
@@ -221,5 +239,5 @@ const HorsCombat = (() => {
   // Ce qu'une boutique paie pour une créature : 100 par niveau, ×5 pour une légendaire.
   const prixCreature = (jeu, c) => Math.max(100, c.niveau * 100 * (C.espece(jeu, c)?.legendaire ? 5 : 1));
 
-  return { utilisable, utiliserObjet, ecranEv, prixCreature };
+  return { utilisable, utiliserObjet, ecranEv, prixCreature, evolutionsEnAttente };
 })();

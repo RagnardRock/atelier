@@ -25,13 +25,15 @@ const Fiches = (() => {
   };
 
   // --- Le résumé d'une créature du joueur (menu Équipe, PC) ---
-  function fiche(jeu, c) {
+  // partie (Saga 0.7, facultatif) : pour dire quand le plafond des badges bloque l'expérience.
+  function fiche(jeu, c, partie = null) {
     const e = C.espece(jeu, c);
+    const plafond = partie ? C.plafond(jeu, partie) : 100;
     const s = C.stats(jeu, c), max = s.pv;
     const nature = c.menthe || c.nature;
     const talent = C.trouver(jeu, 'talents', c.talent);
     const xpAvant = C.xpPour(e?.croissance, c.niveau), xpApres = C.xpPour(e?.croissance, c.niveau + 1);
-    const auMax = c.niveau >= 100;
+    const auMax = c.niveau >= 100, bloque = !auMax && c.niveau >= plafond;
     const sexe = c.sexe === 'm' ? ' ♂' : c.sexe === 'f' ? ' ♀' : '';
     const infos = [
       { nom: 'Espèce', valeur: e?.nom || c.creature, detail: e ? numero(e) : '' },
@@ -39,7 +41,7 @@ const Fiches = (() => {
       { nom: 'Statut', valeur: NOMS_STATUTS[c.statut] || 'En forme' },
       { nom: 'Nature', valeur: NOMS_NATURES[c.nature] || c.nature, detail: c.menthe && c.menthe !== c.nature ? `menthe ${NOMS_NATURES[c.menthe]} : ${effetNature(nature)}` : effetNature(nature) },
       { nom: 'Talent', valeur: talent?.nom || c.talent || '—', detail: talent?.description || '' },
-      { nom: 'Expérience', valeur: `${c.xp}`, detail: auMax ? 'niveau maximum' : `encore ${Math.max(0, xpApres - c.xp)} pour le niveau ${c.niveau + 1}`, barre: auMax ? 1 : (c.xp - xpAvant) / Math.max(1, xpApres - xpAvant), couleur: '#4aa8ff' },
+      { nom: 'Expérience', valeur: `${c.xp}`, detail: auMax ? 'niveau maximum' : bloque ? `niveau maximum des badges (${plafond}) : un nouveau badge pour progresser` : `encore ${Math.max(0, xpApres - c.xp)} pour le niveau ${c.niveau + 1}`, barre: auMax ? 1 : (c.xp - xpAvant) / Math.max(1, xpApres - xpAvant), couleur: '#4aa8ff' },
     ];
     if (c.objet) infos.push({ nom: 'Objet tenu', valeur: C.trouver(jeu, 'objets', c.objet)?.nom || c.objet });
     const nat = C.NATURES[nature];
