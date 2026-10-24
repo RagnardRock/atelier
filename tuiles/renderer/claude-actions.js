@@ -1414,6 +1414,26 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return App.doc?.path === fichier.path ? `${fichier.name} ouvert : ${App.doc.tiles.length} tuile(s).` : 'Le jeu n\'a pas été ouvert (Ragna a peut-être gardé celui en cours).';
       },
     },
+    // Tafl 0.22 : ComfyUI dessine sur la carte graphique de Ragna ; Claude ne dépense que le texte.
+    generer_tuiles: {
+      icone: 'sparkle',
+      libelle: (a) => `Génère avec ComfyUI « ${String(a.description || '').slice(0, 60)} » (${a.sorte === 'objet' ? 'objet' : 'sol'}, ${a.largeur || (a.sorte === 'objet' ? 2 : 4)} × ${a.hauteur || (a.sorte === 'objet' ? 2 : 4)} tuiles, ${a.style || 'pixel'})`,
+      description: 'Génère des tuiles avec ComfyUI, sur la carte graphique de Ragna (aucun jeton d\'image pour toi : préfère-le à dessiner pixel par pixel pour les sols et les objets détaillés), puis les ajoute au jeu ouvert (catégorie « ia-… »). description : de préférence en anglais, courte et concrète (« mossy cobblestone », « small red roof house ») ; style : pixel (par défaut), peint, dessin, realiste ou libre ; sorte : sol (texture qui se répète sans couture) ou objet (détouré, devient aussi un tampon) ; largeur, hauteur : en tuiles, 1 à 16 (sol 4 × 4, objet 2 × 2 par défaut) ; details : fidele (par défaut : l\'image du modèle telle quelle), calme ou tres_calme (moins de bruit, perd les petits détails) ; graine : pour refaire la même image. Un appel prend de quelques secondes à une minute.',
+      schema: { type: 'object', properties: { description: { type: 'string' }, style: { type: 'string', enum: ['pixel', 'peint', 'dessin', 'realiste', 'libre'] }, sorte: { type: 'string', enum: ['sol', 'objet'] }, largeur: nombre, hauteur: nombre, details: { type: 'string', enum: ['fidele', 'calme', 'tres_calme'] }, graine: nombre }, required: ['description'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const objet = a.sorte === 'objet';
+        const v = { description: String(a.description), style: a.style || 'pixel', sorte: objet ? 'objet' : 'sol', largeur: clamp(Math.round(a.largeur || (objet ? 2 : 4)), 1, 16), hauteur: clamp(Math.round(a.hauteur || (objet ? 2 : 4)), 1, 16), variantes: 1, couleurs: 'jeu', details: a.details || 'fidele', graine: a.graine || 0, modele: '', lora: 'auto' };
+        const avant = { tuiles: doc.tiles.length, tampons: doc.stamps.length };
+        const debut = Date.now();
+        const r = await Comfy.generer(v);
+        const { img, infos } = Comfy.traiter(r.images[0], v, doc);
+        if (infos.vide) throw new Error('Après le détourage, il ne reste rien de l\'image : essaie une autre description ou une autre graine.');
+        await Comfy.ajouter(img, v, { target: 'add' });
+        const tuiles = doc.tiles.length - avant.tuiles, tampons = doc.stamps.slice(avant.tampons).map((t) => t.name);
+        return `Généré en ${Math.round((Date.now() - debut) / 1000)} s (${r.recette.modele}${r.recette.lora ? ` + ${r.recette.lora}` : ''}, graine ${r.recette.graine}) : ${tuiles} tuile(s) ajoutée(s)${tuiles ? ` (n° ${avant.tuiles} à ${doc.tiles.length - 1})` : ''}${tampons.length ? `, tampon(s) ${tampons.join(', ')}` : ''}.`;
+      },
+    },
     importer_planche: {
       icone: 'cloud-download',
       libelle: (a) => `Importe la planche ${a.chemin}`,
