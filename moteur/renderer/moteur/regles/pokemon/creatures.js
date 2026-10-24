@@ -102,14 +102,16 @@ const Creatures = (() => {
     c.amitie = Math.max(0, Math.min(255, a + (Number(d) || 0)));
     return c.amitie - a;
   }
-  // Ce que dit le jeu de l'amitié d'une créature (son résumé).
-  function motAmitie(a) {
-    if (a >= 255) return 'Elle t\'adore !';
-    if (a >= 220) return 'Elle t\'aime beaucoup.';
-    if (a >= 150) return 'Elle t\'apprécie.';
-    if (a >= 70) return 'Elle commence à te faire confiance.';
-    if (a >= 1) return 'Elle reste méfiante.';
-    return 'Elle ne t\'aime pas du tout…';
+  // Ce que dit le jeu de l'amitié d'une créature (son résumé), accordé à son genre : « Elle » pour une
+  // femelle, « Il » pour un mâle ou une créature sans genre.
+  function motAmitie(a, sexe = '') {
+    const f = sexe === 'f', il = f ? 'Elle' : 'Il';
+    if (a >= 255) return `${il} t'adore !`;
+    if (a >= 220) return `${il} t'aime beaucoup.`;
+    if (a >= 150) return `${il} t'apprécie.`;
+    if (a >= 70) return `${il} commence à te faire confiance.`;
+    if (a >= 1) return `${il} reste méfiant${f ? 'e' : ''}.`;
+    return `${il} ne t'aime pas du tout…`;
   }
 
   // Une nouvelle créature. o : { nature, attaques: [ids], chromatique, sexe } (facultatif).

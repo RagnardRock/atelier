@@ -77,7 +77,7 @@ const HorsCombat = (() => {
       else if (ev.type === 'apprend') await ui.dire(`${C.nom(jeu, c)} apprend ${C.trouver(jeu, 'attaques', ev.attaque)?.nom || ev.attaque} !`);
       else if (ev.type === 'oublier') await apprendre(jeu, ui, c, ev.attaque);
       else if (ev.type === 'evolue') await evoluer(jeu, partie, ui, c, ev.vers, { annulable: true });
-      else if (ev.type === 'plafond') await ui.dire(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge le laissera progresser.`);
+      else if (ev.type === 'plafond') await ui.dire(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge ${c.sexe === 'f' ? 'la' : 'le'} laissera progresser.`);
     }
   }
 
@@ -183,7 +183,7 @@ const HorsCombat = (() => {
         if ((c.amitie || 0) >= 255) return sansEffet();
         retirer(partie, id);
         C.changerAmitie(c, v || 10);
-        await ui.dire(`${nom} a l'air ravi${c.sexe === 'f' ? 'e' : ''} ! ${C.motAmitie(c.amitie)}`);
+        await ui.dire(`${nom} a l'air ravi${c.sexe === 'f' ? 'e' : ''} ! ${C.motAmitie(c.amitie, c.sexe)}`);
         return true;
       }
       case 'niveau': {

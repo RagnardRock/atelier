@@ -401,7 +401,7 @@ const Combat = (() => {
           } else if (ev.type === 'oublier') {
             await apprendre(c, ev.attaque);
           } else if (ev.type === 'plafond') {
-            await ui.message(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge le laissera progresser.`);
+            await ui.message(`${C.nom(jeu, c)} atteint le niveau maximum (${ev.niveau}) ! Un nouveau badge ${c.sexe === 'f' ? 'la' : 'le'} laissera progresser.`);
           } else if (ev.type === 'evolue') {
             const avant = C.nom(jeu, c);
             // L'évolution se montre sur la créature qui évolue, même si elle n'est pas au combat.
