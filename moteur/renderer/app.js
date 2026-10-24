@@ -231,7 +231,7 @@ const App = (() => {
     };
     $('#carnet-titre').textContent = p.nom;
     const dex = p.dex || { vus: {}, pris: {} }, forme = moteur.formeMenus();
-    $('#carnet-dex').textContent = `${forme.dex} · ${Object.keys(dex.pris).length}`;
+    $('#carnet-dex').textContent = `${forme.dex} · ${Regles.dex(jeu).especes.filter((e) => dex.pris[e.id]).length}`;
     $('#carnet-equipe').textContent = forme.equipe;
     $('.carnet-bouton[data-ecran="dex"]').hidden = !forme.dex_visible;
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
@@ -240,7 +240,7 @@ const App = (() => {
     section(forme.equipe, p.equipe.map((c, i) => {
       const r = Regles.resume(jeu, c), k = r.pv / Math.max(1, r.pvMax);
       return el('li', { className: 'carnet-creature', title: 'Voir son résumé', onclick: () => { fermerCarnet(); moteur.ouvrirEcran('equipe', i); } },
-        r.espece?.sprites?.face ? el('img', { src: r.espece.sprites.face, alt: '' }) : el('span', { className: 'carnet-img' }),
+        r.image ? el('img', { src: r.image, alt: '' }) : el('span', { className: 'carnet-img' }),
         el('span', { className: 'carnet-nom', textContent: `${r.nom}${r.statut ? `  ${r.statut}` : ''}` }),
         el('span', { className: 'carnet-pv' }, el('span', { style: `width: ${Math.round(k * 100)}%`, className: `niveau-${k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas'}` })),
         el('span', { className: 'discret', textContent: `N.${r.niveau} · ${r.pv > 0 ? `${r.pv}/${r.pvMax} PV` : 'K.O.'}` }));

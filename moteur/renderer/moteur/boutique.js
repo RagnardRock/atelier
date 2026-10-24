@@ -21,6 +21,7 @@ const Boutique = (() => {
     // Les articles visibles maintenant, avec leur prix (0 = le prix de l'objet). ferme : pas encore
     // débloqué, mais montré grisé (verrouille_visible).
     const articles = () => (b.articles || [])
+      .filter((a) => a.sorte !== 'creature' || Regles.capacites(jeu).vendre)
       .map((a) => {
         const ouvert = !a.condition || vraie(a.condition);
         if (!ouvert && !a.verrouille_visible) return null;
@@ -100,7 +101,7 @@ const Boutique = (() => {
         const i = await ui.liste({
           titre: 'Vendre une créature', entete: argent(),
           items: toutes.map((x) => ({
-            texte: `${r(x.c).nom}${x.ou === 'boite' ? ` (${partie.boites[x.b].nom})` : ''}`, image: r(x.c).espece?.sprites?.face || '',
+            texte: `${r(x.c).nom}${x.ou === 'boite' ? ` (${partie.boites[x.b].nom})` : ''}`, image: r(x.c).image || '',
             detail: `N.${x.c.niveau} · ${Regles.prixCreature(jeu, x.c)} ${monnaie}`, desactive: garde(x),
           })),
           note: 'Une créature vendue ne revient pas.',
@@ -116,7 +117,7 @@ const Boutique = (() => {
     }
 
     for (;;) {
-      const choix = [['acheter', 'Acheter'], ...(b.rachete ? [['revendre', 'Revendre des objets']] : []), ...(b.achete_creatures ? [['creature', 'Vendre une créature']] : []), ['partir', 'Au revoir']];
+      const choix = [['acheter', 'Acheter'], ...(b.rachete ? [['revendre', 'Revendre des objets']] : []), ...(b.achete_creatures && Regles.capacites(jeu).vendre ? [['creature', 'Vendre une créature']] : []), ['partir', 'Au revoir']];
       const i = await ui.liste({ titre: b.nom || 'Boutique', entete: argent(), note: b.description || '', items: choix.map(([, t]) => ({ texte: t })) });
       const c = i == null ? 'partir' : choix[i][0];
       if (c === 'acheter') await acheter();

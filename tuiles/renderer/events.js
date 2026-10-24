@@ -34,7 +34,7 @@ const Events = (() => {
   const DEPLACEMENTS = [['fixe', 'Immobile'], ['regarde', 'Se tourne vers le joueur qui lui parle'], ['aleatoire', 'Marche au hasard'], ['tourne', 'Regarde autour de lui']];
   const DECLENCHEMENTS = [['parler', 'Le joueur lui parle (touche A)'], ['toucher', 'Le joueur marche dessus ou le touche'], ['auto', 'Tout seul, dès l\'arrivée sur la carte']];
   const EXPRESSIONS = ['normal', 'content', 'rire', 'triste', 'colere', 'surpris', 'inquiet', 'gene', 'determine'];
-  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur']];
+  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur'], ['monstres_vaincus', 'Monstres vaincus (JRPG)']];
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
 
@@ -125,6 +125,7 @@ const Events = (() => {
     parcourirJeu(doc, (u) => {
       const c = u.commande || u.condition;
       if (kind === 'personnage' && u.commande?.type === 'dire' && quiReel(c.qui, u.ev) === id) at(u);
+      if (kind === 'personnage' && (c.type === 'groupe' || c.type === 'membre') && c.personnage === id) at(u);
       if (kind === 'quete' && c.type === 'quete' && c.quete === id) at(u);
       if (kind === 'interrupteur' && c.type === 'interrupteur' && c.id === id) at(u);
     });
@@ -242,7 +243,7 @@ const Events = (() => {
       resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Donner'} ${c.nombre} × ${nomData(doc, 'objets', c.objet)}`,
     },
     creature: {
-      nom: 'Donner une créature', icone: 'heart', groupe: 'Objets et créatures',
+      nom: 'Donner une créature', icone: 'heart', groupe: 'Objets et créatures', packs: ['pokemon'],
       nouveau: () => ({ type: 'creature', creature: '', niveau: 5 }),
       champs: (doc, c) => [
         { key: 'creature', label: 'Créature', type: 'text', value: c.creature, list: 'tafl-creatures', placeholder: 'salameche' },
@@ -254,7 +255,7 @@ const Events = (() => {
       resume: (doc, c) => `Donner ${nomData(doc, 'creatures', c.creature)} (niveau ${c.niveau})`,
     },
     combat_sauvage: {
-      nom: 'Combat contre une créature', icone: 'flame', groupe: 'Objets et créatures',
+      nom: 'Combat contre une créature', icone: 'flame', groupe: 'Objets et créatures', packs: ['pokemon'],
       nouveau: () => ({ type: 'combat_sauvage', creature: '', niveau: 50 }),
       champs: (doc, c) => [
         { key: 'creature', label: 'Créature', type: 'text', value: c.creature, list: 'tafl-creatures', placeholder: 'legendaire-du-lac' },
@@ -266,7 +267,7 @@ const Events = (() => {
       resume: (doc, c) => `Combat contre ${nomData(doc, 'creatures', c.creature)} (niveau ${c.niveau})`,
     },
     combat_dresseur: {
-      nom: 'Combat contre un dresseur', icone: 'person', groupe: 'Objets et créatures',
+      nom: 'Combat contre un dresseur', icone: 'person', groupe: 'Objets et créatures', packs: ['pokemon'],
       nouveau: () => ({ type: 'combat_dresseur', dresseur: '' }),
       champs: (doc, c) => [
         { key: 'dresseur', label: 'Dresseur', type: 'text', value: c.dresseur, list: 'tafl-dresseurs', placeholder: 'rival-1' },
@@ -275,6 +276,18 @@ const Events = (() => {
       depuis: (v) => ({ type: 'combat_dresseur', dresseur: Doc.slug(v.dresseur, '') }),
       valide: (c) => (c.dresseur ? null : 'Quel dresseur ?'),
       resume: (doc, c) => `Combat contre le dresseur ${nomData(doc, 'dresseurs', c.dresseur)}`,
+    },
+    // Tafl 0.25 (Saga 0.8, pack JRPG) : un combat contre un groupe de monstres (boss, embuscade).
+    combat_groupe: {
+      nom: 'Combat contre un groupe de monstres', icone: 'flame', groupe: 'Objets et créatures', packs: ['jrpg'],
+      nouveau: () => ({ type: 'combat_groupe', groupe: '' }),
+      champs: (doc, c) => [
+        { key: 'groupe', label: 'Groupe de monstres', type: 'text', value: c.groupe, list: 'tafl-groupes', placeholder: 'dragon' },
+        { type: 'info', text: 'Un groupe de Jeu › Données du jeu › Groupes de monstres. Perdu : le script s\'arrête et le joueur se réveille au dernier soin. Pour un boss, décoche « On peut fuir » dans le groupe.' },
+      ],
+      depuis: (v) => ({ type: 'combat_groupe', groupe: Doc.slug(v.groupe, '') }),
+      valide: (c) => (c.groupe ? null : 'Quel groupe de monstres ?'),
+      resume: (doc, c) => `Combat contre ${nomData(doc, 'groupes', c.groupe)}`,
     },
     argent: {
       nom: 'Donner ou retirer de l\'argent', icone: 'credit-card', groupe: 'Objets et créatures',
@@ -353,6 +366,21 @@ const Events = (() => {
       depuis: (v) => ({ type: 'tenue', tenue: v.tenue }),
       resume: (doc, c) => `Le héros met ${c.tenue ? `la tenue « ${tenues(doc).find((t) => t.id === c.tenue)?.nom || c.tenue} »` : 'sa tenue de base'}`,
     },
+    // Tafl 0.25 (Saga 0.8, pack JRPG) : un personnage rejoint le groupe, ou le quitte.
+    groupe: {
+      nom: 'Le groupe : un héros rejoint ou part', icone: 'organization', groupe: 'Héros', packs: ['jrpg'],
+      nouveau: (doc) => ({ type: 'groupe', action: 'rejoindre', personnage: doc.data.personnages.find((p) => p.classe && !p.heros)?.id || '', niveau: 0 }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['rejoindre', 'Rejoint le groupe'], ['quitter', 'Quitte le groupe']] },
+        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: doc.data.personnages.map((p) => [p.id, `${p.nom}${p.classe ? ` (${nomData(doc, 'classes', p.classe)})` : ' (sans classe)'}`]) },
+        { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 0, max: 999, unit: '0 = son niveau de départ' },
+        { type: 'info', text: 'Le personnage (avec sa classe, son niveau et son équipement de départ : Jeu › Données du jeu › Personnages) rejoint le groupe, ou la Réserve si le groupe est complet. Un héros qui part puis revient retrouve son niveau et son équipement.' },
+      ],
+      onInput: (v, f) => { f.inputs.niveau.row.hidden = v.action !== 'rejoindre'; },
+      depuis: (v) => ({ type: 'groupe', action: v.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: v.personnage, niveau: clamp(Math.round(v.niveau) || 0, 0, 999) }),
+      valide: (c) => (c.personnage ? null : 'Crée d\'abord le personnage (Jeu › Données du jeu › Personnages).'),
+      resume: (doc, c) => `${nomData(doc, 'personnages', c.personnage)} ${c.action === 'quitter' ? 'quitte le groupe' : `rejoint le groupe${c.niveau ? ` (niveau ${c.niveau})` : ''}`}`,
+    },
     soigner: {
       nom: 'Soigner l\'équipe', icone: 'heart-filled', groupe: 'Services',
       nouveau: () => ({ type: 'soigner' }),
@@ -370,7 +398,7 @@ const Events = (() => {
       resume: (doc, c) => `Ouvrir la boutique ${nomData(doc, 'boutiques', c.boutique)}`,
     },
     ecran_ev: {
-      nom: 'Écran des EV (centre de soins)', icone: 'settings', groupe: 'Services',
+      nom: 'Écran des EV (centre de soins)', icone: 'settings', groupe: 'Services', packs: ['pokemon'],
       nouveau: () => ({ type: 'ecran_ev' }),
       resume: () => 'Ouvrir l\'écran des EV (répartir les points d\'effort)',
     },
@@ -449,6 +477,16 @@ const Events = (() => {
       depuis: (v) => ({ type: 'badge', badge: v.badge }),
       valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Jeu › Données du jeu › Réglages.'),
     },
+    membre: {
+      nom: 'Un héros est avec le joueur (JRPG)', packs: ['jrpg'],
+      nouveau: (doc) => ({ type: 'membre', personnage: doc.data.personnages.find((p) => p.classe && !p.heros)?.id || '' }),
+      champs: (doc, c) => [
+        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: doc.data.personnages.map((p) => [p.id, p.nom]) },
+        { type: 'info', text: 'Vrai s\'il est dans le groupe ou dans la Réserve (commande « Le groupe »).' },
+      ],
+      depuis: (v) => ({ type: 'membre', personnage: v.personnage }),
+      valide: (c) => (c.personnage ? null : 'Quel personnage ?'),
+    },
   };
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
@@ -460,6 +498,7 @@ const Events = (() => {
     if (c.type === 'compteur') return `${libelle(COMPTEURS, c.compteur).toLowerCase()} ≥ ${c.min}`;
     if (c.type === 'argent') return `a au moins ${c.min} ${monnaie(doc)}`;
     if (c.type === 'badge') return `a le badge « ${nomBadge(doc, c.badge)} »`;
+    if (c.type === 'membre') return `${nomData(doc, 'personnages', c.personnage)} est avec le joueur`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -475,6 +514,7 @@ const Events = (() => {
       case 'compteur': return { type: 'compteur', compteur: pick(c.compteur, COMPTEURS, 'captures'), min: Math.max(0, int(c.min, 1)) };
       case 'argent': return { type: 'argent', min: clamp(int(c.min, 0), 0, 9999999) };
       case 'badge': return { type: 'badge', badge: str(c.badge) };
+      case 'membre': return { type: 'membre', personnage: str(c.personnage) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -500,6 +540,8 @@ const Events = (() => {
       case 'badge': return { type: 'badge', badge: str(c.badge) };
       case 'personnaliser': return { type: 'personnaliser', nom: c.nom !== false, tenue: c.tenue !== false };
       case 'tenue': return { type: 'tenue', tenue: str(c.tenue) };
+      case 'groupe': return { type: 'groupe', action: c.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: str(c.personnage), niveau: clamp(int(c.niveau, 0), 0, 999) };
+      case 'combat_groupe': return { type: 'combat_groupe', groupe: str(c.groupe) };
       default: return { ...c };
     }
   }
@@ -562,6 +604,10 @@ const Events = (() => {
           tenues: uniques(arr(p?.tenues).filter((t) => t && typeof t === 'object').map((t, k) => ({
             id: Doc.slug(t.id || t.nom, `tenue-${k + 1}`), nom: str(t.nom || t.id, `Tenue ${k + 1}`), sprite: Sprites.norm(t.sprite),
           }))),
+          // Tafl 0.25 (pack JRPG) : sa classe, son niveau et son équipement quand il rejoint le groupe.
+          classe: Doc.slug(p?.classe, ''),
+          niveau: clamp(int(p?.niveau, 1), 1, 999),
+          equipement: Object.fromEntries(['arme', 'bouclier', 'casque', 'armure', 'accessoire'].map((k) => [k, Doc.slug(p?.equipement?.[k], '')]).filter(([, v]) => v)),
         };
       })),
       quetes: uniques(arr(d?.quetes).map((q, i) => ({
@@ -605,6 +651,7 @@ const Events = (() => {
       if (c.type === 'interrupteur' && !c.id) erreurs.push(`${ou} : id de l'interrupteur manquant.`);
       if (c.type === 'objet' && !c.objet) erreurs.push(`${ou} : objet manquant.`);
       if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ou} : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune quête : crée-la avec l\'action quete'}).`);
+      if (c.type === 'membre' && !perso(doc, c.personnage)) erreurs.push(`${ou} : pas de personnage « ${c.personnage} ».`);
       return null;
     };
     const verifListe = (liste, ou) => {
@@ -625,11 +672,11 @@ const Events = (() => {
           if (c.alors !== undefined) verifListe(c.alors, `${ici}, alors`);
           if (c.sinon !== undefined) verifListe(c.sinon, `${ici}, sinon`);
         }
-        for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique']]) {
+        for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique'], ['combat_groupe', 'groupe'], ['groupe', 'personnage']]) {
           if (c.type === type && !str(c[champ]).trim()) erreurs.push(`${ici} (${type}) : ${champ} manquant.`);
         }
         // Tafl 0.8 : si le jeu a une liste de cette sorte, la référence doit y être.
-        for (const [type, champ, sorte] of [['objet', 'objet', 'objets'], ['creature', 'creature', 'creatures'], ['combat_sauvage', 'creature', 'creatures'], ['combat_dresseur', 'dresseur', 'dresseurs'], ['boutique', 'boutique', 'boutiques']]) {
+        for (const [type, champ, sorte] of [['objet', 'objet', 'objets'], ['creature', 'creature', 'creatures'], ['combat_sauvage', 'creature', 'creatures'], ['combat_dresseur', 'dresseur', 'dresseurs'], ['boutique', 'boutique', 'boutiques'], ['combat_groupe', 'groupe', 'groupes'], ['groupe', 'personnage', 'personnages']]) {
           const l = doc.data[sorte] || [];
           if (c.type === type && c[champ] && l.length && !l.some((o) => o.id === c[champ])) erreurs.push(`${ici} (${type}) : pas de ${sorte.replace(/s$/, '')} « ${c[champ]} » dans les données (voir_donnees pour chercher).`);
         }
@@ -730,11 +777,14 @@ const Events = (() => {
   }
   // Un menu dont on attend le choix.
   const choisir = (items, x, y) => new Promise((resolve) => Menus.open(items.map((it) => it && { ...it, run: () => resolve(it.value) }), x, y));
-  const menuConditions = () => Object.entries(CONDITIONS).map(([k, d]) => ({ label: d.nom, value: k }));
-  function menuCommandes() {
+  // Les commandes et conditions d'un autre pack de règles ne sont pas proposées (packs : sinon toutes).
+  const duPack = (doc, d) => !d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon');
+  const menuConditions = (doc) => Object.entries(CONDITIONS).filter(([, d]) => duPack(doc, d)).map(([k, d]) => ({ label: d.nom, value: k }));
+  function menuCommandes(doc) {
     const items = [];
     let groupe = null;
     for (const [k, d] of Object.entries(COMMANDES)) {
+      if (!duPack(doc, d)) continue;
       if (d.groupe !== groupe) { if (groupe) items.push(null); groupe = d.groupe; }
       items.push({ label: d.nom, value: k });
     }
@@ -922,7 +972,7 @@ const Events = (() => {
         const addCond = el('button', { className: 'cmd-add', textContent: '+ Condition' });
         addCond.onclick = async (e) => {
           const r = addCond.getBoundingClientRect();
-          const type = await choisir(menuConditions(), r.left, r.bottom + 4);
+          const type = await choisir(menuConditions(doc), r.left, r.bottom + 4);
           const c = await formCondition(doc, CONDITIONS[type].nouveau(doc));
           if (c) { p.conditions.push(c); renderPage(); }
           e.stopPropagation();
@@ -972,10 +1022,10 @@ const Events = (() => {
         const add = el('button', { className: 'cmd-add', style: { marginLeft: `${8 + n * 22}px` }, textContent: '+ Ajouter une commande' });
         add.onclick = async () => {
           const r = add.getBoundingClientRect();
-          const type = await choisir(menuCommandes(), r.left, r.bottom + 4);
+          const type = await choisir(menuCommandes(doc), r.left, r.bottom + 4);
           let c;
           if (type === 'si') {
-            const ct = await choisir(menuConditions(), r.left, r.bottom + 4);
+            const ct = await choisir(menuConditions(doc), r.left, r.bottom + 4);
             const cond = await formCondition(doc, CONDITIONS[ct].nouveau(doc));
             if (cond) c = { type: 'si', condition: cond, alors: [], sinon: [] };
           } else {
@@ -1013,7 +1063,7 @@ const Events = (() => {
   // Les onglets de Tafl 0.8 viennent de donnees.js (Donnees.ONGLETS).
   const ONGLETS = [
     { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
-      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null, tenues: [] }),
+      nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null, tenues: [], classe: '', niveau: 1, equipement: {} }),
       meta: (o) => (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
       vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
     { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
@@ -1048,11 +1098,15 @@ const Events = (() => {
       const avant = JSON.stringify(work);
       let importe = false;
       const nouveaux = new Set(); // créés dans cette fenêtre : leur identifiant suit encore leur nom
-      const defs = onglets();
-      const choisis = Object.fromEntries(defs.map((d) => [d.key, 0]));
-      const recherches = Object.fromEntries(defs.map((d) => [d.key, '']));
-      let tab = defs.some((d) => d.key === onglet) ? onglet : 'personnages';
-      const def = () => defs.find((d) => d.key === tab);
+      // Les onglets du pack de règles du jeu (Donnees.ONGLETS › packs), avec leurs noms dans ce pack.
+      const tous = onglets();
+      const pack = () => work.reglages?.regles || 'pokemon';
+      const defs = () => tous.filter((d) => !d.packs || d.packs.includes(pack()));
+      const libelleDe = (d) => d.labels?.[pack()] || d.label;
+      const choisis = Object.fromEntries(tous.map((d) => [d.key, 0]));
+      const recherches = Object.fromEntries(tous.map((d) => [d.key, '']));
+      let tab = defs().some((d) => d.key === onglet) ? onglet : 'personnages';
+      const def = () => tous.find((d) => d.key === tab);
       const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1320 });
       w.card.classList.add('data-editor');
       const nav = el('nav', { className: 'data-nav' });
@@ -1063,13 +1117,13 @@ const Events = (() => {
       function renderNav() {
         const out = [];
         let groupe = '';
-        for (const d of defs) {
+        for (const d of defs()) {
           if (d.groupe !== groupe) { groupe = d.groupe; out.push(el('div', { className: 'data-nav-group', textContent: groupe })); }
-          const b = el('button', { className: d.key === tab ? 'active' : '' }, [icon(d.icon), el('span', { className: 'data-nav-label', textContent: d.label }), d.unique ? null : el('span', { className: 'panel-count', textContent: work[d.key].length })]);
+          const b = el('button', { className: d.key === tab ? 'active' : '' }, [icon(d.icon), el('span', { className: 'data-nav-label', textContent: libelleDe(d) }), d.unique ? null : el('span', { className: 'panel-count', textContent: work[d.key].length })]);
           b.onclick = () => { tab = d.key; render(); };
           out.push(b);
         }
-        if (typeof Donnees !== 'undefined') {
+        if (typeof Donnees !== 'undefined' && pack() === 'pokemon') {
           const imp = el('button', { className: 'data-import', title: 'Types, talents, attaques, créatures, objets officiels, en français (PokeAPI)' }, [icon('cloud-download'), el('span', { textContent: 'Importer les données officielles…' })]);
           imp.onclick = importer;
           out.push(el('div', { className: 'data-nav-fill' }), imp);
@@ -1096,7 +1150,7 @@ const Events = (() => {
         liste.hidden = false;
         const items = work[tab];
         choisis[tab] = clamp(choisis[tab], 0, Math.max(0, items.length - 1));
-        const ajouter = el('button', { className: 'button small', title: 'Ajouter' }, [icon('add'), ` ${d.label.replace(/s$/, '')}`]);
+        const ajouter = el('button', { className: 'button small', title: 'Ajouter' }, [icon('add'), ` ${libelleDe(d).split(' ')[0].replace(/s$/, '')}`]);
         ajouter.onclick = () => {
           const o = d.nouveau(ident(d.base, items, 'x'), work);
           items.push(o);
@@ -1235,12 +1289,30 @@ const Events = (() => {
           Sprites.editeur(p, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe, tuile: () => (doc.tiles[p.tuile] ? Doc.tileCanvas(doc.tiles[p.tuile], doc.tileSize) : null) }),
           champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'Sans sprite : la tuile qui le montre sur la carte (une seule image, quelle que soit sa direction)'),
           ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
+          ...(pack() === 'jrpg' ? groupeJrpg(p) : []),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,
           section('Utilisation'),
           usages('personnage', p.id),
         );
+      }
+
+      // Pack JRPG (Tafl 0.25) : ce qu'il est quand il rejoint le groupe (le héros principal, dès le début).
+      function groupeJrpg(p) {
+        const champsEquipement = Donnees.PLACES.map(([place, nom]) => champ(nom, selectEl(
+          [['', 'Rien'], ...work.objets.filter((o) => o.equipement?.place === place && (!o.equipement.classes.length || !p.classe || o.equipement.classes.includes(p.classe))).map((o) => [o.id, o.nom])],
+          p.equipement[place] || '', (v) => { p.equipement = { ...p.equipement }; if (v) p.equipement[place] = v; else delete p.equipement[place]; },
+        )));
+        return [
+          section('Dans le groupe (pack JRPG)'),
+          el('div', { className: 'field-grid' }, [
+            champ('Classe', selectEl([['', 'Aucune'], ...work.classes.map((k) => [k.id, k.nom])], p.classe, (v) => { p.classe = v; render(); })),
+            champ('Niveau de départ', (() => { const i = el('input', { type: 'number', value: p.niveau, min: 1, max: 999, className: 'num-input' }); i.oninput = () => { p.niveau = clamp(Math.round(Number(i.value)) || 1, 1, 999); }; return i; })()),
+          ]),
+          el('div', { className: 'field-grid' }, champsEquipement),
+          el('p', { className: 'modal-info', textContent: p.heros ? 'Le héros est dans le groupe dès le début s\'il a une classe. Son équipement de départ est porté (pas dans le sac).' : 'Il rejoint le groupe avec la commande « Le groupe : un héros rejoint ou part ». Son équipement de départ est porté (pas dans le sac).' }),
+        ];
       }
 
       // Les tenues du héros (Tafl 0.16) : chacune a son nom et son sprite. La commande « Personnaliser
@@ -1340,6 +1412,8 @@ const Events = (() => {
 
       function renderForm() {
         form.replaceChildren();
+        // Le pack a changé (Réglages) : un onglet d'un autre pack laisse la place aux Réglages.
+        if (!defs().includes(def())) tab = 'reglages';
         const d = def();
         if (d.unique) {
           supprimerBtn.hidden = true;
@@ -1359,7 +1433,7 @@ const Events = (() => {
         form.scrollTop = 0;
       }
       // Ce que les onglets de donnees.js reçoivent pour construire leur formulaire.
-      const ctx = () => ({ doc, work, form, input, zone, coche, idLigne: (o) => idLigne(o, work[tab]), usages, render, renderListe });
+      const ctx = () => ({ doc, work, form, input, zone, coche, idLigne: (o) => idLigne(o, work[tab]), usages, render, renderListe, change: renderNav });
       function render() {
         listes(vue());
         if (typeof Donnees !== 'undefined') Donnees.listes(work);

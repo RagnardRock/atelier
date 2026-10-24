@@ -7,7 +7,7 @@
 //
 // Les combats se jouent depuis Saga 0.3 (combat.js), les boutiques et l'écran des EV depuis Saga 0.5
 // (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js ; le PC depuis Saga 0.6
-// (ecrans.js).
+// (ecrans.js) ; le groupe de héros et les combats contre des groupes de monstres (pack JRPG) depuis Saga 0.8.
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -129,6 +129,36 @@ const Scripts = (() => {
           const issue = await moteur.combattre({ dresseur: d });
           if (issue === 'defaite') throw new Fin();
           if (issue === 'victoire') partie.compteurs.dresseurs_battus = (partie.compteurs.dresseurs_battus || 0) + 1;
+          break;
+        }
+        // Le groupe de héros (pack JRPG, Saga 0.8) : un personnage rejoint ou quitte le joueur.
+        case 'groupe': {
+          if (!Regles.capacites(jeu).groupe) { await narrer('(La commande « groupe » sert aux jeux du pack JRPG.)'); break; }
+          const p = jeu.personnages.get(c.personnage);
+          if (!p) { await narrer(`(Le personnage « ${c.personnage} » n'existe pas dans les données du jeu.)`); break; }
+          const nom = p.heros ? partie.nom : p.nom;
+          const place = Collection.toutes(partie).find((x) => x.c.heros && x.c.creature === c.personnage);
+          if (c.action === 'quitter') {
+            if (!place) break;
+            if (place.ou === 'equipe' && partie.equipe.length <= 1) { await narrer(`(${nom} ne peut pas partir : le groupe serait vide.)`); break; }
+            Collection.enlever(partie, place);
+            partie.partis[c.personnage] = place.c;
+            await narrer(`${nom} quitte le groupe.`);
+            break;
+          }
+          if (place) break; // déjà là
+          const membre = Regles.rejoindre(jeu, partie, c.personnage, Number(c.niveau) || 0);
+          if (!membre) break;
+          const ou = Collection.ranger(jeu, partie, membre);
+          if (ou.ou === 'equipe') await narrer(`${nom} rejoint le groupe !`);
+          else await narrer(`Le groupe est complet : ${nom} attend dans la ${ou.pc}.`);
+          break;
+        }
+        case 'combat_groupe': {
+          if (!trouver('groupes', c.groupe)) { await narrer(`(Le groupe de monstres « ${c.groupe} » n'existe pas dans les données du jeu.)`); break; }
+          if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Personne dans le groupe n\'est en état de se battre !'); break; }
+          const issue = await moteur.combattre({ groupe: c.groupe });
+          if (issue === 'defaite') throw new Fin();
           break;
         }
         case 'teleporter':

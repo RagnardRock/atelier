@@ -508,3 +508,84 @@ body.plein-ecran #scene { cursor: none; }
 #scene[data-theme="pixel"] .pc-case { border: 2px solid var(--px-creux); background: rgba(0, 0, 0, 0.2); }
 #scene[data-theme="pixel"] .pc-case.actif { border-color: var(--accent); box-shadow: none; background: var(--px-creux); }
 #scene[data-theme="pixel"] .fiche-onglet.actif { color: var(--accent); }
+
+/* =========================================================================
+   Saga 0.8 : l'écran des combats en groupe (ecran-groupe.js, pack JRPG). Il reprend les classes de
+   l'écran de combat (.combat, .combat-scene, .combat-bas, .combat-boite) : décors et thèmes suivent.
+   ========================================================================= */
+.groupe.boss .combat-scene { filter: saturate(0.85) brightness(0.9); }
+.gr-ennemis { position: absolute; left: 4%; top: 8%; width: 54%; bottom: 6%; display: flex; flex-wrap: wrap; align-content: center; align-items: flex-end; justify-content: center; gap: 1vh 3vw; pointer-events: none; }
+.gr-heros { position: absolute; right: 7%; top: 10%; bottom: 8%; width: 22%; }
+.gr-monstre, .gr-perso { position: relative; display: flex; align-items: flex-end; justify-content: center; pointer-events: auto; cursor: default; }
+.gr-monstre { height: 18vh; min-width: 12vh; }
+.gr-monstre.taille-petit { height: 12vh; min-width: 8vh; }
+.gr-monstre.taille-grand { height: 28vh; min-width: 18vh; }
+.gr-monstre.taille-boss { height: 40vh; min-width: 26vh; }
+.gr-perso { position: absolute; right: calc(var(--rang) * 2.4vw); top: calc(var(--rang) * (100% / max(var(--n, 4), 3)) * 0.92); height: 13vh; width: 13vh; }
+.gr-sprite { position: relative; height: 100%; width: auto; max-width: 100%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 5px 0 rgba(0, 0, 0, 0.14)); }
+.gr-sprite-vide { display: flex; align-items: center; justify-content: center; width: 70%; height: 70%; border-radius: 50% 50% 42% 42%; background: rgba(30, 30, 40, 0.6); color: rgba(255, 255, 255, 0.85); font-size: 5vh; font-weight: 700; }
+.gr-ombre { position: absolute; left: 10%; right: 10%; bottom: -5%; height: 16%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.3), transparent 70%); }
+.gr-perso.ko .gr-sprite { transform: rotate(-90deg) translateX(-20%); filter: grayscale(1) brightness(0.7); }
+.gr-perso.pret { transform: translateX(-2.5vh); transition: transform 0.15s ease-out; }
+.gr-etiquette { position: absolute; left: 50%; bottom: -3.4vh; transform: translateX(-50%); white-space: nowrap; padding: 1px 8px; border-radius: 6px; background: rgba(10, 12, 18, 0.55); color: #fff; font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.15s; }
+.gr-monstre.vise .gr-etiquette { opacity: 1; }
+.gr-curseur { position: absolute; top: 40%; color: var(--accent); font-size: 26px; opacity: 0; pointer-events: none; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.5); }
+.gr-monstre .gr-curseur { left: -26px; }
+.gr-perso .gr-curseur { right: -26px; }
+.gr-monstre.vise .gr-curseur, .gr-perso.vise .gr-curseur { opacity: 1; animation: gr-curseur 0.6s ease-in-out infinite alternate; }
+.gr-monstre.vise .gr-sprite, .gr-perso.vise .gr-sprite { filter: drop-shadow(0 0 6px var(--accent)) brightness(1.12); }
+@keyframes gr-curseur { from { translate: 0 0; } to { translate: 6px 0; } }
+.gr-perso .gr-curseur { animation-direction: alternate-reverse; }
+.gr-nombre { position: absolute; left: 50%; top: 18%; z-index: 3; pointer-events: none; font-size: 26px; font-weight: 800; color: #fff; white-space: nowrap; text-shadow: 0 2px 0 #000, 0 0 6px rgba(0, 0, 0, 0.6); font-variant-numeric: tabular-nums; }
+.gr-nombre.critique { color: #ffd34a; font-size: 32px; }
+.gr-nombre.soin { color: #7dffb0; }
+.gr-nombre.pm { color: #7cc0ff; }
+.gr-nombre.rate, .gr-nombre.info { font-size: 18px; color: #e8e8f0; }
+.gr-nombre.hausse { font-size: 17px; color: #ffb36b; }
+.gr-nombre.baisse { font-size: 17px; color: #7fb8ff; }
+.gr-halo { position: absolute; left: 50%; top: 55%; width: 140%; aspect-ratio: 1; border-radius: 50%; pointer-events: none; background: radial-gradient(circle, color-mix(in srgb, var(--couleur) 85%, white) 0%, color-mix(in srgb, var(--couleur) 55%, transparent) 35%, transparent 70%); mix-blend-mode: screen; }
+.gr-bandeau { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 6px 20px; border-radius: 999px; background: rgba(12, 14, 22, 0.72); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.18); color: #fff; font-size: 17px; font-weight: 700; letter-spacing: 0.3px; z-index: 2; }
+.gr-boite { display: flex; gap: 14px; }
+.gr-boite .combat-texte { flex: 1; }
+.gr-menu { display: flex; flex-direction: column; gap: 4px; width: 200px; margin: -6px -10px -6px 0; }
+.gr-choix { min-height: 0; height: 22px; padding: 2px 12px; font-size: 15px; flex: 1; }
+.gr-choix.desactive { opacity: 0.4; }
+.gr-equipe { width: min(46%, 520px); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 10px 14px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; background: rgba(255, 255, 255, 0.04); }
+.gr-ligne { display: grid; grid-template-columns: minmax(0, 1fr) 46px 150px 86px; align-items: center; gap: 10px; padding: 2px 8px; border-radius: 7px; color: #f0f0f4; font-size: 15px; cursor: default; border: 1px solid transparent; }
+.gr-ligne.actif { background: rgba(255, 255, 255, 0.08); border-color: var(--accent); }
+.gr-ligne.vise { background: rgba(255, 255, 255, 0.12); }
+.gr-ligne.ko { color: #f0503c; }
+.gr-ligne.ko .gr-pv-texte { color: #f0503c; }
+.gr-nom { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gr-statut { font-size: 11px; font-weight: 800; color: #c9a0ff; }
+.gr-pv { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+.gr-pv-fond { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.gr-pv-barre { display: block; height: 100%; border-radius: 4px; background: #4cd964; transition: width 0.35s ease-out; }
+.gr-pv-barre[data-niveau="moyen"] { background: #f2c230; }
+.gr-pv-barre[data-niveau="bas"] { background: #f0503c; }
+.gr-pv-texte, .gr-pm { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; }
+.gr-pm { color: #9cc8ff; text-align: right; }
+.combat-liste-img.pastille { width: 12px; height: 12px; margin: 0 14px; border-radius: 50%; background: var(--type, #888); }
+
+/* Verre */
+#scene[data-theme="verre"] .gr-equipe { background: rgba(14, 14, 22, 0.66); border-color: rgba(255, 255, 255, 0.16); border-radius: 16px; backdrop-filter: blur(18px) saturate(150%); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4); }
+#scene[data-theme="verre"] .gr-heros { bottom: 172px; }
+#scene[data-theme="verre"] .gr-ennemis { bottom: 168px; }
+#scene[data-theme="verre"] .gr-pv-barre { box-shadow: 0 0 8px currentColor; }
+
+/* Pixel */
+#scene[data-theme="pixel"] .gr-equipe, #scene[data-theme="pixel"] .gr-bandeau {
+  font-family: 'Jersey 10', monospace; border-radius: 0; border: 3px solid var(--px-clair); background: var(--px-fond); backdrop-filter: none;
+  box-shadow: 0 0 0 3px var(--px-ombre), inset 0 0 0 3px var(--px-creux);
+}
+#scene[data-theme="pixel"] .gr-ligne { border-radius: 0; font-size: 22px; font-weight: 400; }
+#scene[data-theme="pixel"] .gr-nom { font-weight: 400; }
+#scene[data-theme="pixel"] .gr-pv-texte, #scene[data-theme="pixel"] .gr-pm { font-size: 20px; font-weight: 400; }
+#scene[data-theme="pixel"] .gr-statut { font-size: 16px; font-weight: 400; }
+#scene[data-theme="pixel"] .gr-pv-fond { border-radius: 0; height: 9px; background: var(--px-ombre); border: 2px solid var(--px-clair); }
+#scene[data-theme="pixel"] .gr-pv-barre { border-radius: 0; transition-timing-function: steps(6); }
+#scene[data-theme="pixel"] .gr-choix { font-size: 22px; box-shadow: none; border-width: 2px; }
+#scene[data-theme="pixel"] .gr-choix.actif { color: var(--accent); background: var(--px-fond); }
+#scene[data-theme="pixel"] .gr-nombre { font-family: 'Jersey 10', monospace; font-weight: 400; font-size: 34px; text-shadow: 2px 2px 0 #000; }
+#scene[data-theme="pixel"] .gr-bandeau { font-size: 24px; font-weight: 400; text-transform: uppercase; }
+#scene[data-theme="pixel"] .gr-etiquette { font-family: 'Jersey 10', monospace; font-size: 18px; font-weight: 400; border-radius: 0; }

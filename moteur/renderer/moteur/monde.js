@@ -26,6 +26,7 @@ const Monde = (() => {
       tenue: '',           // la tenue du héros (un id de ses tenues), '' = sa tenue de base
       dernierSoin: null,   // où le joueur se réveille après une défaite (la dernière commande « soigner »)
       repousse: 0,         // pas sans rencontres qui restent
+      partis: {},          // les héros qui ont quitté le groupe (pack JRPG, commande groupe), tels quels
       position: { ...depart },
     };
   }
@@ -51,6 +52,9 @@ const Monde = (() => {
       case 'compteur': return compteur(partie, cond.compteur) >= (Number(cond.min) || 0);
       case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
       case 'badge': return (partie.badges || []).includes(cond.badge);
+      // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
+      case 'membre': return [...(partie.equipe || []), ...(partie.boites || []).flatMap((b) => b.creatures || [])]
+        .some((c) => c && c.heros && c.creature === cond.personnage);
       case 'quete': {
         const q = partie.quetes[cond.quete];
         const etat = q ? q.etat : 'pas_commencee';
