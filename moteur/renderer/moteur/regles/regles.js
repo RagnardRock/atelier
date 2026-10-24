@@ -28,6 +28,7 @@
 //   sauvage(jeu, partie, id, niveau, { min, max })   une créature sauvage des herbes (creer tel quel)
 //   plafond(jeu, partie)            le niveau maximum de l'équipe, montré dans le menu Équipe (aucun)
 //   evolutionsEnAttente({ jeu, partie, ui })        après un script : ce qui évolue maintenant (rien)
+//   marcher(jeu, partie)            après chaque pas du joueur (Pokémon : l'amitié monte) (rien)
 
 const Regles = (() => {
   // La forme des menus : leurs noms, le Pokédex montré ou non, la taille et la forme des boîtes du PC,
@@ -66,6 +67,7 @@ const Regles = (() => {
     sauvage: (jeu, partie, id, niveau, o) => Creatures.sauvage(jeu, partie, id, niveau, o),
     plafond: (jeu, partie) => Creatures.plafond(jeu, partie),
     evolutionsEnAttente: (o) => HorsCombat.evolutionsEnAttente(o),
+    marcher: (jeu, partie) => HorsCombat.marcher(jeu, partie),
   };
   const PACKS = { pokemon };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
@@ -112,5 +114,6 @@ const Regles = (() => {
     sauvage: (jeu, partie, id, niveau, o) => (pack(jeu).sauvage ? pack(jeu).sauvage(jeu, partie, id, niveau, o) : pack(jeu).creer(jeu, id, niveau)),
     plafond: (jeu, partie) => (pack(jeu).plafond ? pack(jeu).plafond(jeu, partie) : null),
     evolutionsEnAttente: async (o) => { await pack(o.jeu).evolutionsEnAttente?.(o); },
+    marcher: (jeu, partie) => { pack(jeu).marcher?.(jeu, partie); },
   };
 })();

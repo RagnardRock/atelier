@@ -34,7 +34,7 @@ const Combat = (() => {
         const niveau = Math.min(100, Math.max(ecrit, ref ? ref + (Number(r.ecart) || 0) : 0));
         // Monté par l'ajustement (Saga 0.7) : il prend la forme de son nouveau niveau, et les attaques
         // de ce niveau si Tafl ne lui en a pas choisi.
-        const espece = niveau > ecrit && r.evolution_ajustee !== false ? C.formeAuNiveau(jeu, m.creature, niveau) : m.creature;
+        const espece = niveau > ecrit && r.evolution_dresseurs ? C.formeAuNiveau(jeu, m.creature, niveau) : m.creature;
         const c = C.creer(jeu, espece, niveau, { nature: m.nature || undefined, attaques: m.attaques, chromatique: false });
         c.objet = m.objet || '';
         return c;
@@ -540,6 +540,7 @@ const Combat = (() => {
         await envoyer(eux, suivant);
       }
       if (actif(nous).pv <= 0) {
+        C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)
         await ui.animer('joueur', 'ko');
         await ui.message(`${C.nom(jeu, actif(nous))} est K.O. !`);
         if (!vivants(nous).length) {

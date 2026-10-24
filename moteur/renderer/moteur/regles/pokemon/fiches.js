@@ -43,6 +43,9 @@ const Fiches = (() => {
       { nom: 'Talent', valeur: talent?.nom || c.talent || '—', detail: talent?.description || '' },
       { nom: 'Expérience', valeur: `${c.xp}`, detail: auMax ? 'niveau maximum' : bloque ? `niveau maximum des badges (${plafond}) : un nouveau badge pour progresser` : `encore ${Math.max(0, xpApres - c.xp)} pour le niveau ${c.niveau + 1}`, barre: auMax ? 1 : (c.xp - xpAvant) / Math.max(1, xpApres - xpAvant), couleur: '#4aa8ff' },
     ];
+    // L'amitié (Saga 0.7) : une barre et une phrase, sans le chiffre (comme dans les jeux officiels).
+    const amitie = Number.isFinite(c.amitie) ? c.amitie : 70;
+    infos.push({ nom: 'Amitié', valeur: C.motAmitie(amitie), barre: amitie / 255, couleur: '#ff7aa8' });
     if (c.objet) infos.push({ nom: 'Objet tenu', valeur: C.trouver(jeu, 'objets', c.objet)?.nom || c.objet });
     const nat = C.NATURES[nature];
     const totalEv = C.STATS.reduce((n, k) => n + (c.evs?.[k] || 0), 0);

@@ -237,6 +237,7 @@ const Moteur = (() => {
       joueur.y = m.vers.y;
       joueur.mouvement = null;
       partie.compteurs.pas++;
+      Regles.marcher(jeu, partie); // Saga 0.7 : l'amitié qui monte en marchant (pack Pokémon)
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       // Un événement « toucher » sous les pieds (une case invisible qui lance une scène).
       const p = Monde.presentEn(presents, joueur.x, joueur.y);

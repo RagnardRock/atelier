@@ -9,7 +9,7 @@ const HorsCombat = (() => {
   const C = Creatures;
   const STATS_IV = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Att. Spé.'], ['def_spe', 'Déf. Spé.'], ['vitesse', 'Vitesse']];
   const nomStat = (s) => STATS_IV.find(([k]) => k === s)?.[1] || s;
-  const UTILES = ['soin', 'soin_statut', 'rappel', 'pp', 'pp_toutes', 'pp_max', 'ev', 'niveau', 'ivs', 'menthe', 'evolution', 'repousse'];
+  const UTILES = ['soin', 'soin_statut', 'rappel', 'pp', 'pp_toutes', 'pp_max', 'ev', 'niveau', 'ivs', 'menthe', 'evolution', 'repousse', 'amitie'];
 
   const utilisable = (o) => Boolean(o && UTILES.includes(o.effet?.type));
   const retirer = (partie, id) => { partie.sac[id] = (partie.sac[id] || 0) - 1; if (partie.sac[id] <= 0) delete partie.sac[id]; };
@@ -51,6 +51,12 @@ const HorsCombat = (() => {
     await ui.dire(`${avant} devient ${C.nom(jeu, c)} !`);
     for (const a of nouvelles) await apprendre(jeu, ui, c, a);
     return true;
+  }
+
+  // L'amitié en marchant (Saga 0.7) : tous les 128 pas, chaque créature de l'équipe en gagne un peu.
+  function marcher(jeu, partie) {
+    if ((partie.compteurs?.pas || 0) % 128 !== 0) return;
+    for (const c of partie.equipe) if (c.pv > 0) C.changerAmitie(c, [2, 1, 1]);
   }
 
   // Après un script (Saga 0.7) : une quête vient peut-être de finir, et une créature de l'équipe
@@ -167,8 +173,17 @@ const HorsCombat = (() => {
         if (!C.STATS.includes(s) || gain <= 0) return sansEffet();
         retirer(partie, id);
         c.evs[s] = (c.evs[s] || 0) + gain;
+        C.changerAmitie(c, [5, 3, 2]); // une vitamine fait plaisir (Saga 0.7)
         if (s === 'pv' && c.pv > 0) c.pv += C.pvMax(jeu, c) - max;
         await ui.dire(`${nom} gagne ${gain} points d'effort en ${nomStat(s)}.`);
+        return true;
+      }
+      // Saga 0.7 : un objet qui rapproche (une baie, un grelot à offrir…). valeur : de combien.
+      case 'amitie': {
+        if ((c.amitie || 0) >= 255) return sansEffet();
+        retirer(partie, id);
+        C.changerAmitie(c, v || 10);
+        await ui.dire(`${nom} a l'air ravi${c.sexe === 'f' ? 'e' : ''} ! ${C.motAmitie(c.amitie)}`);
         return true;
       }
       case 'niveau': {
@@ -239,5 +254,5 @@ const HorsCombat = (() => {
   // Ce qu'une boutique paie pour une créature : 100 par niveau, ×5 pour une légendaire.
   const prixCreature = (jeu, c) => Math.max(100, c.niveau * 100 * (C.espece(jeu, c)?.legendaire ? 5 : 1));
 
-  return { utilisable, utiliserObjet, ecranEv, prixCreature, evolutionsEnAttente };
+  return { utilisable, utiliserObjet, ecranEv, prixCreature, evolutionsEnAttente, marcher };
 })();
