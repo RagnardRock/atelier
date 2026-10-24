@@ -324,6 +324,16 @@ function creer({ log, dossierTafl }) {
       try { ws?.close(); } catch { /* déjà fermé */ }
     }
   }
+  // Envoie une image au moteur (dossier d'entrée de ComfyUI) : la base d'une génération « image vers image ».
+  async function envoyerImage(octets, nom = 'tafl-base.png') {
+    if (!etat.port) throw new Error('Le moteur ComfyUI n\'est pas démarré.');
+    const corps = new FormData();
+    corps.append('image', new Blob([Buffer.from(octets)], { type: 'image/png' }), nom);
+    corps.append('overwrite', 'true');
+    const r = await fetch(`http://127.0.0.1:${etat.port}/upload/image`, { method: 'POST', body: corps });
+    if (!r.ok) throw new Error(`ComfyUI refuse l'image de base (${r.status})`);
+    return (await r.json()).name || nom;
+  }
   const interrompre = () => (etat.port ? requete('/interrupt', { methode: 'POST', corps: {} }).catch(() => null) : null);
   // Libère la carte graphique (les modèles quittent la mémoire vidéo) sans arrêter le moteur.
   const liberer = () => (etat.port ? requete('/free', { methode: 'POST', corps: { unload_models: true, free_memory: true } }).catch(() => null) : null);
@@ -369,7 +379,7 @@ function creer({ log, dossierTafl }) {
     return { chemin: final, deja: false };
   }
 
-  return { trouver, demarrer, arreter, infos, modeles, generer, interrompre, liberer, telecharger, CATALOGUE, PORT, etat };
+  return { trouver, demarrer, arreter, infos, modeles, generer, envoyerImage, interrompre, liberer, telecharger, CATALOGUE, PORT, etat };
 }
 
 module.exports = { creer, CATALOGUE, DOSSIERS_MODELES };

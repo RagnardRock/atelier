@@ -112,8 +112,16 @@ const Comfy = (() => {
     }
     g[3] = { class_type: 'CLIPTextEncode', inputs: { text: o.positif, clip } };
     g[4] = { class_type: 'CLIPTextEncode', inputs: { text: o.negatif, clip } };
-    g[5] = { class_type: 'EmptyLatentImage', inputs: { width: o.W, height: o.H, batch_size: o.lot || 1 } };
-    g[6] = { class_type: 'KSampler', inputs: { model: modele, positive: ['3', 0], negative: ['4', 0], latent_image: ['5', 0], seed: o.graine, steps: o.etapes, cfg: o.cfg, sampler_name: o.sampler, scheduler: o.scheduler, denoise: 1 } };
+    if (o.base) {
+      // Image vers image : le modèle part de la base (ses formes, ses couleurs) et la redessine,
+      // d'autant plus librement que « force » est grande.
+      g[9] = { class_type: 'LoadImage', inputs: { image: o.base } };
+      g[10] = { class_type: 'VAEEncode', inputs: { pixels: ['9', 0], vae: ['1', 2] } };
+      g[5] = { class_type: 'RepeatLatentBatch', inputs: { samples: ['10', 0], amount: o.lot || 1 } };
+    } else {
+      g[5] = { class_type: 'EmptyLatentImage', inputs: { width: o.W, height: o.H, batch_size: o.lot || 1 } };
+    }
+    g[6] = { class_type: 'KSampler', inputs: { model: modele, positive: ['3', 0], negative: ['4', 0], latent_image: ['5', 0], seed: o.graine, steps: o.etapes, cfg: o.cfg, sampler_name: o.sampler, scheduler: o.scheduler, denoise: o.base ? o.force : 1 } };
     g[7] = { class_type: 'VAEDecode', inputs: { samples: ['6', 0], vae: ['1', 2] } };
     // PreviewImage : les images vont dans le dossier temporaire du moteur, pas dans ses sorties.
     g[8] = { class_type: 'PreviewImage', inputs: { images: ['7', 0] } };
@@ -149,6 +157,22 @@ const Comfy = (() => {
     const { positif, negatif } = phrases(v);
     const graine = v.graine > 0 ? Math.round(v.graine) : Math.floor(Math.random() * 2 ** 32);
     const o = { modele, lora, W, H, positif, negatif, graine, lot: clamp(Math.round(v.variantes) || 1, 1, 4), etapes: v.etapes > 0 ? Math.round(v.etapes) : auto.etapes, cfg: v.cfg > 0 ? v.cfg : auto.cfg, sampler: auto.sampler, scheduler: auto.scheduler };
+    // Partir de la tuile choisie (sol) : elle est répétée à l'échelle du pixel art (un pixel de la
+    // tuile = `echelle` pixels de l'image), puis envoyée au moteur. Le modèle garde son calme et
+    // ses couleurs, et y ajoute du détail.
+    if (v.base === 'tuile' && v.sorte === 'sol' && App.doc) {
+      const doc = App.doc, ts = doc.tileSize, e = Number(v.echelle) || 8;
+      const tuile = Doc.tileCanvas(doc.tiles[doc.current], ts);
+      const art = el('canvas', { width: Math.ceil(W / e), height: Math.ceil(H / e) });
+      const ga = art.getContext('2d');
+      for (let y = 0; y < art.height; y += ts) for (let x = 0; x < art.width; x += ts) ga.drawImage(tuile, x, y);
+      const grande = el('canvas', { width: W, height: H });
+      const gg = grande.getContext('2d');
+      gg.imageSmoothingEnabled = false;
+      gg.drawImage(art, 0, 0, art.width * e, art.height * e);
+      o.base = await api.envoyerImage(await IO.canvasBytes(grande), 'tafl-base.png');
+      o.force = clamp((Number(v.force) || 55) / 100, 0.2, 0.95);
+    }
     suivi = progres;
     const octets = await api.generer(graphe(o));
     const images = [];
@@ -165,7 +189,7 @@ const Comfy = (() => {
     return PostTraitement.traiter(brute, {
       largeur: v.largeur * taille, hauteur: v.hauteur * taille, sorte: v.sorte, pixel,
       couleurs: couleurs || (doc ? 0 : 16), palette: pixel && !couleurs && doc ? doc.palette : null,
-      tolerance: v.tolerance, marge: 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage, rares: (DETAILS[v.details] || DETAILS.peu).rares,
+      tolerance: v.tolerance, marge: pixel ? 0.12 : 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.peu).lissage, rares: (DETAILS[v.details] || DETAILS.peu).rares,
     });
   }
   const versCanvas = (img) => {
@@ -282,8 +306,9 @@ const Comfy = (() => {
       traitees = brutes.map((b) => traiter(b, v).img);
       resultats.replaceChildren();
       traitees.forEach((img, n) => {
-        const zoom = Math.max(1, Math.floor(200 / Math.max(img.width * (v.sorte === 'sol' ? 2 : 1), img.height * (v.sorte === 'sol' ? 2 : 1))));
-        const rep = v.sorte === 'sol' ? 2 : 1; // un sol est montré répété 2 × 2 : on voit s'il raccorde
+        // Un sol peut être montré répété 2 × 2 (case « Aperçu répété ») : on voit s'il raccorde.
+        const rep = v.sorte === 'sol' && v.repete ? 2 : 1;
+        const zoom = Math.max(1, Math.floor(260 / Math.max(img.width * rep, img.height * rep)));
         const c = el('canvas', { width: img.width * rep * zoom, height: img.height * rep * zoom });
         const g = c.getContext('2d');
         drawChecker(g, 0, 0, c.width, c.height, 8);
@@ -384,6 +409,9 @@ const Comfy = (() => {
         { key: 'negatif', label: 'À éviter (facultatif)', type: 'text', value: derniers.negatif || '' },
         { key: 'modele', label: 'Modèle', type: 'select', value: checkpoints.includes(derniers.modele) ? derniers.modele : '', choices: [['', 'Automatique (selon le style)'], ...checkpoints.map((m) => [m, m])] },
         { key: 'lora', label: 'LoRA (style en plus)', type: 'select', value: derniers.lora === '' || loras.includes(derniers.lora) ? derniers.lora : 'auto', choices: [['auto', 'Automatique (Pixel Art XL pour le pixel art)'], ['', 'Aucun'], ...loras.map((m) => [m, m])] },
+        { key: 'repete', label: 'Aperçu répété 2 × 2 (voir les raccords du sol)', type: 'checkbox', value: Boolean(derniers.repete) },
+        { key: 'base', label: 'Partir de', type: 'select', value: derniers.base === 'tuile' && doc ? 'tuile' : 'rien', choices: [['rien', 'Rien : le modèle invente tout'], ...(doc ? [['tuile', 'La tuile choisie dans Tafl (plus calme, mêmes couleurs)']] : [])] },
+        { key: 'force', label: 'Liberté du modèle', type: 'range', value: derniers.force ?? 55, min: 20, max: 95, unit: '%' },
         { key: 'echelle', label: 'Taille d\'un pixel dans l\'image de ComfyUI', type: 'select', value: String(derniers.echelle || 8), choices: [['4', '4 px (plus de détails)'], ['6', '6 px'], ['8', '8 px (Pixel Art XL)'], ['12', '12 px'], ['16', '16 px (plus gros pixels)']] },
         { key: 'avance', label: 'Réglages avancés', type: 'checkbox', value: false },
         { key: 'graine', label: 'Graine (0 = au hasard)', type: 'number', value: 0, min: 0 },
@@ -396,6 +424,9 @@ const Comfy = (() => {
         const s = style(values.style);
         f.inputs.couleurs.row.hidden = !s.pixel;
         f.inputs.echelle.row.hidden = !s.pixel;
+        f.inputs.repete.row.hidden = values.sorte !== 'sol';
+        f.inputs.base.row.hidden = values.sorte !== 'sol' || !doc;
+        f.inputs.force.row.hidden = values.base !== 'tuile' || values.sorte !== 'sol';
         f.inputs.tolerance.row.hidden = values.sorte !== 'objet';
         for (const k of ['graine', 'etapes', 'cfg', 'negatif', 'modele', 'lora']) f.inputs[k].row.hidden = !values.avance;
         const p = phrases(values);

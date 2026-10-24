@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld('tafl', {
     modeles: () => ipcRenderer.invoke('comfy:modeles'),
     generer: (graphe) => ipcRenderer.invoke('comfy:generer', graphe),
     interrompre: () => ipcRenderer.invoke('comfy:interrompre'),
+    envoyerImage: (octets, nom) => ipcRenderer.invoke('comfy:envoyerImage', octets, nom),
     liberer: () => ipcRenderer.invoke('comfy:liberer'),
     telecharger: (quoi) => ipcRenderer.invoke('comfy:telecharger', quoi),
     choisir: (quoi) => ipcRenderer.invoke('comfy:choisir', quoi),

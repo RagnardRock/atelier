@@ -230,6 +230,19 @@ const PostTraitement = (() => {
       for (const p of b) for (let c = 0; c < 3; c++) s[c] += p[c];
       return s.map((v) => Math.round(v / b.length));
     });
+    // Quelques tours de k-moyennes : chaque couleur va au centre des pixels qui la choisissent
+    // (la coupe médiane seule mélangeait le rouge des fleurs et le brun de la terre en orange).
+    for (let tour = 0; tour < 6; tour++) {
+      const somme = moyennes.map(() => [0, 0, 0, 0]);
+      for (let i = 0; i < px.length; i += px.length > 40000 ? 3 : 1) {
+        const p = px[i];
+        let best = Infinity, bi = 0;
+        moyennes.forEach((m, j) => { const d = dist2(p[0], p[1], p[2], m); if (d < best) { best = d; bi = j; } });
+        const t = somme[bi];
+        t[0] += p[0]; t[1] += p[1]; t[2] += p[2]; t[3]++;
+      }
+      somme.forEach((t, j) => { if (t[3]) moyennes[j] = [Math.round(t[0] / t[3]), Math.round(t[1] / t[3]), Math.round(t[2] / t[3])]; });
+    }
     // Deux couleurs presque pareilles n'en font qu'une.
     const gardees = [];
     for (const m of moyennes) if (!gardees.some((g) => dist2(m[0], m[1], m[2], g) < 300)) gardees.push(m);
@@ -322,6 +335,80 @@ const PostTraitement = (() => {
     return couper(img, { x: Math.floor((img.width - cw) / 2), y: Math.floor((img.height - ch) / 2), w: cw, h: ch });
   }
 
+  // --- La grille du pixel art ---
+  // Pixel Art XL dessine de « gros pixels » d'environ 8 pixels de l'image, mais pas exactement :
+  // la taille varie (7,5 ; 8,3…) et la grille ne commence pas en 0. Couper des blocs de 8 depuis
+  // le coin mélangeait deux gros pixels sur trois : du bruit. On mesure donc la grille : là où la
+  // couleur change d'une colonne à l'autre, les sauts tombent à intervalles réguliers.
+  function sauts(img, vertical) {
+    const { data, width: W, height: H } = img;
+    const n = vertical ? H : W, m = vertical ? W : H;
+    const e = new Float64Array(n);
+    for (let i = 1; i < n; i++) {
+      let t = 0;
+      for (let j = 0; j < m; j += 2) {
+        const a = vertical ? (i * W + j) * 4 : (j * W + i) * 4;
+        const b = vertical ? ((i - 1) * W + j) * 4 : (j * W + i - 1) * 4;
+        t += Math.abs(data[a] - data[b]) + Math.abs(data[a + 1] - data[b + 1]) + Math.abs(data[a + 2] - data[b + 2]);
+      }
+      e[i] = t;
+    }
+    return e;
+  }
+  // Le pas (en pixels, pas forcément entier) et le départ de la grille sur un axe ; null si l'image
+  // n'a pas de grille nette (un style peint, par exemple).
+  function pasDeGrille(e, min = 3, max = 24) {
+    const n = e.length;
+    let moyenne = 0;
+    for (let i = 1; i < n; i++) moyenne += e[i];
+    moyenne /= Math.max(1, n - 1);
+    if (!moyenne) return null;
+    const scores = [];
+    for (let pas = min; pas <= max; pas += 0.05) {
+      let best = 0, depart = 0;
+      for (let o = 0; o < pas; o += 0.5) {
+        let t = 0, k = 0;
+        for (let x = o; x < n; x += pas) { const i = Math.round(x); if (i > 0 && i < n) { t += e[i]; k++; } }
+        const r = k ? t / k / moyenne : 0;
+        if (r > best) { best = r; depart = o; }
+      }
+      scores.push({ pas, depart, r: best });
+    }
+    scores.sort((a, b) => b.r - a.r);
+    let choix = scores[0];
+    // Un pas double (16 au lieu de 8) tombe aussi sur les sauts : on garde le plus petit s'il marche presque aussi bien.
+    for (const s of scores) if (s.r >= choix.r * 0.85 && s.pas < choix.pas - 1 && Math.abs(choix.pas / s.pas - Math.round(choix.pas / s.pas)) < 0.08) choix = s;
+    return choix.r >= 1.4 ? choix : null;
+  }
+  // Ramène une image de pixel art à ses vrais pixels : un pixel par case de la grille mesurée, pris
+  // au milieu de la case (couleur dominante du centre). Sans grille nette : blocs de `defaut`.
+  function versGrille(img, defaut = 8) {
+    const gx = pasDeGrille(sauts(img, false)), gy = pasDeGrille(sauts(img, true));
+    const px = gx?.pas || gy?.pas || defaut, py = gy?.pas || gx?.pas || defaut;
+    const ox = gx ? gx.depart : 0, oy = gy ? gy.depart : 0;
+    const w = Math.max(1, Math.floor((img.width - ox) / px)), h = Math.max(1, Math.floor((img.height - oy) / py));
+    const out = image(w, h);
+    const { data, width: W } = img;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const x0 = Math.round(ox + (x + 0.25) * px), x1 = Math.max(x0 + 1, Math.round(ox + (x + 0.75) * px));
+      const y0 = Math.round(oy + (y + 0.25) * py), y1 = Math.max(y0 + 1, Math.round(oy + (y + 0.75) * py));
+      const groupes = new Map();
+      for (let sy = y0; sy < Math.min(y1, img.height); sy++) for (let sx = x0; sx < Math.min(x1, W); sx++) {
+        const k = (sy * W + sx) * 4;
+        const cle = data[k + 3] < 128 ? -1 : ((data[k] >> 3) << 10) | ((data[k + 1] >> 3) << 5) | (data[k + 2] >> 3);
+        const g = groupes.get(cle) || { n: 0, r: 0, g: 0, b: 0, a: 0 };
+        g.n++; g.r += data[k]; g.g += data[k + 1]; g.b += data[k + 2]; g.a += data[k + 3];
+        groupes.set(cle, g);
+      }
+      let best = null;
+      for (const g of groupes.values()) if (!best || g.n > best.n) best = g;
+      if (!best) continue;
+      const o = (y * w + x) * 4;
+      out.data[o] = best.r / best.n; out.data[o + 1] = best.g / best.n; out.data[o + 2] = best.b / best.n; out.data[o + 3] = best.a / best.n < 128 ? 0 : 255;
+    }
+    return { img: out, pas: [px, py], depart: [ox, oy], mesuree: Boolean(gx || gy) };
+  }
+
   // --- Tout ---
   // o = { largeur, hauteur (en pixels), sorte: 'sol' | 'objet', pixel: bool,
   //       couleurs: nombre (0 = garder), palette: ['#rrggbb'] (pixel art : celle du jeu),
@@ -344,7 +431,7 @@ const PostTraitement = (() => {
       if (!r) return { img: image(w, h), infos: { ...infos, vide: true } };
       img = couper(img, r);
       // À l'échelle du pixel art d'abord ; puis l'objet garde ses proportions s'il faut le réduire.
-      if (e) img = reduire(img, Math.max(1, Math.round(img.width / e)), Math.max(1, Math.round(img.height / e)), mode);
+      if (e) img = versGrille(img, e).img;
       const echelle = Math.min(w / img.width, h / img.height, e ? 1 : Infinity);
       const ow = Math.max(1, Math.round(img.width * echelle)), oh = Math.max(1, Math.round(img.height * echelle));
       // Centré, posé en bas (il se tient sur le sol).
@@ -353,8 +440,9 @@ const PostTraitement = (() => {
       const marge = Math.min(0.5, Math.max(0.05, o.marge ?? 0.25));
       const mx = Math.max(1, Math.round(w * marge)), my = Math.max(1, Math.round(h * marge));
       if (e) {
-        img = reduire(img, Math.max(1, Math.round(img.width / e)), Math.max(1, Math.round(img.height / e)), mode);
-        img = milieu(img, w + mx, h + my);
+        const g = versGrille(img, e);
+        infos.grille = g.pas.map((p) => Math.round(p * 100) / 100);
+        img = milieu(g.img, w + mx, h + my);
       }
       if (img.width !== w + mx || img.height !== h + my) img = reduire(img, w + mx, h + my, mode);
       img = raccorder(img, w, h, Boolean(o.pixel));
@@ -373,7 +461,7 @@ const PostTraitement = (() => {
     return { img, infos };
   }
 
-  return { image, traiter, lisser, milieu, retirerRares, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
+  return { image, traiter, versGrille, pasDeGrille, sauts, lisser, milieu, retirerRares, retirerFond, cadre, couper, poser, reduire, reduireMoyenne, reduireDominante, raccorder, palette, versPalette, nettoyer, couleurDuBord, hexVersRgb, rgbVersHex };
 })();
 
 if (typeof module !== 'undefined') module.exports = PostTraitement;

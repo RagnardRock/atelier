@@ -317,6 +317,7 @@ handle('comfy:generer', async (event, graphe) => {
   return images.map((b) => new Uint8Array(b));
 });
 handle('comfy:interrompre', async () => comfy.interrompre());
+handle('comfy:envoyerImage', async (_event, octets, nom) => comfy.envoyerImage(octets, nom));
 handle('comfy:liberer', async () => comfy.liberer());
 handle('comfy:telecharger', async (event, quoi) => {
   const t = comfy.trouver(await comfyConfig());
