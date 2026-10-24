@@ -211,6 +211,7 @@ const Comfy = (() => {
     return PostTraitement.traiter(brute, {
       largeur: v.largeur * taille, hauteur: v.hauteur * taille, sorte: v.sorte, pixel,
       couleurs: couleurs || (doc ? 0 : 16), palette: pixel && !couleurs && doc ? doc.palette : null,
+      taille: v.taille || 'imposee', tuile: taille,
       tolerance: v.tolerance, marge: pixel ? 0.12 : 0.25, echelle: Number(v.echelle) || 8, lissage: (DETAILS[v.details] || DETAILS.fidele).lissage, rares: (DETAILS[v.details] || DETAILS.fidele).rares,
     });
   }
@@ -325,7 +326,7 @@ const Comfy = (() => {
       return installation();
     }
     const doc = App.doc;
-    const derniers = { style: 'pixel', sorte: 'sol', largeur: 4, hauteur: 4, variantes: 4, couleurs: 'jeu', modele: '', lora: 'auto', ...(App.config.comfyDerniers || {}), ...depart };
+    const derniers = { style: 'pixel', sorte: 'sol', largeur: 4, hauteur: 4, variantes: 4, couleurs: 'jeu', modele: '', lora: 'auto', taille: 'image', ...(App.config.comfyDerniers || {}), ...depart };
     const checkpoints = t.fichiers?.checkpoints || [];
     const loras = t.fichiers?.loras || [];
     const resultats = el('div', { className: 'comfy-resultats' }, [el('p', { className: 'modal-info', textContent: 'Décris ce que tu veux, choisis un style, puis « Générer ». Les variantes s\'affichent ici : clique sur celle que tu préfères, puis « Ajouter au jeu ».' })]);
@@ -337,7 +338,8 @@ const Comfy = (() => {
       const r = brutes.map((b) => traiter(b, v));
       traitees = r.map((x) => x.img);
       // La grille de pixels mesurée (pixel art) : pour voir si la détection a marché.
-      grille = r[0]?.infos.grille ? `grille ${r[0].infos.grille.map((p) => String(p).replace('.', ',')).join(' × ')} px` : '';
+      const tuiles = r[choisie]?.infos.tuiles;
+      grille = (tuiles ? `${tuiles[0]} × ${tuiles[1]} tuiles · ` : '') + (r[0]?.infos.grille ? `grille ${r[0].infos.grille.map((p) => String(p).replace('.', ',')).join(' × ')} px` : '');
       resultats.replaceChildren();
       traitees.forEach((img, n) => {
         // Un sol peut être montré répété 2 × 2 (case « Aperçu répété ») : on voit s'il raccorde.
@@ -433,6 +435,7 @@ const Comfy = (() => {
         { type: 'element', element: phrase },
         { key: 'style', label: 'Style', type: 'select', value: derniers.style, choices: STYLES.map((s) => [s.id, s.nom]) },
         { key: 'sorte', label: 'Sorte', type: 'select', value: derniers.sorte, choices: SORTES },
+        { key: 'taille', label: 'Taille finale', type: 'select', value: derniers.taille, choices: [['image', 'Celle de l\'image (tout ce que le modèle a dessiné)'], ['imposee', 'Imposée : largeur × hauteur ci-dessous']] },
         { key: 'largeur', label: 'Largeur', type: 'number', value: derniers.largeur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'hauteur', label: 'Hauteur', type: 'number', value: derniers.hauteur, min: 1, max: 16, unit: 'tuiles' },
         { key: 'variantes', label: 'Variantes', type: 'number', value: derniers.variantes, min: 1, max: 4 },
@@ -462,6 +465,7 @@ const Comfy = (() => {
         f.inputs.base.row.hidden = values.sorte !== 'sol' || !doc;
         f.inputs.force.row.hidden = values.base !== 'tuile' || values.sorte !== 'sol';
         f.inputs.tolerance.row.hidden = values.sorte !== 'objet';
+        f.inputs.taille.row.hidden = !(values.pixel ?? style(values.style).pixel);
         for (const k of ['graine', 'etapes', 'cfg', 'negatif', 'modele', 'lora']) f.inputs[k].row.hidden = !values.avance;
         const p = phrases(values);
         const prefixe = reglagesModele(choisirModele(checkpoints, style(values.style), values.modele) || '').prefixe;

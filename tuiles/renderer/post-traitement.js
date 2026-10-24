@@ -421,13 +421,15 @@ const PostTraitement = (() => {
   //       couleurs: nombre (0 = garder), palette: ['#rrggbb'] (pixel art : celle du jeu),
   //       tolerance (fond), marge (sol : part de l'image fondue dans les bords, 0.1 à 0.5),
   //       echelle (pixel art : taille d'un pixel dans l'image de ComfyUI, 8 avec Pixel Art XL),
-  //       lissage (pixel art : 0 à 3 passes), rares (pixel art : part minimale d'une couleur, 0 = garder) }
+  //       lissage (pixel art : 0 à 3 passes), rares (pixel art : part minimale d'une couleur, 0 = garder),
+  //       taille: 'image' (pixel art : garder tout ce que le modèle a dessiné, en tuiles de `tuile` px)
+  //       ou 'imposee' (largeur × hauteur) }
   //
   // Pixel art : l'image de ComfyUI est d'abord ramenée à SON échelle (1024 px / 8 = 128 pixels de
   // pixel art), puis on y prend la taille voulue, sans la tasser. Tasser toute l'image dans
   // 4 × 4 tuiles mettait un pré entier dans 64 pixels : du bruit au lieu d'herbe.
   function traiter(source, o) {
-    const w = Math.max(1, Math.round(o.largeur)), h = Math.max(1, Math.round(o.hauteur));
+    let w = Math.max(1, Math.round(o.largeur)), h = Math.max(1, Math.round(o.hauteur));
     let img = { width: source.width, height: source.height, data: Uint8ClampedArray.from(source.data) };
     const mode = o.pixel ? 'dominante' : 'moyenne';
     const e = o.pixel ? Math.max(1, Math.round(o.echelle || 8)) : 0;
@@ -439,16 +441,31 @@ const PostTraitement = (() => {
       img = couper(img, r);
       // À l'échelle du pixel art d'abord ; puis l'objet garde ses proportions s'il faut le réduire.
       if (e) img = versGrille(img, e).img;
+      // Taille « de l'image » : l'objet garde tous ses pixels, posé sur assez de tuiles pour lui.
+      if (e && o.taille === 'image' && o.tuile > 0) {
+        const W = Math.ceil(img.width / o.tuile) * o.tuile, H = Math.ceil(img.height / o.tuile) * o.tuile;
+        img = poser(img, W, H, Math.floor((W - img.width) / 2), H - img.height);
+        infos.tuiles = [W / o.tuile, H / o.tuile];
+        return finir(img, o, infos);
+      }
       const echelle = Math.min(w / img.width, h / img.height, e ? 1 : Infinity);
       const ow = Math.max(1, Math.round(img.width * echelle)), oh = Math.max(1, Math.round(img.height * echelle));
       // Centré, posé en bas (il se tient sur le sol).
       img = poser(ow === img.width && oh === img.height ? img : reduire(img, ow, oh, mode), w, h, Math.floor((w - ow) / 2), h - oh);
     } else {
       const marge = Math.min(0.5, Math.max(0.05, o.marge ?? 0.25));
-      const mx = Math.max(1, Math.round(w * marge)), my = Math.max(1, Math.round(h * marge));
+      let mx = Math.max(1, Math.round(w * marge)), my = Math.max(1, Math.round(h * marge));
       if (e) {
         const g = versGrille(img, e);
         infos.grille = g.pas.map((p) => Math.round(p * 100) / 100);
+        // Taille « de l'image » : tout le sol dessiné, en autant de tuiles qu'il en contient
+        // (moins la marge qui sert à raccorder les bords).
+        if (o.taille === 'image' && o.tuile > 0) {
+          const t = o.tuile, gw = g.img.width, gh = g.img.height;
+          w = Math.max(t, Math.floor((gw / (1 + marge)) / t) * t); h = Math.max(t, Math.floor((gh / (1 + marge)) / t) * t);
+          mx = Math.max(1, Math.min(gw - w, Math.round(w * marge))); my = Math.max(1, Math.min(gh - h, Math.round(h * marge)));
+          infos.tuiles = [w / t, h / t];
+        }
         img = milieu(g.img, w + mx, h + my);
       }
       if (img.width !== w + mx || img.height !== h + my) img = reduire(img, w + mx, h + my, mode);
@@ -456,6 +473,10 @@ const PostTraitement = (() => {
       // Un sol est plein : aucune transparence.
       for (let k = 3; k < img.data.length; k += 4) img.data[k] = 255;
     }
+    return finir(img, o, infos);
+  }
+  // Pixel art : palette, lissage, nettoyage.
+  function finir(img, o, infos) {
     if (o.pixel) {
       const jeu = (o.palette || []).map(hexVersRgb).filter(Boolean);
       const couleurs = o.couleurs > 0 ? palette(img, o.couleurs) : jeu.length ? jeu : palette(img, 16);
