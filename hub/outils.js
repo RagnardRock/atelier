@@ -74,6 +74,17 @@ const OUTILS = [
     dossier: 'moteur',
     ouvreDossier: '0.1.0',
   },
+  {
+    id: 'mimir',
+    nom: 'Mimir', // sans accent : c'est aussi le nom de l'installeur et celui inscrit dans Windows
+    glyphe: 'ᛗ',
+    description: 'Lecteur de documents : PDF (annoter, signer, remplir), EPUB, BD, Word',
+    prefixe: 'mimir-v',
+    exe: 'Mimir.exe',
+    icone: 'mimir.svg',
+    dossier: 'lecteur',
+    categorie: 'bureautique',
+  },
 ];
 
 // Les rayons de la colonne Outils, dans l'ordre d'affichage.
