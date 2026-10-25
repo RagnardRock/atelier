@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Sécurité : seuls les scripts locaux s'exécutent. Les images du jeu arrivent en data: (dans les fichiers de Tafl). -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; worker-src blob:">
   <title>Saga</title>
   <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune, Skald et Tafl) -->
   <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
@@ -86,6 +86,9 @@
   <script src="moteur/audio.js"></script>
   <script src="moteur/ambiance.js"></script>
   <script src="moteur/dialogue.js"></script>
+  <!-- Les scripts JS du jeu (Saga 0.12) : le bac à sable commun à Tafl et Saga, puis son hôte -->
+  <script src="../commun/bac-a-sable.js"></script>
+  <script src="moteur/scripts-js.js"></script>
   <script src="moteur/scripts.js"></script>
   <script src="moteur/regles/pokemon/creatures.js"></script>
   <script src="moteur/regles/pokemon/combat.js"></script>

@@ -1,6 +1,6 @@
 // Tafl 0.30 : chercher partout (Ctrl+K). Une seule case pour trouver un espace, une carte, un
 // événement (par son nom ou une phrase de ses dialogues), une donnée du pack de règles du jeu, une
-// tuile, un tampon, ou une commande des menus. Entrée y va ; ↑ et ↓ choisissent ; Échap ferme.
+// tuile, un tampon, un script JS (Tafl 0.31), ou une commande des menus. Entrée y va ; ↑ et ↓ choisissent ; Échap ferme.
 const Recherche = (() => {
   let ouvert = null; // { root, input, liste, resultats, choisi }
   const MAX_PAR_GROUPE = 6;
@@ -45,6 +45,15 @@ const Recherche = (() => {
           out.push({ groupe: 'Événements', icone: Events.TYPE_ICONS[e.type] || 'circle', nom, cle: `${nom} ${e.id} ${perso?.nom || ''}`, textes, detail: `${m.name} · case ${e.x}, ${e.y}`, aller: () => Espaces.aller('evenements', { carte: m.id, evenement: e.id }) });
         }
       }
+      // Tafl 0.31 : les scripts JS, par leur nom, les commandes qu'ils déclarent ou un bout de leur code.
+      if (doc.game) {
+        const inv = ScriptsTafl.connu(doc);
+        for (const sc of doc.scripts || []) {
+          const fichier = `scripts/${sc.nom}.js`;
+          const cmds = inv.commandes.filter((c) => c.fichier === fichier).map((c) => c.nom);
+          out.push({ groupe: 'Scripts', icone: 'file-code', nom: `${sc.nom}.js`, cle: `${sc.nom} ${cmds.join(' ')} script js`, textes: String(sc.code || '').split('\n').map((l) => l.trim()).filter((l) => l.length > 2), detail: `${cmds.length ? `commande${cmds.length > 1 ? 's' : ''} ${cmds.join(', ')}` : 'Script JS'}${sc.actif === false ? ' · coupé' : ''}`, aller: () => Espaces.aller('evenements', { script: sc.nom }) });
+        }
+      }
       if (doc.game) {
         for (const d of Espaces.ongletsDuPack(doc)) {
           const titre = Espaces.libelle(doc, d);
@@ -87,7 +96,7 @@ const Recherche = (() => {
       }
       if (score >= 0) trouves.push({ r, score });
     }
-    const ordre = ['Espaces', 'Cartes', 'Événements', 'Données', 'Tuiles', 'Tampons', 'Commandes'];
+    const ordre = ['Espaces', 'Cartes', 'Événements', 'Scripts', 'Données', 'Tuiles', 'Tampons', 'Commandes'];
     trouves.sort((a, b) => ordre.indexOf(a.r.groupe) - ordre.indexOf(b.r.groupe) || b.score - a.score);
     const parGroupe = {};
     return trouves.filter(({ r }) => (parGroupe[r.groupe] = (parGroupe[r.groupe] || 0) + 1) <= MAX_PAR_GROUPE).slice(0, MAX).map(({ r }) => r);

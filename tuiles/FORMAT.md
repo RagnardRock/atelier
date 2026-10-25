@@ -19,6 +19,7 @@ MonJeu/
     personnages.json    les personnages, avec leurs portraits (Tafl 0.7)
     quetes.json         les quêtes et leurs étapes
     interrupteurs.json  les faits de l'histoire que retiennent les scripts
+    variables.json      les nombres et textes que retient le jeu (Tafl 0.31)
     types.json          les types et leur table d'efficacité (Tafl 0.8)
     talents.json        les talents
     attaques.json       les attaques
@@ -28,7 +29,10 @@ MonJeu/
     boutiques.json      les boutiques et ce qui débloque leurs articles
     reglages.json       argent, niveau maximum, niveau des dresseurs
   sons/                 musiques, bruitages et fonds sonores (MP3, OGG, WAV…), Tafl 0.29
+  scripts/              les scripts JS du jeu, un fichier par script (Tafl 0.31, voir SCRIPTS.md)
+    cadeau.js
   FORMAT.md             ce fichier
+  SCRIPTS.md            l'aide des scripts JS (Tafl 0.31)
 ```
 
 Chaque fichier a un champ `format` (son type) et un champ `version` (sa version). Si un jour le format change, la version augmente. Le moteur doit refuser poliment une version plus grande que celle qu'il connaît.
@@ -61,7 +65,8 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
     "types": "donnees/types.json",
     "creatures": "donnees/creatures.json",
     "...": "une entrée par fichier de donnees/"
-  }
+  },
+  "scripts": [{ "fichier": "scripts/cadeau.js", "actif": true }]
 }
 ```
 
@@ -74,6 +79,7 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
 | `depart` | Où le joueur commence une nouvelle partie, ou `null` s'il n'est pas encore placé. |
 | `donnees` | Les fichiers des données du jeu, par sorte (voir « Données du jeu »). Absent dans un jeu enregistré par Tafl 0.6 : pas encore de données. |
 | `tests` | (Tafl 0.27) Les états de départ enregistrés du **test rapide** de Tafl (voir « Test rapide » plus bas). Le moteur n'en a pas besoin pour jouer. |
+| `scripts` | (Tafl 0.31) Les scripts JS du jeu, dans l'ordre où le moteur les charge : `fichier` (`scripts/<nom>.js` : minuscules, chiffres et tirets) et `actif` (`false` : le moteur ne le charge pas). Ce qu'un script peut faire est dans SCRIPTS.md. Absent : pas de script. |
 
 ## `tuiles.tafl`
 
@@ -351,6 +357,8 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `tenue` | `tenue` | (Tafl 0.16) Met au héros la tenue `tenue` (un id de ses `tenues`), ou `""` pour sa tenue de base. Pour l'histoire : un uniforme pour s'infiltrer, une combinaison de plongée… |
 | `groupe` | `action` (`"rejoindre"` ou `"quitter"`), `personnage`, `niveau` | (Tafl 0.25, pack JRPG) Le personnage rejoint le groupe du joueur (dans la Réserve si le groupe est complet), avec sa `classe`, son `niveau` de départ (ou `niveau` s'il n'est pas 0) et son `equipement` de départ porté ; ou il le quitte. Un héros parti puis revenu retrouve son niveau, son expérience et son équipement. Le dernier héros du groupe ne peut pas partir. Sans effet dans un jeu Pokémon. |
 | `combat_groupe` | `groupe` | (Tafl 0.25, pack JRPG) Un combat contre un groupe de `groupes.json` (un boss, une embuscade). Perdu : le script s'arrête, comme pour les autres combats. |
+| `variable` | `id`, `action` (`"regler"`, `"ajouter"` ou `"retirer"`), `valeur` | (Tafl 0.31) Change une variable de `variables.json`. `regler` : `valeur` est un nombre ou un texte ; `ajouter` et `retirer` : un nombre (une variable qui contient un texte compte pour 0). |
+| `script` | `nom`, `params` | (Tafl 0.31) Joue la commande `nom` déclarée par un script JS actif (`commande('nom', …)`, voir SCRIPTS.md), avec ses réglages `params` (un objet ; un réglage absent prend son défaut). Le script de l'événement attend qu'elle finisse ; elle peut l'arrêter (`saga.fin()`). Une commande que personne ne déclare, ou une erreur dans le script, est signalée et le script de l'événement continue. |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
 
@@ -367,10 +375,11 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `badge` | `badge` | (Tafl 0.16) le joueur a reçu ce badge. |
 | `membre` | `personnage` | (Tafl 0.25, pack JRPG) ce personnage est avec le joueur : dans le groupe ou dans la Réserve. |
 | `moment` | `moment` | (Tafl 0.29) c'est ce moment de la journée, selon l'horloge du jeu (`reglages.temps`) : `"matin"` (6 h à 10 h), `"jour"` (6 h à 20 h), `"soir"` (17 h à 20 h) ou `"nuit"` (20 h à 6 h). Sans horloge, il est toujours midi : seul `"jour"` est vrai. Le moteur refait le choix des pages quand le moment change. |
+| `variable` | `id`, `comparaison`, `valeur` | (Tafl 0.31) la variable compare à `valeur` : `comparaison` vaut `"=="`, `"!="`, `">"`, `">="`, `"<"` ou `"<="`. Deux nombres se comparent comme des nombres, sinon comme des textes (`"=="` et `"!="` seulement ont du sens). Une variable jamais changée vaut son `defaut`. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus. Depuis Tafl 0.29 (Saga 0.11) : l'heure de l'horloge du jeu (`temps`, en minutes depuis minuit) et la musique en cours (`musique`).
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus. Depuis Tafl 0.29 (Saga 0.11) : l'heure de l'horloge du jeu (`temps`, en minutes depuis minuit) et la musique en cours (`musique`). Depuis Tafl 0.31 (Saga 0.12) : les variables (`variables` : par id, leur valeur) et la graine du hasard des scripts (`graine`, un entier : recharger une partie rejoue les mêmes dés).
 
 Saga 0.11 garde aussi une **sauvegarde auto** (`reglages.sauvegarde_auto`), à part : elle n'écrase jamais la sauvegarde du joueur.
 
@@ -452,6 +461,20 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
 ```
 
 La liste sert à Tafl (des noms lisibles) ; le moteur accepte aussi un interrupteur qui n'y est pas (il est éteint au départ).
+
+### `donnees/variables.json`
+
+(Tafl 0.31)
+
+```json
+{
+  "format": "tafl-variables",
+  "version": 1,
+  "variables": [{ "id": "victoires", "nom": "Victoires", "description": "Combats gagnés", "defaut": 0 }]
+}
+```
+
+Une variable retient un nombre ou un texte court (`defaut` : sa valeur au début d'une partie). La commande `variable` la change, la condition `variable` la teste, les scripts JS la lisent (`saga.variable(id)`) et l'écrivent (`saga.variable(id, valeur)`, `saga.ajouter(id, n)`). Le moteur accepte aussi une variable qui n'est pas dans la liste (elle vaut 0 au départ).
 
 ### Les bases de données de Tafl 0.8
 
@@ -619,6 +642,7 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 - `temps` (Tafl 0.29, lu par Saga 0.11) : l'horloge du jeu, `{ "horloge": "aucune", "duree_jour": 24, "heure_depart": 8 }`. `horloge` : `"aucune"` (il fait toujours jour), `"jeu"` (une horloge à part, gardée dans la partie, qui avance quand le joueur est sur la carte : une journée dure `duree_jour` minutes réelles ; une partie neuve commence à `heure_depart` heures) ou `"reelle"` (l'heure du PC du joueur). Les cartes extérieures s'assombrissent la nuit, se dorent à l'aube et au couchant (voir `ambiance.jour_nuit`), et les lumières brillent. Le carnet du jeu montre l'heure.
 - `audio` (Tafl 0.29) : `{ "musique_combat": "", "musique_dresseur": "", "musique_victoire": "", "sons": { "curseur": "", "valider": "", "retour": "", "texte": "", "porte": "", "sauvegarde": "", "choc": "" } }`. `musique_combat` : la musique des combats (`""` = la musique de la carte continue) ; `musique_dresseur` : contre un dresseur (`""` = celle des combats) ; `musique_victoire` : une fanfare jouée une fois après une victoire, puis la musique de la carte revient. `sons` : chaque bruitage du moteur, `""` = le son intégré, `"aucun"` = rien, ou un fichier de `sons/`.
 - `sauvegarde_auto` (Tafl 0.29) : `{ "active": false, "carte": true, "minutes": 5 }`. Avec `active`, le moteur sauvegarde tout seul en changeant de carte (`carte`) et/ou toutes les `minutes` minutes (`0` = jamais), dans une place à part ; il attend que le joueur soit libre (pas pendant un dialogue, un combat ou un fondu), et au plus une fois toutes les 20 secondes. À l'ouverture du jeu, il propose la plus récente des deux sauvegardes.
+- `scripts` (Tafl 0.31, lu par Saga 0.12) : `{ "formules_coupees": ["degats"] }`. Les formules du pack que les scripts JS ne remplacent **pas**, même si un script déclare `formule('degats', …)` (Réglages › Règles maison dans Tafl). Absent ou vide : toutes les formules déclarées par un script sont utilisées.
 - `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
 - `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga. `menus` (Tafl 0.21, lu par Saga 0.6) : la forme des menus. Le pack de règles en donne une par défaut (Pokémon : « Équipe », « Pokédex », « PC », « Boîte », 30 places par boîte en grille de 6 colonnes, résumé en pages `infos`, `stats`, `attaques`) ; chaque champ la remplace s'il n'est pas vide : `equipe`, `dex`, `pc`, `boite` (les noms ; une boîte s'appelle « Boîte 1 », « Boîte 2 »…), `dex_visible` (`false` cache le Pokédex), `places` et `colonnes` (`0` = ceux du pack), `forme_boites` (`"grille"`, `"liste"` ou `""`), `pages` (les pages du résumé, dans l'ordre ; `[]` = celles du pack).
 
@@ -769,3 +793,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.25** : le pack de règles `"jrpg"` : les fichiers `classes.json`, `monstres.json` et `groupes.json`, `cout_pm`, `ranime` et `guerit` dans les attaques, `equipement` et l'effet `soin_pm` dans les objets, `classe`, `niveau` et `equipement` dans les personnages, `niveau_max` et `courbe_xp` dans les réglages, les rencontres de groupes dans les zones, les commandes `groupe` et `combat_groupe`, la condition `membre`, le compteur `monstres_vaincus`. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.27** : `tests` dans `jeu.json` (les états du test rapide) et l'option `--test` du moteur. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.29** : le dossier `sons/`, `musique`, `fond_sonore`, `volume_fond` et `jour_nuit` dans l'ambiance des cartes, `lumiere` dans les tuiles et les événements, `temps`, `audio` et `sauvegarde_auto` dans les réglages, les commandes `musique`, `son` et `heure`, la condition `moment`, `heure` dans les états du test rapide, `temps` et `musique` dans la sauvegarde. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.31** : le dossier `scripts/` et `scripts` dans `jeu.json` (les scripts JS, voir SCRIPTS.md), `donnees/variables.json`, les commandes `variable` et `script`, la condition `variable`, `scripts.formules_coupees` dans les réglages, `variables` et `graine` dans la sauvegarde. Des champs en plus, donc la version reste 1.

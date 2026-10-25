@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Sécurité : seuls les scripts locaux s'exécutent. Les tuiles passent par des adresses blob: et data:. -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:">
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; worker-src 'self' blob:">
   <title>Tafl</title>
   <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune et Skald) -->
   <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
@@ -223,6 +223,9 @@
   <script src="post-traitement.js"></script>
   <script src="comfy.js"></script>
   <script src="monde.js"></script>
+  <!-- Tafl 0.31 : les scripts JS du jeu, dans le bac à sable commun à Saga (../commun/bac-a-sable.js) -->
+  <script src="../commun/bac-a-sable.js"></script>
+  <script src="scripts-js.js"></script>
   <script src="verificateur.js"></script>
   <script src="outils-jeu.js"></script>
   <script src="espaces.js"></script>

@@ -8,7 +8,8 @@
 // Les combats se jouent depuis Saga 0.3 (combat.js), les boutiques et l'écran des EV depuis Saga 0.5
 // (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js ; le PC depuis Saga 0.6
 // (ecrans.js) ; le groupe de héros et les combats contre des groupes de monstres (pack JRPG) depuis Saga 0.8 ;
-// la musique, les bruitages et l'heure depuis Saga 0.11.
+// la musique, les bruitages et l'heure depuis Saga 0.11 ; les variables et le bloc Script (une commande
+// écrite en JavaScript par le jeu, jouée dans le bac à sable de scripts-js.js) depuis Saga 0.12.
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -57,7 +58,16 @@ const Scripts = (() => {
       }
     }
 
-    async function commande(c, ev) {
+    // Saga 0.12 : une variable du jeu (un nombre ou un texte court).
+    const valeurVariable = (v) => {
+      if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      const t = String(v ?? '').slice(0, 200);
+      return t.trim() !== '' && Number.isFinite(Number(t)) ? Number(t) : t;
+    };
+
+    // profondeur : combien de scripts JS sont déjà en train de se lancer les uns les autres.
+    async function commande(c, ev, profondeur = 0) {
       const partie = moteur.partie();
       const carte = moteur.carte();
       switch (c.type) {
@@ -119,7 +129,7 @@ const Scripts = (() => {
           if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Tu n\'as aucune créature en état de se battre !'); break; }
           const issue = await moteur.combattre({ sauvage: Regles.creer(jeu, c.creature, Number(c.niveau) || 5) });
           if (issue === 'defaite') throw new Fin();
-          break;
+          return issue;
         }
         case 'combat_dresseur': {
           const d = trouver('dresseurs', c.dresseur);
@@ -130,7 +140,7 @@ const Scripts = (() => {
           const issue = await moteur.combattre({ dresseur: d });
           if (issue === 'defaite') throw new Fin();
           if (issue === 'victoire') partie.compteurs.dresseurs_battus = (partie.compteurs.dresseurs_battus || 0) + 1;
-          break;
+          return issue;
         }
         // Le groupe de héros (pack JRPG, Saga 0.8) : un personnage rejoint ou quitte le joueur.
         case 'groupe': {
@@ -160,7 +170,7 @@ const Scripts = (() => {
           if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Personne dans le groupe n\'est en état de se battre !'); break; }
           const issue = await moteur.combattre({ groupe: c.groupe });
           if (issue === 'defaite') throw new Fin();
-          break;
+          return issue;
         }
         case 'teleporter':
           dialogue.fermer();
@@ -261,6 +271,31 @@ const Scripts = (() => {
         case 'heure':
           moteur.heure({ action: c.action === 'avancer' ? 'avancer' : 'regler', heures: Number(c.heures) || 0 });
           break;
+        // Saga 0.12 : les variables (régler, ajouter, retirer).
+        case 'variable': {
+          const id = String(c.id || '');
+          if (!id) break;
+          partie.variables = partie.variables || {};
+          const avant = partie.variables[id] ?? 0;
+          if (c.action === 'ajouter' || c.action === 'retirer') {
+            const n = Number(c.valeur) || 0;
+            partie.variables[id] = (Number(avant) || 0) + (c.action === 'retirer' ? -n : n);
+          } else partie.variables[id] = valeurVariable(c.valeur);
+          break;
+        }
+        // Saga 0.12 : une commande écrite en JavaScript par le jeu (scripts/*.js, commande()).
+        case 'script': {
+          const js = moteur.scriptsJs();
+          try {
+            const r = await js.commande(String(c.nom || ''), c.params, ev, profondeur);
+            if (r.finScript) throw new Fin();
+          } catch (err) {
+            if (err instanceof Fin) throw err;
+            if (js.dire) js.dire(err, `« ${c.nom} »`);
+            else moteur.signaler?.(`Script « ${c.nom} » : ${err.message}`);
+          }
+          break;
+        }
         default:
           break; // commande inconnue : on la saute
       }
@@ -277,7 +312,18 @@ const Scripts = (() => {
       }
     }
 
-    return { executer, ui };
+    // Une seule commande, pour un script JS (saga.donner…, scripts-js.js). Rend l'issue d'un combat ;
+    // lance BacASable.FIN si le script de l'événement doit s'arrêter là (combat perdu, « fin »).
+    async function une(c, ev, profondeur = 1) {
+      try {
+        return await commande(c, ev, profondeur);
+      } catch (err) {
+        if (err instanceof Fin) throw BacASable.FIN;
+        throw err;
+      }
+    }
+
+    return { executer, une, ui };
   }
 
   return { creer };

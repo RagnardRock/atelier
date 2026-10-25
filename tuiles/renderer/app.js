@@ -1314,6 +1314,7 @@ const App = (() => {
     if (first && !doc.palette.includes(api.colors.primary)) api.colors.primary = first;
     Stage.reset();
     refresh();
+    ScriptsTafl.rafraichir(doc); // Tafl 0.31 : ce que déclarent les scripts JS (bloc Script, vérificateur)
     await Espaces.aller(doc.game ? 'accueil' : 'tuiles');
   }
 

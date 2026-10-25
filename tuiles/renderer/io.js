@@ -134,6 +134,7 @@ const IO = (() => {
     data.maps = doc.maps.map((m) => mapToJSON(doc, m));
     data.depart = doc.depart;
     data.donnees = doc.data;
+    if (doc.scripts?.length) data.scripts = doc.scripts; // Tafl 0.31
     return JSON.stringify(data);
   }
 
@@ -180,9 +181,24 @@ const IO = (() => {
       }));
     }
     doc.data = Events.normData(data.donnees, doc.tiles.length);
+    doc.scripts = normScripts(data.scripts);
     doc.path = file.path;
     return doc;
   }
+  // Tafl 0.31 : les scripts JS du jeu, [{ nom, code, actif }], des noms uniques en minuscules.
+  function normScripts(liste) {
+    const out = [];
+    for (const s of Array.isArray(liste) ? liste : []) {
+      if (!s || typeof s !== 'object') continue;
+      let nom = Doc.slug(s.nom, 'script').slice(0, 60), n = 2;
+      const base = nom;
+      while (out.some((x) => x.nom === nom)) nom = `${base}-${n++}`;
+      out.push({ nom, code: typeof s.code === 'string' ? s.code : '', actif: s.actif !== false });
+    }
+    return out;
+  }
+  const scriptFile = (s) => `scripts/${s.nom}.js`;
+
   // Les cartes lues, avec des identifiants uniques.
   function setMaps(doc, maps) {
     const seen = new Set();
@@ -263,14 +279,18 @@ const IO = (() => {
       }
     }
     doc.data = Events.normData(donnees, doc.tiles.length);
+    // Tafl 0.31 : les scripts JS (scripts/<nom>.js), dans l'ordre de jeu.json.
+    doc.scripts = normScripts((Array.isArray(jeu.scripts) ? jeu.scripts : [])
+      .map((s) => ({ nom: String(s?.fichier || '').replace(/^scripts\//, '').replace(/\.js$/, ''), code: g.scripts?.[s?.fichier], actif: s?.actif }))
+      .filter((s) => typeof s.code === 'string'));
     doc.name = String(jeu.titre || g.folder.split(/[\\/]/).pop());
     doc.path = g.path;
-    doc.game = { folder: g.folder, fichiers: Object.keys(g.cartes) };
+    doc.game = { folder: g.folder, fichiers: [...Object.keys(g.cartes), ...Object.keys(g.scripts || {})] };
     await App.setDocument(doc);
   }
 
   const mapFile = (m) => `cartes/${m.id}.json`;
-  const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs', ...Donnees.SORTES];
+  const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs', 'variables', ...Donnees.SORTES];
   const dataFile = (kind) => `donnees/${kind}.json`;
   function gameFiles(doc) {
     const jeu = {
@@ -284,11 +304,14 @@ const IO = (() => {
       donnees: Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
       // Tafl 0.27 : les états de départ enregistrés du test rapide (Saga n'en a pas besoin pour jouer).
       tests: doc.tests || [],
+      // Tafl 0.31 : les scripts JS, dans l'ordre (Saga les charge dans cet ordre, sauf ceux coupés).
+      scripts: (doc.scripts || []).map((s) => ({ fichier: scriptFile(s), actif: s.actif !== false })),
     };
     return [
       ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],
       ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify(mapToJSON(doc, m)))]),
       ...DATA_KINDS.map((k) => [dataFile(k), textBytes(JSON.stringify({ format: `tafl-${k}`, version: 1, [k]: doc.data[k] }, null, 1))]),
+      ...(doc.scripts || []).map((s) => [scriptFile(s), textBytes(s.code)]),
       // jeu.json en dernier : s'il manque, le jeu ne s'ouvre pas à moitié.
       ['jeu.json', textBytes(JSON.stringify(jeu, null, 2))],
     ];
@@ -311,7 +334,7 @@ const IO = (() => {
     const files = gameFiles(doc);
     const kept = new Set(files.map(([f]) => f));
     const saved = await window.tafl.writeGame(folder, files, doc.game.fichiers.filter((f) => !kept.has(f)));
-    doc.game.fichiers = files.map(([f]) => f).filter((f) => f.startsWith('cartes/'));
+    doc.game.fichiers = files.map(([f]) => f).filter((f) => f.startsWith('cartes/') || f.startsWith('scripts/'));
     doc.path = saved.path;
     doc.dirty = false;
     App.refresh();

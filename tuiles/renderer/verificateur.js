@@ -24,6 +24,7 @@ const Verificateur = (() => {
     acces: 'Cartes et personnages inaccessibles',
     quetes: 'Quêtes et conditions impossibles',
     references: 'Ids qui n\'existent pas',
+    scripts: 'Scripts JS et variables',
   };
 
   // Toutes les commandes d'une liste, celles des choix et des « si » comprises.
@@ -409,6 +410,35 @@ const Verificateur = (() => {
       }
     }
     for (const q of liste('quetes')) for (const p of q.personnages || []) verifierId('personnages', p, `La quête « ${q.titre || q.id} »`);
+
+    // --- 5. Scripts JS et variables (Tafl 0.31) ---
+    // jeu.scripts : ce que Tafl sait des scripts (ScriptsTafl.etat). Sans lui (ou pas encore calculé),
+    // on ne dit rien des commandes de script.
+    const sc = jeu.scripts || null;
+    for (const p of sc?.problemes || []) ajouter(p.gravite, 'scripts', p.message, { script: p.script, ligne: p.ligne });
+    const variables = new Set(liste('variables').map((v) => v.id));
+    const commandesJs = new Map((sc?.pret ? sc.inventaire.commandes : []).map((c) => [c.nom, c]));
+    for (const { carte, ev } of scriptsDe) {
+      const ou = { carte: carte.id, x: ev.x, y: ev.y, evenement: ev.id };
+      const quoi = `${nomEv(ev)} sur « ${carte.nom} »`;
+      commandes(ev, (cmd) => {
+        if (cmd.type === 'variable' && (!cmd.id || !variables.has(cmd.id))) ajouter('erreur', 'scripts', cmd.id ? `${quoi} : pas de variable « ${cmd.id} » (Données › Variables).` : `${quoi} : un bloc Variable n'a pas de variable choisie.`, ou);
+        if (cmd.type !== 'script' || !sc?.pret) return;
+        if (!cmd.nom) return ajouter('erreur', 'scripts', `${quoi} : un bloc Script n'a pas de commande choisie.`, ou);
+        const c = commandesJs.get(cmd.nom);
+        if (!c) return ajouter('erreur', 'scripts', `${quoi} : aucun script actif ne déclare la commande « ${cmd.nom} » (commande('${cmd.nom}', …)).`, ou);
+        for (const [cle, p] of Object.entries(c.params || {})) {
+          const v = cmd.params?.[cle] ?? p.defaut;
+          const sortes = { objet: 'objets', personnage: 'personnages', quete: 'quetes', creature: 'creatures', dresseur: 'dresseurs', boutique: 'boutiques', badge: 'badges', groupe: 'groupes' };
+          if (p.type === 'carte' && v && !cartes.has(v)) ajouter('erreur', 'scripts', `${quoi}, commande « ${cmd.nom} » : pas de carte « ${v} ».`, ou);
+          if (sortes[p.type] && v && !(jrpg && p.type === 'creature')) verifierId(sortes[p.type], v, `${quoi}, commande « ${cmd.nom} » (${p.nom || cle})`, ou);
+          if (p.type === 'variable' && v && !variables.has(v)) ajouter('erreur', 'scripts', `${quoi}, commande « ${cmd.nom} » : pas de variable « ${v} ».`, ou);
+        }
+      });
+      conditions(ev, (cond) => {
+        if (cond.type === 'variable' && (!cond.id || !variables.has(cond.id))) ajouter('erreur', 'scripts', cond.id ? `${quoi} : une condition parle de la variable « ${cond.id} », qui n'existe pas (Données › Variables).` : `${quoi} : une condition Variable n'a pas de variable choisie.`, ou);
+      });
+    }
     if (!jrpg && liste('personnages').length && !liste('personnages').some((p) => p.heros)) {
       ajouter('attention', 'references', 'Aucun personnage n\'est le héros (case « C\'est le héros » dans Personnages) : Saga dessine un petit bonhomme.');
     }

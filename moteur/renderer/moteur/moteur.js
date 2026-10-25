@@ -127,6 +127,11 @@ const Moteur = (() => {
     // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
     const dialogue = Dialogue.creer(canvas.parentElement, { sons: bruit });
     let scripts = null, enScript = false, autoAFaire = false;
+    // Les scripts JS du jeu (Saga 0.12, scripts-js.js) et les moments qu'ils attendent de voir passer
+    // (une carte, un combat fini…), joués dès que le joueur est libre.
+    let scriptsJs = ScriptsJs.AUCUN, reactions = [];
+    const signaler = (texte) => (rappels.erreurScript || rappels.message)?.(texte);
+    const reagir = (moment, infos = {}) => { if (scriptsJs.actif) reactions.push({ moment, infos }); };
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
     // Les combats (Saga 0.3) : leur écran, posé sur le jeu comme la boîte de dialogue.
@@ -163,6 +168,7 @@ const Moteur = (() => {
         return false;
       }
       const change = nouvelle !== carte;
+      const depuis = carte?.id || '';
       carte = nouvelle;
       // Un arbre qui « repousse » (Saga 0.7) est de nouveau là quand le joueur revient sur la carte.
       if (change) for (const ev of carte.evenements) if (Monde.obstacle(ev)?.repousse) delete partie.locaux[`${carte.id}/${ev.id}`];
@@ -182,6 +188,7 @@ const Moteur = (() => {
         rappels.carte?.(carte);
         // La sauvegarde auto (Saga 0.11) : app.js la fait dès que le joueur est libre.
         rappels.carteChangee?.(carte);
+        reagir('carte', { carte: carte.id, depuis });
       }
       // Les événements « auto » de cette carte se joueront dès la fin du fondu.
       autoAFaire = true;
@@ -203,6 +210,10 @@ const Moteur = (() => {
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
       if (!partieGardee && test) appliquerTest(test);
+      // Saga 0.12 : les variables du jeu, et la graine du hasard des scripts (gardée dans la sauvegarde :
+      // mêmes jets de dés, même résultat).
+      partie.variables = { ...Monde.variablesDeDepart(jeu), ...(partie.variables && typeof partie.variables === 'object' ? partie.variables : {}) };
+      if (!Number.isInteger(partie.graine)) partie.graine = Math.floor(Math.random() * 2147483647);
       enCombat = false;
       ecranCombat.fermer();
       ecranGroupe.fermer();
@@ -238,7 +249,26 @@ const Moteur = (() => {
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique : chemin),
         son: (chemin) => audio.fichier(chemin),
         heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
+        // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
+        scriptsJs: () => scriptsJs,
+        signaler,
       });
+      scriptsJs.fermer();
+      reactions = [];
+      momentPrincipal = '';
+      scriptsJs = ScriptsJs.creer({
+        jeu,
+        partie: () => partie,
+        lieu: () => ({
+          carte: carte ? { id: carte.id, nom: carte.nom } : null,
+          joueur: joueur ? { nom: partie.nom, x: joueur.x, y: joueur.y, direction: joueur.dir } : { nom: partie.nom },
+        }),
+        jouer: (c, ev, profondeur) => scripts.une(c, ev, profondeur),
+        choisir: (options) => dialogue.choisir(options),
+        annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
+        signaler,
+      });
+      if (!partieGardee) reagir('nouvelle_partie');
       redimensionner();
       const d = partie.position;
       if (!entrerSur(d.carte, d.x, d.y, d.direction)) entrerSur(jeu.depart.carte, jeu.depart.x, jeu.depart.y, jeu.depart.direction);
@@ -281,6 +311,9 @@ const Moteur = (() => {
     function arreter() {
       cancelAnimationFrame(boucle);
       boucle = 0;
+      scriptsJs.fermer();
+      scriptsJs = ScriptsJs.AUCUN;
+      reactions = [];
       jeu = null;
       audio.vider();
       jeuSons = null;
@@ -352,6 +385,7 @@ const Moteur = (() => {
       partie.compteurs.pas++;
       Regles.marcher(jeu, partie); // Saga 0.7 : l'amitié qui monte en marchant (pack Pokémon)
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+      if (scriptsJs.ecoute('pas')) reagir('pas', { x: joueur.x, y: joueur.y });
       // Un événement « toucher » sous les pieds (une case invisible qui lance une scène).
       const p = Monde.presentEn(presents, joueur.x, joueur.y);
       if (p && p.ev.declenchement === 'toucher' && !p.bloque) {
@@ -424,6 +458,7 @@ const Moteur = (() => {
         else audio.musique(avant, { fondu: 0.8 });
       }
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
+      if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte: dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage' });
       if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
       if (issue === 'defaite') {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
@@ -540,6 +575,26 @@ const Moteur = (() => {
       p.y = d.y;
       const sous = autres.find((q) => q.x === d.x && q.y === d.y && !q.bloque && q.ev.declenchement === 'toucher');
       if (sous) setTimeout(() => { if (jeu && presents.includes(sous)) lancer(sous); }, DUREE_PAS * 1600);
+    }
+
+    // Les moments vus par les scripts JS (Saga 0.12), l'un après l'autre. Comme un script d'événement :
+    // le joueur ne bouge pas pendant ce temps (c'est très court s'ils ne demandent rien).
+    async function lancerReactions() {
+      enScript = true;
+      try {
+        while (reactions.length && jeu) {
+          const r = reactions.shift();
+          await scriptsJs.quand(r.moment, r.infos);
+        }
+      } finally {
+        dialogue.fermer();
+        if (jeu && carte) {
+          Collection.noterTout(partie);
+          presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+        }
+        enScript = false;
+        entrees.oublier();
+      }
     }
 
     // Les événements « auto » de la carte, l'un après l'autre (une scène d'arrivée).
@@ -825,7 +880,8 @@ const Moteur = (() => {
         for (const a of attentes) a.reste -= dt;
         for (const a of attentes.filter((x) => x.reste <= 0)) a.resoudre();
         attentes = attentes.filter((x) => x.reste > 0);
-        if (autoAFaire && !fondu && !enScript) lancerAuto();
+        if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
+        else if (autoAFaire && !fondu && !enScript) lancerAuto();
       } else entrees.appuis();
       placerCamera();
       ambiance.avancer(enPause ? 0 : dt, cam, options.meteo);
@@ -836,12 +892,18 @@ const Moteur = (() => {
 
     // Le matin devient le jour, le soir la nuit : les pages qui dépendent du moment (condition
     // « moment ») changent, sans attendre la fin d'un script.
-    let momentsAvant = '';
+    let momentsAvant = '', momentPrincipal = '';
     function verifierMoments() {
       const m = Object.keys(Temps.MOMENTS).filter((k) => Temps.moment(jeu, partie, k)).join();
       if (m === momentsAvant) return;
       const premier = !momentsAvant;
       momentsAvant = m;
+      // Saga 0.12 : les scripts qui écoutent quand('moment') voient le moment principal changer.
+      const principal = ['nuit', 'soir', 'matin'].find((k) => m.split(',').includes(k)) || 'jour';
+      if (principal !== momentPrincipal) {
+        if (momentPrincipal && scriptsJs.ecoute('moment')) reagir('moment', { moment: principal });
+        momentPrincipal = principal;
+      }
       if (!premier && !enScript && !enCombat) presents = Monde.evenementsPresents(jeu, carte, partie, presents);
       else if (!premier) momentsAvant = ''; // on réessaiera à la fin du script
     }

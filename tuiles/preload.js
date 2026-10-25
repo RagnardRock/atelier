@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('tafl', {
   findGame: (folder) => ipcRenderer.invoke('game:find', folder),
   registerGame: (file) => ipcRenderer.invoke('game:register', file),
   writeGame: (folder, files, remove) => ipcRenderer.invoke('game:write', folder, files, remove),
+  // L'aide des scripts JS (Tafl 0.31) : SCRIPTS.md, ouvert avec le programme des fichiers .md.
+  ouvrirAideScripts: () => ipcRenderer.invoke('scripts:aide'),
   // Les sons du jeu (Tafl 0.29) : le dossier sons/ (lister, y ajouter des fichiers, en écouter un).
   listeSons: (folder) => ipcRenderer.invoke('sons:liste', folder),
   importerSons: (folder) => ipcRenderer.invoke('sons:importer', folder),

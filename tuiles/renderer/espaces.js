@@ -2,7 +2,8 @@
 // - Accueil : sans jeu ouvert, l'écran de bienvenue ; avec un jeu, son accueil (carte du monde,
 //   vérificateur, récents, raccourcis).
 // - Tuiles et Cartes : les deux modes d'avant (#layout, Tab passe de l'un à l'autre).
-// - Événements : tous les événements du jeu à gauche, l'éditeur d'événement en pleine page.
+// - Événements : tous les événements du jeu à gauche, l'éditeur d'événement en pleine page ; dessous,
+//   les scripts JS du jeu (Tafl 0.31, scripts-js.js), ouverts dans l'éditeur de code à la place.
 // - Données : les données du jeu en pleine page (celles du pack de règles du jeu, comme avant).
 // - Jeu : jouer, tester, vérifier, exporter, régler le jeu.
 // Plus tard, un pack de règles qui en a besoin (jeu de rôle sur table) ajoutera son espace « Table ».
@@ -22,7 +23,7 @@ const Espaces = (() => {
   const PAGES = ['accueil', 'evenements', 'donnees', 'jeu'];
   let courant = 'accueil';
   const memoDonnees = { tab: null, ids: {} };
-  const memoEvenements = { carte: null, id: null, filtre: '' };
+  const memoEvenements = { carte: null, id: null, filtre: '', script: '', ligne: 0 };
   let session = null; // l'éditeur ouvert en page : la promesse qui finit quand il est appliqué ou fermé
   let reveil = null;  // la page Événements sans événement choisi attend ceci
 
@@ -51,12 +52,13 @@ const Espaces = (() => {
   }
 
   // --- Aller dans un espace ---
-  // opts : { tab, id } pour Données ; { carte, evenement } pour Événements.
+  // opts : { tab, id } pour Données ; { carte, evenement } ou { script } pour Événements.
   async function aller(id, opts = {}) {
     const doc = App.doc;
     if (!doc && id !== 'accueil') return false;
     if (id === 'donnees' && opts.tab) { memoDonnees.tab = opts.tab; if (opts.id) memoDonnees.ids[opts.tab] = opts.id; }
-    if (id === 'evenements' && opts.evenement) { memoEvenements.carte = opts.carte; memoEvenements.id = opts.evenement; }
+    if (id === 'evenements' && opts.evenement) { memoEvenements.carte = opts.carte; memoEvenements.id = opts.evenement; memoEvenements.script = ''; }
+    if (id === 'evenements' && opts.script) { memoEvenements.script = opts.script; memoEvenements.ligne = opts.ligne || 0; }
     if (id === courant) {
       // Déjà là : la page se rouvre sur ce qui est demandé (après avoir appliqué ce qui était en cours).
       if (id === 'donnees' || id === 'evenements') { if (await appliquer()) reveiller(); }
@@ -94,6 +96,7 @@ const Espaces = (() => {
   // --- Les éditeurs en page ---
   // Applique ce qui est en cours dans la page. false si l'éditeur refuse (un événement sur une case prise).
   async function appliquer() {
+    ScriptsTafl.appliquer(); // le texte tapé dans un script (Tafl 0.31)
     const p = Events.pageOuverte();
     if (!p) return true;
     const s = session;
@@ -108,6 +111,7 @@ const Espaces = (() => {
   function recharger() {
     if (!App.doc) return;
     if (courant === 'accueil' || courant === 'jeu') return rendre();
+    if (ScriptsTafl.pageOuverte) { ScriptsTafl.rouvrir(); return null; }
     const p = Events.pageOuverte();
     if (p && !p.change()) p.jeter();
     else reveiller();
@@ -115,6 +119,7 @@ const Espaces = (() => {
   }
   // Un autre jeu s'ouvre : l'éditeur en page se ferme sans rien appliquer (déjà fait par confirmDiscard).
   function fermerPage() {
+    ScriptsTafl.rouvrir();
     Events.pageOuverte()?.jeter();
     reveiller();
   }
@@ -150,8 +155,21 @@ const Espaces = (() => {
     while (courant === 'evenements' && App.doc === doc) {
       const page = $('#page-evenements');
       if (!page.firstChild) page.append(el('aside', { id: 'ev-liste', className: 'page-panel' }), el('div', { id: 'ev-editeur' }));
-      const { map, ev } = evenementChoisi(doc);
+      // Un script JS choisi (Tafl 0.31) : l'éditeur de code à la place de celui de l'événement.
+      if (memoEvenements.script && !doc.scripts.some((x) => x.nom === memoEvenements.script)) memoEvenements.script = '';
       rendreListeEvenements(doc);
+      if (memoEvenements.script) {
+        session = new Promise((fini) => {
+          // La ligne demandée (vérificateur) ne sert qu'une fois : quand l'éditeur l'a vraiment montrée.
+          const p = ScriptsTafl.page($('#ev-editeur'), doc, memoEvenements.script, { ligne: memoEvenements.ligne, ligneVue: () => { memoEvenements.ligne = 0; }, fini: (suivant) => { if (suivant !== undefined) memoEvenements.script = suivant; fini(); } });
+          if (!p) fini();
+          reveil = () => ScriptsTafl.quitterPage();
+        });
+        await session;
+        session = null;
+        continue;
+      }
+      const { map, ev } = evenementChoisi(doc);
       const hote = $('#ev-editeur');
       hote.replaceChildren();
       if (!ev) {
@@ -180,6 +198,8 @@ const Espaces = (() => {
     }
   }
   const replies = new Set();
+  // Les scripts JS viennent d'être relus (une erreur de plus ou de moins) : la liste se met à jour.
+  ScriptsTafl.ecouter(() => { if (courant === 'evenements' && App.doc) rendreListeEvenements(App.doc); });
   function rendreListeEvenements(doc) {
     const box = $('#ev-liste');
     if (!box) return;
@@ -198,7 +218,7 @@ const Espaces = (() => {
         rows.append(tete);
         if (plie) continue;
         for (const e of evs) {
-          const actif = m.id === memoEvenements.carte && e.id === memoEvenements.id;
+          const actif = !memoEvenements.script && m.id === memoEvenements.carte && e.id === memoEvenements.id;
           const row = el('button', { className: `row${actif ? ' active' : ''}`, title: Events.decrire(doc, e) }, [
             icon(Events.TYPE_ICONS[e.type] || 'circle'),
             el('span', { className: 'row-name', textContent: e.nom || e.id }),
@@ -218,6 +238,11 @@ const Espaces = (() => {
       el('div', { className: 'panel-header' }, [el('span', { className: 'panel-title', textContent: 'Événements' }), el('span', { className: 'panel-count', textContent: String(total) }), el('div', { className: 'panel-actions' }, [ajouter])]),
       el('div', { className: 'page-search-row' }, [cherche]),
       rows,
+      ScriptsTafl.ligneListe(doc, memoEvenements.script, choisirScript, async (e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        const nom = await ScriptsTafl.nouveau(doc, r.left, r.bottom + 4);
+        if (nom) choisirScript(nom);
+      }),
     );
     lignes();
     if (focus) { cherche.focus(); cherche.setSelectionRange(cherche.value.length, cherche.value.length); }
@@ -225,7 +250,15 @@ const Espaces = (() => {
   }
   async function choisirEvenement(carte, id) {
     const avant = { ...memoEvenements };
-    Object.assign(memoEvenements, { carte, id });
+    Object.assign(memoEvenements, { carte, id, script: '' });
+    if (await appliquer()) reveiller();
+    else Object.assign(memoEvenements, avant);
+  }
+  async function choisirScript(nom) {
+    const avant = { ...memoEvenements };
+    memoEvenements.script = nom;
+    memoEvenements.ligne = 0;
+    if (courant !== 'evenements') { await aller('evenements'); return; }
     if (await appliquer()) reveiller();
     else Object.assign(memoEvenements, avant);
   }
@@ -270,7 +303,7 @@ const Espaces = (() => {
         el('span', { className: 'verif-message', textContent: p.message }),
         lieu ? el('span', { className: 'verif-lieu' }, [carte ? icon('location') : null, lieu]) : null,
       ]);
-      ligne.disabled = !carte;
+      ligne.disabled = !carte && !p.script;
       ligne.onclick = () => OutilsJeu.allerA(p);
       box.append(ligne);
     }
@@ -435,7 +468,7 @@ const Espaces = (() => {
 
   return {
     aide: () => LISTE.find((e) => e.id === courant)?.aide || '',
-    LISTE, aller, numero, suivant, majBarre, appliquer, recharger, fermerPage, estPage, rendre, ongletsDuPack, libelle, nomPack, packDe,
+    LISTE, aller, numero, suivant, choisirScript, majBarre, appliquer, recharger, fermerPage, estPage, rendre, ongletsDuPack, libelle, nomPack, packDe,
     get courant() { return courant; },
   };
 })();

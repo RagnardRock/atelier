@@ -6,13 +6,15 @@
 //   (doc.tests) ; Saga les reçoit par --test (voir main.js, jeu:jouer) et sauvegarde ces parties à part.
 const OutilsJeu = (() => {
   // Le jeu au format des fichiers (celui que lit Saga), sans rien écrire sur le disque.
-  const jeuDe = (doc) => ({ cartes: doc.maps.map((m) => IO.mapToJSON(doc, m)), depart: doc.depart, donnees: doc.data });
+  // Tafl 0.31 : avec ce que déclarent les scripts JS (ScriptsTafl.etat), pour le vérificateur.
+  const jeuDe = (doc) => ({ cartes: doc.maps.map((m) => IO.mapToJSON(doc, m)), depart: doc.depart, donnees: doc.data, scripts: ScriptsTafl.etat(doc) });
 
   // --- Vérifier le jeu ---
   // Montrer un problème : sa carte (espace Cartes) et sa case. Tafl 0.30 : « Revoir la liste » ouvre
   // l'espace Jeu, où la liste reste affichée.
   function allerA(p) {
     const doc = App.doc;
+    if (p.script) { Espaces.aller('evenements', { script: p.script, ligne: p.ligne }); return; }
     const i = doc.maps.findIndex((m) => m.id === p.carte);
     if (i < 0) return;
     App.setMode('map');
@@ -22,9 +24,10 @@ const OutilsJeu = (() => {
     if (p.evenement) actions.unshift({ label: 'Ouvrir l\'événement', run: () => Espaces.aller('evenements', { carte: p.carte, evenement: p.evenement }) });
     notify(p.message, p.gravite === 'erreur' ? 'error' : 'warning', 8000, actions);
   }
-  function verifier() {
+  async function verifier() {
     const doc = App.doc;
     if (!doc || Events.isOpen()) return;
+    await ScriptsTafl.rafraichir(doc); // l'inventaire des scripts à jour
     let r = Verificateur.verifier(jeuDe(doc));
     let filtre = 'tout';
     const w = Events.fenetre({ titre: 'Vérifier le jeu', icone: 'checklist', largeur: 980 });
@@ -65,7 +68,7 @@ const OutilsJeu = (() => {
             el('span', { className: 'verif-message', textContent: p.message }),
             lieu ? el('span', { className: 'verif-lieu' }, [icon('location'), lieu]) : null,
           ]);
-          ligne.disabled = !carte;
+          ligne.disabled = !carte && !p.script;
           ligne.onclick = () => aller(p);
           main.append(ligne);
         }
@@ -75,7 +78,7 @@ const OutilsJeu = (() => {
         : 'Tout est en ordre.';
     }
     w.close.onclick = fermer;
-    w.bouton('Vérifier à nouveau', () => { r = Verificateur.verifier(jeuDe(doc)); render(); });
+    w.bouton('Vérifier à nouveau', async () => { await ScriptsTafl.rafraichir(doc); r = Verificateur.verifier(jeuDe(doc)); render(); });
     w.bouton('Fermer', fermer, true);
     Events.occuper({ fermer, valider: fermer });
     render();

@@ -250,6 +250,7 @@ const Donnees = (() => {
     regles: 'pokemon', badges: [],
     niveau_max: 99, courbe_xp: 'normale',
     temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
+    scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
   });
   // Tafl 0.29 (Saga 0.11) : l'horloge du jeu, la musique des combats et les bruitages, la sauvegarde auto.
   const HORLOGES = [['aucune', 'Aucune : il fait toujours jour'], ['jeu', 'Horloge du jeu (elle avance quand on joue)'], ['reelle', 'Heure réelle du PC (comme Pokémon Or et Argent)']];
@@ -333,6 +334,7 @@ const Donnees = (() => {
       temps: normTemps(r.temps),
       audio: normAudio(r.audio),
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
+      scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
       badges: (() => {
         const out = [];
         arr(r.badges).filter((b) => b && typeof b === 'object').forEach((b, i) => {
@@ -1311,6 +1313,31 @@ const Donnees = (() => {
       champ('Pages du résumé', pages),
     ];
   }
+  // Tafl 0.31 : les formules du pack que les scripts JS remplacent (formule() dans Événements › Scripts).
+  // Une case les coupe sans toucher au code : Saga reprend alors la formule du pack.
+  function formReglesMaison(r, ctx) {
+    const formules = BacASable.formulesDuPack(r.regles);
+    const inv = ScriptsTafl.connu(ctx.doc);
+    const lignes = Object.entries(formules).map(([nom, f]) => {
+      const par = inv.formules.find((x) => x.nom === nom);
+      const coupee = r.scripts.formules_coupees.includes(nom);
+      const c = el('input', { type: 'checkbox', checked: Boolean(par) && !coupee, disabled: !par });
+      c.onchange = () => {
+        const l = r.scripts.formules_coupees.filter((x) => x !== nom);
+        r.scripts.formules_coupees = c.checked ? l : [...l, nom];
+        ctx.change?.();
+      };
+      return el('label', { className: `checkbox-row regle-maison${par ? '' : ' sans'}`, title: f.rend }, [c, el('span', { className: 'regle-maison-nom', textContent: f.nom }),
+        el('span', { className: 'unit', textContent: par ? `${coupee ? 'coupée · ' : ''}${par.fichier.replace(/^scripts\//, '')}` : 'formule du pack, pas de script' })]);
+    });
+    return [
+      section('Règles maison (scripts JS)'),
+      info(inv.formules.length
+        ? 'Ces formules du pack sont remplacées par tes scripts (formule() dans Événements › Scripts). Décoche pour revenir à la formule du pack sans effacer le code.'
+        : 'Un script peut remplacer une formule du pack (les dégâts, la fuite, l\'expérience…) : Événements › Scripts › + › « Règle de dégâts maison ». Elles s\'affichent ici, avec une case pour les couper.'),
+      el('div', { className: 'regles-maison' }, lignes),
+    ];
+  }
   function formReglages(r, ctx) {
     const jrpg = r.regles === 'jrpg';
     const natures = el('table', { className: 'natures' }, [
@@ -1341,6 +1368,7 @@ const Donnees = (() => {
         ]),
         el('div', { className: 'field' }, [el('button', { className: 'button small', textContent: 'Ajouter des données d\'exemple (4 classes, 16 compétences, 10 monstres, équipement)', onclick: (e) => { e.preventDefault(); const n = ajouterExemple(ctx.work); ctx.render(); notify(n ? `${n} éléments d'exemple ajoutés : à modifier ou supprimer comme tu veux. Valide pour les garder.` : 'Les données d\'exemple sont déjà là.', 'success'); } })]),
       ] : []),
+      ...formReglesMaison(r, ctx),
       section('Badges'),
       info('Les badges que le joueur gagne (commande « Donner un badge »). Leur nombre fait monter le niveau maximum de l\'équipe (ci-dessous) et le niveau des dresseurs qui s\'ajustent. Saga les montre dans le carnet, avec leur icône.'),
       tableBadges(r, ctx),

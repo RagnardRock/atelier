@@ -8,8 +8,8 @@
 // lancer() rend { issue } : 'victoire', 'defaite' ou 'fuite'. La partie est modifiée sur place (PV,
 // PM, expérience, or, sac, bestiaire : partie.dex.vus et partie.dex.pris pour les monstres vaincus).
 //
-// Les formules sont dans de petites fonctions (degats, touche, soin, ordre, choixMonstre) : ce sont
-// elles qu'un script du jeu pourra remplacer un jour (REGLES.md).
+// Les formules sont dans de petites fonctions (degats, touche, soin, critique, fuite) : un script du jeu
+// peut les remplacer (règles maison, Saga 0.12) : on les appelle toujours par Maison.formule.
 
 const JrpgCombat = (() => {
   const H = JrpgHeros;
@@ -188,7 +188,7 @@ const JrpgCombat = (() => {
       for (const t of ts) {
         // Ranimer un K.O. : ses PV reviennent (le soin de la compétence, sinon un quart).
         if (comp.ranime && !vivant(t)) {
-          mettrePv(t, Math.max(1, comp.soin > 0 ? formuleSoin({ soin: comp.soin, magie: stat(u, 'magie') }) : pvMax(t) / 4));
+          mettrePv(t, Math.max(1, comp.soin > 0 ? await Maison.formule('soin', { soin: comp.soin, magie: stat(u, 'magie') }, formuleSoin) : pvMax(t) / 4));
           await ui.animer(t.camp, t.i, 'ranime');
           montrer(t);
           await ui.message(`${nom(t)} reprend connaissance !`);
@@ -198,23 +198,23 @@ const JrpgCombat = (() => {
         // Les dégâts.
         if (comp.categorie !== 'statut' && Number(comp.puissance) > 0) {
           const precision = Number(comp.precision) || 100;
-          if ((physique || precision < 100) && !chance(formuleTouche({ precision, agiliteA: stat(u, 'agilite'), agiliteD: stat(t, 'agilite'), aveugle: Boolean(u.statuts.cecite) && physique }))) {
+          if ((physique || precision < 100) && !chance(await Maison.formule('touche', { precision, agiliteA: stat(u, 'agilite'), agiliteD: stat(t, 'agilite'), aveugle: Boolean(u.statuts.cecite) && physique }, formuleTouche))) {
             ui.nombre(t.camp, t.i, 'Raté', 'rate');
             await ui.animer(t.camp, t.i, 'esquive');
             continue;
           }
           const eff = multElement(element, t);
           if (eff === 0) { ui.nombre(t.camp, t.i, 'Immunisé', 'info'); continue; }
-          const critique = physique && chance(formuleCritique({ chance: stat(u, 'chance'), paliers: Number(comp.critique) || 0 }));
+          const critique = physique && chance(await Maison.formule('critique', { chance: stat(u, 'chance'), paliers: Number(comp.critique) || 0 }, formuleCritique));
           const A = stat(u, physique ? 'force' : 'magie'), D = stat(t, physique ? 'defense' : 'esprit');
-          const n = formuleDegats({ A, D, puissance: Number(comp.puissance) || 100, element: eff, critique, defend: t.defend });
+          const n = Math.max(0, Math.round(await Maison.formule('degats', { A, D, puissance: Number(comp.puissance) || 100, element: eff, critique, defend: t.defend, physique }, formuleDegats)));
           if (eff > 1) ui.nombre(t.camp, t.i, 'Faiblesse !', 'info');
           await blesser(t, n, { critique });
           if (critique) await ui.message('Coup critique !');
           if (!vivant(t)) continue;
         }
         // Les soins (PV), puis les statuts guéris.
-        if (Number(comp.soin) > 0 && !comp.ranime) await guerirPv(t, formuleSoin({ soin: Number(comp.soin), magie: stat(u, 'magie') }));
+        if (Number(comp.soin) > 0 && !comp.ranime) await guerirPv(t, Math.max(0, Math.round(await Maison.formule('soin', { soin: Number(comp.soin), magie: stat(u, 'magie') }, formuleSoin))));
         const guerit = comp.guerit || [];
         const gueris = Object.keys(t.statuts).filter((k) => guerit.includes('tous') || guerit.includes(k));
         if (gueris.length) { for (const k of gueris) delete t.statuts[k]; montrer(t); await ui.message(`${nom(t)} va mieux.`); }
@@ -380,7 +380,7 @@ const JrpgCombat = (() => {
           ordres[k] = { type: 'defendre' };
         } else if (choix === 'fuir') {
           const moyenne = (l) => l.reduce((s, x) => s + stat(x, 'agilite'), 0) / Math.max(1, l.length);
-          if (chance(formuleFuite({ agiliteHeros: moyenne(vivants(heros)), agiliteMonstres: moyenne(vivants(monstres)), essais: essaisFuite }))) return 'fuite';
+          if (chance(await Maison.formule('fuite', { agiliteHeros: moyenne(vivants(heros)), agiliteMonstres: moyenne(vivants(monstres)), essais: essaisFuite }, formuleFuite))) return 'fuite';
           essaisFuite++;
           await ui.message('Impossible de fuir !');
           return null;
@@ -452,7 +452,9 @@ const JrpgCombat = (() => {
       if (!vivants(monstres).length) {
         ui.bandeau('');
         await ui.message('Victoire !', { attendre: true, fanfare: true });
-        const xp = monstres.reduce((s, u) => s + (Number(u.m.xp) || 0), 0);
+        const total = monstres.reduce((s, u) => s + (Number(u.m.xp) || 0), 0);
+        // Chaque héros debout reçoit toute l'expérience (une règle maison peut la partager).
+        const xp = Math.max(0, Math.round(await Maison.formule('experience', { total, heros: vivants(heros).length }, (v) => v.total)));
         const or = monstres.reduce((s, u) => s + (Number(u.m.or) || 0), 0);
         partie.argent = (partie.argent || 0) + or;
         partie.compteurs.monstres_vaincus = (partie.compteurs.monstres_vaincus || 0) + monstres.length;

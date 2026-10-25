@@ -1,7 +1,7 @@
 {
   "name": "atelier-tuiles",
   "productName": "Tafl",
-  "version": "0.30.0",
+  "version": "0.31.0",
   "description": "Tafl, mon outil de tuiles façon Pokémon (pixel art, jeux de tuiles, cartes), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
@@ -27,7 +27,8 @@
       "!build/**",
       "build/icon.ico",
       "build/icon.png",
-      "!mettre-a-jour.*"
+      "!mettre-a-jour.*",
+      "!node_modules/monaco-editor/{dev,esm,min-maps}/**"
     ],
     "fileAssociations": [
       {
@@ -68,7 +69,8 @@
   },
   "dependencies": {
     "@vscode/codicons": "0.0.45",
-    "electron-updater": "6.8.9"
+    "electron-updater": "6.8.9",
+    "monaco-editor": "0.52.2"
   },
   "private": true
 }

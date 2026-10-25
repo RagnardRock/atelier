@@ -137,7 +137,7 @@ const Combat = (() => {
         else {
           await ui.message(`${nom} est confus${fe(c)}…`);
           if (chance(33)) {
-            const deg = degats(c, stat(k, 'attaque'), stat(k, 'defense'), 40, 1);
+            const deg = await degats(c, stat(k, 'attaque'), stat(k, 'defense'), 40, 1);
             await ui.message(`${il(c)} se blesse dans sa confusion !`);
             ui.animer(k.joueur ? 'joueur' : 'adversaire', 'touche');
             await pv(k, c, c.pv - deg);
@@ -174,7 +174,7 @@ const Combat = (() => {
           const D = crit ? Math.min(stat(cible, physique ? 'defense' : 'def_spe'), C.stats(jeu, d)[physique ? 'defense' : 'def_spe']) : stat(cible, physique ? 'defense' : 'def_spe');
           let mult = eff * (types(c).includes(att.type) ? 1.5 : 1) * (crit ? 1.5 : 1);
           if (physique && c.statut === 'brulure') mult *= 0.5;
-          const deg = degats(c, A, D, puissance, mult);
+          const deg = await degats(c, A, D, puissance, mult, crit);
           ui.animer(cible.joueur ? 'joueur' : 'adversaire', 'touche');
           infliges += Math.min(d.pv, deg);
           await pv(cible, d, d.pv - deg);
@@ -214,10 +214,14 @@ const Combat = (() => {
       if (att.categorie === 'statut' && !att.statut && !att.stats?.length && !att.soin) await ui.message('Mais rien ne se passe…');
     }
 
-    // La formule des dégâts.
-    function degats(c, A, D, puissance, mult) {
-      const base = Math.floor(Math.floor(Math.floor(2 * c.niveau / 5 + 2) * puissance * A / D) / 50) + 2;
-      return Math.max(1, Math.floor(base * mult * (85 + hasard(16)) / 100));
+    // La formule des dégâts (une règle maison peut la remplacer, Saga 0.12).
+    const formuleDegats = ({ niveau, A, D, puissance, multiplicateur }) => {
+      const base = Math.floor(Math.floor(Math.floor(2 * niveau / 5 + 2) * puissance * A / D) / 50) + 2;
+      return Math.max(1, Math.floor(base * multiplicateur * (85 + hasard(16)) / 100));
+    };
+    async function degats(c, A, D, puissance, mult, critique = false) {
+      const n = await Maison.formule('degats', { niveau: c.niveau, A, D, puissance, multiplicateur: mult, critique }, formuleDegats);
+      return Math.max(1, Math.round(n));
     }
 
     async function infliger(k, statut, annoncer) {
@@ -348,15 +352,21 @@ const Combat = (() => {
       await ui.message(`Tu lances ${o.nom} !`);
       await ui.animer('adversaire', 'capture');
       const max = C.pvMax(jeu, d), bonus = Number(o.effet?.valeur) || 1;
+      // La chance de capture en % (formule officielle : quatre secousses réussies de suite), qu'une règle
+      // maison peut remplacer (Saga 0.12). Chaque secousse réussit avec la racine quatrième de la chance.
+      const formuleCapture = ({ pv, pvMax, taux, balle, statut }) => {
+        if (balle >= 255) return 100;
+        const bonusStatut = statut === 'sommeil' || statut === 'gel' ? 2 : statut ? 1.5 : 1;
+        const a = (3 * pvMax - 2 * pv) * taux * balle / (3 * pvMax) * bonusStatut;
+        if (a >= 255) return 100;
+        return 100 * (1048560 / Math.sqrt(Math.sqrt(16711680 / Math.max(1, a))) / 65536) ** 4;
+      };
+      const pourcent = Math.max(0, Math.min(100, Number(await Maison.formule('capture', { pv: d.pv, pvMax: max, taux: Number(e?.taux_capture) || 45, balle: bonus, statut: d.statut || '' }, formuleCapture)) || 0));
       let secousses = 4;
-      if (bonus < 255) {
-        const bonusStatut = d.statut === 'sommeil' || d.statut === 'gel' ? 2 : d.statut ? 1.5 : 1;
-        const a = (3 * max - 2 * d.pv) * (Number(e?.taux_capture) || 45) * bonus / (3 * max) * bonusStatut;
-        if (a < 255) {
-          const b = 1048560 / Math.sqrt(Math.sqrt(16711680 / Math.max(1, a)));
-          secousses = 0;
-          while (secousses < 4 && hasard(65536) < b) secousses++;
-        }
+      if (pourcent < 100) {
+        const b = 65536 * (pourcent / 100) ** 0.25;
+        secousses = 0;
+        while (secousses < 4 && hasard(65536) < b) secousses++;
       }
       for (let i = 0; i < Math.min(3, secousses); i++) await ui.animer('adversaire', 'secoue');
       if (secousses >= 4) {
@@ -374,11 +384,12 @@ const Combat = (() => {
 
     // --- La fuite (contre une créature sauvage) ---
     let essaisFuite = 0;
-    function fuiteReussie() {
+    // La chance de fuir en % (formule officielle), qu'une règle maison peut remplacer (Saga 0.12).
+    const formuleFuite = ({ vitesse, vitesseAdverse, essais }) => (vitesse >= vitesseAdverse ? 100 : ((Math.floor(vitesse * 128 / vitesseAdverse) + 30 * essais) % 256) / 2.56);
+    async function fuiteReussie() {
       essaisFuite++;
-      const a = stat(nous, 'vitesse'), b = stat(eux, 'vitesse');
-      if (a >= b) return true;
-      return hasard(256) < (Math.floor(a * 128 / b) + 30 * essaisFuite) % 256;
+      const p = await Maison.formule('fuite', { vitesse: stat(nous, 'vitesse'), vitesseAdverse: stat(eux, 'vitesse'), essais: essaisFuite }, formuleFuite);
+      return p >= 100 || chance(p);
     }
 
     // --- Gagner de l'expérience (et apprendre, évoluer) ---
@@ -386,8 +397,9 @@ const Combat = (() => {
       const e = C.espece(jeu, battue);
       const gagnants = [...nous.participants].filter((c) => c.pv > 0 && partie.equipe.includes(c));
       if (!gagnants.length) return;
-      const total = Math.max(1, Math.floor((Number(e?.xp_base) || 60) * battue.niveau / 7 * (dresseur ? 1.5 : 1)));
-      const part = Math.max(1, Math.floor(total / gagnants.length));
+      // L'expérience de chacun (formule officielle), qu'une règle maison peut remplacer (Saga 0.12).
+      const formuleXp = ({ base, niveau, dresseur: d, participants }) => Math.max(1, Math.floor(Math.max(1, Math.floor(base * niveau / 7 * (d ? 1.5 : 1))) / participants));
+      const part = Math.max(0, Math.round(await Maison.formule('experience', { base: Number(e?.xp_base) || 60, niveau: battue.niveau, dresseur: Boolean(dresseur), participants: gagnants.length }, formuleXp)));
       for (const c of gagnants) {
         C.gagnerEv(jeu, c, battue);
         if (c.niveau >= C.plafond(jeu, partie)) continue;
@@ -485,7 +497,7 @@ const Combat = (() => {
           if (i != null) action = { type: 'changer', cible: i };
         } else if (choix === 'fuite') {
           if (dresseur) { await ui.message('Impossible de fuir un combat de dresseur !'); continue; }
-          if (fuiteReussie()) { await ui.message('Tu prends la fuite !'); ui.fermer(); return { issue: 'fuite' }; }
+          if (await fuiteReussie()) { await ui.message('Tu prends la fuite !'); ui.fermer(); return { issue: 'fuite' }; }
           await ui.message('Impossible de fuir !');
           action = { type: 'rien' };
         }
