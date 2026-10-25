@@ -456,6 +456,7 @@ const Combat = (() => {
     if (!dresseur) await ui.animer('adversaire', 'entree');
     if (dresseur) await ui.message(`${nomDresseur()} veut se battre !`);
     else {
+      Collection.voir(partie, actif(eux).creature); // le Pokédex : vue (elle n'est pas « envoyée »)
       await ui.message(`Un ${C.nom(jeu, actif(eux))} sauvage apparaît !`);
       if (actif(eux).chromatique) await ui.message('Il brille !');
     }
