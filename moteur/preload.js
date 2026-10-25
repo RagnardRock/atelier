@@ -18,9 +18,12 @@ contextBridge.exposeInMainWorld('saga', {
   jeuxRecents: () => ipcRenderer.invoke('jeu:recents'),
   montrerJeu: (dossier) => ipcRenderer.invoke('jeu:montrer', dossier),
   // La sauvegarde de la partie d'un jeu (dans %APPDATA%\atelier-moteur\sauvegardes, jamais dans le jeu).
-  // test : la sauvegarde à part d'un test rapide de Tafl (Saga 0.10).
-  lireSauvegarde: (dossier, test = false) => ipcRenderer.invoke('sauvegarde:lire', dossier, test),
-  ecrireSauvegarde: (dossier, donnees, test = false) => ipcRenderer.invoke('sauvegarde:ecrire', dossier, donnees, test),
+  // place : '' (la sauvegarde du joueur), 'test' (celle à part d'un test rapide de Tafl, Saga 0.10)
+  // ou 'auto' (la sauvegarde auto, Saga 0.11).
+  lireSauvegarde: (dossier, place = '') => ipcRenderer.invoke('sauvegarde:lire', dossier, place),
+  ecrireSauvegarde: (dossier, donnees, place = '') => ipcRenderer.invoke('sauvegarde:ecrire', dossier, donnees, place),
+  // Un son du dossier sons/ du jeu ouvert (Saga 0.11) : ses octets, que le moteur décode.
+  lireSon: (chemin) => ipcRenderer.invoke('jeu:son', chemin),
   // Un jeu lancé par Tafl ou Atelier alors que Saga est déjà ouvert : { dossier, depart }.
   // Exporter le jeu en version web et/ou Windows (Saga 0.9) : formats = ['web', 'exe'].
   exporter: (dossier, formats) => ipcRenderer.invoke('jeu:exporter', dossier, formats),

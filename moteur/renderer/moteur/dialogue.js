@@ -8,9 +8,12 @@
 // pour que clavier et manette marchent pareil.
 
 const Dialogue = (() => {
-  const VITESSE = 55; // lettres par seconde
+  // Lettres par seconde, selon le réglage du joueur (Saga 0.11, réglages › Vitesse du texte).
+  const VITESSES = { lente: 30, normale: 55, rapide: 110, instantanee: Infinity };
 
-  function creer(conteneur) {
+  // sons(nom) : un bruitage (curseur, valider, texte), branché par le moteur sur audio.js.
+  function creer(conteneur, { sons = () => {} } = {}) {
+    let vitesse = VITESSES.normale;
     const boite = el('div', { className: 'dialogue', hidden: true });
     const portrait = el('img', { className: 'dialogue-portrait', alt: '' });
     const nom = el('div', { className: 'dialogue-nom' });
@@ -42,6 +45,7 @@ const Dialogue = (() => {
       chrono = 0;
       texte.textContent = '';
       suite.hidden = true;
+      if (vitesse === Infinity) { ecrit = complet.length; texte.textContent = complet; suite.hidden = false; }
       return new Promise((resoudre) => { attente = { type: 'texte', resoudre }; });
     }
 
@@ -81,6 +85,7 @@ const Dialogue = (() => {
       if (attente.type === 'texte') {
         if (t !== 'action' && t !== 'retour') return true;
         if (ecrit < complet.length) { ecrit = complet.length; texte.textContent = complet; suite.hidden = false; return true; }
+        sons('valider');
         const r = attente.resoudre;
         attente = null;
         r();
@@ -89,7 +94,8 @@ const Dialogue = (() => {
       if (t === 'haut' || t === 'bas') {
         attente.i = (attente.i + (t === 'bas' ? 1 : -1) + attente.n) % attente.n;
         surligner(attente);
-      } else if (t === 'action') valider();
+        sons('curseur');
+      } else if (t === 'action') { sons('valider'); valider(); }
       return true;
     }
 
@@ -97,8 +103,9 @@ const Dialogue = (() => {
     function avancer(dt) {
       if (attente?.type !== 'texte' || ecrit >= complet.length) return;
       chrono += dt;
-      const n = Math.min(complet.length, Math.floor(chrono * VITESSE));
+      const n = Math.min(complet.length, Math.floor(chrono * vitesse));
       if (n !== ecrit) {
+        if (/\S/.test(complet.slice(ecrit, n))) sons('texte');
         ecrit = n;
         texte.textContent = complet.slice(0, ecrit);
         if (ecrit >= complet.length) suite.hidden = false;
@@ -113,7 +120,11 @@ const Dialogue = (() => {
       setTimeout(() => a.remove(), 3700);
     }
 
-    return { dire, choisir, fermer, touche, avancer, annoncer, get ouvert() { return !boite.hidden; } };
+    return {
+      dire, choisir, fermer, touche, avancer, annoncer,
+      get ouvert() { return !boite.hidden; },
+      regler({ vitesseTexte } = {}) { vitesse = VITESSES[vitesseTexte] || VITESSES.normale; },
+    };
   }
 
   return { creer };

@@ -391,6 +391,17 @@ Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregi
 - **Le script en blocs** (fenêtre de l'événement, bouton **Blocs** / **Liste**) : chaque commande est un bloc coloré par famille, reliés de haut en bas ; un choix s'ouvre en une branche par réponse, un « si » en deux branches (alors, sinon), qui se rejoignent. Glisse un bloc sur un trait pour le déplacer (même d'une branche à l'autre), glisse une commande de la palette de gauche pour l'ajouter, ou clique le `+` d'un trait. Double-clic : modifier. Le format du script ne change pas : Saga le lit comme avant.
 - **Aperçu du dialogue** : un clic sur un dialogue ou un choix montre la boîte comme dans Saga (portrait, nom dans sa couleur, texte qui s'écrit, réponses), au thème **Verre** ou **Pixel** du jeu. Les flèches passent d'une boîte à l'autre (une ligne vide dans un texte fait une nouvelle boîte, comme dans le jeu).
 
+## Ambiance : musique, jour et nuit, lumières (Tafl 0.29, pour Saga 0.11)
+
+- **Sons du jeu** : les fichiers du dossier `sons/` du jeu (MP3, OGG, WAV…). Partout où on choisit un son, une liste, ▶ pour l'écouter, + pour en ajouter (Tafl le copie dans `sons/`).
+- **Carte › Ambiance** : en plus de la météo et de la teinte, la musique de la carte (ou « celle d'avant continue », ou le silence), un fond sonore en boucle (ou la pluie de la météo, faite par Saga) avec son volume, et « Suit le jour et la nuit ».
+- **Tuiles** (clic droit › Lumière de la tuile…) : une tuile qui éclaire, avec sa couleur, sa portée, sa force et « elle vacille ». Un point lumineux la marque dans la liste des tuiles. Plusieurs tuiles choisies : la même lumière pour toutes.
+- **Événements** : une section Lumière (un feu de camp, un PNJ avec une lanterne).
+- **Données du jeu › Réglages** : Jour et nuit (aucune horloge, horloge du jeu avec la durée d'une journée et l'heure de départ, ou heure réelle du PC), Musique et sons (musique des combats, contre un dresseur, fanfare de victoire, et chaque bruitage : celui de Saga, aucun, ou un fichier), Sauvegarde auto (en changeant de carte, toutes les N minutes).
+- **Commandes** : Changer la musique, Jouer un son, Changer l'heure (avancer ou mettre à une heure) ; **condition** « Le moment de la journée » (matin, jour, soir, nuit).
+- **Test rapide** : l'heure de départ du test, quand le jeu a une horloge.
+- Loki connaît tout ça (action `ambiance`, commandes et conditions des scripts).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).

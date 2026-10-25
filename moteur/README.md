@@ -37,9 +37,9 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
 | Ctrl+O | Ouvrir un autre jeu. |
-| Ctrl+, | Réglages. |
+| Ctrl+, | Options : son, texte, affichage, commandes. |
 
-Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour courir, Start pour la pause).
+Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour revenir et courir, Start pour la pause, Select pour le carnet), et depuis Saga 0.11 dans **tous** les menus. Les touches du clavier et les boutons de la manette se changent dans Options › Commandes.
 
 ## Ce que fait Saga 0.1
 
@@ -133,6 +133,16 @@ Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu �
 - En ligne de commande : `Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports [--rapport=rapport.json]`.
 - Pour l'instant, l'exe garde l'icône de Saga.
 
+## Ce que fait Saga 0.11 : l'ambiance et le confort de jeu (avec Tafl 0.29)
+
+- **Musique et sons** : chaque carte a sa musique (en fondu enchaîné d'une carte à l'autre ; une maison peut garder celle de la ville) et son fond sonore en boucle (vent, ruisseau). Les combats ont leur musique (une autre contre les dresseurs) et une fanfare de victoire. Les fichiers sont dans le dossier `sons/` du jeu (MP3, OGG, WAV…), choisis dans Tafl. Sans fichier, Saga a ses propres bruitages, fabriqués à la volée : des « bips » pour les menus, le texte qui s'écrit, les portes, la sauvegarde, le choc contre un mur, et la pluie et le tonnerre de la météo (`renderer/moteur/audio.js`, Web Audio). La musique baisse pendant la pause.
+- **Jour et nuit** : une horloge du jeu (une journée dure 24 minutes par défaut, réglable) ou l'heure réelle du PC. Les cartes extérieures s'assombrissent la nuit, se dorent à l'aube et au couchant ; les intérieurs ne changent pas. L'heure est dans le carnet et dans la sauvegarde. Les pages des événements peuvent dépendre du moment (condition « moment » : matin, jour, soir, nuit) et les scripts peuvent avancer l'heure (dormir à l'auberge). `renderer/moteur/temps.js`.
+- **Lumières** : une tuile (lampadaire, fenêtre, feu) ou un événement (un feu de camp, un PNJ avec une lanterne) peut éclairer : un halo de sa couleur, qui peut vaciller, quand il fait sombre (la nuit ou une grotte teintée). Une seule couche de lumière, posée en produit, garde le pixel art net.
+- **Options** (la pause, ou Ctrl+,) : volume de la musique et des sons, vitesse du texte (lente, normale, rapide, instantanée), plein écran, zoom, météo, thème, et **Commandes** : chaque commande (haut, bas… action, retour, courir, pause, carnet) a ses touches et ses boutons de manette, en pastilles ; « + » attend la touche ou le bouton à ajouter.
+- **Manette partout** (`renderer/pad.js`) : la pause, le carnet, les options et les questions se pilotent à la croix (gauche et droite règlent les curseurs et les listes), A valide, B ferme. La manette fait aussi avancer les dialogues (avant, elle n'était lue que quand le joueur marchait).
+- **Sauvegarde auto** (si le jeu l'active dans Tafl) : en changeant de carte et/ou toutes les N minutes, dans une place à part (`….auto.json`) : la sauvegarde du joueur n'est jamais écrasée. Elle attend que le joueur soit libre (pas en plein dialogue ni en combat). À l'ouverture, Saga propose la plus récente des deux. Pas de sauvegarde auto pendant un test rapide.
+- **Export** : les sons partent avec le jeu (dans `resources/jeu/sons` pour l'exe, emballés dans `sons.js` pour la version web, qui se joue même d'un double-clic sur `index.html`).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
@@ -152,7 +162,11 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |
 | `renderer/moteur/moteur.js` | La boucle du jeu : commandes, déplacements, caméra, dessin des calques et des personnages, fondus. |
-| `renderer/moteur/ambiance.js` | La teinte et la météo. |
+| `renderer/moteur/ambiance.js` | La lumière (teinte de la carte, jour et nuit, lampes) et la météo. |
+| `renderer/moteur/temps.js` | L'horloge du jeu, la lumière du ciel à chaque heure, les moments de la journée (Saga 0.11). |
+| `renderer/moteur/audio.js` | La musique, les fonds sonores et les bruitages, avec les sons intégrés (Saga 0.11). |
+| `renderer/commandes.js` | Options › Commandes : les touches et les boutons de manette du joueur (Saga 0.11). |
+| `renderer/pad.js` | La manette dans les menus autour du jeu (Saga 0.11). |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
 | `renderer/polices/` | La police pixel Jersey 10 (licence SIL OFL, dans `OFL.txt`). |

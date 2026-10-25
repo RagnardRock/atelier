@@ -1133,8 +1133,7 @@ body.resizing-row { cursor: row-resize; }
 .test-coche { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .test-argent { width: 110px !important; flex: 0 0 auto !important; }
 .field-unit { color: var(--muted); font-size: 12px; }
-/* =========================================================================
-   Tafl 0.28 : le script d'un événement en blocs reliés (blocs.js), et l'aperçu des dialogues
+/* ==================================================================   Tafl 0.28 : le script d'un événement en blocs reliés (blocs.js), et l'aperçu des dialogues
    ========================================================================= */
 .editor-section:has(.vue-choix)::after { order: 1; }
 .editor-section .vue-choix { order: 2; display: flex; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; }
@@ -1255,3 +1254,10 @@ body.resizing-row { cursor: row-resize; }
 .saga-scene[data-theme="pixel"] .dialogue-suite { animation-timing-function: steps(2); }
 .saga-scene[data-theme="pixel"] .dialogue-option { border-radius: 0; font-size: 26px; }
 .saga-scene[data-theme="pixel"] .dialogue-option.actif { background: none; color: var(--accent); }
+=======
+
+/* Tafl 0.29 : une tuile qui éclaire (un point lumineux de sa couleur), et le choix d'un son du jeu. */
+.tile-lumiere { position: absolute; right: 3px; top: 3px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 6px 1px rgba(255, 220, 140, 0.9); }
+.son-champ { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
+.son-champ select { flex: 1; min-width: 0; }
+.son-champ .icon-button.active { color: var(--accent); }

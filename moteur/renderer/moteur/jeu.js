@@ -71,12 +71,32 @@ const Jeu = (() => {
         images,
         duree: Math.max(30, Number(liste[i].duration) || 200),
         passage: liste[i].passage === 'libre' ? PASSAGE.libre : liste[i].passage === 'bloque' ? PASSAGE.bloque : PASSAGE.auto,
+        lumiere: lumiere(liste[i].lumiere), // Saga 0.11 : une tuile qui éclaire (lampadaire, fenêtre, feu)
       });
     }
     return { planche, tuiles };
   }
 
   const nombre = (v, def) => (Number.isFinite(Number(v)) ? Number(v) : def);
+  const borne = (v, def, min, max) => Math.min(max, Math.max(min, nombre(v, def)));
+
+  // Une source de lumière (Saga 0.11, FORMAT.md › Lumières) : sur une tuile ou un événement.
+  // { couleur: '#rrggbb', rayon: en cases, intensite: 0 à 100, scintille } → null s'il n'y en a pas.
+  function lumiere(l) {
+    if (!l || typeof l !== 'object') return null;
+    return {
+      couleur: /^#[0-9a-f]{6}$/i.test(l.couleur || '') ? l.couleur : '#ffd890',
+      rayon: borne(l.rayon, 3, 0.5, 16),
+      intensite: borne(l.intensite, 80, 0, 100) / 100,
+      scintille: Boolean(l.scintille),
+    };
+  }
+  // Un son du jeu : un chemin sons/… (sans remonter ailleurs), ou un mot (aucune, aucun, pluie…).
+  const son = (v, mots = []) => {
+    const t = typeof v === 'string' ? v.replace(/\\/g, '/') : '';
+    if (mots.includes(t)) return t;
+    return /^sons\/[^/]+$/.test(t) && !t.includes('..') ? t : '';
+  };
   const grille = (v, taille, def) => {
     const out = new Int32Array(taille).fill(def);
     if (Array.isArray(v)) for (let i = 0; i < Math.min(taille, v.length); i++) out[i] = nombre(v[i], def);
@@ -138,6 +158,12 @@ const Jeu = (() => {
         intensite: Math.min(100, Math.max(0, nombre(data.ambiance?.intensite, 50))),
         teinte: /^#[0-9a-f]{6}$/i.test(data.ambiance?.teinte || '') ? data.ambiance.teinte : '',
         force: Math.min(100, Math.max(0, nombre(data.ambiance?.force, 0))),
+        // Saga 0.11 : la musique ('' = celle d'avant continue, 'aucune' = silence), le fond sonore
+        // ('' = selon la météo : la pluie intégrée), et le cycle jour/nuit (jamais dans un intérieur).
+        musique: son(data.ambiance?.musique, ['aucune']),
+        fond_sonore: son(data.ambiance?.fond_sonore, ['aucun']),
+        volume_fond: borne(data.ambiance?.volume_fond, 70, 0, 100),
+        jour_nuit: data.ambiance?.jour_nuit !== false && !data.interieur,
       },
     };
     const lue = Array.isArray(data.collisions) && data.collisions.length === n;
@@ -227,5 +253,5 @@ const Jeu = (() => {
     };
   }
 
-  return { charger, ErreurJeu, PASSAGE, DIRECTIONS, REBORDS };
+  return { charger, ErreurJeu, PASSAGE, DIRECTIONS, REBORDS, lumiere, son };
 })();

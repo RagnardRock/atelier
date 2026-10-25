@@ -157,6 +157,7 @@ const Events = (() => {
   // Pour chaque type : son nom, son icône, son groupe (dans le menu « Ajouter une commande »), la
   // commande neuve, les champs de sa fenêtre (Dialogs.form), comment la refaire depuis la fenêtre, et
   // une phrase qui la résume dans la liste. Une commande sans champs s'ajoute directement.
+  let sonOuvert = null; // le choix de son de la fenêtre « musique » ou « son » ouverte (Tafl 0.29)
   const COMMANDES = {
     dire: {
       nom: 'Dialogue', icone: 'comment', groupe: 'Dialogue', largeur: 520,
@@ -408,6 +409,47 @@ const Events = (() => {
       nouveau: () => ({ type: 'ecran_boites' }),
       resume: () => 'Ouvrir le PC (ranger les créatures dans les boîtes)',
     },
+    // Tafl 0.29 (Saga 0.11) : la musique, un bruitage, l'heure du jeu.
+    musique: {
+      nom: 'Changer la musique', icone: 'music', groupe: 'Ambiance',
+      nouveau: () => ({ type: 'musique', fichier: '' }),
+      champs: (doc, c) => {
+        sonOuvert = Sons.choix(doc, c.fichier, { mots: [['', 'Celle de la carte'], ['aucune', 'Silence']] });
+        const choix = sonOuvert;
+        return [
+          { type: 'element', element: Sons.ligne('Musique', choix) },
+          { type: 'info', text: 'Pour une scène : la musique du rival, un silence avant la révélation. Elle reste jusqu\'à la carte suivante qui a sa propre musique ; « Celle de la carte » remet la musique de la carte.' },
+        ];
+      },
+      depuis: () => ({ type: 'musique', fichier: sonOuvert?.valeur || '' }),
+      resume: (doc, c) => (c.fichier === 'aucune' ? 'Couper la musique' : c.fichier ? `Musique : ${c.fichier.slice(5)}` : 'Remettre la musique de la carte'),
+    },
+    son: {
+      nom: 'Jouer un son', icone: 'unmute', groupe: 'Ambiance',
+      nouveau: () => ({ type: 'son', fichier: '' }),
+      champs: (doc, c) => {
+        sonOuvert = Sons.choix(doc, c.fichier, { mots: [['', 'Choisis un son…']] });
+        const choix = sonOuvert;
+        return [
+          { type: 'element', element: Sons.ligne('Son', choix) },
+          { type: 'info', text: 'Un bruitage du dossier sons/ du jeu : une porte qui grince, un cri, une cloche. Le script continue sans attendre la fin du son (ajoute « Attendre » au besoin).' },
+        ];
+      },
+      depuis: () => ({ type: 'son', fichier: sonOuvert?.valeur || '' }),
+      valide: (c) => (c.fichier ? null : 'Quel son ?'),
+      resume: (doc, c) => `Son : ${c.fichier ? c.fichier.slice(5) : '…'}`,
+    },
+    heure: {
+      nom: 'Changer l\'heure (dormir, attendre la nuit)', icone: 'history', groupe: 'Ambiance',
+      nouveau: () => ({ type: 'heure', action: 'avancer', heures: 8 }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['avancer', 'Avancer de… heures'], ['regler', 'Mettre à… heures']] },
+        { key: 'heures', label: 'Heures', type: 'number', value: c.heures, min: 0, max: 23 },
+        { type: 'info', text: 'Pour l\'horloge du jeu (Réglages › Jour et nuit) : une nuit à l\'auberge (avancer de 8 heures), une scène qui se passe le soir (mettre à 20 heures). Avec l\'heure réelle du PC, la commande ne fait rien.' },
+      ],
+      depuis: (v) => ({ type: 'heure', action: v.action === 'regler' ? 'regler' : 'avancer', heures: clamp(Math.round(v.heures) || 0, 0, 23) }),
+      resume: (doc, c) => (c.action === 'regler' ? `Mettre l'heure à ${c.heures} h` : `Avancer l'heure de ${c.heures} h`),
+    },
   };
 
   // --- Les conditions (d'une page, ou d'un « si ») ---
@@ -488,6 +530,17 @@ const Events = (() => {
       valide: (c) => (c.personnage ? null : 'Quel personnage ?'),
     },
   };
+  // Tafl 0.29 (Saga 0.11) : le moment de la journée, selon l'horloge du jeu.
+  const MOMENTS = [['matin', 'Le matin (6 h à 10 h)'], ['jour', 'Le jour (6 h à 20 h)'], ['soir', 'Le soir (17 h à 20 h)'], ['nuit', 'La nuit (20 h à 6 h)']];
+  CONDITIONS.moment = {
+    nom: 'Le moment de la journée (jour, nuit…)',
+    nouveau: () => ({ type: 'moment', moment: 'nuit' }),
+    champs: (doc, c) => [
+      { key: 'moment', label: 'C\'est', type: 'select', value: c.moment, choices: MOMENTS },
+      { type: 'info', text: 'Selon l\'horloge du jeu (Réglages › Jour et nuit). Un marchand qui ne vient que le soir, un fantôme la nuit, une boulangerie ouverte le matin. Sans horloge, il est toujours midi : « le jour » est vrai.' },
+    ],
+    depuis: (v) => ({ type: 'moment', moment: v.moment }),
+  };
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -499,6 +552,7 @@ const Events = (() => {
     if (c.type === 'argent') return `a au moins ${c.min} ${monnaie(doc)}`;
     if (c.type === 'badge') return `a le badge « ${nomBadge(doc, c.badge)} »`;
     if (c.type === 'membre') return `${nomData(doc, 'personnages', c.personnage)} est avec le joueur`;
+    if (c.type === 'moment') return libelle(MOMENTS, c.moment).replace(/ \(.*\)$/, '').toLowerCase();
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -515,6 +569,7 @@ const Events = (() => {
       case 'argent': return { type: 'argent', min: clamp(int(c.min, 0), 0, 9999999) };
       case 'badge': return { type: 'badge', badge: str(c.badge) };
       case 'membre': return { type: 'membre', personnage: str(c.personnage) };
+      case 'moment': return { type: 'moment', moment: pick(c.moment, MOMENTS, 'nuit') };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -542,6 +597,9 @@ const Events = (() => {
       case 'tenue': return { type: 'tenue', tenue: str(c.tenue) };
       case 'groupe': return { type: 'groupe', action: c.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: str(c.personnage), niveau: clamp(int(c.niveau, 0), 0, 999) };
       case 'combat_groupe': return { type: 'combat_groupe', groupe: str(c.groupe) };
+      case 'musique': return { type: 'musique', fichier: Donnees.son(c.fichier, ['aucune']) };
+      case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
+      case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
       default: return { ...c };
     }
   }
@@ -561,6 +619,8 @@ const Events = (() => {
       declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
       pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map(normPage),
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
+      // Tafl 0.29 : l'événement éclaire (un feu de camp, un PNJ avec une lanterne), quelle que soit sa page.
+      ...(e?.lumiere && typeof Donnees !== 'undefined' ? { lumiere: Donnees.normLumiere(e.lumiere) } : {}),
     };
   }
   function normObstacle(o) {
@@ -1001,6 +1061,26 @@ const Events = (() => {
             ...(o.sorte === 'pousser' ? [] : [champ('Repousse quand le joueur quitte la carte', repousse)]),
           );
         };
+        // La lumière (Tafl 0.29) : un halo autour de l'événement quand il fait sombre (Saga 0.11).
+        const blocLumiere = el('div');
+        const majLumiere = () => {
+          blocLumiere.replaceChildren();
+          const active = el('input', { type: 'checkbox', checked: Boolean(work.lumiere) });
+          active.onchange = () => { if (active.checked) work.lumiere = Donnees.lumiereVide(); else delete work.lumiere; majLumiere(); };
+          blocLumiere.append(section('Lumière'), champ('Il éclaire quand il fait sombre', active));
+          const l = work.lumiere;
+          if (!l) return;
+          const couleur = el('input', { type: 'color', value: l.couleur });
+          couleur.oninput = () => { l.couleur = couleur.value; };
+          const rayon = el('input', { type: 'number', min: 0.5, max: 10, step: 0.5, value: l.rayon });
+          rayon.oninput = () => { l.rayon = clamp(Number(rayon.value) || 3, 0.5, 16); };
+          const force = el('input', { type: 'number', min: 0, max: 100, value: l.intensite });
+          force.oninput = () => { l.intensite = clamp(Math.round(Number(force.value)) || 0, 0, 100); };
+          const vacille = el('input', { type: 'checkbox', checked: l.scintille });
+          vacille.onchange = () => { l.scintille = vacille.checked; };
+          blocLumiere.append(champ('Couleur', couleur), champ('Portée', rayon, 'cases'), champ('Force', force, '%'), champ('Elle vacille (flamme)', vacille));
+        };
+        majLumiere();
         side.append(
           champ('Nom', nom),
           champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); majObstacle(); })),
@@ -1015,6 +1095,7 @@ const Events = (() => {
           champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
           champ('Le joueur peut passer à travers', traversable),
           blocObstacle,
+          blocLumiere,
           aide,
         );
         majApercu();

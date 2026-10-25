@@ -599,3 +599,6 @@ body.plein-ecran #scene { cursor: none; }
 #scene[data-theme="pixel"] .gr-nombre { font-family: 'Jersey 10', monospace; font-weight: 400; font-size: 34px; text-shadow: 2px 2px 0 #000; }
 #scene[data-theme="pixel"] .gr-bandeau { font-size: 24px; font-weight: 400; text-transform: uppercase; }
 #scene[data-theme="pixel"] .gr-etiquette { font-family: 'Jersey 10', monospace; font-size: 18px; font-weight: 400; border-radius: 0; }
+
+/* Saga 0.11 : l'heure du jeu dans le carnet. */
+#carnet-heure { color: var(--muted); font-size: 13px; margin-left: 12px; font-variant-numeric: tabular-nums; }

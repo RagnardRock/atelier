@@ -18,9 +18,19 @@
     ouvrirJeu: async () => J.textes,
     jeuxRecents: async () => [],
     montrerJeu: async () => {},
-    lireSauvegarde: async () => lire('sauvegarde'),
-    ecrireSauvegarde: async (_dossier, donnees) => {
-      try { ecrire('sauvegarde', donnees); } catch { throw new Error('le navigateur refuse de garder la sauvegarde (navigation privée ou plus de place)'); }
+    // place : '' (la sauvegarde du joueur) ou 'auto' (la sauvegarde auto, Saga 0.11), rangées à part.
+    lireSauvegarde: async (_dossier, place = '') => lire(place === 'auto' ? 'sauvegarde-auto' : 'sauvegarde'),
+    ecrireSauvegarde: async (_dossier, donnees, place = '') => {
+      try { ecrire(place === 'auto' ? 'sauvegarde-auto' : 'sauvegarde', donnees); } catch { throw new Error('le navigateur refuse de garder la sauvegarde (navigation privée ou plus de place)'); }
+    },
+    // Les sons du jeu (Saga 0.11) : emballés en base64 dans sons.js par l'export.
+    lireSon: async (chemin) => {
+      const b64 = window.SAGA_SONS?.[chemin];
+      if (!b64) throw new Error('introuvable dans l\'export');
+      const bin = atob(b64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
     },
     onJeuExterne: rien,
     demarrage: async () => ({ dossier: J.textes.dossier, depart: null }),

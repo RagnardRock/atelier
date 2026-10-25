@@ -27,6 +27,7 @@ MonJeu/
     dresseurs.json      les dresseurs et leur équipe
     boutiques.json      les boutiques et ce qui débloque leurs articles
     reglages.json       argent, niveau maximum, niveau des dresseurs
+  sons/                 musiques, bruitages et fonds sonores (MP3, OGG, WAV…), Tafl 0.29
   FORMAT.md             ce fichier
 ```
 
@@ -97,6 +98,7 @@ Le même format que les fichiers `.tafl` de Tafl, sans les cartes :
 - `png` : l'image de la tuile (PNG encodé en texte). Une tuile **animée** a aussi `frames` (toutes ses images, dans l'ordre) et `duration` (durée de chaque image, en millisecondes). Toutes les tuiles animées partagent la même horloge, pour que toute l'eau ondule en même temps.
 - `passage` (facultatif) : `"libre"` ou `"bloque"`, ce que fait la tuile partout où elle est posée. Absent = `"auto"` (elle ne décide rien). Voir « Passage et collisions ».
 - `categorie` (facultatif) : le nom de la catégorie où la tuile est rangée dans Tafl (« Herbe », « Maisons »…). Elle ne sert qu'à s'y retrouver dans l'éditeur : le moteur peut l'ignorer.
+- `lumiere` (facultatif, Tafl 0.29) : la tuile éclaire (un lampadaire, une fenêtre allumée, un feu), partout où elle est posée. Voir « Lumières » plus bas.
 - `tampons` (facultatif, Tafl 0.10) : les objets de plusieurs tuiles qu'on pose d'un clic dans Tafl (`{ "nom", "largeur", "hauteur", "dessus", "cases" }`, `cases` = un numéro de tuile par case, rangée par rangée, `-1` = rien ; `dessus` = combien de rangées du haut vont sur le calque au-dessus du joueur). **Le moteur peut l'ignorer** : une fois posés, ce sont des tuiles ordinaires sur les calques de la carte.
 
 Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme une petite texture, ou les recoller dans une planche au chargement.
@@ -202,6 +204,33 @@ Pack JRPG (Tafl 0.25, `reglages.regles` = `"jrpg"`) : `rencontres` liste des **g
 | `intensite` | De 0 à 100 : combien de gouttes, de flocons… |
 | `teinte` | Une couleur `#rrggbb` posée en « produit » (`multiply`) sur toute la carte, comme une couche de lumière : bleu sombre pour la nuit ou l'orage, orangé pour un coucher de soleil. `""` = aucune. |
 | `force` | De 0 à 100 : l'opacité de la teinte. |
+| `musique` | (Tafl 0.29) La musique de la carte : un fichier du dossier `sons/` (`"sons/bourg.ogg"`), `"aucune"` (le silence), ou `""` : la musique d'avant continue (celle de la ville quand on entre dans une maison). Le moteur passe d'une musique à l'autre en fondu enchaîné, et ne recommence pas un morceau qui joue déjà. |
+| `fond_sonore` | (Tafl 0.29) Un son en boucle sous la musique (vent, ruisseau, foule) : un fichier de `sons/`, `"aucun"`, ou `""` : selon la météo (le moteur fait lui-même la pluie de `"pluie"` et `"orage"`, avec le tonnerre après chaque éclair). |
+| `volume_fond` | (Tafl 0.29) De 0 à 100 : le volume du fond sonore. |
+| `jour_nuit` | (Tafl 0.29) `true` (par défaut) : la carte suit le jour et la nuit de l'horloge du jeu (voir `reglages.temps`). `false` : elle garde toujours sa lumière. Un intérieur (`interieur: true`) ne suit jamais le jour et la nuit. |
+
+#### Musique et sons
+
+(Tafl 0.29, joués par Saga 0.11.) Les sons sont des fichiers du dossier `sons/` du jeu, à côté de `jeu.json` : MP3, OGG, WAV, M4A, OPUS, FLAC. Tafl les y copie (bouton + à côté d'une liste de sons) ; les champs qui en parlent donnent leur chemin, `"sons/<nom du fichier>"`, sans sous-dossier. Les sons choisis : la `musique` et le `fond_sonore` de chaque carte, la musique des combats et les bruitages (`reglages.audio`), et les commandes `musique` et `son`. Un son introuvable est sauté (le moteur le signale une fois).
+
+Sans fichier, le moteur a ses propres bruitages, fabriqués à la volée : un « bip » pour le curseur, la validation, le retour, le texte qui s'écrit, une porte, la sauvegarde et le choc contre un mur, et la pluie et le tonnerre de la météo. Le joueur règle le volume de la musique et celui des sons dans les options de Saga.
+
+#### Lumières
+
+(Tafl 0.29, jouées par Saga 0.11.) Une tuile (`lumiere` dans `tuiles.tafl`) ou un événement (`lumiere` dans l'événement) peut éclairer :
+
+```json
+"lumiere": { "couleur": "#ffd890", "rayon": 3, "intensite": 80, "scintille": false }
+```
+
+| Champ | Sens |
+|---|---|
+| `couleur` | La couleur de la lumière, `"#rrggbb"`. |
+| `rayon` | Jusqu'où elle porte, en cases (0,5 à 16). |
+| `intensite` | De 0 à 100 : sa force. |
+| `scintille` | `true` : elle vacille un peu (une flamme, une bougie). |
+
+Le moteur pose sur la carte une seule couche de lumière, en « produit » : la teinte de la carte, multipliée par la lumière du ciel (la nuit, l'aube, le couchant : voir `reglages.temps`), puis éclaircie autour de chaque lumière (un halo qui rend ses vraies couleurs à la carte, avec une lueur de sa couleur). Il fait jour : les lumières ne changent rien. Une carte teintée sombre (une grotte) les montre même de jour. La lumière d'un événement suit l'événement (un PNJ avec une lanterne qui se promène) et vaut pour toutes ses pages, tant qu'il est présent.
 
 ### Téléporteurs
 
@@ -308,6 +337,9 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `combat_sauvage` | `creature`, `niveau` | Un combat contre une créature précise, qu'on peut capturer (un légendaire au bout d'une quête). |
 | `combat_dresseur` | `dresseur` | Un combat contre un dresseur de `dresseurs.json`. |
 | `teleporter` | `carte`, `x`, `y`, `direction` | Emmène le joueur ailleurs. |
+| `musique` | `fichier` | (Tafl 0.29) Change la musique : un fichier de `sons/`, `"aucune"` (le silence), ou `""` (la musique de la carte). Elle reste jusqu'à la carte suivante qui a sa propre musique. |
+| `son` | `fichier` | (Tafl 0.29) Joue un bruitage de `sons/` (une porte qui grince, une cloche). Le script continue sans attendre la fin du son. |
+| `heure` | `action` (`"avancer"` ou `"regler"`), `heures` | (Tafl 0.29) L'horloge du jeu (`reglages.temps.horloge = "jeu"`) avance de `heures` heures (une nuit à l'auberge), ou se met à `heures` heures (0 à 23). Sans effet avec l'heure réelle ou sans horloge. |
 | `quete` | `quete`, `action` (`"commencer"`, `"etape"`, `"finir"`), `etape` | Fait avancer une quête. `etape` : le numéro de l'étape (à partir de 1), pour `"etape"`. Commencer met la quête à l'étape 1. |
 | `soigner` | | Soigne toute l'équipe (le centre de soins). |
 | `boutique` | `boutique` | Ouvre une boutique de `boutiques.json`. |
@@ -334,10 +366,13 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `argent` | `min` | (Tafl 0.16) le joueur a au moins `min` d'argent. |
 | `badge` | `badge` | (Tafl 0.16) le joueur a reçu ce badge. |
 | `membre` | `personnage` | (Tafl 0.25, pack JRPG) ce personnage est avec le joueur : dans le groupe ou dans la Réserve. |
+| `moment` | `moment` | (Tafl 0.29) c'est ce moment de la journée, selon l'horloge du jeu (`reglages.temps`) : `"matin"` (6 h à 10 h), `"jour"` (6 h à 20 h), `"soir"` (17 h à 20 h) ou `"nuit"` (20 h à 6 h). Sans horloge, il est toujours midi : seul `"jour"` est vrai. Le moteur refait le choix des pages quand le moment change. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus.
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus. Depuis Tafl 0.29 (Saga 0.11) : l'heure de l'horloge du jeu (`temps`, en minutes depuis minuit) et la musique en cours (`musique`).
+
+Saga 0.11 garde aussi une **sauvegarde auto** (`reglages.sauvegarde_auto`), à part : elle n'écrase jamais la sauvegarde du joueur.
 
 ## Données du jeu (`donnees/`)
 
@@ -581,6 +616,9 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 - `seuil_amitie` (Tafl 0.24) : l'amitié qu'il faut pour une évolution `"amitie"` (sur 255, 220 par défaut). L'amitié d'une créature part du `bonheur` de son espèce ; elle monte en gagnant des niveaux (+5, +3 au-dessus de 100, +2 au-dessus de 200), en marchant (tous les 128 pas), avec les vitamines et les objets d'effet `amitie` ; elle baisse de 1 quand la créature tombe K.O. L'évolution se fait à la montée de niveau (au `niveau` de l'évolution au moins, s'il est donné).
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
 - `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. `"pokemon"` (les types, talents, attaques, créatures, objets et dresseurs de `donnees/` sont ses données) ou, depuis Tafl 0.25, `"jrpg"` (voir « Le pack JRPG » plus bas). Saga en décrit chaque fonction dans `moteur/renderer/moteur/regles/REGLES.md`. Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
+- `temps` (Tafl 0.29, lu par Saga 0.11) : l'horloge du jeu, `{ "horloge": "aucune", "duree_jour": 24, "heure_depart": 8 }`. `horloge` : `"aucune"` (il fait toujours jour), `"jeu"` (une horloge à part, gardée dans la partie, qui avance quand le joueur est sur la carte : une journée dure `duree_jour` minutes réelles ; une partie neuve commence à `heure_depart` heures) ou `"reelle"` (l'heure du PC du joueur). Les cartes extérieures s'assombrissent la nuit, se dorent à l'aube et au couchant (voir `ambiance.jour_nuit`), et les lumières brillent. Le carnet du jeu montre l'heure.
+- `audio` (Tafl 0.29) : `{ "musique_combat": "", "musique_dresseur": "", "musique_victoire": "", "sons": { "curseur": "", "valider": "", "retour": "", "texte": "", "porte": "", "sauvegarde": "", "choc": "" } }`. `musique_combat` : la musique des combats (`""` = la musique de la carte continue) ; `musique_dresseur` : contre un dresseur (`""` = celle des combats) ; `musique_victoire` : une fanfare jouée une fois après une victoire, puis la musique de la carte revient. `sons` : chaque bruitage du moteur, `""` = le son intégré, `"aucun"` = rien, ou un fichier de `sons/`.
+- `sauvegarde_auto` (Tafl 0.29) : `{ "active": false, "carte": true, "minutes": 5 }`. Avec `active`, le moteur sauvegarde tout seul en changeant de carte (`carte`) et/ou toutes les `minutes` minutes (`0` = jamais), dans une place à part ; il attend que le joueur soit libre (pas pendant un dialogue, un combat ou un fondu), et au plus une fois toutes les 20 secondes. À l'ouverture du jeu, il propose la plus récente des deux sauvegardes.
 - `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
 - `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga. `menus` (Tafl 0.21, lu par Saga 0.6) : la forme des menus. Le pack de règles en donne une par défaut (Pokémon : « Équipe », « Pokédex », « PC », « Boîte », 30 places par boîte en grille de 6 colonnes, résumé en pages `infos`, `stats`, `attaques`) ; chaque champ la remplace s'il n'est pas vide : `equipe`, `dex`, `pc`, `boite` (les noms ; une boîte s'appelle « Boîte 1 », « Boîte 2 »…), `dex_visible` (`false` cache le Pokédex), `places` et `colonnes` (`0` = ceux du pack), `forme_boites` (`"grille"`, `"liste"` ou `""`), `pages` (les pages du résumé, dans l'ordre ; `[]` = celles du pack).
 
@@ -698,6 +736,7 @@ Huit monstres au plus en tout. `fuite: false` : on ne peut pas fuir (un boss).
 | `equipe` | Les membres de l'équipe, à la place de celle de départ : des ids de `creatures.json` (Pokémon) ou de personnages qui ont une `classe` (pack JRPG), avec leur niveau. Au-delà de la taille de l'équipe, ils vont dans les boîtes (ou la Réserve). Vide : l'équipe d'une partie neuve. |
 | `objets` | Le sac : id d'objet → nombre. |
 | `argent` | L'argent, ou `null` : `argent_depart` des réglages. |
+| `heure` | (Tafl 0.29) L'heure de l'horloge du jeu au départ (0 à 23), ou `null` : `temps.heure_depart`. |
 | `badges` | Les ids des badges reçus (le compteur `badges` suit). |
 | `interrupteurs` | Les interrupteurs allumés au départ. |
 | `quetes` | L'état des quêtes : `{ "etat": "en_cours", "etape": n }` ou `{ "etat": "finie" }`. Les absentes ne sont pas commencées. |
@@ -729,3 +768,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.24** : le type d'événement `obstacle` et son champ `obstacle`, les compteurs `sauvages_battus`, `especes_vues`, `especes_prises` et `quetes_finies`, les effets d'objet `stase` et `amitie`, `verrouille_visible` dans les articles de boutique, `ajustement_sauvages`, `ecart_sauvages`, `evolution_dresseurs`, `evolution_sauvages` et `seuil_amitie` dans les réglages, l'`amitie` de chaque créature dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.25** : le pack de règles `"jrpg"` : les fichiers `classes.json`, `monstres.json` et `groupes.json`, `cout_pm`, `ranime` et `guerit` dans les attaques, `equipement` et l'effet `soin_pm` dans les objets, `classe`, `niveau` et `equipement` dans les personnages, `niveau_max` et `courbe_xp` dans les réglages, les rencontres de groupes dans les zones, les commandes `groupe` et `combat_groupe`, la condition `membre`, le compteur `monstres_vaincus`. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.27** : `tests` dans `jeu.json` (les états du test rapide) et l'option `--test` du moteur. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.29** : le dossier `sons/`, `musique`, `fond_sonore`, `volume_fond` et `jour_nuit` dans l'ambiance des cartes, `lumiere` dans les tuiles et les événements, `temps`, `audio` et `sauvegarde_auto` dans les réglages, les commandes `musique`, `son` et `heure`, la condition `moment`, `heure` dans les états du test rapide, `temps` et `musique` dans la sauvegarde. Des champs en plus, donc la version reste 1.

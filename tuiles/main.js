@@ -303,6 +303,57 @@ handle('game:write', async (_event, folder, files, remove = []) => {
 
 handle('file:reveal', async (_event, file) => shell.showItemInFolder(String(file)));
 
+// --- Les sons du jeu (Tafl 0.29, lus par Saga 0.11) : le dossier sons/ du jeu ---
+// Tafl les liste (pour les choisir dans l'ambiance d'une carte, les réglages, les commandes), les y
+// copie (« Ajouter un son… ») et les lit pour les écouter. Saga les joue.
+const SOUND_EXT = /\.(ogg|oga|mp3|wav|m4a|aac|opus|flac|webm)$/i;
+function dossierSons(folder) {
+  const root = path.resolve(String(folder || ''));
+  if (!gameFolders.has(root)) throw new Error('Enregistre d\'abord le jeu dans un dossier (Fichier › Enregistrer le jeu) : ses sons vont dans son dossier sons/.');
+  return { root, sons: path.join(root, 'sons') };
+}
+handle('sons:liste', async (_event, folder) => {
+  const { sons } = dossierSons(folder);
+  const names = await fs.readdir(sons).catch(() => []);
+  return names.filter((n) => SOUND_EXT.test(n)).sort((a, b) => a.localeCompare(b, 'fr')).map((n) => `sons/${n}`);
+});
+handle('sons:importer', async (event, folder) => {
+  const { sons } = dossierSons(folder);
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    title: 'Ajouter des sons au jeu (musiques, bruitages, fonds sonores)',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Sons', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'opus', 'flac', 'webm', 'aac', 'oga'] }],
+  });
+  if (result.canceled || !result.filePaths.length) return [];
+  await fs.mkdir(sons, { recursive: true });
+  const out = [];
+  for (const file of result.filePaths) {
+    // Un nom sûr : sans les caractères interdits par Windows, et sans écraser un autre son.
+    const ext = path.extname(file).toLowerCase();
+    const base = path.basename(file, path.extname(file)).replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').trim() || 'son';
+    let name = `${base}${ext}`, n = 2;
+    while (fsSync.existsSync(path.join(sons, name)) && path.resolve(path.join(sons, name)) !== path.resolve(file)) name = `${base}-${n++}${ext}`;
+    if (path.resolve(path.join(sons, name)) !== path.resolve(file)) await fs.copyFile(file, path.join(sons, name));
+    out.push(`sons/${name}`);
+  }
+  log('INFO', `Sons ajoutés : ${out.join(', ')}`);
+  return out;
+});
+handle('sons:lire', async (_event, folder, rel) => {
+  const { root } = dossierSons(folder);
+  const r = relGame(rel);
+  if (!/^sons\/[^/]+$/.test(r) || !SOUND_EXT.test(r) || r.includes('..')) throw new Error(`Son refusé : ${rel}`);
+  const octets = await fs.readFile(path.join(root, r));
+  return new Uint8Array(octets.buffer, octets.byteOffset, octets.byteLength);
+});
+handle('sons:montrer', async (_event, folder) => {
+  const { sons } = dossierSons(folder);
+  await fs.mkdir(sons, { recursive: true });
+  const err = await shell.openPath(sons);
+  if (err) throw new Error(err);
+});
+
 // --- Tafl 0.22 : générer des tuiles avec ComfyUI, caché (voir comfy.js) ---
 const comfy = require('./comfy').creer({ log, dossierTafl: app.getPath('userData') });
 const comfyConfig = async () => ({ ...DEFAULT_CONFIG.comfy, ...((await readConfig()).comfy || {}) });

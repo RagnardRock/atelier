@@ -22,7 +22,7 @@
       <button id="btn-recharger" class="icon-button" title="Recharger le jeu depuis le disque, sans bouger le joueur (F5)" hidden><i class="codicon codicon-refresh"></i></button>
       <button id="btn-debug" class="icon-button" title="Montrer le passage, les zones et les téléporteurs (F3)" hidden><i class="codicon codicon-debug-alt"></i></button>
       <button id="btn-plein" class="icon-button" title="Plein écran (F11)"><i class="codicon codicon-screen-full"></i></button>
-      <button id="btn-reglages" class="icon-button" title="Réglages de Saga (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-reglages" class="icon-button" title="Options de Saga : son, texte, affichage, commandes (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
       <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Saga"><i class="codicon codicon-cloud-download"></i></button>
     </div>
   </header>
@@ -58,17 +58,17 @@
         <button class="pause-choix" data-action="sauvegarder"><i class="codicon codicon-save"></i>Sauvegarder<kbd>Ctrl+S</kbd></button>
         <button class="pause-choix" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
         <button class="pause-choix" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
-        <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Réglages</button>
+        <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Options : son, texte, commandes<kbd>Ctrl+,</kbd></button>
         <button class="pause-choix" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
         <button class="pause-choix" data-action="exporter"><i class="codicon codicon-package"></i>Exporter ce jeu (web, Windows)…</button>
         <button class="pause-choix" data-action="quitter"><i class="codicon codicon-home"></i><span id="pause-quitter">Changer de jeu</span></button>
-        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11</p>
+        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11 · Manette : A valider, B retour, Start pause, Select carnet. Les touches se changent dans Options.</p>
       </div>
     </div>
     <!-- Tab : le carnet du joueur -->
     <div id="carnet" hidden>
       <div class="carnet-carte">
-        <div class="carnet-tete"><span id="carnet-titre"></span><span id="carnet-argent"></span><button class="carnet-bouton" data-ecran="equipe" type="button"><i class="codicon codicon-organization"></i><span id="carnet-equipe">Équipe</span></button><button class="carnet-bouton" data-ecran="dex" type="button"><i class="codicon codicon-library"></i><span id="carnet-dex">Pokédex</span></button><button class="icon-button carnet-fermer" title="Fermer (Tab ou Échap)"><i class="codicon codicon-close"></i></button></div>
+        <div class="carnet-tete"><span id="carnet-titre"></span><span id="carnet-heure" hidden></span><span id="carnet-argent"></span><button class="carnet-bouton" data-ecran="equipe" type="button"><i class="codicon codicon-organization"></i><span id="carnet-equipe">Équipe</span></button><button class="carnet-bouton" data-ecran="dex" type="button"><i class="codicon codicon-library"></i><span id="carnet-dex">Pokédex</span></button><button class="icon-button carnet-fermer" title="Fermer (Tab ou Échap)"><i class="codicon codicon-close"></i></button></div>
         <div id="carnet-corps"></div>
       </div>
     </div>
@@ -82,6 +82,8 @@
   <script src="moteur/jeu.js"></script>
   <script src="moteur/monde.js"></script>
   <script src="moteur/sprites.js"></script>
+  <script src="moteur/temps.js"></script>
+  <script src="moteur/audio.js"></script>
   <script src="moteur/ambiance.js"></script>
   <script src="moteur/dialogue.js"></script>
   <script src="moteur/scripts.js"></script>
@@ -103,6 +105,8 @@
   <script src="moteur/boutique.js"></script>
   <script src="moteur/ecrans.js"></script>
   <script src="moteur/moteur.js"></script>
+  <script src="commandes.js"></script>
+  <script src="pad.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
 </body>

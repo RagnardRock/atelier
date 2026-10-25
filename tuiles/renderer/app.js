@@ -451,6 +451,7 @@ const App = (() => {
       { label: 'Passage : auto (ne décide rien)', checked: (doc.tiles[doc.current].passage || 'auto') === 'auto', run: () => setTilePassage('auto') },
       { label: 'Passage : laisse passer le joueur', checked: doc.tiles[doc.current].passage === 'libre', run: () => setTilePassage('libre') },
       { label: 'Passage : bloque le joueur (arbre, mur, eau…)', checked: doc.tiles[doc.current].passage === 'bloque', run: () => setTilePassage('bloque') },
+      { label: doc.tiles[doc.current].lumiere ? 'Lumière de la tuile… (elle éclaire)' : 'Lumière de la tuile… (lampadaire, fenêtre, feu)', checked: Boolean(doc.tiles[doc.current].lumiere), run: () => run(() => tileLight(lot)) },
       null,
       { label: 'Taille des tuiles du jeu…', run: resizeTiles },
     ];
@@ -461,6 +462,36 @@ const App = (() => {
     const doc = api.doc;
     if ((doc.tiles[index].passage || 'auto') === value) return;
     Doc.change(doc, 'Passage de la tuile', () => { doc.tiles[index] = { ...doc.tiles[index], passage: value }; });
+  }
+
+  // Tafl 0.29 : une tuile qui éclaire (lampadaire, fenêtre, feu de camp) : partout où elle est posée,
+  // Saga 0.11 fait briller un halo de sa couleur quand il fait sombre (la nuit, une grotte teintée).
+  async function tileLight(lot = [api.doc.current]) {
+    const doc = api.doc;
+    const l = doc.tiles[lot[0]].lumiere || Donnees.lumiereVide();
+    const v = await Dialogs.form({
+      title: lot.length > 1 ? `Lumière de ${lot.length} tuiles` : `Lumière de « ${doc.tiles[lot[0]].name} »`,
+      okLabel: 'Appliquer',
+      width: 460,
+      fields: [
+        { key: 'active', label: 'Cette tuile éclaire', type: 'checkbox', value: Boolean(doc.tiles[lot[0]].lumiere) },
+        { key: 'couleur', label: 'Couleur', type: 'color', value: l.couleur },
+        { key: 'rayon', label: 'Portée', type: 'range', value: l.rayon, min: 0.5, max: 10, step: 0.5, unit: 'cases' },
+        { key: 'intensite', label: 'Force', type: 'range', value: l.intensite, min: 0, max: 100, unit: '%' },
+        { key: 'scintille', label: 'Elle vacille (une flamme, une bougie)', type: 'checkbox', value: l.scintille },
+        { type: 'info', text: 'La lumière se voit dans Saga quand il fait sombre : la nuit (Réglages › Jour et nuit), ou sur une carte teintée sombre (une grotte). Le jour, elle ne change rien. Jaune doux pour une lampe, orange pour un feu, bleu pâle pour un cristal.' },
+      ],
+      onInput: (values, f) => { for (const k of ['couleur', 'rayon', 'intensite', 'scintille']) f.inputs[k].row.hidden = !values.active; },
+    });
+    if (!v) return;
+    const lumiere = v.active ? Donnees.normLumiere(v) : null;
+    Doc.change(doc, 'Lumière de la tuile', () => {
+      for (const i of lot) {
+        const t = { ...doc.tiles[i] };
+        if (lumiere) t.lumiere = { ...lumiere }; else delete t.lumiere;
+        doc.tiles[i] = t;
+      }
+    });
   }
 
   // --- Animation ---
@@ -596,26 +627,38 @@ const App = (() => {
     Doc.change(doc, 'Renommer la carte', () => { doc.maps[i] = { ...m, name }; Doc.selectMap(doc, doc.mapIndex); });
   }
   // Tafl 0.8 : la météo et la teinte de la carte (le moteur les jouera ; Tafl en montre un aperçu).
+  // Tafl 0.29 : sa musique, son fond sonore et le jour et la nuit (joués par Saga 0.11).
   async function mapAmbiance(i = api.doc.mapIndex) {
     const doc = api.doc;
     const m = doc.maps[i];
-    const a = m.ambiance || Donnees.ambianceVide();
+    const a = { ...Donnees.ambianceVide(), ...(m.ambiance || {}) };
+    const musique = Sons.choix(doc, a.musique, { mots: [['', 'Celle d\'avant continue'], ['aucune', 'Silence']] });
+    const fond = Sons.choix(doc, a.fond_sonore, { mots: [['', 'Selon la météo (pluie, orage)'], ['aucun', 'Aucun']] });
+    const titre = (t) => ({ type: 'element', element: el('div', { className: 'editor-section' }, [el('span', { textContent: t })]) });
     const v = await Dialogs.form({
       title: `Ambiance de ${m.name}`,
       okLabel: 'Appliquer',
-      width: 480,
+      width: 520,
       fields: [
+        titre('Météo et lumière'),
         { key: 'meteo', label: 'Météo', type: 'select', value: a.meteo, choices: Donnees.METEOS },
         { key: 'intensite', label: 'Intensité', type: 'range', value: a.intensite, min: 0, max: 100, unit: '%' },
         { key: 'avecTeinte', label: 'Teinter la carte', type: 'checkbox', value: Boolean(a.teinte) },
         { key: 'teinte', label: 'Teinte', type: 'color', value: a.teinte || '#5a6b8c' },
         { key: 'force', label: 'Force de la teinte', type: 'range', value: a.force, min: 0, max: 100, unit: '%' },
         { type: 'info', text: 'Une teinte bleu sombre et de la pluie pour un village sous l\'orage, orangée pour un coucher de soleil, verte pour une forêt profonde. Elle est appliquée en « produit » par-dessus les calques, comme une couche de lumière.' },
+        { key: 'jour_nuit', label: 'Suit le jour et la nuit (Saga assombrit la carte la nuit)', type: 'checkbox', value: a.jour_nuit !== false },
+        { type: 'info', text: m.interieur ? 'Cette carte est un intérieur : elle ne change jamais avec l\'heure.' : 'L\'horloge du jeu se règle dans Jeu › Données du jeu › Réglages › Jour et nuit. Les tuiles et les événements qui ont une lumière brillent quand il fait sombre.' },
+        titre('Musique et sons'),
+        { type: 'element', element: Sons.ligne('Musique', musique) },
+        { type: 'element', element: Sons.ligne('Fond sonore', fond) },
+        { key: 'volume_fond', label: 'Volume du fond', type: 'range', value: a.volume_fond, min: 0, max: 100, unit: '%' },
+        { type: 'info', text: 'Des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique part en fondu quand le joueur entre sur la carte. Le fond sonore tourne en boucle dessous (vent, ruisseau, foule…) ; s\'il n\'y en a pas, Saga fait lui-même la pluie et le tonnerre de la météo.' },
       ],
       onInput: (values, f) => { f.inputs.teinte.row.hidden = !values.avecTeinte; f.inputs.force.row.hidden = !values.avecTeinte; f.inputs.intensite.row.hidden = values.meteo === 'aucune'; },
     });
     if (!v) return;
-    const ambiance = Donnees.normAmbiance({ meteo: v.meteo, intensite: v.intensite, teinte: v.avecTeinte ? v.teinte : '', force: v.force });
+    const ambiance = Donnees.normAmbiance({ meteo: v.meteo, intensite: v.intensite, teinte: v.avecTeinte ? v.teinte : '', force: v.force, musique: musique.valeur, fond_sonore: fond.valeur, volume_fond: v.volume_fond, jour_nuit: v.jour_nuit });
     Doc.change(doc, 'Ambiance de la carte', () => { doc.maps[i] = { ...m, ambiance }; Doc.selectMap(doc, doc.mapIndex); });
   }
   async function deleteMap() {
