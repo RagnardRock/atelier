@@ -41,7 +41,7 @@ const EquipeLibre = (() => {
         const liste = el('div', { className: 'libre-liste' });
         const choix = el('div', { className: 'libre-choix' });
         const ok = el('button', { className: 'libre-ok', type: 'button', textContent: 'C\'est mon équipe !' });
-        const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}). Clique une créature de ta liste, en bas, pour régler ses attaques et son objet.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
+        const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}), deux fois la même si tu veux. En bas, clique une vignette pour choisir ses attaques et son objet, ou sa croix pour l'enlever.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
         const reglage = el('div', { className: 'libre-reglage', hidden: true });
         carte.append(tete, recherche, liste, el('div', { className: 'libre-bas' }, choix, ok), aide, reglage);
         racine.append(carte);
@@ -63,14 +63,16 @@ const EquipeLibre = (() => {
             const prise = choisies.filter((x) => x.id === e.id).length;
             const b = el('button', { className: `libre-creature${prise ? ' prise' : ''}`, type: 'button', title: e.nom || e.id });
             const im = e.sprites?.face || e.image || '';
-            b.append(im ? el('img', { src: im, alt: '' }) : el('span', { className: 'libre-vide', textContent: (e.nom || '?')[0] }),
+            b.append(...[
+              im ? el('img', { src: im, alt: '' }) : el('span', { className: 'libre-vide', textContent: (e.nom || '?')[0] }),
               el('span', { className: 'libre-nom', textContent: e.nom || e.id }),
-              prise ? el('b', { className: 'libre-prise', textContent: `×${prise}` }) : null);
+              prise ? el('b', { className: 'libre-prise', textContent: `×${prise}` }) : null,
+            ].filter(Boolean));
+            // Chaque clic en prend une de plus (deux fois la même espèce, c'est permis) ; la croix sur
+            // sa vignette, en bas, la repose.
             b.onclick = () => {
-              const i = choisies.map((x) => x.id).lastIndexOf(e.id);
-              if (i >= 0 && choisies.length >= nombre) choisies.splice(i, 1);
-              else if (choisies.length < nombre) choisies.push({ id: e.id, attaques: Regles.attaquesDefaut(jeu, e.id, niveau).slice(0, 4), objet: '' });
-              else return;
+              if (choisies.length >= nombre) return;
+              choisies.push({ id: e.id, attaques: Regles.attaquesDefaut(jeu, e.id, niveau).slice(0, 4), objet: '' });
               dessiner();
             };
             liste.append(b);
@@ -103,9 +105,13 @@ const EquipeLibre = (() => {
 
           const attaques = el('div', { className: 'libre-attaques' });
           const compte = el('span', { className: 'libre-compte' });
+          const rechercheA = el('input', { className: 'libre-recherche', type: 'search', placeholder: 'Chercher une attaque…', spellcheck: false });
           const dessinerAttaques = () => {
+            const q = rechercheA.value.trim().toLowerCase();
             attaques.innerHTML = '';
-            for (const a of possibles) {
+            // Les attaques choisies restent visibles, même quand la recherche ne les montre pas.
+            const montrees = possibles.filter((a) => m.attaques.includes(a.id) || !q || `${a.nom} ${a.type} ${a.id}`.toLowerCase().includes(q));
+            for (const a of montrees) {
               const prise = m.attaques.includes(a.id);
               const b = el('button', { className: `libre-attaque${prise ? ' prise' : ''}`, type: 'button', style: `--type: ${a.couleur}` },
                 el('span', { className: 'libre-attaque-nom' },
@@ -122,15 +128,16 @@ const EquipeLibre = (() => {
               };
               attaques.append(b);
             }
-            if (!possibles.length) attaques.append(el('p', { className: 'libre-aide', textContent: 'Cette créature n\'a aucune attaque dans les données du jeu.' }));
+            if (!montrees.length) attaques.append(el('p', { className: 'libre-aide', textContent: possibles.length ? 'Aucune attaque ne correspond.' : 'Cette créature n\'a aucune attaque dans les données du jeu.' }));
             compte.textContent = `${m.attaques.length} / 4 attaques`;
           };
+          rechercheA.oninput = dessinerAttaques;
           dessinerAttaques();
 
           const bloc = el('div', { className: 'libre-reglage-carte' },
             el('div', { className: 'libre-tete' }, el('h2', { textContent: `${e?.nom || m.id}  N.${niveau}` }), compte),
-            el('p', { className: 'libre-aide', textContent: 'Quatre attaques au plus. Sans choix, elle garde celles qu\'elle connaît à ce niveau.' }),
-            attaques);
+            el('p', { className: 'libre-aide', textContent: 'Quatre attaques au plus, parmi tout ce qu\'elle sait à ce niveau. Sans choix, elle garde celles de son niveau.' }),
+            rechercheA, attaques);
 
           if (objets.length) {
             const select = el('select', { className: 'libre-objet' },
