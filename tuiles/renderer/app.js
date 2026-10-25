@@ -9,7 +9,7 @@ const App = (() => {
     colors: { primary: '#38a048', secondary: null }, // null = transparent
     // layer : le calque où l'on pose les tuiles (-1 = la ligne Passage) ; passage : le code peint (2 = bloqué) ;
     // showPassage / showObjects : montrer le passage, et les zones / téléporteurs / départ, sur la carte.
-    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, showAmbiance: true, direction: 'bas', stamp: 0 },
+    options: { mirrorH: false, mirrorV: false, mosaic: false, filled: true, layer: 0, dimOther: false, pixelGrid: true, tileGrid: true, onion: true, passage: 2, showPassage: false, showObjects: true, showAmbiance: true, direction: 'bas', stamp: 0, selCalques: 'courant', selPassage: false, selZones: false, selEvents: false },
     frame: 0,              // l'image de l'animation qu'on dessine (0 pour une tuile fixe)
     playing: true,         // les tuiles animées bougent dans l'aperçu, les vignettes et la carte
     config: null,
@@ -32,6 +32,7 @@ const App = (() => {
     $('#doc-name').textContent = doc ? `${doc.name}${doc.dirty ? ' ●' : ''}` : '';
     $('#btn-undo').disabled = !doc?.undo.length;
     $('#btn-redo').disabled = !doc?.redo.length;
+    $('#btn-history').disabled = !doc;
     $('#btn-jouer').hidden = !doc?.game;
     renderModes();
     renderToolbar();
@@ -73,6 +74,8 @@ const App = (() => {
   function setTool(id) {
     const t = TOOLS.find((x) => x.id === id);
     if (!t || !t.modes.includes(api.mode)) return;
+    // Un morceau collé qui suit encore la souris ne se pose qu'avec l'outil Sélection.
+    if (id !== 'select' && Stage.flottant) Stage.annuler();
     api.tool = id;
     renderToolbar();
     renderOptions();
@@ -136,6 +139,26 @@ const App = (() => {
           bar.append(el('span', { className: 'option', title: 'Double-clic sur le tampon (panneau Tampons) : le renommer, choisir ses rangées au-dessus du joueur' }, [el('span', { textContent: 'Tampon' }), el('strong', { textContent: `${st.name} (${st.w} × ${st.h})` })]));
           if (st.dessus) bar.append(el('span', { className: 'option', textContent: top >= 0 && top !== api.options.layer ? `${st.dessus} rangée(s) du haut sur ${map.layers[top].name}` : `${st.dessus} rangée(s) au-dessus, mais pas de calque « au-dessus du joueur » plus haut` }));
         }
+      }
+      if (api.tool === 'select') {
+        // Tafl 0.28 : ce que la sélection emporte quand on copie, coupe, déplace ou vide.
+        const quoi = el('select', { title: 'Ce que copier, couper, déplacer et Suppr emportent' });
+        quoi.add(new Option(api.options.layer < 0 ? 'Le passage' : `Le calque ${map.layers[api.options.layer]?.name}`, 'courant'));
+        quoi.add(new Option('Tous les calques', 'tous'));
+        quoi.value = api.options.selCalques;
+        quoi.onchange = () => { api.options.selCalques = quoi.value; renderOptions(); };
+        bar.append(el('label', { className: 'option' }, [el('span', { textContent: 'Emporter' }), quoi]));
+        if (!(api.options.selCalques === 'courant' && api.options.layer < 0)) bar.append(check('+ passage', 'selPassage', 'Emporter aussi le passage peint à la main (libre, bloqué, rebords)'));
+        bar.append(check('+ zones', 'selZones', 'Emporter aussi les zones (herbes hautes, eau…) ; elles sont recoupées aux bords'));
+        bar.append(check('+ événements et téléporteurs', 'selEvents', 'Emporter aussi les personnages, panneaux, coffres… et les téléporteurs posés dans la sélection'));
+        const r = Stage.selection();
+        if (r) bar.append(el('span', { className: 'option', textContent: `${r.w} × ${r.h} cases` }));
+        const btn = (label, ic, keys, fn) => {
+          const b = el('button', { className: 'button small', title: `${label} (${keys})` }, [icon(ic), label]);
+          b.onclick = fn;
+          return b;
+        };
+        bar.append(btn('Copier', 'copy', 'Ctrl+C', () => Stage.copier()), btn('Couper', 'screen-cut', 'Ctrl+X', () => Stage.copier(true)), btn('Coller', 'clippy', 'Ctrl+V', () => Stage.coller()));
       }
       if (api.tool === 'start') {
         const select = el('select', { title: 'Où regarde le joueur au début du jeu' });
@@ -731,16 +754,14 @@ const App = (() => {
   function selectLayer(i) {
     api.options.layer = clamp(i, -1, api.doc.map.layers.length - 1);
     // Choisir le passage : on peint au crayon (les zones et téléporteurs n'y ont pas de sens).
-    if (i < 0 && !['pencil', 'eraser', 'fill', 'line', 'rect', 'picker'].includes(api.tool)) api.tool = 'pencil';
+    if (i < 0 && !['pencil', 'eraser', 'fill', 'line', 'rect', 'picker', 'select'].includes(api.tool)) api.tool = 'pencil';
     if (api.mode !== 'map') api.mode = 'map';
     refresh();
   }
   function toggleLayerVisible(i) {
     const l = api.doc.map.layers[i];
-    // Montrer ou cacher un calque n'est pas une modification du jeu (pas d'annulation), comme avant.
-    api.doc.map.layers[i] = { ...l, visible: !l.visible };
-    Panels.renderLayers();
-    Stage.render();
+    // Tafl 0.28 : montrer ou cacher un calque s'annule aussi (Ctrl+Z), comme le reste.
+    Doc.change(api.doc, l.visible ? `Cacher le calque ${l.name}` : `Montrer le calque ${l.name}`, () => { api.doc.map.layers[i] = { ...l, visible: !l.visible }; });
   }
   function toggleOption(key) {
     api.options[key] = !api.options[key];
@@ -1187,6 +1208,31 @@ const App = (() => {
     refresh();
   }
 
+  // Tafl 0.28 : l'historique en liste. Un clic ramène le jeu à cet état (on peut ensuite refaire).
+  function historyMenu(x, y, button = null) {
+    const doc = api.doc;
+    if (!doc) return;
+    const items = [];
+    const n = doc.undo.length;
+    if (n) items.push({ label: 'Avant tout ça', title: 'L\'état le plus ancien que garde l\'historique', run: () => travelTo(-n) });
+    doc.undo.forEach((s, i) => items.push({ label: s.label, checked: i === n - 1, className: i === n - 1 ? 'history-actuel' : '', keys: i === n - 1 ? 'maintenant' : '', run: () => travelTo(i - (n - 1)) }));
+    if (!n) items.push({ label: 'Rien à annuler pour l\'instant', disabled: true, run() {} });
+    if (doc.redo.length) {
+      items.push(null);
+      for (let j = doc.redo.length - 1; j >= 0; j--) items.push({ label: doc.redo[j].label, className: 'history-futur', keys: 'refaire', run: () => travelTo(doc.redo.length - j) });
+    }
+    Menus.open(items, x, y, button, 'history-menu');
+    // On montre l'état actuel (le bas de la liste des actions faites).
+    document.querySelector('.history-menu .history-actuel')?.scrollIntoView({ block: 'center' });
+  }
+  function travelTo(k) {
+    if (!api.doc || !k) return;
+    const label = Doc.travel(api.doc, k);
+    if (label) setStatusHint(`${k < 0 ? 'Revenu avant' : 'Refait jusqu\'à'} : ${label} (${Math.abs(k)} étape${Math.abs(k) > 1 ? 's' : ''})`);
+    Stage.reset();
+    refresh();
+  }
+
   // --- Documents ---
   async function confirmDiscard() {
     const doc = api.doc;
@@ -1284,6 +1330,22 @@ const App = (() => {
       null,
       { label: 'Réglages de Tafl…', keys: 'Ctrl+,', run: () => run(openSettings) },
     ],
+    // Tafl 0.28 : annuler, l'historique, et copier-coller des morceaux de carte (outil Sélection).
+    Édition: () => {
+      const doc = api.doc, carte = api.mode === 'map', sel = Boolean(doc && carte && Stage.selection());
+      return [
+        { label: doc?.undo.length ? `Annuler : ${doc.undo[doc.undo.length - 1].label}` : 'Annuler', keys: 'Ctrl+Z', disabled: !doc?.undo.length, run: undo },
+        { label: doc?.redo.length ? `Rétablir : ${doc.redo[doc.redo.length - 1].label}` : 'Rétablir', keys: 'Ctrl+Y', disabled: !doc?.redo.length, run: redo },
+        { label: 'Historique…', keys: 'Ctrl+H', disabled: !doc, run: () => { const r = $('#btn-history').getBoundingClientRect(); historyMenu(r.left, r.bottom + 4); } },
+        null,
+        { label: 'Outil Sélection (morceaux de carte)', keys: 'R', disabled: !doc, run: () => { setMode('map'); setTool('select'); } },
+        { label: 'Couper', keys: 'Ctrl+X', disabled: !sel, run: () => Stage.copier(true) },
+        { label: 'Copier', keys: 'Ctrl+C', disabled: !sel, run: () => Stage.copier() },
+        { label: 'Coller', keys: 'Ctrl+V', disabled: !doc || !PressePapiers.pourDoc(doc), run: () => Stage.coller() },
+        { label: 'Vider la sélection', keys: 'Suppr', disabled: !sel, run: () => Stage.vider() },
+        { label: 'Sélectionner toute la carte', keys: 'Ctrl+A', disabled: !doc, run: () => { setMode('map'); setTool('select'); Stage.toutSelectionner(); } },
+      ];
+    },
     Tuile: () => (api.doc ? [...tileMenuItems(), null, ...sortMenuItems()] : [{ label: 'Ouvre ou crée d\'abord un jeu de tuiles', disabled: true, run() {} }]),
     Carte: () => (api.doc ? [
       ...mapMenuItems(),
@@ -1368,6 +1430,11 @@ const App = (() => {
   // --- Barre de titre et accueil ---
   $('#btn-undo').onclick = undo;
   $('#btn-redo').onclick = redo;
+  $('#btn-history').onclick = (e) => {
+    if (Menus.isOpen()) return Menus.close();
+    const r = e.currentTarget.getBoundingClientRect();
+    historyMenu(r.left, r.bottom + 4, e.currentTarget);
+  };
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
   $('#btn-jouer').onclick = (e) => needDoc(() => jouer(e.shiftKey))();
   $('#btn-export').onclick = needDoc(IO.exportSheet);
@@ -1463,6 +1530,7 @@ const App = (() => {
       if (k === 'z' && e.shiftKey) return go(redo);
       if (k === 'z') return go(undo);
       if (k === 'y') return go(redo);
+      if (k === 'h') return go(() => { const r = $('#btn-history').getBoundingClientRect(); historyMenu(r.left, r.bottom + 4, $('#btn-history')); });
       if (k === 'd' && e.shiftKey) return go(needDoc(() => openData()));
       if (k === 'm' && e.shiftKey) return go(needDoc(openWorld));
       if (k === 'v' && e.shiftKey) return go(needDoc(OutilsJeu.verifier));
@@ -1470,7 +1538,12 @@ const App = (() => {
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
+      // Tafl 0.28 : avec l'outil Sélection, Ctrl+A prend toute la carte (sinon : toutes les tuiles montrées).
+      if (k === 'a' && api.mode === 'map' && api.tool === 'select') return go(() => Stage.toutSelectionner());
       if (k === 'a') return go(needDoc(selectAllShown));
+      if (k === 'c' && api.doc && api.mode === 'map') return go(() => Stage.copier());
+      if (k === 'x' && api.doc && api.mode === 'map') return go(() => Stage.copier(true));
+      if (k === 'v' && api.doc) return go(() => Stage.coller());
       if (k === 'g' && e.shiftKey) return go(() => run(() => Comfy.fenetre()));
       if (k === 'g') return go(needDoc(() => setTileCategory()));
       if (k === 'f') return go(needDoc(() => { $('#tiles-filter').focus(); $('#tiles-filter').select(); }));
@@ -1481,6 +1554,8 @@ const App = (() => {
       return;
     }
     if (!api.doc) return;
+    if (e.key === 'Escape' && api.mode === 'map' && Stage.annuler()) return go(() => {});
+    if ((e.key === 'Delete' || e.key === 'Backspace') && api.mode === 'map' && api.tool === 'select') return go(() => Stage.vider());
     if (e.key === 'F5') return go(() => run(() => jouer(e.shiftKey)));
     if (e.key === 'Tab') return go(() => setMode(api.mode === 'tile' ? 'map' : 'tile'));
     if (e.key === 'F2') return go(() => renameTile(api.doc.current));
@@ -1634,7 +1709,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { jouer, testRapide, refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

@@ -20,6 +20,7 @@ const TOOLS = [
   { id: 'picker', nom: 'Pipette', key: 'I', icone: 'eye', modes: ['tile', 'map'], aide: 'Clic gauche : prend la couleur principale, clic droit : la secondaire.', aideCarte: 'Reprend la tuile d\'une case.' },
   { id: 'line', nom: 'Ligne', key: 'L', icone: 'dash', modes: ['tile', 'map'], aide: 'Glisser pour tracer une ligne droite.', aideCarte: 'Glisser pour poser une ligne de tuiles.' },
   { id: 'rect', nom: 'Rectangle', key: 'U', icone: 'primitive-square', modes: ['tile', 'map'], aide: 'Glisser pour tracer un rectangle (plein ou contour, dans la barre d\'options).', aideCarte: 'Glisser pour couvrir un rectangle de tuiles.' },
+  { id: 'select', nom: 'Sélection', key: 'R', icone: 'selection', modes: ['map'], aideCarte: 'Glisser : sélectionner un rectangle. Glisser l\'intérieur : le déplacer. Ctrl+C copie, Ctrl+X coupe, Ctrl+V colle (aussi dans une autre carte : le morceau suit la souris, clic pour le poser, Échap annule). Suppr vide la sélection.' },
   { id: 'stamp', nom: 'Tampon', key: 'S', icone: 'package', modes: ['map'], aideCarte: 'Clic : pose le tampon choisi (panneau Tampons), son coin en haut à gauche sur la case. Glisser : en pose d\'autres côte à côte. Clic droit : l\'efface. Maj+glisser : un nouveau tampon fait des tuiles du rectangle (calque choisi).' },
   { id: 'zone', nom: 'Zone', key: 'Z', icone: 'symbol-namespace', modes: ['map'], aideCarte: 'Glisser pour tracer une zone (herbes hautes, eau, grotte…). Clic sur une zone : la modifier ou la supprimer.' },
   { id: 'warp', nom: 'Téléporteur', key: 'T', icone: 'debug-step-into', modes: ['map'], aideCarte: 'Clic sur une case : elle mène vers une autre carte (porte, escalier, sortie de route). Clic sur un téléporteur : le modifier.' },
@@ -39,6 +40,11 @@ const Stage = (() => {
   let lastPoint = null;  // dernier point du crayon (pour Maj+clic)
   let spaceDown = false;
   let frame = 0;
+  // Tafl 0.28 : la sélection de l'outil Sélection { carte, x, y, w, h }, et le morceau qui suit la
+  // souris avant d'être posé { piece, x, y, dx, dy, glisser } (glisser : on déplace la sélection,
+  // l'action est déjà commencée et les cases de départ déjà vidées). Voir presse-papiers.js.
+  let sel = null;
+  let flottant = null;
 
   const view = () => views[App.mode];
   const size = () => ({ w: wrap.clientWidth, h: wrap.clientHeight });
@@ -365,6 +371,15 @@ const Stage = (() => {
       drawObjects(cell);
       drawEvents(cell, canvases);
     }
+    if (flottant) drawPiece(flottant, cell, canvases);
+    const r0 = selection();
+    if (r0 && !flottant && !preview?.rect) {
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = accent();
+      ctx.lineWidth = 2;
+      ctx.strokeRect(v.x + r0.x * cell + 1, v.y + r0.y * cell + 1, r0.w * cell - 2, r0.h * cell - 2);
+      ctx.setLineDash([]);
+    }
     if (preview?.rect) {
       const r = preview.rect;
       ctx.setLineDash([6, 4]);
@@ -383,7 +398,7 @@ const Stage = (() => {
     }
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.strokeRect(v.x - 0.5, v.y - 0.5, mw + 1, mh + 1);
-    if (hover && !action && !preview && hover.x >= 0 && hover.y >= 0 && hover.x < map.width && hover.y < map.height) {
+    if (hover && !action && !preview && !flottant && App.tool !== 'select' && hover.x >= 0 && hover.y >= 0 && hover.x < map.width && hover.y < map.height) {
       if (App.tool === 'pencil' && passageMode) passageCell(hover.x, hover.y, App.options.passage, cell, true);
       else if (App.tool === 'pencil') ghost(hover.x, hover.y, doc.current);
       const st = App.tool === 'stamp' && !passageMode ? App.currentStamp() : null;
@@ -420,6 +435,114 @@ const Stage = (() => {
     v.y = Math.round(h / 2 - (y + 0.5) * cell);
     signal = { carte: map.id, x, y, debut: performance.now() };
     render();
+  }
+
+  // Le morceau à coller, en transparence sous la souris, avec son cadre.
+  function drawPiece(f, cell, canvases) {
+    const v = view(), p = f.piece;
+    ctx.globalAlpha = 0.8;
+    for (const couche of p.couches) {
+      for (let j = 0; j < p.h; j++) {
+        for (let i = 0; i < p.w; i++) {
+          const t = couche.cells[j * p.w + i];
+          if (t >= 0 && canvases[t]) ctx.drawImage(canvases[t], v.x + (f.x + i) * cell, v.y + (f.y + j) * cell, cell, cell);
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    if (p.passage) for (let j = 0; j < p.h; j++) for (let i = 0; i < p.w; i++) if (p.passage[j * p.w + i]) passageCell(f.x + i, f.y + j, p.passage[j * p.w + i], cell, true);
+    for (const z of p.zones) {
+      ctx.strokeStyle = ZONE_COLORS[z.type] || ZONE_COLORS.autre;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(v.x + (f.x + z.x) * cell + 2, v.y + (f.y + z.y) * cell + 2, z.w * cell - 4, z.h * cell - 4);
+    }
+    for (const o of [...p.events, ...p.warps]) {
+      ctx.strokeStyle = o.pages ? (EVENT_COLORS[o.type] || EVENT_COLORS.pnj) : WARP_COLOR;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(v.x + (f.x + o.x) * cell + 3, v.y + (f.y + o.y) * cell + 3, cell - 6, cell - 6);
+    }
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(v.x + f.x * cell + 1, v.y + f.y * cell + 1, p.w * cell - 2, p.h * cell - 2);
+    ctx.setLineDash([]);
+  }
+
+  // --- Sélection, copier, couper, coller (Tafl 0.28) ---
+  // La sélection n'existe que sur la carte où on l'a tracée.
+  const selection = () => (sel && App.doc && sel.carte === App.doc.map.id ? sel : null);
+  const optionsPiece = () => ({ calques: App.options.selCalques, layer: App.options.layer, passage: App.options.selPassage, zones: App.options.selZones, evenements: App.options.selEvents });
+  function selectionner(r) {
+    sel = r ? { carte: App.doc.map.id, ...r } : null;
+    App.renderOptions();
+    render();
+  }
+  function toutSelectionner() {
+    const { map } = App.doc;
+    selectionner({ x: 0, y: 0, w: map.width, h: map.height });
+  }
+  function copier(couper = false) {
+    const r = selection();
+    if (!r) { notify('Sélectionne d\'abord un rectangle avec l\'outil Sélection (R).', 'info', 3500); return false; }
+    const doc = App.doc, map = doc.map;
+    PressePapiers.copier(doc, map, r, optionsPiece());
+    if (couper) Doc.change(doc, 'Couper', () => PressePapiers.vider(doc, map, r, optionsPiece()));
+    App.setStatusHint(`${couper ? 'Coupé' : 'Copié'} : ${r.w} × ${r.h} cases${App.options.selCalques === 'tous' ? ', tous les calques' : ''}. Ctrl+V pour coller.`);
+    return true;
+  }
+  function vider() {
+    const r = selection();
+    if (!r) return false;
+    const doc = App.doc, map = doc.map;
+    Doc.change(doc, 'Vider la sélection', () => PressePapiers.vider(doc, map, r, optionsPiece()));
+    return true;
+  }
+  // Ctrl+V : le morceau suit la souris (au milieu de la vue si elle n'est pas sur la carte).
+  function coller() {
+    const doc = App.doc;
+    const piece = PressePapiers.pourDoc(doc);
+    if (!piece) {
+      notify(PressePapiers.clip ? 'Ce morceau vient d\'un autre jeu de tuiles : ses numéros de tuiles ne correspondent pas ici.' : 'Rien à coller : sélectionne et copie d\'abord un morceau de carte (outil Sélection, R, puis Ctrl+C).', 'info', 4000);
+      return false;
+    }
+    if (App.mode !== 'map') App.setMode('map');
+    if (App.tool !== 'select') App.setTool('select');
+    const { map } = doc;
+    const h = hover && hover.x >= 0 && hover.y >= 0 && hover.x < map.width && hover.y < map.height ? hover : null;
+    const c = h || { x: Math.floor((map.width - piece.w) / 2), y: Math.floor((map.height - piece.h) / 2) };
+    flottant = { piece, x: c.x - (h ? Math.floor(piece.w / 2) : 0), y: c.y - (h ? Math.floor(piece.h / 2) : 0), dx: Math.floor(piece.w / 2), dy: Math.floor(piece.h / 2), glisser: false };
+    App.setStatusHint('Clic : poser le morceau ici. Clic droit ou Échap : annuler.');
+    render();
+    return true;
+  }
+  function poser() {
+    const f = flottant;
+    if (!f) return;
+    flottant = null;
+    const doc = App.doc, map = doc.map;
+    if (!f.glisser) Doc.begin(doc, 'Coller');
+    const bilan = PressePapiers.coller(doc, map, f.x, f.y, optionsPiece(), f.piece);
+    doc.editing = null;
+    sel = { carte: map.id, x: Math.max(0, f.x), y: Math.max(0, f.y), w: Math.min(map.width, f.x + f.piece.w) - Math.max(0, f.x), h: Math.min(map.height, f.y + f.piece.h) - Math.max(0, f.y) };
+    if (sel.w <= 0 || sel.h <= 0) sel = null;
+    if (bilan.perdus.length) notify(f.piece.tous ? `Pas de calque pour : ${bilan.perdus.join(', ')}. Ajoute-les à cette carte pour les coller aussi.` : 'Choisis un calque (pas la ligne Passage) pour y coller ces tuiles.', 'info', 4500);
+    App.refresh();
+  }
+  // Échap : on lâche le morceau (s'il venait d'un déplacement, tout revient comme avant), sinon on désélectionne.
+  function annuler() {
+    if (flottant) {
+      const f = flottant;
+      flottant = null;
+      if (f.glisser) {
+        App.doc.editing = null;
+        Doc.undo(App.doc);
+        App.doc.redo.pop();
+        App.refresh();
+      } else render();
+      return true;
+    }
+    if (selection()) { selectionner(null); return true; }
+    return false;
   }
 
   // Le tampon sous la souris, en transparence (ses rangées « au-dessus du joueur » marquées d'un trait).
@@ -727,6 +850,29 @@ const Stage = (() => {
     if (tool === 'picker') { pick(g, c.x, c.y, e.button); action = { tool, button: e.button }; return; }
     const map = doc.map;
     const onMap = (p) => p.x >= 0 && p.y >= 0 && p.x < map.width && p.y < map.height;
+    if (flottant) {
+      if (e.button === 2) annuler(); else poser();
+      return;
+    }
+    if (tool === 'select') {
+      const r = selection();
+      // Glisser l'intérieur de la sélection : on la soulève (ses cases se vident) et on la déplace.
+      if (r && e.button === 0 && c.x >= r.x && c.y >= r.y && c.x < r.x + r.w && c.y < r.y + r.h) {
+        const piece = PressePapiers.prendre(doc, map, r, optionsPiece());
+        Doc.begin(doc, 'Déplacer la sélection');
+        PressePapiers.vider(doc, map, r, optionsPiece());
+        flottant = { piece, x: r.x, y: r.y, dx: c.x - r.x, dy: c.y - r.y, glisser: true };
+        action = { tool, move: true, start: c };
+        render();
+        return;
+      }
+      if (e.button === 2) { selectionner(null); return; }
+      const p = { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
+      action = { tool, start: p };
+      preview = { rect: normRect(p, p) };
+      render();
+      return;
+    }
     if (tool === 'zone') {
       const p = { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) };
       action = { tool, start: p, button: e.button };
@@ -807,6 +953,12 @@ const Stage = (() => {
       return;
     }
     if (!changed) return;
+    if (flottant) {
+      flottant.x = c.x - flottant.dx;
+      flottant.y = c.y - flottant.dy;
+      render();
+      return;
+    }
     if (!action) { render(); return; }
     const g = grid();
     if (action.tool === 'pencil' || action.tool === 'eraser') {
@@ -840,7 +992,7 @@ const Stage = (() => {
         Doc.placeStamp(App.doc, st, action.origin.x + i * st.w, action.origin.y + j * st.h, App.options.layer, action.erase);
         App.refreshLive();
       }
-    } else if (action.tool === 'zone') {
+    } else if (action.tool === 'select' || action.tool === 'zone') {
       const { map } = App.doc;
       preview.rect = normRect(action.start, { x: clamp(c.x, 0, map.width - 1), y: clamp(c.y, 0, map.height - 1) });
       render();
@@ -873,6 +1025,17 @@ const Stage = (() => {
       if (!done.id) return App.eventMenu(done.start.x, done.start.y, done.cx, done.cy);
       if (p && (p.x !== done.start.x || p.y !== done.start.y)) return App.moveEvent(done.id, p.x, p.y);
       return App.editEvent(done.id);
+    }
+    if (done.tool === 'select') {
+      if (done.move) {
+        // Un simple clic dans la sélection (sans bouger) ne déplace rien.
+        if (flottant && flottant.x === selection()?.x && flottant.y === selection()?.y) return annuler();
+        return poser();
+      }
+      const r = preview?.rect;
+      preview = null;
+      selectionner(r || null);
+      return;
     }
     if (done.tool === 'stamp' && done.capture) {
       const r = preview?.rect;
@@ -935,8 +1098,11 @@ const Stage = (() => {
     preview = null;
     action = null;
     lastPoint = null;
+    // Le morceau collé qui suit la souris reste (on peut changer de carte avant de le poser), sauf
+    // dans un autre jeu.
+    if (flottant && (flottant.glisser || flottant.piece.doc !== App.doc)) flottant = null;
     render();
   }
 
-  return { init, render, fit, zoomBy, reset, zoneAt, montrer, get zoom() { return view().zoom; }, get hover() { return hover; } };
+  return { init, render, fit, zoomBy, reset, zoneAt, montrer, copier, coller, vider, annuler, toutSelectionner, selection, get flottant() { return Boolean(flottant); }, get zoom() { return view().zoom; }, get hover() { return hover; } };
 })();

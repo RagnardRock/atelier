@@ -68,12 +68,12 @@ const Menus = (() => {
     current?.button?.classList.remove('open');
     current = null;
   }
-  function open(items, x, y, button = null) {
+  function open(items, x, y, button = null, className = '') {
     close();
-    const menu = el('div', { className: 'menu' });
+    const menu = el('div', { className: `menu${className ? ` ${className}` : ''}` });
     for (const item of items) {
       if (!item) { menu.append(el('div', { className: 'menu-sep' })); continue; }
-      const b = el('button', { className: 'menu-item', disabled: Boolean(item.disabled) }, [
+      const b = el('button', { className: `menu-item${item.className ? ` ${item.className}` : ''}`, disabled: Boolean(item.disabled), title: item.title || '' }, [
         el('span', { className: 'menu-check' }, item.checked ? [icon('check')] : []),
         el('span', { className: 'menu-label', textContent: item.label }),
         item.keys ? el('span', { className: 'menu-keys', textContent: item.keys }) : null,

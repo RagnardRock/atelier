@@ -791,6 +791,19 @@ const Events = (() => {
     return items;
   }
 
+  // Une commande neuve de ce type, remplie dans sa fenêtre (null si on annule). Un « si » demande
+  // d'abord sa condition, dans un menu ouvert en (x, y).
+  async function nouvelleCommande(doc, type, ev, x, y) {
+    if (!COMMANDES[type]) return null;
+    if (type === 'si') {
+      const ct = await choisir(menuConditions(doc), x, y);
+      const cond = ct && await formCondition(doc, CONDITIONS[ct].nouveau(doc));
+      return cond ? { type: 'si', condition: cond, alors: [], sinon: [] } : null;
+    }
+    const neuf = COMMANDES[type].nouveau(doc);
+    return COMMANDES[type].champs ? formCommande(doc, neuf, ev) : neuf;
+  }
+
   // --- Les grandes fenêtres (au-dessus de Tafl, sous les petites fenêtres et les menus) ---
   let courant = null; // la fenêtre ouverte : { fermer() }
   const isOpen = () => Boolean(courant);
@@ -801,8 +814,72 @@ const Events = (() => {
   function handleKey(e) {
     if (!courant) return false;
     if (e.key === 'Escape' && !menuOuvert) courant.fermer();
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') courant.valider?.();
+    const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (ctrl && e.key === 'Enter') courant.valider?.();
+    // Tafl 0.28 : annuler et refaire dans la fenêtre. Dans une case de texte, Ctrl+Z reste celui du
+    // texte (il défait les lettres tapées) ; ailleurs, il défait le dernier changement de la fenêtre.
+    const texte = /INPUT|TEXTAREA/.test(document.activeElement?.tagName) && !/checkbox|radio|range|color|button/.test(document.activeElement?.type);
+    if (ctrl && courant.suivi && !texte && !Dialogs.isOpen()) {
+      if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); courant.suivi.refaire(); }
+      else if (k === 'z') { e.preventDefault(); courant.suivi.annuler(); }
+    }
     return true;
+  }
+
+  // Tafl 0.28 : l'historique d'une grande fenêtre (événement, données du jeu). La fenêtre travaille
+  // sur une copie `work` ; après chaque geste (clic, choix, glisser-déposer, texte tapé puis une
+  // petite pause), on regarde ce qui a changé, clé par clé (work.pages, work.creatures…), et on garde
+  // l'ancienne version des seules clés changées. Annuler les remet et redessine la fenêtre.
+  function suivi(work, redessiner, { max = 100, nom = 'la fenêtre' } = {}) {
+    const json = (v) => (v === undefined ? undefined : JSON.stringify(v));
+    let photo = Object.fromEntries(Object.keys(work).map((k) => [k, json(work[k])]));
+    const pile = [], refaites = [];
+    function differences() {
+      const avant = {}, apres = {};
+      for (const k of new Set([...Object.keys(photo), ...Object.keys(work)])) {
+        const j = json(work[k]);
+        if (j !== photo[k]) { avant[k] = photo[k]; apres[k] = j; }
+      }
+      return Object.keys(avant).length ? { avant, apres } : null;
+    }
+    function noter() {
+      const d = differences();
+      if (!d) return;
+      pile.push(d.avant);
+      if (pile.length > max) pile.shift();
+      refaites.length = 0;
+      Object.assign(photo, d.apres);
+    }
+    function remettre(etat) {
+      for (const [k, j] of Object.entries(etat)) {
+        if (j === undefined) delete work[k]; else work[k] = JSON.parse(j);
+        photo[k] = j;
+      }
+      redessiner();
+    }
+    function bouger(depuis, vers, mot) {
+      noter(); // ce qui vient d'être tapé compte comme un pas
+      const etat = depuis.pop();
+      if (!etat) { notify(`Rien à ${mot} dans ${nom}.`, 'info', 1800); return; }
+      vers.push(Object.fromEntries(Object.keys(etat).map((k) => [k, photo[k]])));
+      remettre(etat);
+    }
+    let attente = 0;
+    const bientot = () => { clearTimeout(attente); attente = setTimeout(noter, 0); };
+    const apresPause = () => { clearTimeout(attente); attente = setTimeout(noter, 700); };
+    const gestes = ['click', 'change', 'drop', 'pointerup', 'dragend'];
+    for (const g of gestes) document.addEventListener(g, bientot, true);
+    document.addEventListener('input', apresPause, true);
+    return {
+      noter,
+      annuler: () => bouger(pile, refaites, 'annuler'),
+      refaire: () => bouger(refaites, pile, 'refaire'),
+      arreter() {
+        clearTimeout(attente);
+        for (const g of gestes) document.removeEventListener(g, bientot, true);
+        document.removeEventListener('input', apresPause, true);
+      },
+    };
   }
   function fenetre({ titre, icone: ic, largeur = 1180 }) {
     const root = el('div', { className: 'editor-overlay' });
@@ -859,83 +936,92 @@ const Events = (() => {
       const work = structuredClone(ev);
       const avant = JSON.stringify(work);
       let page = 0;
-      const w = fenetre({ titre: '', icone: TYPE_ICONS[work.type] });
+      let vue = 'blocs';
+      try { vue = localStorage.getItem('tafl.vueScript') === 'liste' ? 'liste' : 'blocs'; } catch { /* sans mémoire : les blocs */ }
+      const etatBlocs = { choisi: null, boite: 0, theme: '' };
+      const w = fenetre({ titre: '', icone: TYPE_ICONS[work.type], largeur: 1600 });
+      w.card.classList.add('event-editor');
       const majTitre = () => { w.setTitle(`${nouveau ? 'Nouvel événement' : 'Événement'} « ${work.nom || libelle(TYPES, work.type)} » sur ${map.name}`); w.setIcon(TYPE_ICONS[work.type]); };
       majTitre();
       const side = el('div', { className: 'editor-side' });
       const main = el('div', { className: 'editor-main' });
       w.body.append(side, main);
 
-      // Colonne de gauche : ce qu'est l'événement.
-      const nom = el('input', { type: 'text', value: work.nom, placeholder: 'Maman, Prof. Chêne, Panneau du bourg…' });
-      nom.oninput = () => { work.nom = nom.value; majTitre(); };
-      const num = (key, max) => {
-        const i = el('input', { type: 'number', min: 0, max, value: work[key] });
-        i.oninput = () => { work[key] = clamp(Math.round(Number(i.value)) || 0, 0, max); };
-        return i;
-      };
-      const apercuTuile = el('canvas', { className: 'tile-apercu', width: doc.tileSize, height: doc.tileSize });
-      const majApercu = () => {
-        const g = apercuTuile.getContext('2d');
-        g.clearRect(0, 0, apercuTuile.width, apercuTuile.height);
-        const t = doc.tiles[work.apparence.tuile >= 0 ? work.apparence.tuile : perso(doc, work.apparence.personnage)?.tuile ?? -1];
-        if (t) g.drawImage(Doc.tileCanvas(t, doc.tileSize), 0, 0);
-        apercuTuile.hidden = !t;
-      };
-      const traversable = el('input', { type: 'checkbox', checked: work.traversable });
-      traversable.onchange = () => { work.traversable = traversable.checked; };
-      const aide = el('p', { className: 'modal-info' });
-      const majAide = () => {
-        aide.textContent = {
-          pnj: 'Un habitant, un dresseur, le prof… Choisis son personnage (Jeu › Données du jeu) : ses dialogues prennent son nom et ses portraits.',
-          panneau: 'Le joueur le lit en se plaçant devant et en appuyant sur A.',
-          coffre: 'La page 2 (« déjà fait ») prend le relais une fois le coffre ouvert.',
-          objet: 'Une fois ramassé, la page 2 le fait disparaître (case « absent »).',
-          declencheur: 'Une case invisible : une scène se lance quand le joueur marche dessus. Mets une condition pour qu\'elle ne se joue qu\'une fois (déjà fait, ou un interrupteur).',
-          obstacle: 'À la place des CS : avec l\'objet, le joueur coupe l\'arbre ou brise le rocher (touche A, Saga lui demande s\'il veut l\'utiliser), ou pousse le rocher en marchant contre lui. Sans l\'objet, Saga dit lequel il faudrait. Donne-lui une tuile (l\'arbre, le rocher) ; la page 1 se joue juste après le passage (vide d\'habitude). Un rocher poussé sur un déclencheur le lance : une énigme ! Il revient à sa place quand le joueur quitte la carte.',
-        }[work.type];
-      };
-      // L'obstacle (Tafl 0.24) : sa sorte, l'objet qu'il faut, son message, s'il repousse.
-      const blocObstacle = el('div');
-      const majObstacle = () => {
-        blocObstacle.replaceChildren();
-        if (work.type !== 'obstacle') { delete work.obstacle; return; }
-        if (!work.obstacle) { work.obstacle = normObstacle({ sorte: 'couper' }); work.traversable = false; traversable.checked = false; }
-        const o = work.obstacle;
-        const objet = el('input', { type: 'text', value: o.objet, placeholder: OBJETS_OBSTACLE[o.sorte] });
-        objet.setAttribute('list', 'tafl-objets');
-        objet.oninput = () => { o.objet = Doc.slug(objet.value, ''); };
-        const message = el('input', { type: 'text', value: o.message, placeholder: { couper: 'Ce petit arbre a l\'air fragile.', briser: 'Ce rocher est fissuré de partout.', pousser: 'Un gros rocher, bien lourd.' }[o.sorte] });
-        message.oninput = () => { o.message = message.value; };
-        const repousse = el('input', { type: 'checkbox', checked: o.repousse });
-        repousse.onchange = () => { o.repousse = repousse.checked; };
-        blocObstacle.append(
-          section('Obstacle'),
-          champ('Sorte', selectEl(SORTES_OBSTACLE, o.sorte, (v) => { const avant = OBJETS_OBSTACLE[o.sorte]; o.sorte = v; if (!o.objet || o.objet === avant) o.objet = OBJETS_OBSTACLE[v]; majObstacle(); })),
-          champ('Objet requis', objet, 'L\'objet du sac qui ouvre le passage (Jeu › Données du jeu › Objets, effet « Ouvre un passage »)'),
-          champ('Message', message, 'Ce que Saga dit quand le joueur le regarde (vide : la phrase grise)'),
-          ...(o.sorte === 'pousser' ? [] : [champ('Repousse quand le joueur quitte la carte', repousse)]),
+      // Colonne de gauche : ce qu'est l'événement (redessinée après Ctrl+Z).
+      let nom = null;
+      function renderSide() {
+        side.replaceChildren();
+        nom = el('input', { type: 'text', value: work.nom, placeholder: 'Maman, Prof. Chêne, Panneau du bourg…' });
+        nom.oninput = () => { work.nom = nom.value; majTitre(); };
+        const num = (key, max) => {
+          const i = el('input', { type: 'number', min: 0, max, value: work[key] });
+          i.oninput = () => { work[key] = clamp(Math.round(Number(i.value)) || 0, 0, max); };
+          return i;
+        };
+        const apercuTuile = el('canvas', { className: 'tile-apercu', width: doc.tileSize, height: doc.tileSize });
+        const majApercu = () => {
+          const g = apercuTuile.getContext('2d');
+          g.clearRect(0, 0, apercuTuile.width, apercuTuile.height);
+          const t = doc.tiles[work.apparence.tuile >= 0 ? work.apparence.tuile : perso(doc, work.apparence.personnage)?.tuile ?? -1];
+          if (t) g.drawImage(Doc.tileCanvas(t, doc.tileSize), 0, 0);
+          apercuTuile.hidden = !t;
+        };
+        const traversable = el('input', { type: 'checkbox', checked: work.traversable });
+        traversable.onchange = () => { work.traversable = traversable.checked; };
+        const aide = el('p', { className: 'modal-info' });
+        const majAide = () => {
+          aide.textContent = {
+            pnj: 'Un habitant, un dresseur, le prof… Choisis son personnage (Jeu › Données du jeu) : ses dialogues prennent son nom et ses portraits.',
+            panneau: 'Le joueur le lit en se plaçant devant et en appuyant sur A.',
+            coffre: 'La page 2 (« déjà fait ») prend le relais une fois le coffre ouvert.',
+            objet: 'Une fois ramassé, la page 2 le fait disparaître (case « absent »).',
+            declencheur: 'Une case invisible : une scène se lance quand le joueur marche dessus. Mets une condition pour qu\'elle ne se joue qu\'une fois (déjà fait, ou un interrupteur).',
+            obstacle: 'À la place des CS : avec l\'objet, le joueur coupe l\'arbre ou brise le rocher (touche A, Saga lui demande s\'il veut l\'utiliser), ou pousse le rocher en marchant contre lui. Sans l\'objet, Saga dit lequel il faudrait. Donne-lui une tuile (l\'arbre, le rocher) ; la page 1 se joue juste après le passage (vide d\'habitude). Un rocher poussé sur un déclencheur le lance : une énigme ! Il revient à sa place quand le joueur quitte la carte.',
+          }[work.type];
+        };
+        // L'obstacle (Tafl 0.24) : sa sorte, l'objet qu'il faut, son message, s'il repousse.
+        const blocObstacle = el('div');
+        const majObstacle = () => {
+          blocObstacle.replaceChildren();
+          if (work.type !== 'obstacle') { delete work.obstacle; return; }
+          if (!work.obstacle) { work.obstacle = normObstacle({ sorte: 'couper' }); work.traversable = false; traversable.checked = false; }
+          const o = work.obstacle;
+          const objet = el('input', { type: 'text', value: o.objet, placeholder: OBJETS_OBSTACLE[o.sorte] });
+          objet.setAttribute('list', 'tafl-objets');
+          objet.oninput = () => { o.objet = Doc.slug(objet.value, ''); };
+          const message = el('input', { type: 'text', value: o.message, placeholder: { couper: 'Ce petit arbre a l\'air fragile.', briser: 'Ce rocher est fissuré de partout.', pousser: 'Un gros rocher, bien lourd.' }[o.sorte] });
+          message.oninput = () => { o.message = message.value; };
+          const repousse = el('input', { type: 'checkbox', checked: o.repousse });
+          repousse.onchange = () => { o.repousse = repousse.checked; };
+          blocObstacle.append(
+            section('Obstacle'),
+            champ('Sorte', selectEl(SORTES_OBSTACLE, o.sorte, (v) => { const avant = OBJETS_OBSTACLE[o.sorte]; o.sorte = v; if (!o.objet || o.objet === avant) o.objet = OBJETS_OBSTACLE[v]; majObstacle(); })),
+            champ('Objet requis', objet, 'L\'objet du sac qui ouvre le passage (Jeu › Données du jeu › Objets, effet « Ouvre un passage »)'),
+            champ('Message', message, 'Ce que Saga dit quand le joueur le regarde (vide : la phrase grise)'),
+            ...(o.sorte === 'pousser' ? [] : [champ('Repousse quand le joueur quitte la carte', repousse)]),
+          );
+        };
+        side.append(
+          champ('Nom', nom),
+          champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); majObstacle(); })),
+          champ('Colonne (x)', num('x', map.width - 1)),
+          champ('Rangée (y)', num('y', map.height - 1)),
+          section('Apparence'),
+          champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits et son sprite'),
+          el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
+          champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
+          champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
+          section('Déclenchement'),
+          champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
+          champ('Le joueur peut passer à travers', traversable),
+          blocObstacle,
+          aide,
         );
-      };
-      side.append(
-        champ('Nom', nom),
-        champ('Type', selectEl(TYPES, work.type, (v) => { work.type = v; majTitre(); majAide(); majObstacle(); })),
-        champ('Colonne (x)', num('x', map.width - 1)),
-        champ('Rangée (y)', num('y', map.height - 1)),
-        section('Apparence'),
-        champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits et son sprite'),
-        el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
-        champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
-        champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
-        section('Déclenchement'),
-        champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
-        champ('Le joueur peut passer à travers', traversable),
-        blocObstacle,
-        aide,
-      );
-      majApercu();
-      majAide();
-      majObstacle();
+        majApercu();
+        majAide();
+        majObstacle();
+      }
+      renderSide();
 
       // Colonne de droite : les pages, leurs conditions et leur script.
       function renderPage() {
@@ -945,7 +1031,7 @@ const Events = (() => {
         const tabs = el('div', { className: 'page-tabs' });
         work.pages.forEach((pg, k) => {
           const b = el('button', { className: `page-tab${k === page ? ' active' : ''}`, title: pg.conditions.length ? `Si ${pg.conditions.map((c) => resumeCondition(doc, c)).join(' et ')}` : 'Toujours valable' }, [`Page ${k + 1}`, pg.conditions.length ? el('span', { className: 'page-cond', textContent: '•' }) : null]);
-          b.onclick = () => { page = k; renderPage(); };
+          b.onclick = () => { page = k; etatBlocs.choisi = null; renderPage(); };
           tabs.append(b);
         });
         tabs.append(petitBouton('add', 'Nouvelle page (vide)', () => { work.pages.push({ conditions: [], cache: false, commandes: [] }); page = work.pages.length - 1; renderPage(); }));
@@ -983,8 +1069,20 @@ const Events = (() => {
         cache.onchange = () => { p.cache = cache.checked; };
         main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Sur cette page, l\'événement est absent (invisible : on ne peut ni lui parler ni le toucher)' }), cache]));
 
-        // Le script.
-        main.append(section('Script : ce qui se passe, dans l\'ordre'));
+        // Le script : en blocs reliés (Tafl 0.28) ou en liste, au choix (gardé pour la prochaine fois).
+        const vues = el('span', { className: 'vue-choix' });
+        for (const [v, label, ic] of [['blocs', 'Blocs', 'type-hierarchy-sub'], ['liste', 'Liste', 'list-flat']]) {
+          const b = el('button', { className: `button small${vue === v ? ' active' : ''}`, title: v === 'blocs' ? 'Les commandes en blocs reliés, avec l\'aperçu des dialogues' : 'Les commandes en liste, comme avant' }, [icon(ic), label]);
+          b.onclick = () => { vue = v; try { localStorage.setItem('tafl.vueScript', v); } catch { /* sans mémoire, tant pis */ } renderPage(); };
+          vues.append(b);
+        }
+        main.append(section('Script : ce qui se passe, dans l\'ordre', el('span', { className: 'spacer' }), vues));
+        if (vue === 'blocs') {
+          const box = el('div', { className: 'flow-box' });
+          main.append(box);
+          Blocs.dessiner(box, { doc, ev: work, page: p, etat: etatBlocs, redessiner: renderPage });
+          return;
+        }
         const tree = el('div', { className: 'cmd-tree' });
         renderListe(tree, p.commandes, 0);
         main.append(tree);
@@ -1023,22 +1121,15 @@ const Events = (() => {
         add.onclick = async () => {
           const r = add.getBoundingClientRect();
           const type = await choisir(menuCommandes(doc), r.left, r.bottom + 4);
-          let c;
-          if (type === 'si') {
-            const ct = await choisir(menuConditions(doc), r.left, r.bottom + 4);
-            const cond = await formCondition(doc, CONDITIONS[ct].nouveau(doc));
-            if (cond) c = { type: 'si', condition: cond, alors: [], sinon: [] };
-          } else {
-            const neuf = COMMANDES[type].nouveau(doc);
-            c = COMMANDES[type].champs ? await formCommande(doc, neuf, work) : neuf;
-          }
+          const c = await nouvelleCommande(doc, type, work, r.left, r.bottom + 4);
           if (c) { liste.push(c); renderPage(); }
         };
         box.append(add);
       }
       renderPage();
 
-      const finir = (r) => { w.root.remove(); courant = null; resolve(r); };
+      const historique = suivi(work, () => { majTitre(); renderSide(); renderPage(); }, { nom: 'cet événement' });
+      const finir = (r) => { historique.arreter(); w.root.remove(); courant = null; resolve(r); };
       const fermer = async () => { if (await abandonner(!nouveau && JSON.stringify(work) !== avant)) finir(null); };
       const valider = () => {
         if (map.events.some((o) => o.id !== work.id && o.x === work.x && o.y === work.y)) return notify(`La case (${work.x}, ${work.y}) a déjà un événement.`, 'warning', 3500);
@@ -1047,11 +1138,11 @@ const Events = (() => {
         return null;
       };
       w.close.onclick = fermer;
-      w.hint.textContent = 'Ctrl+Entrée : valider · Échap : fermer';
+      w.hint.textContent = 'Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : valider · Échap : fermer';
       if (!nouveau) w.bouton('Supprimer l\'événement', () => finir('supprimer'));
       w.bouton('Annuler', fermer);
       w.bouton(nouveau ? 'Créer' : 'Valider', valider, true);
-      courant = { fermer, valider };
+      courant = { fermer, valider, suivi: historique };
       nom.focus();
       nom.select();
     });
@@ -1443,15 +1534,16 @@ const Events = (() => {
       }
 
       const change = () => importe || JSON.stringify(work) !== avant;
-      const finir = (r) => { w.root.remove(); courant = null; resolve(r); };
+      const historique = suivi(work, render, { max: 40, nom: 'les données du jeu' });
+      const finir = (r) => { historique.arreter(); w.root.remove(); courant = null; resolve(r); };
       const fermer = async () => { if (await abandonner(change())) finir(null); };
       const valider = () => finir(change() ? normData(work, doc.tiles.length) : null);
       w.close.onclick = fermer;
-      w.hint.textContent = 'Tout sert dans les scripts des événements (outil Événement, N), les zones et les combats.';
+      w.hint.textContent = 'Tout sert dans les scripts des événements (outil Événement, N), les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire.';
       const supprimerBtn = w.bouton('Supprimer', () => w.bouton.supprimer?.());
       w.bouton('Annuler', fermer);
       w.bouton('Valider', valider, true);
-      courant = { fermer, valider };
+      courant = { fermer, valider, suivi: historique };
       render();
     });
   }
@@ -1461,5 +1553,6 @@ const Events = (() => {
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
     editEvent, editData, isOpen, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
+    formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, nomQui, quiReel, suivi,
   };
 })();
