@@ -152,6 +152,19 @@ Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu �
 - **Les variables** du jeu (nombres ou textes), leur commande et leur condition ; **les dés** des scripts partent d'une graine gardée dans la sauvegarde.
 - **Export** : le bac à sable part avec le jeu (version web et exe).
 
+## Ce que fait Saga 1.1 : jouer à plusieurs sur Internet
+
+Dans le panneau des joueurs, **Ouvrir sur Internet** : Saga demande à la box (UPnP) d'ouvrir un port vers
+ce PC, et affiche l'adresse publique (`http://81.x.x.x:7777`) à donner aux amis éloignés.
+
+- **Sûreté** : un seul port, seulement pendant la partie ; la box l'oublie à la fermeture de la partie ou
+  de Saga (et d'elle-même au bout d'une heure si Saga plante). Le code passe à huit lettres (`ABCD-EFGH`),
+  les mauvais codes sont limités, et **l'hôte accepte chaque nouveau joueur** avant qu'il reçoive quoi que
+  ce soit. Le serveur ne sert que l'interface et le jeu ouvert, rien d'autre du PC.
+- **Si la box refuse** (UPnP désactivé) : Saga explique la redirection de port à la main, puis
+  « J'ai ouvert le port ». Si la box n'a pas d'adresse publique (CGNAT de l'opérateur, ou double box),
+  Saga le dit : il faut demander une « IPv4 full-stack » ou une IP fixe à l'opérateur.
+
 ## Ce que fait Saga 1.0 : jouer à plusieurs (avec Tafl 1.0)
 
 Menu de pause › **Jouer à plusieurs** : Saga ouvre un petit serveur sur le réseau de la maison et affiche

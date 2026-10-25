@@ -1,7 +1,7 @@
 {
   "name": "atelier-moteur",
   "productName": "Saga",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Saga, le moteur qui fait tourner les jeux décrits dans Tafl (cartes, calques, parallaxe, déplacements, téléporteurs, météo), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
