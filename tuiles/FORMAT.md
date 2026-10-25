@@ -649,6 +649,8 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 } }
 ```
 
+Dans Tafl (0.32.1), **Données › Réglages** a quatre onglets (Règles du jeu, Partie, Interface, Ambiance) et ne montre que ce que le pack de règles utilise : `plafonds`, `ajustement*`, `evolution_*`, `seuil_amitie`, `chance_chromatique` et `badges` sont réservés au pack Pokémon (un jeu d'un autre pack qui a déjà des badges les garde, dans l'onglet Partie). Les valeurs cachées sont gardées. `monnaie` vaut par défaut celle du pack (`Pokédollars`, `Or`, `po`) ; un jeu JRPG ou JDR resté sur `Pokédollars` prend celle de son pack.
+
 - `plafonds` : le niveau maximum des créatures du joueur selon ses badges. Au plafond, elles ne gagnent plus d'expérience ; Saga 0.7 le dit quand elles l'atteignent et le montre dans le menu Équipe (« Niv. max 20 »).
 - `ajustement` : comment les dresseurs `ajuste: true` règlent leur niveau : `"aucun"`, `"equipe"` (le meilleur niveau de l'équipe du joueur), `"badges"` (le plafond des badges du joueur). Leur niveau devient cette référence plus `ecart`, sans descendre sous celui écrit dans leur équipe.
 - `ajustement_sauvages` (Tafl 0.24) : pareil pour les créatures sauvages des zones (`"aucun"` par défaut). Toute la fourchette de la zone monte pour que son haut vaille la référence plus `ecart_sauvages`, sans descendre sous ce qu'écrit la zone (zone 3 à 5, référence 20, écart −2 : niveaux 16 à 18). Les commandes `combat_sauvage` gardent leur niveau.
@@ -758,7 +760,7 @@ Huit monstres au plus en tout. `fuite: false` : on ne peut pas fuir (un boss).
 
 Quand `reglages.regles` vaut `"jdr"` : un jeu de rôle sur table façon D&D 5e (le SRD 5.1, en français), pour accompagner de vraies parties. Les joueurs créent leurs personnages (ou prennent un pré-tiré), font des tests au d20 contre un DD, et se battent au tour par tour contre des rencontres de monstres. Les distances sont écrites en mètres (1,5 m = une case). Il n'y a ni capture, ni types, ni dresseurs.
 
-Chaque fichier ci-dessous peut rester vide : Saga prend alors la liste de la 5e (six caractéristiques, 18 compétences, 15 états), pour qu'un jeu tout neuf marche déjà. Dans Tafl, **Données › Réglages › Règles du JDR › Charger le modèle D&D 5e** ajoute ce qui manque : les listes de la 5e, 9 origines, 12 classes (niveaux 1 à 20), des sorts, des monstres, des rencontres, des armes, des armures et des potions (contenu du SRD 5.1, sous licence CC-BY-4.0 : `reglages.jdr.attribution` en garde la mention). Les ids gardent les « _ » (`a_terre`, `attaque_sournoise`) : Saga les connaît ainsi.
+Chaque fichier ci-dessous peut rester vide : Saga prend alors la liste de la 5e (six caractéristiques, 18 compétences, 15 états), pour qu'un jeu tout neuf marche déjà. Dans Tafl, **Données › Réglages › Règles du jeu › Charger le modèle D&D 5e** ajoute ce qui manque : les listes de la 5e, 9 origines, 12 classes (niveaux 1 à 20), des sorts, des monstres, des rencontres, des armes, des armures et des potions (contenu du SRD 5.1, sous licence CC-BY-4.0 : `reglages.jdr.attribution` en garde la mention). Les ids gardent les « _ » (`a_terre`, `attaque_sournoise`) : Saga les connaît ainsi.
 
 Les fichiers servent ainsi :
 
@@ -911,7 +913,7 @@ Une arme ou une armure a une partie `jdr` ; un objet de soin peut lancer des dé
 }
 ```
 
-Les règles maison, réglées dans Tafl (**Données › Réglages › Règles du JDR**) :
+Les règles maison, réglées dans Tafl (**Données › Réglages › Règles du jeu**) :
 
 | Champ | Valeurs |
 |---|---|
@@ -925,7 +927,7 @@ Les règles maison, réglées dans Tafl (**Données › Réglages › Règles du
 | `potion_bonus` | `true` : boire une potion est une action bonus. |
 | `tenaille` | `true` : la prise en tenaille : avantage au contact contre une cible qu'un allié a déjà frappée au contact ce tour-ci. |
 | `unite` | `m` (mètres), `cases` (1,5 m = une case) ou `pieds` : l'affichage des distances (les données restent en mètres). |
-| `monnaie` | `po` (pièces d'or) ou `unique` (la monnaie du jeu, `reglages.monnaie`) : le nom de l'argent. |
+| `monnaie` | Depuis Tafl 0.32.1, toujours `unique` : le jeu n'a qu'une monnaie, `reglages.monnaie` (`po` par défaut en JDR). Saga lit encore `po` (pièces d'or) dans un ancien jeu. |
 | `mj_decide` | `true` : après chaque test, le MJ garde le jet ou force la réussite ou l'échec. |
 | `animation_des` | `normale`, `rapide` ou `aucune` : le plateau de dés. |
 | `attribution` | la mention de licence du contenu SRD (écrite par le modèle D&D 5e). |

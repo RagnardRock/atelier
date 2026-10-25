@@ -692,7 +692,6 @@ const DonneesJdr = (() => {
       coche(j, 'tenaille', 'Prise en tenaille', 'avantage contre un ennemi déjà frappé au contact par un allié ce tour-ci'),
       section('Affichage'),
       choixR('unite', UNITES, 'les distances écrites en mètres dans les données'),
-      choixR('monnaie', MONNAIES),
       choixR('animation_des', ANIMATIONS),
       coche(j, 'mj_decide', 'Le MJ peut forcer un test', 'en vraie partie : après le jet, garder le résultat ou forcer la réussite ou l\'échec'),
     ];

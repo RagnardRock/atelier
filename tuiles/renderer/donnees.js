@@ -286,6 +286,8 @@ const Donnees = (() => {
     ['jrpg', 'JRPG classique : un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres'],
     ['jdr', 'JDR (D&D 5e et règles maison) : création de personnages, tests au d20, sorts, combats à l\'initiative'],
   ];
+  // La monnaie par défaut de chaque pack (Tafl 0.32.1) : elle suit le pack tant qu'on ne l'a pas renommée.
+  const MONNAIES_PACK = { pokemon: 'Pokédollars', jrpg: 'Or', jdr: 'po' };
   // La forme des menus que chaque pack donne par défaut dans Saga 0.6 (regles.js › menus) : Tafl la
   // montre en gris ; ce que le jeu règle dans Interface › Menus passe par-dessus (vide = celle du pack).
   const FORMES_MENUS = {
@@ -321,8 +323,13 @@ const Donnees = (() => {
   function normReglages(r) {
     const d = reglagesVides();
     if (!r || typeof r !== 'object') return d;
+    const regles = typeof r.regles === 'string' && /^[a-z0-9-]+$/.test(r.regles) ? r.regles : 'pokemon';
+    // Tafl 0.32.1 : une seule monnaie. Un jeu JRPG ou JDR resté sur « Pokédollars » prend celle de son pack ;
+    // le JDR n'a plus son choix « pièces d'or ou monnaie du jeu » (jdr.monnaie vaut toujours « unique »).
+    let monnaie = str(r.monnaie, d.monnaie) || d.monnaie;
+    if (regles !== 'pokemon' && monnaie === MONNAIES_PACK.pokemon) monnaie = MONNAIES_PACK[regles] || monnaie;
     return {
-      monnaie: str(r.monnaie, d.monnaie) || d.monnaie,
+      monnaie,
       argent_depart: int(r.argent_depart, d.argent_depart, 0, 9999999),
       equipe_max: int(r.equipe_max, 6, 1, 12),
       plafonds: Array.isArray(r.plafonds) ? r.plafonds.map((p) => ({ badges: int(p?.badges, 0, 0, 99), niveau: int(p?.niveau, 100, 1, 100) })).sort((a, b) => a.badges - b.badges) : d.plafonds,
@@ -340,13 +347,13 @@ const Donnees = (() => {
         menus: normMenus(r.interface?.menus),
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
-      regles: typeof r.regles === 'string' && /^[a-z0-9-]+$/.test(r.regles) ? r.regles : 'pokemon',
+      regles,
       niveau_max: int(r.niveau_max, 99, 1, 999),
       courbe_xp: pick(r.courbe_xp, COURBES_XP, 'normale'),
       temps: normTemps(r.temps),
       audio: normAudio(r.audio),
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
-      ...(J ? { jdr: J.normRegles(r.jdr) } : {}),
+      ...(J ? { jdr: { ...J.normRegles(r.jdr), monnaie: 'unique' } } : {}),
       scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
       badges: (() => {
         const out = [];
@@ -1284,7 +1291,7 @@ const Donnees = (() => {
       }, true],
     ], () => { const nom = `Badge ${r.badges.length + 1}`; return { id: Events.ident(nom, r.badges, 'badge'), nom, icone: '' }; }, { ajouter: '+ Badge', vide: 'Aucun badge pour l\'instant.' });
   }
-  // La forme des menus (Saga 0.6) : leurs noms, le Pokédex, les boîtes du PC, les pages du résumé.
+  // La forme des menus (Saga 0.6) : leurs noms, l'encyclopédie (Pokédex, Bestiaire), les boîtes, les pages du résumé.
   // Chaque champ vide garde ce que donne le pack de règles (montré en gris).
   function formMenus(r, ctx) {
     const m = r.interface.menus, d = FORMES_MENUS[r.regles] || FORMES_MENUS.pokemon;
@@ -1313,22 +1320,34 @@ const Donnees = (() => {
       }));
     };
     rendrePages();
+    // Tafl 0.32.1 : les mots du pack (Pokédex et PC pour Pokémon ; Bestiaire et Réserve pour un groupe de héros).
+    const pokemon = r.regles === 'pokemon';
+    const forme = m.forme_boites || d.forme_boites;
+    const colonnes = champ('Colonnes (grille)', nombre('colonnes', 12));
+    colonnes.hidden = forme !== 'grille';
+    const formes = pokemon ? FORMES_BOITES : [['', 'Celle du pack de règles'], ['liste', 'Liste (une ligne par héros)'], ['grille', 'Grille (des cases)']];
     return [
-      section('Menus du jeu'),
-      info('La forme des menus dans Saga : leurs noms, le Pokédex, les boîtes du PC et les pages du résumé d\'une créature. Le pack de règles en donne une par défaut (en gris) ; un champ vide la garde.'),
-      el('div', { className: 'field-grid' }, [
+      section('Noms des menus'),
+      info('Les noms que Saga affiche. Vide = celui que donne le pack de règles (en gris).'),
+      el('div', { className: 'field-grid' }, pokemon ? [
         champ('Menu de l\'équipe', ctx.input(m, 'equipe', d.equipe)),
         champ('Encyclopédie', ctx.input(m, 'dex', d.dex)),
         champ('Ordinateur', ctx.input(m, 'pc', d.pc)),
         champ('Nom d\'une boîte', ctx.input(m, 'boite', d.boite), '« Boîte 1 », « Boîte 2 »…'),
+      ] : [
+        champ('Le groupe', ctx.input(m, 'equipe', d.equipe)),
+        champ('Le bestiaire', ctx.input(m, 'dex', d.dex)),
+        champ('Les héros en attente', ctx.input(m, 'pc', d.pc)),
       ]),
       champ(`Montrer le ${m.dex || d.dex} (menu de pause et carnet)`, visible),
+      section(pokemon ? 'Les boîtes du PC' : `La ${m.pc || d.pc}`),
       el('div', { className: 'field-grid' }, [
-        champ('Forme des boîtes', sel(FORMES_BOITES, m.forme_boites, (v) => { m.forme_boites = v; })),
-        champ('Places par boîte', nombre('places', 120)),
-        champ('Colonnes (grille)', nombre('colonnes', 12)),
+        champ('Forme', sel(formes, m.forme_boites, (v) => { m.forme_boites = v; colonnes.hidden = (v || d.forme_boites) !== 'grille'; })),
+        champ(pokemon ? 'Places par boîte' : 'Places', nombre('places', 120)),
+        colonnes,
       ]),
-      champ('Pages du résumé', pages),
+      section(pokemon ? 'Pages du résumé d\'une créature' : 'Pages de la fiche d\'un héros'),
+      champ('Montrées dans Saga', pages),
     ];
   }
   // Tafl 0.31 : les formules du pack que les scripts JS remplacent (formule() dans Événements › Scripts).
@@ -1356,80 +1375,167 @@ const Donnees = (() => {
       el('div', { className: 'regles-maison' }, lignes),
     ];
   }
+  // Tafl 0.32.1 : les Réglages en 4 onglets, et seulement ce que le pack de règles du jeu utilise.
+  // Les valeurs cachées ne sont pas effacées : revenir au pack les retrouve.
+  const ONGLETS_REGLAGES = [['regles', 'Règles du jeu', 'law'], ['partie', 'Partie', 'play'], ['interface', 'Interface', 'symbol-color'], ['ambiance', 'Ambiance', 'color-mode']];
+  const PACKS_COURTS = { pokemon: ['Pokémon', 'Créatures à capturer, types, natures, badges, dresseurs.'], jrpg: ['JRPG classique', 'Un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres.'], jdr: ['JDR (D&D 5e)', 'Création de personnages, tests au d20, sorts, combats à l\'initiative.'] };
+  const nomPack = (k) => PACKS_COURTS[k]?.[0] || k;
+  let ongletReglages = (() => { try { return localStorage.getItem('tafl.reglagesOnglet') || 'regles'; } catch { return 'regles'; } })();
   function formReglages(r, ctx) {
-    const jrpg = r.regles === 'jrpg';
-    const groupe = r.regles !== 'pokemon'; // JRPG et JDR : un groupe de héros, pas de créatures à capturer
+    if (!ONGLETS_REGLAGES.some(([k]) => k === ongletReglages)) ongletReglages = 'regles';
+    const barre = el('div', { className: 'reglages-onglets', role: 'tablist' }, [
+      ...ONGLETS_REGLAGES.map(([k, label, ic]) => {
+        const b = el('button', { type: 'button', role: 'tab', className: `reglages-onglet${k === ongletReglages ? ' active' : ''}`, ariaSelected: String(k === ongletReglages) }, [icon(ic), el('span', { textContent: label })]);
+        b.onclick = (e) => {
+          e.preventDefault();
+          ongletReglages = k;
+          try { localStorage.setItem('tafl.reglagesOnglet', k); } catch { /* sans stockage : l'onglet est oublié */ }
+          ctx.form.replaceChildren();
+          formReglages(r, ctx);
+        };
+        return b;
+      }),
+      el('span', { className: 'reglages-pack', title: 'Le pack de règles du jeu (onglet Règles du jeu)', textContent: `Pack : ${nomPack(r.regles)}` }),
+    ]);
+    const contenu = { regles: ongletRegles, partie: ongletPartie, interface: ongletInterface, ambiance: ongletAmbiance }[ongletReglages](r, ctx);
+    ctx.form.append(barre, ...contenu.filter(Boolean));
+    ctx.form.scrollTop = 0;
+  }
+  function choixPack(r, ctx) {
+    const connus = Object.keys(PACKS_COURTS);
+    const cartes = [...connus, ...(connus.includes(r.regles) ? [] : [r.regles])].map((k) => {
+      const [nom, texte] = PACKS_COURTS[k] || [k, 'Inconnu de ce Tafl (écrit à la main, ou par un Tafl plus récent).'];
+      const b = el('button', { type: 'button', className: `pack-carte${k === r.regles ? ' active' : ''}`, ariaPressed: String(k === r.regles) }, [el('span', { className: 'pack-carte-nom', textContent: nom }), el('span', { className: 'pack-carte-texte', textContent: texte })]);
+      b.onclick = (e) => {
+        e.preventDefault();
+        if (k === r.regles) return;
+        const avant = r.regles;
+        r.regles = k;
+        // Un groupe JRPG ou JDR se bat à 4 ; Pokémon à 6.
+        if (k !== 'pokemon' && r.equipe_max === 6) r.equipe_max = 4;
+        if (k === 'pokemon' && r.equipe_max === 4) r.equipe_max = 6;
+        if (!r.monnaie || r.monnaie === MONNAIES_PACK[avant]) r.monnaie = MONNAIES_PACK[k] || r.monnaie;
+        ctx.render();
+      };
+      return b;
+    });
+    return [
+      section('Le pack de règles'),
+      info('Il décide des combats, des personnages qui se battent et des statistiques ; Saga le suit. Les onglets du groupe Combat et les réglages ci-dessous changent avec lui. Changer de pack ne touche ni aux cartes, ni aux événements, ni aux quêtes, et ne perd aucun réglage.'),
+      el('div', { className: 'pack-cartes' }, cartes),
+    ];
+  }
+  function ongletRegles(r, ctx) {
+    const groupe = r.regles !== 'pokemon';
+    const out = [...choixPack(r, ctx)];
+    if (r.regles === 'pokemon') out.push(...reglesPokemon(r, ctx));
+    if (groupe && PACKS_COURTS[r.regles]) {
+      out.push(
+        section('Le groupe de héros'),
+        el('div', { className: 'field-grid' }, [
+          champ('Héros qui se battent', nombreIn(r, 'equipe_max', 1, 8), 'les autres attendent dans la Réserve'),
+          champ('Niveau maximum', r.regles === 'jdr' ? niveauMaxJdr(r) : nombreIn(r, 'niveau_max', 1, 999), r.regles === 'jdr' ? '20 au plus' : ''),
+        ]),
+        r.regles === 'jrpg' ? champ('Expérience', sel(COURBES_XP, r.courbe_xp, (v) => { r.courbe_xp = v; }), 'ce qu\'il faut pour chaque niveau') : null,
+      );
+    }
+    if (r.regles === 'jrpg') {
+      out.push(
+        info('Les héros sont dans l\'onglet Personnages (classe, niveau, équipement de départ) ; ils rejoignent et quittent le groupe par la commande « Le groupe ». Pas de capture : le Bestiaire se remplit en battant les monstres.'),
+        el('div', { className: 'field' }, [el('button', { className: 'button small', textContent: 'Ajouter des données d\'exemple (4 classes, 16 compétences, 10 monstres, équipement)', onclick: (e) => { e.preventDefault(); const n = ajouterExemple(ctx.work); ctx.render(); notify(n ? `${n} éléments d'exemple ajoutés : à modifier ou supprimer comme tu veux. Valide pour les garder.` : 'Les données d\'exemple sont déjà là.', 'success'); } })]),
+      );
+    }
+    if (r.regles === 'jdr' && J) out.push(...J.formRegles(r, ctx));
+    out.push(...formReglesMaison(r, ctx));
+    return out;
+  }
+  // Le JDR s'arrête au niveau 20 (Saga borne niveau_max) : on montre ce que Saga utilisera, sans toucher au 99 des autres packs.
+  function niveauMaxJdr(r) {
+    const i = el('input', { type: 'number', value: Math.min(20, r.niveau_max), min: 1, max: 20, className: 'num-input' });
+    i.oninput = () => { if (i.value !== '') r.niveau_max = clamp(Math.round(Number(i.value)), 1, 20); };
+    return i;
+  }
+  // Tout ce qui ne sert qu'au pack Pokémon : l'équipe, les badges et le niveau maximum, dresseurs, sauvages, amitié, natures.
+  function reglesPokemon(r, ctx) {
     const natures = el('table', { className: 'natures' }, [
       el('tr', {}, [el('th', { textContent: 'Nature' }), el('th', { textContent: '+10 %' }), el('th', { textContent: '−10 %' })]),
       ...NATURES.map(([, n, p, m]) => el('tr', {}, [el('td', { textContent: n }), el('td', { textContent: p ? libelleStat(p) : '—' }), el('td', { textContent: m ? libelleStat(m) : '—' })])),
     ]);
-    ctx.form.append(
-      section('Interface du jeu'),
-      info('Le style des dialogues, du combat et des menus quand on joue dans Saga. Le joueur peut aussi le forcer dans les réglages de Saga.'),
-      champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
-      champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
-      ...formMenus(r, ctx),
-      ...formAmbiance(r, ctx),
-      section('Règles du jeu'),
-      info('Le pack de règles décide des combats, des personnages qui se battent et des statistiques ; Saga le suit. Les onglets du groupe Combat sont ses données, et changent avec lui. Changer de pack ne touche ni aux cartes, ni aux événements, ni aux quêtes.'),
-      champ('Règles', sel(REGLES.some(([k]) => k === r.regles) ? REGLES : [...REGLES, [r.regles, `${r.regles} (inconnu de ce Tafl)`]], r.regles, (v) => {
-        r.regles = v;
-        // Un groupe JRPG ou JDR se bat à 4 ; Pokémon à 6.
-        if (v !== 'pokemon' && r.equipe_max === 6) r.equipe_max = 4;
-        if (v === 'pokemon' && r.equipe_max === 4) r.equipe_max = 6;
-        ctx.render();
-      })),
-      ...(jrpg ? [
-        info('JRPG classique : un groupe de héros (onglet Personnages : leur classe, niveau et équipement de départ), avec des classes, des PV et des PM, des compétences et de l\'équipement, contre des groupes de monstres au tour par tour. Les héros rejoignent et quittent le groupe par la commande « Le groupe ». Pas de capture : le Bestiaire se remplit en battant les monstres.'),
-        el('div', { className: 'field-grid' }, [
-          champ('Niveau maximum', nombreIn(r, 'niveau_max', 1, 999)),
-          champ('Expérience', sel(COURBES_XP, r.courbe_xp, (v) => { r.courbe_xp = v; }), 'ce qu\'il faut pour chaque niveau'),
-        ]),
-        el('div', { className: 'field' }, [el('button', { className: 'button small', textContent: 'Ajouter des données d\'exemple (4 classes, 16 compétences, 10 monstres, équipement)', onclick: (e) => { e.preventDefault(); const n = ajouterExemple(ctx.work); ctx.render(); notify(n ? `${n} éléments d'exemple ajoutés : à modifier ou supprimer comme tu veux. Valide pour les garder.` : 'Les données d\'exemple sont déjà là.', 'success'); } })]),
-      ] : []),
-      ...(r.regles === 'jdr' && J ? J.formRegles(r, ctx) : []),
-      ...formReglesMaison(r, ctx),
-      section('Badges'),
-      info('Les badges que le joueur gagne (commande « Donner un badge »). Leur nombre fait monter le niveau maximum de l\'équipe (ci-dessous) et le niveau des dresseurs qui s\'ajustent. Saga les montre dans le carnet, avec leur icône.'),
-      tableBadges(r, ctx),
-      section(groupe ? 'Argent et groupe' : 'Argent et équipe'),
+    return [
+      section('L\'équipe'),
       el('div', { className: 'field-grid' }, [
-        champ('Monnaie', ctx.input(r, 'monnaie', groupe ? 'Or' : 'Pokédollars')),
-        champ('Argent de départ', nombreIn(r, 'argent_depart', 0, 9999999)),
-        champ(groupe ? 'Héros qui se battent' : 'Créatures dans l\'équipe', nombreIn(r, 'equipe_max', 1, groupe ? 8 : 12), groupe ? 'les autres attendent dans la Réserve' : ''),
-        groupe ? null : champ('Chance d\'une chromatique', nombreIn(r, 'chance_chromatique', 0, 100000), '1 sur… (0 = jamais)'),
+        champ('Créatures dans l\'équipe', nombreIn(r, 'equipe_max', 1, 12), 'les autres vont dans le PC'),
+        champ('Chance d\'une chromatique', nombreIn(r, 'chance_chromatique', 0, 100000), '1 sur… (0 = jamais)'),
+        champ('Amitié pour évoluer', nombreIn(r, 'seuil_amitie', 1, 255), 'sur 255 (220 dans les jeux officiels)'),
       ]),
-      ...(groupe ? [] : [
-      section('Niveau maximum (selon les badges)'),
+      info('Chaque créature a une amitié de 0 à 255 : elle monte en gagnant des niveaux, en marchant avec le joueur, avec les vitamines et les objets « Fait monter l\'amitié », et baisse un peu quand la créature tombe K.O. Une évolution « Par amitié » se fait à la montée de niveau quand l\'amitié atteint ce seuil.'),
+      section('Badges'),
+      info('Les badges que le joueur gagne (commande « Donner un badge »). Saga les montre dans le carnet, avec leur icône. Leur nombre fait monter le niveau maximum de l\'équipe et celui des dresseurs qui s\'ajustent.'),
+      tableBadges(r, ctx),
+      section('Niveau maximum selon les badges'),
       info('Les créatures du joueur ne dépassent pas ce niveau tant qu\'il n\'a pas assez de badges : l\'aventure reste un défi.'),
       table(r.plafonds, [
         ['Badges', (p) => nombreIn(p, 'badges', 0, 99)],
         ['Niveau max', (p) => nombreIn(p, 'niveau', 1, 100)],
       ], () => ({ badges: (r.plafonds.at(-1)?.badges ?? -1) + 1, niveau: Math.min(100, (r.plafonds.at(-1)?.niveau || 10) + 5) }), { ajouter: '+ Palier', vide: 'Aucun plafond : jusqu\'au niveau 100.' }),
       section('Niveau des dresseurs'),
-      champ('Les dresseurs s\'ajustent', sel(AJUSTEMENTS, r.ajustement, (v) => { r.ajustement = v; })),
-      champ('Écart', nombreIn(r, 'ecart', -20, 20), 'niveaux en plus (ou en moins) que la référence'),
-      info('Pour les dresseurs qui ont « son équipe suit le niveau du joueur » : leur niveau devient celui de la référence (+ l\'écart), sans jamais descendre sous le niveau écrit dans leur équipe.'),
-      champ('Ils évoluent avec leur niveau', ctx.coche(r, 'evolution_dresseurs'), 'facultatif : un Bulbizarre monté au niveau 40 devient Florizarre (évolutions au niveau seulement)'),
-      section('Niveau des créatures sauvages'),
-      champ('Les sauvages s\'ajustent', sel(AJUSTEMENTS_SAUVAGES, r.ajustement_sauvages, (v) => { r.ajustement_sauvages = v; })),
-      champ('Écart', nombreIn(r, 'ecart_sauvages', -20, 20), 'le haut de la fourchette de la zone vaut la référence plus cet écart'),
-      info('Facultatif (« Jamais » par défaut). Toute la fourchette d\'une zone monte (une zone 3 à 5, référence 20, écart −2 : niveaux 16 à 18), sans jamais descendre sous ce qu\'écrit la zone. Les combats contre une créature précise (un légendaire) gardent leur niveau.'),
-      champ('Elles évoluent avec leur niveau', ctx.coche(r, 'evolution_sauvages'), 'facultatif : un Rattata monté au niveau 25 devient Rattatac'),
-      section('Amitié'),
-      champ('Amitié pour évoluer', nombreIn(r, 'seuil_amitie', 1, 255), 'sur 255 (220 dans les jeux officiels)'),
-      info('Chaque créature a une amitié de 0 à 255 qui part du « bonheur de départ » de son espèce. Elle monte en gagnant des niveaux, en marchant avec le joueur (tous les 128 pas), avec les vitamines et les objets « Fait monter l\'amitié » ; elle baisse un peu quand la créature tombe K.O. Une évolution « Par amitié » se fait à la montée de niveau quand l\'amitié atteint ce seuil (et le niveau de l\'évolution, s\'il y en a un). Saga la montre dans le résumé.'),
-      section('Les 25 natures'),
-      info('Les natures sont celles du jeu officiel. Une menthe (objet « Change l\'effet de la nature ») remplace l\'effet sur les statistiques, comme dans les jeux récents.'),
-      natures,
+      el('div', { className: 'field-grid' }, [
+        champ('Les dresseurs s\'ajustent', sel(AJUSTEMENTS, r.ajustement, (v) => { r.ajustement = v; })),
+        champ('Écart', nombreIn(r, 'ecart', -20, 20), 'niveaux en plus (ou en moins)'),
       ]),
-    );
+      info('Pour les dresseurs qui ont « son équipe suit le niveau du joueur » : leur niveau devient celui de la référence (+ l\'écart), sans jamais descendre sous le niveau écrit dans leur équipe.'),
+      champ('Ils évoluent avec leur niveau', ctx.coche(r, 'evolution_dresseurs'), 'un Bulbizarre monté au niveau 40 devient Florizarre'),
+      section('Niveau des créatures sauvages'),
+      el('div', { className: 'field-grid' }, [
+        champ('Les sauvages s\'ajustent', sel(AJUSTEMENTS_SAUVAGES, r.ajustement_sauvages, (v) => { r.ajustement_sauvages = v; })),
+        champ('Écart', nombreIn(r, 'ecart_sauvages', -20, 20), 'le haut de la fourchette vaut la référence plus cet écart'),
+      ]),
+      info('« Jamais » par défaut. Toute la fourchette d\'une zone monte (une zone 3 à 5, référence 20, écart −2 : niveaux 16 à 18), sans descendre sous ce qu\'écrit la zone. Un combat contre une créature précise (un légendaire) garde son niveau.'),
+      champ('Elles évoluent avec leur niveau', ctx.coche(r, 'evolution_sauvages'), 'un Rattata monté au niveau 25 devient Rattatac'),
+      section('Les 25 natures'),
+      el('details', { className: 'reglages-details' }, [
+        el('summary', { textContent: 'Celles du jeu officiel : voir le tableau' }),
+        info('Une menthe (objet « Change l\'effet de la nature ») remplace l\'effet sur les statistiques, comme dans les jeux récents.'),
+        natures,
+      ]),
+    ];
   }
+  function ongletPartie(r, ctx) {
+    const pokemon = r.regles === 'pokemon';
+    const out = [
+      info('Ce que le joueur a en commençant une partie, et comment Saga la sauvegarde.'),
+      section('Argent'),
+      el('div', { className: 'field-grid' }, [
+        champ('Monnaie', ctx.input(r, 'monnaie', MONNAIES_PACK[r.regles] || 'Or'), r.regles === 'jdr' ? 'les boutiques, le butin des monstres, les commandes' : ''),
+        champ('Argent de départ', nombreIn(r, 'argent_depart', 0, 9999999)),
+      ]),
+    ];
+    // Un jeu d'un autre pack qui a déjà des badges les garde (la commande « Donner un badge » reste là).
+    if (!pokemon && r.badges.length) {
+      out.push(
+        section('Badges'),
+        info(`Ton jeu a des badges, mais le pack ${nomPack(r.regles)} ne s'en sert pas pour les niveaux : ce sont de simples récompenses, montrées dans le carnet. Retire-les tous pour ne plus les voir.`),
+        tableBadges(r, ctx),
+      );
+    }
+    out.push(...formSauvegarde(r, ctx));
+    return out;
+  }
+  function ongletInterface(r, ctx) {
+    return [
+      info('L\'allure du jeu quand on joue dans Saga. Le joueur peut aussi forcer le thème dans les réglages de Saga.'),
+      section('Style'),
+      champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
+      champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
+      ...formMenus(r, ctx),
+    ];
+  }
+  function ongletAmbiance(r, ctx) { return formAmbiance(r, ctx); }
 
 
   // Réglages › Jour et nuit, Musique et sons, Sauvegarde auto (Tafl 0.29, joués par Saga 0.11).
   function formAmbiance(r, ctx) {
-    const t = r.temps, a = r.audio, auto = r.sauvegarde_auto;
+    const t = r.temps, a = r.audio;
     const doc = ctx.doc;
     const lignesTemps = el('div', { className: 'field-grid' }, [
       champ('Une journée dure', nombreIn(t, 'duree_jour', 1, 1440), 'minutes de jeu'),
@@ -1438,6 +1544,22 @@ const Donnees = (() => {
     const majTemps = () => { lignesTemps.hidden = t.horloge !== 'jeu'; };
     majTemps();
     const musique = (cle, label, aide) => champ(label, Sons.choix(doc, a[cle], { mots: [['', aide]], change: (v) => { a[cle] = v; } }).element);
+    return [
+      section('Jour et nuit'),
+      info('Saga assombrit les cartes extérieures la nuit (bleu nuit), les dore à l\'aube et au couchant. Les intérieurs ne changent pas ; une carte peut aussi ne pas suivre le jour et la nuit (Carte › Ambiance). Les tuiles et les événements qui ont une lumière brillent quand il fait sombre. Les pages et les « si » peuvent dépendre du moment (condition « Le moment de la journée »).'),
+      champ('Horloge', sel(HORLOGES, t.horloge, (v) => { t.horloge = v; majTemps(); })),
+      lignesTemps,
+      section('Musique et sons'),
+      info('Les sons sont des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique de chaque carte se choisit dans Carte › Ambiance. Sans fichier, Saga joue ses propres bruitages (des petits « bips ») ; « Aucun » les fait taire.'),
+      musique('musique_combat', 'Musique des combats', 'Aucune (la musique de la carte continue)'),
+      r.regles === 'pokemon' ? musique('musique_dresseur', 'Contre un dresseur', 'Celle des combats') : null,
+      musique('musique_victoire', 'Fanfare de victoire', 'Aucune'),
+      ...SONS_INTEGRES.map(([k, label]) => champ(label, Sons.choix(doc, a.sons[k], { mots: [['', 'Son intégré de Saga'], ['aucun', 'Aucun']], change: (v) => { a.sons[k] = v; } }).element)),
+    ].filter(Boolean);
+  }
+  // Réglages › Partie › Sauvegarde auto.
+  function formSauvegarde(r, ctx) {
+    const auto = r.sauvegarde_auto;
     const lignesAuto = el('div', { className: 'field-grid' }, [
       champ('En changeant de carte', ctx.coche(auto, 'carte')),
       champ('Toutes les', nombreIn(auto, 'minutes', 0, 120), 'minutes (0 = jamais)'),
@@ -1447,16 +1569,6 @@ const Donnees = (() => {
     cocheAuto.addEventListener('change', majAuto);
     majAuto();
     return [
-      section('Jour et nuit'),
-      info('Saga assombrit les cartes extérieures la nuit (bleu nuit), les dore à l\'aube et au couchant. Les intérieurs ne changent pas ; une carte peut aussi ne pas suivre le jour et la nuit (Carte › Ambiance). Les tuiles et les événements qui ont une lumière brillent quand il fait sombre. Les pages et les « si » peuvent dépendre du moment (condition « Le moment de la journée »).'),
-      champ('Horloge', sel(HORLOGES, t.horloge, (v) => { t.horloge = v; majTemps(); })),
-      lignesTemps,
-      section('Musique et sons'),
-      info('Les sons sont des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique de chaque carte se choisit dans Carte › Ambiance. Sans fichier, Saga joue ses propres bruitages (des petits « bips ») ; « Aucun » les fait taire.'),
-      musique('musique_combat', 'Musique des combats', 'Aucune (la musique de la carte continue)'),
-      musique('musique_dresseur', 'Contre un dresseur', 'Celle des combats'),
-      musique('musique_victoire', 'Fanfare de victoire', 'Aucune'),
-      ...SONS_INTEGRES.map(([k, label]) => champ(label, Sons.choix(doc, a.sons[k], { mots: [['', 'Son intégré de Saga'], ['aucun', 'Aucun']], change: (v) => { a.sons[k] = v; } }).element)),
       section('Sauvegarde auto'),
       info('Saga sauvegarde tout seul, dans une place à part : la sauvegarde du joueur (Ctrl+S, la pause) n\'est jamais écrasée. Il attend que le joueur soit libre (pas en plein dialogue ni en combat). À l\'ouverture du jeu, il propose la plus récente des deux.'),
       champ('Sauvegarder tout seul', cocheAuto),
