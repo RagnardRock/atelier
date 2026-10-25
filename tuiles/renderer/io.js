@@ -328,6 +328,8 @@ const IO = (() => {
   }
 
   async function save(doc, as = false) {
+    // Tafl 0.30 : ce qui est en cours dans une page (Données, Événements) s'applique d'abord.
+    if (!(await Espaces.appliquer())) return false;
     if (doc.game) return saveGame(doc, as);
     let path = doc.path;
     if (!path || as) {

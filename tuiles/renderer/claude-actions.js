@@ -43,9 +43,18 @@
   const choisirCarte = (doc, carte) => {
     const i = carteNumero(doc, carte);
     if (i !== doc.mapIndex) App.selectMap(i);
-    if (App.mode !== 'map') App.setMode('map');
+    App.setMode('map');
     return doc.map;
   };
+  // Tafl 0.30 : avant une action qui change le jeu, ce qui est en cours dans une page (Données,
+  // Événements) est appliqué ; après, la page se redessine avec ce que Loki a fait.
+  const avecPages = (liste) => Object.fromEntries(Object.entries(liste).map(([nom, a]) => [nom, a.lecture ? a : {
+    ...a,
+    faire: async (args) => {
+      if (!(await Espaces.appliquer())) throw new Error('Ragna a un événement en cours de modification qui ne peut pas être appliqué (case déjà prise). Demande-lui de le valider ou de l\'annuler.');
+      try { return await a.faire(args); } finally { Espaces.recharger(); }
+    },
+  }]));
   const PASSAGE_CARS = ['?', '.', '#', 'v', '^', '<', '>'];
   const legende = (doc) => `Légende des pixels : « . » = transparent, ${doc.palette.map((c, i) => `${CODES[i] ?? '?'} = ${c}`).join(', ')}.`;
 
@@ -262,7 +271,7 @@
     return out;
   }
 
-  ClaudePanneau.actions({
+  ClaudePanneau.actions(avecPages({
     // Tafl 0.27 : le vérificateur du jeu (verificateur.js), comme Jeu › Vérifier le jeu.
     verifier: {
       lecture: true,
@@ -285,7 +294,7 @@
       faire: () => {
         const doc = besoinJeu();
         return [
-          `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Mode affiché : ${App.mode === 'map' ? 'Carte' : 'Tuile'}.`,
+          `${doc.game ? `Dossier de jeu « ${doc.name} »${doc.game.folder ? ` (${doc.game.folder})` : ', pas encore enregistré'}` : `Jeu de tuiles « ${doc.name} »${doc.path ? ` (${doc.path})` : ', jamais enregistré'}`}${doc.dirty ? ', modifié' : ''}. Tuiles de ${doc.tileSize} × ${doc.tileSize} px. Espace affiché : ${Espaces.LISTE.find((e) => e.id === Espaces.courant)?.nom}.`,
           // Tafl 0.19 : au-delà de 40 tuiles, un résumé (le détail est dans catalogue).
           doc.tiles.length <= 40
             ? `Tuiles (${doc.tiles.length}) : ${doc.tiles.map((t, i) => `${i} « ${t.name} »${t.frames.length > 1 ? ` (${t.frames.length} images, ${t.duration} ms)` : ''}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${i === doc.current ? ' [choisie]' : ''}`).join(', ')}.`
@@ -709,7 +718,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           const { cells } = Doc.layerForEdit(doc, li);
           for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) cells[y * map.width + x] = choix[Math.floor(Math.random() * choix.length)];
         });
-        if (App.mode !== 'map') App.setMode('map');
+        App.setMode('map');
         return `${(x1 - x0) * (y1 - y0)} case(s) du calque ${map.layers[li].name} ${t === -1 ? 'effacée(s)' : `remplie(s) avec la tuile ${t}${variantes.length ? ` et ses variantes ${variantes.join(', ')}` : ''}`}.`;
       },
     },
@@ -819,7 +828,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
             });
           });
         });
-        if (App.mode !== 'map') App.setMode('map');
+        App.setMode('map');
         return `${n} case(s) écrite(s) sur le calque ${map.layers[li].name}.`;
       },
     },
@@ -950,7 +959,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           }));
         });
         if (a.nouvelle) Stage.reset();
-        if (App.mode !== 'map') App.setMode('map');
+        App.setMode('map');
         App.refresh();
         const map = doc.map;
         const texte = [`Carte ${doc.mapIndex} = ${map.id} « ${map.name} » (${map.width} × ${map.height}) : ${compte.cases} case(s) de tuiles posées${compte.tampons.size ? `, tampons ${[...compte.tampons].map(([n, k]) => `${n} ×${k}`).join(', ')}` : ''}${compte.passage ? `, passage peint sur ${compte.passage} case(s)` : ''}. Un seul Ctrl+Z annule tout.`,
@@ -989,10 +998,20 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     mode: {
       lecture: true,
       icone: 'eye',
-      libelle: (a) => `Affiche le mode ${a.mode === 'carte' ? 'Carte' : 'Tuile'}`,
-      description: 'Change ce que montre la fenêtre de Tafl : tuile (la tuile choisie, agrandie) ou carte.',
-      schema: { type: 'object', properties: { mode: { type: 'string', enum: ['tuile', 'carte'] } }, required: ['mode'] },
-      faire: (a) => { besoinJeu(); App.setMode(a.mode === 'carte' ? 'map' : 'tile'); return 'Fait.'; },
+      libelle: (a) => `Affiche l'espace ${a.mode}`,
+      description: 'Change l\'espace de travail affiché dans Tafl (Tafl 0.30) : accueil (le jeu en un coup d\'œil), tuile (la tuile choisie, agrandie), carte, evenements (un événement en pleine page : id et carte), donnees (les données du jeu : onglet, et id d\'un élément), jeu (jouer, vérifier, exporter).',
+      schema: { type: 'object', properties: { mode: { type: 'string', enum: ['accueil', 'tuile', 'carte', 'evenements', 'donnees', 'jeu'] }, carte: { type: ['string', 'number'] }, id: { type: 'string' }, onglet: { type: 'string' } }, required: ['mode'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        if (a.mode === 'carte' || a.mode === 'tuile') App.setMode(a.mode === 'carte' ? 'map' : 'tile');
+        else if (a.mode === 'evenements' && a.id) {
+          const map = doc.maps[carteNumero(doc, a.carte)];
+          if (!map.events.some((e) => e.id === a.id)) throw new Error(`Pas d'événement « ${a.id} » sur ${map.id}.`);
+          await Espaces.aller('evenements', { carte: map.id, evenement: a.id });
+        } else if (a.mode === 'donnees') await Espaces.aller('donnees', a.onglet ? { tab: a.onglet, id: a.id } : {});
+        else await Espaces.aller(a.mode);
+        return 'Fait.';
+      },
     },
     exporter_planche: {
       icone: 'export',
@@ -1056,7 +1075,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return label ? `Annulé : ${label}.` : 'Rien à annuler.';
       },
     },
-  });
+  }));
   // --- Le reste : menus, animation, palette, fichiers du projet ---
   const normal = (t) => String(t).toLowerCase().replace(/…|\.\.\./g, '').replace(/\s+/g, ' ').trim();
   function lignesMenus() {
@@ -1080,7 +1099,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     : `Fenêtre « ${f.titre} »${f.erreur ? ` (non validée : ${f.erreur})` : ''} :\n${f.champs.map((c) => `  - ${c.cle} : ${c.libelle} (${c.type}${c.choix ? ` : ${c.choix.join(', ')}` : ''}${c.min !== undefined ? `, ${c.min} à ${c.max}${c.unite ? ` ${c.unite}` : ''}` : ''})${f.valeurs ? ` = ${JSON.stringify(f.valeurs[c.cle])}` : ''}`).join('\n')}`)).join('\n');
   const dossierRel = (d) => String(d || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
 
-  ClaudePanneau.actions({
+  ClaudePanneau.actions(avecPages({
     menus: {
       lecture: true,
       icone: 'list-flat',
@@ -1534,7 +1553,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return 'Rétabli.';
       },
     },
-  });
+  }));
   // --- Événements et données du jeu (Tafl 0.7) ---
   // Ce qui porte un sprite : le personnage a.id, ou sa tenue a.tenue (Tafl 0.16). Renvoie { id, nom, sprite,
   // tuile, personnage } ; nom dit « Léa (tenue Hiver) » pour les messages.
@@ -1675,7 +1694,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     return `Modifié : ${Donnees.resumer(doc, sorte, o)}`;
   }
 
-  ClaudePanneau.actions({
+  ClaudePanneau.actions(avecPages({
     evenement: {
       icone: 'person',
       libelle: (a) => `Événement : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
@@ -2007,5 +2026,5 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return `Ambiance de ${map.id} : ${JSON.stringify(ambiance)}.`;
       },
     },
-  });
+  }));
 })();

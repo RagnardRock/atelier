@@ -20,9 +20,7 @@ const App = (() => {
   function refresh() {
     const doc = api.doc;
     if (doc) api.frame = clamp(api.frame, 0, doc.tiles[doc.current].frames.length - 1);
-    $('#welcome').hidden = Boolean(doc);
     $('#stage').hidden = !doc;
-    $('#modes').hidden = !doc;
     document.body.classList.toggle('no-doc', !doc);
     document.body.classList.toggle('mode-map', Boolean(doc) && api.mode === 'map');
     if (doc) api.options.layer = clamp(api.options.layer, -1, doc.map.layers.length - 1);
@@ -34,7 +32,7 @@ const App = (() => {
     $('#btn-redo').disabled = !doc?.redo.length;
     $('#btn-history').disabled = !doc;
     $('#btn-jouer').hidden = !doc?.game;
-    renderModes();
+    Espaces.majBarre();
     renderToolbar();
     renderOptions();
     Panels.render();
@@ -47,17 +45,19 @@ const App = (() => {
   }
 
   // --- Modes ---
-  function renderModes() {
-    $$('#modes .mode').forEach((b) => b.classList.toggle('active', b.dataset.mode === api.mode));
-  }
+  // Tafl 0.30 : les modes Tuile et Carte sont les espaces Tuiles et Cartes (espaces.js).
   function setMode(mode) {
     if (!api.doc) return;
+    if (api.mode === mode && Espaces.courant === (mode === 'map' ? 'cartes' : 'tuiles')) return;
+    Espaces.aller(mode === 'map' ? 'cartes' : 'tuiles');
+  }
+  // Appelé par Espaces en entrant dans Tuiles ou Cartes.
+  function choisirMode(mode) {
     api.mode = mode;
     // Le Décalage n'existe qu'en mode Tuile, les zones et téléporteurs qu'en mode Carte.
     if (!TOOLS.find((t) => t.id === api.tool).modes.includes(mode)) api.tool = 'pencil';
     refresh();
   }
-  $$('#modes .mode').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
 
   // --- Outils ---
   function renderToolbar() {
@@ -74,6 +74,7 @@ const App = (() => {
   function setTool(id) {
     const t = TOOLS.find((x) => x.id === id);
     if (!t || !t.modes.includes(api.mode)) return;
+    if (Espaces.estPage()) Espaces.aller(api.mode === 'map' ? 'cartes' : 'tuiles');
     // Un morceau collé qui suit encore la souris ne se pose qu'avec l'outil Sélection.
     if (id !== 'select' && Stage.flottant) Stage.annuler();
     api.tool = id;
@@ -1109,11 +1110,12 @@ const App = (() => {
   // test (Tafl 0.27) : un état de départ du test rapide (outils-jeu.js), avec son propre départ.
   async function jouer(ici = false, test = null) {
     const doc = api.doc;
+    if (!(await Espaces.appliquer())) return;
     if (!doc?.game) return notify('Pour jouer, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
     if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
     let depart = null;
     if (ici) {
-      const map = doc.map, h = api.mode === 'map' ? Stage.hover : null;
+      const map = doc.map, h = Espaces.courant === 'cartes' ? Stage.hover : null;
       const dedans = h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
       depart = { carte: map.id, x: dedans ? h.x : Math.floor(map.width / 2), y: dedans ? h.y : Math.floor(map.height / 2), direction: 'bas' };
     } else if (!doc.depart && !test?.depart) {
@@ -1124,7 +1126,7 @@ const App = (() => {
   }
   // Le test rapide (Ctrl+F5), ouvert depuis la case sous la souris quand elle est sur la carte.
   function testRapide() {
-    const map = api.doc?.map, h = api.mode === 'map' ? Stage.hover : null;
+    const map = api.doc?.map, h = Espaces.courant === 'cartes' ? Stage.hover : null;
     const dedans = map && h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
     OutilsJeu.testRapide({ ici: dedans ? { carte: map.id, x: h.x, y: h.y, direction: 'bas' } : null });
   }
@@ -1180,19 +1182,20 @@ const App = (() => {
       if (r.interrupteurs?.length) doc.data = { ...doc.data, interrupteurs: [...doc.data.interrupteurs, ...r.interrupteurs] };
     });
   }
+  // Tafl 0.30 : un événement s'ouvre dans l'espace Événements, en pleine page.
   async function editEvent(id) {
     const map = api.doc.map;
-    const ev = map.events.find((o) => o.id === id);
-    if (!ev) return;
-    applyEvent(map, await Events.editEvent(api.doc, ev), ev);
+    if (!map.events.some((o) => o.id === id)) return;
+    await Espaces.aller('evenements', { carte: map.id, evenement: id });
   }
+  // Un nouvel événement est posé tout de suite (Ctrl+Z l'enlève), puis s'ouvre dans l'espace Événements.
   async function createEvent(type, x, y) {
     const doc = api.doc, map = doc.map;
     const there = Doc.eventAt(map, x, y);
     if (there) return editEvent(there.id);
     const ev = Events.create(doc, type, x, y, Events.nextId('ev', map.events));
-    applyEvent(map, await Events.editEvent(doc, ev, { nouveau: true }), null);
-    return null;
+    applyEvent(map, { event: ev, interrupteurs: Events.interrupteursManquants(doc, ev) }, null);
+    return editEvent(ev.id);
   }
   function moveEvent(id, x, y) {
     const map = api.doc.map;
@@ -1231,24 +1234,28 @@ const App = (() => {
     ] : Events.TYPES.map(([type, label]) => ({ label: `Nouveau : ${label.toLowerCase()}…`, run: () => run(() => createEvent(type, x, y)) }));
     Menus.open(items, cx, cy);
   }
+  // Tafl 0.30 : les données du jeu sont l'espace Données, en pleine page.
   async function openData(tab) {
-    const doc = api.doc;
-    const data = await Events.editData(doc, tab);
-    if (data) Doc.change(doc, 'Données du jeu', () => { doc.data = data; });
+    if (!api.doc) return;
+    await Espaces.aller('donnees', tab ? { tab } : {});
   }
 
   // --- Historique ---
-  function undo() {
-    if (!api.doc) return;
+  // Dans une page (Données, Événements), ce qui n'est pas encore appliqué l'est d'abord : Ctrl+Z
+  // défait alors le dernier changement du jeu, et la page se redessine.
+  async function undo() {
+    if (!api.doc || !(await Espaces.appliquer())) return;
     const label = Doc.undo(api.doc);
     if (label) setStatusHint(`Annulé : ${label}`);
     refresh();
+    Espaces.recharger();
   }
-  function redo() {
-    if (!api.doc) return;
+  async function redo() {
+    if (!api.doc || !(await Espaces.appliquer())) return;
     const label = Doc.redo(api.doc);
     if (label) setStatusHint(`Rétabli : ${label}`);
     refresh();
+    Espaces.recharger();
   }
 
   // Tafl 0.28 : l'historique en liste. Un clic ramène le jeu à cet état (on peut ensuite refaire).
@@ -1268,17 +1275,19 @@ const App = (() => {
     // On montre l'état actuel (le bas de la liste des actions faites).
     document.querySelector('.history-menu .history-actuel')?.scrollIntoView({ block: 'center' });
   }
-  function travelTo(k) {
-    if (!api.doc || !k) return;
+  async function travelTo(k) {
+    if (!api.doc || !k || !(await Espaces.appliquer())) return;
     const label = Doc.travel(api.doc, k);
     if (label) setStatusHint(`${k < 0 ? 'Revenu avant' : 'Refait jusqu\'à'} : ${label} (${Math.abs(k)} étape${Math.abs(k) > 1 ? 's' : ''})`);
     Stage.reset();
     refresh();
+    Espaces.recharger();
   }
 
   // --- Documents ---
   async function confirmDiscard() {
     const doc = api.doc;
+    if (doc && !(await Espaces.appliquer())) return false;
     if (!doc?.dirty) return true;
     const choice = await Dialogs.ask(doc.game ? 'Jeu non enregistré' : 'Jeu de tuiles non enregistré', `« ${doc.name} » a des modifications qui ne sont pas enregistrées.`, [
       { label: 'Annuler', value: 'cancel' },
@@ -1294,8 +1303,9 @@ const App = (() => {
     api.options.layer = 0;
     api.options.stamp = 0;
     api.frame = 0;
-    // Un dossier de jeu s'ouvre sur ses cartes ; un jeu de tuiles, sur la tuile.
-    if (doc.game) api.mode = 'map';
+    Espaces.fermerPage();
+    // Un dossier de jeu s'ouvre sur son accueil (et ses cartes) ; un jeu de tuiles, sur la tuile.
+    api.mode = doc.game ? 'map' : 'tile';
     if (!doc.tiles.length) Doc.addTile(doc);
     doc.current = clamp(doc.current, 0, doc.tiles.length - 1);
     // Couleur principale : la première de la palette qui n'est ni noire ni blanche, si possible.
@@ -1304,6 +1314,7 @@ const App = (() => {
     if (first && !doc.palette.includes(api.colors.primary)) api.colors.primary = first;
     Stage.reset();
     refresh();
+    await Espaces.aller(doc.game ? 'accueil' : 'tuiles');
   }
 
   // game : true pour un dossier de jeu (plusieurs cartes, lu par le moteur), false pour un simple .tafl.
@@ -1409,13 +1420,16 @@ const App = (() => {
       { label: 'Jouer (dans Saga)', keys: 'F5', disabled: !api.doc.game, run: () => run(() => jouer(false)) },
       { label: 'Jouer depuis la case sous la souris', keys: 'Maj+F5', disabled: !api.doc.game, run: () => run(() => jouer(true)) },
       { label: 'Test rapide (équipe, objets, badges choisis)…', keys: 'Ctrl+F5', disabled: !api.doc.game, run: () => run(testRapide) },
-      { label: 'Vérifier le jeu…', keys: 'Ctrl+Maj+V', run: () => run(OutilsJeu.verifier) },
+      { label: 'Vérifier le jeu (espace Jeu)', keys: 'Ctrl+Maj+V', run: () => Espaces.aller('jeu') },
       { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc.game, run: () => run(exporterJeu) },
       null,
       { label: 'Titre du jeu…', run: () => run(renameGame) },
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
       { label: 'Données du jeu (personnages, créatures, objets…)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
-      { label: 'Créatures et Pokédex…', run: () => { run(() => openData('creatures')); } },
+      // Le raccourci vers la liste principale du pack de règles du jeu.
+      Espaces.packDe(api.doc) === 'jrpg'
+        ? { label: 'Monstres (bestiaire)…', run: () => { run(() => openData('monstres')); } }
+        : { label: 'Créatures et Pokédex…', run: () => { run(() => openData('creatures')); } },
       { label: 'Aller au départ du joueur', run: goToStart },
       { label: 'Afficher le dossier du jeu', disabled: !api.doc.game?.folder, run: () => window.tafl.revealFile(api.doc.path) },
       null,
@@ -1430,9 +1444,11 @@ const App = (() => {
       { label: 'Arrêter ComfyUI', run: () => run(async () => notify(await window.tafl.comfy.arreter() ? 'ComfyUI est arrêté.' : 'ComfyUI n\'était pas lancé par Tafl.', 'info')) },
     ],
     Affichage: () => [
-      { label: 'Mode Tuile', keys: 'Tab', checked: api.mode === 'tile', disabled: !api.doc, run: () => setMode('tile') },
-      { label: 'Mode Carte', keys: 'Tab', checked: api.mode === 'map', disabled: !api.doc, run: () => setMode('map') },
+      // Tafl 0.30 : les espaces de travail (Tab : Tuiles ↔ Cartes).
+      ...Espaces.LISTE.map((e, i) => ({ label: `Espace ${e.nom}`, keys: `Alt+${i + 1}${e.id === 'tuiles' || e.id === 'cartes' ? ' · Tab' : ''}`, checked: Espaces.courant === e.id, disabled: !api.doc && e.id !== 'accueil', run: () => run(() => Espaces.aller(e.id)) })),
+      { label: 'Chercher partout…', keys: 'Ctrl+K', run: () => Recherche.ouvrir() },
       null,
+      { label: 'Panneaux de droite', keys: 'Ctrl+B', checked: !document.body.classList.contains('sans-panneaux'), run: togglePanels },
       { label: 'Mosaïque (raccords)', keys: 'Ctrl+M', checked: api.options.mosaic, disabled: !api.doc, run: toggleMosaic },
       { label: 'Ajuster à la fenêtre', keys: 'Ctrl+0', disabled: !api.doc, run: () => Stage.fit() },
       { label: 'Carte monde…', keys: 'Ctrl+Maj+M', disabled: !api.doc, run: () => run(openWorld) },
@@ -1444,18 +1460,27 @@ const App = (() => {
       { label: 'Disposition des panneaux par défaut', run: () => Disposition.reinitialiser() },
     ],
   };
-  const menuBar = $('#menus');
-  for (const name of Object.keys(MENUS)) {
-    const b = el('button', { textContent: name });
-    b.onclick = () => {
-      if (b.classList.contains('open')) return Menus.close();
-      const r = b.getBoundingClientRect();
-      Menus.open(MENUS[name](), r.left, r.bottom + 4, b);
-    };
-    // Survoler un autre menu pendant qu'un menu est ouvert l'ouvre à sa place.
-    b.onmouseenter = () => { if (Menus.isOpen() && !b.classList.contains('open') && $('#menus .open')) b.click(); };
-    menuBar.append(b);
+  // Tafl 0.30 : les menus sont rangés derrière ☰, chacun en sous-menu (survol ou clic).
+  const MENU_ICONES = { Fichier: 'file', Édition: 'edit', Tuile: 'symbol-color', Carte: 'map', Jeu: 'game', Générer: 'sparkle', Affichage: 'eye' };
+  function openMainMenu() {
+    const b = $('#btn-menu');
+    if (b.classList.contains('open')) return Menus.close();
+    const r = b.getBoundingClientRect();
+    Menus.open(Object.keys(MENUS).map((name) => ({ label: name, icon: MENU_ICONES[name], submenu: () => MENUS[name]() })), r.left, r.bottom + 4, b, 'main-menu');
+    return null;
   }
+  $('#btn-menu').onclick = openMainMenu;
+
+  // Ctrl+B : cacher les panneaux de droite (Tuiles et Cartes), pour dessiner en grand sur un petit écran.
+  try { document.body.classList.toggle('sans-panneaux', localStorage.getItem('tafl.sansPanneaux') === '1'); } catch { /* sans mémoire */ }
+  function togglePanels() {
+    const sans = document.body.classList.toggle('sans-panneaux');
+    try { localStorage.setItem('tafl.sansPanneaux', sans ? '1' : '0'); } catch { /* sans mémoire */ }
+    $('#btn-panneaux').classList.toggle('active', !sans);
+    requestAnimationFrame(() => Stage.fit());
+  }
+  $('#btn-panneaux').onclick = togglePanels;
+  $('#btn-chercher').onclick = () => Recherche.ouvrir();
 
   // Affichage › Panneaux plus grands / plus petits (comme Ctrl+molette sur le panneau).
   async function panelZoomBy(d) {
@@ -1480,7 +1505,6 @@ const App = (() => {
   };
   $('#btn-save').onclick = needDoc((d) => IO.save(d));
   $('#btn-jouer').onclick = (e) => needDoc(() => jouer(e.shiftKey))();
-  $('#btn-export').onclick = needDoc(IO.exportSheet);
   $('#btn-settings').onclick = () => run(openSettings);
   $('#welcome-new').onclick = () => run(() => newDocument(false));
   $('#welcome-game').onclick = () => run(() => newDocument(true));
@@ -1521,9 +1545,9 @@ const App = (() => {
     const passageHelp = api.mode === 'map' && api.options.layer < 0 && ['pencil', 'eraser', 'fill', 'line', 'rect'].includes(api.tool)
       ? 'Passage : clic gauche peint la valeur choisie (barre du haut), clic droit remet « auto » (la case suit alors ses tuiles). Alt+clic : reprend la valeur d\'une case.'
       : null;
-    if (Date.now() >= hintUntil) $('#status-hint').textContent = !doc ? '' : api.mode === 'map' ? (passageHelp || t.aideCarte || t.aide) : t.aide;
+    if (Date.now() >= hintUntil) $('#status-hint').textContent = !doc ? '' : Espaces.estPage() ? Espaces.aide() : api.mode === 'map' ? (passageHelp || t.aideCarte || t.aide) : t.aide;
     let pos = '';
-    if (doc && hover) {
+    if (doc && hover && !Espaces.estPage()) {
       if (api.mode === 'tile') {
         const s = doc.tileSize;
         pos = `x ${((hover.x % s) + s) % s}  y ${((hover.y % s) + s) % s}`;
@@ -1556,12 +1580,26 @@ const App = (() => {
       if (e.key === 'Escape') Dialogs.close(null);
       return;
     }
+    // La recherche Ctrl+K garde ses touches.
+    if (Recherche.isOpen()) return;
     // L'éditeur d'événement ou les données du jeu : Échap ferme, le reste est pour la fenêtre.
     if (Events.handleKey(e)) return;
-    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
     const k = e.key.toLowerCase();
     const ctrl = e.ctrlKey || e.metaKey;
     const go = (fn) => { e.preventDefault(); fn(); };
+    // Tafl 0.30 : ceux-ci marchent partout, même dans une case de texte d'une page.
+    if (ctrl && !e.shiftKey && k === 'k') return go(() => Recherche.ouvrir());
+    if (e.altKey && !ctrl && /^(Digit|Numpad)[1-6]$/.test(e.code)) return go(() => run(() => Espaces.numero(Number(e.code.slice(-1)))));
+    if (ctrl && e.key === 'Tab') return go(() => run(() => Espaces.suivant(e.shiftKey ? -1 : 1)));
+    if (ctrl && !e.shiftKey && k === 's' && Espaces.estPage()) return go(needDoc((d) => IO.save(d)));
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) return;
+    // Dans une page (Accueil, Événements, Données, Jeu), pas de raccourcis de dessin : seulement
+    // ceux du jeu entier (fichiers, annuler, jouer, aller ailleurs).
+    if (Espaces.estPage()) {
+      if (e.key === 'F5' && api.doc) return go(() => run(() => (ctrl ? testRapide() : jouer(false))));
+      if (!ctrl || !['n', 'j', 'o', 'i', 's', 'e', 'z', 'y', 'h', 'd', 'm', 'v', 'g', 'b', ','].includes(k)) return;
+      if (['d', 'm', 'v', 'g'].includes(k) && !e.shiftKey) return;
+    }
     if (ctrl) {
       if (k === 'n' && e.shiftKey) return go(needDoc(newTile));
       if (k === 'n') return go(() => run(() => newDocument(false)));
@@ -1576,7 +1614,8 @@ const App = (() => {
       if (k === 'h') return go(() => { const r = $('#btn-history').getBoundingClientRect(); historyMenu(r.left, r.bottom + 4, $('#btn-history')); });
       if (k === 'd' && e.shiftKey) return go(needDoc(() => openData()));
       if (k === 'm' && e.shiftKey) return go(needDoc(openWorld));
-      if (k === 'v' && e.shiftKey) return go(needDoc(OutilsJeu.verifier));
+      if (k === 'v' && e.shiftKey) return go(needDoc(() => Espaces.aller('jeu')));
+      if (k === 'b' && !e.shiftKey) return go(togglePanels);
       if (e.key === 'F5') return go(needDoc(testRapide));
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
@@ -1752,7 +1791,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { choisirMode, applyEvent, renderWelcome, exporterJeu, renameGame, togglePanels, jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

@@ -867,12 +867,16 @@ const Events = (() => {
   // --- Les grandes fenêtres (au-dessus de Tafl, sous les petites fenêtres et les menus) ---
   let courant = null; // la fenêtre ouverte : { fermer() }
   const isOpen = () => Boolean(courant);
+  // Tafl 0.30 : l'éditeur ouvert en pleine page (espaces Événements et Données, espaces.js) :
+  // { fermer, valider, jeter, suivi }. Il ne bloque ni les autres fenêtres ni les raccourcis de Tafl.
+  let courantPage = null;
+  const pageOuverte = () => courantPage;
   // Échap ferme d'abord un menu ouvert : on regarde avant que le menu ne se ferme.
   let menuOuvert = false;
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuOuvert = Menus.isOpen(); }, true);
   // Appelé par les raccourcis de Tafl : true si la touche est pour la fenêtre ouverte.
   function handleKey(e) {
-    if (!courant) return false;
+    if (!courant) return courantPage ? handleKeyPage(e) : false;
     if (e.key === 'Escape' && !menuOuvert) courant.fermer();
     const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (ctrl && e.key === 'Enter') courant.valider?.();
@@ -884,6 +888,20 @@ const Events = (() => {
       else if (k === 'z') { e.preventDefault(); courant.suivi.annuler(); }
     }
     return true;
+  }
+
+  // Dans une page, seuls Ctrl+Entrée (appliquer) et Ctrl+Z / Ctrl+Y (hors des cases de texte) sont
+  // pour l'éditeur ; le reste (Ctrl+S, Ctrl+K, changer d'espace…) va à Tafl.
+  function handleKeyPage(e) {
+    const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (Dialogs.isOpen()) return false;
+    if (ctrl && e.key === 'Enter') { e.preventDefault(); courantPage.valider?.(); return true; }
+    const texte = /INPUT|TEXTAREA/.test(document.activeElement?.tagName) && !/checkbox|radio|range|color|button/.test(document.activeElement?.type);
+    if (ctrl && courantPage.suivi && !texte) {
+      if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); courantPage.suivi.refaire(); return true; }
+      if (k === 'z') { e.preventDefault(); courantPage.suivi.annuler(); return true; }
+    }
+    return false;
   }
 
   // Tafl 0.28 : l'historique d'une grande fenêtre (événement, données du jeu). La fenêtre travaille
@@ -941,9 +959,10 @@ const Events = (() => {
       },
     };
   }
-  function fenetre({ titre, icone: ic, largeur = 1180 }) {
-    const root = el('div', { className: 'editor-overlay' });
-    const card = el('div', { className: 'editor', style: { width: `min(${largeur}px, calc(100vw - 48px))` } });
+  // page (Tafl 0.30) : l'élément où poser l'éditeur en pleine page, au lieu d'une fenêtre par-dessus Tafl.
+  function fenetre({ titre, icone: ic, largeur = 1180, page = null }) {
+    const root = el('div', { className: page ? 'editor-page' : 'editor-overlay' });
+    const card = el('div', { className: `editor${page ? ' en-page' : ''}`, style: page ? {} : { width: `min(${largeur}px, calc(100vw - 48px))` } });
     const headIcon = icon(ic);
     const title = el('span', { className: 'editor-title', textContent: titre });
     const close = el('button', { className: 'icon-button', title: 'Fermer (Échap)' }, [icon('close')]);
@@ -955,7 +974,8 @@ const Events = (() => {
     const foot = el('footer', {}, [hint]);
     card.append(head, body, foot);
     root.append(card);
-    document.body.append(root);
+    (page || document.body).append(root);
+    if (page) close.hidden = true;
     const bouton = (label, run, primary = false) => {
       const b = el('button', { className: `button${primary ? ' primary' : ''}`, textContent: label });
       b.onclick = run;
@@ -989,8 +1009,9 @@ const Events = (() => {
 
   // --- L'éditeur d'un événement ---
   // Rend { event, interrupteurs } (les interrupteurs à créer), 'supprimer', ou null (annulé).
-  function editEvent(doc, ev, { nouveau = false } = {}) {
-    if (courant) return Promise.resolve(null);
+  // page : l'élément où l'ouvrir en pleine page (espace Événements), sinon une fenêtre.
+  function editEvent(doc, ev, { nouveau = false, page: hote = null } = {}) {
+    if (hote ? courantPage : courant) return Promise.resolve(null);
     return new Promise((resolve) => {
       const map = doc.map;
       const work = structuredClone(ev);
@@ -999,7 +1020,7 @@ const Events = (() => {
       let vue = 'blocs';
       try { vue = localStorage.getItem('tafl.vueScript') === 'liste' ? 'liste' : 'blocs'; } catch { /* sans mémoire : les blocs */ }
       const etatBlocs = { choisi: null, boite: 0, theme: '' };
-      const w = fenetre({ titre: '', icone: TYPE_ICONS[work.type], largeur: 1600 });
+      const w = fenetre({ titre: '', icone: TYPE_ICONS[work.type], largeur: 1600, page: hote });
       w.card.classList.add('event-editor');
       const majTitre = () => { w.setTitle(`${nouveau ? 'Nouvel événement' : 'Événement'} « ${work.nom || libelle(TYPES, work.type)} » sur ${map.name}`); w.setIcon(TYPE_ICONS[work.type]); };
       majTitre();
@@ -1210,7 +1231,7 @@ const Events = (() => {
       renderPage();
 
       const historique = suivi(work, () => { majTitre(); renderSide(); renderPage(); }, { nom: 'cet événement' });
-      const finir = (r) => { historique.arreter(); w.root.remove(); courant = null; resolve(r); };
+      const finir = (r) => { historique.arreter(); w.root.remove(); if (hote) courantPage = null; else courant = null; resolve(r); };
       const fermer = async () => { if (await abandonner(!nouveau && JSON.stringify(work) !== avant)) finir(null); };
       const valider = () => {
         if (map.events.some((o) => o.id !== work.id && o.x === work.x && o.y === work.y)) return notify(`La case (${work.x}, ${work.y}) a déjà un événement.`, 'warning', 3500);
@@ -1219,6 +1240,19 @@ const Events = (() => {
         return null;
       };
       w.close.onclick = fermer;
+      if (hote) {
+        // En page : les changements s'appliquent en quittant la page, en enregistrant ou en jouant.
+        w.hint.textContent = 'Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'événement ou d\'espace, enregistres ou joues.';
+        w.bouton('Supprimer l\'événement', async () => {
+          if (await Dialogs.ask('Supprimer l\'événement', `Supprimer « ${work.nom || libelle(TYPES, work.type)} » ? (Ctrl+Z le remet)`, [{ label: 'Annuler', value: false }, { label: 'Supprimer', value: true, primary: true }])) finir('supprimer');
+        });
+        // Rien de changé : rien à appliquer (le jeu ne devient pas « modifié » pour rien).
+        const appliquer = () => (JSON.stringify(work) === avant ? finir(null) : valider());
+        w.bouton('Annuler les changements', fermer);
+        w.bouton('Appliquer', appliquer, true);
+        courantPage = { fermer, valider: appliquer, jeter: () => finir(null), suivi: historique, change: () => JSON.stringify(work) !== avant };
+        return;
+      }
       w.hint.textContent = 'Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : valider · Échap : fermer';
       if (!nouveau) w.bouton('Supprimer l\'événement', () => finir('supprimer'));
       w.bouton('Annuler', fermer);
@@ -1263,8 +1297,10 @@ const Events = (() => {
   }
 
   // Rend les nouvelles données, ou null (annulé).
-  function editData(doc, onglet = 'personnages') {
-    if (courant) return Promise.resolve(null);
+  // page (Tafl 0.30) : l'élément où l'ouvrir en pleine page (espace Données) ; memo : { tab, ids }
+  // garde l'onglet et l'élément choisi d'une ouverture à l'autre (la page se rouvre après chaque « Appliquer »).
+  function editData(doc, onglet = 'personnages', { page = null, memo = null } = {}) {
+    if (page ? courantPage : courant) return Promise.resolve(null);
     return new Promise((resolve) => {
       const work = structuredClone(doc.data);
       const avant = JSON.stringify(work);
@@ -1277,9 +1313,14 @@ const Events = (() => {
       const libelleDe = (d) => d.labels?.[pack()] || d.label;
       const choisis = Object.fromEntries(tous.map((d) => [d.key, 0]));
       const recherches = Object.fromEntries(tous.map((d) => [d.key, '']));
+      if (memo?.tab) onglet = memo.tab;
+      for (const [k, id] of Object.entries(memo?.ids || {})) {
+        const i = Array.isArray(work[k]) ? work[k].findIndex((o) => o.id === id) : -1;
+        if (i >= 0) choisis[k] = i;
+      }
       let tab = defs().some((d) => d.key === onglet) ? onglet : 'personnages';
       const def = () => tous.find((d) => d.key === tab);
-      const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1320 });
+      const w = fenetre({ titre: 'Données du jeu', icone: 'database', largeur: 1320, page });
       w.card.classList.add('data-editor');
       const nav = el('nav', { className: 'data-nav' });
       const liste = el('div', { className: 'data-list' });
@@ -1616,15 +1657,28 @@ const Events = (() => {
 
       const change = () => importe || JSON.stringify(work) !== avant;
       const historique = suivi(work, render, { max: 40, nom: 'les données du jeu' });
-      const finir = (r) => { historique.arreter(); w.root.remove(); courant = null; resolve(r); };
+      const finir = (r) => {
+        if (memo) {
+          memo.tab = tab;
+          memo.ids = Object.fromEntries(tous.filter((d) => !d.unique && Array.isArray(work[d.key])).map((d) => [d.key, work[d.key][choisis[d.key]]?.id]).filter(([, id]) => id));
+        }
+        historique.arreter(); w.root.remove(); if (page) courantPage = null; else courant = null; resolve(r);
+      };
       const fermer = async () => { if (await abandonner(change())) finir(null); };
       const valider = () => finir(change() ? normData(work, doc.tiles.length) : null);
       w.close.onclick = fermer;
       w.hint.textContent = 'Tout sert dans les scripts des événements (outil Événement, N), les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire.';
       const supprimerBtn = w.bouton('Supprimer', () => w.bouton.supprimer?.());
-      w.bouton('Annuler', fermer);
-      w.bouton('Valider', valider, true);
-      courant = { fermer, valider, suivi: historique };
+      if (page) {
+        w.hint.textContent = 'Tout sert dans les scripts des événements, les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'espace, enregistres ou joues.';
+        w.bouton('Annuler les changements', fermer);
+        w.bouton('Appliquer', valider, true);
+        courantPage = { fermer, valider, jeter: () => finir(null), suivi: historique, change };
+      } else {
+        w.bouton('Annuler', fermer);
+        w.bouton('Valider', valider, true);
+        courant = { fermer, valider, suivi: historique };
+      }
       render();
     });
   }
@@ -1633,7 +1687,7 @@ const Events = (() => {
     TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
-    editEvent, editData, isOpen, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
+    editEvent, editData, isOpen, pageOuverte, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
     formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, nomQui, quiReel, suivi,
   };
 })();

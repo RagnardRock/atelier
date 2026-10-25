@@ -14,16 +14,20 @@
 <body class="glass">
   <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
   <header id="titlebar">
+    <!-- Tafl 0.30 : les menus d'avant (Fichier, Édition, Tuile…) sont rangés derrière ☰ -->
+    <button id="btn-menu" class="icon-button" title="Menus : Fichier, Édition, Tuile, Carte, Jeu… (Alt)"><i class="codicon codicon-menu"></i></button>
     <span id="brand"><img class="logo" src="tafl.svg" alt="">Tafl</span>
-    <nav id="menus"></nav>
     <span id="doc-name"></span>
+    <!-- Les espaces de travail (espaces.js) : Accueil, Tuiles, Cartes, Événements, Données, Jeu -->
+    <nav id="espaces" role="tablist" aria-label="Espaces de travail"></nav>
+    <button id="btn-chercher" class="search-button" title="Chercher une carte, un événement, une donnée, une tuile ou une commande (Ctrl+K)"><i class="codicon codicon-search"></i><span class="search-label">Chercher…</span><kbd>Ctrl+K</kbd></button>
     <div class="title-actions">
       <button id="btn-jouer" class="button primary small" title="Jouer au jeu dans Saga, depuis le départ (F5). Maj+F5 : depuis la case sous la souris" hidden><i class="codicon codicon-play"></i> Jouer</button>
       <button id="btn-undo" class="icon-button" title="Annuler (Ctrl+Z)"><i class="codicon codicon-discard"></i></button>
       <button id="btn-redo" class="icon-button" title="Rétablir (Ctrl+Y)"><i class="codicon codicon-redo"></i></button>
       <button id="btn-history" class="icon-button" title="Historique : revenir à n'importe quelle étape (Ctrl+H)"><i class="codicon codicon-history"></i></button>
       <button id="btn-save" class="icon-button" title="Enregistrer (Ctrl+S)"><i class="codicon codicon-save"></i></button>
-      <button id="btn-export" class="icon-button" title="Exporter la planche de tuiles en PNG (Ctrl+E)"><i class="codicon codicon-export"></i></button>
+      <button id="btn-panneaux" class="icon-button" title="Montrer ou cacher les panneaux de droite (Ctrl+B)"><i class="codicon codicon-layout-sidebar-right"></i></button>
       <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Tafl"><i class="codicon codicon-cloud-download"></i></button>
     </div>
   </header>
@@ -47,27 +51,8 @@
     </nav>
 
     <section id="workspace">
-      <!-- Les deux modes : dessiner une tuile, ou les poser sur la carte (Tab passe de l'un à l'autre) -->
-      <div id="modes" hidden>
-        <button class="mode" data-mode="tile" title="Dessiner la tuile choisie, pixel par pixel (Tab)"><i class="codicon codicon-edit"></i> Tuile</button>
-        <button class="mode" data-mode="map" title="Poser les tuiles sur une carte pour les essayer ensemble (Tab)"><i class="codicon codicon-map"></i> Carte</button>
-      </div>
       <div id="canvas-wrap">
         <canvas id="stage" hidden></canvas>
-        <div id="welcome">
-          <img class="welcome-logo" src="tafl.svg" alt="">
-          <h1>Tafl</h1>
-          <p class="welcome-sub">Tuiles, cartes et jeux en pixel art, façon Pokémon</p>
-          <div class="welcome-actions">
-            <button id="welcome-game" class="button primary"><i class="codicon codicon-game"></i> Nouveau jeu <kbd>Ctrl+Maj+J</kbd></button>
-            <button id="welcome-new" class="button"><i class="codicon codicon-new-file"></i> Nouveau jeu de tuiles <kbd>Ctrl+N</kbd></button>
-            <button id="welcome-open" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
-            <button id="welcome-import" class="button"><i class="codicon codicon-file-media"></i> Importer une planche <kbd>Ctrl+I</kbd></button>
-          </div>
-          <p class="welcome-hint">Un dossier de jeu (son jeu.json), un jeu de tuiles .tafl, ou une planche en PNG à découper. Tu peux aussi les glisser ici.</p>
-          <h2 id="welcome-recents-title" hidden>Récents</h2>
-          <div id="welcome-recents"></div>
-        </div>
       </div>
     </section>
 
@@ -184,6 +169,30 @@
     </aside>
   </main>
 
+  <!-- Tafl 0.30 : les espaces en pleine page (espaces.js). Tuiles et Cartes restent dans #layout. -->
+  <section id="pages" hidden>
+    <div id="page-accueil" class="page">
+      <div id="welcome">
+        <img class="welcome-logo" src="tafl.svg" alt="">
+        <h1>Tafl</h1>
+        <p class="welcome-sub">Tuiles, cartes et jeux en pixel art, façon Pokémon</p>
+        <div class="welcome-actions">
+          <button id="welcome-game" class="button primary"><i class="codicon codicon-game"></i> Nouveau jeu <kbd>Ctrl+Maj+J</kbd></button>
+          <button id="welcome-new" class="button"><i class="codicon codicon-new-file"></i> Nouveau jeu de tuiles <kbd>Ctrl+N</kbd></button>
+          <button id="welcome-open" class="button"><i class="codicon codicon-folder-opened"></i> Ouvrir <kbd>Ctrl+O</kbd></button>
+          <button id="welcome-import" class="button"><i class="codicon codicon-file-media"></i> Importer une planche <kbd>Ctrl+I</kbd></button>
+        </div>
+        <p class="welcome-hint">Un dossier de jeu (son jeu.json), un jeu de tuiles .tafl, ou une planche en PNG à découper. Tu peux aussi les glisser ici.</p>
+        <h2 id="welcome-recents-title" hidden>Récents</h2>
+        <div id="welcome-recents"></div>
+      </div>
+      <div id="accueil-projet" hidden></div>
+    </div>
+    <div id="page-evenements" class="page"></div>
+    <div id="page-donnees" class="page"></div>
+    <div id="page-jeu" class="page"></div>
+  </section>
+
   <footer id="statusbar">
     <span id="status-hint"></span>
     <span class="spacer"></span>
@@ -216,6 +225,8 @@
   <script src="monde.js"></script>
   <script src="verificateur.js"></script>
   <script src="outils-jeu.js"></script>
+  <script src="espaces.js"></script>
+  <script src="recherche.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
   <!-- Panneau Claude, commun à Skald, Tafl et Brokk (../commun/LISEZMOI.md) -->

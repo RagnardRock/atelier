@@ -1261,3 +1261,165 @@ body.resizing-row { cursor: row-resize; }
 .son-champ { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
 .son-champ select { flex: 1; min-width: 0; }
 .son-champ .icon-button.active { color: var(--accent); }
+
+/* =========================================================================
+   Tafl 0.30 : les espaces de travail (espaces.js), la recherche Ctrl+K (recherche.js),
+   les éditeurs en pleine page, et les écrans classiques.
+   ========================================================================= */
+#titlebar { gap: 8px; }
+#btn-menu { width: 30px; height: 30px; flex-shrink: 0; }
+#btn-menu.open { background: var(--hover); color: var(--text-strong); }
+#doc-name { max-width: 220px; margin-left: 0; }
+
+/* Les onglets des espaces */
+#espaces { display: flex; gap: 2px; padding: 3px; margin-left: 6px; border: 1px solid var(--plate-border); border-radius: 10px; background: rgba(255, 255, 255, 0.03); flex-shrink: 0; }
+.espace { display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.espace:hover:not(:disabled) { background: var(--hover); color: var(--text-strong); }
+.espace.active { background: rgba(255, 255, 255, 0.09); color: var(--text-strong); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.espace.active .codicon { color: var(--accent); }
+.espace:disabled { opacity: 0.35; cursor: default; }
+
+/* La case « Chercher… » qui ouvre Ctrl+K */
+.search-button { display: flex; align-items: center; gap: 8px; height: 30px; width: 260px; min-width: 0; margin-left: auto; padding: 0 8px 0 10px; border: 1px solid var(--plate-border); border-radius: 8px; background: rgba(0, 0, 0, 0.22); color: var(--muted); cursor: text; -webkit-app-region: no-drag; }
+.search-button:hover { border-color: rgba(255, 255, 255, 0.16); color: var(--text); }
+.search-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.search-button kbd { margin-left: 0; }
+#titlebar .title-actions { margin-left: 4px; }
+#btn-panneaux.active { color: var(--accent); }
+
+/* Le menu ☰ et ses sous-menus */
+.menu.main-menu { min-width: 200px; }
+.menu-item.has-submenu.open { background: var(--hover); color: var(--text-strong); }
+.menu-arrow { display: flex; margin-left: 16px; color: var(--muted); }
+.menu-item:hover .menu-arrow { color: inherit; }
+.menu-check .codicon { font-size: 14px; }
+.menu.submenu { z-index: 61; max-height: calc(100vh - 16px); overflow-y: auto; }
+
+/* Tuiles et Cartes gardent #layout ; les autres espaces sont des pages. */
+body.espace-page #optionsbar, body.espace-page #layout { display: none; }
+#pages { flex: 1; min-height: 0; display: flex; padding: 0 8px; }
+.page { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.page[hidden] { display: none; }
+#page-accueil { flex-direction: column; overflow-y: auto; }
+#page-accueil #welcome { flex: 1; }
+#accueil-projet { display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; }
+body.sans-panneaux #sidepanel, body.sans-panneaux #side-resizer { display: none; }
+
+/* Les plaques des pages, comme les panneaux de droite */
+.page-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid var(--plate-border); border-radius: 12px; background: var(--plate); overflow: hidden; }
+body.glass .page-panel { backdrop-filter: blur(24px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.page-panel > .panel-header { gap: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); height: 38px; }
+.page-panel > .panel-header .panel-count { margin-left: 0; }
+.panel-sub { color: var(--muted); font-size: 11px; }
+.page-panel.grandit { flex: 1; }
+.pill { padding: 0 7px; border-radius: 5px; font-size: 11px; line-height: 18px; white-space: nowrap; }
+.pill.erreur { background: rgba(241, 76, 76, 0.15); color: #ff8a8a; }
+.pill.attention { background: rgba(224, 165, 38, 0.15); color: #f0c060; }
+.pill.ok { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+.pack-badge { display: inline-flex; align-items: center; padding: 1px 9px; border-radius: 999px; font-size: 12px; background: rgba(185, 168, 255, 0.12); color: #cfc2ff; border: 1px solid rgba(185, 168, 255, 0.28); }
+.page-vide { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; margin: auto; max-width: 440px; padding: 40px 20px; text-align: center; color: var(--muted); line-height: 1.5; }
+.page-vide > .codicon { font-size: 36px; color: var(--accent); opacity: 0.7; }
+.page-vide strong { color: var(--text-strong); font-size: 15px; }
+.row.statique { cursor: default; }
+.row.statique:hover { background: transparent; }
+.row.statique .codicon { color: var(--muted); }
+
+/* Accueil d'un jeu */
+.accueil-hero { flex-direction: row; align-items: center; gap: 18px; padding: 14px 18px; flex-shrink: 0; flex-wrap: wrap; }
+.accueil-vignette { width: 52px; height: 52px; image-rendering: pixelated; border-radius: 10px; background: rgba(0, 0, 0, 0.3); box-shadow: 0 0 0 1px var(--plate-border); flex-shrink: 0; }
+.accueil-titre { min-width: 0; flex: 1 1 260px; }
+.accueil-titre h1 { margin: 0; font-size: 22px; font-weight: 600; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.accueil-titre p { margin: 4px 0 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; user-select: text; }
+.accueil-stats { display: flex; gap: 22px; padding: 0 20px; border-left: 1px solid var(--plate-border); border-right: 1px solid var(--plate-border); }
+.stat b { display: block; font-size: 20px; font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.accueil-boutons { display: flex; gap: 8px; }
+.accueil-grille { flex: 1; min-height: 420px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 0.8fr); gap: 8px; padding-bottom: 8px; }
+.accueil-colonne { display: flex; flex-direction: column; gap: 8px; min-height: 0; min-width: 0; }
+.accueil-monde { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: hidden; }
+.accueil-monde-image { max-width: 100%; max-height: 100%; image-rendering: pixelated; border-radius: 8px; cursor: pointer; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.verif-liste { display: flex; flex-direction: column; gap: 4px; padding: 8px; overflow-y: auto; min-height: 0; flex: 1; }
+.verif-vide.petit { padding: 24px 0; }
+.verif-vide.petit > .codicon { font-size: 26px; color: var(--accent); }
+.raccourcis { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px; padding: 8px; }
+.raccourci { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 10px 12px; border: 1px solid var(--plate-border); border-radius: 9px; background: rgba(255, 255, 255, 0.025); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.raccourci:hover { border-color: rgba(255, 255, 255, 0.16); background: var(--hover); }
+.raccourci strong { display: flex; align-items: center; gap: 7px; color: var(--text-strong); font-weight: 600; }
+.raccourci strong .codicon { color: var(--accent); }
+.raccourci span { color: var(--muted); font-size: 11px; }
+.accueil-colonne .rows { padding-top: 6px; }
+
+/* Jeu */
+.jeu-grille { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 8px; padding-bottom: 8px; }
+.jeu-cartes { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding: 12px; overflow-y: auto; align-content: start; }
+.jeu-carte { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--plate-border); border-radius: 10px; background: rgba(255, 255, 255, 0.025); }
+.jeu-carte h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; color: var(--text-strong); }
+.jeu-carte h3 .codicon { color: var(--accent); }
+.jeu-carte p { flex: 1; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; user-select: text; }
+.jeu-boutons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* Événements : la liste de tout le jeu, puis l'éditeur */
+#page-evenements { gap: 8px; padding-bottom: 8px; }
+#ev-liste { width: 280px; flex-shrink: 0; }
+#ev-liste .rows { flex: 1; padding-top: 2px; }
+#ev-editeur { flex: 1; min-width: 0; display: flex; }
+.page-search-row { padding: 8px 8px 6px; }
+.page-search { width: 100%; }
+.page-group { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; margin-top: 4px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: 600 11px var(--ui-font); text-transform: uppercase; letter-spacing: 0.6px; cursor: pointer; }
+.page-group:hover { color: var(--text); }
+.page-group .panel-count { margin-left: auto; }
+.page-group.folded .codicon { transform: rotate(-90deg); }
+.page-group .codicon { transition: transform 0.12s; font-size: 12px; }
+
+/* Un éditeur (événement, données) en pleine page au lieu d'une fenêtre */
+.editor-page { flex: 1; min-width: 0; display: flex; }
+#page-donnees .editor-page { padding-bottom: 8px; }
+#ev-editeur .editor-page { min-height: 0; }
+.editor.en-page { flex: 1; width: auto; height: auto; max-height: none; border-color: var(--plate-border); background: var(--plate); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04); animation: none; }
+body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: none; }
+.editor.en-page > header { height: 42px; }
+
+/* Ctrl+K */
+.recherche-fond { position: fixed; inset: 0; z-index: 70; display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; background: rgba(4, 5, 8, 0.45); }
+.recherche { width: min(680px, 100%); max-height: 70vh; display: flex; flex-direction: column; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 14px; background: rgba(28, 30, 38, 0.94); backdrop-filter: blur(40px) saturate(160%); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); overflow: hidden; animation: pop 0.1s ease-out; }
+.recherche-tete { display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.07); }
+.recherche-tete > .codicon { color: var(--muted); font-size: 16px; }
+.recherche-input { flex: 1; height: 52px !important; padding: 0 !important; border: 0 !important; background: transparent !important; font-size: 16px !important; }
+.recherche-liste { overflow-y: auto; padding: 6px 8px 8px; }
+.recherche-groupe { margin: 8px 8px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.recherche-ligne { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 34px; padding: 4px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.recherche-ligne > .codicon { color: var(--muted); flex-shrink: 0; }
+.recherche-ligne.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text-strong); }
+.recherche-ligne.active > .codicon { color: var(--accent); }
+.recherche-nom { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; flex-shrink: 0; }
+.recherche-nom mark { background: none; color: var(--accent); font-weight: 600; }
+.recherche-detail { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recherche-ligne kbd { flex-shrink: 0; }
+.recherche-vide { margin: 14px 10px; color: var(--muted); line-height: 1.5; }
+
+/* Écrans classiques : la barre de titre se resserre (1920 px et moins), puis les onglets ne gardent
+   que leur icône (1366 px). Les panneaux de droite se cachent avec Ctrl+B. */
+@media (max-width: 1700px) {
+  .search-button { width: 200px; }
+  .accueil-grille { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+  .accueil-grille > .accueil-colonne:last-child { grid-column: 1 / -1; flex-direction: row; }
+  .accueil-grille > .accueil-colonne:last-child > * { flex: 1; }
+}
+@media (max-width: 1500px) {
+  #doc-name { display: none; }
+  .search-button { width: 150px; }
+  .search-button kbd { display: none; }
+  .accueil-stats { display: none; }
+  #ev-liste { width: 230px; }
+  .editor.en-page .editor-side { width: 290px; }
+  .data-list { width: 220px; }
+  .data-nav { width: 172px; }
+}
+@media (max-width: 1280px) {
+  .espace-nom { display: none; }
+  .espace { padding: 0 9px; }
+  .search-button { width: 36px; padding: 0; justify-content: center; }
+  .search-label { display: none; }
+  .jeu-grille { grid-template-columns: minmax(0, 1fr); }
+  #ev-liste { width: 200px; }
+}
