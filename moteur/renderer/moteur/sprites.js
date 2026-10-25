@@ -145,5 +145,38 @@ const Sprites = (() => {
       x + Math.floor((taille - sprite.largeur) / 2), y + taille - sprite.hauteur, sprite.largeur, sprite.hauteur);
   }
 
-  return { dessiner, dessinerSprite, imageDeMarche, ombre, images };
+  // Saga 0.8 : une image d'un personnage, en data: URL, pour les menus et l'écran de combat en groupe
+  // (le héros de côté, debout ou en marche). perso : { sprite, tuile, couleur } (un personnage de
+  // personnages.json, ou une tenue) ; jeu : pour sa tuile. Rend '' si rien ne se dessine.
+  const vignettes = new WeakMap();
+  function vignette(jeu, perso, direction = 'bas', image = 0) {
+    if (!perso) return '';
+    let parPerso = vignettes.get(perso);
+    if (!parPerso) { parPerso = new Map(); vignettes.set(perso, parPerso); }
+    const cle = `${direction}/${image}`;
+    if (parPerso.has(cle)) return parPerso.get(cle);
+    const r = Math.max(0, ORDRE.indexOf(direction));
+    const cv = document.createElement('canvas');
+    const g = cv.getContext('2d');
+    if (perso.sprite?.img) {
+      const s = perso.sprite, k = Math.min(Math.max(0, image), s.images - 1);
+      cv.width = s.largeur;
+      cv.height = s.hauteur;
+      g.drawImage(s.img, k * s.largeur, r * s.hauteur, s.largeur, s.hauteur, 0, 0, s.largeur, s.hauteur);
+    } else if (perso.tuile >= 0 && jeu?.tuiles?.[perso.tuile]) {
+      const t = jeu.taille, im = jeu.tuiles[perso.tuile].images[0];
+      cv.width = t;
+      cv.height = t;
+      g.drawImage(jeu.planche, im.sx, im.sy, t, t, 0, 0, t, t);
+    } else {
+      cv.width = 16;
+      cv.height = 16;
+      g.drawImage(planche(perso.couleur || '#d94a4a'), Math.min(2, Math.max(0, image)) * 16, r * 16, 16, 16, 0, 0, 16, 16);
+    }
+    const url = cv.toDataURL('image/png');
+    parPerso.set(cle, url);
+    return url;
+  }
+
+  return { dessiner, dessinerSprite, imageDeMarche, ombre, images, vignette };
 })();

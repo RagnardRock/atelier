@@ -102,6 +102,9 @@ const Moteur = (() => {
     let actionDemandee = false;
     // Les combats (Saga 0.3) : leur écran, posé sur le jeu comme la boîte de dialogue.
     const ecranCombat = EcranCombat.creer(canvas.parentElement);
+    // Saga 0.8 : l'écran des combats en groupe (pack JRPG). Le pack de règles du jeu choisit le sien.
+    const ecranGroupe = EcranGroupe.creer(canvas.parentElement);
+    const ecranDuJeu = () => (jeu && Regles.ecran(jeu) === 'groupe' ? ecranGroupe : ecranCombat);
     const ecranPerso = Personnaliser.creer(canvas.parentElement);
     const menus = Menus.creer(canvas.parentElement);
     let enCombat = false;
@@ -156,21 +159,27 @@ const Moteur = (() => {
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
+      // Ce que le pack de règles lit du joueur (Saga 0.8) : son nom et sa tenue (le héros du groupe JRPG).
+      Object.defineProperty(jeu, 'joueur', { configurable: true, get: () => ({ nom: partie?.nom || '', tenue: partie?.tenue || '' }) });
+      // Une partie toute neuve : le pack la prépare (le héros principal rejoint le groupe JRPG).
+      if (!partieGardee) Regles.nouvellePartie(jeu, partie);
       // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
       enCombat = false;
       ecranCombat.fermer();
+      ecranGroupe.fermer();
       ecranPerso.fermer();
       menus.fermer();
       // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
       partie.badges = [...new Set(Array.isArray(partie.badges) ? partie.badges : [])];
+      partie.partis = partie.partis && typeof partie.partis === 'object' ? partie.partis : {};
       partie.compteurs = { ...Monde.nouvellePartie(jeu).compteurs, ...partie.compteurs, badges: partie.badges.length };
       carte = null;
       enScript = false;
       attentes = [];
       dialogue.fermer();
-      ecrans = Ecrans.creer({ jeu, partie: () => partie, menus });
+      ecrans = Ecrans.creer({ jeu, partie: () => partie, menus, ui: () => scripts.ui });
       scripts = Scripts.creer({
         jeu, dialogue,
         partie: () => partie,
@@ -270,18 +279,12 @@ const Moteur = (() => {
         return false;
       }
       if (Math.random() * 100 >= zone.taux) return false;
-      // Les chances des créatures sont des poids (ramenés à 100).
-      const possibles = zone.rencontres.filter((r) => Regles.existe(jeu, r.creature));
-      const total = possibles.reduce((s, r) => s + Math.max(0, Number(r.chance) || 0), 0);
-      if (!possibles.length || total <= 0) return false;
-      let tirage = Math.random() * total;
-      const r = possibles.find((q) => (tirage -= Math.max(0, Number(q.chance) || 0)) < 0) || possibles[0];
-      const min = Number(r.niveau_min) || 2, max = Math.max(min, Number(r.niveau_max) || min);
-      // Saga 0.7 : le pack de règles peut faire suivre la progression du joueur (Tafl › Réglages).
-      const sauvage = Regles.sauvage(jeu, partie, r.creature, min + Math.floor(Math.random() * (max - min + 1)), { min, max });
+      // Ce qu'on rencontre : le pack de règles tire une créature (Pokémon) ou un groupe de monstres (JRPG).
+      const adversaires = Regles.rencontre(jeu, zone, partie);
+      if (!adversaires) return false;
       (async () => {
         enScript = true;
-        await combattre({ sauvage });
+        await combattre(adversaires);
         presents = Monde.evenementsPresents(jeu, carte, partie, presents);
         enScript = false;
         entrees.oublier();
@@ -291,15 +294,15 @@ const Moteur = (() => {
     // Un combat (une rencontre, ou les commandes combat_sauvage et combat_dresseur des scripts).
     // Rend l'issue : 'victoire', 'defaite', 'fuite' ou 'capture'. Après une défaite, le joueur se
     // réveille au dernier endroit où il s'est soigné (sinon au départ du jeu), son équipe soignée.
-    async function combattre({ sauvage = null, dresseur = null }) {
+    async function combattre({ sauvage = null, dresseur = null, groupe = null }) {
       enCombat = true;
       entrees.oublier();
       dialogue.fermer();
       let issue = 'fuite';
       try {
-        ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranCombat, sauvage, dresseur, fond: fondCombat() }));
+        ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, fond: fondCombat() }));
       } catch (err) {
-        ecranCombat.fermer();
+        ecranDuJeu().fermer();
         rappels.message?.(`Erreur pendant le combat : ${err.message}`);
       }
       enCombat = false;
@@ -656,8 +659,8 @@ const Moteur = (() => {
         // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
         for (const a of entrees.appuis()) {
           if (menus.ouvert) menus.touche(a === 'echap' ? 'retour' : a);
-          else if (a === 'echap') { if (enCombat) ecranCombat.touche('retour'); }
-          else if (enCombat) ecranCombat.touche(a);
+          else if (a === 'echap') { if (enCombat) ecranDuJeu().touche('retour'); }
+          else if (enCombat) ecranDuJeu().touche(a);
           else if (enScript) dialogue.touche(a);
           else if (a === 'action') actionDemandee = true;
         }
@@ -667,6 +670,7 @@ const Moteur = (() => {
         avancerFondu(dt);
         dialogue.avancer(dt);
         ecranCombat.avancer(dt);
+        ecranGroupe.avancer(dt);
         for (const a of attentes) a.reste -= dt;
         for (const a of attentes.filter((x) => x.reste <= 0)) a.resoudre();
         attentes = attentes.filter((x) => x.reste > 0);

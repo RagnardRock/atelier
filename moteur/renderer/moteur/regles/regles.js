@@ -1,57 +1,97 @@
-// Les règles du jeu, vues par le moteur (Saga 0.3).
+// Les règles du jeu, vues par le moteur (Saga 0.3, packs multiples depuis Saga 0.8).
 //
-// Le moteur (cartes, déplacements, scripts, sauvegarde) ne connaît pas les règles des combats ni des
-// créatures : il passe toujours par cet objet `Regles`. Chaque pack de règles est un dossier
-// (regles/pokemon/ pour l'instant) qui fournit les mêmes fonctions. Le jeu choisit le sien dans Tafl
-// (Tafl 0.16 : reglages.regles) ; un pack inconnu de Saga retombe sur « pokemon ». L'écran de combat
-// (ecran-combat.js) reste le même : il montre ce qu'on lui dit.
+// Le moteur (cartes, déplacements, scripts, sauvegarde, menus) ne connaît pas les règles des combats ni
+// des personnages qui se battent : il passe toujours par cet objet `Regles`. Chaque pack de règles est un
+// dossier (regles/pokemon/, regles/jrpg/) qui fournit un objet `pack` avec les fonctions ci-dessous. Le
+// jeu choisit le sien dans Tafl (Données du jeu › Réglages › Règles, reglages.regles) ; un pack inconnu
+// de Saga retombe sur « pokemon ».
 //
-// Ce qu'un jeu de règles doit fournir :
-//   existe(jeu, id)                 la créature `id` existe-t-elle dans les données ?
-//   creer(jeu, id, niveau)          une nouvelle créature pour la partie (équipe, boîte, adversaire)
-//   completer(jeu, c)               remet à jour une créature lue dans une sauvegarde (ou null)
-//   soigner(jeu, c)                 soin complet (centre, défaite)
-//   resume(jeu, c)                  { nom, niveau, pv, pvMax, statut, sprite } pour le carnet
-//   combattre({ jeu, partie, ui, sauvage, dresseur, fond }) → { issue }
+// La documentation complète, avec les formes des données et un exemple de pack : REGLES.md, à côté.
+//
+// Un pack est un objet tout simple, sans DOM ni accès au disque : il reçoit les données du jeu (`jeu`)
+// et la partie (`partie`), et ne parle au joueur que par l'objet `ui` qu'on lui prête. C'est ce qui
+// permettra plus tard d'écrire un pack (ou d'en remplacer un morceau) dans un script du jeu.
+//
+// Ce qu'un pack doit fournir (« → » : ce que la fonction rend) :
+//   nom                             son identifiant ('pokemon', 'jrpg')
+//   capacites                       ce que ses jeux savent faire (voir CAPACITES ci-dessous)
+//   menus                           la forme des menus par défaut (voir la forme ci-dessous)
+//   existe(jeu, id)                 → le combattant `id` existe-t-il dans les données ?
+//   creer(jeu, id, niveau)          → un nouveau membre pour la partie (équipe, boîte, adversaire)
+//   completer(jeu, c)               → un membre lu dans une sauvegarde, remis à jour (ou null)
+//   soigner(jeu, c)                 soin complet (centre, auberge, défaite)
+//   resume(jeu, c)                  → { nom, niveau, pv, pvMax, statut, image } pour les listes et le carnet
+//   rencontre(jeu, zone, partie)    → ce qu'on rencontre en marchant dans une zone (les options de
+//                                   combattre : { sauvage } ou { groupe }), ou null
+//   combattre({ jeu, partie, ui, sauvage, dresseur, groupe, fond }) → { issue }
 //                                   issue : 'victoire', 'defaite', 'fuite' ou 'capture'
-//   utilisable(jeu, objet)          l'objet s'utilise-t-il depuis le sac, hors combat ?
-//   utiliserObjet({ jeu, partie, ui, id }) → true s'il a servi (ui : dire, liste, quantite, ev)
-//   ecranEv({ jeu, partie, ui })    l'écran où le joueur répartit les EV (commande ecran_ev)
-//   prixCreature(jeu, c)            ce qu'une boutique paie pour cette créature
-//   fiche(jeu, c)                   le résumé d'une créature (menu Équipe, PC), voir pokemon/fiches.js
-//   dex(jeu)                        { nom, especes: [{ id, numero, nom, image }] } dans l'ordre du Pokédex
-//   ficheEspece(jeu, id, { pris, vus }) la page d'une espèce dans le Pokédex (ou null)
-//   menus                           la forme des menus par défaut (voir FORME ci-dessous) : le jeu peut
-//                                   la changer dans Tafl › Réglages › Interface › Menus (Saga 0.6)
-//
-// Facultatif (Saga 0.7) : un pack qui ne les a pas garde le comportement simple écrit entre parenthèses.
-//   sauvage(jeu, partie, id, niveau, { min, max })   une créature sauvage des herbes (creer tel quel)
-//   plafond(jeu, partie)            le niveau maximum de l'équipe, montré dans le menu Équipe (aucun)
-//   evolutionsEnAttente({ jeu, partie, ui })        après un script : ce qui évolue maintenant (rien)
-//   marcher(jeu, partie)            après chaque pas du joueur (Pokémon : l'amitié monte) (rien)
+//   utilisable(jeu, objet)          → l'objet s'utilise-t-il depuis le sac, hors combat ?
+//   utiliserObjet({ jeu, partie, ui, id }) → true s'il a servi
+//   ecranEv({ jeu, partie, ui })    l'écran de la commande ecran_ev (les EV de Pokémon)
+//   prixCreature(jeu, c)            → ce qu'une boutique paie pour ce membre
+//   fiche(jeu, c)                   → le résumé d'un membre (menu Équipe, PC), voir pokemon/fiches.js
+//   dex(jeu)                        → { nom, especes: [{ id, numero, nom, image }] } dans l'ordre
+//   ficheEspece(jeu, id, { pris, vus }) → la page d'une espèce dans l'encyclopédie (ou null)
+// Et, s'il en a besoin (sinon le moteur fait sans) :
+//   ecran                           'duel' (un contre un, ecran-combat.js, par défaut) ou 'groupe'
+//                                   (plusieurs contre plusieurs, ecran-groupe.js)
+//   nouvellePartie(jeu, partie)     prépare une partie toute neuve (le héros rejoint le groupe…)
+//   actionsMembre(jeu, c)           → [[id, nom]] : les actions en plus sur un membre dans le menu Équipe
+//   agirMembre({ jeu, partie, ui, c, id }) fait l'une de ces actions
+//   rejoindre(jeu, partie, id, niveau) → un membre qui rejoint le joueur (commande groupe), ou null
+//   sauvage(jeu, partie, id, niveau, { min, max }) → une créature sauvage (Saga 0.7 ; sinon creer)
+//   plafond(jeu, partie)            → le niveau maximum de l'équipe, montré dans le menu Équipe (Saga 0.7)
+//   evolutionsEnAttente({ jeu, partie, ui }) après un script : ce qui évolue maintenant (Saga 0.7)
+//   marcher(jeu, partie)            après chaque pas du joueur (Pokémon : l'amitié monte) (Saga 0.7)
 
 const Regles = (() => {
-  // La forme des menus : leurs noms, le Pokédex montré ou non, la taille et la forme des boîtes du PC,
-  // les pages du résumé d'une créature (des ids de pages que la fiche du pack sait faire).
+  // Ce que les jeux d'un pack savent faire : le moteur et Tafl cachent le reste.
+  //   capture     on attrape des créatures (balles, compteur des captures)
+  //   relacher    on peut relâcher un membre (PC)
+  //   ev          l'écran des EV (commande ecran_ev)
+  //   vendre      les boutiques achètent et vendent des membres
+  //   groupe      des héros rejoignent et quittent le groupe (commande groupe)
+  //   tenir       un membre tient un objet (menu Équipe › Faire tenir un objet)
+  const CAPACITES = { capture: false, relacher: false, ev: false, vendre: false, groupe: false, tenir: false };
+
+  // La forme des menus : leurs noms, l'encyclopédie montrée ou non, la taille et la forme des boîtes,
+  // les pages du résumé d'un membre (des ids de pages que la fiche du pack sait faire), et les mots de
+  // l'encyclopédie (dex_pris : « Attrapés » ou « Vaincus », dex_pris_un, dex_vide).
   //   { equipe, dex, dex_visible, pc, boite, places, colonnes, forme_boites: 'grille' | 'liste',
-  //     pages: [id], toutes_pages: [[id, nom]] }
+  //     pages: [id], toutes_pages: [[id, nom]], dex_pris, dex_pris_un, dex_vide }
   const pokemon = {
+    nom: 'pokemon',
+    ecran: 'duel',
+    capacites: { capture: true, relacher: true, ev: true, vendre: true, groupe: false, tenir: true },
     menus: {
       equipe: 'Équipe', dex: 'Pokédex', dex_visible: true, pc: 'PC', boite: 'Boîte',
       places: 30, colonnes: 6, forme_boites: 'grille',
       pages: ['infos', 'stats', 'attaques'],
       toutes_pages: [['infos', 'Infos'], ['stats', 'Statistiques'], ['attaques', 'Attaques']],
+      dex_pris: 'Attrapés', dex_pris_un: 'attrapé',
+      dex_vide: 'Tu n\'as encore vu aucune créature. Celles que tu croises en combat s\'inscrivent ici.',
     },
-    nom: 'pokemon',
     existe: (jeu, id) => Boolean(Creatures.trouver(jeu, 'creatures', id)),
     creer: (jeu, id, niveau) => Creatures.creer(jeu, id, niveau),
     completer: (jeu, c) => Creatures.completer(jeu, c),
     soigner: (jeu, c) => Creatures.soigner(jeu, c),
     resume(jeu, c) {
+      const espece = Creatures.espece(jeu, c);
       return {
         nom: Creatures.nom(jeu, c), niveau: c.niveau, pv: c.pv, pvMax: Creatures.pvMax(jeu, c),
-        statut: c.statut ? Combat.NOMS_STATUTS[c.statut] || '' : '', espece: Creatures.espece(jeu, c),
+        statut: c.statut ? Combat.NOMS_STATUTS[c.statut] || '' : '', image: espece?.sprites?.face || '', espece,
       };
+    },
+    // Les hautes herbes : une créature tirée parmi celles de la zone (les chances sont des poids).
+    // Saga 0.7 : son niveau peut suivre la progression du joueur (sauvage, Tafl › Réglages).
+    rencontre(jeu, zone, partie) {
+      const possibles = (zone.rencontres || []).filter((r) => Creatures.trouver(jeu, 'creatures', r.creature));
+      const total = possibles.reduce((s, r) => s + Math.max(0, Number(r.chance) || 0), 0);
+      if (!possibles.length || total <= 0) return null;
+      let tirage = Math.random() * total;
+      const r = possibles.find((q) => (tirage -= Math.max(0, Number(q.chance) || 0)) < 0) || possibles[0];
+      const min = Number(r.niveau_min) || 2, max = Math.max(min, Number(r.niveau_max) || min);
+      return { sauvage: Creatures.sauvage(jeu, partie, r.creature, min + Math.floor(Math.random() * (max - min + 1)), { min, max }) };
     },
     combattre: (o) => Combat.lancer(o),
     // Hors combat (Saga 0.5) : objets du sac sur la carte, écran des EV, prix d'une créature vendue.
@@ -64,12 +104,13 @@ const Regles = (() => {
     dex: (jeu) => ({ nom: 'Pokédex', especes: Fiches.especes(jeu) }),
     ficheEspece: (jeu, id, etat) => Fiches.ficheEspece(jeu, id, etat),
     // Saga 0.7 : les sauvages qui suivent le joueur, le plafond des badges, les évolutions de quête.
+    // Saga 0.7 : facultatives (sans elles, le comportement simple).
     sauvage: (jeu, partie, id, niveau, o) => Creatures.sauvage(jeu, partie, id, niveau, o),
     plafond: (jeu, partie) => Creatures.plafond(jeu, partie),
     evolutionsEnAttente: (o) => HorsCombat.evolutionsEnAttente(o),
     marcher: (jeu, partie) => HorsCombat.marcher(jeu, partie),
   };
-  const PACKS = { pokemon };
+  const PACKS = { pokemon, ...(typeof Jrpg !== 'undefined' ? { jrpg: Jrpg.pack } : {}) };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
   // La forme des menus du jeu : celle du pack, et par-dessus ce que le jeu a réglé dans Tafl (un champ
   // vide ou faux garde celui du pack).
@@ -80,6 +121,7 @@ const Regles = (() => {
     const connues = d.toutes_pages.map(([id]) => id);
     const pages = (Array.isArray(m.pages) ? m.pages : []).filter((x) => connues.includes(x));
     return {
+      ...pokemon.menus,
       ...d,
       equipe: texte(m.equipe, d.equipe), dex: texte(m.dex, d.dex), pc: texte(m.pc, d.pc), boite: texte(m.boite, d.boite),
       dex_visible: m.dex_visible === false ? false : d.dex_visible,
@@ -88,21 +130,34 @@ const Regles = (() => {
       pages: pages.length ? pages : d.pages,
     };
   }
-  // Chaque fonction va au pack du jeu (le jeu est toujours le premier argument, ou dans l'objet de combattre).
+  // Chaque fonction va au pack du jeu (le jeu est toujours le premier argument, ou dans l'objet passé).
   return {
+    CAPACITES,
     packs: () => Object.keys(PACKS),
     menus,
     nom: (jeu) => pack(jeu).nom,
+    ecran: (jeu) => (pack(jeu).ecran === 'groupe' ? 'groupe' : 'duel'),
+    capacites: (jeu) => ({ ...CAPACITES, ...pack(jeu).capacites }),
     existe: (jeu, ...a) => pack(jeu).existe(jeu, ...a),
     creer: (jeu, ...a) => pack(jeu).creer(jeu, ...a),
     completer: (jeu, ...a) => pack(jeu).completer(jeu, ...a),
     soigner: (jeu, ...a) => pack(jeu).soigner(jeu, ...a),
-    resume: (jeu, ...a) => pack(jeu).resume(jeu, ...a),
+    // Un résumé sans image mais avec une apparence (un personnage) : le moteur dessine sa vignette.
+    resume(jeu, c) {
+      const r = pack(jeu).resume(jeu, c);
+      if (!r.image && r.apparence && typeof Sprites !== 'undefined') r.image = Sprites.vignette(jeu, r.apparence);
+      return r;
+    },
+    rencontre: (jeu, zone, partie) => pack(jeu).rencontre?.(jeu, zone, partie) || null,
     combattre: (o) => pack(o.jeu).combattre(o),
     utilisable: (jeu, ...a) => pack(jeu).utilisable(jeu, ...a),
     utiliserObjet: (o) => pack(o.jeu).utiliserObjet(o),
     ecranEv: (o) => pack(o.jeu).ecranEv(o),
     prixCreature: (jeu, ...a) => pack(jeu).prixCreature(jeu, ...a),
+    nouvellePartie: (jeu, partie) => pack(jeu).nouvellePartie?.(jeu, partie),
+    actionsMembre: (jeu, c) => pack(jeu).actionsMembre?.(jeu, c) || [],
+    agirMembre: (o) => pack(o.jeu).agirMembre?.(o),
+    rejoindre: (jeu, ...a) => pack(jeu).rejoindre?.(jeu, ...a) || null,
     // Le résumé : seulement les pages choisies, dans leur ordre.
     fiche(jeu, ...a) {
       const f = pack(jeu).fiche(jeu, ...a), ordre = menus(jeu).pages;
@@ -111,6 +166,7 @@ const Regles = (() => {
     },
     dex: (jeu) => ({ ...pack(jeu).dex(jeu), nom: menus(jeu).dex }),
     ficheEspece: (jeu, ...a) => pack(jeu).ficheEspece(jeu, ...a),
+    // Saga 0.7 : facultatives (sans elles, le comportement simple).
     sauvage: (jeu, partie, id, niveau, o) => (pack(jeu).sauvage ? pack(jeu).sauvage(jeu, partie, id, niveau, o) : pack(jeu).creer(jeu, id, niveau)),
     plafond: (jeu, partie) => (pack(jeu).plafond ? pack(jeu).plafond(jeu, partie) : null),
     evolutionsEnAttente: async (o) => { await pack(o.jeu).evolutionsEnAttente?.(o); },

@@ -40,7 +40,8 @@ const Collection = (() => {
   function voir(partie, id) { if (id && partie.dex) partie.dex.vus[id] = true; }
   function prendre(partie, id) { if (id && partie.dex) { partie.dex.vus[id] = true; partie.dex.pris[id] = true; } }
   // Tout ce que le joueur a (une évolution donne une nouvelle espèce attrapée).
-  function noterTout(partie) { for (const { c } of toutes(partie)) prendre(partie, c.creature); }
+  // Les héros d'un groupe JRPG (c.heros) ne sont pas des espèces : ils ne vont pas dans l'encyclopédie.
+  function noterTout(partie) { for (const { c } of toutes(partie)) if (!c.heros) prendre(partie, c.creature); }
 
   // --- Ranger ---
   // Dans la première place libre des boîtes (une nouvelle boîte si tout est plein). Rend la boîte.
@@ -59,7 +60,7 @@ const Collection = (() => {
   // Une créature reçue (capture, cadeau, achat) : dans l'équipe s'il y a de la place, sinon au PC.
   // Rend { ou: 'equipe' } ou { ou: 'boite', nom, pc } (la boîte et le nom du PC, pour le dire au joueur).
   function ranger(jeu, partie, c) {
-    prendre(partie, c.creature);
+    if (!c.heros) prendre(partie, c.creature);
     if (partie.equipe.length < equipeMax(jeu)) { partie.equipe.push(c); return { ou: 'equipe' }; }
     return { ou: 'boite', nom: deposer(jeu, partie, c).nom, pc: Regles.menus(jeu).pc };
   }

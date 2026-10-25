@@ -189,6 +189,8 @@ Des rectangles de cases (`x`, `y`, `largeur`, `hauteur`), qui peuvent se chevauc
 
 `rencontres` (Tafl 0.8) : les créatures sauvages qu'on y croise. Pour chacune, son `id` dans `creatures.json`, ses niveaux (`niveau_min` à `niveau_max`, tirés au hasard) et sa `chance` en %. Si les chances ne font pas 100, le moteur les ramène à 100 (ce sont des poids). `taux` : la chance, en %, qu'une rencontre arrive à chaque pas dans la zone (10 par défaut).
 
+Pack JRPG (Tafl 0.25, `reglages.regles` = `"jrpg"`) : `rencontres` liste des **groupes de monstres** au lieu de créatures, `[{ "groupe": "slimes", "chance": 60 }]` (`groupe` : un id de `groupes.json` ; les chances sont des poids, comme ci-dessus).
+
 ### Ambiance
 
 `ambiance` (Tafl 0.8) : la météo et la lumière de la carte. Tafl en montre un aperçu (Affichage › Montrer l'ambiance) ; c'est le moteur qui la joue.
@@ -314,6 +316,8 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `badge` | `badge` | (Tafl 0.16) Donne au joueur le badge `badge` (un id de `reglages.badges`). Un badge déjà reçu ne compte pas deux fois. Le compteur `badges` vaut toujours le nombre de badges différents reçus : c'est lui qui fait monter les `plafonds` et le niveau des dresseurs qui s'ajustent. |
 | `personnaliser` | `nom` (`true`/`false`), `tenue` (`true`/`false`) | (Tafl 0.16) Ouvre l'écran où le joueur tape son nom (`nom`) et/ou choisit la tenue du héros parmi sa tenue de base et ses `tenues` (`tenue`). Le nom devient `{joueur}` dans les dialogues. |
 | `tenue` | `tenue` | (Tafl 0.16) Met au héros la tenue `tenue` (un id de ses `tenues`), ou `""` pour sa tenue de base. Pour l'histoire : un uniforme pour s'infiltrer, une combinaison de plongée… |
+| `groupe` | `action` (`"rejoindre"` ou `"quitter"`), `personnage`, `niveau` | (Tafl 0.25, pack JRPG) Le personnage rejoint le groupe du joueur (dans la Réserve si le groupe est complet), avec sa `classe`, son `niveau` de départ (ou `niveau` s'il n'est pas 0) et son `equipement` de départ porté ; ou il le quitte. Un héros parti puis revenu retrouve son niveau, son expérience et son équipement. Le dernier héros du groupe ne peut pas partir. Sans effet dans un jeu Pokémon. |
+| `combat_groupe` | `groupe` | (Tafl 0.25, pack JRPG) Un combat contre un groupe de `groupes.json` (un boss, une embuscade). Perdu : le script s'arrête, comme pour les autres combats. |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
 
@@ -325,13 +329,14 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `local` | `valeur` | l'interrupteur « déjà fait » de l'événement vaut `valeur`. |
 | `objet` | `objet`, `min` | le joueur a au moins `min` fois cet objet. |
 | `quete` | `quete`, `etat`, `etape` | la quête est `"pas_commencee"`, `"en_cours"` ou `"finie"`. Pour `"en_cours"`, `etape` > 0 demande en plus d'être au moins à cette étape. |
-| `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"sauvages_battus"` (créatures sauvages battues, Tafl 0.24), `"evolutions"` (évolutions vues), `"especes_vues"` et `"especes_prises"` (les espèces différentes vues et attrapées, comptées sur le Pokédex, Tafl 0.24), `"quetes_finies"` (Tafl 0.24), `"badges"`, `"pas"`. Pour débloquer des boutiques ou des personnages au fil de la progression. |
+| `compteur` | `compteur`, `min` | un compteur du joueur vaut au moins `min` : `"captures"` (créatures capturées), `"dresseurs_battus"`, `"sauvages_battus"` (créatures sauvages battues, Tafl 0.24), `"evolutions"` (évolutions vues), `"especes_vues"` et `"especes_prises"` (les espèces différentes vues et attrapées, comptées sur le Pokédex, Tafl 0.24), `"quetes_finies"` (Tafl 0.24), `"badges"`, `"pas"`, `"monstres_vaincus"` (pack JRPG, Tafl 0.25). Pour débloquer des boutiques ou des personnages au fil de la progression. |
 | `argent` | `min` | (Tafl 0.16) le joueur a au moins `min` d'argent. |
 | `badge` | `badge` | (Tafl 0.16) le joueur a reçu ce badge. |
+| `membre` | `personnage` | (Tafl 0.25, pack JRPG) ce personnage est avec le joueur : dans le groupe ou dans la Réserve. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`.
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus.
 
 ## Données du jeu (`donnees/`)
 
@@ -356,7 +361,8 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
         { "expression": "content", "png": "data:image/png;base64,..." }
       ],
       "sprite": { "largeur": 16, "hauteur": 32, "images": 3, "planche": "data:image/png;base64,..." },
-      "tenues": []
+      "tenues": [],
+      "classe": "", "niveau": 1, "equipement": {}
     }
   ]
 }
@@ -371,6 +377,7 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
   - **Placement** : l'image est centrée sur la case, ses pieds (le bas de l'image) en bas de la case. Un sprite plus haut qu'une case (16 × 32, comme dans Pokémon) dépasse vers le haut, sur la case du dessus.
   - Le moteur montre le sprite s'il y en a un, sinon la `tuile`, sinon ce qu'il veut (Saga dessine un petit bonhomme à la `couleur` du personnage).
 - `tenues` (Tafl 0.16, pour le héros) : ses autres apparences, `[{ "id": "hiver", "nom": "Hiver", "sprite": { … } }]`, chacune avec un `sprite` au même format que ci-dessus (ou `null`). Le joueur en choisit une (commande `personnaliser`), ou l'histoire la lui met (commande `tenue`) ; le moteur montre alors le sprite de la tenue à la place du sien. Les portraits ne changent pas.
+- `classe`, `niveau`, `equipement` (Tafl 0.25, pack JRPG) : ce qu'il est quand il rejoint le groupe. `classe` : un id de `classes.json` (`""` = aucune) ; `niveau` : son niveau de départ (1 par défaut) ; `equipement` : ce qu'il porte au départ, `{ "arme": "epee-courte", "armure": "tunique" }` (places `arme`, `bouclier`, `casque`, `armure`, `accessoire` ; des ids d'objets avec `equipement`). Le héros (`heros: true`) qui a une classe est dans le groupe dès le début d'une partie ; les autres le rejoignent par la commande `groupe`.
 - `portraits` : un visage par expression (`normal`, `content`, `rire`, `triste`, `colere`, `surpris`, `inquiet`, `gene`, `determine`, ou d'autres noms), en image encodée en texte comme les tuiles. Taille libre.
 
 ### `donnees/quetes.json`
@@ -572,9 +579,100 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 - `evolution_dresseurs` et `evolution_sauvages` (Tafl 0.24, `false` par défaut) : une créature montée par l'ajustement (dresseur, ou sauvage) prend la forme de son niveau en suivant les évolutions `"niveau"` (un Bulbizarre de dresseur monté au niveau 40 devient Florizarre). Ses attaques sont celles de ce niveau, sauf si le dresseur en a choisi.
 - `seuil_amitie` (Tafl 0.24) : l'amitié qu'il faut pour une évolution `"amitie"` (sur 255, 220 par défaut). L'amitié d'une créature part du `bonheur` de son espèce ; elle monte en gagnant des niveaux (+5, +3 au-dessus de 100, +2 au-dessus de 200), en marchant (tous les 128 pas), avec les vitamines et les objets d'effet `amitie` ; elle baisse de 1 quand la créature tombe K.O. L'évolution se fait à la montée de niveau (au `niveau` de l'évolution au moins, s'il est donné).
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
-- `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. Seule valeur pour l'instant : `"pokemon"` (les types, talents, attaques, créatures et objets de `donnees/` sont ses données). Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
+- `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. `"pokemon"` (les types, talents, attaques, créatures, objets et dresseurs de `donnees/` sont ses données) ou, depuis Tafl 0.25, `"jrpg"` (voir « Le pack JRPG » plus bas). Saga en décrit chaque fonction dans `moteur/renderer/moteur/regles/REGLES.md`. Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
 - `badges` (Tafl 0.16) : les badges du jeu, dans l'ordre où on les gagne d'habitude. `icone` : une image PNG encodée en texte, ou `""`. La commande `badge` les donne ; le carnet du jeu les montre.
 - `interface` : le style de l'interface en jeu (dialogues, combat, carnet). `theme` : `"verre"` (sombre, flou, coins arrondis) ou `"pixel"` (police pixel, cadres nets à double bordure). `accent` : la couleur des noms, curseurs et barres (`"#rrggbb"`), ou `""` pour celle du moteur. Le joueur peut forcer un thème dans les réglages de Saga. `menus` (Tafl 0.21, lu par Saga 0.6) : la forme des menus. Le pack de règles en donne une par défaut (Pokémon : « Équipe », « Pokédex », « PC », « Boîte », 30 places par boîte en grille de 6 colonnes, résumé en pages `infos`, `stats`, `attaques`) ; chaque champ la remplace s'il n'est pas vide : `equipe`, `dex`, `pc`, `boite` (les noms ; une boîte s'appelle « Boîte 1 », « Boîte 2 »…), `dex_visible` (`false` cache le Pokédex), `places` et `colonnes` (`0` = ceux du pack), `forme_boites` (`"grille"`, `"liste"` ou `""`), `pages` (les pages du résumé, dans l'ordre ; `[]` = celles du pack).
+
+### Le pack JRPG (Tafl 0.25, Saga 0.8)
+
+Quand `reglages.regles` vaut `"jrpg"` : un groupe de héros (les personnages qui ont une `classe`) se bat au tour par tour contre des groupes de monstres. Il n'y a pas de capture, ni de natures, d'EV, d'IV, de talents ou de dresseurs. Les fichiers servent ainsi :
+
+- `types.json` : les **éléments** (feu, glace…). Seuls `id`, `nom` et `couleur` comptent ; les faiblesses sont écrites sur chaque monstre.
+- `attaques.json` : les **compétences** (sorts, techniques), voir ci-dessous.
+- `objets.json`, `boutiques.json` : comme pour Pokémon, plus l'équipement.
+- `classes.json`, `monstres.json`, `groupes.json` : propres à ce pack.
+
+Les statistiques s'appellent `pv`, `pm`, `force`, `magie`, `defense`, `esprit`, `agilite`, `chance`. Les statuts : `poison` (perd 1/12 de ses PV max à chaque tour, et reste après le combat), `sommeil` (2 à 4 tours, une chance sur deux de se réveiller quand on le frappe), `paralysie` (1 à 3 tours), `silence` (plus de compétences magiques), `cecite` (deux fois moins de chances de toucher avec les attaques physiques). Les autres statuts s'effacent à la fin du combat.
+
+#### Les compétences (`attaques.json`)
+
+Les champs de Pokémon, avec ce sens et trois champs en plus :
+
+| Champ | Sens |
+|---|---|
+| `type` | Son élément (`""` = neutre). |
+| `categorie` | `"physique"` (Force contre Défense, peut faire un critique), `"speciale"` (magie : Magie contre Esprit, impossible sous Silence), `"statut"` (soutien, sans dégâts). |
+| `puissance` | 100 = une attaque normale ; 0 = pas de dégâts. |
+| `precision` | En %. Une compétence magique à 100 ne rate jamais. |
+| `cible` | `"adversaire"`, `"adversaires"` (tous), `"allie"`, `"equipe"` (tout le groupe du lanceur), `"soi"`, `"tous"`. |
+| `cout_pm` | Son coût en PM. |
+| `soin` | La puissance du soin : PV rendus ≈ `soin` + Magie du lanceur. |
+| `ranime` | `true` : ranime un allié K.O. (avec `soin`, sinon un quart de ses PV). |
+| `guerit` | Les statuts qu'elle guérit : `["poison", "silence"]`, ou `["tous"]`. |
+| `statut`, `chance_statut` | Le statut infligé, et sa chance en % (0 = toujours). |
+| `stats`, `stats_cible`, `chance_stats` | Des crans sur `force`, `magie`, `defense`, `esprit` ou `agilite` (±4 au plus en combat ; n crans font ×(2 + n) / 2 en hausse, ×2 / (2 − n) en baisse). |
+| `critique` | Des paliers de coup critique en plus (+10 % chacun). |
+
+Une compétence de soin (`soin`, `ranime` ou `guerit`) qui vise `allie`, `equipe` ou `soi` s'utilise aussi hors combat, depuis le menu du groupe.
+
+#### Les objets (`objets.json`)
+
+- `effet.type` : `"soin"` (PV), `"soin_pm"` (PM, Tafl 0.25), `"rappel"` (ranime avec `valeur` % des PV), `"soin_statut"` (`statut` ou `"tous"`), `"repousse"`, `"passage"`. `valeur` 9999 = tout.
+- `equipement` (facultatif) : un objet qu'un héros porte.
+
+```json
+{ "id": "epee-de-flamme", "nom": "Épée de flamme", "categorie": "arme", "prix": 900,
+  "effet": { "type": "aucun" },
+  "equipement": { "place": "arme", "bonus": { "force": 10 }, "element": "feu", "classes": ["guerrier"] } }
+```
+
+`place` : `arme`, `bouclier`, `casque`, `armure` ou `accessoire`. `bonus` : ce qu'il ajoute aux statistiques (négatif pour un malus). `element` (arme) : l'élément de l'attaque de base. `classes` : celles qui peuvent le porter (`[]` = toutes). Un objet porté quitte le sac ; retiré, il y revient.
+
+#### `donnees/classes.json`
+
+```json
+{ "format": "tafl-classes", "version": 1, "classes": [
+  { "id": "mage-blanc", "nom": "Mage blanc", "description": "Elle soigne, protège et ranime.", "couleur": "#f0f0f0",
+    "stats": { "pv": 30, "pm": 14, "force": 6, "magie": 12, "defense": 6, "esprit": 12, "agilite": 7, "chance": 7 },
+    "gains": { "pv": 7, "pm": 3.2, "force": 1, "magie": 2.4, "defense": 1.2, "esprit": 2.4, "agilite": 1.2, "chance": 1 },
+    "competences": [{ "niveau": 1, "competence": "soin" }, { "niveau": 12, "competence": "resurrection" }] }
+] }
+```
+
+La statistique d'un héros au niveau n vaut `stats` + `gains` × (n − 1), arrondi en dessous, plus les `bonus` de son équipement. Il connaît les `competences` de sa classe jusqu'à son niveau.
+
+#### `donnees/monstres.json`
+
+```json
+{ "format": "tafl-monstres", "version": 1, "monstres": [
+  { "id": "slime", "nom": "Slime", "numero": 1, "description": "Une goutte gluante et curieuse.", "image": "data:image/png;base64,...",
+    "taille": "petit", "boss": false, "niveau": 1,
+    "stats": { "pv": 18, "pm": 0, "force": 7, "magie": 5, "defense": 4, "esprit": 4, "agilite": 5, "chance": 3 },
+    "faiblesses": ["feu"], "resistances": [], "immunites": [], "statuts_immunises": [],
+    "poids_attaque": 50, "competences": [{ "competence": "spores", "poids": 30 }],
+    "xp": 4, "or": 3, "butin": [{ "objet": "potion", "chance": 15 }] }
+] }
+```
+
+- `image` : le monstre en combat (PNG encodé en texte, fond transparent), tourné vers la droite (les héros sont à droite). `taille` : `"petit"`, `"moyen"` ou `"grand"` ; un `boss` est dessiné plus grand, et ne s'endort ni ne se paralyse jamais.
+- `faiblesses` (×2), `resistances` (×½), `immunites` (×0) : des ids d'éléments. `statuts_immunises` : les statuts qui ne le touchent pas.
+- À son tour, il tire au hasard l'attaque de base (`poids_attaque`) ou une de ses `competences` (selon les `poids`, parmi celles qu'il a assez de PM pour lancer).
+- `xp` et `or` : ce que rapporte sa défaite (l'expérience va entière à chaque héros debout). `butin` : les objets qu'il peut laisser (`chance` en %).
+- `numero` : son ordre dans le Bestiaire (qui montre son nom et son image une fois vu, tout le reste une fois vaincu).
+
+#### `donnees/groupes.json`
+
+```json
+{ "format": "tafl-groupes", "version": 1, "groupes": [
+  { "id": "gobelins", "nom": "Gobelins et slime", "monstres": [{ "monstre": "gobelin", "nombre": 2 }, { "monstre": "slime", "nombre": 1 }], "fuite": true }
+] }
+```
+
+Huit monstres au plus en tout. `fuite: false` : on ne peut pas fuir (un boss).
+
+#### Dans `reglages.json`
+
+`niveau_max` (99 par défaut) et `courbe_xp` : l'expérience totale qu'il faut pour le niveau n vaut 10 × (n − 1)², fois 0,7 (`"rapide"`), 1 (`"normale"`) ou 1,4 (`"lente"`). `equipe_max` : le nombre de héros qui se battent (4 conseillé) ; les autres attendent dans la Réserve. `plafonds`, `ajustement`, `ecart` et `chance_chromatique` ne servent pas.
 
 ## Exemple de lecture (JavaScript)
 
@@ -599,3 +697,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.16** : les commandes `argent`, `badge`, `personnaliser` et `tenue`, les conditions `argent` et `badge`, `tenues` dans les personnages, `regles` et `badges` dans les réglages. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.21** : la commande `ecran_boites` et `interface.menus` dans les réglages. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.24** : le type d'événement `obstacle` et son champ `obstacle`, les compteurs `sauvages_battus`, `especes_vues`, `especes_prises` et `quetes_finies`, les effets d'objet `stase` et `amitie`, `verrouille_visible` dans les articles de boutique, `ajustement_sauvages`, `ecart_sauvages`, `evolution_dresseurs`, `evolution_sauvages` et `seuil_amitie` dans les réglages, l'`amitie` de chaque créature dans la sauvegarde. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.25** : le pack de règles `"jrpg"` : les fichiers `classes.json`, `monstres.json` et `groupes.json`, `cout_pm`, `ranime` et `guerit` dans les attaques, `equipement` et l'effet `soin_pm` dans les objets, `classe`, `niveau` et `equipement` dans les personnages, `niveau_max` et `courbe_xp` dans les réglages, les rencontres de groupes dans les zones, les commandes `groupe` et `combat_groupe`, la condition `membre`, le compteur `monstres_vaincus`. Des champs en plus, donc la version reste 1.

@@ -6,12 +6,12 @@
 // Regles.ficheEspece, le nom du Pokédex de Regles.dex ; les places viennent de collection.js.
 
 const Ecrans = (() => {
-  function creer({ jeu, partie, menus }) {
+  function creer({ jeu, partie, menus, ui = () => null }) {
     const r = (c) => Regles.resume(jeu, c);
     const ligne = (c, detail = null) => {
       const x = r(c);
       return {
-        texte: `${x.nom}${x.statut ? `  ${x.statut}` : ''}`, image: x.espece?.sprites?.face || '', pv: x.pv / Math.max(1, x.pvMax),
+        texte: `${x.nom}${x.statut ? `  ${x.statut}` : ''}`, image: x.image || '', pv: x.pv / Math.max(1, x.pvMax),
         detail: detail ?? `N.${x.niveau} · ${x.pv > 0 ? `${x.pv}/${x.pvMax}` : 'K.O.'}`,
       };
     };
@@ -30,7 +30,10 @@ const Ecrans = (() => {
         i = await menus.liste({ titre: forme().equipe, entete: `${p.equipe.length} / ${Collection.equipeMax(jeu)}${max && max < 100 ? ` · Niv. max ${max}` : ''}`, items: lignesEquipe(), depart: Math.min(i, p.equipe.length - 1) });
         if (i == null) return;
         const c = p.equipe[i], nom = r(c).nom;
-        const actions = [['resume', 'Résumé'], ...(p.equipe.length > 1 ? [['place', 'Changer de place']] : []), ['surnom', 'Surnom'], ['objet', c.objet ? `Objet tenu : ${nomObjet(c.objet)}` : 'Faire tenir un objet'], ['retour', 'Retour']];
+        // Les actions du pack de règles en plus (Équipement, Compétences pour le pack JRPG), Saga 0.8.
+        const plus = Regles.actionsMembre(jeu, c);
+        const tenu = Regles.capacites(jeu).tenir ? [['objet', c.objet ? `Objet tenu : ${nomObjet(c.objet)}` : 'Faire tenir un objet']] : [];
+        const actions = [['resume', 'Résumé'], ...plus, ...(p.equipe.length > 1 ? [['place', 'Changer de place']] : []), ['surnom', 'Surnom'], ...tenu, ['retour', 'Retour']];
         const a = await menus.liste({ titre: nom, items: actions.map(([, t]) => ({ texte: t })) });
         const choix = a == null ? 'retour' : actions[a][0];
         if (choix === 'resume') i = await resume(p.equipe, i);
@@ -39,6 +42,7 @@ const Ecrans = (() => {
           if (j != null && j !== i) { [p.equipe[i], p.equipe[j]] = [p.equipe[j], p.equipe[i]]; i = j; }
         } else if (choix === 'surnom') await surnom(c);
         else if (choix === 'objet') await tenir(c);
+        else if (plus.some(([id]) => id === choix)) await Regles.agirMembre({ jeu, partie: p, ui: ui(), c, id: choix });
       }
     }
 
@@ -83,11 +87,11 @@ const Ecrans = (() => {
         const connues = especes.filter((e) => vus[e.id]);
         i = await menus.liste({
           titre: nom, large: true, saut: 10, depart: i,
-          entete: `Vus ${connues.length} · Attrapés ${especes.filter((e) => pris[e.id]).length} · ${especes.length} en tout`,
-          note: connues.length ? '' : 'Tu n\'as encore vu aucune créature. Celles que tu croises en combat s\'inscrivent ici.',
+          entete: `Vus ${connues.length} · ${forme().dex_pris} ${especes.filter((e) => pris[e.id]).length} · ${especes.length} en tout`,
+          note: connues.length ? '' : forme().dex_vide,
           items: especes.map((e) => ({
             texte: `${e.numero}   ${vus[e.id] ? e.nom : '???'}`, image: vus[e.id] ? e.image : '',
-            detail: pris[e.id] ? 'attrapé' : vus[e.id] ? 'vu' : '', desactive: !vus[e.id],
+            detail: pris[e.id] ? forme().dex_pris_un : vus[e.id] ? 'vu' : '', desactive: !vus[e.id],
           })),
         });
         if (i == null) return;
@@ -175,7 +179,7 @@ const Ecrans = (() => {
           const caseDe = (c, actif, enListe = false) => {
             const x = c ? r(c) : null;
             return el('div', { className: `pc-case${actif ? ' actif' : ''}${c && c.pv <= 0 ? ' ko' : ''}`, title: x ? `${x.nom} N.${x.niveau}` : '' },
-              x?.espece?.sprites?.face ? el('img', { src: x.espece.sprites.face, alt: '' }) : c ? el('span', { className: 'pc-sans-image', textContent: x.nom.slice(0, 2) }) : null,
+              x?.image ? el('img', { src: x.image, alt: '' }) : c ? el('span', { className: 'pc-sans-image', textContent: x.nom.slice(0, 2) }) : null,
               enListe ? el('span', { className: 'pc-case-nom', textContent: x ? x.nom : '—' }) : null,
               enListe && x ? el('span', { className: 'pc-case-niveau', textContent: `N.${x.niveau}` }) : null);
           };
@@ -255,7 +259,7 @@ const Ecrans = (() => {
         const actions = [
           ['deplacer', 'Déplacer'],
           zone === 'equipe' ? ['deposer', `Déposer dans ${p.boites[b].nom}`] : ['retirer', 'Prendre dans l\'équipe'],
-          ['resume', 'Résumé'], ['surnom', 'Surnom'], ['relacher', 'Relâcher'], ['retour', 'Retour'],
+          ['resume', 'Résumé'], ['surnom', 'Surnom'], ...(Regles.capacites(jeu).relacher ? [['relacher', 'Relâcher']] : []), ['retour', 'Retour'],
         ];
         const bloque = (id) => (id === 'deposer' || id === 'relacher') && zone === 'equipe' && !Collection.peutQuitterEquipe(p, i)
           || id === 'retirer' && p.equipe.length >= max;
