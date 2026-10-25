@@ -109,12 +109,20 @@ const Events = (() => {
   const monnaie = (doc) => doc.data.reglages?.monnaie || 'Pokédollars';
   const choixTuiles = (doc) => [['-1', 'Aucune'], ...doc.tiles.map((t, i) => [String(i), `${i}. ${t.name}`])];
 
-  // Parcourt toutes les commandes d'une liste, y compris celles rangées dans un choix ou un « si ».
+  // Les listes de commandes rangées dans une commande : [titre, liste, sorte] pour les réponses d'un
+  // choix, l'alors et le sinon d'un « si », et (Tafl 0.32, pack JDR) le réussi et le raté d'un test.
+  const A_BRANCHES = ['test', 'sauvegarde', 'test_oppose'];
+  function branches(c) {
+    if (c?.type === 'choix') return (c.options || []).map((o) => [`Si le joueur répond « ${o.texte} »`, o.commandes || [], 'reponse']);
+    if (c?.type === 'si') return [['Alors', c.alors || [], 'alors'], ['Sinon', c.sinon || [], 'sinon']];
+    if (A_BRANCHES.includes(c?.type)) return [['Si c\'est réussi', c.reussi || [], 'alors'], ['Si c\'est raté', c.rate || [], 'sinon']];
+    return [];
+  }
+  // Parcourt toutes les commandes d'une liste, y compris celles rangées dans un choix, un « si » ou un test.
   function parcourir(liste, fn) {
     for (const c of liste || []) {
       fn(c);
-      if (c.type === 'choix') for (const o of c.options || []) parcourir(o.commandes, fn);
-      if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
+      for (const [, l] of branches(c)) parcourir(l, fn);
     }
   }
   function parcourirJeu(doc, fn) {
@@ -310,7 +318,7 @@ const Events = (() => {
     },
     // Tafl 0.25 (Saga 0.8, pack JRPG) : un combat contre un groupe de monstres (boss, embuscade).
     combat_groupe: {
-      nom: 'Combat contre un groupe de monstres', icone: 'flame', groupe: 'Objets et créatures', packs: ['jrpg'],
+      nom: 'Combat contre un groupe de monstres', icone: 'flame', groupe: 'Objets et créatures', packs: ['jrpg', 'jdr'],
       nouveau: () => ({ type: 'combat_groupe', groupe: '' }),
       champs: (doc, c) => [
         { key: 'groupe', label: 'Groupe de monstres', type: 'text', value: c.groupe, list: 'tafl-groupes', placeholder: 'dragon' },
@@ -399,11 +407,11 @@ const Events = (() => {
     },
     // Tafl 0.25 (Saga 0.8, pack JRPG) : un personnage rejoint le groupe, ou le quitte.
     groupe: {
-      nom: 'Le groupe : un héros rejoint ou part', icone: 'organization', groupe: 'Héros', packs: ['jrpg'],
+      nom: 'Le groupe : un héros rejoint ou part', icone: 'organization', groupe: 'Héros', packs: ['jrpg', 'jdr'],
       nouveau: (doc) => ({ type: 'groupe', action: 'rejoindre', personnage: doc.data.personnages.find((p) => p.classe && !p.heros)?.id || '', niveau: 0 }),
       champs: (doc, c) => [
         { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['rejoindre', 'Rejoint le groupe'], ['quitter', 'Quitte le groupe']] },
-        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: doc.data.personnages.map((p) => [p.id, `${p.nom}${p.classe ? ` (${nomData(doc, 'classes', p.classe)})` : ' (sans classe)'}`]) },
+        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: doc.data.personnages.map((p) => [p.id, `${p.nom}${p.jdr?.classe && doc.data.reglages?.regles === 'jdr' ? ` (${nomData(doc, 'classes_jdr', p.jdr.classe)})` : p.classe ? ` (${nomData(doc, 'classes', p.classe)})` : ' (sans classe)'}`]) },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 0, max: 999, unit: '0 = son niveau de départ' },
         { type: 'info', text: 'Le personnage (avec sa classe, son niveau et son équipement de départ : Jeu › Données du jeu › Personnages) rejoint le groupe, ou la Réserve si le groupe est complet. Un héros qui part puis revient retrouve son niveau et son équipement.' },
       ],
@@ -495,6 +503,129 @@ const Events = (() => {
     },
   };
   const nomVariable = (doc, id) => (doc.data.variables || []).find((v) => v.id === id)?.nom || id;
+
+  // --- Tafl 0.32 (Saga 0.13) : les blocs du pack JDR (dés, tests, repos, expérience, états) ---
+  // Les listes du jeu (Données › Caractéristiques, Compétences, États), sinon celles de la 5e.
+  const jdrListe = (doc, sorte) => {
+    const l = doc.data[sorte] || [];
+    if (l.length || typeof ModeleDnd5e === 'undefined') return l;
+    return { caracteristiques: ModeleDnd5e.CARACTERISTIQUES, competences: ModeleDnd5e.COMPETENCES, etats: ModeleDnd5e.ETATS }[sorte] || [];
+  };
+  const jdrNom = (doc, sorte, id) => jdrListe(doc, sorte).find((o) => o.id === id)?.nom || id || '…';
+  const choixCaracs = (doc) => jdrListe(doc, 'caracteristiques').map((k) => [k.id, k.nom]);
+  // Une compétence, ou une caractéristique seule (« un test de Force »).
+  const choixTests = (doc) => [...jdrListe(doc, 'competences').map((k) => [k.id, `${k.nom} (${jdrNom(doc, 'caracteristiques', k.carac)})`]), ...choixCaracs(doc).map(([k, n]) => [k, `${n} (sans compétence)`])];
+  const choixEtats = (doc) => jdrListe(doc, 'etats').map((k) => [k.id, k.nom]);
+  const QUI_TEST = [['choix', 'Le joueur choisit qui le tente'], ['meilleur', 'Le meilleur du groupe'], ['premier', 'Le premier du groupe'], ['tous', 'Chacun : réussi si au moins un réussit'], ['groupe', 'Test de groupe : réussi si la moitié réussit']];
+  const QUI_VISES = [['tous', 'Tout le groupe'], ['premier', 'Le premier du groupe'], ['choix', 'Le joueur choisit qui']];
+  const MODES_JET = [['', 'Normal'], ['avantage', 'Avec avantage (2d20, le meilleur)'], ['desavantage', 'Avec désavantage (2d20, le pire)']];
+  const lireDes = (t) => /^\s*(\d*d\d+(\s*[+-]\s*\d+)?|\d+)\s*$/i.test(String(t || ''));
+  const PACK_JDR = ['jdr'];
+  const de = (nom) => (/^[aeiouyhéèêàâîôû]/i.test(nom) ? `d'${nom}` : `de ${nom}`);
+  const AIDE_BRANCHES = 'Le bloc a deux branches, « réussi » et « raté » : glisse dedans ce qui arrive dans chaque cas.';
+  Object.assign(COMMANDES, {
+    test: {
+      nom: 'Test de compétence (d20 contre un DD)', icone: 'symbol-event', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'test', competence: 'perception', dd: 12, qui: 'choix', avantage: false, desavantage: false, quoi: '', variable: '', reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'competence', label: 'Compétence', type: 'select', value: c.competence, choices: choixTests(doc) },
+        { key: 'dd', label: 'Difficulté (DD)', type: 'number', value: c.dd, min: 1, max: 40, unit: '5 très facile · 10 facile · 15 moyen · 20 difficile · 25 très difficile' },
+        { key: 'qui', label: 'Qui le tente', type: 'select', value: c.qui, choices: QUI_TEST },
+        { key: 'mode', label: 'Le jet', type: 'select', value: c.avantage ? 'avantage' : c.desavantage ? 'desavantage' : '', choices: MODES_JET },
+        { key: 'quoi', label: 'Ce qu\'on tente', type: 'text', value: c.quoi, placeholder: 'Crocheter la serrure (le texte du journal des jets)' },
+        { key: 'variable', label: 'Retenir le total dans', type: 'text', value: c.variable, list: 'tafl-variables', placeholder: 'facultatif : une variable' },
+        { type: 'info', text: `Le d20 + le bonus du personnage (caractéristique, et maîtrise s'il maîtrise la compétence) contre le DD. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'test', competence: v.competence, dd: clamp(Math.round(v.dd) || 10, 1, 40), qui: v.qui, avantage: v.mode === 'avantage', desavantage: v.mode === 'desavantage', quoi: v.quoi.trim(), variable: Doc.slug(v.variable, ''), reussi: c.reussi || [], rate: c.rate || [] }),
+      resume: (doc, c) => `${c.quoi ? `${c.quoi} : ` : ''}test ${de(jdrNom(doc, 'competences', c.competence) === c.competence ? jdrNom(doc, 'caracteristiques', c.competence) : jdrNom(doc, 'competences', c.competence))} DD ${c.dd} (${libelle(QUI_TEST, c.qui).split(' :')[0].toLowerCase()})${c.avantage ? ', avantage' : c.desavantage ? ', désavantage' : ''}`,
+    },
+    sauvegarde: {
+      nom: 'Jet de sauvegarde (piège, poison, sort)', icone: 'shield', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'sauvegarde', carac: 'dex', dd: 12, qui: 'tous', degats: '', type_degats: '', moitie: true, etat: '', quoi: '', reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'carac', label: 'Sauvegarde de', type: 'select', value: c.carac, choices: choixCaracs(doc) },
+        { key: 'dd', label: 'Difficulté (DD)', type: 'number', value: c.dd, min: 1, max: 40 },
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: QUI_VISES },
+        { key: 'quoi', label: 'Quoi', type: 'text', value: c.quoi, placeholder: 'Une fléchette empoisonnée jaillit du mur !' },
+        { key: 'degats', label: 'Dégâts', type: 'text', value: c.degats, placeholder: '2d6 (vide : aucun)' },
+        { key: 'type_degats', label: 'Type de dégâts', type: 'select', value: c.type_degats, choices: [['', '—'], ...TYPES_DEGATS] },
+        { key: 'moitie', label: 'Réussi : la moitié des dégâts', type: 'checkbox', value: c.moitie },
+        { key: 'etat', label: 'Raté : un état', type: 'select', value: c.etat, choices: [['', 'Aucun'], ...choixEtats(doc)] },
+        { type: 'info', text: `Chacun lance son d20 + son bonus de sauvegarde. Ceux qui ratent prennent les dégâts (et l'état) ; hors combat, le dernier debout garde toujours 1 PV. Le bloc est « réussi » si tous réussissent. ${AIDE_BRANCHES}` },
+      ],
+      onInput: (v, f) => { f.inputs.type_degats.row.hidden = !v.degats.trim(); f.inputs.moitie.row.hidden = !v.degats.trim(); },
+      depuis: (v, c) => ({ type: 'sauvegarde', carac: v.carac, dd: clamp(Math.round(v.dd) || 10, 1, 40), qui: v.qui, quoi: v.quoi.trim(), degats: v.degats.trim(), type_degats: v.degats.trim() ? v.type_degats : '', moitie: Boolean(v.moitie), etat: v.etat, reussi: c.reussi || [], rate: c.rate || [] }),
+      valide: (c) => (!c.degats || lireDes(c.degats) ? null : 'Dégâts : des dés comme 2d6, 1d8+2 ou un nombre.'),
+      resume: (doc, c) => `${c.quoi ? `${court(c.quoi, 30)} ` : ''}sauvegarde ${de(jdrNom(doc, 'caracteristiques', c.carac))} DD ${c.dd}${c.degats ? `, ${c.degats}${c.type_degats ? ` ${c.type_degats}` : ''}${c.moitie ? ' (moitié si réussi)' : ''}` : ''}${c.etat ? `, ${jdrNom(doc, 'etats', c.etat).toLowerCase()} si raté` : ''}`,
+    },
+    test_oppose: {
+      nom: 'Test opposé (contre un PNJ ou un monstre)', icone: 'arrow-swap', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'test_oppose', competence: 'persuasion', contre: 2, monstre: '', competence_adverse: '', nom_adverse: '', qui: 'choix', reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'competence', label: 'Compétence du héros', type: 'select', value: c.competence, choices: choixTests(doc) },
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui === 'premier' ? 'premier' : c.qui === 'meilleur' ? 'meilleur' : 'choix', choices: QUI_TEST.slice(0, 3) },
+        { key: 'nom_adverse', label: 'L\'adversaire', type: 'text', value: c.nom_adverse, placeholder: 'Le garde, le marchand…' },
+        { key: 'monstre', label: 'Ou un monstre', type: 'text', value: c.monstre, list: 'tafl-monstres-jdr', placeholder: 'facultatif : il prend la compétence du monstre' },
+        { key: 'competence_adverse', label: 'Sa compétence', type: 'select', value: c.competence_adverse, choices: [['', 'La même'], ...choixTests(doc)] },
+        { key: 'contre', label: 'Son bonus', type: 'number', value: c.contre, min: -10, max: 30, unit: 'sans monstre : l\'adversaire lance d20 + ce bonus' },
+        { type: 'info', text: `Les deux lancent un d20 + leur bonus ; égalité : celui qui tente échoue (Persuasion contre Intuition, Discrétion contre Perception, Athlétisme contre Athlétisme…). ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'test_oppose', competence: v.competence, qui: v.qui, nom_adverse: v.nom_adverse.trim(), monstre: Doc.slug(v.monstre, ''), competence_adverse: v.competence_adverse, contre: clamp(Math.round(v.contre) || 0, -10, 30), reussi: c.reussi || [], rate: c.rate || [] }),
+      resume: (doc, c) => `${jdrNom(doc, 'competences', c.competence)} contre ${c.monstre ? nomData(doc, 'monstres_jdr', c.monstre) : c.nom_adverse || 'un adversaire'}${c.competence_adverse ? ` (${jdrNom(doc, 'competences', c.competence_adverse)})` : ''}${c.monstre ? '' : ` ${c.contre >= 0 ? '+' : '−'}${Math.abs(c.contre)}`}`,
+    },
+    jet: {
+      nom: 'Lancer des dés (2d6, d100…)', icone: 'symbol-numeric', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'jet', formule: '1d20', quoi: '', variable: '' }),
+      champs: (doc, c) => [
+        { key: 'formule', label: 'Les dés', type: 'text', value: c.formule, placeholder: '1d20, 2d6+3, 1d100' },
+        { key: 'quoi', label: 'Pour quoi', type: 'text', value: c.quoi, placeholder: 'Table des rumeurs (le texte du journal)' },
+        { key: 'variable', label: 'Retenir le total dans', type: 'text', value: c.variable, list: 'tafl-variables', placeholder: 'une variable, testée ensuite par un « si »' },
+        { type: 'info', text: 'Les dés roulent à l\'écran et le jet est noté dans le journal. Pour une table aléatoire : retiens le total dans une variable, puis des « si » sur cette variable.' },
+      ],
+      depuis: (v) => ({ type: 'jet', formule: v.formule.trim().toLowerCase() || '1d20', quoi: v.quoi.trim(), variable: Doc.slug(v.variable, '') }),
+      valide: (c) => (lireDes(c.formule) ? null : 'Des dés comme 1d20, 2d6+3 ou 1d100.'),
+      resume: (doc, c) => `Lancer ${c.formule}${c.quoi ? ` (${court(c.quoi, 30)})` : ''}${c.variable ? ` → ${nomVariable(doc, c.variable)}` : ''}`,
+    },
+    repos: {
+      nom: 'Repos (court ou long)', icone: 'coffee', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'repos', sorte: 'long' }),
+      champs: (doc, c) => [
+        { key: 'sorte', label: 'Repos', type: 'select', value: c.sorte, choices: [['long', 'Long (une nuit : tous les PV, les sorts, la moitié des dés de vie)'], ['court', 'Court (une heure : dépenser des dés de vie)']] },
+        { type: 'info', text: 'Une auberge, un feu de camp. Les règles maison (Réglages › Règles du JDR) disent si le groupe peut aussi se reposer depuis le menu.' },
+      ],
+      depuis: (v) => ({ type: 'repos', sorte: v.sorte === 'court' ? 'court' : 'long' }),
+      resume: (doc, c) => `Repos ${c.sorte}`,
+    },
+    xp: {
+      nom: 'Donner de l\'XP (ou un jalon)', icone: 'star-full', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'xp', montant: 100, jalon: false }),
+      champs: (doc, c) => [
+        { key: 'jalon', label: 'Donner', type: 'select', value: String(c.jalon), choices: [['false', 'Des points d\'expérience à chaque héros'], ['true', 'Un jalon : tout le groupe monte d\'un niveau']] },
+        { key: 'montant', label: 'XP', type: 'number', value: c.montant, min: 0, max: 999999, unit: 'pour chaque héros' },
+        { type: 'info', text: 'Avec la progression par jalons (Réglages › Règles du JDR), les combats ne donnent pas d\'XP : ce bloc fait monter de niveau aux moments clés de l\'histoire.' },
+      ],
+      onInput: (v, f) => { f.inputs.montant.row.hidden = v.jalon === 'true'; },
+      depuis: (v) => ({ type: 'xp', jalon: v.jalon === 'true', montant: clamp(Math.round(v.montant) || 0, 0, 999999) }),
+      resume: (doc, c) => (c.jalon ? 'Jalon : le groupe monte d\'un niveau' : `${c.montant} XP pour chaque héros`),
+    },
+    etat: {
+      nom: 'Mettre ou retirer un état (empoisonné…)', icone: 'pulse', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'etat', etat: 'empoisonne', action: 'ajouter', qui: 'tous' }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ajouter', 'Mettre l\'état'], ['retirer', 'Retirer l\'état']] },
+        { key: 'etat', label: 'État', type: 'select', value: c.etat, choices: choixEtats(doc) },
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: QUI_VISES },
+      ],
+      depuis: (v) => ({ type: 'etat', action: v.action === 'retirer' ? 'retirer' : 'ajouter', etat: v.etat, qui: v.qui }),
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Mettre'} l'état ${jdrNom(doc, 'etats', c.etat).toLowerCase()} (${libelle(QUI_VISES, c.qui).toLowerCase()})`,
+    },
+    creer_personnage: {
+      nom: 'Créer un personnage (un héros de plus)', icone: 'person-add', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: () => ({ type: 'creer_personnage' }),
+      resume: () => 'Le joueur crée un nouveau personnage (il rejoint le groupe)',
+    },
+  });
+  const TYPES_DEGATS = [['contondant', 'Contondant'], ['perforant', 'Perforant'], ['tranchant', 'Tranchant'], ['acide', 'Acide'], ['feu', 'Feu'], ['froid', 'Froid'], ['foudre', 'Foudre'], ['tonnerre', 'Tonnerre'], ['poison', 'Poison'], ['necrotique', 'Nécrotique'], ['radiant', 'Radiant'], ['force', 'Force'], ['psychique', 'Psychique']];
 
   // Le bloc Script : la commande à jouer, puis ses réglages (ceux qu'elle déclare dans commande()). Les
   // réglages de toutes les commandes sont dans la fenêtre ; seuls ceux de la commande choisie se voient.
@@ -639,6 +770,53 @@ const Events = (() => {
     depuis: (v) => ({ type: 'variable', id: Doc.slug(v.id, ''), comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: valeurVariable(v.valeur) }),
     valide: (c) => (c.id ? null : 'Donne le nom de la variable.'),
   };
+  // Tafl 0.32 (Saga 0.13) : les conditions du pack JDR, vraies si au moins un héros du groupe convient.
+  Object.assign(CONDITIONS, {
+    jdr_perception: {
+      nom: 'La Perception passive du groupe (JDR)', packs: PACK_JDR,
+      nouveau: () => ({ type: 'jdr_perception', min: 13 }),
+      champs: (doc, c) => [
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 1, max: 40 },
+        { type: 'info', text: 'Sans lancer de dé : 10 + le bonus de Perception du meilleur héros. Une porte secrète, un piège, un pickpocket qui ne se voient que si le groupe est attentif.' },
+      ],
+      depuis: (v) => ({ type: 'jdr_perception', min: clamp(Math.round(v.min) || 10, 1, 40) }),
+    },
+    jdr_maitrise: {
+      nom: 'Un héros maîtrise une compétence (JDR)', packs: PACK_JDR,
+      nouveau: () => ({ type: 'jdr_maitrise', competence: 'arcanes' }),
+      champs: (doc, c) => [{ key: 'competence', label: 'Compétence', type: 'select', value: c.competence, choices: jdrListe(doc, 'competences').map((k) => [k.id, k.nom]) }],
+      depuis: (v) => ({ type: 'jdr_maitrise', competence: v.competence }),
+    },
+    jdr_etat: {
+      nom: 'Un héros a un état (JDR)', packs: PACK_JDR,
+      nouveau: () => ({ type: 'jdr_etat', etat: 'empoisonne', valeur: true }),
+      champs: (doc, c) => [
+        { key: 'etat', label: 'État', type: 'select', value: c.etat, choices: choixEtats(doc) },
+        { key: 'valeur', label: 'Est', type: 'select', value: String(c.valeur), choices: [['true', 'Vrai : au moins un héros l\'a'], ['false', 'Faux : personne ne l\'a']] },
+      ],
+      depuis: (v) => ({ type: 'jdr_etat', etat: v.etat, valeur: v.valeur === 'true' }),
+    },
+    jdr_classe: {
+      nom: 'Un héros a une classe (JDR)', packs: PACK_JDR,
+      nouveau: (doc) => ({ type: 'jdr_classe', classe: doc.data.classes_jdr?.[0]?.id || '' }),
+      champs: (doc, c) => [{ key: 'classe', label: 'Classe', type: 'select', value: c.classe, choices: (doc.data.classes_jdr || []).map((k) => [k.id, k.nom]) }],
+      depuis: (v) => ({ type: 'jdr_classe', classe: v.classe }),
+      valide: (c) => (c.classe ? null : 'Crée d\'abord les classes (Données › Classes, ou le modèle D&D 5e).'),
+    },
+    jdr_origine: {
+      nom: 'Un héros a une origine (JDR)', packs: PACK_JDR,
+      nouveau: (doc) => ({ type: 'jdr_origine', origine: doc.data.origines?.[0]?.id || '' }),
+      champs: (doc, c) => [{ key: 'origine', label: 'Origine', type: 'select', value: c.origine, choices: (doc.data.origines || []).map((k) => [k.id, k.nom]) }],
+      depuis: (v) => ({ type: 'jdr_origine', origine: v.origine }),
+      valide: (c) => (c.origine ? null : 'Crée d\'abord les origines (Données › Origines, ou le modèle D&D 5e).'),
+    },
+    jdr_niveau: {
+      nom: 'Un héros a au moins un niveau (JDR)', packs: PACK_JDR,
+      nouveau: () => ({ type: 'jdr_niveau', min: 3 }),
+      champs: (doc, c) => [{ key: 'min', label: 'Au moins le niveau', type: 'number', value: c.min, min: 1, max: 20 }],
+      depuis: (v) => ({ type: 'jdr_niveau', min: clamp(Math.round(v.min) || 1, 1, 20) }),
+    },
+  });
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -652,6 +830,12 @@ const Events = (() => {
     if (c.type === 'membre') return `${nomData(doc, 'personnages', c.personnage)} est avec le joueur`;
     if (c.type === 'moment') return libelle(MOMENTS, c.moment).replace(/ \(.*\)$/, '').toLowerCase();
     if (c.type === 'variable') return `« ${nomVariable(doc, c.id)} » ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur}`;
+    if (c.type === 'jdr_perception') return `Perception passive du groupe ≥ ${c.min}`;
+    if (c.type === 'jdr_maitrise') return `un héros maîtrise ${jdrNom(doc, 'competences', c.competence)}`;
+    if (c.type === 'jdr_etat') return c.valeur === false ? `personne n'est ${jdrNom(doc, 'etats', c.etat).toLowerCase()}` : `un héros est ${jdrNom(doc, 'etats', c.etat).toLowerCase()}`;
+    if (c.type === 'jdr_classe') return `un héros est ${nomData(doc, 'classes_jdr', c.classe)}`;
+    if (c.type === 'jdr_origine') return `un héros est ${nomData(doc, 'origines', c.origine)}`;
+    if (c.type === 'jdr_niveau') return `un héros est au moins niveau ${c.min}`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -670,6 +854,12 @@ const Events = (() => {
       case 'membre': return { type: 'membre', personnage: str(c.personnage) };
       case 'moment': return { type: 'moment', moment: pick(c.moment, MOMENTS, 'nuit') };
       case 'variable': return { type: 'variable', id: str(c.id), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: valeurVariable(c.valeur ?? 0) };
+      case 'jdr_perception': return { type: 'jdr_perception', min: clamp(int(c.min, 10), 1, 40) };
+      case 'jdr_maitrise': return { type: 'jdr_maitrise', competence: str(c.competence) };
+      case 'jdr_etat': return { type: 'jdr_etat', etat: str(c.etat), valeur: c.valeur !== false };
+      case 'jdr_classe': return { type: 'jdr_classe', classe: str(c.classe) };
+      case 'jdr_origine': return { type: 'jdr_origine', origine: str(c.origine) };
+      case 'jdr_niveau': return { type: 'jdr_niveau', min: clamp(int(c.min, 1), 1, 20) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -697,6 +887,15 @@ const Events = (() => {
       case 'tenue': return { type: 'tenue', tenue: str(c.tenue) };
       case 'groupe': return { type: 'groupe', action: c.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: str(c.personnage), niveau: clamp(int(c.niveau, 0), 0, 999) };
       case 'combat_groupe': return { type: 'combat_groupe', groupe: str(c.groupe) };
+      // Tafl 0.32 : le pack JDR.
+      case 'test': return { type: 'test', competence: str(c.competence) || 'perception', dd: clamp(int(c.dd, 10), 1, 40), qui: pick(c.qui, QUI_TEST, 'choix'), avantage: Boolean(c.avantage), desavantage: Boolean(c.desavantage) && !c.avantage, quoi: str(c.quoi), variable: str(c.variable), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'sauvegarde': return { type: 'sauvegarde', carac: str(c.carac) || 'dex', dd: clamp(int(c.dd, 10), 1, 40), qui: pick(c.qui, QUI_VISES, 'tous'), quoi: str(c.quoi), degats: lireDes(c.degats) ? str(c.degats).trim() : '', type_degats: str(c.type_degats), moitie: c.moitie !== false, etat: str(c.etat), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'test_oppose': return { type: 'test_oppose', competence: str(c.competence) || 'athletisme', qui: pick(c.qui, QUI_TEST, 'choix'), nom_adverse: str(c.nom_adverse), monstre: str(c.monstre), competence_adverse: str(c.competence_adverse), contre: clamp(int(c.contre, 0), -10, 30), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'jet': return { type: 'jet', formule: lireDes(c.formule) ? str(c.formule).trim().toLowerCase() : '1d20', quoi: str(c.quoi), variable: str(c.variable) };
+      case 'repos': return { type: 'repos', sorte: c.sorte === 'court' ? 'court' : 'long' };
+      case 'xp': return { type: 'xp', jalon: Boolean(c.jalon), montant: clamp(int(c.montant, 0), 0, 999999) };
+      case 'etat': return { type: 'etat', action: c.action === 'retirer' ? 'retirer' : 'ajouter', etat: str(c.etat), qui: pick(c.qui, QUI_VISES, 'tous') };
+      case 'creer_personnage': return { type: 'creer_personnage' };
       case 'musique': return { type: 'musique', fichier: Donnees.son(c.fichier, ['aucune']) };
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
@@ -782,6 +981,8 @@ const Events = (() => {
           classe: Doc.slug(p?.classe, ''),
           niveau: clamp(int(p?.niveau, 1), 1, 999),
           equipement: Object.fromEntries(['arme', 'bouclier', 'casque', 'armure', 'accessoire'].map((k) => [k, Doc.slug(p?.equipement?.[k], '')]).filter(([, v]) => v)),
+          // Tafl 0.32 (pack JDR) : la fiche d'un pré-tiré (donnees-jdr.js › normFiche).
+          ...(p?.jdr && typeof DonneesJdr !== 'undefined' ? { jdr: DonneesJdr.normFiche(p.jdr) } : {}),
         };
       })),
       quetes: uniques(arr(d?.quetes).map((q, i) => ({
@@ -858,6 +1059,7 @@ const Events = (() => {
           if (c.alors !== undefined) verifListe(c.alors, `${ici}, alors`);
           if (c.sinon !== undefined) verifListe(c.sinon, `${ici}, sinon`);
         }
+        if (A_BRANCHES.includes(c.type)) for (const k of ['reussi', 'rate']) if (c[k] !== undefined) verifListe(c[k], `${ici}, ${k}`);
         for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique'], ['combat_groupe', 'groupe'], ['groupe', 'personnage']]) {
           if (c.type === type && !str(c[champ]).trim()) erreurs.push(`${ici} (${type}) : ${champ} manquant.`);
         }
@@ -898,6 +1100,7 @@ const Events = (() => {
         lignes.push(`${'  '.repeat(n)}- ${resumeCommande(doc, c, ev)}`);
         if (c.type === 'choix') c.options.forEach((o) => { lignes.push(`${'  '.repeat(n + 1)}« ${o.texte} » :`); liste(o.commandes, n + 2); });
         if (c.type === 'si') { lignes.push(`${'  '.repeat(n + 1)}alors :`); liste(c.alors, n + 2); if (c.sinon.length) { lignes.push(`${'  '.repeat(n + 1)}sinon :`); liste(c.sinon, n + 2); } }
+        if (A_BRANCHES.includes(c.type)) for (const [k, mot] of [['reussi', 'réussi'], ['rate', 'raté']]) if (c[k].length) { lignes.push(`${'  '.repeat(n + 1)}${mot} :`); liste(c[k], n + 2); }
       }
     };
     ev.pages.forEach((p, k) => {
@@ -1352,8 +1555,7 @@ const Events = (() => {
           row.ondblclick = edit;
           box.append(row);
           const sous = (text) => box.append(el('div', { className: 'cmd-sub', style: { paddingLeft: `${8 + (n + 1) * 22}px` }, textContent: text }));
-          if (c.type === 'choix') c.options.forEach((o) => { sous(`Si le joueur répond « ${o.texte} »`); renderListe(box, o.commandes, n + 2); });
-          if (c.type === 'si') { sous('Alors'); renderListe(box, c.alors, n + 2); sous('Sinon'); renderListe(box, c.sinon, n + 2); }
+          for (const [titre, l] of branches(c)) { sous(titre); renderListe(box, l, n + 2); }
         });
         const add = el('button', { className: 'cmd-add', style: { marginLeft: `${8 + n * 22}px` }, textContent: '+ Ajouter une commande' });
         add.onclick = async () => {
@@ -1406,7 +1608,7 @@ const Events = (() => {
   const ONGLETS = [
     { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
       nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null, tenues: [], classe: '', niveau: 1, equipement: {} }),
-      meta: (o) => (o.heros ? 'héros' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
+      meta: (o) => (o.heros ? 'héros' : o.jdr ? 'pré-tiré' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
       vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
     { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
       nouveau: (id) => ({ id, titre: 'Nouvelle quête', description: '', secondaire: false, suivante: '', personnages: [], etapes: [{ texte: '' }] }),
@@ -1642,6 +1844,7 @@ const Events = (() => {
           champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'Sans sprite : la tuile qui le montre sur la carte (une seule image, quelle que soit sa direction)'),
           ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
           ...(pack() === 'jrpg' ? groupeJrpg(p) : []),
+          ...(pack() === 'jdr' && typeof DonneesJdr !== 'undefined' ? DonneesJdr.formPersonnage(p, work, render) : []),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,
@@ -1843,6 +2046,6 @@ const Events = (() => {
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants, valeurVariable,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
     editEvent, editData, isOpen, pageOuverte, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
-    formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, nomQui, quiReel, suivi,
+    formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, branches, nomQui, quiReel, suivi,
   };
 })();

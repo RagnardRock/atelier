@@ -120,9 +120,14 @@ const OutilsJeu = (() => {
     doc.tests = Array.isArray(doc.tests) ? doc.tests : [];
     const d = doc.data;
     const jrpg = d.reglages?.regles === 'jrpg';
+    const jdr = d.reglages?.regles === 'jdr';
+    const enGroupe = jrpg || jdr;
+    const nivMax = jdr ? 20 : 100;
     const nom = (liste, id) => liste.find((x) => x.id === id)?.nom || liste.find((x) => x.id === id)?.titre || id;
-    // Les membres possibles : les créatures (Pokémon), ou les personnages qui ont une classe (JRPG).
-    const membres = jrpg ? d.personnages.filter((p) => p.classe).map((p) => [p.id, `${p.nom || p.id}${p.heros ? ' (héros)' : ''}`]) : d.creatures.map((c) => [c.id, `${c.numero ? `#${c.numero} ` : ''}${c.nom || c.id}`]);
+    // Les membres possibles : les créatures (Pokémon), les personnages qui ont une classe (JRPG), ou les
+    // pré-tirés (JDR : un personnage avec une fiche de classe).
+    const membres = jdr ? d.personnages.filter((p) => p.jdr?.classe).map((p) => [p.id, `${p.nom || p.id}${p.heros ? ' (héros)' : ''}`])
+      : jrpg ? d.personnages.filter((p) => p.classe).map((p) => [p.id, `${p.nom || p.id}${p.heros ? ' (héros)' : ''}`]) : d.creatures.map((c) => [c.id, `${c.numero ? `#${c.numero} ` : ''}${c.nom || c.id}`]);
     const objets = d.objets.map((o) => [o.id, o.nom || o.id]);
     const badges = d.reglages?.badges || [];
 
@@ -217,36 +222,36 @@ const OutilsJeu = (() => {
       }
 
       // Équipe (ou groupe)
-      main.append(section(jrpg ? 'Groupe de héros' : 'Équipe'));
-      if (!membres.length) main.append(el('div', { className: 'rows-empty', textContent: jrpg ? 'Aucun personnage n\'a de classe : donne-leur une classe dans Données du jeu › Personnages.' : 'Pas encore de créatures : importe-les ou crée-les dans Données du jeu › Créatures.' }));
+      main.append(section(enGroupe ? 'Groupe de héros' : 'Équipe'));
+      if (!membres.length) main.append(el('div', { className: 'rows-empty', textContent: jdr ? 'Aucun pré-tiré : donne une fiche de JDR à un personnage dans Données du jeu › Personnages (sinon, la création de personnage se fait au début du test).' : jrpg ? 'Aucun personnage n\'a de classe : donne-leur une classe dans Données du jeu › Personnages.' : 'Pas encore de créatures : importe-les ou crée-les dans Données du jeu › Créatures.' }));
       else {
         etat.equipe.forEach((m, i) => {
           main.append(el('div', { className: 'field test-ligne' }, [
             liste(membres.some(([id]) => id === m.id) ? membres : [[m.id, `${m.id} (introuvable)`], ...membres], m.id, (v) => { m.id = v; }),
             el('span', { className: 'field-unit', textContent: 'Niv.' }),
-            nombre(m.niveau, 1, 100, (v) => { m.niveau = v ?? 1; }),
+            nombre(m.niveau, 1, nivMax, (v) => { m.niveau = v ?? 1; }),
             supprimer(() => { etat.equipe.splice(i, 1); renderMain(); }),
           ]));
         });
-        const max = jrpg ? 8 : 6;
+        const max = jrpg ? 8 : 6; // JDR : 6 personnages au plus, comme la création
         const actions = el('div', { className: 'test-actions' });
         if (etat.equipe.length < max) {
-          const ajouter = el('button', { className: 'button small' }, [icon('add'), jrpg ? ' Ajouter un héros' : ' Ajouter une créature']);
+          const ajouter = el('button', { className: 'button small' }, [icon('add'), enGroupe ? ' Ajouter un héros' : ' Ajouter une créature']);
           ajouter.onclick = () => {
             const pris = new Set(etat.equipe.map((m) => m.id));
-            etat.equipe.push({ id: (membres.find(([id]) => !pris.has(id)) || membres[0])[0], niveau: etat.equipe.at(-1)?.niveau || 5 });
+            etat.equipe.push({ id: (membres.find(([id]) => !pris.has(id)) || membres[0])[0], niveau: etat.equipe.at(-1)?.niveau || (jdr ? 1 : 5) });
             renderMain();
           };
           actions.append(ajouter);
         }
         if (etat.equipe.length) {
-          const niv = el('input', { type: 'number', min: 1, max: 100, placeholder: 'Niv.' });
+          const niv = el('input', { type: 'number', min: 1, max: nivMax, placeholder: 'Niv.' });
           const tous = el('button', { className: 'button small', textContent: 'Mettre tout le monde à ce niveau' });
-          tous.onclick = () => { const n = clamp(Math.round(Number(niv.value) || 0), 1, 100); if (niv.value) { for (const m of etat.equipe) m.niveau = n; renderMain(); } };
+          tous.onclick = () => { const n = clamp(Math.round(Number(niv.value) || 0), 1, nivMax); if (niv.value) { for (const m of etat.equipe) m.niveau = n; renderMain(); } };
           actions.append(niv, tous);
         }
         main.append(actions);
-        main.append(el('div', { className: 'editor-hint', textContent: etat.equipe.length ? 'Ces membres remplacent l\'équipe de départ.' : (jrpg ? 'Vide : le groupe de départ du jeu.' : 'Vide : une équipe vide, comme au début du jeu.') }));
+        main.append(el('div', { className: 'editor-hint', textContent: etat.equipe.length ? 'Ces membres remplacent l\'équipe de départ.' : jdr ? 'Vide : la création de personnage au début, comme une vraie partie.' : (jrpg ? 'Vide : le groupe de départ du jeu.' : 'Vide : une équipe vide, comme au début du jeu.') }));
       }
 
       // Objets

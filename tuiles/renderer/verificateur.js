@@ -34,6 +34,7 @@ const Verificateur = (() => {
       fn(c);
       if (c.type === 'choix') for (const o of c.options || []) parcourir(o?.commandes, fn);
       if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
+      if (['test', 'sauvegarde', 'test_oppose'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
     }
   }
   // Les conditions d'un événement : celles de ses pages, et celles des « si » de ses scripts.
@@ -53,10 +54,13 @@ const Verificateur = (() => {
     const liste = (sorte) => (Array.isArray(d[sorte]) ? d[sorte] : []);
     const reglages = d.reglages || {};
     const jrpg = reglages.regles === 'jrpg';
+    const jdr = reglages.regles === 'jdr';
+    const enGroupe = jrpg || jdr; // un groupe de héros contre des groupes de monstres (pas de créatures)
     const ids = (sorte) => new Set(liste(sorte).map((x) => x.id));
     const connus = {
       personnages: ids('personnages'), quetes: ids('quetes'), objets: ids('objets'), creatures: ids('creatures'),
       dresseurs: ids('dresseurs'), boutiques: ids('boutiques'), groupes: ids('groupes'),
+      monstres_jdr: ids('monstres_jdr'), classes_jdr: ids('classes_jdr'), origines: ids('origines'),
       badges: new Set((reglages.badges || []).map((b) => b.id)),
     };
     const nomCarte = (id) => cartes.get(id)?.nom || id;
@@ -93,8 +97,8 @@ const Verificateur = (() => {
       }
     }
     for (const b of liste('boutiques')) for (const a of b.articles || []) if (a.sorte === 'objet' && a.id) donne.objets.add(a.id);
-    // Le butin des monstres (pack JRPG) compte aussi.
-    if (jrpg) for (const m of liste('monstres')) for (const b of m.butin || []) if (b.objet) donne.objets.add(b.objet);
+    // Le butin des monstres (packs JRPG et JDR) compte aussi.
+    if (enGroupe) for (const m of liste(jdr ? 'monstres_jdr' : 'monstres')) for (const b of m.butin || []) if (b.objet) donne.objets.add(b.objet);
     // Le héros qui a une classe est dans le groupe dès le début.
     for (const p of liste('personnages')) if (p.heros && p.classe) donne.membres.add(p.id);
     const aObjet = (id) => !id || donne.objets.has(id);
@@ -354,7 +358,7 @@ const Verificateur = (() => {
     // --- 4. Les ids qui n'existent pas ---
     const verifierId = (sorte, id, quoi, ou = {}) => {
       if (!id || connus[sorte].has(id)) return;
-      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge' };
+      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine' };
       ajouter('erreur', 'references', `${quoi} : pas ${noms[sorte]} « ${id} » dans les données du jeu.`, ou);
     };
     for (const { carte, ev } of scriptsDe) {
@@ -365,19 +369,22 @@ const Verificateur = (() => {
       commandes(ev, (cmd) => {
         if (cmd.type === 'dire' && cmd.qui && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);
         if (cmd.type === 'objet') verifierId('objets', cmd.objet, quoi, ou);
-        if ((cmd.type === 'creature' || cmd.type === 'combat_sauvage') && !jrpg) verifierId('creatures', cmd.creature, quoi, ou);
+        if ((cmd.type === 'creature' || cmd.type === 'combat_sauvage') && !enGroupe) verifierId('creatures', cmd.creature, quoi, ou);
         if (cmd.type === 'combat_dresseur') verifierId('dresseurs', cmd.dresseur, quoi, ou);
         if (cmd.type === 'boutique') verifierId('boutiques', cmd.boutique, quoi, ou);
         if (cmd.type === 'quete') verifierId('quetes', cmd.quete, quoi, ou);
         if (cmd.type === 'badge') verifierId('badges', cmd.badge, quoi, ou);
         if (cmd.type === 'groupe') verifierId('personnages', cmd.personnage, quoi, ou);
         if (cmd.type === 'combat_groupe') verifierId('groupes', cmd.groupe, quoi, ou);
+        if (cmd.type === 'test_oppose' && cmd.monstre) verifierId('monstres_jdr', cmd.monstre, quoi, ou);
       });
       conditions(ev, (cond) => {
         if (cond.type === 'objet') verifierId('objets', cond.objet, quoi, ou);
         if (cond.type === 'quete') verifierId('quetes', cond.quete, quoi, ou);
         if (cond.type === 'badge') verifierId('badges', cond.badge, quoi, ou);
         if (cond.type === 'membre') verifierId('personnages', cond.personnage, quoi, ou);
+        if (cond.type === 'jdr_classe') verifierId('classes_jdr', cond.classe, quoi, ou);
+        if (cond.type === 'jdr_origine') verifierId('origines', cond.origine, quoi, ou);
       });
     }
     for (const c of cartes.values()) {
@@ -386,7 +393,7 @@ const Verificateur = (() => {
         const quoi = `La zone « ${z.nom || z.id} » de « ${c.nom} »`;
         verifierId('objets', z.objetRequis, quoi, ou);
         for (const r of z.rencontres || []) {
-          if (jrpg) verifierId('groupes', r.groupe, quoi, ou);
+          if (enGroupe) verifierId('groupes', r.groupe, quoi, ou);
           else verifierId('creatures', r.creature, quoi, ou);
         }
         if (z.objetRequis && connus.objets.has(z.objetRequis) && !donne.objets.has(z.objetRequis)) ajouter('attention', 'quetes', `${quoi} demande l'objet « ${z.objetRequis} », que personne ne donne ni ne vend : on n'y entrera jamais.`, ou);
@@ -400,10 +407,10 @@ const Verificateur = (() => {
       for (const a of b.articles || []) {
         const quoi = `La boutique « ${b.nom || b.id} »`;
         if (a.sorte === 'objet') verifierId('objets', a.id, quoi);
-        if (a.sorte === 'creature' && !jrpg) verifierId('creatures', a.id, quoi);
+        if (a.sorte === 'creature' && !enGroupe) verifierId('creatures', a.id, quoi);
       }
     }
-    if (!jrpg) {
+    if (!enGroupe) {
       for (const t of liste('dresseurs')) {
         for (const m of t.equipe || []) verifierId('creatures', m.creature, `Le dresseur « ${t.nom || t.id} »`);
         verifierId('personnages', t.personnage, `Le dresseur « ${t.nom || t.id} »`);
@@ -422,6 +429,8 @@ const Verificateur = (() => {
       const ou = { carte: carte.id, x: ev.x, y: ev.y, evenement: ev.id };
       const quoi = `${nomEv(ev)} sur « ${carte.nom} »`;
       commandes(ev, (cmd) => {
+        // Un test ou un jet du pack JDR peut ranger son total dans une variable.
+        if ((cmd.type === 'test' || cmd.type === 'jet') && cmd.variable && !variables.has(cmd.variable)) ajouter('erreur', 'scripts', `${quoi} : le bloc ${cmd.type === 'test' ? 'Test' : 'Jet de dés'} range son total dans « ${cmd.variable} », qui n'existe pas (Données › Variables).`, ou);
         if (cmd.type === 'variable' && (!cmd.id || !variables.has(cmd.id))) ajouter('erreur', 'scripts', cmd.id ? `${quoi} : pas de variable « ${cmd.id} » (Données › Variables).` : `${quoi} : un bloc Variable n'a pas de variable choisie.`, ou);
         if (cmd.type !== 'script' || !sc?.pret) return;
         if (!cmd.nom) return ajouter('erreur', 'scripts', `${quoi} : un bloc Script n'a pas de commande choisie.`, ou);
@@ -431,7 +440,7 @@ const Verificateur = (() => {
           const v = cmd.params?.[cle] ?? p.defaut;
           const sortes = { objet: 'objets', personnage: 'personnages', quete: 'quetes', creature: 'creatures', dresseur: 'dresseurs', boutique: 'boutiques', badge: 'badges', groupe: 'groupes' };
           if (p.type === 'carte' && v && !cartes.has(v)) ajouter('erreur', 'scripts', `${quoi}, commande « ${cmd.nom} » : pas de carte « ${v} ».`, ou);
-          if (sortes[p.type] && v && !(jrpg && p.type === 'creature')) verifierId(sortes[p.type], v, `${quoi}, commande « ${cmd.nom} » (${p.nom || cle})`, ou);
+          if (sortes[p.type] && v && !(enGroupe && p.type === 'creature')) verifierId(sortes[p.type], v, `${quoi}, commande « ${cmd.nom} » (${p.nom || cle})`, ou);
           if (p.type === 'variable' && v && !variables.has(v)) ajouter('erreur', 'scripts', `${quoi}, commande « ${cmd.nom} » : pas de variable « ${v} ».`, ou);
         }
       });

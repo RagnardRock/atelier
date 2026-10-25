@@ -2,14 +2,15 @@
 
 Saga sépare **le monde** (cartes, déplacements, événements, scripts, sauvegarde, menus) et **les règles** (qui se bat, comment on gagne, comment on progresse). Le monde ne connaît pas les règles : il passe toujours par l'objet `Regles` (`regles.js`), qui envoie chaque appel au **pack de règles** choisi par le jeu.
 
-Deux packs existent (Saga 0.8) :
+Trois packs existent (Saga 0.13) :
 
 | Pack | Dossier | Écran de combat | En bref |
 |---|---|---|---|
 | `pokemon` | `regles/pokemon/` | `duel` (`ecran-combat.js`) | Créatures, captures, types, natures, EV/IV, évolutions, dresseurs. Formules des jeux officiels. |
 | `jrpg` | `regles/jrpg/` | `groupe` (`ecran-groupe.js`) | Un groupe de héros avec des classes, des PV et des PM, des compétences et de l'équipement, contre des groupes de monstres au tour par tour. |
+| `jdr` | `regles/jdr/` | `groupe` (`ecran-groupe.js`) | Un jeu de rôle sur table façon D&D 5e (SRD 5.1) : création de personnage, tests au d20 contre un DD, sauvegardes, sorts et emplacements, jets contre la mort, règles maison. |
 
-Le jeu choisit son pack dans Tafl (Données du jeu › Réglages › Règles), c'est-à-dire `donnees/reglages.json` › `reglages.regles`. Un pack que Saga ne connaît pas retombe sur `pokemon`. Les fichiers de données de chaque pack sont décrits dans `tuiles/FORMAT.md` (« Le pack JRPG » pour `jrpg`).
+Le jeu choisit son pack dans Tafl (Données du jeu › Réglages › Règles), c'est-à-dire `donnees/reglages.json` › `reglages.regles`. Un pack que Saga ne connaît pas retombe sur `pokemon`. Les fichiers de données de chaque pack sont décrits dans `tuiles/FORMAT.md` (« Le pack JRPG » pour `jrpg`, « Le pack JDR » pour `jdr`).
 
 Ce document décrit :
 
@@ -20,6 +21,7 @@ Ce document décrit :
 5. [Le pack Pokémon](#5-le-pack-pokémon) : ce qui lui est propre.
 6. [Écrire un pack](#6-écrire-un-pack--un-exemple-minimal) : un exemple minimal complet.
 7. [Les scripts et les règles maison](#7-les-scripts-du-jeu-et-les-règles-maison-saga-012) : remplacer une formule du pack depuis un script du jeu (Saga 0.12), et ce qui est prévu ensuite.
+8. [Le pack JDR](#8-le-pack-jdr-saga-013) : D&D 5e, ses ajouts au contrat, ses calculs, un combat, ses formules (Saga 0.13).
 
 ---
 
@@ -139,7 +141,7 @@ Saga 0.7. Appelée après chaque pas du joueur (le compteur `partie.compteurs.pa
 
 | Appel | Rend |
 |---|---|
-| `Regles.packs()` | Les noms des packs connus : `['pokemon', 'jrpg']`. |
+| `Regles.packs()` | Les noms des packs connus : `['pokemon', 'jrpg', 'jdr']`. |
 | `Regles.nom(jeu)` | Le nom du pack du jeu. |
 | `Regles.ecran(jeu)` | `'duel'` ou `'groupe'`. |
 | `Regles.capacites(jeu)` | Toutes les capacités, `false` par défaut. |
@@ -542,6 +544,7 @@ Les formules de chaque pack sont déclarées dans `BacASable.FORMULES` (nom, ce 
 | Pack | Formules |
 |---|---|
 | `jrpg` | `degats`, `soin` (en combat et hors combat), `touche`, `critique`, `fuite`, `experience` (voir 4.4 et 4.3) |
+| `jdr` | `attaque`, `degats`, `critique`, `test`, `sauvegarde`, `initiative`, `pv_niveau`, `soin`, `experience` (voir 8.6) |
 | `pokemon` | `degats`, `capture` (une chance en % ; Saga en tire les secousses : seuil `65536 × (p / 100)^¼` par secousse), `fuite` (en %), `experience` |
 
 **Un nouveau pack** qui veut des règles maison : ajouter ses formules à `BacASable.FORMULES` sous l'id du pack, et les appeler par `Maison.formule`. Une formule qui n'y est pas ne peut pas être remplacée (Tafl prévient si un script en déclare une).
@@ -557,3 +560,104 @@ Les formules de chaque pack sont déclarées dans `BacASable.FORMULES` (nom, ce 
 
 - **Un pack entier écrit en script** (avec le pack TTRPG) : un objet qui suit le contrat de la [partie 1](#1-le-contrat-dun-pack), déclaré par un script et choisi dans Réglages › Règles. Il faudra prêter `ui` à travers le bac à sable et vérifier dans Tafl qu'il a toutes les fonctions obligatoires.
 - **Des comportements** pour les genres en temps réel (machines à états des personnages et des ennemis).
+
+---
+
+## 8. Le pack JDR (Saga 0.13)
+
+Le dossier `regles/jdr/` : un jeu de rôle sur table façon D&D 5e (SRD 5.1, en français), pour accompagner de vraies parties autour d'une table. Ses données sont décrites dans `tuiles/FORMAT.md` › « Le pack JDR ». Le pack est découpé en petits fichiers, chargés dans cet ordre :
+
+| Fichier | Rôle |
+|---|---|
+| `base.js` | Les listes par défaut (6 caractéristiques, 18 compétences, 15 états), les tables de la 5e (bonus de maîtrise, XP par niveau et par FP, emplacements de sorts), les règles maison avec leurs défauts (`regles(jeu)`), l'affichage des distances et de la monnaie. |
+| `des.js` | Tous les dés du pack, tirés depuis une graine gardée dans la partie (`partie.jdr.graine`), et le journal des jets (`partie.jdr.journal`, les 200 derniers). |
+| `personnage.js` | Un personnage et tout ce qui s'en calcule : caractéristiques, bonus, CA, PV max, sorts, emplacements, repos, montée de niveau. Rien de calculé n'est gardé dans la partie. |
+| `tests.js` | Les tests, sauvegardes, tests de groupe et tests opposés, hors combat comme en combat. |
+| `combat.js` | Le combat au d20 sur l'écran de groupe. |
+| `hors-combat.js` | Le sac, l'équipement, les sorts hors combat, les repos, la montée de niveau, le journal des jets. |
+| `creation.js` | La création de personnage (neuf étapes). |
+| `fiches.js` | La fiche du menu Groupe, le Bestiaire et ce qu'un script lit d'un personnage. |
+| `pack.js` | L'objet que la façade attend, plus les commandes et conditions du pack. |
+
+### 8.1 Les ajouts au contrat (facultatifs pour tous les packs)
+
+Le pack JDR a demandé six nouveaux champs facultatifs. La façade les rend sans effet pour un pack qui ne les a pas.
+
+| Champ | Ce que le moteur en fait |
+|---|---|
+| `commandes` | `{ type: async ({ jeu, partie, ui, c, jouer, narrer, ranger }) → résultat }`. Les commandes d'événement propres au pack. `scripts.js` demande d'abord `Regles.commande(jeu, c.type)` ; `jouer(liste)` joue une branche (`reussi`, `rate`), `narrer(texte)` dit une phrase, `ranger(membre)` le met dans l'équipe ou la Réserve. Le résultat, un objet simple, revient à un script JS (`saga.test(…)`). |
+| `condition(jeu, cond, partie)` | Vrai, faux, ou `undefined` pour une condition que le pack ne connaît pas (le monde prend alors la sienne). |
+| `debut({ jeu, partie, ui, ranger })` | Au début d'une nouvelle partie, dès que le joueur est libre : ici, la création des personnages. Un test rapide de Tafl qui a déjà mis un groupe la saute. |
+| `actionsPause(jeu)` → `[[id, nom, icône]]` | Des choix en plus dans le menu de pause (JDR : « Jets de dés », « Se reposer »). |
+| `agirPause({ jeu, partie, ui, id })` | Fait l'un de ces choix. |
+| `pourScript(jeu, partie)` → `[fiche]` | Ce qu'un script JS lit de chaque membre (`saga.fiche(i)`, `saga.fiches`). Des valeurs simples, déjà calculées. |
+
+`scripts.ui` (3.1) gagne aussi `texte({ titre, valeur, max })` (taper un texte : le nom du personnage), `repartir({ … })` (répartir des valeurs, l'achat de points) et `des({ titre, lignes })` (le plateau de dés, `des-ecran.js`, qui montre des jets **déjà tirés** et ne décide rien). Sur l'écran groupe, une vue de héros peut donner `info` (un texte à la place des PM : le pack JDR y met la CA).
+
+### 8.2 Un personnage dans la partie
+
+```js
+{
+  creature: 'aventurier', heros: true, jdr: true, nom: 'Thorgrim', joueur: '',
+  origine: 'nain', classe: 'guerrier', niveau: 1, xp: 0,
+  carac: { for: 16, dex: 12, con: 15, int: 8, sag: 13, cha: 10 },   // sans le bonus d'origine
+  competences: ['athletisme', 'intimidation'], expertises: [],
+  pv: 13, pv_temp: 0, pv_niveaux: [],      // les PV gagnés à chaque niveau après le 1er (sans la Con)
+  des_vie: 1,                               // les dés de vie qui restent
+  equipement: { arme: 'hache-d-armes', seconde: 'bouclier', armure: 'cotte-de-mailles' },
+  sorts: [], emplacements: { 1: 0 }, pacte: 0, ressources: { second_souffle: 0 },
+  etats: [], mort: { succes: 0, echecs: 0 }, stable: false, mort_definitive: false,
+}
+```
+
+`creature` est le personnage de `personnages.json` qui prête son apparence. `joueur` dira plus tard à quel ami appartient la fiche (multijoueur) : vide pour l'instant.
+
+### 8.3 Les calculs de base
+
+- **Modificateur** d'une caractéristique : ⌊(valeur − 10) / 2⌋. **Bonus de maîtrise** : +2 aux niveaux 1 à 4, puis +1 tous les 4 niveaux (+6 au 17).
+- **Test** : d20 + modificateur (+ maîtrise si la compétence est maîtrisée, deux fois avec l'expertise) contre un DD. **Avantage / désavantage** : 2d20, le meilleur / le pire ; les deux ensemble s'annulent.
+- **CA** : 10 + Dex sans armure ; armure légère : sa CA + Dex ; intermédiaire : + Dex (2 au plus) ; lourde : sa CA ; + le bouclier ; Défense sans armure du barbare (10 + Dex + Con) ou du moine (10 + Dex + Sag) ; + Style défense.
+- **PV max** : le maximum du dé de vie + Con au niveau 1, puis chaque niveau ce que donne `pv_niveau` (moyenne, jet ou choix) + Con (au moins 1), plus `pv_bonus_niveau` de l'origine.
+- **Sorts** : DD = 8 + maîtrise + modificateur de magie ; bonus d'attaque de sort = maîtrise + modificateur. Les emplacements suivent la table de la 5e selon le niveau de lanceur (complet : son niveau ; demi : la moitié, à partir du niveau 2) ; la magie de pacte a sa propre table.
+- **Perception passive** : 10 + bonus de Perception (condition `jdr_perception`).
+- **XP** : la table de la 5e (300 pour le niveau 2, 900 pour le 3…, 355 000 pour le 20). Le niveau ne monte pas tout seul : le joueur choisit « Monter de niveau » dans le menu Groupe (PV, aptitudes, sorts, et +2 à répartir aux niveaux d'`ameliorations`).
+
+### 8.4 Un combat
+
+1. **L'initiative** : d20 + Dex pour chacun ; on joue du plus grand au plus petit.
+2. **À son tour**, un héros a une action (Attaquer, Sort, Objet, Esquiver, Aider, Se cacher, Fuir) puis, s'il en a une, une action bonus (attaque de la main gauche, Second souffle, Rage, Ruse, sort à `action: "bonus"`, potion si `potion_bonus`).
+3. **Une attaque** : d20 + bonus contre la CA. Un 20 naturel est un **critique** (seuil abaissé par `critique_ameliore`) : les dés de dégâts sont lancés deux fois (`critiques: "doubler"`) ou valent leur maximum plus un jet (`"max"`). Un 1 naturel rate toujours (`echec_critique`). Avec `tenaille`, avantage au contact contre une cible qu'un allié a déjà frappée au contact ce tour-ci.
+4. **Les dégâts** : dés + modificateur, puis résistance (×½), vulnérabilité (×2) ou immunité (×0) de la cible selon le type.
+5. **Un sort** : un emplacement dépensé (sauf un sort mineur), puis un jet d'attaque de sort, une sauvegarde contre le DD, ou un effet sûr (FORMAT.md › `sorts.json`). La concentration s'arrête avec un autre sort à concentration, ou une sauvegarde de Constitution ratée (DD 10 ou la moitié des dégâts) quand le lanceur est touché.
+6. **Les monstres** choisissent une de leurs `actions` (selon `poids`, les `recharge` en plus), ou leur multiattaque.
+7. **À 0 PV**, un héros tombe. Avec `morts: "jets"`, il fait un jet contre la mort au début de son tour (10 ou plus : une réussite ; 1 : deux échecs ; 20 : il se relève avec 1 PV) : 3 réussites, il est stable ; 3 échecs, il meurt. Frappé à terre : un échec (deux sur un critique). Des dégâts qui dépassent ses PV max d'un coup le tuent. Avec `"ko"`, il reste simplement K.O. jusqu'à la fin du combat.
+8. **Fuir** : un test de groupe d'Acrobaties contre 10 + la meilleure Dex des monstres, plus facile de 2 à chaque essai raté. Impossible si le groupe a `fuite: false`.
+9. **La fin** : tout le groupe à terre = défaite. Victoire : l'XP des monstres (leur `xp`, sinon celle de leur FP) partagée entre les héros vivants, leur or et leur butin, le Bestiaire. Les PV, ressources et emplacements dépensés restent dépensés jusqu'au prochain repos.
+
+Tout ce qui ne vit que le temps du combat (l'initiative, le tour, les états de combat, les bonus des sorts) est rangé à part de l'écran : le futur mode « table » (pions, brouillard de guerre) reprendra ces règles telles quelles.
+
+### 8.5 Hors combat
+
+- **Repos court** : chacun peut dépenser ses dés de vie (dé + Con chacun) ; Second souffle, Fougue, Conduit divin, les points de ki et la magie de pacte reviennent. **Repos long** : tous les PV, la moitié des dés de vie (au moins 1), tous les emplacements et toutes les aptitudes ; les états partent (sauf l'épuisement) et les héros tombés se relèvent. La durée montrée suit `repos`.
+- **Le journal des jets** (menu de pause › Jets de dés) : les derniers jets, et une barre pour lancer n'importe quelle formule (`2d6+3`) devant toute la table.
+- **Le MJ décide** (`mj_decide`) : après chaque test d'événement, une liste « Garder le jet / Forcer la réussite / Forcer l'échec ». Une vraie table garde ainsi le dernier mot.
+
+### 8.6 Les formules remplaçables
+
+| Formule | Rend | Valeurs |
+|---|---|---|
+| `attaque` | le bonus ajouté au d20 d'une attaque | `naturel`, `bonus`, `magie`, `sort`, `distance` |
+| `degats` | les PV perdus, avant les résistances | `des`, `mod`, `critique`, `type`, `sort` |
+| `critique` | le d20 naturel à partir duquel c'est un critique | `niveau`, `classe` |
+| `test` | le total d'un test | `naturel`, `bonus`, `dd`, `competence`, `carac`, `maitrise` |
+| `sauvegarde` | le total d'une sauvegarde | `naturel`, `bonus`, `dd`, `carac`, `maitrise` |
+| `initiative` | le total d'initiative | `naturel`, `dex` |
+| `pv_niveau` | les PV gagnés en montant (sans la Con) | `de`, `con`, `jet`, `niveau` |
+| `soin` | les PV rendus par un sort | `des`, `mod`, `sort` |
+| `experience` | l'XP de chaque héros après une victoire | `total`, `heros` |
+
+Toutes ont aussi `normal`. Elles sont décrites pour Tafl dans `BacASable.FORMULES.jdr`.
+
+### 8.7 Prévu pour la suite
+
+Le pack reste pur (une partie en entrée, une partie en sortie, les dés depuis la graine) pour le mode « table » et le multijoueur : `cache` dans une ligne du journal (un jet caché du MJ, toujours faux pour l'instant) et `joueur` sur chaque fiche sont déjà là.

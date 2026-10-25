@@ -71,6 +71,7 @@ const ScriptsTafl = (() => {
     const pack = packDe(doc);
     const objet = doc.data.objets?.find((o) => o.id === 'potion')?.id || doc.data.objets?.[0]?.id || 'potion';
     const jrpg = pack === 'jrpg';
+    const nomPack = { jrpg: 'JRPG', jdr: 'JDR' }[pack] || 'Pokémon';
     return [
       { id: 'dialogue', nom: 'Commande avec dialogue', aide: 'Un personnage qui offre un objet une seule fois, avec une question.', nomFichier: 'cadeau', code: `// Une commande pour le bloc Script d'un événement : un personnage offre un objet, une seule fois.
 // Dans l'événement : ajoute le bloc « Script JS », choisis « cadeau » et règle l'objet et le nombre.
@@ -109,7 +110,7 @@ commande('crocheter', {
   }
 });
 ` },
-      { id: 'degats', nom: 'Règle de dégâts maison', aide: `Remplace la formule des dégâts du pack ${jrpg ? 'JRPG' : 'Pokémon'} (ici : +10 %, et les critiques encore plus forts).`, nomFichier: 'regles-maison', code: `// Une règle maison : elle remplace la formule des dégâts du pack de règles du jeu.
+      { id: 'degats', nom: 'Règle de dégâts maison', aide: `Remplace la formule des dégâts du pack ${nomPack} (ici : +10 %, et les critiques encore plus forts).`, nomFichier: 'regles-maison', code: `// Une règle maison : elle remplace la formule des dégâts du pack de règles du jeu.
 // v.normal est le résultat de la formule du pack : on peut juste l'ajuster.
 // (Les formules qu'on peut remplacer sont listées à droite, et dans l'aide de formule().)
 formule('degats', (v, des) => {
@@ -186,6 +187,7 @@ quand('apres_combat', async (saga, infos) => {
       `type IdBoutique = ${chaine(ids(doc.data.boutiques))};`,
       `type IdDresseur = ${chaine(ids(doc.data.dresseurs))};`,
       `type IdGroupe = ${chaine(ids(doc.data.groupes))};`,
+      'type Fiche = { nom: string; personnage: string; joueur: string; origine: string; classe: string; niveau: number; xp: number; pv: number; pvMax: number; pv_temp: number; ca: number; maitrise: number; vitesse: number; caracteristiques: Record<string, number>; modificateurs: Record<string, number>; sauvegardes: Record<string, number>; competences: Record<string, number>; maitrises: string[]; perception_passive: number; etats: string[]; sorts: string[]; dd_sorts: number; mort: boolean };',
       'type Direction = \'haut\' | \'bas\' | \'gauche\' | \'droite\';',
       'type Issue = \'victoire\' | \'defaite\' | \'fuite\' | \'capture\';',
       '/** Les formules du pack de règles de ce jeu, et les valeurs que chacune reçoit. */',
@@ -231,7 +233,18 @@ quand('apres_combat', async (saga, infos) => {
       `  ${doc1('Donne un badge.')}\n  badge(badge: string): Promise<void>;`,
       `  ${doc1('Soigne toute l\'équipe (le joueur se réveillera ici s\'il perd un combat).')}\n  soigner(): Promise<void>;`,
       `  ${doc1('Emmène le joueur ailleurs, avec un fondu.')}\n  teleporter(carte: IdCarte, x: number, y: number, direction?: Direction): Promise<void>;`,
-      ...(packDe(doc) === 'jrpg'
+      ...(packDe(doc) === 'jdr'
+        ? [`  ${doc1('Un test au d20 contre un DD, comme le bloc Test (pack JDR). qui : \'choix\' (le joueur choisit), \'meilleur\', \'premier\', \'tous\' (réussi si l\'un réussit), \'groupe\' (la moitié). Rend reussi, total, membre (son nom), naturel.')}\n  test(o: { competence: string; dd: number; qui?: 'choix' | 'meilleur' | 'premier' | 'tous' | 'groupe'; avantage?: boolean; desavantage?: boolean; quoi?: string }): Promise<{ reussi: boolean; total: number; membre: string; naturel: number; annule?: boolean }>;`,
+          `  ${doc1('Un jet de sauvegarde du groupe (pack JDR), avec des dégâts (la moitié si réussi avec moitie) et un état pour ceux qui ratent. reussi : tous ont réussi.')}\n  sauvegarde(o: { carac: string; dd: number; qui?: 'tous' | 'premier' | 'choix'; degats?: string; type_degats?: string; moitie?: boolean; etat?: string; quoi?: string }): Promise<{ reussi: boolean; reussis: number; total: number }>;`,
+          `  ${doc1('Un test opposé (pack JDR) : la compétence d\'un héros contre un monstre de monstres_jdr ou un PNJ (son bonus : contre).')}\n  oppose(o: { competence: string; monstre?: string; competence_adverse?: string; contre?: number; nom_adverse?: string; qui?: 'choix' | 'meilleur' | 'premier' }): Promise<{ reussi: boolean; total: number; adverse: number }>;`,
+          `  ${doc1('Un jet de dés montré sur le plateau et noté au journal des jets (pack JDR) : \'2d6+3\'.')}\n  jet(formule: string, quoi?: string): Promise<{ total: number; des: number[] }>;`,
+          `  ${doc1('Le groupe se repose (pack JDR).')}\n  repos(sorte?: 'court' | 'long'): Promise<void>;`,
+          `  ${doc1('Chaque héros gagne de l\'expérience (pack JDR).')}\n  xp(montant: number): Promise<void>;`,
+          `  ${doc1('Met ou enlève un état (empoisonne, a_terre…) au groupe (pack JDR).')}\n  etat(etat: string, action?: 'ajouter' | 'retirer', qui?: 'tous' | 'premier' | 'choix'): Promise<void>;`,
+          `  ${doc1('La fiche du membre i du groupe (0 = le premier), ou null (pack JDR) : nom, classe, niveau, pv, pvMax, ca, caracteristiques, modificateurs, sauvegardes, competences (les bonus), etats, sorts…')}\n  fiche(i?: number): Fiche | null;`,
+          `  ${doc1('Toutes les fiches du groupe (pack JDR).')}\n  readonly fiches: Fiche[];`,
+          `  ${doc1('Un combat contre une rencontre (un groupe de monstres). Rend l\'issue ; perdu, le script de l\'événement s\'arrête.')}\n  combattre(o: { groupe: IdGroupe }): Promise<Issue>;`]
+        : packDe(doc) === 'jrpg'
         ? [`  ${doc1('Un personnage rejoint ou quitte le groupe (pack JRPG).')}\n  groupe(personnage: IdPersonnage, action?: 'rejoindre' | 'quitter', niveau?: number): Promise<void>;`,
           `  ${doc1('Un combat contre un groupe de monstres. Rend l\'issue ; perdu, le script de l\'événement s\'arrête.')}\n  combattre(o: { groupe: IdGroupe }): Promise<Issue>;`]
         : [`  ${doc1('Donne une créature au joueur.')}\n  creature(creature: IdCreature, niveau?: number): Promise<void>;`,
@@ -331,7 +344,7 @@ quand('apres_combat', async (saga, infos) => {
         const r = await bac.appeler('formule', quoi.nom, ex);
         console.ecrire('ok', `formule('${quoi.nom}') avec ${JSON.stringify(ex)} → ${r.valeur?.absente ? 'pas remplacée' : r.valeur} (le pack donnait ${ex.normal})`);
       } else if (quoi.sorte === 'quand') {
-        const infos = { carte: { carte: carte?.id || '', depuis: '' }, apres_combat: { issue: 'victoire', sorte: packDe(doc) === 'jrpg' ? 'groupe' : 'sauvage' }, moment: { moment: 'nuit' }, pas: { x: 3, y: 4 } }[quoi.nom] || {};
+        const infos = { carte: { carte: carte?.id || '', depuis: '' }, apres_combat: { issue: 'victoire', sorte: ['jrpg', 'jdr'].includes(packDe(doc)) ? 'groupe' : 'sauvage' }, moment: { moment: 'nuit' }, pas: { x: 3, y: 4 } }[quoi.nom] || {};
         await bac.appeler('quand', quoi.nom, infos);
         console.ecrire('ok', `quand('${quoi.nom}') a fini (${Math.round(performance.now() - t0)} ms).`);
       } else {
@@ -451,7 +464,7 @@ quand('apres_combat', async (saga, infos) => {
             return ligne(def ? 'symbol-event' : 'warning', x.moment, def ? def.nom : 'moment inconnu : Saga ne l\'appellera jamais', def ? { sorte: 'quand', nom: x.moment } : null, def ? '' : 'attention');
           })),
           ...(!mes.erreurs.length && !mes.commandes.length && !mes.formules.length && !mes.quand.length ? [el('p', { className: 'modal-info', textContent: 'Ce fichier ne déclare encore rien. commande(), formule() et quand() s\'affichent ici au fur et à mesure.' })] : []),
-          el('div', { className: 'editor-section' }, [el('span', { textContent: `Formules du pack ${packDe(doc) === 'jrpg' ? 'JRPG' : 'Pokémon'}` })]),
+          el('div', { className: 'editor-section' }, [el('span', { textContent: `Formules du pack ${{ jrpg: 'JRPG', jdr: 'JDR' }[packDe(doc)] || 'Pokémon'}` })]),
           el('p', { className: 'script-formules modal-info', textContent: Object.entries(formules).map(([k, f]) => `${k} (${f.nom.toLowerCase()})`).join(' · ') }),
         ]),
         el('div', { className: 'editor-section' }, [el('span', { textContent: 'Console' })]),

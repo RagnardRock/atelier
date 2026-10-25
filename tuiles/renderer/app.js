@@ -1333,13 +1333,16 @@ const App = (() => {
         { key: 'mapWidth', label: 'Carte : largeur', type: 'number', value: 20, min: 1, max: 256, unit: 'cases' },
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec des tuiles d\'exemple (herbe, hautes herbes, chemin, eau, fleur) et une petite carte', type: 'checkbox', value: true },
+        // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
+        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)']] }] : []),
         ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
     if (!v) return;
     const tileSize = Number(v.tileSize);
     const doc = Doc.create({ name: v.name.trim() || (game ? 'Mon jeu' : 'mon-jeu'), tileSize, palette: paletteById(v.palette).couleurs, mapWidth: clamp(Math.round(v.mapWidth), 1, 256), mapHeight: clamp(Math.round(v.mapHeight), 1, 256), mapName: (game && v.mapName.trim()) || 'Carte 1' });
-    if (v.samples) Samples.fill(doc);
+    if (game && v.modele === 'jdr') ExempleJdr.remplir(doc);
+    else if (v.samples) Samples.fill(doc);
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut
     await setDocument(doc);
@@ -1428,7 +1431,9 @@ const App = (() => {
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
       { label: 'Données du jeu (personnages, créatures, objets…)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
       // Le raccourci vers la liste principale du pack de règles du jeu.
-      Espaces.packDe(api.doc) === 'jrpg'
+      Espaces.packDe(api.doc) === 'jdr'
+        ? { label: 'Monstres du JDR (bestiaire)…', run: () => { run(() => openData('monstres_jdr')); } }
+        : Espaces.packDe(api.doc) === 'jrpg'
         ? { label: 'Monstres (bestiaire)…', run: () => { run(() => openData('monstres')); } }
         : { label: 'Créatures et Pokédex…', run: () => { run(() => openData('creatures')); } },
       { label: 'Aller au départ du joueur', run: goToStart },
