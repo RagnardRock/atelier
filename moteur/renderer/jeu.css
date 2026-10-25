@@ -870,7 +870,7 @@ body.plein-ecran.mode-table #scene { cursor: default; }
 .libre-aide { margin: 0; font-size: 12px; opacity: 0.8; line-height: 1.4; }
 .libre-membre { position: relative; display: inline-flex; }
 .libre-membre .libre-enlever { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0; display: grid; place-items: center;
-  border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.75); color: #fff; font-size: 10px; cursor: pointer; opacity: 0; transition: opacity 0.12s; }
+  border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; background: rgba(0, 0, 0, 0.85); color: #fff; font-size: 10px; cursor: pointer; opacity: 0.75; transition: opacity 0.12s; }
 .libre-membre:hover .libre-enlever, .libre-enlever:focus-visible { opacity: 1; }
 .libre-petite { position: relative; }
 .libre-tenu { position: absolute; bottom: 2px; right: 2px; font-size: 8px; color: var(--accent, #ffd36b); }

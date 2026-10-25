@@ -41,7 +41,7 @@ const EquipeLibre = (() => {
         const liste = el('div', { className: 'libre-liste' });
         const choix = el('div', { className: 'libre-choix' });
         const ok = el('button', { className: 'libre-ok', type: 'button', textContent: 'C\'est mon équipe !' });
-        const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}) ; reclique-la pour l'enlever. Clique une créature de ta liste, en bas, pour choisir ses attaques et son objet.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
+        const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}), deux fois la même si tu veux. En bas, clique une vignette pour choisir ses attaques et son objet, ou sa croix pour l'enlever.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
         const reglage = el('div', { className: 'libre-reglage', hidden: true });
         carte.append(tete, recherche, liste, el('div', { className: 'libre-bas' }, choix, ok), aide, reglage);
         racine.append(carte);
@@ -66,14 +66,13 @@ const EquipeLibre = (() => {
             b.append(...[
               im ? el('img', { src: im, alt: '' }) : el('span', { className: 'libre-vide', textContent: (e.nom || '?')[0] }),
               el('span', { className: 'libre-nom', textContent: e.nom || e.id }),
-              prise ? el('b', { className: 'libre-prise', textContent: '✓' }) : null,
+              prise ? el('b', { className: 'libre-prise', textContent: `×${prise}` }) : null,
             ].filter(Boolean));
-            // Un clic la prend, un autre la repose.
+            // Chaque clic en prend une de plus (deux fois la même espèce, c'est permis) ; la croix sur
+            // sa vignette, en bas, la repose.
             b.onclick = () => {
-              const i = choisies.findIndex((x) => x.id === e.id);
-              if (i >= 0) choisies.splice(i, 1);
-              else if (choisies.length < nombre) choisies.push({ id: e.id, attaques: Regles.attaquesDefaut(jeu, e.id, niveau).slice(0, 4), objet: '' });
-              else return;
+              if (choisies.length >= nombre) return;
+              choisies.push({ id: e.id, attaques: Regles.attaquesDefaut(jeu, e.id, niveau).slice(0, 4), objet: '' });
               dessiner();
             };
             liste.append(b);
