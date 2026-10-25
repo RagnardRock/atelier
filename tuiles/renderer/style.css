@@ -195,7 +195,7 @@ input[type=range]::-webkit-slider-thumb {
 .menu-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-keys { color: var(--muted); font-size: 12px; margin-left: 24px; }
 .menu-sep { height: 1px; margin: 5px 8px; background: var(--border); }
-/* Tafl 0.26 : l'historique (Édition › Historique, Ctrl+H) : les actions faites, puis celles qu'on peut refaire. */
+/* Tafl 0.28 : l'historique (Édition › Historique, Ctrl+H) : les actions faites, puis celles qu'on peut refaire. */
 .menu.history-menu { max-height: 70vh; overflow-y: auto; min-width: 320px; }
 .menu-item.history-futur { color: var(--muted); font-style: italic; }
 .menu-item.history-actuel { font-weight: 600; }
@@ -1134,7 +1134,7 @@ body.resizing-row { cursor: row-resize; }
 .test-argent { width: 110px !important; flex: 0 0 auto !important; }
 .field-unit { color: var(--muted); font-size: 12px; }
 /* =========================================================================
-   Tafl 0.26 : le script d'un événement en blocs reliés (blocs.js), et l'aperçu des dialogues
+   Tafl 0.28 : le script d'un événement en blocs reliés (blocs.js), et l'aperçu des dialogues
    ========================================================================= */
 .editor-section:has(.vue-choix)::after { order: 1; }
 .editor-section .vue-choix { order: 2; display: flex; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; }

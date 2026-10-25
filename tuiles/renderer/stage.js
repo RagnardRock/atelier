@@ -40,7 +40,7 @@ const Stage = (() => {
   let lastPoint = null;  // dernier point du crayon (pour Maj+clic)
   let spaceDown = false;
   let frame = 0;
-  // Tafl 0.26 : la sélection de l'outil Sélection { carte, x, y, w, h }, et le morceau qui suit la
+  // Tafl 0.28 : la sélection de l'outil Sélection { carte, x, y, w, h }, et le morceau qui suit la
   // souris avant d'être posé { piece, x, y, dx, dy, glisser } (glisser : on déplace la sélection,
   // l'action est déjà commencée et les cases de départ déjà vidées). Voir presse-papiers.js.
   let sel = null;
@@ -468,7 +468,7 @@ const Stage = (() => {
     ctx.setLineDash([]);
   }
 
-  // --- Sélection, copier, couper, coller (Tafl 0.26) ---
+  // --- Sélection, copier, couper, coller (Tafl 0.28) ---
   // La sélection n'existe que sur la carte où on l'a tracée.
   const selection = () => (sel && App.doc && sel.carte === App.doc.map.id ? sel : null);
   const optionsPiece = () => ({ calques: App.options.selCalques, layer: App.options.layer, passage: App.options.selPassage, zones: App.options.selZones, evenements: App.options.selEvents });

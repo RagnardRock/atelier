@@ -1,4 +1,4 @@
-// Tafl 0.26 : copier, couper et coller un morceau de carte, d'une carte à l'autre.
+// Tafl 0.28 : copier, couper et coller un morceau de carte, d'une carte à l'autre.
 // L'outil Sélection (R) trace un rectangle ; Ctrl+C le copie, Ctrl+X le coupe, Ctrl+V colle le
 // morceau qui suit alors la souris jusqu'au clic (Échap annule). Glisser l'intérieur de la sélection
 // la déplace.

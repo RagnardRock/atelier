@@ -141,7 +141,7 @@ const App = (() => {
         }
       }
       if (api.tool === 'select') {
-        // Tafl 0.26 : ce que la sélection emporte quand on copie, coupe, déplace ou vide.
+        // Tafl 0.28 : ce que la sélection emporte quand on copie, coupe, déplace ou vide.
         const quoi = el('select', { title: 'Ce que copier, couper, déplacer et Suppr emportent' });
         quoi.add(new Option(api.options.layer < 0 ? 'Le passage' : `Le calque ${map.layers[api.options.layer]?.name}`, 'courant'));
         quoi.add(new Option('Tous les calques', 'tous'));
@@ -760,7 +760,7 @@ const App = (() => {
   }
   function toggleLayerVisible(i) {
     const l = api.doc.map.layers[i];
-    // Tafl 0.26 : montrer ou cacher un calque s'annule aussi (Ctrl+Z), comme le reste.
+    // Tafl 0.28 : montrer ou cacher un calque s'annule aussi (Ctrl+Z), comme le reste.
     Doc.change(api.doc, l.visible ? `Cacher le calque ${l.name}` : `Montrer le calque ${l.name}`, () => { api.doc.map.layers[i] = { ...l, visible: !l.visible }; });
   }
   function toggleOption(key) {
@@ -1208,7 +1208,7 @@ const App = (() => {
     refresh();
   }
 
-  // Tafl 0.26 : l'historique en liste. Un clic ramène le jeu à cet état (on peut ensuite refaire).
+  // Tafl 0.28 : l'historique en liste. Un clic ramène le jeu à cet état (on peut ensuite refaire).
   function historyMenu(x, y, button = null) {
     const doc = api.doc;
     if (!doc) return;
@@ -1330,7 +1330,7 @@ const App = (() => {
       null,
       { label: 'Réglages de Tafl…', keys: 'Ctrl+,', run: () => run(openSettings) },
     ],
-    // Tafl 0.26 : annuler, l'historique, et copier-coller des morceaux de carte (outil Sélection).
+    // Tafl 0.28 : annuler, l'historique, et copier-coller des morceaux de carte (outil Sélection).
     Édition: () => {
       const doc = api.doc, carte = api.mode === 'map', sel = Boolean(doc && carte && Stage.selection());
       return [
@@ -1538,7 +1538,7 @@ const App = (() => {
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
-      // Tafl 0.26 : avec l'outil Sélection, Ctrl+A prend toute la carte (sinon : toutes les tuiles montrées).
+      // Tafl 0.28 : avec l'outil Sélection, Ctrl+A prend toute la carte (sinon : toutes les tuiles montrées).
       if (k === 'a' && api.mode === 'map' && api.tool === 'select') return go(() => Stage.toutSelectionner());
       if (k === 'a') return go(needDoc(selectAllShown));
       if (k === 'c' && api.doc && api.mode === 'map') return go(() => Stage.copier());

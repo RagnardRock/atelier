@@ -192,7 +192,7 @@ const Doc = (() => {
     }
   }
 
-  // Tafl 0.26 : aller d'un coup à un état de l'historique (n < 0 : annuler n fois, n > 0 : refaire n fois).
+  // Tafl 0.28 : aller d'un coup à un état de l'historique (n < 0 : annuler n fois, n > 0 : refaire n fois).
   function travel(doc, n) {
     let label = null;
     for (let k = 0; k < Math.abs(n); k++) label = (n < 0 ? undo : redo)(doc) ?? label;

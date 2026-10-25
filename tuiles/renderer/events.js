@@ -816,7 +816,7 @@ const Events = (() => {
     if (e.key === 'Escape' && !menuOuvert) courant.fermer();
     const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
     if (ctrl && e.key === 'Enter') courant.valider?.();
-    // Tafl 0.26 : annuler et refaire dans la fenêtre. Dans une case de texte, Ctrl+Z reste celui du
+    // Tafl 0.28 : annuler et refaire dans la fenêtre. Dans une case de texte, Ctrl+Z reste celui du
     // texte (il défait les lettres tapées) ; ailleurs, il défait le dernier changement de la fenêtre.
     const texte = /INPUT|TEXTAREA/.test(document.activeElement?.tagName) && !/checkbox|radio|range|color|button/.test(document.activeElement?.type);
     if (ctrl && courant.suivi && !texte && !Dialogs.isOpen()) {
@@ -826,7 +826,7 @@ const Events = (() => {
     return true;
   }
 
-  // Tafl 0.26 : l'historique d'une grande fenêtre (événement, données du jeu). La fenêtre travaille
+  // Tafl 0.28 : l'historique d'une grande fenêtre (événement, données du jeu). La fenêtre travaille
   // sur une copie `work` ; après chaque geste (clic, choix, glisser-déposer, texte tapé puis une
   // petite pause), on regarde ce qui a changé, clé par clé (work.pages, work.creatures…), et on garde
   // l'ancienne version des seules clés changées. Annuler les remet et redessine la fenêtre.
@@ -1069,7 +1069,7 @@ const Events = (() => {
         cache.onchange = () => { p.cache = cache.checked; };
         main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Sur cette page, l\'événement est absent (invisible : on ne peut ni lui parler ni le toucher)' }), cache]));
 
-        // Le script : en blocs reliés (Tafl 0.26) ou en liste, au choix (gardé pour la prochaine fois).
+        // Le script : en blocs reliés (Tafl 0.28) ou en liste, au choix (gardé pour la prochaine fois).
         const vues = el('span', { className: 'vue-choix' });
         for (const [v, label, ic] of [['blocs', 'Blocs', 'type-hierarchy-sub'], ['liste', 'Liste', 'list-flat']]) {
           const b = el('button', { className: `button small${vue === v ? ' active' : ''}`, title: v === 'blocs' ? 'Les commandes en blocs reliés, avec l\'aperçu des dialogues' : 'Les commandes en liste, comme avant' }, [icon(ic), label]);

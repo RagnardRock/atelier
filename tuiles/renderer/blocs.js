@@ -1,4 +1,4 @@
-// Tafl 0.26 : le script d'un événement en blocs reliés (dans la fenêtre de l'événement).
+// Tafl 0.28 : le script d'un événement en blocs reliés (dans la fenêtre de l'événement).
 //
 // Chaque commande est un bloc, coloré selon sa famille (dialogue, logique, objets…). Les blocs se
 // suivent de haut en bas, reliés par un trait. Un « choix » s'ouvre en une branche par réponse, un
