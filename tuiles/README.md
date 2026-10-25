@@ -184,6 +184,22 @@ Le bouton **Jouer** de la barre de titre (ou `F5`, ou Jeu › Jouer) lance le je
 - Saga déjà ouvert : il recharge le jeu dans sa fenêtre, avec ce que Tafl vient d'enregistrer.
 - Lancé depuis le clone (`npm start`), Tafl lance le Saga du clone (`moteur/`, après un `npm install` dans `moteur`) ; installé, il lance le Saga installé (depuis Atelier).
 
+## Vérifier le jeu et test rapide (Tafl 0.26, avec Saga 0.9)
+
+**Jeu › Vérifier le jeu** (`Ctrl+Maj+V`) lit tout le jeu, même ce qui n'est pas encore enregistré, et liste ce qui empêcherait de jouer ou de finir l'histoire. Les **erreurs** (rouge) sont à corriger ; les lignes **à vérifier** (jaune) sont peut-être voulues. Un clic sur une ligne ferme la liste, ouvre la carte et fait clignoter la case ; la notification propose d'ouvrir l'événement ou de revoir la liste.
+
+- **Téléporteurs** : une carte d'arrivée qui n'existe plus, une case hors de la carte, bloquée, sous un PNJ ou d'où l'on ne peut aller nulle part, un téléporteur posé sur une case bloquée, et ceux d'où on ne revient jamais (un trou peut être voulu). Les commandes « téléporter » des scripts aussi.
+- **Cartes et personnages inaccessibles** : Tafl marche depuis le départ du joueur comme Saga (passage, rebords, PNJ qui bloquent, téléporteurs, scripts qui téléportent) et signale les cartes où l'on ne va jamais et les personnages, panneaux, coffres ou obstacles qu'on ne peut pas atteindre (aucune case libre devant eux).
+- **Quêtes et conditions impossibles** : une quête que rien ne commence ou ne finit (ou seulement un événement inaccessible), une étape jamais atteinte, une page qui attend un interrupteur jamais allumé, un objet que personne ne donne ni ne vend, un badge jamais donné, une quête jamais finie. Pareil pour les articles de boutique, les zones et les obstacles.
+- **Ids qui n'existent pas** : un personnage, objet, créature, dresseur, boutique, quête, badge ou groupe de monstres nommé dans un script ou une donnée, mais absent des données.
+
+Le vérificateur est optimiste : il suppose que le joueur obtient tout ce que le jeu donne ou vend quelque part, et qu'un PNJ qui peut disparaître ne bloque pas. Ce qu'il signale reste donc impossible même dans le meilleur des cas. Loki peut le lancer aussi (action `verifier`).
+
+**Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un **état de départ choisi** : la case de départ (le départ du jeu, ou une case : par défaut celle sous la souris), l'équipe et ses niveaux (les héros du groupe pour le pack JRPG), les objets du sac, l'argent, les badges, les interrupteurs allumés et l'avancée de chaque quête. Pour essayer l'arène 2 sans rejouer le début.
+
+- Donne un nom à l'état (« Avant l'arène 2 ») et **Enregistrer l'état** : il reste dans la liste de gauche (gardé dans `jeu.json`, champ `tests`). Double-clic sur un état : le lancer. `Ctrl+Entrée` : lancer.
+- Saga démarre une **partie neuve** avec cet état, affiche un badge **Test** dans sa barre de titre, et **sauvegarde ces parties à part** : ta vraie partie n'est jamais écrasée.
+
 ## Importer des planches et poser des objets (Tafl 0.10)
 
 Pour reprendre des planches de tuiles trouvées sur Internet ou extraites d'un jeu, même « sales ».

@@ -11,8 +11,9 @@ contextBridge.exposeInMainWorld('saga', {
   jeuxRecents: () => ipcRenderer.invoke('jeu:recents'),
   montrerJeu: (dossier) => ipcRenderer.invoke('jeu:montrer', dossier),
   // La sauvegarde de la partie d'un jeu (dans %APPDATA%\atelier-moteur\sauvegardes, jamais dans le jeu).
-  lireSauvegarde: (dossier) => ipcRenderer.invoke('sauvegarde:lire', dossier),
-  ecrireSauvegarde: (dossier, donnees) => ipcRenderer.invoke('sauvegarde:ecrire', dossier, donnees),
+  // test : la sauvegarde à part d'un test rapide de Tafl (Saga 0.9).
+  lireSauvegarde: (dossier, test = false) => ipcRenderer.invoke('sauvegarde:lire', dossier, test),
+  ecrireSauvegarde: (dossier, donnees, test = false) => ipcRenderer.invoke('sauvegarde:ecrire', dossier, donnees, test),
   // Un jeu lancé par Tafl ou Atelier alors que Saga est déjà ouvert : { dossier, depart }.
   onJeuExterne: (callback) => ipcRenderer.on('jeu:externe', (_event, l) => callback(l)),
   demarrage: () => ipcRenderer.invoke('startup'),

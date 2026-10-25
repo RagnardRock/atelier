@@ -58,8 +58,10 @@ const App = (() => {
 
   // --- Ouvrir un jeu ---
   // depart : où commencer (« Jouer ici » de Tafl). partie : une partie à garder (F5).
-  // Sans l'un ni l'autre, s'il y a une sauvegarde, Saga propose de la continuer.
-  async function lancer(textes, depart, partie = null) {
+  // test : un test rapide de Tafl (Saga 0.9), une partie neuve avec un état de départ choisi
+  // (équipe, objets, badges…) ; ses sauvegardes vont à part, pour ne pas écraser la vraie partie.
+  // Sans rien de tout ça, s'il y a une sauvegarde, Saga propose de la continuer.
+  async function lancer(textes, depart, partie = null, test = null) {
     if (!textes) return;
     let jeu;
     try {
@@ -69,8 +71,11 @@ const App = (() => {
       return;
     }
     // Un départ demandé (« Jouer ici » de Tafl, ou F5) qui n'existe plus : on revient au départ du jeu.
+    if (!depart && !partie && test?.depart) depart = test.depart;
     const d = depart && jeu.cartes.has(depart.carte) ? depart : null;
-    ouvert = { dossier: textes.dossier, jeu };
+    ouvert = { dossier: textes.dossier, jeu, test: test ? { nom: String(test.nom || '') } : null };
+    $('#badge-test').hidden = !test;
+    $('#badge-test').title = test ? `Test rapide${test.nom ? ` « ${test.nom} »` : ''} lancé par Tafl : les sauvegardes vont à part, ta vraie partie n'est pas touchée.` : '';
     appliquerTheme();
     $('#accueil').hidden = true;
     $('#scene').hidden = false;
@@ -80,7 +85,7 @@ const App = (() => {
     for (const id of ['#btn-recharger', '#btn-debug']) $(id).hidden = false;
     document.title = `${jeu.titre} · Saga`;
     fermerPause();
-    if (!partie && !d) {
+    if (!partie && !d && !test) {
       const sauvegarde = await window.saga.lireSauvegarde(textes.dossier).catch(() => null);
       if (sauvegarde?.partie) {
         const quand = new Date(sauvegarde.quand).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
@@ -93,15 +98,15 @@ const App = (() => {
     }
     // Une partie dont la carte n'existe plus (supprimée dans Tafl) repart du départ du jeu.
     if (partie && !jeu.cartes.has(partie.position?.carte)) partie = { ...partie, position: { ...jeu.depart } };
-    moteur.demarrer(jeu, d, partie);
+    moteur.demarrer(jeu, d, partie, partie ? null : test);
     for (const p of jeu.problemes) notify(`À savoir : ${p}.`, 'warning', 9000);
   }
 
   async function sauvegarder() {
     if (!ouvert || moteur.enScript) return;
     try {
-      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() });
-      moteur.annoncer('Partie sauvegardée');
+      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() }, Boolean(ouvert.test));
+      moteur.annoncer(ouvert.test ? 'Partie de test sauvegardée (à part)' : 'Partie sauvegardée');
     } catch (err) {
       notify(`Sauvegarde impossible : ${cleanError(err)}`, 'error');
     }
@@ -115,9 +120,9 @@ const App = (() => {
     }
   }
 
-  async function ouvrirDossier(dossier, depart, partie) {
+  async function ouvrirDossier(dossier, depart, partie, test) {
     try {
-      await lancer(await window.saga.ouvrirJeu(dossier), depart, partie);
+      await lancer(await window.saga.ouvrirJeu(dossier), depart, partie, test);
     } catch (err) {
       notify(cleanError(err), 'error');
     }
@@ -128,7 +133,7 @@ const App = (() => {
   async function recharger() {
     if (!ouvert || moteur.enScript) return;
     const partie = moteur.partie();
-    await ouvrirDossier(ouvert.dossier, partie?.position, partie);
+    await ouvrirDossier(ouvert.dossier, partie?.position, partie, ouvert.test);
     notify('Jeu rechargé.', 'success', 1800);
   }
 
@@ -139,6 +144,7 @@ const App = (() => {
     $('#scene').hidden = true;
     $('#accueil').hidden = false;
     $('#titre-jeu').hidden = true;
+    $('#badge-test').hidden = true;
     for (const id of ['#btn-recharger', '#btn-debug']) $(id).hidden = true;
     $('#infos').hidden = true;
     document.title = 'Saga';
@@ -348,12 +354,12 @@ const App = (() => {
   // comme dans les jeux Pokémon. F5 garde la partie en mémoire.
 
   // Un jeu lancé par Tafl (« Jouer ») ou Atelier alors que Saga est déjà ouvert.
-  window.saga.onJeuExterne((l) => ouvrirDossier(l.dossier, l.depart));
+  window.saga.onJeuExterne((l) => ouvrirDossier(l.dossier, l.depart, null, l.test));
 
   async function init() {
     await chargerConfig();
     const l = await window.saga.demarrage();
-    if (l) await ouvrirDossier(l.dossier, l.depart);
+    if (l) await ouvrirDossier(l.dossier, l.depart, null, l.test);
     else afficherRecents();
   }
   init();

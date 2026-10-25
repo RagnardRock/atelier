@@ -392,6 +392,34 @@ const Stage = (() => {
       ctx.lineWidth = 2;
       ctx.strokeRect(v.x + hover.x * cell, v.y + hover.y * cell, (st ? st.w : 1) * cell, (st ? st.h : 1) * cell);
     }
+    // La case montrée par le vérificateur (Tafl 0.26) : un cadre qui pulse quelques secondes.
+    if (signal && signal.carte === map.id) {
+      const t = performance.now() - signal.debut;
+      if (t > 3200) signal = null;
+      else {
+        const r = cell * (0.6 + 0.4 * Math.abs(Math.sin(t / 220)));
+        const cx = v.x + (signal.x + 0.5) * cell, cy = v.y + (signal.y + 0.5) * cell;
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(cx - r, cy - r, r * 2, r * 2);
+        render();
+      }
+    }
+  }
+
+  // Centre la vue de la carte sur la case (x, y) et la fait clignoter (le vérificateur, Tafl 0.26).
+  let signal = null;
+  function montrer(x, y) {
+    const map = App.doc?.map;
+    if (!map || App.mode !== 'map') return;
+    const v = views.map;
+    if (!v.fitted) fit();
+    v.zoom = Math.max(v.zoom, 2);
+    const cell = v.zoom * App.doc.tileSize, { w, h } = size();
+    v.x = Math.round(w / 2 - (x + 0.5) * cell);
+    v.y = Math.round(h / 2 - (y + 0.5) * cell);
+    signal = { carte: map.id, x, y, debut: performance.now() };
+    render();
   }
 
   // Le tampon sous la souris, en transparence (ses rangées « au-dessus du joueur » marquées d'un trait).
@@ -910,5 +938,5 @@ const Stage = (() => {
     render();
   }
 
-  return { init, render, fit, zoomBy, reset, zoneAt, get zoom() { return view().zoom; }, get hover() { return hover; } };
+  return { init, render, fit, zoomBy, reset, zoneAt, montrer, get zoom() { return view().zoom; }, get hover() { return hover; } };
 })();

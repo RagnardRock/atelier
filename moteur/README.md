@@ -63,6 +63,13 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **PNJ qui bougent** : un événement en déplacement `aleatoire` se promène (sans s'éloigner de plus de 2 cases), `tourne` regarde autour de lui.
 - **Sauvegarde** : Ctrl+S ou le menu de pause. Elle va dans `%APPDATA%\atelier-moteur\sauvegardes` (jamais dans le dossier du jeu), une par jeu. Quand on rouvre le jeu, Saga propose **Continuer** ou **Nouvelle partie**. F5 (recharger) garde la partie en cours.
 
+## Test rapide (Saga 0.9, avec Tafl 0.26)
+
+Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de départ choisi : la case de départ, l'équipe et ses niveaux (les héros pour le pack JRPG), les objets, l'argent, les badges, les interrupteurs et l'avancée des quêtes. Tafl l'écrit dans un petit fichier temporaire et lance `Saga.exe <dossier> --test=<ce fichier>` (le format est dans `tuiles/FORMAT.md`, « Test rapide »).
+
+- Saga commence une **partie neuve**, sans proposer de continuer la sauvegarde, puis pose l'état par-dessus (`moteur.js`, `appliquerTest`). Ce qui n'est pas donné reste comme au début d'une partie.
+- Un badge **Test** s'affiche dans la barre de titre. Les sauvegardes d'un test vont dans un fichier à part (`…-test.json` dans `sauvegardes`) : la vraie partie n'est jamais écrasée. F5 garde la partie de test.
+
 ## Ce que fait Saga 0.3 : les combats
 
 - **Rencontres sauvages** : dans une zone qui a des rencontres (les hautes herbes, l'eau…), chaque pas a sa chance de lancer un combat, selon le taux de la zone. La créature est tirée au sort selon les poids de la table, à un niveau entre le minimum et le maximum. Un **Repousse** empêche les rencontres pendant un certain nombre de pas.
@@ -127,7 +134,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 
 | Fichier | Rôle |
 |---|---|
-| `main.js` | La fenêtre, les réglages, la lecture du dossier de jeu (Saga n'y écrit jamais), les sauvegardes, la ligne de commande (`Saga.exe <dossier> --carte=… --x=… --y=…`), la mise à jour. |
+| `main.js` | La fenêtre, les réglages, la lecture du dossier de jeu (Saga n'y écrit jamais), les sauvegardes, la ligne de commande (`Saga.exe <dossier> --carte=… --x=… --y=…`, `--test=<fichier>` pour un test rapide de Tafl), la mise à jour. |
 | `preload.js` | Le pont entre l'interface et `main.js` (`window.saga`). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |

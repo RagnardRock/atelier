@@ -250,6 +250,7 @@ const IO = (() => {
     });
     if (maps.length) setMaps(doc, maps);
     doc.depart = cleanDepart(doc, jeu.depart);
+    doc.tests = Array.isArray(jeu.tests) ? jeu.tests.filter((t) => t && typeof t === 'object' && !Array.isArray(t)) : [];
     // Les données du jeu : un fichier par sorte (donnees/personnages.json…).
     const donnees = {};
     for (const [kind, fichier] of Object.entries(jeu.donnees || {})) {
@@ -280,6 +281,8 @@ const IO = (() => {
       cartes: doc.maps.map((m) => ({ id: m.id, nom: m.name, fichier: mapFile(m) })),
       depart: doc.depart,
       donnees: Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
+      // Tafl 0.26 : les états de départ enregistrés du test rapide (Saga n'en a pas besoin pour jouer).
+      tests: doc.tests || [],
     };
     return [
       ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],

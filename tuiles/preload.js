@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('tafl', {
   nomsPlanche: (file) => ipcRenderer.invoke('file:nomsPlanche', file),
   revealFile: (file) => ipcRenderer.invoke('file:reveal', file),
   // Lancer le jeu dans Saga (le moteur) ; depart = { carte, x, y, direction } pour « Jouer ici ».
-  jouer: (dossier, depart) => ipcRenderer.invoke('jeu:jouer', dossier, depart),
+  jouer: (dossier, depart, test) => ipcRenderer.invoke('jeu:jouer', dossier, depart, test),
   // Dossier de jeu (jeu.json, tuiles.tafl, cartes/*.json : voir FORMAT.md)
   pickGameFolder: () => ipcRenderer.invoke('game:pick'),
   openGame: (target) => ipcRenderer.invoke('game:open', target),
