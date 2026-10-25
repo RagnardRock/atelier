@@ -1,7 +1,7 @@
 {
   "name": "atelier-export",
   "productName": "Brokk",
-  "version": "0.6.0",
+  "version": "1.0.0",
   "description": "Brokk, mon outil d'export d'assets : un PSD, un logo ou une image devient d'un coup toutes les tailles web d'un projet (favicon, icônes, WebP, @2x, Open Graph), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
