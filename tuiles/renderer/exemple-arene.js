@@ -57,7 +57,7 @@ const ExempleArene = (() => {
     return data;
   }
 
-  const dire = (texte, qui = '@evenement') => ({ type: 'dire', qui, expression: 'normal', texte });
+  const dire = (texte, qui = '') => ({ type: 'dire', qui, expression: 'normal', texte });
   const page = (commandes, conditions = [], cache = false) => ({ conditions, cache, commandes });
   const ev = (id, nom, type, x, y, pages, autres = {}) => ({ id, nom, type, x, y, apparence: { personnage: '', tuile: -1 }, direction: 'bas', deplacement: 'fixe', traversable: false, declenchement: 'parler', pages, ...autres });
 
@@ -91,9 +91,9 @@ const ExempleArene = (() => {
 
     const borne = (id, x, y) => ev(id, 'Borne d\'équipe', 'pnj', x, y, [
       page([
-        dire('Borne d\'équipe. Choisis six créatures, niveau 50 : elles seront ton équipe pour l\'arène.', 'Borne'),
+        dire('Borne d\'équipe. Choisis six créatures, niveau 50 : elles seront ton équipe pour l\'arène.'),
         { type: 'composer_equipe', nombre: 6, niveau: 50, titre: 'Ton équipe pour l\'arène', garder: true },
-        dire('Bonne chance ! Pour te battre contre un ami, mets-toi face à lui et appuie sur Action.', 'Borne'),
+        dire('Bonne chance ! Pour te battre contre un ami, mets-toi face à lui et appuie sur Action.'),
       ]),
     ], { apparence: { personnage: '', tuile: T.borne }, obstacle: null });
 
@@ -102,9 +102,9 @@ const ExempleArene = (() => {
       borne('borne-rouge', 17, 7),
       ev('panneau', 'Panneau de l\'arène', 'panneau', 10, 15, [
         page([
-          dire('Arène de duel. À deux (ou plus) : l\'un ouvre la partie dans Saga (menu de pause › Jouer à plusieurs), les autres ouvrent l\'adresse affichée dans leur navigateur et entrent le code.', 'Panneau'),
-          dire('Chacun prend son équipe à une borne, puis vous vous mettez face à face et vous appuyez sur Action : Défier. Rien n\'est perdu ni gagné, les équipes reviennent comme avant.', 'Panneau'),
-          dire('S\'il n\'y a aucune créature à choisir, importe d\'abord les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »).', 'Panneau'),
+          dire('Arène de duel. À deux (ou plus) : l\'un ouvre la partie dans Saga (menu de pause › Jouer à plusieurs), les autres ouvrent l\'adresse affichée dans leur navigateur et entrent le code.'),
+          dire('Chacun prend son équipe à une borne, puis vous vous mettez face à face et vous appuyez sur Action : Défier. Rien n\'est perdu ni gagné, les équipes reviennent comme avant.'),
+          dire('S\'il n\'y a aucune créature à choisir, importe d\'abord les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »).'),
         ]),
       ]),
     ];
