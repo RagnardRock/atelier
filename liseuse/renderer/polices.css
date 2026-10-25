@@ -1,0 +1,11 @@
+/* Les polices de lecture livrées avec Kenning (paquets @fontsource, sous licence libre OFL) :
+   - Literata : dessinée pour les liseuses (Google Play Livres), latin, latin étendu (polonais) et cyrillique ;
+   - Atkinson Hyperlegible : très lisible, faite pour les personnes malvoyantes ;
+   - OpenDyslexic : pensée pour les lecteurs dyslexiques.
+   Ici pour l'aperçu dans les réglages ; les pages des livres les chargent elles-mêmes (lecture.js). */
+@import url("../node_modules/@fontsource/literata/400.css");
+@import url("../node_modules/@fontsource/literata/400-italic.css");
+@import url("../node_modules/@fontsource/literata/700.css");
+@import url("../node_modules/@fontsource/atkinson-hyperlegible/400.css");
+@import url("../node_modules/@fontsource/atkinson-hyperlegible/700.css");
+@import url("../node_modules/@fontsource/opendyslexic/400.css");

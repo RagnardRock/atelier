@@ -1,0 +1,94 @@
+{
+  "name": "atelier-liseuse",
+  "productName": "Kenning",
+  "version": "0.1.0",
+  "description": "Kenning, ma liseuse d'eBooks : bibliothèque (couvertures, collections, reprise de lecture) et lecture confortable des EPUB, MOBI, AZW3, FB2, un des outils d'Atelier",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "postinstall": "node ../commun/copier.js",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "author": "Ragna",
+  "build": {
+    "appId": "fr.ragna.kenning",
+    "productName": "Kenning",
+    "copyright": "Ragna",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asarUnpack": [
+      "commun/mcp-commun.js"
+    ],
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!build/**",
+      "build/icon.ico",
+      "build/icon.png",
+      "!mettre-a-jour.*",
+      "!node_modules/@fontsource/*/files/*-{cyrillic-ext,greek,greek-ext,vietnamese,hebrew}-*",
+      "!node_modules/@fontsource/*/files/*.woff"
+    ],
+    "fileAssociations": [
+      {
+        "ext": "epub",
+        "name": "Livre EPUB",
+        "description": "Livre numérique EPUB",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": ["mobi", "azw3", "azw"],
+        "name": "Livre Kindle",
+        "description": "Livre numérique Kindle (MOBI, AZW3)",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      },
+      {
+        "ext": ["fb2", "fbz"],
+        "name": "Livre FictionBook",
+        "description": "Livre numérique FictionBook (FB2)",
+        "role": "Viewer",
+        "icon": "build/icon.ico"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "executableName": "Kenning"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kenning",
+      "artifactName": "Kenning-Setup-${version}.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Kenning",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/RagnardRock/atelier/releases/latest/download"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "5.3.0",
+    "@fontsource/literata": "5.3.0",
+    "@fontsource/opendyslexic": "5.3.0",
+    "@vscode/codicons": "0.0.45",
+    "electron-updater": "6.8.9"
+  },
+  "private": true
+}
