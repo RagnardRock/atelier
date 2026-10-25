@@ -7,7 +7,8 @@
 //
 // Les combats se jouent depuis Saga 0.3 (combat.js), les boutiques et l'écran des EV depuis Saga 0.5
 // (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js ; le PC depuis Saga 0.6
-// (ecrans.js) ; le groupe de héros et les combats contre des groupes de monstres (pack JRPG) depuis Saga 0.8.
+// (ecrans.js) ; le groupe de héros et les combats contre des groupes de monstres (pack JRPG) depuis Saga 0.8 ;
+// la musique, les bruitages et l'heure depuis Saga 0.11.
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -248,6 +249,17 @@ const Scripts = (() => {
         case 'ecran_boites':
           dialogue.fermer();
           await moteur.ecrans.boites();
+          break;
+        // Saga 0.11 : la musique, un bruitage, l'heure du jeu.
+        case 'musique':
+          // fichier : un morceau de sons/, 'aucune' pour le silence, '' pour revenir à celle de la carte.
+          moteur.musique(Jeu.son(c.fichier, ['aucune']));
+          break;
+        case 'son':
+          moteur.son(Jeu.son(c.fichier));
+          break;
+        case 'heure':
+          moteur.heure({ action: c.action === 'avancer' ? 'avancer' : 'regler', heures: Number(c.heures) || 0 });
           break;
         default:
           break; // commande inconnue : on la saute

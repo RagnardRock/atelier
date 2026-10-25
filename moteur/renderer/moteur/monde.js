@@ -27,6 +27,8 @@ const Monde = (() => {
       dernierSoin: null,   // où le joueur se réveille après une défaite (la dernière commande « soigner »)
       repousse: 0,         // pas sans rencontres qui restent
       partis: {},          // les héros qui ont quitté le groupe (pack JRPG, commande groupe), tels quels
+      temps: (Number(jeu.donnees.reglages?.reglages?.temps?.heure_depart) || 8) * 60, // l'horloge du jeu, en minutes (Saga 0.11)
+      musique: null,       // la musique en cours (Saga 0.11), pour la retrouver en chargeant la partie
       position: { ...depart },
     };
   }
@@ -52,6 +54,8 @@ const Monde = (() => {
       case 'compteur': return compteur(partie, cond.compteur) >= (Number(cond.min) || 0);
       case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
       case 'badge': return (partie.badges || []).includes(cond.badge);
+      // Le moment de la journée (Saga 0.11) : matin, jour, soir ou nuit, selon l'horloge du jeu.
+      case 'moment': return typeof Temps === 'undefined' || Temps.moment(null, partie, cond.moment);
       // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
       case 'membre': return [...(partie.equipe || []), ...(partie.boites || []).flatMap((b) => b.creatures || [])]
         .some((c) => c && c.heros && c.creature === cond.personnage);
@@ -87,6 +91,7 @@ const Monde = (() => {
         const titre = q?.titre || cond.quete;
         return cond.etat === 'finie' ? `Après la quête « ${titre} »` : cond.etat === 'en_cours' ? `Pendant la quête « ${titre} »` : 'Bientôt';
       }
+      case 'moment': return { matin: 'Le matin', jour: 'Le jour', soir: 'Le soir', nuit: 'La nuit' }[cond.moment] || 'À un autre moment';
       default: return 'Plus tard dans l\'aventure';
     }
   }

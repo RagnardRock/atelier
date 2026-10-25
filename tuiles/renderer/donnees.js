@@ -249,7 +249,28 @@ const Donnees = (() => {
     interface: { theme: 'verre', accent: '', menus: menusVides() },
     regles: 'pokemon', badges: [],
     niveau_max: 99, courbe_xp: 'normale',
+    temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
   });
+  // Tafl 0.29 (Saga 0.11) : l'horloge du jeu, la musique des combats et les bruitages, la sauvegarde auto.
+  const HORLOGES = [['aucune', 'Aucune : il fait toujours jour'], ['jeu', 'Horloge du jeu (elle avance quand on joue)'], ['reelle', 'Heure réelle du PC (comme Pokémon Or et Argent)']];
+  const SONS_INTEGRES = [['curseur', 'Curseur (changer de choix)'], ['valider', 'Valider'], ['retour', 'Retour, annuler'], ['texte', 'Texte qui s\'écrit'], ['porte', 'Porte, téléporteur'], ['sauvegarde', 'Partie sauvegardée'], ['choc', 'Se cogner à un mur']];
+  function tempsVide() { return { horloge: 'aucune', duree_jour: 24, heure_depart: 8 }; }
+  function audioVide() { return { musique_combat: '', musique_dresseur: '', musique_victoire: '', sons: Object.fromEntries(SONS_INTEGRES.map(([k]) => [k, ''])) }; }
+  // Un son du dossier sons/ du jeu, ou un des mots permis ; sinon ''.
+  const son = (v, mots = []) => {
+    const t = str(v).replace(/\\/g, '/');
+    if (mots.includes(t)) return t;
+    return /^sons\/[^/]+$/.test(t) && !t.includes('..') ? t : '';
+  };
+  function normTemps(t) {
+    return { horloge: pick(t?.horloge, HORLOGES, 'aucune'), duree_jour: int(t?.duree_jour, 24, 1, 1440), heure_depart: int(t?.heure_depart, 8, 0, 23) };
+  }
+  function normAudio(a) {
+    return {
+      musique_combat: son(a?.musique_combat), musique_dresseur: son(a?.musique_dresseur), musique_victoire: son(a?.musique_victoire),
+      sons: Object.fromEntries(SONS_INTEGRES.map(([k]) => [k, son(a?.sons?.[k], ['aucun'])])),
+    };
+  }
   // Le pack de règles du jeu (Tafl 0.16) : ce qui décide des combats, des captures, des statistiques.
   // Saga choisit regles/<nom>/ d'après lui (voir moteur/renderer/moteur/regles/REGLES.md).
   const REGLES = [
@@ -309,6 +330,9 @@ const Donnees = (() => {
       regles: typeof r.regles === 'string' && /^[a-z0-9-]+$/.test(r.regles) ? r.regles : 'pokemon',
       niveau_max: int(r.niveau_max, 99, 1, 999),
       courbe_xp: pick(r.courbe_xp, COURBES_XP, 'normale'),
+      temps: normTemps(r.temps),
+      audio: normAudio(r.audio),
+      sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
       badges: (() => {
         const out = [];
         arr(r.badges).filter((b) => b && typeof b === 'object').forEach((b, i) => {
@@ -551,8 +575,20 @@ const Donnees = (() => {
 
   // --- L'ambiance d'une carte : météo et teinte (l'aperçu est dessiné par stage.js) ---
   const METEOS = [['aucune', 'Aucune'], ['pluie', 'Pluie'], ['orage', 'Orage'], ['neige', 'Neige'], ['brouillard', 'Brouillard'], ['feuilles', 'Feuilles qui tombent'], ['lucioles', 'Lucioles']];
-  const ambianceVide = () => ({ meteo: 'aucune', intensite: 50, teinte: '', force: 30 });
-  const normAmbiance = (a) => ({ meteo: pick(a?.meteo, METEOS, 'aucune'), intensite: int(a?.intensite, 50, 0, 100), teinte: normalizeHex(a?.teinte) || '', force: int(a?.force, 30, 0, 100) });
+  // Tafl 0.29 : la musique de la carte ('' = celle d'avant continue, 'aucune' = silence), son fond sonore
+  // en boucle ('' = selon la météo : Saga fait la pluie et l'orage lui-même, 'aucun' = silence), et le jour
+  // et la nuit (une carte extérieure suit l'horloge du jeu, sauf si on le décoche).
+  const ambianceVide = () => ({ meteo: 'aucune', intensite: 50, teinte: '', force: 30, musique: '', fond_sonore: '', volume_fond: 70, jour_nuit: true });
+  const normAmbiance = (a) => ({
+    meteo: pick(a?.meteo, METEOS, 'aucune'), intensite: int(a?.intensite, 50, 0, 100), teinte: normalizeHex(a?.teinte) || '', force: int(a?.force, 30, 0, 100),
+    musique: son(a?.musique, ['aucune']), fond_sonore: son(a?.fond_sonore, ['aucun']), volume_fond: int(a?.volume_fond, 70, 0, 100), jour_nuit: a?.jour_nuit !== false,
+  });
+  // Une lumière (Tafl 0.29) : sur une tuile (un lampadaire, une fenêtre, un feu) ou sur un événement.
+  // Saga la fait briller quand il fait sombre (la nuit, ou une carte teintée sombre).
+  const lumiereVide = () => ({ couleur: '#ffd890', rayon: 3, intensite: 80, scintille: false });
+  const normLumiere = (l) => (l && typeof l === 'object'
+    ? { couleur: normalizeHex(l.couleur) || '#ffd890', rayon: num(l.rayon, 3, 0.5, 16), intensite: int(l.intensite, 80, 0, 100), scintille: Boolean(l.scintille) }
+    : null);
 
   // --- Les onglets de Jeu › Données du jeu ---
   // ctx (donné par Events.editData) : { doc, work, form, input, zone, coche, nombre, idLigne, usages,
@@ -1287,6 +1323,7 @@ const Donnees = (() => {
       champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
       champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
       ...formMenus(r, ctx),
+      ...formAmbiance(r, ctx),
       section('Règles du jeu'),
       info('Le pack de règles décide des combats, des personnages qui se battent et des statistiques ; Saga le suit. Les onglets du groupe Combat sont ses données, et changent avec lui. Changer de pack ne touche ni aux cartes, ni aux événements, ni aux quêtes.'),
       champ('Règles', sel(REGLES.some(([k]) => k === r.regles) ? REGLES : [...REGLES, [r.regles, `${r.regles} (inconnu de ce Tafl)`]], r.regles, (v) => {
@@ -1341,6 +1378,43 @@ const Donnees = (() => {
     );
   }
 
+
+  // Réglages › Jour et nuit, Musique et sons, Sauvegarde auto (Tafl 0.29, joués par Saga 0.11).
+  function formAmbiance(r, ctx) {
+    const t = r.temps, a = r.audio, auto = r.sauvegarde_auto;
+    const doc = ctx.doc;
+    const lignesTemps = el('div', { className: 'field-grid' }, [
+      champ('Une journée dure', nombreIn(t, 'duree_jour', 1, 1440), 'minutes de jeu'),
+      champ('Heure au départ', nombreIn(t, 'heure_depart', 0, 23), 'h'),
+    ]);
+    const majTemps = () => { lignesTemps.hidden = t.horloge !== 'jeu'; };
+    majTemps();
+    const musique = (cle, label, aide) => champ(label, Sons.choix(doc, a[cle], { mots: [['', aide]], change: (v) => { a[cle] = v; } }).element);
+    const lignesAuto = el('div', { className: 'field-grid' }, [
+      champ('En changeant de carte', ctx.coche(auto, 'carte')),
+      champ('Toutes les', nombreIn(auto, 'minutes', 0, 120), 'minutes (0 = jamais)'),
+    ]);
+    const cocheAuto = ctx.coche(auto, 'active');
+    const majAuto = () => { lignesAuto.hidden = !auto.active; };
+    cocheAuto.addEventListener('change', majAuto);
+    majAuto();
+    return [
+      section('Jour et nuit'),
+      info('Saga assombrit les cartes extérieures la nuit (bleu nuit), les dore à l\'aube et au couchant. Les intérieurs ne changent pas ; une carte peut aussi ne pas suivre le jour et la nuit (Carte › Ambiance). Les tuiles et les événements qui ont une lumière brillent quand il fait sombre. Les pages et les « si » peuvent dépendre du moment (condition « Le moment de la journée »).'),
+      champ('Horloge', sel(HORLOGES, t.horloge, (v) => { t.horloge = v; majTemps(); })),
+      lignesTemps,
+      section('Musique et sons'),
+      info('Les sons sont des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique de chaque carte se choisit dans Carte › Ambiance. Sans fichier, Saga joue ses propres bruitages (des petits « bips ») ; « Aucun » les fait taire.'),
+      musique('musique_combat', 'Musique des combats', 'Aucune (la musique de la carte continue)'),
+      musique('musique_dresseur', 'Contre un dresseur', 'Celle des combats'),
+      musique('musique_victoire', 'Fanfare de victoire', 'Aucune'),
+      ...SONS_INTEGRES.map(([k, label]) => champ(label, Sons.choix(doc, a.sons[k], { mots: [['', 'Son intégré de Saga'], ['aucun', 'Aucun']], change: (v) => { a.sons[k] = v; } }).element)),
+      section('Sauvegarde auto'),
+      info('Saga sauvegarde tout seul, dans une place à part : la sauvegarde du joueur (Ctrl+S, la pause) n\'est jamais écrasée. Il attend que le joueur soit libre (pas en plein dialogue ni en combat). À l\'ouverture du jeu, il propose la plus récente des deux.'),
+      champ('Sauvegarder tout seul', cocheAuto),
+      lignesAuto,
+    ];
+  }
 
   // --- Pack JRPG : des données d'exemple pour commencer (Réglages › bouton) ---
   // Des petits monstres en pixel art 16 × 16, dessinés en 32 × 32 : o contour, b corps, l reflet,
@@ -1508,7 +1582,7 @@ const Donnees = (() => {
 
   return {
     SORTES, REGLES, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
-    METEOS, ambianceVide, normAmbiance, tableRencontres, normRencontres,
+    METEOS, ambianceVide, normAmbiance, lumiereVide, normLumiere, son, SONS_INTEGRES, HORLOGES, tableRencontres, normRencontres,
     vides, normer, normElement, reglagesVides, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };
 })();

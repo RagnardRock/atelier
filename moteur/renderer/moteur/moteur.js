@@ -17,69 +17,93 @@ const Moteur = (() => {
   // --- Les commandes : clavier (flèches, ZQSD sur AZERTY / WASD sur QWERTY) et manette ---
   // On utilise la position physique des touches (event.code) : la touche Z d'un clavier AZERTY
   // s'appelle « KeyW », comme le W d'un clavier QWERTY au même endroit.
-  const TOUCHES = {
-    ArrowDown: 'bas', ArrowUp: 'haut', ArrowLeft: 'gauche', ArrowRight: 'droite',
-    KeyS: 'bas', KeyW: 'haut', KeyA: 'gauche', KeyD: 'droite',
+  // Saga 0.11 : le joueur les change dans les réglages (Commandes). Pause et carnet sont lus par app.js.
+  const TOUCHES_DEFAUT = {
+    haut: ['ArrowUp', 'KeyW'], bas: ['ArrowDown', 'KeyS'], gauche: ['ArrowLeft', 'KeyA'], droite: ['ArrowRight', 'KeyD'],
+    action: ['Space', 'Enter', 'NumpadEnter', 'KeyE'], retour: ['Backspace', 'KeyX'], courir: ['ShiftLeft', 'ShiftRight'],
+    pause: ['Escape'], carnet: ['Tab'],
   };
-  // Action (parler, ouvrir, passer un dialogue) : Espace, Entrée ou E. Retour : Retour arrière ou X.
-  const ACTIONS = { Space: 'action', Enter: 'action', NumpadEnter: 'action', KeyE: 'action', Backspace: 'retour', KeyX: 'retour' };
+  // Les boutons de la manette (numéros de la « manette standard » : 0 A, 1 B, 2 X, 3 Y, 8 Select, 9 Start).
+  // La croix et le stick gauche déplacent toujours.
+  const MANETTE_DEFAUT = { action: [0], retour: [1], courir: [1, 2], pause: [9], carnet: [8] };
+  const COMMANDES = ['haut', 'bas', 'gauche', 'droite', 'action', 'retour', 'courir', 'pause', 'carnet'];
+  const DIRS = ['haut', 'bas', 'gauche', 'droite'];
+  const liste = (v, def) => (Array.isArray(v) ? v : def);
+  function commandes(touches, manette) {
+    touches = touches || {}; manette = manette || {};
+    const t = Object.fromEntries(COMMANDES.map((c) => [c, liste(touches[c], TOUCHES_DEFAUT[c]).filter((x) => typeof x === 'string')]));
+    const m = Object.fromEntries(Object.keys(MANETTE_DEFAUT).map((c) => [c, liste(manette[c], MANETTE_DEFAUT[c]).map(Number).filter((x) => Number.isInteger(x) && x >= 0 && x < 20)]));
+    return { touches: t, manette: m };
+  }
+  // Quelle commande pour cette touche (event.code) ? Les directions d'abord, puis action, retour…
+  const commandeDe = (cmd, code) => COMMANDES.filter((c) => cmd.touches[c].includes(code));
+
   function creerEntrees() {
+    let cmd = commandes();
     const tenues = []; // directions tenues, la dernière appuyée à la fin
     let course = false;
     let appuis = [];   // les touches appuyées depuis la dernière image : 'action', 'retour', 'haut'…
+    let pad = null;    // ce que la manette tient en ce moment : { dir, course }
     const lacher = (dir) => { const i = tenues.indexOf(dir); if (i >= 0) tenues.splice(i, 1); };
     window.addEventListener('keydown', (e) => {
       if (e.target.closest?.('input, select, textarea, button, .modal')) return;
-      const dir = TOUCHES[e.code];
+      const quoi = commandeDe(cmd, e.code);
+      const dir = quoi.find((c) => DIRS.includes(c));
       if (dir) {
         e.preventDefault();
         appuis.push(dir);
         if (!e.repeat) { lacher(dir); tenues.push(dir); }
       }
-      const action = ACTIONS[e.code];
-      if (action && !e.ctrlKey && !e.altKey) { e.preventDefault(); if (!e.repeat) appuis.push(action); }
-      // Échap : la pause (dans app.js), mais en combat c'est un Retour comme les autres.
-      if (e.code === 'Escape' && !e.repeat) appuis.push('echap');
-      if (e.key === 'Shift') course = true;
+      for (const action of quoi.filter((c) => c === 'action' || c === 'retour')) {
+        if (!e.ctrlKey && !e.altKey) { e.preventDefault(); if (!e.repeat) appuis.push(action); }
+      }
+      // La touche de pause (Échap) : la pause (dans app.js), mais en combat c'est un Retour comme les autres.
+      if ((quoi.includes('pause') || e.code === 'Escape') && !e.repeat) appuis.push('echap');
+      if (quoi.includes('courir')) course = true;
     });
     window.addEventListener('keyup', (e) => {
-      const dir = TOUCHES[e.code];
-      if (dir) lacher(dir);
-      if (e.key === 'Shift') course = false;
+      const quoi = commandeDe(cmd, e.code);
+      for (const dir of quoi.filter((c) => DIRS.includes(c))) lacher(dir);
+      if (quoi.includes('courir')) course = false;
     });
     // Fenêtre quittée (Alt+Tab) : on oublie tout, sinon le joueur continuerait de marcher tout seul.
     window.addEventListener('blur', () => { tenues.length = 0; course = false; appuis = []; });
 
-    // Manette (Xbox, PlayStation, Switch Pro…) : croix directionnelle ou stick gauche, bouton B pour courir.
-    // Bouton A : action, bouton B : retour (et courir, tenu).
+    // Manette (Xbox, PlayStation, Switch Pro…) : croix directionnelle ou stick gauche pour bouger.
+    // Bouton A : action, bouton B : retour (et courir, tenu). Lue à chaque image (sonder), même pendant
+    // un dialogue ou un combat.
     let padAvant = {};
-    function manette() {
-      for (const pad of navigator.getGamepads?.() || []) {
-        if (!pad) continue;
-        const b = (i) => pad.buttons[i]?.pressed;
-        const [ax, ay] = [pad.axes[0] || 0, pad.axes[1] || 0];
+    function sonder() {
+      pad = null;
+      for (const p of navigator.getGamepads?.() || []) {
+        if (!p) continue;
+        const b = (i) => p.buttons[i]?.pressed;
+        const un = (liste) => liste.some(b);
+        const [ax, ay] = [p.axes[0] || 0, p.axes[1] || 0];
         let dir = null;
         if (b(12) || ay < -0.5) dir = 'haut';
         else if (b(13) || ay > 0.5) dir = 'bas';
         else if (b(14) || ax < -0.5) dir = 'gauche';
         else if (b(15) || ax > 0.5) dir = 'droite';
-        const etat = { dir, a: b(0), b: b(1) };
+        const etat = { dir, a: un(cmd.manette.action), b: un(cmd.manette.retour) };
         if (etat.a && !padAvant.a) appuis.push('action');
         if (etat.b && !padAvant.b) appuis.push('retour');
         if (dir && dir !== padAvant.dir) appuis.push(dir);
         padAvant = etat;
-        return { dir, course: b(1) || b(2) };
+        pad = { dir, course: un(cmd.manette.courir) };
+        return;
       }
-      return null;
+      padAvant = {};
     }
     return {
+      sonder,
       lire() {
-        const pad = manette();
         return { dir: tenues[tenues.length - 1] || pad?.dir || null, course: course || Boolean(pad?.course) };
       },
       // Les appuis depuis la dernière fois (chacun n'est rendu qu'une fois).
       appuis() { const a = appuis; appuis = []; return a; },
       oublier() { tenues.length = 0; course = false; appuis = []; },
+      regler(touches, manette) { cmd = commandes(touches, manette); tenues.length = 0; course = false; },
     };
   }
 
@@ -87,7 +111,12 @@ const Moteur = (() => {
     const ctx = canvas.getContext('2d');
     const entrees = creerEntrees();
     const ambiance = Ambiance.creer();
-    let options = { zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true };
+    let options = { zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true, volumeMusique: 70, volumeSons: 80, vitesseTexte: 'normale' };
+    // Le son (Saga 0.11) : la musique des cartes et des combats, les bruitages, la pluie et le tonnerre.
+    const audio = Son.creer({ charger: (chemin) => rappels.chargerSon?.(chemin) ?? Promise.reject(new Error('pas de sons')) });
+    audio.onErreur((m) => rappels.message?.(m));
+    const reglagesAudio = () => jeu?.donnees.reglages?.reglages?.audio || {};
+    const bruit = (nom) => audio.son(nom, reglagesAudio().sons?.[nom] || '');
     let jeu = null, partie = null, carte = null, presents = [];
     let joueur = null;
     let cam = { x: 0, y: 0 };
@@ -96,7 +125,7 @@ const Moteur = (() => {
     let enPause = false, debug = false, boucle = 0, avant = 0;
     let fps = 0, images = 0, chrono = 0;
     // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
-    const dialogue = Dialogue.creer(canvas.parentElement);
+    const dialogue = Dialogue.creer(canvas.parentElement, { sons: bruit });
     let scripts = null, enScript = false, autoAFaire = false;
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
@@ -146,8 +175,14 @@ const Moteur = (() => {
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       presents = Monde.evenementsPresents(jeu, carte, partie);
       ambiance.regler(carte.ambiance);
+      lumieresCarte = null;
       placerCamera();
-      if (change) rappels.carte?.(carte);
+      if (change) {
+        sonCarte();
+        rappels.carte?.(carte);
+        // La sauvegarde auto (Saga 0.11) : app.js la fait dès que le joueur est libre.
+        rappels.carteChangee?.(carte);
+      }
       // Les événements « auto » de cette carte se joueront dès la fin du fondu.
       autoAFaire = true;
       return true;
@@ -173,6 +208,11 @@ const Moteur = (() => {
       ecranGroupe.fermer();
       ecranPerso.fermer();
       menus.fermer();
+      // L'horloge du jeu (Saga 0.11) : une partie d'avant Saga 0.11 part de l'heure de départ du jeu.
+      Temps.utiliser(jeu);
+      Temps.preparer(jeu, partie);
+      if (nouveauJeu !== jeuSons) { audio.vider(); jeuSons = nouveauJeu; }
+      for (const k of ['musique_combat', 'musique_dresseur', 'musique_victoire']) audio.precharger(reglagesAudio()[k]);
       // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
       partie.badges = [...new Set(Array.isArray(partie.badges) ? partie.badges : [])];
       partie.partis = partie.partis && typeof partie.partis === 'object' ? partie.partis : {};
@@ -194,6 +234,10 @@ const Moteur = (() => {
         menus,
         ecrans,
         position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
+        // Saga 0.11 : la musique, les bruitages et l'heure (commandes musique, son, heure).
+        musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique : chemin),
+        son: (chemin) => audio.fichier(chemin),
+        heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
       });
       redimensionner();
       const d = partie.position;
@@ -223,6 +267,8 @@ const Moteur = (() => {
       }
       if (Number.isFinite(Number(test.argent)) && test.argent !== null && test.argent !== '') partie.argent = Math.max(0, Math.round(Number(test.argent)));
       if (Array.isArray(test.badges)) partie.badges = test.badges.filter((b) => typeof b === 'string');
+      // Saga 0.11 : l'heure de l'horloge du jeu (pour essayer une scène de nuit).
+      if (test.heure !== null && test.heure !== undefined && Number.isFinite(Number(test.heure))) Temps.regler(jeu, partie, { heures: Number(test.heure) });
       if (Array.isArray(test.interrupteurs)) for (const id of test.interrupteurs) if (typeof id === 'string') partie.interrupteurs[id] = true;
       if (test.quetes && typeof test.quetes === 'object') {
         for (const [id, q] of Object.entries(test.quetes)) {
@@ -236,6 +282,31 @@ const Moteur = (() => {
       cancelAnimationFrame(boucle);
       boucle = 0;
       jeu = null;
+      audio.vider();
+      jeuSons = null;
+    }
+
+    // --- Le son de la carte (Saga 0.11) ---
+    let jeuSons = null;
+    // La musique : 'aucune' = silence ; un fichier = ce morceau ; null = on ne change rien.
+    function changerMusique(chemin) {
+      if (!chemin) return;
+      partie.musique = chemin === 'aucune' ? null : chemin;
+      audio.musique(partie.musique);
+    }
+    function sonCarte() {
+      const a = carte.ambiance;
+      // Une carte sans musique choisie garde celle qui joue (ou celle de la partie chargée).
+      changerMusique(a.musique || (audio.morceau ? '' : partie.musique));
+      sonFond();
+    }
+    // Le fond sonore : celui de la carte, sinon la pluie intégrée s'il pleut (et si la météo est montrée).
+    function sonFond() {
+      const a = carte.ambiance;
+      const pluie = options.meteo && (a.meteo === 'pluie' || a.meteo === 'orage') ? a.meteo : null;
+      const cle = a.fond_sonore === 'aucun' ? null : a.fond_sonore || pluie;
+      const force = (a.volume_fond / 100) * (cle === pluie && !a.fond_sonore ? 0.35 + 0.65 * a.intensite / 100 : 1);
+      audio.fond(cle, force);
     }
 
     // --- Le joueur ---
@@ -260,6 +331,8 @@ const Moteur = (() => {
         const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy);
         if (p && p.bloque && joueur.pietine === 0 && Monde.obstacle(p.ev)?.sorte === 'pousser') pousser(p, dir);
         else if (p && p.bloque && p.ev.declenchement === 'toucher' && joueur.pietine === 0) lancer(p);
+        // Contre un mur : un petit « bonk », puis un toutes les demi-secondes tant qu'il pousse.
+        else if (joueur.pietine === 0 || joueur.pietine >= joueur.prochainChoc) { bruit('choc'); joueur.prochainChoc = joueur.pietine + 0.5; }
         return false;
       }
       joueur.pietine = 0;
@@ -289,6 +362,7 @@ const Moteur = (() => {
       const tp = Monde.teleporteur(carte, joueur.x, joueur.y);
       if (tp) {
         fondu = { phase: 'sortie', t: 0, vers: tp.vers };
+        bruit('porte');
         return true;
       }
       // Les hautes herbes (ou l'eau, une grotte…) : une créature sauvage peut surgir.
@@ -329,6 +403,10 @@ const Moteur = (() => {
       enCombat = true;
       entrees.oublier();
       dialogue.fermer();
+      // La musique du combat (Saga 0.11) : celle des dresseurs pour un dresseur, sinon celle des combats.
+      const ra = reglagesAudio(), avant = partie.musique;
+      const morceau = Jeu.son(dresseur ? ra.musique_dresseur || ra.musique_combat : ra.musique_combat);
+      if (morceau) audio.musique(morceau, { fondu: 0.4 });
       let issue = 'fuite';
       try {
         ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, fond: fondCombat() }));
@@ -338,6 +416,13 @@ const Moteur = (() => {
       }
       enCombat = false;
       entrees.oublier();
+      if (morceau) {
+        // Gagné : la fanfare de victoire (jouée une fois), puis la musique de la carte revient.
+        const fanfare = issue === 'victoire' || issue === 'capture' ? Jeu.son(ra.musique_victoire) : '';
+        const retour = () => { if (jeu && enCombat === false && (audio.morceau === fanfare || audio.morceau === morceau)) audio.musique(partie.musique); };
+        if (fanfare) audio.musique(fanfare, { fondu: 0.3, boucle: false }).then(retour);
+        else audio.musique(avant, { fondu: 0.8 });
+      }
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
       if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
       if (issue === 'defaite') {
@@ -603,6 +688,35 @@ const Moteur = (() => {
       for (const e of liste) e.dessiner();
     }
 
+    // --- Les lumières (Saga 0.11) : les tuiles qui éclairent (une fois par carte) et les événements ---
+    let lumieresCarte = null;
+    function sourcesLumiere() {
+      const t = jeu.taille;
+      if (!lumieresCarte) {
+        // Une case éclairée une seule fois, même si plusieurs calques y ont une tuile qui éclaire.
+        const vues = new Map();
+        for (const c of carte.calques) {
+          if (!c.visible) continue;
+          for (let i = 0; i < c.cases.length; i++) {
+            const l = c.cases[i] >= 0 ? jeu.tuiles[c.cases[i]]?.lumiere : null;
+            if (l) vues.set(i, l);
+          }
+        }
+        lumieresCarte = [...vues].map(([i, l]) => ({ cx: (i % carte.largeur) * t + t / 2, cy: Math.floor(i / carte.largeur) * t + t / 2, l, graine: (i * 7.31) % 6.28 }));
+      }
+      const out = lumieresCarte.map((s) => ({ x: s.cx - cam.x, y: s.cy - cam.y, rayon: s.l.rayon * t, couleur: s.l.couleur, intensite: s.l.intensite, scintille: s.l.scintille, graine: s.graine }));
+      for (const p of presents) {
+        const l = p.visible && p.ev.lumiere ? (p.lumiere ??= Jeu.lumiere(p.ev.lumiere)) : null;
+        if (!l) continue;
+        const m = p.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
+        const px = m ? m.de.x + (p.x * t - m.de.x) * k : p.x * t, py = m ? m.de.y + (p.y * t - m.de.y) * k : p.y * t;
+        out.push({ x: px + t / 2 - cam.x, y: py + t / 2 - cam.y, rayon: l.rayon * t, couleur: l.couleur, intensite: l.intensite, scintille: l.scintille, graine: p.x * 3.7 + p.y });
+      }
+      return out;
+    }
+    // La lumière du ciel à l'heure qu'il est (blanche dans un intérieur, ou sans horloge).
+    const ciel = () => (carte.ambiance.jour_nuit ? Temps.lumiere(Temps.heure(jeu, partie)) : [255, 255, 255]);
+
     // F3 : la grille de passage, les zones, les téléporteurs et les événements, pour vérifier une carte.
     function dessinerDebug() {
       const t = jeu.taille;
@@ -645,8 +759,8 @@ const Moteur = (() => {
       dessinerPersonnages(maintenant);
       // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur ;
       for (const c of carte.calques) if (c.visible && c.profondeur === 'dessus') dessinerCalque(c, maintenant);
-      // 4. l'ambiance : la teinte sur toute la carte, puis la météo.
-      ambiance.dessinerTeinte(ctx);
+      // 4. l'ambiance : la lumière (teinte de la carte, jour et nuit, lampes), puis la météo.
+      ambiance.dessinerLumiere(ctx, ciel(), sourcesLumiere());
       if (options.meteo) ambiance.dessinerMeteo(ctx);
       if (debug) dessinerDebug();
       // 5. le fondu au noir des téléporteurs.
@@ -686,15 +800,21 @@ const Moteur = (() => {
       images++;
       chrono += dt;
       if (chrono >= 0.5) { fps = Math.round(images / chrono); images = 0; chrono = 0; }
+      entrees.sonder();
       if (!enPause) {
         // Les appuis de cette image : à la boîte de dialogue s'il y en a une, sinon au joueur.
+        // Dans un menu ou un combat, chaque appui a son petit son (Saga 0.11).
+        const sonMenu = (a) => bruit(DIRS.includes(a) ? 'curseur' : a === 'action' ? 'valider' : 'retour');
         for (const a of entrees.appuis()) {
-          if (menus.ouvert) menus.touche(a === 'echap' ? 'retour' : a);
-          else if (a === 'echap') { if (enCombat) ecranDuJeu().touche('retour'); }
-          else if (enCombat) ecranDuJeu().touche(a);
+          if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
+          else if (a === 'echap') { if (enCombat) { sonMenu('retour'); ecranDuJeu().touche('retour'); } }
+          else if (enCombat) { sonMenu(a); ecranDuJeu().touche(a); }
           else if (enScript) dialogue.touche(a);
           else if (a === 'action') actionDemandee = true;
         }
+        // L'horloge du jeu avance quand le joueur est sur la carte (pas en combat ni en pause).
+        if (!enCombat) Temps.avancer(jeu, partie, dt);
+        verifierMoments();
         avancerJoueur(dt);
         actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
         avancerPNJ(dt);
@@ -709,7 +829,21 @@ const Moteur = (() => {
       } else entrees.appuis();
       placerCamera();
       ambiance.avancer(enPause ? 0 : dt, cam, options.meteo);
+      // L'orage : le tonnerre suit l'éclair (sauf si la carte a son propre fond sonore).
+      if (ambiance.nouvelEclair && !carte.ambiance.fond_sonore && !enCombat) audio.tonnerre(0.4 + carte.ambiance.intensite / 160);
       dessiner(maintenant);
+    }
+
+    // Le matin devient le jour, le soir la nuit : les pages qui dépendent du moment (condition
+    // « moment ») changent, sans attendre la fin d'un script.
+    let momentsAvant = '';
+    function verifierMoments() {
+      const m = Object.keys(Temps.MOMENTS).filter((k) => Temps.moment(jeu, partie, k)).join();
+      if (m === momentsAvant) return;
+      const premier = !momentsAvant;
+      momentsAvant = m;
+      if (!premier && !enScript && !enCombat) presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      else if (!premier) momentsAvant = ''; // on réessaiera à la fin du script
     }
 
     // Un menu ouvert depuis le carnet (un objet du sac, l'équipe, le Pokédex…). Comme un script : le
@@ -737,8 +871,23 @@ const Moteur = (() => {
       demarrer,
       arreter,
       redimensionner,
-      regler(o) { options = { ...options, ...o }; if (jeu) redimensionner(); },
-      pause(oui) { enPause = oui; entrees.oublier(); },
+      regler(o) {
+        const meteoAvant = options.meteo;
+        options = { ...options, ...o };
+        entrees.regler(options.touches, options.manette);
+        audio.volumes({ musique: options.volumeMusique, sons: options.volumeSons });
+        dialogue.regler({ vitesseTexte: options.vitesseTexte });
+        if (jeu) redimensionner();
+        if (jeu && carte && meteoAvant !== options.meteo) sonFond();
+      },
+      pause(oui) { enPause = oui; entrees.oublier(); audio.attenuer(oui); },
+      // Un bruitage pour l'interface autour du jeu (le menu de pause, la sauvegarde).
+      bruit,
+      // Le joueur peut-il être sauvegardé sans risque ? (pas pendant un script, un combat, un fondu)
+      get libre() { return Boolean(jeu && joueur && !enScript && !enCombat && !fondu && !joueur.mouvement); },
+      // L'heure du jeu (Saga 0.11), pour le carnet : « 14 h 05 », ou '' sans horloge.
+      heure() { return jeu ? Temps.texte(Temps.heure(jeu, partie)) : ''; },
+      reveiller() { audio.reprendre(); },
       get enScript() { return enScript; },
       get enCombat() { return enCombat; },
       // La partie en cours, pour la sauvegarder (une copie : la sauvegarde ne bouge plus ensuite).
@@ -757,11 +906,11 @@ const Moteur = (() => {
       // Pour la barre d'infos (F3) et pour « Recharger » (F5 garde la position du joueur).
       infos() {
         if (!jeu || !joueur) return null;
-        return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo };
+        return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau };
       },
       position() { return joueur ? { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
     };
   }
 
-  return { creer };
+  return { creer, TOUCHES_DEFAUT, MANETTE_DEFAUT, COMMANDES };
 })();

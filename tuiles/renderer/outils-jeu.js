@@ -87,7 +87,7 @@ const OutilsJeu = (() => {
     const jrpg = doc.data.reglages?.regles === 'jrpg';
     // Le héros du groupe JRPG est là dès le début : on le met d'office.
     const heros = jrpg ? doc.data.personnages.find((p) => p.heros && p.classe) : null;
-    return { nom: '', depart: null, equipe: heros ? [{ id: heros.id, niveau: heros.niveau || 1 }] : [], objets: {}, argent: null, badges: [], interrupteurs: [], quetes: {} };
+    return { nom: '', depart: null, equipe: heros ? [{ id: heros.id, niveau: heros.niveau || 1 }] : [], objets: {}, argent: null, heure: null, badges: [], interrupteurs: [], quetes: {} };
   };
   const copie = (o) => JSON.parse(JSON.stringify(o));
   function normTest(t, doc) {
@@ -99,6 +99,8 @@ const OutilsJeu = (() => {
       equipe: Array.isArray(o.equipe) ? o.equipe.filter((m) => m?.id).map((m) => ({ id: String(m.id), niveau: clamp(Math.round(Number(m.niveau) || 5), 1, 100) })) : v.equipe,
       objets: o.objets && typeof o.objets === 'object' ? Object.fromEntries(Object.entries(o.objets).filter(([, n]) => Number(n) > 0).map(([k, n]) => [k, Math.round(Number(n))])) : {},
       argent: o.argent === null || o.argent === undefined || o.argent === '' ? null : Math.max(0, Math.round(Number(o.argent) || 0)),
+      // Tafl 0.29 : l'heure de l'horloge du jeu au départ du test (null : l'heure de départ du jeu).
+      heure: o.heure === null || o.heure === undefined || o.heure === '' ? null : clamp(Math.round(Number(o.heure) || 0), 0, 23),
       badges: Array.isArray(o.badges) ? o.badges.map(String) : [],
       interrupteurs: Array.isArray(o.interrupteurs) ? o.interrupteurs.map(String) : [],
       quetes: o.quetes && typeof o.quetes === 'object' ? o.quetes : {},
@@ -263,6 +265,12 @@ const OutilsJeu = (() => {
       const argent = nombre(etat.argent, 0, 9999999, (v) => { etat.argent = v; }, String(d.reglages?.argent_depart ?? 0));
       argent.classList.add('test-argent');
       main.append(champ('Argent', argent, el('span', { className: 'field-unit', textContent: `${d.reglages?.monnaie || ''} · vide : l'argent de départ du jeu` })));
+      // L'heure (Tafl 0.29) : pour essayer une scène de nuit sans attendre.
+      if (d.reglages?.temps?.horloge === 'jeu') {
+        const heure = nombre(etat.heure, 0, 23, (v) => { etat.heure = v; }, String(d.reglages.temps.heure_depart ?? 8));
+        heure.classList.add('test-argent');
+        main.append(champ('Heure', heure, el('span', { className: 'field-unit', textContent: 'h · vide : l\'heure de départ du jeu' })));
+      }
 
       // Badges
       if (badges.length) {

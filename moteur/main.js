@@ -31,6 +31,8 @@ app.setPath('userData', path.join(app.getPath('appData'), joueur ? joueur.cle : 
 // Même identifiant que l'installeur (package.json › build.appId) : Windows range la fenêtre
 // sous l'icône épinglée de Saga dans la barre des tâches.
 if (process.platform === 'win32') app.setAppUserModelId(joueur ? `fr.ragna.saga.${joueur.cle.toLowerCase()}` : 'fr.ragna.saga');
+// La musique du jeu part dès l'ouverture, sans attendre un clic (Saga 0.11).
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // --- Journal (saga.log) ---
 const logPath = () => path.join(app.getPath('userData'), 'saga.log');
@@ -74,6 +76,12 @@ const DEFAULT_CONFIG = {
   casesVisibles: 11,     // en zoom automatique : combien de cases on voit au moins en hauteur
   courirParDefaut: false, // true : on court sans tenir Maj (Maj fait alors marcher)
   meteo: true,           // montrer la météo des cartes
+  // Saga 0.11 : le son, le texte et les commandes du joueur (réglages › Son, Texte, Commandes).
+  volumeMusique: 70,     // de 0 à 100
+  volumeSons: 80,        // bruitages et fonds sonores, de 0 à 100
+  vitesseTexte: 'normale', // lente, normale, rapide, instantanee
+  touches: null,         // null = les touches par défaut ; sinon { haut: ['ArrowUp', 'KeyW'], … } (event.code)
+  manette: null,         // null = les boutons par défaut ; sinon { action: [0], retour: [1], … }
   jeuxRecents: [],       // les dossiers de jeu ouverts, du plus récent au plus ancien
 };
 
@@ -148,9 +156,24 @@ async function lireJeu(cible) {
     if (text !== null) donnees[rel] = text;
   }
   if (!joueur) await modifierConfig((config) => { config.jeuxRecents = [dossier, ...config.jeuxRecents.filter((d) => d !== dossier)].slice(0, 12); });
+  dossierOuvert = dossier;
   log('INFO', `Jeu ouvert : ${dossier}`);
   return { dossier, jeu, tuiles, cartes, donnees };
 }
+
+// Les sons du jeu (Saga 0.11) : sons/<fichier>, lus à la demande (une musique peut peser quelques Mo),
+// seulement dans le dossier du jeu ouvert. Le moteur les décode lui-même (Web Audio).
+let dossierOuvert = null;
+const SOUND_FILE = /^sons\/[^/\\:*?"<>|]+\.(ogg|oga|mp3|wav|m4a|aac|opus|flac|webm)$/i;
+handle('jeu:son', async (_event, rel) => {
+  const r = relJeu(rel);
+  if (!dossierOuvert || !SOUND_FILE.test(r) || r.includes('..')) throw new Error(`Son refusé : ${rel}`);
+  const full = path.join(dossierOuvert, r);
+  if (path.relative(dossierOuvert, full).startsWith('..')) throw new Error(`Son refusé : ${rel}`);
+  const octets = await fs.readFile(full).catch(() => null);
+  if (!octets) throw new Error(`introuvable dans le dossier du jeu`);
+  return new Uint8Array(octets.buffer, octets.byteOffset, octets.byteLength);
+});
 
 handle('jeu:choisir', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
@@ -178,13 +201,16 @@ handle('jeu:montrer', async (_event, dossier) => {
 // vient du chemin du dossier du jeu.
 const crypto = require('node:crypto');
 // Un test rapide de Tafl (Saga 0.10) sauvegarde à part (…-test.json) : il n'écrase jamais la vraie partie.
-const sauvegardePath = (dossier, test = false) => path.join(app.getPath('userData'), 'sauvegardes',
-  `${crypto.createHash('sha1').update(dossierDuJeu(dossier).toLowerCase()).digest('hex').slice(0, 16)}${test ? '-test' : ''}.json`);
-handle('sauvegarde:lire', async (_event, dossier, test) => {
-  try { return JSON.parse(await fs.readFile(sauvegardePath(dossier, Boolean(test)), 'utf8')); } catch { return null; }
+// Saga 0.11 : la sauvegarde auto aussi (….auto.json), à côté de celle du joueur.
+// place : '' (la sauvegarde du joueur), 'auto', ou 'test' (true, comme avant Saga 0.11).
+const suffixe = (place) => (place === true || place === 'test' ? '-test' : place === 'auto' ? '.auto' : '');
+const sauvegardePath = (dossier, place = '') => path.join(app.getPath('userData'), 'sauvegardes',
+  `${crypto.createHash('sha1').update(dossierDuJeu(dossier).toLowerCase()).digest('hex').slice(0, 16)}${suffixe(place)}.json`);
+handle('sauvegarde:lire', async (_event, dossier, place) => {
+  try { return JSON.parse(await fs.readFile(sauvegardePath(dossier, place), 'utf8')); } catch { return null; }
 });
-handle('sauvegarde:ecrire', async (_event, dossier, donnees, test) => {
-  const file = sauvegardePath(dossier, Boolean(test));
+handle('sauvegarde:ecrire', async (_event, dossier, donnees, place) => {
+  const file = sauvegardePath(dossier, place);
   await fs.mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp`;
   await fs.writeFile(temp, JSON.stringify({ ...donnees, dossier: dossierDuJeu(dossier) }, null, 1), 'utf8');
@@ -208,7 +234,7 @@ async function exporterJeu(dossier, formats, sortie, progres) {
   try { titre = String(JSON.parse(textes.jeu).titre || ''); } catch { /* jeu.json abîmé : le nom du dossier */ }
   titre = titre.trim() || path.basename(textes.dossier);
   await fs.mkdir(sortie, { recursive: true });
-  const commun = { textes, titre, sortie, moteur: __dirname, version: app.getVersion(), progres };
+  const commun = { textes, titre, sortie, moteur: __dirname, version: app.getVersion(), progres, dossierJeu: textes.dossier };
   const resultat = { titre, sortie };
   if (formats.includes('web')) {
     const { jeuxRecents, ...configDefaut } = DEFAULT_CONFIG;

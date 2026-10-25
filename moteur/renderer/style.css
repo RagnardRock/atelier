@@ -325,3 +325,24 @@ body.glass .panel {
 }
 /* Sans verre : plaques pleines, plus sobres */
 body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
+
+/* --- Saga 0.11 : les options (sections, commandes) et la manette dans les menus --- */
+.modal-section { margin: 8px 0 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
+.modal-section:first-child { margin-top: 0; }
+.commandes-bloc { display: flex; flex-direction: column; gap: 4px; }
+.commandes-tete, .commandes-ligne { display: grid; grid-template-columns: 150px 1fr 150px; gap: 8px; align-items: center; }
+.commandes-tete { color: var(--muted); font-size: 11px; padding: 0 2px; }
+.commandes-ligne { padding: 3px 2px; border-top: 1px solid var(--border); }
+.commandes-nom { color: var(--text); }
+.commandes-cases { display: flex; flex-wrap: wrap; gap: 4px; }
+.commandes-cases.discret { color: var(--muted); font-size: 12px; }
+.commandes-pied { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.commandes-pied .discret { flex: 1; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.pastille { min-width: 26px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: rgba(255, 255, 255, 0.06); color: var(--text-strong); font: inherit; font-size: 12px; cursor: pointer; }
+.pastille:hover { border-color: #e06c6c; color: #ffb4b4; }
+.pastille.plus { color: var(--muted); border-style: dashed; }
+.pastille.plus:hover { color: var(--accent); border-color: var(--accent); }
+.pastille.ecoute { color: var(--accent); border-color: var(--accent); border-style: solid; animation: pastille-ecoute 1s ease-in-out infinite; }
+@keyframes pastille-ecoute { 50% { opacity: 0.55; } }
+/* Le choix fait à la manette : un cadre bien visible. */
+.pad-focus { outline: 2px solid var(--accent) !important; outline-offset: 2px; }

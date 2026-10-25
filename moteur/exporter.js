@@ -74,6 +74,16 @@ async function ecrireJeu(textes, dossier) {
   }
 }
 
+// Les sons du jeu (Saga 0.11) : les fichiers du dossier sons/ (musiques, bruitages, fonds sonores).
+const SON = /\.(ogg|oga|mp3|wav|m4a|aac|opus|flac|webm)$/i;
+async function lireSons(dossierJeu) {
+  if (!dossierJeu) return [];
+  const noms = await fs.readdir(path.join(dossierJeu, 'sons')).catch(() => []);
+  const out = [];
+  for (const n of noms.filter((x) => SON.test(x))) out.push({ rel: `sons/${n}`, data: await fs.readFile(path.join(dossierJeu, 'sons', n)) });
+  return out;
+}
+
 // --- Zip (sans dépendance) : chaque fichier compressé avec zlib, écrit au fil de l'eau ---
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -129,7 +139,7 @@ async function zipper(dossier, zip, prefixe, progres) {
 // --- Version web ---
 const MARQUE_WEB = 'saga-export-web.txt';
 
-async function exporterWeb({ textes, titre, sortie, moteur, version, configDefaut, progres }) {
+async function exporterWeb({ textes, titre, sortie, moteur, version, configDefaut, progres, dossierJeu }) {
   const nom = nomFichier(titre);
   const dossier = path.join(sortie, `${nom}-web`);
   await dossierNeuf(dossier, MARQUE_WEB);
@@ -147,12 +157,17 @@ async function exporterWeb({ textes, titre, sortie, moteur, version, configDefau
     .replace(/<title>[^<]*<\/title>/, `<title>${titre.replace(/[<>&]/g, '')}</title>`)
     .replace('<body class="glass">', '<body class="glass joueur web">')
     .replace(/\s*<script src="update\.js"><\/script>/, '')
-    .replace('<script src="base.js"></script>', '<script src="../jeu.js"></script>\n  <script src="saga-web.js"></script>\n  <script src="base.js"></script>');
+    .replace('<script src="base.js"></script>', '<script src="../jeu.js"></script>\n  <script src="../sons.js"></script>\n  <script src="saga-web.js"></script>\n  <script src="base.js"></script>');
   await fs.writeFile(path.join(dossier, 'index.html'), html, 'utf8');
   await fs.writeFile(path.join(dossier, 'saga', 'saga-web.js'), await fs.readFile(path.join(moteur, 'web', 'saga-web.js')));
   // Le jeu : les textes que lit le moteur, sans le chemin du dossier de Ragna.
   const jeu = { titre, cle: nom.toLowerCase(), saga: version, config: configDefaut, textes: { ...textes, dossier: nom } };
   await fs.writeFile(path.join(dossier, 'jeu.js'), `// ${titre} : le jeu, exporté par Saga ${version}.\nwindow.SAGA_JEU = ${JSON.stringify(jeu)};\n`, 'utf8');
+  // Les sons (Saga 0.11) : emballés dans sons.js (en base64), car un navigateur refuse de lire les
+  // fichiers d'un index.html ouvert d'un double-clic. saga-web.js les rend au moteur.
+  progres?.('Ajout des sons…');
+  const sons = await lireSons(dossierJeu);
+  await fs.writeFile(path.join(dossier, 'sons.js'), `// Les sons du jeu (${sons.length}).\nwindow.SAGA_SONS = {\n${sons.map((x) => `  ${JSON.stringify(x.rel)}: '${x.data.toString('base64')}',`).join('\n')}\n};\n`, 'utf8');
   await fs.writeFile(path.join(dossier, MARQUE_WEB), [
     `${titre} : version web exportée par Saga ${version}.`,
     '',
@@ -174,7 +189,7 @@ const MARQUE_EXE = 'LISEZMOI.txt';
 const FICHIERS_APP = ['main.js', 'preload.js', 'exporter.js', 'renderer', 'commun', 'build/icon.ico', 'build/icon.png',
   'node_modules/@vscode/codicons/dist/codicon.css', 'node_modules/@vscode/codicons/dist/codicon.ttf'];
 
-async function exporterExe({ textes, titre, sortie, moteur, version, runtime, exe, progres }) {
+async function exporterExe({ textes, titre, sortie, moteur, version, runtime, exe, progres, dossierJeu }) {
   const nom = nomFichier(titre);
   const dossier = path.join(sortie, nom);
   await dossierNeuf(dossier, MARQUE_EXE);
@@ -208,6 +223,11 @@ async function exporterExe({ textes, titre, sortie, moteur, version, runtime, ex
   progres?.('Ajout du jeu…');
   const jeu = path.join(dossier, 'resources', 'jeu');
   await ecrireJeu(textes, jeu);
+  // Les sons (Saga 0.11) : le dossier sons/ du jeu, tel quel.
+  for (const x of await lireSons(dossierJeu)) {
+    await fs.mkdir(path.join(jeu, 'sons'), { recursive: true });
+    await fs.writeFile(path.join(jeu, x.rel), x.data);
+  }
   await fs.writeFile(path.join(jeu, 'export.json'), JSON.stringify({ titre, cle: nom, saga: version }, null, 2), 'utf8');
   await fs.writeFile(path.join(dossier, MARQUE_EXE), [
     `${titre} : exporté par Saga ${version}.`,

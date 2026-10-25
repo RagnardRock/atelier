@@ -1,5 +1,5 @@
-// L'ambiance d'une carte (FORMAT.md › Ambiance) : la teinte, posée en « produit » sur toute la carte
-// comme une couche de lumière, puis la météo, avec de vraies particules.
+// L'ambiance d'une carte (FORMAT.md › Ambiance) : la lumière (la teinte de la carte, le jour et la nuit,
+// les lampes), posée en « produit » sur toute la carte, puis la météo, avec de vraies particules.
 //
 // Les particules vivent à l'écran (en pixels de jeu), mais elles suivent la caméra : quand le joueur
 // avance, la pluie et la neige glissent avec le décor, et le brouillard un peu plus vite que lui
@@ -28,7 +28,7 @@ const Ambiance = (() => {
     let a = { meteo: 'aucune', intensite: 0, teinte: '', force: 0 };
     let particules = [], eclaboussures = [];
     let W = 0, H = 0, camAvant = null;
-    let eclair = 0, prochainEclair = hasard(3, 8);
+    let eclair = 0, prochainEclair = hasard(3, 8), nouvelEclairVu = false;
 
     function nouvelle(type, partout) {
       const p = { x: hasard(0, W), y: partout ? hasard(0, H) : hasard(-20, -2), v: hasard(0.7, 1.3), phase: hasard(0, Math.PI * 2) };
@@ -112,19 +112,82 @@ const Ambiance = (() => {
       // L'orage : un éclair de temps en temps (un double flash qui s'éteint vite).
       if (a.meteo === 'orage') {
         prochainEclair -= dt;
-        if (prochainEclair <= 0) { eclair = 1; prochainEclair = hasard(4, 11) * (1.4 - a.intensite / 100); }
+        if (prochainEclair <= 0) { eclair = 1; nouvelEclairVu = true; prochainEclair = hasard(4, 11) * (1.4 - a.intensite / 100); }
         eclair = Math.max(0, eclair - dt * 2.4);
       } else eclair = 0;
     }
 
-    // La teinte, sur tout ce qui est la carte (calques et personnages), avant la météo.
-    function dessinerTeinte(ctx) {
-      if (!a.teinte || !a.force) return;
+    // La lumière (Saga 0.11) : la teinte de la carte, la lumière du jour (temps.js) et les sources de
+    // lumière (lampadaires, fenêtres, feux), en une seule couche posée en « produit » sur toute la carte.
+    //
+    // La couche part de la couleur ambiante (blanc = rien ne change, bleu nuit = la nuit). Chaque source
+    // y ajoute un halo (en « addition ») : là où elle éclaire, la couche redevient blanche, et la carte
+    // garde ses vraies couleurs. Puis, la nuit, un léger halo coloré par-dessus fait « briller » la lampe.
+    let couche = null;
+    const hex = (c) => {
+      const m = /^#?([0-9a-f]{6})$/i.exec(c || '');
+      const n = m ? parseInt(m[1], 16) : 0xffd890;
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    };
+    // La couleur ambiante : le ciel (r, g, b de 0 à 255) × la teinte de la carte.
+    function ambiante(ciel = [255, 255, 255]) {
+      if (!a.teinte || !a.force) return ciel;
+      const t = hex(a.teinte), f = a.force / 100;
+      return ciel.map((c, i) => Math.round(c * (1 + (t[i] / 255 - 1) * f)));
+    }
+    // sources : [{ x, y (centre, en pixels à l'écran), rayon (px), couleur, intensite (0 à 1), scintille, graine }].
+    function dessinerLumiere(ctx, ciel, sources = []) {
+      const amb = ambiante(ciel);
+      const sombre = 1 - (amb[0] * 0.3 + amb[1] * 0.59 + amb[2] * 0.11) / 255;
+      if (sombre < 0.01) return;
+      if (!sources.length) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = `rgb(${amb.join(',')})`;
+        ctx.fillRect(0, 0, W, H);
+        ctx.restore();
+        return;
+      }
+      if (!couche) couche = document.createElement('canvas');
+      if (couche.width !== W || couche.height !== H) { couche.width = W; couche.height = H; }
+      const g = couche.getContext('2d');
+      g.globalCompositeOperation = 'source-over';
+      g.fillStyle = `rgb(${amb.join(',')})`;
+      g.fillRect(0, 0, W, H);
+      g.globalCompositeOperation = 'lighter';
+      const t = performance.now() / 1000;
+      const rayons = sources.map((s) => {
+        // Une flamme vacille : son rayon et sa force bougent un peu, chacune à son rythme.
+        const v = s.scintille ? 1 + Math.sin(t * 9 + s.graine) * 0.04 + Math.sin(t * 23 + s.graine * 3) * 0.03 : 1;
+        return { ...s, r: Math.max(2, s.rayon * v), k: Math.min(1, s.intensite * (s.scintille ? 0.92 + 0.08 * Math.sin(t * 13 + s.graine) : 1)) };
+      });
+      for (const s of rayons) {
+        if (s.x + s.r < 0 || s.y + s.r < 0 || s.x - s.r > W || s.y - s.r > H) continue;
+        const [r, gg, b] = hex(s.couleur);
+        // Le halo éclaire vers le blanc, teinté de la couleur de la lampe.
+        const cl = [r, gg, b].map((c) => Math.round(110 + c * 0.6));
+        const d = g.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+        d.addColorStop(0, `rgba(${cl.join(',')}, ${s.k})`);
+        d.addColorStop(0.45, `rgba(${cl.join(',')}, ${s.k * 0.55})`);
+        d.addColorStop(1, `rgba(${cl.join(',')}, 0)`);
+        g.fillStyle = d;
+        g.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+      }
       ctx.save();
       ctx.globalCompositeOperation = 'multiply';
-      ctx.globalAlpha = a.force / 100;
-      ctx.fillStyle = a.teinte;
-      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(couche, 0, 0);
+      // La lueur colorée, d'autant plus visible qu'il fait sombre.
+      ctx.globalCompositeOperation = 'lighter';
+      for (const s of rayons) {
+        if (s.x + s.r < 0 || s.y + s.r < 0 || s.x - s.r > W || s.y - s.r > H) continue;
+        const [r, gg, b] = hex(s.couleur);
+        const k = s.k * sombre * 0.45;
+        const d = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 0.75);
+        d.addColorStop(0, `rgba(${r}, ${gg}, ${b}, ${k})`);
+        d.addColorStop(1, `rgba(${r}, ${gg}, ${b}, 0)`);
+        ctx.fillStyle = d;
+        ctx.fillRect(s.x - s.r, s.y - s.r, s.r * 2, s.r * 2);
+      }
       ctx.restore();
     }
 
@@ -198,7 +261,7 @@ const Ambiance = (() => {
       }
     }
 
-    return { regler, taille, avancer, dessinerTeinte, dessinerMeteo, get eclair() { return eclair; } };
+    return { regler, taille, avancer, dessinerLumiere, dessinerMeteo, get eclair() { return eclair; }, get nouvelEclair() { const n = nouvelEclairVu; nouvelEclairVu = false; return n; } };
   }
 
   return { creer };

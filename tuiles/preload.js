@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('tafl', {
   findGame: (folder) => ipcRenderer.invoke('game:find', folder),
   registerGame: (file) => ipcRenderer.invoke('game:register', file),
   writeGame: (folder, files, remove) => ipcRenderer.invoke('game:write', folder, files, remove),
+  // Les sons du jeu (Tafl 0.29) : le dossier sons/ (lister, y ajouter des fichiers, en écouter un).
+  listeSons: (folder) => ipcRenderer.invoke('sons:liste', folder),
+  importerSons: (folder) => ipcRenderer.invoke('sons:importer', folder),
+  lireSon: (folder, rel) => ipcRenderer.invoke('sons:lire', folder, rel),
+  montrerSons: (folder) => ipcRenderer.invoke('sons:montrer', folder),
   // Données officielles Pokémon (Tafl 0.8, officiel.js)
   importerOfficiel: (options) => ipcRenderer.invoke('officiel:importer', options),
   onImportProgres: (callback) => ipcRenderer.on('officiel:progres', (_event, p) => callback(p)),

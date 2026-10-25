@@ -4,7 +4,9 @@
 // Raccourcis :
 //   Ctrl+O  ouvrir un jeu          F5   recharger le jeu (après un enregistrement dans Tafl)
 //   Échap   menu de pause          F3   montrer le passage, les zones, les téléporteurs
-//   F11     plein écran            Ctrl+, réglages
+//   F11     plein écran            Ctrl+, réglages (Options)
+// Saga 0.11 : les touches du jeu (pause, carnet comprises) se changent dans Réglages › Commandes, et la
+// manette sert partout (pad.js).
 
 const App = (() => {
   // Le mode joueur (Saga 0.9) : un jeu exporté (.exe ou web). Le jeu seul, sans les outils de Saga.
@@ -14,6 +16,9 @@ const App = (() => {
   const moteur = Moteur.creer($('#ecran'), {
     carte: (carte) => montrerBandeau(carte.nom),
     message: (texte) => notify(texte, 'warning', 6000),
+    // Les sons du dossier sons/ du jeu (Saga 0.11).
+    chargerSon: (chemin) => window.saga.lireSon(chemin),
+    carteChangee: () => { if (autoReglages().carte) autoAFaire = true; },
   });
   let config = {};
   let ouvert = null; // { dossier, jeu } : le jeu en cours
@@ -24,26 +29,50 @@ const App = (() => {
     moteur.regler(config);
   }
 
+  // Les réglages du joueur (Saga 0.11 : « Options » dans la pause) : l'affichage, le son, le texte et
+  // les commandes. Tout se règle aussi à la manette (pad.js).
   async function reglages() {
     const etaitEnPause = !$('#pause').hidden;
-    const themeAvant = config.theme;
+    const avant = { ...config };
     moteur.pause(true);
+    const titre = (texte) => ({ type: 'element', element: el('h4', { className: 'modal-section', textContent: texte }) });
+    const commandes = Commandes.editeur(config.touches, config.manette);
     const v = await Dialogs.form({
-      title: 'Réglages de Saga',
+      title: 'Options',
       okLabel: 'Enregistrer',
+      width: 560,
       fields: [
+        titre('Son'),
+        { key: 'volumeMusique', label: 'Musique', type: 'range', min: 0, max: 100, step: 1, value: config.volumeMusique ?? 70, unit: '%' },
+        { key: 'volumeSons', label: 'Sons', type: 'range', min: 0, max: 100, step: 1, value: config.volumeSons ?? 80, unit: '%' },
+        { type: 'info', text: 'Les sons : les bruitages (menus, texte, portes) et les fonds sonores (pluie, vent…). 0 coupe tout.' },
+        titre('Texte'),
+        { key: 'vitesseTexte', label: 'Vitesse du texte', type: 'select', value: config.vitesseTexte || 'normale', choices: [['lente', 'Lente'], ['normale', 'Normale'], ['rapide', 'Rapide'], ['instantanee', 'Instantanée (tout le texte d\'un coup)']] },
+        titre('Affichage'),
+        { key: 'pleinEcran', label: 'Plein écran (F11)', type: 'checkbox', value: document.body.classList.contains('plein-ecran') },
         { key: 'zoom', label: 'Zoom', type: 'select', value: String(config.zoom), choices: [['0', 'Automatique'], ...[1, 2, 3, 4, 5, 6, 7, 8].map((z) => [String(z), `× ${z}`])] },
         { key: 'casesVisibles', label: 'Cases visibles', type: 'range', min: 7, max: 24, step: 1, value: config.casesVisibles, unit: 'en hauteur' },
         { type: 'info', text: 'En zoom automatique, Saga choisit le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur. Un zoom entier garde le pixel art parfaitement net.' },
-        { key: 'courirParDefaut', label: 'Courir sans tenir Maj (Maj fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },
         { key: 'meteo', label: 'Montrer la météo des cartes', type: 'checkbox', value: config.meteo },
         { key: 'theme', label: 'Interface en jeu', type: 'select', value: config.theme || 'jeu', choices: [['jeu', 'Celle choisie par le jeu'], ['verre', 'Verre (sombre, flou)'], ['pixel', 'Pixel (rétro)']] },
+        titre('Commandes'),
+        { key: 'courirParDefaut', label: 'Courir sans tenir la touche Courir (elle fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },
+        { type: 'element', element: commandes.element },
       ],
-      onInput: (vals) => { moteur.regler({ ...vals, zoom: Number(vals.zoom) }); config = { ...config, theme: vals.theme }; appliquerTheme(); },
+      onInput: (vals) => {
+        moteur.regler({ ...vals, zoom: Number(vals.zoom) });
+        config = { ...config, theme: vals.theme };
+        appliquerTheme();
+        // Le volume s'entend tout de suite : un petit bip au réglage des sons.
+        if (vals.volumeSons !== config.volumeSons) { config.volumeSons = vals.volumeSons; moteur.bruit('curseur'); }
+      },
     });
+    const { touches, manette } = commandes.valeurs();
     if (v) {
-      config = await window.saga.writeConfig({ ...v, zoom: Number(v.zoom) });
-    } else config = { ...config, theme: themeAvant };
+      const { pleinEcran, ...reste } = v;
+      config = await window.saga.writeConfig({ ...reste, zoom: Number(v.zoom), touches, manette });
+      if (pleinEcran !== document.body.classList.contains('plein-ecran')) window.saga.pleinEcran(pleinEcran);
+    } else config = avant;
     moteur.regler(config);
     appliquerTheme();
     if (!etaitEnPause) moteur.pause(false);
@@ -90,31 +119,66 @@ const App = (() => {
     document.title = joueur ? jeu.titre : `${jeu.titre} · Saga`;
     fermerPause();
     if (!partie && !d && !test) {
-      const sauvegarde = await window.saga.lireSauvegarde(textes.dossier).catch(() => null);
-      if (sauvegarde?.partie) {
-        const quand = new Date(sauvegarde.quand).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
-        const suite = await Dialogs.ask(jeu.titre, `Une partie est sauvegardée (${quand}).`, [
-          { label: 'Nouvelle partie', value: false },
-          { label: 'Continuer', value: true, primary: true },
-        ]);
-        if (suite) partie = sauvegarde.partie;
+      // La sauvegarde du joueur, et la sauvegarde auto (Saga 0.11) si elle existe : la plus récente est
+      // proposée en premier.
+      const [manuelle, auto] = await Promise.all(['', 'auto'].map((place) => window.saga.lireSauvegarde(textes.dossier, place).catch(() => null)));
+      const quand = (s) => new Date(s.quand).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+      const choix = [{ label: 'Nouvelle partie', value: null }];
+      const autoPlusRecente = auto?.partie && (!manuelle?.partie || auto.quand > manuelle.quand);
+      if (auto?.partie && autoPlusRecente) choix.push({ label: 'Sauvegarde auto', value: auto.partie, primary: true });
+      if (manuelle?.partie) choix.push({ label: 'Continuer', value: manuelle.partie, primary: !autoPlusRecente });
+      if (choix.length > 1) {
+        const lignes = [manuelle?.partie ? `Ta sauvegarde : ${quand(manuelle)}.` : '', auto?.partie && autoPlusRecente ? `Sauvegarde auto : ${quand(auto)}.` : ''].filter(Boolean);
+        partie = await Dialogs.ask(jeu.titre, lignes.join('\n'), choix) || null;
       }
     }
     // Une partie dont la carte n'existe plus (supprimée dans Tafl) repart du départ du jeu.
     if (partie && !jeu.cartes.has(partie.position?.carte)) partie = { ...partie, position: { ...jeu.depart } };
     moteur.demarrer(jeu, d, partie, partie ? null : test);
+    autoAFaire = false;
+    derniereAuto = Date.now();
     for (const p of jeu.problemes) notify(`À savoir : ${p}.`, 'warning', 9000);
   }
 
   async function sauvegarder() {
     if (!ouvert || moteur.enScript) return;
     try {
-      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() }, Boolean(ouvert.test));
+      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() }, ouvert.test ? 'test' : '');
       moteur.annoncer(ouvert.test ? 'Partie de test sauvegardée (à part)' : 'Partie sauvegardée');
+      moteur.bruit('sauvegarde');
     } catch (err) {
       notify(`Sauvegarde impossible : ${cleanError(err)}`, 'error');
     }
   }
+
+  // --- La sauvegarde auto (Saga 0.11, Tafl › Réglages du jeu) ---
+  // En changeant de carte et/ou toutes les N minutes, dans une place à part : la sauvegarde du joueur
+  // (Ctrl+S, la pause) n'est jamais écrasée. Elle attend que le joueur soit libre (pas en plein dialogue,
+  // combat ou fondu) : la partie sauvée est toujours dans un état stable.
+  let autoAFaire = false, derniereAuto = 0, autoEnCours = false;
+  const autoReglages = () => {
+    const a = ouvert?.jeu.donnees.reglages?.reglages?.sauvegarde_auto || {};
+    return { active: Boolean(a.active), carte: a.active && a.carte !== false, minutes: Math.max(0, Number(a.minutes) || 0) };
+  };
+  setInterval(async () => {
+    const r = autoReglages();
+    // Un test rapide de Tafl ne sauvegarde pas tout seul (sa partie ne compte pas).
+    if (!ouvert || ouvert.test || !r.active || autoEnCours) return;
+    if (r.minutes && Date.now() - derniereAuto >= r.minutes * 60000) autoAFaire = true;
+    // Au plus une toutes les 20 secondes (deux portes coup sur coup ne sauvent qu'une fois).
+    if (!autoAFaire || !moteur.libre || !$('#pause').hidden || !$('#carnet').hidden || Dialogs.isOpen() || Date.now() - derniereAuto < 20000) return;
+    autoAFaire = false;
+    autoEnCours = true;
+    try {
+      await window.saga.ecrireSauvegarde(ouvert.dossier, { quand: Date.now(), partie: moteur.partie() }, 'auto');
+      derniereAuto = Date.now();
+      moteur.annoncer('Sauvegarde auto');
+    } catch (err) {
+      notify(`Sauvegarde auto impossible : ${cleanError(err)}`, 'error');
+    } finally {
+      autoEnCours = false;
+    }
+  }, 1000);
 
   async function ouvrir() {
     try {
@@ -193,6 +257,7 @@ const App = (() => {
     $('#pause-equipe').textContent = forme.equipe;
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
     moteur.pause(true);
+    moteur.bruit('valider');
     $('#pause').hidden = false;
     $('.pause-choix').focus();
   }
@@ -224,6 +289,8 @@ const App = (() => {
       choix[(i + (e.key === 'ArrowDown' ? 1 : -1) + choix.length) % choix.length].focus();
     }
   });
+  // Un petit son quand le choix change (clavier ou manette) et quand on valide.
+  $('#pause').addEventListener('focusin', (e) => { if (e.target.closest('.pause-choix') && !$('#pause').hidden) moteur.bruit('curseur'); });
 
   // --- Le carnet (Tab) : l'équipe, le sac, l'argent et les quêtes ---
   function ouvrirCarnet() {
@@ -242,6 +309,9 @@ const App = (() => {
       corps.append(ul);
     };
     $('#carnet-titre').textContent = p.nom;
+    // L'heure du jeu (Saga 0.11), s'il a une horloge.
+    $('#carnet-heure').textContent = moteur.heure();
+    $('#carnet-heure').hidden = !moteur.heure();
     const dex = p.dex || { vus: {}, pris: {} }, forme = moteur.formeMenus();
     $('#carnet-dex').textContent = `${forme.dex} · ${Regles.dex(jeu).especes.filter((e) => dex.pris[e.id]).length}`;
     $('#carnet-equipe').textContent = forme.equipe;
@@ -374,25 +444,44 @@ const App = (() => {
     else if (e.key === 'F5' && ouvert) { e.preventDefault(); recharger(); }
     else if (e.key === 'F3' && ouvert) { e.preventDefault(); basculerDebug(); }
     else if (ctrl && e.key.toLowerCase() === 's' && ouvert) { e.preventDefault(); sauvegarder(); }
-    else if (e.key === 'Tab' && ouvert) {
+    else if (touche('carnet', e) && ouvert) {
       e.preventDefault();
       if (!$('#carnet').hidden) fermerCarnet(); else if (!moteur.enScript) ouvrirCarnet();
     }
-    else if (e.key === 'Escape' && ouvert) {
+    else if ((e.key === 'Escape' || touche('pause', e)) && ouvert) {
       e.preventDefault();
       if (!$('#carnet').hidden) fermerCarnet();
       else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
       else if ($('#pause').hidden) ouvrirPause(); else fermerPause();
     }
   });
-  // Manette : le bouton Start ouvre et ferme le menu de pause.
-  let startAvant = false;
-  setInterval(() => {
-    const pad = [...(navigator.getGamepads?.() || [])].find(Boolean);
-    const start = Boolean(pad?.buttons[9]?.pressed);
-    if (start && !startAvant && ouvert && !Dialogs.isOpen()) ($('#pause').hidden ? ouvrirPause : fermerPause)();
-    startAvant = start;
-  }, 50);
+  // Les touches de pause et du carnet (Réglages › Commandes, Saga 0.11).
+  function touche(commande, e) {
+    const liste = Array.isArray(config.touches?.[commande]) ? config.touches[commande] : Moteur.TOUCHES_DEFAUT[commande];
+    return liste.includes(e.code);
+  }
+  // Le son reprend au premier geste du joueur (si Windows l'avait suspendu).
+  for (const t of ['keydown', 'pointerdown']) window.addEventListener(t, () => moteur.reveiller(), { capture: true, passive: true });
+
+  // La manette dans les menus autour du jeu (pad.js) : Start ouvre et ferme la pause, Select le carnet.
+  Pad.demarrer({
+    boutons: () => ({ ...Moteur.MANETTE_DEFAUT, ...(config.manette || {}) }),
+    start: () => {
+      if (!ouvert || Dialogs.isOpen()) return;
+      if (!$('#carnet').hidden) fermerCarnet();
+      else if ($('#pause').hidden) { if (!moteur.enScript) ouvrirPause(); } else fermerPause(); // pas pendant un dialogue, comme Échap
+    },
+    select: () => {
+      if (!ouvert || Dialogs.isOpen()) return;
+      if (!$('#carnet').hidden) fermerCarnet(); else if (!moteur.enScript && $('#pause').hidden) ouvrirCarnet();
+    },
+    cibles: () => [
+      Dialogs.isOpen() ? { racine: $('#modal-root .modal'), fermer: () => Dialogs.close(null) } : null,
+      { racine: $('#carnet'), fermer: fermerCarnet },
+      { racine: $('#pause'), fermer: fermerPause },
+      { racine: $('#accueil'), fermer: null },
+    ],
+  });
 
   $('#accueil-ouvrir').onclick = ouvrir;
   $('#btn-recharger').onclick = recharger;
