@@ -361,6 +361,10 @@ Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuil
 - **Compteurs** : créatures sauvages battues, espèces vues, espèces attrapées, quêtes finies, en plus des captures, dresseurs battus, évolutions, badges et pas.
 - Loki connaît tout ça (actions `evenement` avec `obstacle`, `donnee`).
 
+## Exporter le jeu (Tafl 0.26, avec Saga 0.9)
+
+Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (`index.html`, à ouvrir dans un navigateur ou à mettre sur itch.io) et/ou une **version Windows** (`MonJeu.exe`, rien à installer). Chacune donne un dossier et un `.zip` à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).

@@ -7,6 +7,10 @@
 //   F11     plein écran            Ctrl+, réglages
 
 const App = (() => {
+  // Le mode joueur (Saga 0.9) : un jeu exporté (.exe ou web). Le jeu seul, sans les outils de Saga.
+  const joueur = window.saga.joueur || null;
+  if (joueur) document.body.classList.add('joueur', ...(joueur.web ? ['web'] : []));
+  if (joueur) $('#pause-quitter').textContent = 'Quitter le jeu';
   const moteur = Moteur.creer($('#ecran'), {
     carte: (carte) => montrerBandeau(carte.nom),
     message: (texte) => notify(texte, 'warning', 6000),
@@ -78,7 +82,7 @@ const App = (() => {
     $('#titre-jeu').hidden = false;
     $('#pause-jeu').textContent = jeu.titre;
     for (const id of ['#btn-recharger', '#btn-debug']) $(id).hidden = false;
-    document.title = `${jeu.titre} · Saga`;
+    document.title = joueur ? jeu.titre : `${jeu.titre} · Saga`;
     fermerPause();
     if (!partie && !d) {
       const sauvegarde = await window.saga.lireSauvegarde(textes.dossier).catch(() => null);
@@ -133,6 +137,7 @@ const App = (() => {
   }
 
   function quitter() {
+    if (joueur) { window.close(); return; }
     moteur.arreter();
     ouvert = null;
     fermerPause();
@@ -200,6 +205,7 @@ const App = (() => {
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
+    else if (action === 'exporter') { fermerPause(); exporter(); }
     else if (action === 'quitter') quitter();
   });
   // Dans le menu de pause, les flèches passent d'un choix à l'autre.
@@ -283,6 +289,49 @@ const App = (() => {
     else if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet();
   });
 
+  // --- Exporter le jeu (Saga 0.9) : une version web et/ou Windows à envoyer à des testeurs ---
+  // Saga relit le jeu sur le disque (ce que Tafl a enregistré), pas la partie en cours.
+  let attenteExport = null; // la notification qui dit où en est l'export
+  window.saga.onExportProgres?.((texte) => { if (attenteExport) attenteExport.querySelector('.message').textContent = texte; });
+  async function exporter() {
+    if (!ouvert || joueur) return;
+    moteur.pause(true);
+    try {
+      const v = await Dialogs.form({
+        title: `Exporter « ${ouvert.jeu.titre} »`,
+        okLabel: 'Choisir le dossier et exporter',
+        fields: [
+          { key: 'web', label: 'Version web (index.html, à ouvrir dans un navigateur ou à mettre sur itch.io)', type: 'checkbox', value: config.exportWeb ?? true },
+          { key: 'exe', label: `Version ${window.saga.platform === 'win32' ? 'Windows (.exe, rien à installer)' : 'pour ce système (application)'}`, type: 'checkbox', value: config.exportExe ?? true },
+          { type: 'info', text: 'Chaque version donne un dossier et un .zip à envoyer. L\'export reprend le jeu tel qu\'il est enregistré par Tafl. Les testeurs n\'ont besoin ni de Tafl ni de Saga.' },
+        ],
+      });
+      if (!v) return;
+      config = await window.saga.writeConfig({ exportWeb: v.web, exportExe: v.exe });
+      const formats = [v.web && 'web', v.exe && 'exe'].filter(Boolean);
+      if (!formats.length) return notify('Coche au moins une version.', 'info');
+      attenteExport = notify('Export du jeu…', 'info', 600000);
+      let r;
+      try {
+        r = await window.saga.exporter(ouvert.dossier, formats);
+      } finally {
+        attenteExport.remove();
+        attenteExport = null;
+      }
+      if (!r) return;
+      const lignes = [r.web && `• Web : ${r.web.zip}`, r.exe && `• ${window.saga.platform === 'win32' ? 'Windows' : 'Application'} : ${r.exe.zip}`].filter(Boolean);
+      const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nChaque .zip a son dossier à côté, pour essayer avant d'envoyer.`, [
+        { label: 'Fermer', value: null },
+        { label: 'Montrer dans l\'explorateur', value: (r.web || r.exe).zip, primary: true },
+      ]);
+      if (voir) window.saga.montrerExport(voir).catch((err) => notify(cleanError(err), 'error'));
+    } catch (err) {
+      notify(`Export impossible : ${cleanError(err)}`, 'error');
+    } finally {
+      if ($('#pause').hidden) moteur.pause(false);
+    }
+  }
+
   // --- Infos (F3) ---
   function basculerDebug() {
     const oui = moteur.basculerDebug();
@@ -311,6 +360,8 @@ const App = (() => {
       return;
     }
     const ctrl = e.ctrlKey || e.metaKey;
+    // Mode joueur : pas d'autre jeu à ouvrir, pas de rechargement ni de vue de débogage.
+    if (joueur && ((ctrl && e.key.toLowerCase() === 'o') || e.key === 'F5' || e.key === 'F3')) { e.preventDefault(); return; }
     if (ctrl && e.key.toLowerCase() === 'o') { e.preventDefault(); ouvrir(); }
     else if (ctrl && e.key === ',') { e.preventDefault(); reglages(); }
     else if (e.key === 'F11') { e.preventDefault(); basculerPleinEcran(); }

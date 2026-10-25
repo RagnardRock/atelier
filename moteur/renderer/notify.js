@@ -29,6 +29,7 @@ function notify(message, type = 'info', duration = 3500, actions = []) {
   notifications.appendChild(el);
   while (notifications.children.length > 4) notifications.firstChild.remove();
   if (type !== 'error') setTimeout(() => el.remove(), duration);
+  return el;
 }
 
 // Les erreurs venant de main.js arrivent préfixées par "Error invoking remote method '…': Error: ".

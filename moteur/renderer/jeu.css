@@ -26,6 +26,13 @@
 #scene { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
 #ecran { display: block; image-rendering: pixelated; flex-shrink: 0; }
 body.plein-ecran #titlebar { display: none; }
+/* Mode joueur (Saga 0.9, un jeu exporté) : le jeu seul, sans ce qui sert à fabriquer le jeu.
+   En version web, pas de barre de titre du tout : c'est le navigateur qui l'a. */
+body.joueur #brand, body.joueur #btn-recharger, body.joueur #btn-debug, body.joueur #btn-update,
+body.joueur .pause-choix[data-action="recharger"], body.joueur .pause-choix[data-action="dossier"],
+body.joueur .pause-choix[data-action="exporter"], body.joueur .welcome-actions, body.joueur .welcome-hint,
+body.web .pause-choix[data-action="quitter"], body.web #titlebar { display: none !important; }
+body.joueur #titre-jeu { border-left: none; padding-left: 4px; }
 body.plein-ecran #scene { cursor: none; }
 
 /* Le nom de la carte, en haut à gauche, qui glisse puis s'efface */
