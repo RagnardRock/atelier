@@ -143,6 +143,15 @@ Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu �
 - **Sauvegarde auto** (si le jeu l'active dans Tafl) : en changeant de carte et/ou toutes les N minutes, dans une place à part (`….auto.json`) : la sauvegarde du joueur n'est jamais écrasée. Elle attend que le joueur soit libre (pas en plein dialogue ni en combat). À l'ouverture, Saga propose la plus récente des deux. Pas de sauvegarde auto pendant un test rapide.
 - **Export** : les sons partent avec le jeu (dans `resources/jeu/sons` pour l'exe, emballés dans `sons.js` pour la version web, qui se joue même d'un double-clic sur `index.html`).
 
+## Ce que fait Saga 0.12 : les scripts JS du jeu (avec Tafl 0.31)
+
+- **Les scripts du jeu** (`scripts/*.js`, écrits dans Tafl, voir `tuiles/SCRIPTS.md`) sont chargés au lancement dans un **bac à sable** (`commun/bac-a-sable.js`, un Web Worker sans fichiers, réseau ni page). Un script qui calcule trop longtemps est arrêté et relancé ; une erreur est montrée (en test) ou notée dans la console (jeu exporté), et le jeu continue.
+- **Le bloc Script** d'un événement joue une commande déclarée par un script. Ce que demande le script (dire, choisir, donner, combattre…) devient une commande des blocs, jouée par `scripts.js` comme les autres : un script ne touche jamais la partie lui-même.
+- **Les règles maison** : les packs appellent leurs formules par `Maison.formule` (voir REGLES.md, partie 7). Un script peut ainsi remplacer les dégâts, les soins, la chance de toucher, de critique, de fuite, de capture ou l'expérience.
+- **Les réactions** (`quand`) : nouvelle partie, arrivée sur une carte, après un combat, changement de moment, chaque pas ; jouées quand le joueur est libre.
+- **Les variables** du jeu (nombres ou textes), leur commande et leur condition ; **les dés** des scripts partent d'une graine gardée dans la sauvegarde.
+- **Export** : le bac à sable part avec le jeu (version web et exe).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
@@ -169,6 +178,8 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/pad.js` | La manette dans les menus autour du jeu (Saga 0.11). |
 | `renderer/moteur/dialogue.js` | La boîte de dialogue, les choix et les annonces (en HTML, posés sur le canvas). |
 | `renderer/moteur/scripts.js` | Joue les commandes des événements, une par une. |
+| `renderer/moteur/scripts-js.js` | Saga 0.12 : les scripts JS du jeu (l'hôte du bac à sable) et `Maison.formule`, les règles maison des packs. |
+| `../commun/bac-a-sable.js` | Saga 0.12 : le bac à sable des scripts (partagé avec Tafl, copié au `npm install`). |
 | `renderer/polices/` | La police pixel Jersey 10 (licence SIL OFL, dans `OFL.txt`). |
 | `renderer/moteur/regles/regles.js` | **La porte des règles** : le moteur ne parle qu'à elle pour tout ce qui touche aux créatures et aux combats. |
 | `renderer/moteur/regles/pokemon/creatures.js` | Les créatures : statistiques, XP, niveaux, attaques apprises, évolutions, plafond de niveau. |

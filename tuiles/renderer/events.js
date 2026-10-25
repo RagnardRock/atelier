@@ -18,7 +18,8 @@
 // doc.data, les données du jeu, suit la même règle (on remplace doc.data en entier) :
 //   { personnages: [{ id, nom, description, heros, couleur, tuile, portraits: [{ expression, png }], sprite, tenues: [{ id, nom, sprite }] }],
 //     quetes: [{ id, titre, description, secondaire, suivante, personnages, etapes: [{ texte }] }],
-//     interrupteurs: [{ id, nom, description }] }
+//     interrupteurs: [{ id, nom, description }],
+//     variables: [{ id, nom, description, defaut }] } (Tafl 0.31 : un nombre ou un texte, pour les scripts)
 //
 // Les deux grandes fenêtres (l'éditeur d'un événement, et Jeu › Données du jeu) travaillent sur une
 // copie et la rendent d'un bloc quand on valide : App la remet dans le jeu avec Doc.change(), ce qui
@@ -37,6 +38,15 @@ const Events = (() => {
   const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur'], ['monstres_vaincus', 'Monstres vaincus (JRPG)']];
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
+  // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
+  const ACTIONS_VARIABLE = [['regler', 'La mettre à'], ['ajouter', 'Lui ajouter'], ['retirer', 'Lui retirer']];
+  const COMPARAISONS = [['>=', 'au moins (≥)'], ['<=', 'au plus (≤)'], ['==', 'égale à (=)'], ['!=', 'différente de (≠)'], ['>', 'plus que (>)'], ['<', 'moins que (<)']];
+  // « 12 » → 12, « Bourg » → 'Bourg' (un texte court).
+  const valeurVariable = (v) => {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+    const t = String(v ?? '').trim().slice(0, 200);
+    return t !== '' && Number.isFinite(Number(t.replace(',', '.'))) ? Number(t.replace(',', '.')) : t;
+  };
 
   // --- Petites aides ---
   const str = (v, d = '') => (v === undefined || v === null ? d : String(v));
@@ -128,6 +138,7 @@ const Events = (() => {
       if (kind === 'personnage' && (c.type === 'groupe' || c.type === 'membre') && c.personnage === id) at(u);
       if (kind === 'quete' && c.type === 'quete' && c.quete === id) at(u);
       if (kind === 'interrupteur' && c.type === 'interrupteur' && c.id === id) at(u);
+      if (kind === 'variable' && c.type === 'variable' && c.id === id) at(u);
     });
     if (kind === 'quete') for (const q of doc.data.quetes) if (q.suivante === id) out.add(`Quête « ${q.titre} » (suite)`);
     return [...out];
@@ -149,6 +160,7 @@ const Events = (() => {
     };
     set('tafl-expressions', [...EXPRESSIONS, ...doc.data.personnages.flatMap((p) => p.portraits.map((x) => x.expression))]);
     set('tafl-interrupteurs', doc.data.interrupteurs.map((i) => i.id));
+    set('tafl-variables', (doc.data.variables || []).map((v) => v.id));
     set('tafl-objets', [...(doc.data.objets || []).map((o) => o.id), ...objetsUtilises(doc)]);
     if (typeof Donnees !== 'undefined' && doc.data.creatures) Donnees.listes(doc.data);
   }
@@ -217,6 +229,24 @@ const Events = (() => {
       ],
       depuis: (v) => ({ type: 'local', valeur: v.valeur === 'true' }),
       resume: (doc, c) => (c.valeur ? 'Marquer comme déjà fait' : 'Marquer comme pas encore fait'),
+    },
+    // Tafl 0.31 (Saga 0.12) : une variable, un nombre (pièces trouvées, réputation) ou un texte.
+    variable: {
+      nom: 'Variable (un nombre ou un texte)', icone: 'symbol-variable', groupe: 'Logique',
+      nouveau: () => ({ type: 'variable', id: '', action: 'ajouter', valeur: 1 }),
+      champs: (doc, c) => [
+        { key: 'id', label: 'Variable', type: 'text', value: c.id, list: 'tafl-variables', placeholder: 'pieces-trouvees' },
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: ACTIONS_VARIABLE },
+        { key: 'valeur', label: 'Valeur', type: 'text', value: String(c.valeur ?? 0), placeholder: '1' },
+        { type: 'info', text: 'Une variable retient un nombre (pièces trouvées, réputation, nombre de victoires) ou un texte, pour tout le jeu. Elle vaut sa valeur de départ (Données › Variables), sinon 0. Les pages et les « si » la testent (condition « Une variable »), les scripts JS la lisent avec saga.variable().' },
+      ],
+      depuis: (v) => {
+        const action = pick(v.action, ACTIONS_VARIABLE, 'regler');
+        return { type: 'variable', id: Doc.slug(v.id, ''), action, valeur: action === 'regler' ? valeurVariable(v.valeur) : Number(String(v.valeur).replace(',', '.')) || 0 };
+      },
+      valide: (c) => (c.id ? null : 'Donne un nom à la variable.'),
+      resume: (doc, c) => (c.action === 'regler' ? `Variable « ${nomVariable(doc, c.id)} » = ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur}`
+        : `Variable « ${nomVariable(doc, c.id)} » ${c.action === 'retirer' ? '−' : '+'} ${c.valeur}`),
     },
     attendre: {
       nom: 'Attendre', icone: 'watch', groupe: 'Logique',
@@ -450,7 +480,63 @@ const Events = (() => {
       depuis: (v) => ({ type: 'heure', action: v.action === 'regler' ? 'regler' : 'avancer', heures: clamp(Math.round(v.heures) || 0, 0, 23) }),
       resume: (doc, c) => (c.action === 'regler' ? `Mettre l'heure à ${c.heures} h` : `Avancer l'heure de ${c.heures} h`),
     },
+    // Tafl 0.31 (Saga 0.12) : une commande écrite en JavaScript (Événements › Scripts, commande()).
+    script: {
+      nom: 'Script JS (une commande de tes scripts)', icone: 'code', groupe: 'Scripts', largeur: 540,
+      nouveau: (doc) => ({ type: 'script', nom: ScriptsTafl.connu(doc).commandes[0]?.nom || '', params: {} }),
+      champs: (doc, c) => champsScript(doc, c),
+      onInput: (v, f) => { for (const [k, i] of Object.entries(f.inputs)) if (k.startsWith('p|')) i.row.hidden = k.split('|')[1] !== v.nom; },
+      depuis: (v, c) => ({ type: 'script', nom: v.nom || c.nom, params: paramsDepuis(v, v.nom || c.nom) }),
+      valide: (c) => (c.nom ? null : 'Écris d\'abord une commande dans Événements › Scripts : commande(\'mon-nom\', async (saga) => { … }).'),
+      resume: (doc, c) => {
+        const p = Object.entries(c.params || {}).map(([k, v]) => `${k} : ${typeof v === 'string' ? v || '…' : v}`).join(', ');
+        return `Script « ${c.nom || '…'} »${p ? ` (${court(p, 48)})` : ''}`;
+      },
+    },
   };
+  const nomVariable = (doc, id) => (doc.data.variables || []).find((v) => v.id === id)?.nom || id;
+
+  // Le bloc Script : la commande à jouer, puis ses réglages (ceux qu'elle déclare dans commande()). Les
+  // réglages de toutes les commandes sont dans la fenêtre ; seuls ceux de la commande choisie se voient.
+  function champsScript(doc, c) {
+    const connu = ScriptsTafl.connu(doc);
+    const cmds = connu.commandes;
+    const choix = cmds.map((x) => [x.nom, `${x.nom}  (${x.fichier.replace(/^scripts\//, '')})`]);
+    if (c.nom && !cmds.some((x) => x.nom === c.nom)) choix.unshift([c.nom, `${c.nom} (introuvable dans les scripts)`]);
+    if (!choix.length) {
+      return [{ type: 'info', text: 'Aucune commande de script pour l\'instant. Dans Événements › Scripts, crée un script (modèle « Commande avec dialogue »), puis reviens ici.' },
+        { key: 'nom', label: 'Commande', type: 'select', value: '', choices: [['', '(aucune)']] }];
+    }
+    const fields = [{ key: 'nom', label: 'Commande', type: 'select', value: c.nom || choix[0][0], choices: choix }];
+    const choisie = c.nom || choix[0][0];
+    for (const x of cmds) {
+      for (const [cle, d] of Object.entries(x.params || {})) {
+        const v = x.nom === c.nom && c.params?.[cle] !== undefined ? c.params[cle] : d.defaut;
+        const f = { key: `p|${x.nom}|${cle}`, label: d.nom || cle, hidden: x.nom !== choisie };
+        if (d.type === 'nombre') Object.assign(f, { type: 'number', value: Number(v) || 0, ...(Number.isFinite(d.min) ? { min: d.min } : {}), ...(Number.isFinite(d.max) ? { max: d.max } : {}) });
+        else if (d.type === 'oui_non') Object.assign(f, { type: 'select', value: String(Boolean(v)), choices: [['true', 'Oui'], ['false', 'Non']] });
+        else if (d.type === 'liste') Object.assign(f, { type: 'select', value: String(v ?? d.choix?.[0] ?? ''), choices: (d.choix || []).map((k) => [k, k]) });
+        else if (d.type === 'personnage') Object.assign(f, { type: 'select', value: String(v ?? ''), choices: [['', '(aucun)'], ...doc.data.personnages.map((p) => [p.id, p.nom])] });
+        else if (d.type === 'carte') Object.assign(f, { type: 'select', value: String(v ?? ''), choices: [['', '(aucune)'], ...doc.maps.map((m) => [m.id, m.name])] });
+        else if (d.type === 'quete') Object.assign(f, { type: 'select', value: String(v ?? ''), choices: [['', '(aucune)'], ...doc.data.quetes.map((q) => [q.id, q.titre])] });
+        else Object.assign(f, { type: 'text', value: String(v ?? ''), ...({ objet: { list: 'tafl-objets' }, interrupteur: { list: 'tafl-interrupteurs' }, variable: { list: 'tafl-variables' }, creature: { list: 'tafl-creatures' } }[d.type] || {}) });
+        fields.push(f);
+      }
+    }
+    const aide = cmds.find((x) => x.nom === choisie)?.aide;
+    fields.push({ type: 'info', text: `${aide ? `${aide} ` : ''}La commande et ses réglages viennent de commande('nom', { réglages }, async (saga, params) => { … }) dans un script (Événements › Scripts). Saga la joue dans un bac à sable : elle ne voit ni tes fichiers ni Internet.` });
+    return fields;
+  }
+  function paramsDepuis(v, nom) {
+    const d = ScriptsTafl.connu(App.doc).commandes.find((x) => x.nom === nom);
+    const out = {};
+    for (const [cle, def] of Object.entries(d?.params || {})) {
+      const brut = v[`p|${nom}|${cle}`];
+      if (brut === undefined) continue;
+      out[cle] = def.type === 'nombre' ? Number(brut) || 0 : def.type === 'oui_non' ? brut === 'true' : String(brut);
+    }
+    return out;
+  }
 
   // --- Les conditions (d'une page, ou d'un « si ») ---
   const CONDITIONS = {
@@ -541,6 +627,18 @@ const Events = (() => {
     ],
     depuis: (v) => ({ type: 'moment', moment: v.moment }),
   };
+  CONDITIONS.variable = {
+    nom: 'Une variable (nombre ou texte)',
+    nouveau: () => ({ type: 'variable', id: '', comparaison: '>=', valeur: 1 }),
+    champs: (doc, c) => [
+      { key: 'id', label: 'Variable', type: 'text', value: c.id, list: 'tafl-variables', placeholder: 'pieces-trouvees' },
+      { key: 'comparaison', label: 'Est', type: 'select', value: c.comparaison, choices: COMPARAISONS },
+      { key: 'valeur', label: 'Valeur', type: 'text', value: String(c.valeur ?? 0) },
+      { type: 'info', text: 'Pour un nombre : au moins, au plus, égal… Pour un texte (le nom d\'une ville, un choix du joueur), seulement « égale à » ou « différente de ».' },
+    ],
+    depuis: (v) => ({ type: 'variable', id: Doc.slug(v.id, ''), comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: valeurVariable(v.valeur) }),
+    valide: (c) => (c.id ? null : 'Donne le nom de la variable.'),
+  };
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -553,6 +651,7 @@ const Events = (() => {
     if (c.type === 'badge') return `a le badge « ${nomBadge(doc, c.badge)} »`;
     if (c.type === 'membre') return `${nomData(doc, 'personnages', c.personnage)} est avec le joueur`;
     if (c.type === 'moment') return libelle(MOMENTS, c.moment).replace(/ \(.*\)$/, '').toLowerCase();
+    if (c.type === 'variable') return `« ${nomVariable(doc, c.id)} » ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur}`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -570,6 +669,7 @@ const Events = (() => {
       case 'badge': return { type: 'badge', badge: str(c.badge) };
       case 'membre': return { type: 'membre', personnage: str(c.personnage) };
       case 'moment': return { type: 'moment', moment: pick(c.moment, MOMENTS, 'nuit') };
+      case 'variable': return { type: 'variable', id: str(c.id), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: valeurVariable(c.valeur ?? 0) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -600,6 +700,20 @@ const Events = (() => {
       case 'musique': return { type: 'musique', fichier: Donnees.son(c.fichier, ['aucune']) };
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
+      case 'variable': {
+        const action = pick(c.action, ACTIONS_VARIABLE, 'regler');
+        return { type: 'variable', id: str(c.id), action, valeur: action === 'regler' ? valeurVariable(c.valeur ?? 0) : Number(c.valeur) || 0 };
+      }
+      case 'script': {
+        // Les réglages : des nombres, des textes, des oui/non (rien d'autre ne passe dans un bloc).
+        const params = {};
+        for (const [k, v] of Object.entries(c.params && typeof c.params === 'object' && !Array.isArray(c.params) ? c.params : {})) {
+          if (typeof v === 'number' && Number.isFinite(v)) params[k] = v;
+          else if (typeof v === 'boolean') params[k] = v;
+          else if (v !== null && v !== undefined && typeof v !== 'object') params[k] = String(v).slice(0, 500);
+        }
+        return { type: 'script', nom: str(c.nom), params };
+      }
       default: return { ...c };
     }
   }
@@ -639,7 +753,7 @@ const Events = (() => {
     return out;
   }
 
-  const emptyData = () => ({ personnages: [], quetes: [], interrupteurs: [], ...(typeof Donnees !== 'undefined' ? Donnees.vides() : {}) });
+  const emptyData = () => ({ personnages: [], quetes: [], interrupteurs: [], variables: [], ...(typeof Donnees !== 'undefined' ? Donnees.vides() : {}) });
   // Les données du jeu, lues d'un fichier (ou données par Claude) : identifiants uniques, valeurs sûres.
   function normData(d, tileCount = Infinity) {
     const uniques = (list) => {
@@ -684,6 +798,13 @@ const Events = (() => {
         nom: str(s?.nom || s?.id, `Interrupteur ${i + 1}`),
         description: str(s?.description),
       }))),
+      // Tafl 0.31 : les variables (un nombre ou un texte), avec leur valeur au début d'une partie.
+      variables: uniques(arr(d?.variables).map((v, i) => ({
+        id: Doc.slug(v?.id || v?.nom, `variable-${i + 1}`),
+        nom: str(v?.nom || v?.id, `Variable ${i + 1}`),
+        description: str(v?.description),
+        defaut: valeurVariable(v?.defaut ?? 0),
+      }))),
       // Tafl 0.8 : types, talents, attaques, créatures, objets, dresseurs, boutiques, réglages (donnees.js).
       ...(typeof Donnees !== 'undefined' ? Donnees.normer(d) : {}),
     };
@@ -712,8 +833,13 @@ const Events = (() => {
       if (c.type === 'objet' && !c.objet) erreurs.push(`${ou} : objet manquant.`);
       if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ou} : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune quête : crée-la avec l\'action quete'}).`);
       if (c.type === 'membre' && !perso(doc, c.personnage)) erreurs.push(`${ou} : pas de personnage « ${c.personnage} ».`);
+      if (c.type === 'variable' && !variableExiste(c.id)) erreurs.push(`${ou} : pas de variable « ${c.id} » (${variablesConnues()}).`);
       return null;
     };
+    // Tafl 0.31 : les variables du jeu, et les commandes déclarées par les scripts JS actifs.
+    const variableExiste = (id) => (doc.data.variables || []).some((v) => v.id === id);
+    const variablesConnues = () => (doc.data.variables || []).map((v) => v.id).join(', ') || 'aucune : crée-la avec l\'action variable';
+    const commandesJs = ScriptsTafl.connu(doc).commandes;
     const verifListe = (liste, ou) => {
       if (!Array.isArray(liste)) { erreurs.push(`${ou} : il faut une liste de commandes.`); return; }
       liste.forEach((c, i) => {
@@ -742,6 +868,16 @@ const Events = (() => {
         }
         if (c.type === 'teleporter' && !Doc.mapById(doc, c.carte)) erreurs.push(`${ici} (teleporter) : pas de carte « ${c.carte} » (${doc.maps.map((m) => m.id).join(', ')}).`);
         if (c.type === 'quete' && !quete(doc, c.quete)) erreurs.push(`${ici} (quete) : pas de quête « ${c.quete} » (${doc.data.quetes.map((q) => q.id).join(', ') || 'aucune : crée-la avec l\'action quete'}).`);
+        if (c.type === 'variable') {
+          if (!variableExiste(c.id)) erreurs.push(`${ici} (variable) : pas de variable « ${c.id} » (${variablesConnues()}).`);
+          if (!['regler', 'ajouter', 'retirer'].includes(c.action)) erreurs.push(`${ici} (variable) : action = regler, ajouter ou retirer.`);
+        }
+        if (c.type === 'script') {
+          const js = commandesJs.find((x) => x.nom === c.nom);
+          if (!js) erreurs.push(`${ici} (script) : aucun script actif ne déclare la commande « ${c.nom} » (${commandesJs.map((x) => x.nom).join(', ') || 'aucune : écris-la avec l\'action ecrire_script'}).`);
+          else if (c.params !== undefined && (typeof c.params !== 'object' || Array.isArray(c.params))) erreurs.push(`${ici} (script) : params = un objet { ${Object.keys(js.params || {}).join(', ')} }.`);
+          else for (const k of Object.keys(c.params || {})) if (!js.params?.[k]) erreurs.push(`${ici} (script) : « ${c.nom} » n'a pas de réglage « ${k} » (${Object.keys(js.params || {}).join(', ') || 'aucun'}).`);
+        }
       });
     };
     pages.forEach((p, k) => {
@@ -1279,6 +1415,9 @@ const Events = (() => {
     { key: 'interrupteurs', groupe: 'Histoire', label: 'Interrupteurs', icon: 'symbol-boolean', kind: 'interrupteur', base: 'Nouvel interrupteur',
       nouveau: (id) => ({ id, nom: 'Nouvel interrupteur', description: '' }), meta: () => '',
       vide: 'Aucun interrupteur. Ils se créent aussi tout seuls quand un script en utilise un nouveau.' },
+    { key: 'variables', groupe: 'Histoire', label: 'Variables', icon: 'symbol-variable', kind: 'variable', base: 'Nouvelle variable',
+      nouveau: (id) => ({ id, nom: 'Nouvelle variable', description: '', defaut: 0 }), meta: (o) => `départ : ${o.defaut === '' ? '« »' : o.defaut}`,
+      vide: 'Aucune variable. Une variable retient un nombre (pièces trouvées, réputation) ou un texte ; les blocs et les scripts JS la changent et la testent.' },
   ];
   const onglets = () => [...ONGLETS, ...(typeof Donnees !== 'undefined' ? Donnees.ONGLETS : [])];
   const MAX_LIGNES = 250; // au-delà, on cherche (1025 créatures, c'est long à faire défiler)
@@ -1426,7 +1565,7 @@ const Events = (() => {
         return { el: el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Identifiant' }), span, el('span', { className: 'unit', textContent: nouveaux.has(o) ? 'suit le nom (ensuite il ne change plus)' : o.officiel ? `officiel (${o.officiel}), utilisé par les scripts` : 'utilisé par les scripts' })]), maj };
       };
       const vue = () => ({ ...doc, data: work });
-      const usagesDe = (kind, id) => (['personnage', 'quete', 'interrupteur'].includes(kind) ? utilisations(vue(), kind, id) : Donnees.utilisations(vue(), kind, id));
+      const usagesDe = (kind, id) => (['personnage', 'quete', 'interrupteur', 'variable'].includes(kind) ? utilisations(vue(), kind, id) : Donnees.utilisations(vue(), kind, id));
       const usages = (kind, id) => {
         const u = usagesDe(kind, id);
         return el('p', { className: 'modal-info', textContent: u.length ? `Utilisé par : ${u.slice(0, 12).join(' · ')}${u.length > 12 ? ` (et ${u.length - 12} autres)` : ''}` : 'Pas encore utilisé.' });
@@ -1623,6 +1762,21 @@ const Events = (() => {
         );
       }
 
+      function formVariable(v, items) {
+        const idl = idLigne(v, items);
+        const depart = el('input', { type: 'text', value: String(v.defaut ?? 0), placeholder: '0' });
+        depart.oninput = () => { v.defaut = valeurVariable(depart.value); renderListe(); };
+        form.append(
+          champ('Nom', input(v, 'nom', 'Pièces d\'or trouvées', idl.maj)),
+          idl.el,
+          champ('Valeur de départ', depart, 'Un nombre (0, 10) ou un texte court (Bourg)'),
+          el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), zone(v, 'description', 3, 'Ce qu\'elle compte, ce qu\'elle retient.')]),
+          el('p', { className: 'modal-info', textContent: 'Une variable retient un nombre ou un texte pour tout le jeu (pièces trouvées, réputation auprès d\'un village, nombre de victoires). Les blocs la changent (commande « Variable »), les pages et les « si » la testent (condition « Une variable »), les scripts JS la lisent et l\'écrivent (saga.variable, saga.ajouter). Elle part de sa valeur de départ.' }),
+          section('Utilisation'),
+          usages('variable', v.id),
+        );
+      }
+
       function renderForm() {
         form.replaceChildren();
         // Le pack a changé (Réglages) : un onglet d'un autre pack laisse la place aux Réglages.
@@ -1642,6 +1796,7 @@ const Events = (() => {
         if (tab === 'personnages') formPersonnage(o, items, i);
         else if (tab === 'quetes') formQuete(o, items, i);
         else if (tab === 'interrupteurs') formInterrupteur(o, items, i);
+        else if (tab === 'variables') formVariable(o, items, i);
         else d.form(o, ctx());
         form.scrollTop = 0;
       }
@@ -1685,7 +1840,7 @@ const Events = (() => {
 
   return {
     TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
-    create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants,
+    create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants, valeurVariable,
     texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
     editEvent, editData, isOpen, pageOuverte, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
     formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, nomQui, quiReel, suivi,

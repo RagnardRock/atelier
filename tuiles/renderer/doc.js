@@ -120,6 +120,7 @@ const Doc = (() => {
       map: null,
       depart: null,
       tests: [],            // Tafl 0.27 : les états de départ du test rapide (gardés dans jeu.json)
+      scripts: [],          // Tafl 0.31 : les scripts JS du jeu [{ nom, code, actif }] (scripts/<nom>.js)
       data: Events.emptyData(),
       stamps: [],
       current: 0,
@@ -156,6 +157,7 @@ const Doc = (() => {
       depart: doc.depart,
       data: doc.data,
       stamps: doc.stamps,
+      scripts: doc.scripts,
       current: doc.current,
     };
   }
@@ -169,6 +171,7 @@ const Doc = (() => {
     doc.depart = s.depart;
     doc.data = s.data;
     doc.stamps = s.stamps;
+    doc.scripts = s.scripts || [];
     doc.current = clamp(s.current, 0, Math.max(0, doc.tiles.length - 1));
   }
 

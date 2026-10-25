@@ -122,6 +122,7 @@ handle('app:version', async () => app.getVersion());
 // navigateur (un export web du jeu).
 const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
 const DATA_FILE = /^donnees\/[a-z0-9-]+\.json$/;
+const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9-]{0,59}\.js$/; // les scripts JS du jeu (Saga 0.12)
 const TILES_FILE = /^[\w.-]+\.tafl$/;
 const relJeu = (rel) => String(rel || '').replace(/\\/g, '/');
 
@@ -155,10 +156,19 @@ async function lireJeu(cible) {
     const text = await fs.readFile(path.join(dossier, rel), 'utf8').catch(() => null);
     if (text !== null) donnees[rel] = text;
   }
+  // Les scripts JS (Saga 0.12) : lus comme du texte. Ils tourneront dans le bac à sable du moteur,
+  // jamais dans ce processus (qui, lui, a accès au disque).
+  const scripts = {};
+  for (const s of Array.isArray(data.scripts) ? data.scripts : []) {
+    const rel = relJeu(s?.fichier);
+    if (!SCRIPT_FILE.test(rel)) continue;
+    const text = await fs.readFile(path.join(dossier, rel), 'utf8').catch(() => null);
+    if (text !== null) scripts[rel] = text;
+  }
   if (!joueur) await modifierConfig((config) => { config.jeuxRecents = [dossier, ...config.jeuxRecents.filter((d) => d !== dossier)].slice(0, 12); });
   dossierOuvert = dossier;
   log('INFO', `Jeu ouvert : ${dossier}`);
-  return { dossier, jeu, tuiles, cartes, donnees };
+  return { dossier, jeu, tuiles, cartes, donnees, scripts };
 }
 
 // Les sons du jeu (Saga 0.11) : sons/<fichier>, lus à la demande (une musique peut peser quelques Mo),

@@ -19,7 +19,7 @@ Ce document décrit :
 4. [Le pack JRPG](#4-le-pack-jrpg) : ses données en mémoire, ses formules, ses statuts.
 5. [Le pack Pokémon](#5-le-pack-pokémon) : ce qui lui est propre.
 6. [Écrire un pack](#6-écrire-un-pack--un-exemple-minimal) : un exemple minimal complet.
-7. [Et les scripts ?](#7-et-les-scripts-du-jeu-plus-tard) : ce qui est prévu pour écrire ou modifier un pack depuis le jeu.
+7. [Les scripts et les règles maison](#7-les-scripts-du-jeu-et-les-règles-maison-saga-012) : remplacer une formule du pack depuis un script du jeu (Saga 0.12), et ce qui est prévu ensuite.
 
 ---
 
@@ -349,7 +349,7 @@ Huit statistiques : `pv`, `pm`, `force`, `magie`, `defense`, `esprit`, `agilite`
 
 ### 4.4 Les formules du combat
 
-Ces formules sont de petites fonctions exportées par `JrpgCombat` (`formuleDegats`, `formuleSoin`, `formuleTouche`, `formuleCritique`, `formuleFuite`), pour pouvoir un jour les remplacer depuis un script.
+Ces formules sont de petites fonctions exportées par `JrpgCombat` (`formuleDegats`, `formuleSoin`, `formuleTouche`, `formuleCritique`, `formuleFuite`). Depuis Saga 0.12, un script du jeu peut remplacer chacune d'elles (règles maison, voir la [partie 7](#7-les-scripts-du-jeu-et-les-règles-maison-saga-012)).
 
 **Dégâts** (attaque de base et compétences avec `puissance` > 0) :
 
@@ -518,21 +518,42 @@ Les points d'attention :
 
 ---
 
-## 7. Et les scripts du jeu, plus tard ?
+## 7. Les scripts du jeu et les règles maison (Saga 0.12)
 
-Pas encore construit : cette partie dit ce qui est prévu, pour que les packs d'aujourd'hui y soient prêts.
+Depuis Tafl 0.31 et Saga 0.12, un jeu peut contenir ses propres fichiers JavaScript (`scripts/*.js`, écrits dans Tafl, espace Événements › Scripts JS). Saga les charge dans un **bac à sable** (`commun/bac-a-sable.js`) : un Web Worker fermé, sans fichiers, réseau ni page, arrêté s'il calcule trop longtemps. Tout ce qu'un script peut faire est dans `tuiles/SCRIPTS.md` (copié dans chaque dossier de jeu). Ce qui concerne les packs :
 
-L'idée : un jeu pourra contenir ses propres fichiers JavaScript (dans Tafl, onglet Scripts) que Saga chargera dans un **bac à sable**, c'est-à-dire un endroit fermé où le script ne voit que ce qu'on lui donne : pas de fichiers, pas de réseau, pas de fenêtre. Ces scripts pourront :
+### 7.1 Les formules remplaçables : `Maison.formule`
 
-1. **Modifier un pack existant** : remplacer une formule (`formuleDegats`, `formuleFuite`…), le choix des monstres, ou ajouter un statut, en gardant le reste du pack JRPG ou Pokémon.
-2. **Écrire un pack entier** : un objet qui suit exactement le contrat de la [partie 1](#1-le-contrat-dun-pack), déclaré par le jeu et choisi dans Réglages › Règles.
-3. **Donner des comportements** (plus tard, pour les genres en temps réel) : des machines à états pour les personnages et les ennemis.
+Un pack n'appelle jamais une formule remplaçable directement, mais par la façade `Maison` (`moteur/scripts-js.js`) :
 
-Ce qui rend cela possible, et que les packs actuels respectent déjà :
+```js
+const degats = await Maison.formule('degats', { A, D, puissance, element, critique, defend, physique }, formuleDegats);
+```
 
-- un pack n'utilise que `jeu`, `partie`, `ui` et quelques aides du moteur : c'est exactement ce que le bac à sable lui prêtera ;
-- tout ce qui attend le joueur est une promesse (`await ui.message(…)`), ce qui marche aussi à travers un bac à sable (un worker ou un iframe isolé qui échange des messages avec le moteur) ;
-- les formules sont de petites fonctions pures, faciles à remplacer une par une ;
-- la partie est un objet JSON simple : le bac à sable pourra en recevoir une copie et rendre les changements.
+- `Maison.formule(nom, valeurs, formuleDuPack)` calcule d'abord `normal = formuleDuPack(valeurs)` ;
+- sans script qui déclare `formule(nom, …)`, ou si la formule est coupée (`reglages.scripts.formules_coupees`), elle rend `normal` ;
+- sinon elle appelle le script avec `{ ...valeurs, normal }` et rend son nombre ; si le script rend autre chose qu'un nombre, a une erreur ou est arrêté, elle rend `normal` et l'erreur est signalée ;
+- elle rend toujours une promesse quand un script existe : la fonction du pack qui l'appelle doit donc être `async` (les combats le sont déjà).
 
-Ce qu'il faudra décider en construisant les scripts : la liste exacte des aides prêtées (`Collection`, `Sprites`, le hasard), une limite de temps pour qu'un script ne bloque pas le jeu, et comment Tafl vérifie un pack de script (qu'il a bien toutes les fonctions obligatoires) avant de le proposer.
+Le pack reste responsable des bornes : arrondir, au moins 1 PV de dégâts, une chance entre 0 et 100. Les valeurs doivent être simples (nombres, booléens, textes) : elles traversent le bac à sable en copie.
+
+Les formules de chaque pack sont déclarées dans `BacASable.FORMULES` (nom, ce qu'elles rendent, leurs valeurs, un exemple pour le bouton Essayer de Tafl) : c'est cette liste que Tafl montre dans l'éditeur (complétion), dans Réglages › Règles maison, et que le vérificateur utilise.
+
+| Pack | Formules |
+|---|---|
+| `jrpg` | `degats`, `soin` (en combat et hors combat), `touche`, `critique`, `fuite`, `experience` (voir 4.4 et 4.3) |
+| `pokemon` | `degats`, `capture` (une chance en % ; Saga en tire les secousses : seuil `65536 × (p / 100)^¼` par secousse), `fuite` (en %), `experience` |
+
+**Un nouveau pack** qui veut des règles maison : ajouter ses formules à `BacASable.FORMULES` sous l'id du pack, et les appeler par `Maison.formule`. Une formule qui n'y est pas ne peut pas être remplacée (Tafl prévient si un script en déclare une).
+
+### 7.2 Pourquoi les packs étaient déjà prêts
+
+- un pack n'utilise que `jeu`, `partie`, `ui` et quelques aides : rien qu'un bac à sable ne puisse prêter ;
+- tout ce qui attend est une promesse, ce qui marche à travers un worker ;
+- les formules sont de petites fonctions pures, remplaçables une par une ;
+- la partie est un objet JSON simple : un script en reçoit une copie, et ses changements passent par des commandes (FORMAT.md › Commandes) que le moteur joue. Rien ne change la partie en dehors du moteur, ce qui servira au multijoueur.
+
+### 7.3 Pas encore
+
+- **Un pack entier écrit en script** (avec le pack TTRPG) : un objet qui suit le contrat de la [partie 1](#1-le-contrat-dun-pack), déclaré par un script et choisi dans Réglages › Règles. Il faudra prêter `ui` à travers le bac à sable et vérifier dans Tafl qu'il a toutes les fonctions obligatoires.
+- **Des comportements** pour les genres en temps réel (machines à états des personnages et des ennemis).

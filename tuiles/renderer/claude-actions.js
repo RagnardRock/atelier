@@ -278,11 +278,13 @@
       icone: 'checklist',
       libelle: () => 'Vérifie le jeu',
       description: 'Vérifie tout le jeu (ce qui est dans Tafl, même pas encore enregistré) : téléporteurs cassés (carte ou case d\'arrivée qui n\'existe pas, case bloquée, pas de retour), cartes et personnages que le joueur ne peut pas atteindre depuis le départ, quêtes impossibles à commencer ou à finir, étapes jamais atteintes, conditions jamais vraies (interrupteur jamais allumé, objet que personne ne donne), ids inconnus. Il suppose que le joueur obtient tout ce que le jeu donne ou vend. Lance-le après une grosse modification, corrige les erreurs, puis relance-le. Ragna voit la même liste avec Jeu › Vérifier le jeu (Ctrl+Maj+V).',
-      faire: () => {
+      faire: async () => {
         const doc = besoinJeu();
+        ScriptsTafl.appliquer();
+        await ScriptsTafl.rafraichir(doc); // Tafl 0.31 : ce que déclarent les scripts JS, à jour
         const r = Verificateur.verifier(OutilsJeu.jeuDe(doc));
         if (!r.problemes.length) return 'Aucun problème trouvé.';
-        const lignes = r.problemes.slice(0, 80).map((p) => `- [${p.gravite === 'erreur' ? 'erreur' : 'à vérifier'}] ${p.message}${p.carte ? ` (carte ${p.carte}${Number.isInteger(p.x) ? `, case ${p.x}, ${p.y}` : ''}${p.evenement ? `, événement ${p.evenement}` : ''})` : ''}`);
+        const lignes = r.problemes.slice(0, 80).map((p) => `- [${p.gravite === 'erreur' ? 'erreur' : 'à vérifier'}] ${p.message}${p.carte ? ` (carte ${p.carte}${Number.isInteger(p.x) ? `, case ${p.x}, ${p.y}` : ''}${p.evenement ? `, événement ${p.evenement}` : ''})` : p.script ? ` (script ${p.script}.js${p.ligne ? `, ligne ${p.ligne}` : ''})` : ''}`);
         return [`${r.erreurs} erreur(s), ${r.attentions} à vérifier.`, ...lignes, r.problemes.length > 80 ? `… et ${r.problemes.length - 80} de plus.` : ''].filter(Boolean).join('\n');
       },
     },
@@ -1565,7 +1567,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     if (!t) throw new Error(`${p.nom} n'a pas de tenue « ${a.tenue} » (${(p.tenues || []).map((x) => x.id).join(', ') || 'aucune : personnage action tenue'}).`);
     return { id: t.id, nom: `${p.nom} (tenue ${t.nom})`, sprite: t.sprite, tuile: -1, personnage: p.id };
   }
-  const CMDS_AIDE = 'Commandes ({ "type": …, champs }) : dire {qui: id d\'un personnage, "@evenement" (le personnage de l\'événement) ou "" (texte seul : panneau, narration), expression (normal, content, triste…), texte ({joueur} = nom du joueur ; une ligne vide = boîte suivante)} ; choix {options: [{texte, commandes: [...]}], 2 à 4} ; si {condition, alors: [...], sinon: [...]} ; commentaire {texte} ; fin {} ; interrupteur {id, valeur: true|false} (un nom nouveau crée l\'interrupteur) ; local {valeur} (l\'interrupteur « déjà fait » propre à l\'événement) ; attendre {ms} ; objet {action: donner|retirer, objet, nombre} ; creature {creature, niveau} (la donner) ; combat_sauvage {creature, niveau} ; combat_dresseur {dresseur} ; teleporter {carte, x, y, direction} ; quete {quete, action: commencer|etape|finir, etape (numéro, à partir de 1)} ; soigner {} ; boutique {boutique} ; ecran_ev {} ; ecran_boites {} (le PC : le joueur range ses créatures dans les boîtes) ; argent {action: donner|retirer, montant} (retirer ne descend pas sous 0) ; badge {badge: id d\'un badge des réglages} (une seule fois ; le compteur badges = nombre de badges différents, il fait monter le niveau maximum) ; personnaliser {nom: true|false, tenue: true|false} (le joueur choisit son nom et/ou la tenue du héros) ; tenue {tenue: id d\'une tenue du héros, "" = sa tenue de base}. Pack JRPG seulement (reglages.regles = "jrpg") : groupe {action: rejoindre|quitter, personnage, niveau (0 = son niveau de départ)} (un personnage avec une classe rejoint le groupe ou la Réserve ; parti puis revenu, il garde niveau et équipement) ; combat_groupe {groupe: id d\'un groupe de monstres} (perdu : le script s\'arrête) ; dans ce pack, creature, combat_sauvage, combat_dresseur et ecran_ev ne servent pas. Ambiance (Saga 0.11) : musique {fichier: "sons/…" (un fichier du dossier sons/ du jeu), "aucune" (silence) ou "" (la musique de la carte)} ; son {fichier: "sons/…"} (un bruitage, le script n\'attend pas) ; heure {action: avancer|regler, heures: 0 à 23} (horloge du jeu seulement). Conditions : interrupteur {id, valeur} ; local {valeur} ; objet {objet, min} ; quete {quete, etat: pas_commencee|en_cours|finie, etape (au moins, 0 = peu importe)} ; compteur {compteur: captures|dresseurs_battus|sauvages_battus|evolutions|especes_vues|especes_prises|quetes_finies|badges|pas|monstres_vaincus, min} ; argent {min} ; badge {badge} ; membre {personnage} (JRPG : il est dans le groupe ou la Réserve) ; moment {moment: matin|jour|soir|nuit} (selon l\'horloge du jeu, réglages.temps ; sans horloge, toujours « jour »). Un événement peut avoir lumiere {couleur, rayon (cases), intensite 0-100, scintille} : il éclaire quand il fait sombre.';
+  const CMDS_AIDE = 'Commandes ({ "type": …, champs }) : dire {qui: id d\'un personnage, "@evenement" (le personnage de l\'événement) ou "" (texte seul : panneau, narration), expression (normal, content, triste…), texte ({joueur} = nom du joueur ; une ligne vide = boîte suivante)} ; choix {options: [{texte, commandes: [...]}], 2 à 4} ; si {condition, alors: [...], sinon: [...]} ; commentaire {texte} ; fin {} ; interrupteur {id, valeur: true|false} (un nom nouveau crée l\'interrupteur) ; local {valeur} (l\'interrupteur « déjà fait » propre à l\'événement) ; attendre {ms} ; objet {action: donner|retirer, objet, nombre} ; creature {creature, niveau} (la donner) ; combat_sauvage {creature, niveau} ; combat_dresseur {dresseur} ; teleporter {carte, x, y, direction} ; quete {quete, action: commencer|etape|finir, etape (numéro, à partir de 1)} ; soigner {} ; boutique {boutique} ; ecran_ev {} ; ecran_boites {} (le PC : le joueur range ses créatures dans les boîtes) ; argent {action: donner|retirer, montant} (retirer ne descend pas sous 0) ; badge {badge: id d\'un badge des réglages} (une seule fois ; le compteur badges = nombre de badges différents, il fait monter le niveau maximum) ; personnaliser {nom: true|false, tenue: true|false} (le joueur choisit son nom et/ou la tenue du héros) ; tenue {tenue: id d\'une tenue du héros, "" = sa tenue de base}. Tafl 0.31 : variable {id: id d\'une variable (action variable), action: regler|ajouter|retirer, valeur (regler : nombre ou texte ; ajouter, retirer : un nombre)} ; script {nom: une commande déclarée par commande() dans un script JS (action scripts), params: {ses réglages}} (le script de l\'événement attend qu\'elle finisse ; saga.fin() l\'arrête aussi). Pack JRPG seulement (reglages.regles = "jrpg") : groupe {action: rejoindre|quitter, personnage, niveau (0 = son niveau de départ)} (un personnage avec une classe rejoint le groupe ou la Réserve ; parti puis revenu, il garde niveau et équipement) ; combat_groupe {groupe: id d\'un groupe de monstres} (perdu : le script s\'arrête) ; dans ce pack, creature, combat_sauvage, combat_dresseur et ecran_ev ne servent pas. Ambiance (Saga 0.11) : musique {fichier: "sons/…" (un fichier du dossier sons/ du jeu), "aucune" (silence) ou "" (la musique de la carte)} ; son {fichier: "sons/…"} (un bruitage, le script n\'attend pas) ; heure {action: avancer|regler, heures: 0 à 23} (horloge du jeu seulement). Conditions : interrupteur {id, valeur} ; local {valeur} ; objet {objet, min} ; quete {quete, etat: pas_commencee|en_cours|finie, etape (au moins, 0 = peu importe)} ; compteur {compteur: captures|dresseurs_battus|sauvages_battus|evolutions|especes_vues|especes_prises|quetes_finies|badges|pas|monstres_vaincus, min} ; argent {min} ; badge {badge} ; membre {personnage} (JRPG : il est dans le groupe ou la Réserve) ; moment {moment: matin|jour|soir|nuit} (selon l\'horloge du jeu, réglages.temps ; sans horloge, toujours « jour »). variable {id, comparaison: ==|!=|>|>=|<|<=, valeur (nombre ou texte)}. Un événement peut avoir lumiere {couleur, rayon (cases), intensite 0-100, scintille} : il éclaire quand il fait sombre.';
   const evenementSchema = {
     type: 'object',
     properties: {
@@ -1622,6 +1624,9 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       '',
       `Interrupteurs (${d.interrupteurs.length}) :`,
       ...d.interrupteurs.map((s) => `- ${s.id} « ${s.nom} »${s.description ? ` : ${s.description}` : ''}${(() => { const u = Events.utilisations(doc, 'interrupteur', s.id); return u.length ? ` (utilisé par ${u.join(', ')})` : ''; })()}`),
+      '',
+      `Variables (${d.variables.length}) :`,
+      ...d.variables.map((v) => `- ${v.id} « ${v.nom} », départ ${JSON.stringify(v.defaut)}${v.description ? ` : ${v.description}` : ''}`),
     ].join('\n');
   };
   // Les portraits d'un personnage côte à côte (pour que Claude les voie).
@@ -1950,11 +1955,142 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return `Interrupteur ${s.id} modifié.`;
       },
     },
+    // --- Tafl 0.31 : les variables et les scripts JS (scripts-js.js, ../commun/bac-a-sable.js, SCRIPTS.md) ---
+    variable: {
+      icone: 'symbol-variable',
+      libelle: (a) => `Variable : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
+      description: 'Les variables du jeu (Données › Variables) : chacune retient un nombre ou un texte pour toute la partie (pièces trouvées, réputation, victoires), avec sa valeur de départ. Les blocs la changent (commande variable), les pages la testent (condition variable), les scripts JS la lisent et l\'écrivent (saga.variable, saga.ajouter). action : ajouter (nom, id facultatif tiré du nom, defaut : nombre ou texte, 0 par défaut, description), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, nom: { type: 'string' }, defaut: { type: ['number', 'string'] }, description: { type: 'string' } }, required: ['action'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const liste = doc.data.variables;
+        if (a.action === 'ajouter') {
+          if (!a.nom) throw new Error('nom : ce que retient la variable.');
+          const v0 = { id: Events.ident(a.id || a.nom, liste, 'variable'), nom: String(a.nom), description: String(a.description || ''), defaut: Events.valeurVariable(a.defaut ?? 0) };
+          changerDonnees(doc, 'Nouvelle variable (Loki)', (d) => ({ ...d, variables: [...d.variables, v0] }));
+          return `Variable ${v0.id} « ${v0.nom} » ajoutée (départ : ${JSON.stringify(v0.defaut)}).`;
+        }
+        const v0 = liste.find((v) => v.id === a.id);
+        if (!v0) throw new Error(`Pas de variable « ${a.id} » : ${liste.map((v) => v.id).join(', ') || 'aucune'}.`);
+        if (a.action === 'supprimer') {
+          const u = Events.utilisations(doc, 'variable', v0.id);
+          changerDonnees(doc, 'Supprimer la variable (Loki)', (d) => ({ ...d, variables: d.variables.filter((v) => v.id !== v0.id) }));
+          return `${v0.id} supprimée.${u.length ? ` Attention, elle était utilisée par : ${u.join(', ')} (et peut-être des scripts JS).` : ''}`;
+        }
+        if (a.action !== 'modifier') throw new Error(`Action inconnue : ${a.action}`);
+        const v = { ...v0 };
+        for (const k of ['nom', 'description']) if (a[k] !== undefined) v[k] = String(a[k]);
+        if (a.defaut !== undefined) v.defaut = Events.valeurVariable(a.defaut);
+        changerDonnees(doc, 'Modifier la variable (Loki)', (d) => ({ ...d, variables: d.variables.map((o) => (o.id === v.id ? v : o)) }));
+        return `Variable ${v.id} modifiée.`;
+      },
+    },
+    scripts: {
+      lecture: true,
+      icone: 'file-code',
+      libelle: (a) => (a.nom ? `Lit le script ${a.nom}.js` : 'Regarde les scripts JS'),
+      description: 'Les scripts JS du jeu (scripts/*.js, espace Événements › Scripts). Sans nom : la liste des scripts (actif ou coupé), ce qu\'ils déclarent (commandes avec leurs réglages, formules, réactions quand()), leurs erreurs, et ce que le pack du jeu permet de remplacer (formules et leurs valeurs) ou d\'écouter (moments). nom : le code d\'un script, lignes numérotées. L\'API complète (commande, formule, quand, saga.*, des.*, donnees) est dans le SCRIPTS.md copié dans le dossier du jeu : lis-le (Read) avant d\'écrire ton premier script.',
+      schema: { type: 'object', properties: { nom: { type: 'string' } } },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        ScriptsTafl.appliquer();
+        const inv = await ScriptsTafl.rafraichir(doc);
+        if (a.nom) {
+          const s = doc.scripts.find((x) => x.nom === String(a.nom).replace(/\.js$/, ''));
+          if (!s) throw new Error(`Pas de script « ${a.nom} » : ${doc.scripts.map((x) => x.nom).join(', ') || 'aucun'}.`);
+          const erreurs = inv.erreurs.filter((e) => e.fichier === `scripts/${s.nom}.js`);
+          return [`scripts/${s.nom}.js${s.actif === false ? ' (coupé : Saga ne le charge pas)' : ''} :`, ...String(s.code).split('\n').map((l, i) => `${String(i + 1).padStart(3)}| ${l}`), ...erreurs.map((e) => `Erreur${e.ligne ? ` ligne ${e.ligne}` : ''} : ${e.message}`)].join('\n');
+        }
+        const pack = doc.data.reglages?.regles || 'pokemon';
+        const formules = BacASable.formulesDuPack(pack);
+        const coupees = doc.data.reglages?.scripts?.formules_coupees || [];
+        const parFichier = (l, f) => l.filter((x) => x.fichier === f);
+        const lignes = doc.scripts.length ? doc.scripts.map((s) => {
+          const f = `scripts/${s.nom}.js`;
+          const cmds = parFichier(inv.commandes, f).map((c) => `commande ${c.nom} {${Object.entries(c.params || {}).map(([k, p]) => `${k}: ${p.type}${p.defaut !== undefined && p.defaut !== '' ? ` = ${JSON.stringify(p.defaut)}` : ''}`).join(', ')}}`);
+          const fos = parFichier(inv.formules, f).map((x) => `formule ${x.nom}${coupees.includes(x.nom) ? ' (coupée dans Réglages)' : ''}`);
+          const qs = parFichier(inv.quand, f).map((x) => `quand ${x.moment}`);
+          const err = parFichier(inv.erreurs, f).map((e) => `ERREUR${e.ligne ? ` ligne ${e.ligne}` : ''} : ${e.message}`);
+          return `- ${s.nom}.js${s.actif === false ? ' [coupé]' : ''} (${String(s.code).split('\n').length} lignes) : ${[...cmds, ...fos, ...qs].join(' ; ') || 'ne déclare rien'}${err.length ? `\n  ${err.join('\n  ')}` : ''}`;
+        }) : ['Aucun script pour l\'instant.'];
+        return [
+          `Scripts (${doc.scripts.length}) :`, ...lignes,
+          `Formules du pack ${pack} qu'un script peut remplacer (formule(nom, (v) => nombre)) :`,
+          ...Object.entries(formules).map(([k, f]) => `- ${k} : ${f.nom}. Rend : ${f.rend} Valeurs : ${Object.keys(f.valeurs).join(', ')}.`),
+          `Moments pour quand() : ${Object.entries(BacASable.MOMENTS).map(([k, m]) => `${k}${Object.keys(m.infos).length ? ` {${Object.keys(m.infos).join(', ')}}` : ''}`).join(', ')}.`,
+          `Variables : ${doc.data.variables.map((v) => `${v.id} (départ ${JSON.stringify(v.defaut)})`).join(', ') || 'aucune'}.`,
+        ].join('\n');
+      },
+    },
+    script: {
+      icone: 'file-code',
+      libelle: (a) => `Script ${a.nom || ''}.js : ${a.action}`,
+      description: 'Écrire et ranger les scripts JS du jeu (un fichier scripts/<nom>.js chacun). action : ecrire (nom + code : crée le script ou remplace tout son code), renommer (nom + nouveau_nom ; les blocs Script parlent des commandes, pas des fichiers : rien d\'autre à changer), supprimer (nom), activer ou couper (nom : un script coupé n\'est pas chargé par Saga). nom : minuscules, chiffres et tirets. Le code tourne dans un bac à sable (pas de fichiers, de réseau, de page ; arrêté s\'il calcule plus de 0,6 s) : il déclare commande(), formule(), quand() (voir SCRIPTS.md) et n\'agit sur le jeu que par saga.* et des.*. La réponse dit ce que le script déclare et ses erreurs (ligne). Ensuite : essayer_script, puis le bloc Script dans un événement (commande { type: "script", nom, params }).',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ecrire', 'renommer', 'supprimer', 'activer', 'couper'] }, nom: { type: 'string' }, code: { type: 'string' }, nouveau_nom: { type: 'string' } }, required: ['action', 'nom'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const nom = Doc.slug(String(a.nom || '').replace(/\.js$/, ''), '').slice(0, 60);
+        if (!nom) throw new Error('nom : le nom du script (minuscules, chiffres, tirets), sans .js.');
+        const s0 = doc.scripts.find((x) => x.nom === nom);
+        if (a.action === 'ecrire') {
+          if (typeof a.code !== 'string' || !a.code.trim()) throw new Error('code : le texte JavaScript du script.');
+          if (a.code.length > 200000) throw new Error('code : trop long (200 000 caractères au plus).');
+          Doc.change(doc, `${s0 ? 'Modifier' : 'Nouveau'} script ${nom}.js (Loki)`, () => {
+            doc.scripts = s0 ? doc.scripts.map((x) => (x.nom === nom ? { ...x, code: a.code } : x)) : [...doc.scripts, { nom, code: a.code, actif: true }];
+          });
+        } else {
+          if (!s0) throw new Error(`Pas de script « ${nom} » : ${doc.scripts.map((x) => x.nom).join(', ') || 'aucun'}.`);
+          if (a.action === 'supprimer') {
+            Doc.change(doc, `Supprimer le script ${nom}.js (Loki)`, () => { doc.scripts = doc.scripts.filter((x) => x.nom !== nom); });
+            return `${nom}.js supprimé (Ctrl+Z le remet).`;
+          }
+          if (a.action === 'renommer') {
+            const neuf = Doc.slug(String(a.nouveau_nom || '').replace(/\.js$/, ''), '').slice(0, 60);
+            if (!neuf) throw new Error('nouveau_nom : le nouveau nom.');
+            if (doc.scripts.some((x) => x.nom === neuf)) throw new Error(`Il y a déjà un script ${neuf}.js.`);
+            Doc.change(doc, `Renommer ${nom}.js en ${neuf}.js (Loki)`, () => { doc.scripts = doc.scripts.map((x) => (x.nom === nom ? { ...x, nom: neuf } : x)); });
+            return `${nom}.js s'appelle maintenant ${neuf}.js.`;
+          }
+          if (a.action !== 'activer' && a.action !== 'couper') throw new Error(`Action inconnue : ${a.action}`);
+          Doc.change(doc, `${a.action === 'activer' ? 'Activer' : 'Couper'} le script ${nom}.js (Loki)`, () => { doc.scripts = doc.scripts.map((x) => (x.nom === nom ? { ...x, actif: a.action === 'activer' } : x)); });
+        }
+        const inv = await ScriptsTafl.rafraichir(doc);
+        const f = `scripts/${nom}.js`;
+        const s = doc.scripts.find((x) => x.nom === nom);
+        if (s.actif === false) return `${nom}.js est coupé : Saga ne le charge pas.`;
+        const decl = [
+          ...inv.commandes.filter((c) => c.fichier === f).map((c) => `commande ${c.nom} {${Object.keys(c.params || {}).join(', ')}}`),
+          ...inv.formules.filter((x) => x.fichier === f).map((x) => `formule ${x.nom}`),
+          ...inv.quand.filter((x) => x.fichier === f).map((x) => `quand ${x.moment}`),
+        ];
+        const err = inv.erreurs.filter((e) => e.fichier === f).map((e) => `ERREUR${e.ligne ? ` ligne ${e.ligne}${e.colonne ? `, colonne ${e.colonne}` : ''}` : ''} : ${e.message}`);
+        const avert = ScriptsTafl.problemes(doc).filter((p) => p.script === nom && p.gravite !== 'erreur').map((p) => `À vérifier : ${p.message}`);
+        return [`${nom}.js enregistré dans le jeu (Ctrl+Z l'annule). Il déclare : ${decl.join(' ; ') || 'rien'}.`, ...err, ...avert, err.length ? 'Corrige ces erreurs (le script n\'est pas chargé tant qu\'il en a).' : 'Essaie-le avec essayer_script.'].join('\n');
+      },
+    },
+    essayer_script: {
+      lecture: true,
+      icone: 'play',
+      libelle: (a) => `Essaie ${a.sorte} ${a.nom}`,
+      description: 'Essaie une commande, une formule ou une réaction des scripts JS, comme le bouton Essayer de Tafl : dans le bac à sable, avec une fausse partie (rien ne change dans le jeu). sorte : commande (nom + params : ses réglages), formule (nom + valeurs : celles à changer dans l\'exemple ; donne aussi normal, le résultat du pack), quand (nom = le moment). reponses : les réponses du joueur aux saga.choisir(), dans l\'ordre (1 = la première ; sans réponse : la première). La réponse raconte ce que le script a fait (dialogues, objets donnés, dés…) et ses erreurs. Les combats sont gagnés.',
+      schema: { type: 'object', properties: { sorte: { type: 'string', enum: ['commande', 'formule', 'quand'] }, nom: { type: 'string' }, params: { type: 'object' }, valeurs: { type: 'object' }, reponses: { type: 'array', items: { type: 'integer' } } }, required: ['sorte', 'nom'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const lignes = [];
+        const sortie = { ecrire: (niveau, texte) => lignes.push(`${{ erreur: 'ERREUR', demande: '→', ok: '✓' }[niveau] || '·'} ${texte}`), vider: () => { lignes.length = 0; } };
+        const inv = await ScriptsTafl.rafraichir(doc);
+        if (!inv[{ commande: 'commandes', formule: 'formules', quand: 'quand' }[a.sorte]]?.some((x) => (x.nom || x.moment) === a.nom)) {
+          throw new Error(`Aucun script actif ne déclare ${a.sorte}('${a.nom}'). Regarde l'action scripts.`);
+        }
+        await ScriptsTafl.essayer(doc, { sorte: a.sorte, nom: a.nom, params: a.params || {}, valeurs: a.valeurs, reponses: Array.isArray(a.reponses) ? [...a.reponses] : [] }, sortie);
+        return lignes.join('\n').slice(0, 12000) || 'Le script n\'a rien fait.';
+      },
+    },
     donnees: {
       lecture: true,
       icone: 'database',
       libelle: (a) => (a.personnage ? `Regarde le personnage ${a.personnage}` : 'Regarde les données du jeu'),
-      description: 'Décrit les données de l\'histoire : personnages (id, nom, héros, description, expressions des portraits), quêtes (étapes numérotées, suite, personnages) et interrupteurs (avec où ils servent). personnage : un id, pour voir aussi ses portraits. Types, attaques, créatures, objets, dresseurs, boutiques et réglages : action donnee.',
+      description: 'Décrit les données de l\'histoire : personnages (id, nom, héros, description, expressions des portraits), quêtes (étapes numérotées, suite, personnages), interrupteurs (avec où ils servent) et variables. personnage : un id, pour voir aussi ses portraits. Types, attaques, créatures, objets, dresseurs, boutiques et réglages : action donnee.',
       schema: { type: 'object', properties: { personnage: { type: 'string' } } },
       faire: async (a) => {
         const doc = besoinJeu();
@@ -1977,7 +2113,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     donnee: {
       icone: 'database',
       libelle: (a) => `${{ ajouter: 'Ajoute', modifier: 'Modifie', supprimer: 'Supprime' }[a.action] || a.action} ${a.sorte}${a.id ? ` ${a.id}` : a.valeurs?.nom ? ` « ${a.valeurs.nom} »` : ''}`,
-      description: `Les bases de données du jeu (Jeu › Données du jeu). sorte : ${Donnees.SORTES.join(', ')}. action : ajouter (valeurs : l'élément ; id facultatif tiré du nom), modifier (id + valeurs : seulement les champs à changer ; l'id ne change pas), supprimer (id). Pour reglages : modifier, sans id (dont interface : { theme : verre ou pixel, accent : #rrggbb ou \"\", menus : { equipe, dex, pc, boite (noms, \"\" = ceux du pack), dex_visible, places, colonnes (0 = ceux du pack), forme_boites : grille, liste ou \"\", pages : ids du résumé parmi infos, stats, attaques ([] = toutes) } } ; badges : [{ id, nom, icone }] la liste complète, donnés par la commande badge ; regles : le pack de règles, \"pokemon\" ou \"jrpg\" (JRPG : niveau_max, courbe_xp rapide|normale|lente) ; plafonds [{ badges, niveau }] ; ajustement et ecart : le niveau des dresseurs ajuste: true ; ajustement_sauvages (aucun, equipe, badges) et ecart_sauvages : le niveau des sauvages ; evolution_dresseurs et evolution_sauvages (false par défaut) : les créatures montées par l'ajustement prennent la forme de leur niveau ; seuil_amitie : l'amitié (0-255, 220 par défaut) d'une évolution mode amitie). Un article de boutique a aussi verrouille_visible (true : grisé avec son déblocage avant d'être en vente). Objet tenu Pierre Stase : effet { type: \"stase\" } ; objet qui rapproche : effet { type: \"amitie\", valeur }. Pack JRPG : classes {nom, couleur, description, stats et gains {pv, pm, force, magie, defense, esprit, agilite, chance} (niveau 1 et gain par niveau), competences [{niveau, competence: id d'une attaque}]} ; monstres {nom, numero, niveau, taille petit|moyen|grand, boss, stats (les 8), faiblesses, resistances, immunites (ids de types), statuts_immunises, poids_attaque, competences [{competence, poids}], xp, or, butin [{objet, chance %}]} (image : image_donnee) ; groupes {nom, monstres [{monstre, nombre}] (8 au plus), fuite} ; une attaque JRPG a aussi cout_pm, ranime, guerit ([statuts] ou [\"tous\"]), soin = puissance du soin, categorie physique|speciale (magie)|statut, statut poison|sommeil|paralysie|silence|cecite, stats en crans ±4 sur force|magie|defense|esprit|agilite ; un objet porté : equipement {place arme|bouclier|casque|armure|accessoire, bonus {stat: n}, element, classes}, effet soin_pm pour les PM. Un personnage du groupe a classe, niveau, equipement {place: id} (action personnage). Les zones JRPG ont rencontres [{groupe, chance}]. Pour lire : voir_donnees. Les clés de chaque sorte sont celles de FORMAT.md (« Données du jeu ») : voir_donnees sur un élément existant en montre un exemple. Les éléments importés ont « officiel » (leur nom anglais PokeAPI) ; ceux que Ragna crée n'en ont pas. Références : une créature cite ses types, talents, attaques (attaques par niveau, ct) et ses évolutions (vers, objet) par leur id ; un dresseur ses créatures ; une boutique ses articles (sorte objet ou creature, condition de déblocage : une condition des événements, par exemple { type: "compteur", compteur: "captures", min: 10 }). Natures : ${Donnees.NATURES.map(([k]) => k).join(', ')}.`,
+      description: `Les bases de données du jeu (Jeu › Données du jeu). sorte : ${Donnees.SORTES.join(', ')}. action : ajouter (valeurs : l'élément ; id facultatif tiré du nom), modifier (id + valeurs : seulement les champs à changer ; l'id ne change pas), supprimer (id). Pour reglages : modifier, sans id (dont interface : { theme : verre ou pixel, accent : #rrggbb ou \"\", menus : { equipe, dex, pc, boite (noms, \"\" = ceux du pack), dex_visible, places, colonnes (0 = ceux du pack), forme_boites : grille, liste ou \"\", pages : ids du résumé parmi infos, stats, attaques ([] = toutes) } } ; badges : [{ id, nom, icone }] la liste complète, donnés par la commande badge ; regles : le pack de règles, \"pokemon\" ou \"jrpg\" (JRPG : niveau_max, courbe_xp rapide|normale|lente) ; plafonds [{ badges, niveau }] ; ajustement et ecart : le niveau des dresseurs ajuste: true ; ajustement_sauvages (aucun, equipe, badges) et ecart_sauvages : le niveau des sauvages ; evolution_dresseurs et evolution_sauvages (false par défaut) : les créatures montées par l'ajustement prennent la forme de leur niveau ; seuil_amitie : l'amitié (0-255, 220 par défaut) d'une évolution mode amitie). Un article de boutique a aussi verrouille_visible (true : grisé avec son déblocage avant d'être en vente). Objet tenu Pierre Stase : effet { type: \"stase\" } ; objet qui rapproche : effet { type: \"amitie\", valeur }. Pack JRPG : classes {nom, couleur, description, stats et gains {pv, pm, force, magie, defense, esprit, agilite, chance} (niveau 1 et gain par niveau), competences [{niveau, competence: id d'une attaque}]} ; monstres {nom, numero, niveau, taille petit|moyen|grand, boss, stats (les 8), faiblesses, resistances, immunites (ids de types), statuts_immunises, poids_attaque, competences [{competence, poids}], xp, or, butin [{objet, chance %}]} (image : image_donnee) ; groupes {nom, monstres [{monstre, nombre}] (8 au plus), fuite} ; une attaque JRPG a aussi cout_pm, ranime, guerit ([statuts] ou [\"tous\"]), soin = puissance du soin, categorie physique|speciale (magie)|statut, statut poison|sommeil|paralysie|silence|cecite, stats en crans ±4 sur force|magie|defense|esprit|agilite ; un objet porté : equipement {place arme|bouclier|casque|armure|accessoire, bonus {stat: n}, element, classes}, effet soin_pm pour les PM. Un personnage du groupe a classe, niveau, equipement {place: id} (action personnage). Les zones JRPG ont rencontres [{groupe, chance}]. Pour lire : voir_donnees. Les clés de chaque sorte sont celles de FORMAT.md (« Données du jeu ») : voir_donnees sur un élément existant en montre un exemple. Les éléments importés ont « officiel » (leur nom anglais PokeAPI) ; ceux que Ragna crée n'en ont pas. Références : une créature cite ses types, talents, attaques (attaques par niveau, ct) et ses évolutions (vers, objet) par leur id ; un dresseur ses créatures ; une boutique ses articles (sorte objet ou creature, condition de déblocage : une condition des événements, par exemple { type: "compteur", compteur: "captures", min: 10 }). Natures : ${Donnees.NATURES.map(([k]) => k).join(', ')}. Tafl 0.31 : reglages.scripts.formules_coupees = les formules du pack que les scripts JS ne remplacent pas (Réglages › Règles maison), par exemple ["degats"].`,
       schema: { type: 'object', properties: { sorte: { type: 'string', enum: Donnees.SORTES }, action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer'] }, id: { type: 'string' }, valeurs: { type: 'object' } }, required: ['sorte', 'action'] },
       faire: (a) => {
         if (!['ajouter', 'modifier', 'supprimer'].includes(a.action)) throw new Error('action : ajouter, modifier ou supprimer (pour lire : voir_donnees).');

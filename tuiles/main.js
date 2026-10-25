@@ -196,13 +196,17 @@ handle('file:write', async (_event, file, bytes) => {
 // MonJeu/jeu.json, MonJeu/tuiles.tafl, MonJeu/cartes/*.json, MonJeu/donnees/*.json (Tafl 0.7) et
 // MonJeu/FORMAT.md. Tafl n'écrit dans un dossier de jeu que si tu l'as ouvert ou choisi, et seulement
 // ces fichiers-là.
-const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json|donnees\/[a-z0-9-]+\.json)$/;
+const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json|donnees\/[a-z0-9-]+\.json|scripts\/[a-z0-9][a-z0-9-]{0,59}\.js)$/;
 const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
 const DATA_FILE = /^donnees\/[a-z0-9-]+\.json$/;
+// Tafl 0.31 : les scripts JS du jeu (scripts/*.js). Tafl ne les exécute jamais ici : seulement dans le
+// bac à sable de la fenêtre (commun/bac-a-sable.js), comme Saga.
+const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9-]{0,59}\.js$/;
 const relGame = (rel) => String(rel).replace(/\\/g, '/');
 async function mapFilesIn(folder) {
   const names = await fs.readdir(path.join(folder, 'cartes')).catch(() => []);
-  return names.map((n) => `cartes/${n}`).filter((f) => MAP_FILE.test(f));
+  const scripts = await fs.readdir(path.join(folder, 'scripts')).catch(() => []);
+  return [...names.map((n) => `cartes/${n}`).filter((f) => MAP_FILE.test(f)), ...scripts.map((n) => `scripts/${n}`).filter((f) => SCRIPT_FILE.test(f))];
 }
 
 handle('game:pick', async (event) => {
@@ -241,9 +245,16 @@ handle('game:open', async (_event, target) => {
     const text = await fs.readFile(path.join(folder, rel), 'utf8').catch(() => null);
     if (text !== null) donnees[rel] = text;
   }
+  const scripts = {};
+  for (const s of Array.isArray(data.scripts) ? data.scripts : []) {
+    const rel = relGame(s?.fichier || '');
+    if (!SCRIPT_FILE.test(rel)) continue;
+    const text = await fs.readFile(path.join(folder, rel), 'utf8').catch(() => null);
+    if (text !== null) scripts[rel] = text;
+  }
   gameFolders.add(folder);
   await rememberRecent(file);
-  return { folder, path: file, jeu, tuiles, cartes, donnees };
+  return { folder, path: file, jeu, tuiles, cartes, donnees, scripts };
 });
 
 // Tafl 0.8 : importer les données officielles Pokémon (PokeAPI, voir officiel.js), à la demande.
@@ -282,6 +293,7 @@ handle('game:write', async (_event, folder, files, remove = []) => {
   if (!gameFolders.has(root)) throw new Error(`Écriture refusée : ${root} n'est pas un dossier de jeu ouvert`);
   await fs.mkdir(path.join(root, 'cartes'), { recursive: true });
   await fs.mkdir(path.join(root, 'donnees'), { recursive: true });
+  if (files.some(([rel]) => SCRIPT_FILE.test(relGame(rel)))) await fs.mkdir(path.join(root, 'scripts'), { recursive: true });
   for (const [rel, bytes] of files) {
     const r = relGame(rel);
     if (!GAME_FILE.test(r)) throw new Error(`Fichier refusé dans le dossier de jeu : ${rel}`);
@@ -292,10 +304,12 @@ handle('game:write', async (_event, folder, files, remove = []) => {
   }
   for (const rel of remove) {
     const r = relGame(rel);
-    if (MAP_FILE.test(r)) await fs.rm(path.join(root, r), { force: true });
+    if (MAP_FILE.test(r) || SCRIPT_FILE.test(r)) await fs.rm(path.join(root, r), { force: true });
   }
   // La description du format, toujours celle de cette version de Tafl.
   await fs.copyFile(path.join(__dirname, 'FORMAT.md'), path.join(root, 'FORMAT.md')).catch((err) => log('ERREUR', `FORMAT.md : ${err.message}`));
+  // Tafl 0.31 : et l'aide des scripts JS (pour Ragna, et pour Loki qui la lit avant d'écrire un script).
+  await fs.copyFile(path.join(__dirname, 'SCRIPTS.md'), path.join(root, 'SCRIPTS.md')).catch((err) => log('ERREUR', `SCRIPTS.md : ${err.message}`));
   const file = path.join(root, 'jeu.json');
   await rememberRecent(file);
   return { path: file, folder: root };
@@ -351,6 +365,15 @@ handle('sons:montrer', async (_event, folder) => {
   const { sons } = dossierSons(folder);
   await fs.mkdir(sons, { recursive: true });
   const err = await shell.openPath(sons);
+  if (err) throw new Error(err);
+});
+
+// Tafl 0.31 : l'aide des scripts JS (bouton ? de la page d'un script). Copiée hors de l'archive de
+// l'application, sinon Windows ne peut pas l'ouvrir ; elle s'ouvre avec le programme des fichiers .md.
+handle('scripts:aide', async () => {
+  const copie = path.join(app.getPath('userData'), 'SCRIPTS.md');
+  await fs.copyFile(path.join(__dirname, 'SCRIPTS.md'), copie);
+  const err = await shell.openPath(copie);
   if (err) throw new Error(err);
 });
 
@@ -514,6 +537,9 @@ const CLAUDE_CONSIGNES = [
   '- Un dossier de jeu (jeu.json, tuiles.tafl, cartes/, donnees/) est décrit dans le FORMAT.md copié dans ce',
   '  dossier : ouvre-le avec Read seulement si une question porte sur le format des fichiers (pour le moteur Saga).',
   '- Pour enregistrer : enregistrer_jeu (ou enregistrer). Pour essayer le jeu : Ragna clique sur « Jouer ».',
+  '- Scripts JS (Tafl 0.31) : quand un bloc ne suffit pas (dés, calculs, règles maison, réactions), écris un script',
+  '  avec l\'action script, après avoir lu le SCRIPTS.md du dossier du jeu (l\'API : commande, formule, quand, saga.*,',
+  '  des.*). Regarde d\'abord l\'action scripts, essaie avec essayer_script, puis pose le bloc Script dans un événement.',
   '- Après une grosse modification (cartes, téléporteurs, quêtes, scripts), lance l\'action verifier et corrige les',
   '  erreurs qu\'elle trouve. Pour essayer un passage précis avec une équipe, des objets ou des badges : Ragna ouvre',
   '  Jeu › Test rapide (Ctrl+F5).',

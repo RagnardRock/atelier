@@ -189,7 +189,8 @@ const Jeu = (() => {
     return { largeur, hauteur, images, img };
   }
 
-  // textes = ce que renvoie main.js : { dossier, jeu, tuiles, cartes: { chemin: texte }, donnees: { chemin: texte } }.
+  // textes = ce que renvoie main.js : { dossier, jeu, tuiles, cartes: { chemin: texte }, donnees: { chemin: texte },
+  // scripts: { chemin: texte } } (les scripts JS du jeu depuis Saga 0.12, voir SCRIPTS.md).
   async function charger(textes) {
     const jeu = lireJson(textes.jeu, 'jeu.json');
     if (jeu.format && jeu.format !== 'tafl-jeu') throw new ErreurJeu('Ce jeu.json n\'a pas été écrit par Tafl.');
@@ -230,6 +231,17 @@ const Jeu = (() => {
       }
     }
 
+    // Les scripts JS du jeu (Saga 0.12) : ceux que jeu.json liste et qui sont actifs, dans l'ordre.
+    // Ils tourneront dans le bac à sable (scripts-js.js), jamais ici.
+    const scripts = [];
+    for (const s of Array.isArray(jeu.scripts) ? jeu.scripts : []) {
+      const fichier = String(s?.fichier || '').replace(/\\/g, '/');
+      if (s?.actif === false || !/^scripts\/[a-z0-9][a-z0-9-]{0,59}\.js$/.test(fichier)) continue;
+      const code = textes.scripts?.[fichier];
+      if (typeof code !== 'string') { problemes.push(`le script ${fichier} est introuvable`); continue; }
+      scripts.push({ fichier, code });
+    }
+
     // Le départ : celui de jeu.json, sinon la première case libre de la première carte.
     let depart = jeu.depart && cartes.has(jeu.depart.carte) ? { ...jeu.depart } : null;
     if (!depart) {
@@ -249,6 +261,7 @@ const Jeu = (() => {
       personnages,
       heros: [...personnages.values()].find((p) => p.heros) || null,
       depart,
+      scripts,
       problemes,
     };
   }

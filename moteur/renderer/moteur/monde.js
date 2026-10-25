@@ -29,8 +29,31 @@ const Monde = (() => {
       partis: {},          // les héros qui ont quitté le groupe (pack JRPG, commande groupe), tels quels
       temps: (Number(jeu.donnees.reglages?.reglages?.temps?.heure_depart) || 8) * 60, // l'horloge du jeu, en minutes (Saga 0.11)
       musique: null,       // la musique en cours (Saga 0.11), pour la retrouver en chargeant la partie
+      variables: variablesDeDepart(jeu), // id → nombre ou texte (Saga 0.12)
+      graine: Math.floor(Math.random() * 2147483647), // le hasard des scripts JS (Saga 0.12)
       position: { ...depart },
     };
+  }
+
+  // Les variables du jeu (Saga 0.12, donnees/variables.json) avec leur valeur de départ.
+  function variablesDeDepart(jeu) {
+    const out = {};
+    for (const v of jeu.donnees.variables?.variables || []) {
+      if (v && typeof v.id === 'string' && v.id) out[v.id] = typeof v.defaut === 'number' || typeof v.defaut === 'string' ? v.defaut : 0;
+    }
+    return out;
+  }
+  // Comparer une variable (condition « variable ») : en nombres si les deux en sont, sinon en textes
+  // (seulement = et ≠ ont un sens pour un texte).
+  function comparer(a, op, b) {
+    const na = Number(a), nb = Number(b);
+    const nombres = a !== '' && b !== '' && Number.isFinite(na) && Number.isFinite(nb);
+    if (op === '==' || op === '!=') {
+      const egal = nombres ? na === nb : String(a ?? '') === String(b ?? '');
+      return op === '==' ? egal : !egal;
+    }
+    if (!nombres) return false;
+    return op === '>=' ? na >= nb : op === '<=' ? na <= nb : op === '>' ? na > nb : op === '<' ? na < nb : false;
   }
 
   // Un compteur du joueur (FORMAT.md › Conditions › compteur). Ceux de Saga 0.7 se lisent sur la partie :
@@ -54,6 +77,8 @@ const Monde = (() => {
       case 'compteur': return compteur(partie, cond.compteur) >= (Number(cond.min) || 0);
       case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
       case 'badge': return (partie.badges || []).includes(cond.badge);
+      // Saga 0.12 : une variable comparée à une valeur.
+      case 'variable': return comparer(partie.variables?.[cond.id] ?? 0, cond.comparaison || '>=', cond.valeur ?? 0);
       // Le moment de la journée (Saga 0.11) : matin, jour, soir ou nuit, selon l'horloge du jeu.
       case 'moment': return typeof Temps === 'undefined' || Temps.moment(null, partie, cond.moment);
       // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
@@ -186,5 +211,5 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { nouvellePartie, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

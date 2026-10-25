@@ -63,11 +63,17 @@ async function dossierNeuf(dossier, marque) {
 }
 
 // Les fichiers du jeu, tels que Saga les lit : jeu.json, le .tafl, cartes/, donnees/.
+// Un fichier commun (commun/copier.js le met dans moteur/commun/ ; depuis le clone sans npm install,
+// on le prend dans atelier/commun/).
+async function lireCommun(moteur, nom) {
+  return fs.readFile(path.join(moteur, 'commun', nom)).catch(() => fs.readFile(path.join(moteur, '..', 'commun', nom)));
+}
+
 async function ecrireJeu(textes, dossier) {
   let data = {};
   try { data = JSON.parse(textes.jeu); } catch { /* lireJeu l'a déjà lu */ }
   const tuiles = /^[\w.-]+\.tafl$/.test(String(data.tuiles || '')) ? data.tuiles : 'tuiles.tafl';
-  const fichiers = { 'jeu.json': textes.jeu, ...(textes.tuiles !== null ? { [tuiles]: textes.tuiles } : {}), ...textes.cartes, ...textes.donnees };
+  const fichiers = { 'jeu.json': textes.jeu, ...(textes.tuiles !== null ? { [tuiles]: textes.tuiles } : {}), ...textes.cartes, ...textes.donnees, ...(textes.scripts || {}) };
   for (const [rel, texte] of Object.entries(fichiers)) {
     await fs.mkdir(path.dirname(path.join(dossier, rel)), { recursive: true });
     await fs.writeFile(path.join(dossier, rel), texte, 'utf8');
@@ -160,6 +166,9 @@ async function exporterWeb({ textes, titre, sortie, moteur, version, configDefau
     .replace('<script src="base.js"></script>', '<script src="../jeu.js"></script>\n  <script src="../sons.js"></script>\n  <script src="saga-web.js"></script>\n  <script src="base.js"></script>');
   await fs.writeFile(path.join(dossier, 'index.html'), html, 'utf8');
   await fs.writeFile(path.join(dossier, 'saga', 'saga-web.js'), await fs.readFile(path.join(moteur, 'web', 'saga-web.js')));
+  // Le bac à sable des scripts JS (Saga 0.12), commun à Tafl et Saga : index.html le cherche dans ../commun/.
+  await fs.mkdir(path.join(dossier, 'commun'), { recursive: true });
+  await fs.writeFile(path.join(dossier, 'commun', 'bac-a-sable.js'), await lireCommun(moteur, 'bac-a-sable.js'));
   // Le jeu : les textes que lit le moteur, sans le chemin du dossier de Ragna.
   const jeu = { titre, cle: nom.toLowerCase(), saga: version, config: configDefaut, textes: { ...textes, dossier: nom } };
   await fs.writeFile(path.join(dossier, 'jeu.js'), `// ${titre} : le jeu, exporté par Saga ${version}.\nwindow.SAGA_JEU = ${JSON.stringify(jeu)};\n`, 'utf8');
@@ -213,7 +222,7 @@ async function exporterExe({ textes, titre, sortie, moteur, version, runtime, ex
   }
   // commun/ manque dans le clone si npm install n'a pas tourné : on prend celui d'atelier/.
   if (!(await fs.stat(path.join(app, 'commun')).catch(() => null))) {
-    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => r === 'github.js');
+    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => r === 'github.js' || r === 'bac-a-sable.js');
   }
   const pkg = JSON.parse(await fs.readFile(path.join(moteur, 'package.json'), 'utf8'));
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({

@@ -421,6 +421,19 @@ Les menus d'avant (Fichier, Édition, Tuile, Carte, Jeu, Générer, Affichage) s
 
 Sur un écran classique, la barre se resserre : sous 1500 px de large les petits textes partent, sous 1280 px les onglets ne gardent que leur icône. L'accueil passe sur deux colonnes.
 
+## Les scripts JS (Tafl 0.31, pour Saga 0.12)
+
+Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à changer, une réaction à un moment du jeu), un jeu peut avoir ses propres **scripts JavaScript**. Tout ce qu'un script peut faire est dans [SCRIPTS.md](SCRIPTS.md), copié dans chaque dossier de jeu.
+
+- **Où** : espace **Événements**, section **Scripts JS** sous la liste des événements. Le `+` propose des modèles qui suivent le pack du jeu (une commande avec dialogue, un jet de dés, des dégâts maison, une réaction aux victoires). Chaque script est un fichier `scripts/<nom>.js` du dossier de jeu.
+- **L'éditeur** : le même que dans Rune (Monaco), avec la complétion de toute l'API (y compris les ids du jeu : objets, personnages, cartes…), les erreurs soulignées à la bonne ligne, et une colonne qui montre ce que le script déclare. **Essayer** (`Ctrl+Entrée`) le fait tourner sur une fausse partie et raconte ce qu'il fait : dialogues, objets donnés, dés lancés ; Tafl demande la réponse quand le script pose une question.
+- **Trois façons de s'en servir** : `commande()` crée une commande pour le nouveau bloc **Script JS** (groupe Scripts), avec un formulaire pour ses réglages ; `formule()` remplace une formule du pack (dégâts, capture, fuite, expérience…) : ce sont les **règles maison**, qu'on peut couper une par une dans **Données › Réglages › Règles maison** ; `quand()` réagit à une nouvelle partie, à l'arrivée sur une carte, après un combat, au changement de moment de la journée ou à chaque pas.
+- **Sans danger** : un script tourne dans une boîte fermée (un *Web Worker*), sans fichiers, réseau ni page. Il ne change le jeu qu'en le demandant à Saga (`saga.donner`, `saga.dire`…), ce qui le rend prêt pour le multijoueur. Une boucle sans fin est arrêtée au bout de 0,6 s, et une erreur ne casse jamais le jeu : elle est dite avec le fichier et la ligne.
+- **Les dés** passent par `des` (`des.d(20)`, `des.lancer('2d6+3')`), avec une graine gardée dans la sauvegarde : recharger ne change pas le résultat.
+- **Les variables** : nouvel onglet **Données › Variables** (un nombre ou un texte, avec sa valeur de départ), nouveau bloc **Variable** (régler, ajouter, retirer) et nouvelle condition **Une variable** (=, ≠, >, ≥, <, ≤). Pas besoin de script pour un compteur.
+- **Le vérificateur** signale aussi les erreurs des scripts, les blocs Script qui appellent une commande inconnue et les variables qui n'existent pas ; un clic ouvre le script à la bonne ligne. **Ctrl+K** trouve un script par son nom, ses commandes ou un bout de son code.
+- **Loki** lit, écrit et essaie les scripts (actions `scripts`, `script`, `essayer_script`) et crée les variables (`variable`), toujours avec Autoriser / Refuser et `Ctrl+Z`.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -483,6 +496,8 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `renderer/samples.js` | Les tuiles d'exemple, dessinées en texte (une lettre par pixel). |
 | `renderer/espaces.js` | Tafl 0.30 : les espaces de travail (onglets), l'accueil d'un jeu, l'espace Jeu, et les éditeurs d'événement et de données en pleine page. |
 | `renderer/recherche.js` | Tafl 0.30 : chercher partout (Ctrl+K). |
+| `renderer/scripts-js.js` | Tafl 0.31 : les scripts JS du jeu : la page d'un script (Monaco, Essayer), les modèles, l'inventaire de ce qu'ils déclarent (calculé dans le bac à sable de `../commun/bac-a-sable.js`). |
+| `SCRIPTS.md` | Tafl 0.31 : l'aide des scripts JS (copiée dans chaque dossier de jeu). |
 | `renderer/app.js` | L'état, les menus (☰), les raccourcis, les réglages et l'écran de bienvenue. |
 | `build/icon.svg` | L'icône (et `icon.png` / `icon.ico` qui en sont tirés). |
 | `../.github/workflows/tafl.yml` | La fabrication et la publication de l'installeur. |

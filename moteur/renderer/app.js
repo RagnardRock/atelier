@@ -16,6 +16,9 @@ const App = (() => {
   const moteur = Moteur.creer($('#ecran'), {
     carte: (carte) => montrerBandeau(carte.nom),
     message: (texte) => notify(texte, 'warning', 6000),
+    // Une erreur dans un script JS du jeu (Saga 0.12) : dite quand on teste (depuis Tafl ou Saga), seulement
+    // notée dans un jeu exporté (le joueur n'y peut rien, et le jeu continue).
+    erreurScript: (texte) => (joueur ? console.warn(texte) : notify(texte, 'error', 9000)),
     // Les sons du dossier sons/ du jeu (Saga 0.11).
     chargerSon: (chemin) => window.saga.lireSon(chemin),
     carteChangee: () => { if (autoReglages().carte) autoAFaire = true; },

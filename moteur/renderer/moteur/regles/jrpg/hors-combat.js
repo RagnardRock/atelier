@@ -126,11 +126,17 @@ const JrpgHorsCombat = (() => {
         cibles = [partie.equipe[j]];
       } else if (comp.cible === 'equipe') cibles = partie.equipe;
       const magie = H.stats(jeu, c).magie;
-      const textes = cibles.map((x) => soigner(jeu, x, {
-        pv: comp.ranime ? 0 : JrpgCombat.formuleSoin({ soin: Number(comp.soin) || 0, magie }) * (Number(comp.soin) > 0 ? 1 : 0),
-        ranime: comp.ranime ? (Number(comp.soin) > 0 ? JrpgCombat.formuleSoin({ soin: Number(comp.soin), magie }) : H.pvMax(jeu, x) / 4) : 0,
-        statut: comp.guerit?.includes('tous') ? 'tous' : comp.guerit?.[0] || '',
-      })).filter(Boolean);
+      // Le soin passe par la formule (une règle maison peut la remplacer, Saga 0.12).
+      const soin = async () => Math.max(0, Math.round(await Maison.formule('soin', { soin: Number(comp.soin) || 0, magie }, JrpgCombat.formuleSoin)));
+      const textes = [];
+      for (const x of cibles) {
+        const t = soigner(jeu, x, {
+          pv: comp.ranime || !(Number(comp.soin) > 0) ? 0 : await soin(),
+          ranime: comp.ranime ? (Number(comp.soin) > 0 ? await soin() : H.pvMax(jeu, x) / 4) : 0,
+          statut: comp.guerit?.includes('tous') ? 'tous' : comp.guerit?.[0] || '',
+        });
+        if (t) textes.push(t);
+      }
       if (!textes.length) { await ui.dire('Ça n\'aura aucun effet.'); continue; }
       c.pm -= Number(comp.cout_pm) || 0;
       await ui.dire(`${H.nom(jeu, c)} lance ${comp.nom}. ${textes.join(' ')}`);
