@@ -195,6 +195,10 @@ input[type=range]::-webkit-slider-thumb {
 .menu-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu-keys { color: var(--muted); font-size: 12px; margin-left: 24px; }
 .menu-sep { height: 1px; margin: 5px 8px; background: var(--border); }
+/* Tafl 0.26 : l'historique (Édition › Historique, Ctrl+H) : les actions faites, puis celles qu'on peut refaire. */
+.menu.history-menu { max-height: 70vh; overflow-y: auto; min-width: 320px; }
+.menu-item.history-futur { color: var(--muted); font-style: italic; }
+.menu-item.history-actuel { font-weight: 600; }
 
 /* ---------- Barre d'options de l'outil ---------- */
 #optionsbar { padding: 0 8px 8px; flex-shrink: 0; }
@@ -1129,3 +1133,125 @@ body.resizing-row { cursor: row-resize; }
 .test-coche { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .test-argent { width: 110px !important; flex: 0 0 auto !important; }
 .field-unit { color: var(--muted); font-size: 12px; }
+/* =========================================================================
+   Tafl 0.26 : le script d'un événement en blocs reliés (blocs.js), et l'aperçu des dialogues
+   ========================================================================= */
+.editor-section:has(.vue-choix)::after { order: 1; }
+.editor-section .vue-choix { order: 2; display: flex; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.editor-section:has(.vue-choix) .spacer { display: none; }
+.button.small.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text-strong); }
+.button.small .codicon { font-size: 14px; margin-right: 4px; }
+.editor.event-editor { max-height: 1180px; }
+.flow-box { flex: 1; min-height: 420px; display: flex; flex-direction: column; gap: 10px; }
+.flow-zone { flex: 1; min-height: 300px; display: flex; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; background: rgba(0, 0, 0, 0.18); overflow: hidden; }
+
+/* La palette : les commandes à glisser, par famille */
+.flow-palette { width: 196px; flex-shrink: 0; padding: 8px; overflow-y: auto; border-right: 1px solid rgba(255, 255, 255, 0.05); user-select: none; }
+.flow-palette-groupe { margin: 10px 4px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+.flow-palette-groupe:first-child { margin-top: 2px; }
+.flow-palette-item { display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px; border-radius: 6px; font-size: 12px; color: var(--text); cursor: grab; white-space: nowrap; overflow: hidden; }
+.flow-palette-item span { overflow: hidden; text-overflow: ellipsis; }
+.flow-palette-item .codicon { color: var(--bloc); font-size: 14px; flex-shrink: 0; }
+.flow-palette-item:hover { background: color-mix(in srgb, var(--bloc) 14%, transparent); color: var(--text-strong); }
+
+/* La toile : le script de haut en bas, centré, défilant dans les deux sens */
+.flow-toile { flex: 1; min-width: 0; overflow: auto; padding: 18px 24px 28px; user-select: none; --lien: rgba(255, 255, 255, 0.3); }
+.flow { display: flex; flex-direction: column; align-items: center; width: max-content; min-width: 100%; }
+.flow-liste { display: flex; flex-direction: column; align-items: center; }
+.flow-debut, .flow-fin { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 14px; border-radius: 14px; font-size: 12px; font-weight: 600; }
+.flow-debut { background: color-mix(in srgb, var(--accent) 22%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); color: var(--text-strong); cursor: default; }
+.flow-fin { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--muted); }
+
+/* Le trait entre deux blocs : on y dépose, son + ajoute */
+.flow-lien { position: relative; width: 120px; height: 30px; display: flex; align-items: center; justify-content: center; }
+.flow-lien::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--lien); }
+.flow-lien::after { content: ''; position: absolute; left: 50%; bottom: 0; margin-left: -4px; border: 4px solid transparent; border-top-color: var(--lien); border-bottom: 0; }
+.flow-lien.vide { height: 44px; }
+.flow-plus { position: relative; z-index: 1; width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 50%; background: #23242e; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity 0.1s, transform 0.1s; }
+.flow-plus .codicon { font-size: 12px; }
+.flow-lien:hover .flow-plus, .flow-lien.vide .flow-plus { opacity: 1; }
+.flow-plus:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.15); }
+.flow-vide { position: absolute; left: calc(50% + 16px); font-size: 11px; color: var(--muted); font-style: italic; }
+.flow-toile.en-glisse .flow-lien::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.flow-lien.cible::before { width: 4px; margin-left: -2px; background: var(--accent) !important; box-shadow: 0 0 10px var(--accent); }
+.flow-lien.cible .flow-plus { opacity: 1; border-color: var(--accent); color: var(--accent); }
+
+/* Un bloc : une carte de verre, liseré de la couleur de sa famille */
+.bloc { position: relative; width: 268px; padding: 7px 10px 8px 12px; border: 1px solid rgba(255, 255, 255, 0.10); border-left: 4px solid var(--bloc); border-radius: 10px; background: linear-gradient(135deg, color-mix(in srgb, var(--bloc) 12%, rgba(30, 31, 40, 0.92)), rgba(26, 27, 34, 0.92)); box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); cursor: grab; }
+.bloc:hover { border-color: color-mix(in srgb, var(--bloc) 50%, transparent); border-left-color: var(--bloc); }
+.bloc.choisi { border-color: var(--bloc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--bloc) 45%, transparent), 0 6px 18px rgba(0, 0, 0, 0.4); }
+.bloc.glisse { opacity: 0.35; }
+.bloc.note { --bloc: #7fb069 !important; background: rgba(127, 176, 105, 0.07); border-style: dashed; border-left-style: solid; }
+.bloc.note .bloc-texte { color: #9cc488; font-style: italic; }
+.bloc.inconnu { --bloc: var(--warning) !important; }
+.bloc-tete { display: flex; align-items: center; gap: 6px; height: 22px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--bloc); }
+.bloc-tete > .codicon { font-size: 14px; }
+.bloc-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bloc-portrait { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; border-radius: 5px; background: rgba(0, 0, 0, 0.3); }
+.bloc-texte { margin-top: 2px; font-size: 12.5px; line-height: 1.35; color: var(--text-strong); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.bloc-texte strong { font-weight: 600; }
+.bloc-actions { display: flex; opacity: 0; transition: opacity 0.1s; }
+.bloc:hover .bloc-actions { opacity: 1; }
+.bloc-actions .icon-button { width: 22px; height: 22px; color: var(--muted); }
+.bloc-actions .icon-button:hover { color: var(--text-strong); }
+
+/* Les branches d'un choix ou d'un si : côte à côte, reliées en haut et en bas */
+.flow-branches { display: flex; align-items: stretch; }
+.flow-branche { position: relative; display: flex; flex-direction: column; align-items: center; padding: 22px 14px 0; }
+/* En haut : le trait qui descend du bloc se divise. Chaque branche porte la moitié gauche (::before) et
+   la moitié droite (::after, qui tient aussi le trait vertical du milieu) de la barre du haut. */
+.flow-branche::before, .flow-branche::after { content: ''; position: absolute; top: 0; width: 50%; height: 22px; border-top: 2px solid var(--lien); }
+.flow-branche::before { left: 0; }
+.flow-branche::after { right: 0; width: calc(50% + 1px); border-left: 2px solid var(--lien); }
+.flow-branche:first-child::before, .flow-branche:last-child::after { border-top-color: transparent; }
+.flow-branche:first-child::after { border-top-left-radius: 10px; }
+.flow-branche:last-child::before { border-top-right-radius: 10px; }
+/* Au milieu : le trait continue jusqu'en bas de la plus longue branche */
+.flow-suite { flex: 1; width: 2px; min-height: 8px; background: var(--lien); }
+/* En bas : les branches se rejoignent, de la même façon à l'envers */
+.flow-joint { position: relative; align-self: stretch; margin: 0 -14px; height: 16px; }
+.flow-joint::before, .flow-joint::after { content: ''; position: absolute; bottom: 0; width: 50%; height: 16px; border-bottom: 2px solid var(--lien); }
+.flow-joint::before { left: 0; }
+.flow-joint::after { right: 0; width: calc(50% + 1px); border-left: 2px solid var(--lien); }
+.flow-branche:first-child .flow-joint::before, .flow-branche:last-child .flow-joint::after { border-bottom-color: transparent; }
+.flow-branche:first-child .flow-joint::after { border-bottom-left-radius: 10px; }
+.flow-branche:last-child .flow-joint::before { border-bottom-right-radius: 10px; }
+.flow-etiquette { position: relative; z-index: 1; max-width: 220px; padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: #23242e; border: 1px solid rgba(255, 255, 255, 0.16); color: var(--text); }
+.flow-etiquette.reponse { border-color: color-mix(in srgb, #5ec8ff 60%, transparent); color: #a8e0ff; }
+.flow-etiquette.alors { border-color: color-mix(in srgb, #3fb950 60%, transparent); color: #8fe09b; }
+.flow-etiquette.sinon { border-color: color-mix(in srgb, #f14c4c 55%, transparent); color: #ff9c9c; }
+.flow-branche > .flow-liste > .flow-lien:first-child { height: 18px; }
+
+/* L'aperçu du dialogue, sous la toile : la scène de Saga, réduite */
+.flow-apercu { flex-shrink: 0; padding: 8px 10px 12px; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 10px; background: rgba(0, 0, 0, 0.18); }
+.flow-apercu-tete { display: flex; align-items: center; gap: 8px; height: 28px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.flow-apercu-tete .codicon { color: var(--accent); }
+.flow-apercu-tete select { height: 24px; font-size: 12px; text-transform: none; letter-spacing: 0; }
+.flow-apercu-nav { display: flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; color: var(--text); }
+.flow-apercu-nav .icon-button { width: 24px; height: 24px; }
+.flow-apercu-vide, .flow-apercu-note { margin: 4px 2px 0; font-size: 12px; color: var(--muted); }
+.flow-apercu-note { color: var(--warning); }
+.saga-cadre { position: relative; margin: 6px auto 0; width: 672px; height: 210px; overflow: hidden; border-radius: 8px; background: radial-gradient(120% 140% at 30% 0%, #3b5a3f 0%, #23352a 45%, #141a18 100%); }
+.saga-scene { position: absolute; left: 0; top: 0; width: 960px; height: 300px; transform-origin: 0 0; font-family: var(--ui-font); }
+.saga-scene .dialogue { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 16px; width: min(920px, calc(100% - 40px)); min-height: 118px; padding: 16px 22px 18px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 14px; background: rgba(14, 14, 22, 0.78); backdrop-filter: blur(18px) saturate(150%); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.saga-scene .dialogue-portrait { width: 104px; height: 104px; flex-shrink: 0; object-fit: contain; image-rendering: pixelated; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); }
+.saga-scene .dialogue-corps { flex: 1; min-width: 0; align-self: stretch; display: flex; flex-direction: column; gap: 6px; }
+.saga-scene .dialogue-nom { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: 0.3px; }
+.saga-scene .dialogue-texte { font-size: 19px; line-height: 1.5; color: #f4f4f6; white-space: pre-wrap; word-break: break-word; }
+.saga-scene .dialogue-suite { position: absolute; right: 18px; bottom: 10px; color: var(--accent); font-size: 12px; animation: saga-suite 0.9s ease-in-out infinite; }
+@keyframes saga-suite { 50% { transform: translateY(3px); opacity: 0.5; } }
+.saga-scene .dialogue-choix { position: absolute; right: 20px; bottom: 156px; display: flex; flex-direction: column; gap: 2px; min-width: 220px; padding: 8px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 12px; background: rgba(14, 14, 22, 0.85); backdrop-filter: blur(18px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4); }
+.saga-scene .dialogue-option { padding: 8px 14px 8px 26px; border-radius: 8px; font-size: 17px; color: #e8e8ee; position: relative; }
+.saga-scene .dialogue-option.actif { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.saga-scene .dialogue-option.actif::before { content: "▶"; position: absolute; left: 9px; top: 10px; font-size: 11px; color: var(--accent); }
+/* Le thème pixel de Saga : police pixel (Jersey 10, polices/OFL.txt), cadres nets à double bordure */
+@font-face { font-family: 'Jersey 10'; src: url('polices/jersey-10.woff2') format('woff2'); font-display: block; }
+.saga-scene[data-theme="pixel"] { --px-fond: #1b1d2a; --px-clair: #efe8d6; --px-ombre: #0b0c12; --px-creux: #2c3045; }
+.saga-scene[data-theme="pixel"] .dialogue, .saga-scene[data-theme="pixel"] .dialogue-choix { font-family: 'Jersey 10', monospace; border-radius: 0; border: 3px solid var(--px-clair); background: var(--px-fond); backdrop-filter: none; box-shadow: 0 0 0 3px var(--px-ombre), inset 0 0 0 3px var(--px-creux), 6px 6px 0 3px rgba(0, 0, 0, 0.35); letter-spacing: 0.3px; }
+.saga-scene[data-theme="pixel"] .dialogue { bottom: 26px; }
+.saga-scene[data-theme="pixel"] .dialogue-texte { font-size: 30px; line-height: 1.25; }
+.saga-scene[data-theme="pixel"] .dialogue-nom { font-size: 22px; text-transform: uppercase; letter-spacing: 1px; }
+.saga-scene[data-theme="pixel"] .dialogue-portrait { border-radius: 0; border: 3px solid var(--px-creux); background: #262a3b; }
+.saga-scene[data-theme="pixel"] .dialogue-suite { animation-timing-function: steps(2); }
+.saga-scene[data-theme="pixel"] .dialogue-option { border-radius: 0; font-size: 26px; }
+.saga-scene[data-theme="pixel"] .dialogue-option.actif { background: none; color: var(--accent); }

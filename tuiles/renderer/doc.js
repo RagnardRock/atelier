@@ -192,6 +192,12 @@ const Doc = (() => {
     }
   }
 
+  // Tafl 0.26 : aller d'un coup à un état de l'historique (n < 0 : annuler n fois, n > 0 : refaire n fois).
+  function travel(doc, n) {
+    let label = null;
+    for (let k = 0; k < Math.abs(n); k++) label = (n < 0 ? undo : redo)(doc) ?? label;
+    return label;
+  }
   function undo(doc) {
     const s = doc.undo.pop();
     if (!s) return null;
@@ -592,5 +598,5 @@ const Doc = (() => {
     });
   }
 
-  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, newStamp, placeStamp, stampTopLayer, stampFromRect, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, reorderTiles, removeTiles, usedTiles, tileKey, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
+  return { create, newMap, newLayer, slug, uniqueMapId, selectMap, mapById, eventAt, addMap, removeMap, moveMap, addLayer, removeLayer, moveLayer, setLayer, passageForEdit, collisions, tileUses, newStamp, placeStamp, stampTopLayer, stampFromRect, PASSAGE, PASSAGE_NOMS, PROFONDEURS, FUSIONS, ZONES, DIRECTIONS, begin, change, undo, redo, travel, tileForEdit, pixelsForEdit, layerForEdit, tileCanvas, touch, addTile, removeTile, moveTile, reorderTiles, removeTiles, usedTiles, tileKey, addFrame, removeFrame, moveFrame, frameCount, animated, frameAt, transformTile, TRANSFORMS, resizeTiles, resizeMap, replaceColor, uniqueName, newId, DEFAULT_DURATION };
 })();

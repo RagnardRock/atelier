@@ -381,6 +381,16 @@ Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuil
 
 Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (`index.html`, à ouvrir dans un navigateur ou à mettre sur itch.io) et/ou une **version Windows** (`MonJeu.exe`, rien à installer). Chacune donne un dossier et un `.zip` à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
 
+## Copier-coller, annuler partout, scripts en blocs (Tafl 0.27)
+
+- **Outil Sélection (R)**, en mode Carte : glisse un rectangle. `Ctrl+C` le copie, `Ctrl+X` le coupe, `Suppr` le vide, `Ctrl+A` prend toute la carte, `Échap` désélectionne. Glisser l'intérieur de la sélection la **déplace**.
+- **Coller (`Ctrl+V`)**, aussi dans une autre carte du jeu : le morceau suit la souris, un clic le pose, clic droit ou `Échap` annule. Les cases vides du morceau ne recouvrent rien (un arbre se colle sur l'herbe).
+- **Ce qu'on emporte** (barre d'options de l'outil) : le calque choisi ou **tous les calques** (collés sur les calques de même nom, sinon de même rang), et en plus, si tu coches : le passage peint, les zones (recoupées aux bords), les événements et les téléporteurs (ils remplacent ceux déjà sur la case). Tout est aussi dans le menu **Édition**.
+- **Historique (`Ctrl+H`** ou le bouton horloge de la barre de titre) : la liste des dernières actions ; un clic ramène le jeu à cette étape, et on peut ensuite refaire. Montrer ou cacher un calque s'annule aussi.
+- **`Ctrl+Z` / `Ctrl+Y` dans les fenêtres** de l'événement et des Données du jeu (sprites des personnages compris) : chaque changement s'annule un par un, avant même de valider. Dans une case de texte, `Ctrl+Z` reste celui du texte.
+- **Le script en blocs** (fenêtre de l'événement, bouton **Blocs** / **Liste**) : chaque commande est un bloc coloré par famille, reliés de haut en bas ; un choix s'ouvre en une branche par réponse, un « si » en deux branches (alors, sinon), qui se rejoignent. Glisse un bloc sur un trait pour le déplacer (même d'une branche à l'autre), glisse une commande de la palette de gauche pour l'ajouter, ou clique le `+` d'un trait. Double-clic : modifier. Le format du script ne change pas : Saga le lit comme avant.
+- **Aperçu du dialogue** : un clic sur un dialogue ou un choix montre la boîte comme dans Saga (portrait, nom dans sa couleur, texte qui s'écrit, réponses), au thème **Verre** ou **Pixel** du jeu. Les flèches passent d'une boîte à l'autre (une ligne vide dans un texte fait une nouvelle boîte, comme dans le jeu).
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -415,7 +425,7 @@ Le plan (validé avec Ragna le 20/10/2026) :
 2. ~~**Tafl 0.8, les bases de données**~~ : fait (voir plus haut).
 3. ~~**Le moteur**, un outil à part, qui lit le dossier de jeu, avec un bouton **Jouer** dans Tafl~~ : commencé, c'est **Saga** (voir plus haut).
 
-Et toujours : tuiles automatiques (bords de chemin et de mare posés tout seuls), sélection et copier-coller sur la carte, lien direct avec Skald.
+Et toujours : tuiles automatiques (bords de chemin et de mare posés tout seuls), lien direct avec Skald. Plus tard peut-être : des liens libres entre les blocs d'un script (des « aller à »), qui demanderaient aussi un changement dans Saga.
 
 ## Comment c'est construit
 
@@ -429,6 +439,9 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `renderer/stage.js` | La zone de dessin, ses deux modes et les outils, écrits une seule fois pour une « grille de cases » (pixels d'une tuile, cases d'un calque ou passage), plus les outils Zone, Téléporteur, Événement et Départ. |
 | `renderer/panels.js` | Palette, tuiles, aperçu, cartes, calques, événements. |
 | `renderer/events.js` | Les événements et leurs scripts (commandes, conditions, vérification), l'éditeur d'un événement et la fenêtre Données du jeu (personnages, quêtes, interrupteurs). |
+| `renderer/presse-papiers.js` | Tafl 0.27 : copier, couper, vider et coller un morceau de carte (calques, passage, zones, événements, téléporteurs). |
+| `renderer/blocs.js` | Tafl 0.27 : le script d'un événement en blocs reliés (palette, glisser-déposer) et l'aperçu des dialogues comme dans Saga. |
+| `renderer/polices/` | La police pixel de Saga (Jersey 10, licence SIL OFL) pour l'aperçu des dialogues au thème Pixel. |
 | `renderer/sprites.js` | Les sprites des personnages (Tafl 0.12) : lire et assembler les planches, l'éditeur pixel par pixel de la fiche du personnage, et le dessin sur la carte. |
 | `renderer/io.js` | Le format `.tafl`, le dossier de jeu (jeu.json, cartes/*.json, donnees/*.json), la fenêtre d'import de planches et les exports (PNG, Tiled). |
 | `comfy.js` | Tafl 0.22 : trouver ComfyUI, démarrer son moteur caché (sans fenêtre), lui envoyer une recette, télécharger des modèles, l'arrêter avec Tafl. |
