@@ -35,7 +35,9 @@ const Events = (() => {
   const DEPLACEMENTS = [['fixe', 'Immobile'], ['regarde', 'Se tourne vers le joueur qui lui parle'], ['aleatoire', 'Marche au hasard'], ['tourne', 'Regarde autour de lui']];
   const DECLENCHEMENTS = [['parler', 'Le joueur lui parle (touche A)'], ['toucher', 'Le joueur marche dessus ou le touche'], ['auto', 'Tout seul, dès l\'arrivée sur la carte']];
   const EXPRESSIONS = ['normal', 'content', 'rire', 'triste', 'colere', 'surpris', 'inquiet', 'gene', 'determine'];
-  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur'], ['monstres_vaincus', 'Monstres vaincus (JRPG)']];
+  const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur'], ['monstres_vaincus', 'Monstres vaincus']];
+  // Tafl 0.32.1 : les compteurs que le pack de règles du jeu fait vraiment monter (les autres restent à 0).
+  const COMPTEURS_PACK = { captures: ['pokemon'], dresseurs_battus: ['pokemon'], sauvages_battus: ['pokemon'], evolutions: ['pokemon'], especes_vues: ['pokemon'], especes_prises: ['pokemon'], badges: ['pokemon'], monstres_vaincus: ['jrpg', 'jdr'] };
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
   // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
@@ -99,6 +101,9 @@ const Events = (() => {
   };
   // Tafl 0.16 : les badges (Réglages), les tenues du héros, la monnaie.
   const badges = (doc) => doc.data.reglages?.badges || [];
+  // Les badges servent au pack Pokémon (niveau maximum, dresseurs) ; un autre pack ne les montre que si le jeu en a déjà.
+  const avecBadges = (doc) => (doc?.data?.reglages?.regles || 'pokemon') === 'pokemon' || badges(doc).length > 0;
+  const compteursDu = (doc, garde = '') => COMPTEURS.filter(([k]) => k === garde || (k === 'badges' ? avecBadges(doc) : !COMPTEURS_PACK[k] || COMPTEURS_PACK[k].includes(doc?.data?.reglages?.regles || 'pokemon')));
   const nomBadge = (doc, id) => badges(doc).find((b) => b.id === id)?.nom || id || '…';
   const choixBadges = (doc, actuel) => {
     const list = badges(doc).map((b) => [b.id, b.nom]);
@@ -373,7 +378,7 @@ const Events = (() => {
       },
     },
     badge: {
-      nom: 'Donner un badge', icone: 'star-full', groupe: 'Progression',
+      nom: 'Donner un badge', icone: 'star-full', groupe: 'Progression', packs: ['pokemon'], aussiSi: avecBadges,
       nouveau: (doc) => ({ type: 'badge', badge: badges(doc)[0]?.id || '' }),
       champs: (doc, c) => [
         { key: 'badge', label: 'Badge', type: 'select', value: c.badge, choices: choixBadges(doc, c.badge) },
@@ -711,12 +716,14 @@ const Events = (() => {
       valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Jeu › Données du jeu.'),
     },
     compteur: {
-      nom: 'Un compteur du joueur (captures, badges…)',
-      nouveau: () => ({ type: 'compteur', compteur: 'captures', min: 10 }),
+      nom: 'Un compteur du joueur (quêtes finies, pas…)',
+      nouveau: (doc) => ({ type: 'compteur', compteur: compteursDu(doc)[0]?.[0] || 'quetes_finies', min: 10 }),
       champs: (doc, c) => [
-        { key: 'compteur', label: 'Compteur', type: 'select', value: c.compteur, choices: COMPTEURS },
+        { key: 'compteur', label: 'Compteur', type: 'select', value: c.compteur, choices: compteursDu(doc, c.compteur) },
         { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 99999 },
-        { type: 'info', text: 'Pour débloquer une boutique, un personnage ou une quête au fil de la progression : 10 créatures capturées, 5 dresseurs battus, 3 évolutions…' },
+        { type: 'info', text: (doc?.data?.reglages?.regles || 'pokemon') === 'pokemon'
+          ? 'Pour débloquer une boutique, un personnage ou une quête au fil de la progression : 10 créatures capturées, 5 dresseurs battus, 3 évolutions…'
+          : 'Pour débloquer une boutique, un personnage ou une quête au fil de la progression : 3 quêtes finies, 20 monstres vaincus…' },
       ],
       depuis: (v) => ({ type: 'compteur', compteur: v.compteur, min: clamp(Math.round(v.min) || 0, 0, 99999) }),
     },
@@ -727,7 +734,7 @@ const Events = (() => {
       depuis: (v) => ({ type: 'argent', min: clamp(Math.round(v.min) || 0, 0, 9999999) }),
     },
     badge: {
-      nom: 'Le joueur a un badge',
+      nom: 'Le joueur a un badge', packs: ['pokemon'], aussiSi: avecBadges,
       nouveau: (doc) => ({ type: 'badge', badge: badges(doc)[0]?.id || '' }),
       champs: (doc, c) => [
         { key: 'badge', label: 'Badge', type: 'select', value: c.badge, choices: choixBadges(doc, c.badge) },
@@ -1177,7 +1184,8 @@ const Events = (() => {
   // Un menu dont on attend le choix.
   const choisir = (items, x, y) => new Promise((resolve) => Menus.open(items.map((it) => it && { ...it, run: () => resolve(it.value) }), x, y));
   // Les commandes et conditions d'un autre pack de règles ne sont pas proposées (packs : sinon toutes).
-  const duPack = (doc, d) => !d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon');
+  // aussiSi(doc) : une commande d'un autre pack que le jeu utilise quand même (des badges déjà créés).
+  const duPack = (doc, d) => !d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon') || Boolean(d.aussiSi?.(doc));
   const menuConditions = (doc) => Object.entries(CONDITIONS).filter(([, d]) => duPack(doc, d)).map(([k, d]) => ({ label: d.nom, value: k }));
   function menuCommandes(doc) {
     const items = [];
