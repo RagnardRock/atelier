@@ -17,8 +17,12 @@
 //            défie. Ce fichier relaie les positions et les messages d'un joueur à l'autre (« pair »).
 // Le chat et la liste des joueurs valent pour les deux. L'hôte y est un joueur comme un autre, d'id 'hote'.
 //
+// Saga 1.1 : la partie peut s'ouvrir sur Internet (internet.js ouvre le port de la box). Tant que c'est
+// le cas, le code est plus long, les mauvais codes sont limités pour tous, et chaque nouveau joueur
+// attend que l'hôte l'accepte (« attente ») avant de recevoir quoi que ce soit du jeu.
+//
 // Plus tard, un relais sur le serveur de Ragna pourra remplacer ce serveur (mêmes messages : rejoindre,
-// vue, action), pour jouer hors du réseau local.
+// vue, action).
 
 const http = require('node:http');
 const os = require('node:os');
@@ -30,6 +34,11 @@ const PORT_DEFAUT = 7777;
 const MAX_CLIENTS = 12;
 const MAX_CORPS = 16 * 1024;
 const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (on les confond avec 1 et 0)
+const MAX_ATTENTE = 6;            // demandes en attente de l'hôte, au plus
+const MAX_MAUVAIS_CODES = 20;     // sur Internet : mauvais codes par minute, toutes adresses confondues
+// Les seuls fichiers de commun/ dont l'interface a besoin.
+const COMMUN = new Set(['bac-a-sable.js']);
+const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.json': 'application/json',
@@ -41,9 +50,14 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   let chat = [], numeroChat = 0;
   const clients = new Map(); // id → { id, nom, jeton, flux, ip, derniere }
   const essais = new Map();  // ip → [dates des mauvais codes]
+  const attente = new Map(); // jeton → { id, nom, ip, depuis, vu } : sur Internet, ceux que l'hôte n'a pas encore acceptés
+  const refuses = new Map(); // jeton → date : pour dire « l'hôte a refusé » plutôt que « mauvais code »
+  let mauvais = [];          // dates des mauvais codes, toutes adresses (sur Internet)
+  let internet = null;       // { adresse, port, methode: 'upnp' | 'manuel' } quand la partie est ouverte sur Internet
   let jeuPublic = null;
 
   const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux) }));
+  const enAttente = () => [...attente.values()].map((a) => ({ id: a.id, nom: a.nom, remplace: [...clients.values()].some((c) => c.nom.toLowerCase() === a.nom.toLowerCase()) }));
   // Qui est là, pour tout le monde (l'hôte en tête).
   const joueurs = () => [{ id: 'hote', nom: hote.nom, connecte: true, hote: true }, ...liste()];
   function prevenir() {
@@ -112,7 +126,14 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     // Les adresses de la maison (192.168…) d'abord.
     return out.sort((a, b) => Number(!a.startsWith('192.168.')) - Number(!b.startsWith('192.168.')));
   }
-  const nouveauCode = () => Array.from(crypto.randomBytes(4), (b) => LETTRES[b % LETTRES.length]).join('');
+  // 4 lettres à la maison ; 8 sur Internet (ABCD-EFGH), où n'importe qui peut essayer.
+  const nouveauCode = (n = internet ? 8 : 4) => {
+    // On tire sans biais (256 n'est pas un multiple de 24 : on jette les octets trop grands).
+    let c = '';
+    while (c.length < n) for (const b of crypto.randomBytes(n)) if (b < 240 && c.length < n) c += LETTRES[b % LETTRES.length];
+    return c.length > 4 ? `${c.slice(0, 4)}-${c.slice(4)}` : c;
+  };
+  const sansTiret = (t) => String(t || '').toUpperCase().replace(/[^A-Z]/g, '');
 
   // --- Les fichiers de l'interface ---
   async function page() {
@@ -133,13 +154,13 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     if (!type) return fin(res, 404);
     try {
       const data = await fs.readFile(p);
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache', ...SURETE });
       res.end(data);
     } catch { fin(res, 404); }
   }
   function fin(res, statut, corps = null) {
     if (res.headersSent) { res.end(); return; }
-    res.writeHead(statut, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.writeHead(statut, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SURETE });
     res.end(corps === null ? JSON.stringify({ ok: statut < 400 }) : JSON.stringify(corps));
   }
   function lireCorps(req) {
@@ -162,47 +183,64 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     const p = url.pathname;
     const ip = req.socket.remoteAddress || '';
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
-      res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-cache' });
+      res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-cache', ...SURETE });
       res.end(await page());
       return;
     }
     // Le pont du navigateur, précédé de ce qu'il doit savoir avant que l'interface démarre (la sorte de partie).
     if (req.method === 'GET' && p === '/web/saga-reseau.js') {
       const pont = await fs.readFile(path.join(moteur, 'web', 'saga-reseau.js'), 'utf8');
-      res.writeHead(200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'no-store' });
+      res.writeHead(200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'no-store', ...SURETE });
       res.end(`window.SAGA_RESEAU = ${JSON.stringify({ mode, titre, version, config })};\n${pont}`);
       return;
     }
     if (req.method === 'GET' && p.startsWith('/saga/')) return fichier(res, path.join(moteur, 'renderer'), p.slice(6));
-    if (req.method === 'GET' && p.startsWith('/commun/')) return fichier(res, path.join(moteur, 'commun'), p.slice(8));
+    if (req.method === 'GET' && p.startsWith('/commun/')) {
+      if (!COMMUN.has(p.slice(8))) return fin(res, 404);
+      return fichier(res, path.join(moteur, 'commun'), p.slice(8));
+    }
     if (req.method === 'GET' && p.startsWith('/codicons/')) return fichier(res, path.join(moteur, 'node_modules', '@vscode', 'codicons', 'dist'), p.slice(10));
 
     if (req.method === 'POST' && p === '/rejoindre') {
       const maintenant = Date.now();
       const l = (essais.get(ip) || []).filter((t) => maintenant - t < 60e3);
       essais.set(ip, l);
+      if (essais.size > 2000) for (const [k, v] of essais) if (!v.some((t) => maintenant - t < 60e3)) essais.delete(k);
       if (l.length >= 6) return fin(res, 429, { erreur: 'Trop d\'essais : attends une minute.' });
       const corps = await lireCorps(req);
       const nom = String(corps?.nom || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 24);
+      const jetonDonne = typeof corps?.jeton === 'string' ? corps.jeton : '';
       // Revenir avec son jeton (la page rechargée, le Wi-Fi coupé) : on retrouve sa place.
-      const ancien = typeof corps?.jeton === 'string' ? [...clients.values()].find((c) => c.jeton === corps.jeton) : null;
+      const ancien = jetonDonne ? [...clients.values()].find((c) => c.jeton === jetonDonne) : null;
       if (ancien) return fin(res, 200, { ok: true, jeton: ancien.jeton, id: ancien.id, nom: ancien.nom, version });
-      if (String(corps?.code || '').trim().toUpperCase() !== code) {
+      // Celui qui attend l'accord de l'hôte redemande toutes les deux secondes.
+      const attend = jetonDonne ? attente.get(jetonDonne) : null;
+      if (attend) { attend.vu = maintenant; return fin(res, 202, { ok: true, attente: true, jeton: jetonDonne, nom: attend.nom }); }
+      if (jetonDonne && refuses.has(jetonDonne)) return fin(res, 403, { erreur: 'L\'hôte n\'a pas accepté ta demande.', refuse: true });
+      if (internet) {
+        mauvais = mauvais.filter((t) => maintenant - t < 60e3);
+        if (mauvais.length >= MAX_MAUVAIS_CODES) return fin(res, 429, { erreur: 'Trop d\'essais sur cette partie : réessaie dans une minute.' });
+      }
+      if (sansTiret(corps?.code) !== sansTiret(code)) {
         l.push(maintenant);
+        if (internet) {
+          mauvais.push(maintenant);
+          if (mauvais.length === MAX_MAUVAIS_CODES) log('ATTENTION', 'Multijoueur : beaucoup de mauvais codes, les demandes sont suspendues une minute');
+        }
         return fin(res, 403, { erreur: 'Ce code ne correspond pas à la partie.' });
       }
       if (!nom) return fin(res, 400, { erreur: 'Écris ton prénom.' });
       if (clients.size >= MAX_CLIENTS) return fin(res, 403, { erreur: 'La partie est pleine.' });
-      // Un même prénom : c'est sans doute le même ami, sur un autre appareil ou un nouvel onglet.
-      let c = [...clients.values()].find((x) => x.nom.toLowerCase() === nom.toLowerCase());
-      if (c) { c.flux?.end(); c.flux = null; c.jeton = crypto.randomBytes(18).toString('base64url'); }
-      else {
-        c = { id: `j-${crypto.randomBytes(4).toString('hex')}`, nom, jeton: crypto.randomBytes(18).toString('base64url'), flux: null, ip };
-        clients.set(c.id, c);
+      // Sur Internet : on attend que l'hôte accepte (il voit le prénom, et s'il remplace quelqu'un).
+      if (internet) {
+        if (attente.size >= MAX_ATTENTE) return fin(res, 429, { erreur: 'L\'hôte a déjà plusieurs demandes à voir : réessaie dans un moment.' });
+        const a = { id: `a-${crypto.randomBytes(4).toString('hex')}`, nom, ip, depuis: maintenant, vu: maintenant, jeton: crypto.randomBytes(18).toString('base64url') };
+        attente.set(a.jeton, a);
+        log('INFO', `Multijoueur : ${nom} demande à rejoindre (${ip})`);
+        prevenir();
+        return fin(res, 202, { ok: true, attente: true, jeton: a.jeton, nom });
       }
-      log('INFO', `Multijoueur : ${nom} rejoint la partie (${ip})`);
-      prevenir();
-      return fin(res, 200, { ok: true, jeton: c.jeton, id: c.id, nom: c.nom, version });
+      return fin(res, 200, admettre(nom, ip));
     }
 
     const c = clientDe(req, url);
@@ -242,9 +280,52 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     return fin(res, 404);
   }
 
+  // Une place dans la partie (tout de suite à la maison, ou une fois acceptée par l'hôte sur Internet).
+  function admettre(nom, ip, jeton = crypto.randomBytes(18).toString('base64url')) {
+    // Un même prénom : c'est sans doute le même ami, sur un autre appareil ou un nouvel onglet.
+    let c = [...clients.values()].find((x) => x.nom.toLowerCase() === nom.toLowerCase());
+    if (c) { c.flux?.end(); c.flux = null; c.jeton = jeton; c.ip = ip; }
+    else {
+      c = { id: `j-${crypto.randomBytes(4).toString('hex')}`, nom, jeton, flux: null, ip };
+      clients.set(c.id, c);
+    }
+    log('INFO', `Multijoueur : ${nom} rejoint la partie (${ip})`);
+    prevenir();
+    return { ok: true, jeton: c.jeton, id: c.id, nom: c.nom, version };
+  }
+  // L'hôte répond à une demande (sur Internet).
+  function accepter(id, oui) {
+    const a = [...attente.values()].find((x) => x.id === id);
+    if (!a) return false;
+    attente.delete(a.jeton);
+    if (oui && clients.size < MAX_CLIENTS) admettre(a.nom, a.ip, a.jeton);
+    else { refuses.set(a.jeton, Date.now()); log('INFO', `Multijoueur : demande de ${a.nom} refusée`); prevenir(); }
+    return true;
+  }
+  // Les demandes abandonnées (la page fermée) et les vieux refus s'effacent.
+  function menage() {
+    const t = Date.now();
+    let change = false;
+    for (const [j, a] of attente) if (t - a.vu > 30e3) { attente.delete(j); change = true; }
+    for (const [j, d] of refuses) if (t - d > 10 * 60e3) refuses.delete(j);
+    if (change) prevenir();
+  }
+  // Passer sur Internet (ou en revenir) : un nouveau code, plus long. Ceux déjà là gardent leur place.
+  function passerInternet(details) {
+    if (!serveur) return infos();
+    internet = details ? { adresse: String(details.adresse || ''), port: Number(details.port) || port, methode: details.methode === 'manuel' ? 'manuel' : 'upnp' } : null;
+    code = nouveauCode();
+    mauvais = [];
+    if (!internet) { for (const a of attente.values()) refuses.set(a.jeton, Date.now()); attente.clear(); }
+    log('INFO', internet ? `Multijoueur : partie ouverte sur Internet (${internet.methode})` : 'Multijoueur : partie refermée à Internet');
+    prevenir();
+    return infos();
+  }
+
   // --- Ouvrir, fermer, envoyer ---
   function ouvrir({ port: portVoulu = PORT_DEFAUT, mode: m = 'monde', nom = '', titre: t = '' } = {}) {
     if (serveur) return Promise.resolve(infos());
+    internet = null;
     code = nouveauCode();
     jeuPublic = null;
     mode = m === 'table' ? 'table' : 'monde';
@@ -252,11 +333,12 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     hote = { id: 'hote', nom: String(nom || '').trim().slice(0, 24) || (mode === 'table' ? 'MJ' : 'Hôte'), position: null };
     chat = [];
     const essayer = (pt, reste) => new Promise((resoudre, rejeter) => {
-      const s = http.createServer((req, res) => { repondre(req, res).catch((err) => { log('ERREUR', `Multijoueur : ${err.message}`); fin(res, 500); }); });
+      const s = http.createServer({ headersTimeout: 10e3, requestTimeout: 15e3, maxHeaderSize: 8192 }, (req, res) => { repondre(req, res).catch((err) => { log('ERREUR', `Multijoueur : ${err.message}`); fin(res, 500); }); });
       s.once('error', (err) => {
         if (err.code === 'EADDRINUSE' && reste > 0) essayer(pt + 1, reste - 1).then(resoudre, rejeter);
         else rejeter(new Error(err.code === 'EADDRINUSE' ? 'Les ports 7777 à 7787 sont déjà pris' : err.message));
       });
+      s.maxConnections = 64;
       s.listen(pt, '0.0.0.0', () => { serveur = s; port = pt; resoudre(infos()); });
     });
     // Un ping régulier garde les flux ouverts (certains routeurs coupent un flux muet).
@@ -264,16 +346,21 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     r.then(() => {
       log('INFO', `Multijoueur : partie ouverte sur le port ${port}`);
       ping = setInterval(() => { for (const c of clients.values()) c.flux?.write(': ping\n\n'); }, 20e3);
+      nettoyage = setInterval(menage, 10e3);
     }).catch(() => {});
     return r;
   }
-  let ping = null;
+  let ping = null, nettoyage = null;
   function fermer() {
     if (!serveur) return;
     for (const c of clients.values()) { envoyer(c.id, 'fin', '{"raison":"ferme"}'); c.flux?.end(); }
     clients.clear();
+    attente.clear();
+    refuses.clear();
+    internet = null;
     hote.position = null;
     clearInterval(ping);
+    clearInterval(nettoyage);
     serveur.close();
     serveur.closeAllConnections?.();
     serveur = null;
@@ -298,10 +385,13 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   }
   // Le jeu a été rouvert ou rechargé : les amis le relisent.
   function oublierJeu() { jeuPublic = null; for (const c of clients.values()) envoyer(c.id, 'jeu', '{}'); }
-  const infos = () => (serveur ? { ouvert: true, port, code, mode, adresses: adresses(), clients: liste(), joueurs: joueurs(), chat: chatPour('hote') } : { ouvert: false, clients: [], joueurs: [], chat: [] });
+  const infos = () => (serveur
+    ? { ouvert: true, port, code, mode, adresses: adresses(), clients: liste(), joueurs: joueurs(), attente: enAttente(), internet, chat: chatPour('hote') }
+    : { ouvert: false, clients: [], joueurs: [], attente: [], internet: null, chat: [] });
 
   return {
-    ouvrir, fermer, envoyer, expulser, infos, oublierJeu, get ouvert() { return Boolean(serveur); },
+    ouvrir, fermer, envoyer, expulser, infos, oublierJeu, passerInternet, accepter, get ouvert() { return Boolean(serveur); },
+    get port() { return port; },
     // Ce que fait l'hôte, comme un joueur : parler, bouger, écrire à un autre.
     dire: (texte, pour) => dire('hote', texte, pour), bouger: (p) => bouger('hote', p), pair: (vers, donnees) => pair('hote', vers, donnees),
   };

@@ -4,6 +4,8 @@
 //   - l'hôte (la fenêtre de Saga) ouvre la partie (window.saga.reseauOuvrir) et voit l'adresse et le code
 //     à donner à ses amis ;
 //   - un ami (dans son navigateur) a rejoint par le pont web/saga-reseau.js.
+// Saga 1.1 : l'hôte peut ouvrir la partie sur Internet (le port de sa box) ; il accepte alors chaque
+// nouveau joueur ici.
 // Chacun voit la liste des joueurs et peut parler à tous ou à un seul. Le reste du multijoueur est à
 // côté : reseau/monde.js (se voir, échanger, se défier) et reseau/duel.js (le duel).
 //
@@ -18,7 +20,9 @@ const Multi = (() => {
     const racine = el('aside', { className: 'multi-panneau', hidden: true });
     const bulle = el('div', { className: 'multi-bulles' });
     scene.append(racine, bulle);
-    let infos = { ouvert: false, joueurs: [], code: '', adresses: [], port: 0 };
+    let infos = { ouvert: false, joueurs: [], attente: [], code: '', adresses: [], port: 0, internet: null };
+    let ouvertureNet = false; // la box est en train de répondre
+    let echecNet = null;      // ce que la box a répondu quand ça n'a pas marché
     let joueurs = [];
     let lignes = [];
     let pour = 'tous';     // à qui on parle : 'tous', ou l'id d'un joueur
@@ -105,13 +109,82 @@ const Multi = (() => {
     async function fermer() {
       if (ami) return;
       infos = await window.saga.reseauFermer();
+      echecNet = null;
       joueurs = [];
       racine.hidden = true;
     }
     async function rafraichir() {
       if (ami) return;
+      const avant = new Set((infos.attente || []).map((a) => a.id));
       infos = await window.saga.reseauInfos();
+      // Quelqu'un frappe à la porte (sur Internet) : on le dit, et le panneau s'ouvre.
+      const nouveaux = (infos.attente || []).filter((a) => !avant.has(a.id));
+      for (const a of nouveaux) message(`${a.nom} demande à rejoindre la partie.`);
+      if (nouveaux.length) { replie = false; nonLus = 0; }
       recevoirJoueurs(infos.joueurs || []);
+    }
+    const accepter = (id, oui) => window.saga.reseauAccepter?.(id, oui).then((i) => { infos = i; recevoirJoueurs(i.joueurs || []); });
+
+    // --- Saga 1.1 : ouvrir la partie sur Internet ---
+    // voulu : 'upnp' (Saga demande à la box), 'manuel' (ouvert à la main dans la box), false (refermer).
+    async function internet(voulu) {
+      if (ami || ouvertureNet) return;
+      ouvertureNet = true;
+      dessiner();
+      try {
+        const r = await window.saga.reseauInternet(voulu);
+        echecNet = r.echec || null;
+        infos = r;
+        if (r.internet) message('La partie est ouverte sur Internet.');
+        else if (echecNet) aideInternet();
+      } catch (err) {
+        echecNet = { raison: String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), port: infos.port };
+      }
+      ouvertureNet = false;
+      recevoirJoueurs(infos.joueurs || []);
+    }
+    // Quand la box ne veut pas : la redirection à la main.
+    async function aideInternet() {
+      const e = echecNet || { port: infos.port };
+      const port = e.port || infos.port;
+      const pc = e.ipLocale || infos.adresses?.[0] || 'ton PC';
+      const fields = [
+        e.raison ? { type: 'info', text: e.raison } : null,
+        { type: 'info', text: `1. Ouvre les réglages de ta box dans ton navigateur (${e.routeur ? `http://${e.routeur}` : 'souvent http://192.168.1.1 ; Freebox : mafreebox.freebox.fr'}).` },
+        { type: 'info', text: `2. Dans « Redirection de ports » (ou NAT/PAT), ajoute : protocole TCP, port externe ${port}, port interne ${port}, vers ${pc}. Ou active UPnP, puis réessaie le bouton.` },
+        { type: 'info', text: '3. Reviens ici et clique « J\'ai ouvert le port ». Pense à retirer la redirection après la partie.' },
+        { type: 'info', text: e.cgnat
+          ? 'Ici, ta box n\'a pas d\'adresse publique à elle : ton opérateur la partage (CGNAT, fréquent avec les box 4G/5G et certaines fibres) ou elle est derrière une autre box. Demande à ton opérateur une « IPv4 full-stack » ou une IP fixe (chez Free : gratuit, dans l\'espace abonné), ou branche ton PC sur la box principale.'
+          : 'Si tes amis n\'arrivent toujours pas à entrer, ton opérateur partage peut-être ton adresse (CGNAT) : demande-lui une « IPv4 full-stack » ou une IP fixe.' },
+      ].filter(Boolean);
+      const v = await Dialogs.form({ title: 'Ouvrir le port à la main', okLabel: 'J\'ai ouvert le port', cancelLabel: 'Plus tard', width: 540, fields });
+      if (v) await internet('manuel');
+    }
+    function blocInternet() {
+      const b = el('div', { className: 'multi-rejoindre multi-internet' });
+      const net = infos.internet;
+      const bouton = (texte, icone, f) => {
+        const x = el('button', { className: 'multi-bouton', type: 'button', disabled: ouvertureNet }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: texte }));
+        x.onclick = f;
+        return x;
+      };
+      if (net) {
+        b.append(
+          el('div', { className: 'multi-label', textContent: 'Amis éloignés : cette adresse' }),
+          el('code', { className: 'multi-adresse', textContent: net.adresse ? `http://${net.adresse}:${net.port}` : `ton adresse publique, port ${net.port}` }),
+          el('p', { className: 'multi-note', textContent: net.methode === 'manuel'
+            ? 'Avec le même code. Tu acceptes chaque nouveau joueur. Retire la redirection dans ta box après la partie.'
+            : 'Avec le même code. Tu acceptes chaque nouveau joueur. Le port de ta box se referme quand tu fermes la partie ou Saga.' }),
+          bouton(ouvertureNet ? 'Fermeture…' : 'Fermer l\'accès Internet', 'debug-disconnect', () => internet(false)));
+        return b;
+      }
+      b.append(bouton(ouvertureNet ? 'Ouverture de la box…' : 'Ouvrir sur Internet', 'globe', () => internet('upnp')),
+        el('p', { className: 'multi-note', textContent: 'Pour des amis hors de chez toi : Saga ouvre un port de ta box le temps de la partie.' }));
+      if (echecNet) {
+        b.append(el('p', { className: 'multi-note multi-erreur', textContent: echecNet.raison || 'La box n\'a pas ouvert le port.' }),
+          bouton('Faire à la main', 'tools', aideInternet));
+      }
+      return b;
     }
     const expulser = (id) => window.saga.reseauExpulser?.(id).then(rafraichir);
 
@@ -136,6 +209,22 @@ const Multi = (() => {
           el('div', { className: 'multi-label', textContent: 'et entrent ce code' }),
           el('code', { className: 'multi-code', textContent: infos.code }),
           el('p', { className: 'multi-note', textContent: 'Ils doivent être sur le même réseau (le Wi-Fi de la maison). Rien à installer : leur navigateur suffit.' })));
+        racine.append(blocInternet());
+      }
+      // Sur Internet : ceux qui attendent que l'hôte les accepte.
+      if (!ami && infos.attente?.length) {
+        const att = el('div', { className: 'multi-joueurs multi-attente' }, el('div', { className: 'multi-label', textContent: 'Demandent à entrer' }));
+        for (const a of infos.attente) {
+          const oui = el('button', { className: 'multi-mini oui', type: 'button', title: 'Accepter' }, el('i', { className: 'codicon codicon-check' }));
+          const non = el('button', { className: 'multi-mini', type: 'button', title: 'Refuser' }, el('i', { className: 'codicon codicon-close' }));
+          oui.onclick = () => accepter(a.id, true);
+          non.onclick = () => accepter(a.id, false);
+          att.append(el('div', { className: 'multi-joueur' },
+            el('i', { className: 'codicon codicon-question' }),
+            el('span', { className: 'multi-nom', textContent: a.nom, title: a.remplace ? 'Un joueur porte déjà ce prénom : il sera remplacé' : '' }),
+            a.remplace ? el('small', { textContent: 'remplace' }) : null, oui, non));
+        }
+        racine.append(att);
       }
       const l = el('div', { className: 'multi-joueurs' });
       for (const j of joueurs) {
@@ -189,7 +278,7 @@ const Multi = (() => {
 
     brancher();
     const api = {
-      ouvrir, fermer, rafraichir, dessiner, dire, pair, bouger, sur, expulser,
+      ouvrir, fermer, rafraichir, dessiner, dire, pair, bouger, sur, expulser, internet, accepter,
       get ami() { return ami; },
       get moi() { return moi; },
       get joueurs() { return joueurs; },

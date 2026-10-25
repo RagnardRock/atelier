@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('saga', {
   reseauFermer: () => ipcRenderer.invoke('reseau:fermer'),
   reseauInfos: () => ipcRenderer.invoke('reseau:infos'),
   reseauExpulser: (id) => ipcRenderer.invoke('reseau:expulser', id),
+  reseauInternet: (voulu) => ipcRenderer.invoke('reseau:internet', voulu),
+  reseauAccepter: (id, oui) => ipcRenderer.invoke('reseau:accepter', id, oui),
   reseauEnvoyer: (id, sorte, json) => ipcRenderer.send('reseau:envoyer', id, sorte, json),
   onReseauAction: (callback) => ipcRenderer.on('reseau:action', (_event, a) => callback(a)),
   onReseauClients: (callback) => ipcRenderer.on('reseau:clients', (_event, l) => callback(l)),

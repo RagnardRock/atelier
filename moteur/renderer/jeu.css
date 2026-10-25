@@ -783,7 +783,7 @@ body.plein-ecran.mode-table #scene { cursor: default; }
 
 /* Le panneau des joueurs et la discussion (chez l'hôte comme chez un ami) */
 .multi-panneau { position: absolute; z-index: 7; right: 12px; bottom: 12px; width: min(300px, calc(100% - 24px)); max-height: min(60vh, 520px);
-  display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(14, 14, 22, 0.88);
+  display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow-y: auto; border-radius: 12px; background: rgba(14, 14, 22, 0.88);
   backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; font-size: 13px; }
 .multi-panneau[hidden] { display: none; }
 .multi-panneau.replie { width: auto; padding: 4px; }
@@ -796,6 +796,12 @@ body.plein-ecran.mode-table #scene { cursor: default; }
 .multi-code { letter-spacing: 3px; }
 .multi-note { margin: 4px 0 0; font-size: 11px; opacity: 0.7; line-height: 1.35; }
 .multi-joueurs { display: flex; flex-direction: column; gap: 2px; }
+.multi-bouton { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 2px; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px; background: rgba(255, 255, 255, 0.07); color: inherit; font-size: 12px; cursor: pointer; }
+.multi-bouton:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); }
+.multi-bouton:disabled { opacity: 0.6; cursor: progress; }
+.multi-erreur { color: #ffb4a8; opacity: 0.95; }
+.multi-attente { padding: 6px; border-radius: 9px; background: rgba(255, 211, 107, 0.1); }
+.multi-mini.oui:hover { background: rgba(90, 220, 140, 0.28); }
 .multi-joueur { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border-radius: 7px; }
 .multi-joueur.moi { background: rgba(255, 255, 255, 0.06); }
 .multi-joueur.absent { opacity: 0.5; }

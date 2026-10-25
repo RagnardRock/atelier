@@ -29,13 +29,27 @@
       body: JSON.stringify(corps || {}),
     });
     const d = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(d.erreur || `erreur ${r.status}`);
+    if (!r.ok) throw Object.assign(new Error(d.erreur || `erreur ${r.status}`), { statut: r.status });
     return d;
   }
   async function demander(chemin) {
     const r = await fetch(chemin, { headers: jeton ? { 'X-Jeton': jeton } : {} });
     if (!r.ok) throw new Error(`erreur ${r.status}`);
     return r;
+  }
+
+  // Sur Internet (Saga 1.1), l'hôte accepte chaque nouveau joueur : on redemande jusqu'à sa réponse.
+  async function attendreAccord(jetonAttente) {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 2000));
+      try {
+        const d = await envoyer('/rejoindre', { jeton: jetonAttente });
+        if (!d.attente) return d;
+      } catch (e) {
+        // Le réseau qui hoquette ou trop de demandes à la fois : on patiente. Un refus : on arrête.
+        if (e.statut && e.statut !== 429) throw e;
+      }
+    }
   }
 
   // --- L'écran d'entrée : le code et le prénom ---
@@ -48,7 +62,7 @@
           <div class="reseau-rune">ᛃ</div>
           <h1></h1>
           <p class="reseau-note">Entre le code que l'hôte t'a donné.</p>
-          <label>Code de la partie<input name="code" maxlength="8" required spellcheck="false" style="text-transform:uppercase"></label>
+          <label>Code de la partie<input name="code" maxlength="12" required spellcheck="false" style="text-transform:uppercase"></label>
           <label>Ton prénom<input name="nom" maxlength="24" required></label>
           <p class="reseau-erreur" hidden></p>
           <button type="submit">Rejoindre</button>
@@ -66,7 +80,15 @@
         bouton.disabled = true;
         err.hidden = true;
         try {
-          const d = await envoyer('/rejoindre', { code: form.code.value.trim().toUpperCase(), nom: form.nom.value.trim() });
+          let d = await envoyer('/rejoindre', { code: form.code.value.trim().toUpperCase(), nom: form.nom.value.trim() });
+          if (d.attente) {
+            for (const i of form.querySelectorAll('input')) i.disabled = true;
+            bouton.textContent = 'L\'hôte doit t\'accepter…';
+            try { d = await attendreAccord(d.jeton); } finally {
+              for (const i of form.querySelectorAll('input')) i.disabled = false;
+              bouton.textContent = 'Rejoindre';
+            }
+          }
           jeton = d.jeton;
           moi = { id: d.id, nom: d.nom };
           ecrire('jeton', jeton);

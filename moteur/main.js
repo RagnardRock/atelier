@@ -558,14 +558,42 @@ handle('reseau:ouvrir', async (_event, o) => {
 ipcMain.on('reseau:dire', (event, texte, pour) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous')); });
 ipcMain.on('reseau:bouger', (event, p) => { if (event.sender === fenetrePrincipale?.webContents) reseau.bouger(p); });
 ipcMain.on('reseau:pair', (event, vers, donnees) => { if (event.sender === fenetrePrincipale?.webContents) reseau.pair(String(vers || ''), donnees); });
-handle('reseau:fermer', async () => { reseau.fermer(); return reseau.infos(); });
+handle('reseau:fermer', async () => { await internet.fermer(); reseau.fermer(); return reseau.infos(); });
+// Saga 1.1 : ouvrir la partie sur Internet. 'upnp' : Saga demande à la box d'ouvrir le port (internet.js) ;
+// 'manuel' : Ragna l'a ouvert à la main dans sa box ; false : on referme. Dans tous les cas le port de
+// la box se referme avec la partie ou avec Saga.
+const Internet = require('./internet.js');
+const internet = Internet.creer({ log });
+handle('reseau:internet', async (_event, voulu) => {
+  if (!reseau.ouvert) throw new Error('Ouvre d\'abord la partie');
+  if (voulu === 'upnp') {
+    const r = await internet.ouvrir(reseau.port);
+    if (!r.ok) return { ...reseau.infos(), echec: r };
+    return { ...reseau.passerInternet({ ...r, methode: 'upnp' }), echec: null };
+  }
+  await internet.fermer();
+  if (voulu === 'manuel') {
+    const adresse = await internet.adresseVueDehors().catch(() => '');
+    return { ...reseau.passerInternet({ adresse, port: reseau.port, methode: 'manuel' }), echec: null };
+  }
+  return { ...reseau.passerInternet(null), echec: null };
+});
+handle('reseau:accepter', async (_event, id, oui) => { reseau.accepter(String(id || ''), Boolean(oui)); return reseau.infos(); });
 handle('reseau:infos', async () => reseau.infos());
 handle('reseau:expulser', async (_event, id) => { reseau.expulser(String(id || '')); return true; });
 ipcMain.on('reseau:envoyer', (event, id, sorte, json) => {
   if (event.sender !== fenetrePrincipale?.webContents || typeof json !== 'string' || json.length > 4e6) return;
   reseau.envoyer(String(id), ['vue', 'jeu', 'fin'].includes(sorte) ? sorte : 'vue', json);
 });
-app.on('before-quit', () => reseau.fermer());
+// En quittant : on attend (un peu) que la box ait refermé le port.
+let fermetureFaite = false;
+app.on('before-quit', (event) => {
+  reseau.fermer();
+  if (fermetureFaite || !internet.ouverte) return;
+  event.preventDefault();
+  fermetureFaite = true;
+  Promise.race([internet.fermer(), new Promise((r) => setTimeout(r, 2500))]).finally(() => app.quit());
+});
 
 // Les sons du dossier sons/ du jeu ouvert (le panneau Musique du MJ).
 handle('jeu:listeSons', async () => {
