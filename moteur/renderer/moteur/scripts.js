@@ -9,7 +9,8 @@
 // (boutique.js, regles/pokemon/hors-combat.js), avec les menus de menus.js ; le PC depuis Saga 0.6
 // (ecrans.js) ; le groupe de héros et les combats contre des groupes de monstres (pack JRPG) depuis Saga 0.8 ;
 // la musique, les bruitages et l'heure depuis Saga 0.11 ; les variables et le bloc Script (une commande
-// écrite en JavaScript par le jeu, jouée dans le bac à sable de scripts-js.js) depuis Saga 0.12.
+// écrite en JavaScript par le jeu, jouée dans le bac à sable de scripts-js.js) depuis Saga 0.12 ; les
+// commandes du pack de règles (Regles.commande : les tests, les repos… du pack JDR) depuis Saga 0.13.
 
 const Scripts = (() => {
   class Fin {} // la commande « fin » : on remonte tout le script d'un coup
@@ -44,11 +45,16 @@ const Scripts = (() => {
     // Une phrase du jeu lui-même (« Tu reçois… »), sans nom.
     const narrer = (texte) => dire({}, texte);
     // Ce que les menus hors combat (boutique, sac, EV) reçoivent pour parler et demander.
+    // Saga 0.13 : un nom à taper, des valeurs à répartir, une fiche, et le plateau de dés (pack JDR).
     const ui = {
       dire: async (texte) => { await narrer(texte); dialogue.fermer(); },
       liste: (o) => moteur.menus.liste(o),
       quantite: (o) => moteur.menus.quantite(o),
       ev: (o) => moteur.menus.ev(o),
+      texte: (o) => moteur.menus.texte(o),
+      repartir: (o) => moteur.menus.repartir(o),
+      fiche: (o) => moteur.menus.fiche(o),
+      des: (o) => moteur.des?.(o),
     };
 
     async function jouer(commandes, ev) {
@@ -296,8 +302,14 @@ const Scripts = (() => {
           }
           break;
         }
-        default:
-          break; // commande inconnue : on la saute
+        default: {
+          // Saga 0.13 : une commande du pack de règles du jeu (test, sauvegarde, repos… pour le pack JDR).
+          // Elle rend un résultat simple, que reçoit un script JS (saga.test…).
+          const f = Regles.commande(jeu, c.type);
+          if (!f) break; // commande inconnue : on la saute
+          dialogue.fermer();
+          return await f({ jeu, partie, ui, c, jouer: (l) => jouer(l, ev), narrer, ranger: (m) => Collection.ranger(jeu, partie, m) });
+        }
       }
     }
 

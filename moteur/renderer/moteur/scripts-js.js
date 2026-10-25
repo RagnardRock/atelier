@@ -70,7 +70,8 @@ const ScriptsJs = (() => {
       hote: {
         etat: (a) => {
           const ev = a.contexte?.ev || null;
-          return { partie: copie(), ...lieu(ev), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
+          // Saga 0.13 : les fiches des membres, déjà calculées par le pack (saga.fiche).
+          return { partie: copie(), fiches: Regles.pourScript(jeu, partie()), ...lieu(ev), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
         },
         graine: (n) => { if (partie()) partie().graine = n; },
         console: (c) => {
@@ -89,7 +90,9 @@ const ScriptsJs = (() => {
             if (!args || typeof args.type !== 'string') throw new Error('saga.commande() a besoin d\'une commande avec un type (FORMAT.md › Commandes)');
             if (args.type === 'script' && (a.contexte?.profondeur || 0) >= MAX_IMBRICATION) throw new Error('Trop de scripts lancés les uns dans les autres');
             const issue = await jouer(args, ev, (a.contexte?.profondeur || 0) + 1);
-            return typeof issue === 'string' ? issue : null;
+            // L'issue d'un combat (un texte), ou le résultat d'une commande du pack (saga.test : un objet simple).
+            if (typeof issue === 'string') return issue;
+            return issue && typeof issue === 'object' ? JSON.parse(JSON.stringify(issue)) : null;
           }
           throw new Error(`Demande inconnue : ${action}`);
         },

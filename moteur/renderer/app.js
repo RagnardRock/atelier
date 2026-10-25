@@ -259,6 +259,16 @@ const App = (() => {
     $('#pause-dex').textContent = forme.dex;
     $('#pause-equipe').textContent = forme.equipe;
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
+    // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer), après le Pokédex.
+    for (const b of $$('.pause-choix[data-pack]')) b.remove();
+    let apres = $('.pause-choix[data-action="dex"]');
+    for (const [id, nom, icone] of moteur.actionsPause()) {
+      const b = el('button', { className: 'pause-choix' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
+      b.dataset.action = 'pack';
+      b.dataset.pack = id;
+      apres.after(b);
+      apres = b;
+    }
     moteur.pause(true);
     moteur.bruit('valider');
     $('#pause').hidden = false;
@@ -277,6 +287,7 @@ const App = (() => {
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
+    else if (action === 'pack') { const id = e.target.closest('.pause-choix').dataset.pack; fermerPause(); moteur.agirPause(id); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'exporter') { fermerPause(); exporter(); }

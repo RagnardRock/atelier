@@ -90,9 +90,17 @@ const Monde = (() => {
         if (etat !== cond.etat) return false;
         return cond.etat !== 'en_cours' || !(cond.etape > 0) || q.etape >= cond.etape;
       }
-      default: return true; // une condition inconnue (Tafl plus récent) ne bloque rien
+      default: {
+        // Saga 0.13 : une condition du pack de règles du jeu (jdr_perception…), sinon une condition
+        // inconnue (Tafl plus récent) qui ne bloque rien.
+        const r = conditionPack ? conditionPack(cond, partie) : undefined;
+        return r === undefined ? true : Boolean(r);
+      }
     }
   }
+  // Le moteur branche ici les conditions du pack du jeu en cours (Regles.condition).
+  let conditionPack = null;
+  const brancherConditions = (f) => { conditionPack = f; };
 
   // Une condition dite au joueur (Saga 0.7) : le déblocage d'un article de boutique montré grisé.
   // Un interrupteur ne se raconte pas (ce serait dévoiler l'histoire).
@@ -211,5 +219,5 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { brancherConditions, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

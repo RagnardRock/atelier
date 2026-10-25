@@ -1,4 +1,4 @@
-# Les scripts JS d'un jeu (Tafl 0.31, Saga 0.12)
+# Les scripts JS d'un jeu (Tafl 0.31, Saga 0.12 ; pack JDR : Tafl 0.32, Saga 0.13)
 
 Les blocs des événements (Dire, Choix, Si…) suffisent pour la plupart des histoires. Un **script JS**
 sert quand il faut plus : lancer des dés, calculer, retenir des nombres, changer une règle du pack
@@ -85,6 +85,27 @@ rend autre chose qu'un nombre, ou a une erreur, Saga garde la formule du pack et
 Dans Tafl, **Données › Réglages › Règles maison** liste les formules remplacées et permet d'en
 couper une sans toucher au script (`reglages.scripts.formules_coupees`).
 
+### Pack JDR (`reglages.regles = "jdr"`, Saga 0.13)
+
+| Formule | Rend | Valeurs |
+|---|---|---|
+| `attaque` | le bonus ajouté au d20 d'une attaque | `naturel` (le d20), `bonus` (modificateur + maîtrise + magie de l'arme), `magie`, `sort`, `distance` |
+| `degats` | PV perdus, avant les résistances (au moins 1 pour une arme) | `des` (déjà doublés sur un critique), `mod`, `critique`, `type` (`"tranchant"`, `"feu"`…), `sort` |
+| `critique` | le d20 naturel à partir duquel c'est un critique (20) | `niveau` (0 pour un monstre), `classe` |
+| `test` | le total d'un test, comparé au DD | `naturel`, `bonus`, `dd`, `competence`, `carac`, `maitrise` |
+| `sauvegarde` | le total d'une sauvegarde | `naturel`, `bonus`, `dd`, `carac`, `maitrise` |
+| `initiative` | le total d'initiative | `naturel`, `dex` |
+| `pv_niveau` | PV gagnés en montant de niveau, sans la Con | `de` (6 à 12), `con`, `jet` (0 si on prend la moyenne), `niveau` |
+| `soin` | PV rendus par un sort | `des`, `mod`, `sort` (son id) |
+| `experience` | XP de chaque héros après une victoire | `total`, `heros` |
+
+```js
+// Règle maison : un 1 au d20 d'un test compte comme un 5 (« pas de catastrophe »).
+formule('test', (v) => (v.naturel === 1 ? 5 + v.bonus : v.normal));
+// Les critiques font le maximum des dés en plus.
+formule('degats', (v) => (v.critique ? v.normal + Math.round(v.des / 2) : v.normal));
+```
+
 ### Pack JRPG (`reglages.regles = "jrpg"`)
 
 | Formule | Rend | Valeurs |
@@ -150,6 +171,8 @@ Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse
 | `saga.combien(objet)` | combien le joueur en a |
 | `saga.argent()` | l'argent du joueur |
 | `saga.etatQuete(id)` | `pas_commencee`, `en_cours` ou `finie` |
+| `saga.fiche(i)` | (pack JDR) la fiche du membre `i` du groupe (0 = le premier), ou `null` : `nom`, `personnage`, `joueur`, `origine`, `classe`, `niveau`, `xp`, `pv`, `pvMax`, `pv_temp`, `ca`, `maitrise`, `vitesse`, `caracteristiques`, `modificateurs`, `sauvegardes` et `competences` (les bonus, par id), `maitrises`, `perception_passive`, `etats`, `sorts`, `dd_sorts`, `mort` |
+| `saga.fiches` | (pack JDR) toutes les fiches du groupe |
 
 ### Parler au joueur
 
@@ -180,6 +203,11 @@ Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse
 | `saga.boutique(id)` | ouvrir une boutique |
 | `saga.musique(fichier)`, `saga.son(fichier)` | `'sons/…'` ; `'aucune'` = silence, `''` = la musique de la carte |
 | `saga.heure(h, 'regler'/'avancer')` | l'horloge du jeu |
+| `await saga.test({ competence, dd, qui, avantage, desavantage, quoi })` | (pack JDR) un test, comme le bloc Test (`qui` : `choix`, `meilleur`, `premier`, `tous`, `groupe`) ; rend `{ reussi, total, membre, naturel }` (`annule: true` si le joueur a refusé de choisir) |
+| `await saga.sauvegarde({ carac, dd, qui, degats, type_degats, moitie, etat, quoi })` | (pack JDR) une sauvegarde du groupe ; rend `{ reussi, reussis, total }` (`reussi` : tous ont réussi) |
+| `await saga.oppose({ competence, monstre, competence_adverse, contre, nom_adverse, qui })` | (pack JDR) un test opposé ; rend `{ reussi, total, adverse }` |
+| `await saga.jet('2d6+3', 'Dégâts du piège')` | (pack JDR) un jet montré sur le plateau de dés et noté au journal ; rend `{ total, des }` |
+| `saga.repos('court'/'long')`, `saga.xp(montant)`, `saga.etat(etat, 'ajouter'/'retirer', qui)` | (pack JDR) un repos, de l'XP pour chaque héros, un état |
 | `saga.commande({ type: …, … })` | n'importe quelle commande des blocs (FORMAT.md › Commandes) |
 | `saga.fin()` | arrêter le script de l'événement ici |
 

@@ -13,7 +13,9 @@
 // les appelle Éléments et Compétences.
 
 const Donnees = (() => {
-  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', 'reglages'];
+  // Tafl 0.32 : les sortes du pack JDR viennent de donnees-jdr.js (DonneesJdr), lu juste avant.
+  const J = typeof DonneesJdr !== 'undefined' ? DonneesJdr : null;
+  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), 'reglages'];
   const STATS = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Attaque Spé.'], ['def_spe', 'Défense Spé.'], ['vitesse', 'Vitesse']];
   const STATS_COMBAT = [...STATS.slice(1), ['precision', 'Précision'], ['esquive', 'Esquive']];
   // Les 25 natures officielles : [identifiant, nom, stat augmentée de 10 %, stat baissée de 10 %].
@@ -161,6 +163,7 @@ const Donnees = (() => {
           ...(effet.stat ? { stat: str(effet.stat) } : {}),
           ...(effet.statut ? { statut: str(effet.statut) } : {}),
           ...(effet.nature ? { nature: pick(effet.nature, NATURES, 'hardi') } : {}),
+          ...(J?.des(effet.des) ? { des: J.des(effet.des) } : {}), // pack JDR : une potion soigne aux dés (2d4+2)
         },
         icone: image(o?.icone),
         // Pack JRPG : un objet qu'un héros porte (arme, armure…), ses bonus et les classes qui le peuvent.
@@ -170,6 +173,8 @@ const Donnees = (() => {
           element: Doc.slug(o.equipement.element, ''),
           classes: ids(o.equipement.classes),
         } } : {}),
+        // Pack JDR (Tafl 0.32) : une arme ou une armure (voir donnees-jdr.js).
+        ...(J?.normObjet(o?.jdr) ? { jdr: J.normObjet(o.jdr) } : {}),
         ...officiel(o),
       };
     },
@@ -241,6 +246,7 @@ const Donnees = (() => {
       monstres: arr(g?.monstres).filter((x) => x?.monstre).slice(0, 8).map((x) => ({ monstre: Doc.slug(x.monstre, ''), nombre: int(x.nombre, 1, 1, 8) })),
       fuite: g?.fuite !== false,
     }),
+    ...(J ? J.NORMES : {}),
   };
   const reglagesVides = () => ({
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
@@ -251,6 +257,7 @@ const Donnees = (() => {
     niveau_max: 99, courbe_xp: 'normale',
     temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
     scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
+    ...(J ? { jdr: J.normRegles({}) } : {}), // Tafl 0.32 : les règles maison du pack JDR
   });
   // Tafl 0.29 (Saga 0.11) : l'horloge du jeu, la musique des combats et les bruitages, la sauvegarde auto.
   const HORLOGES = [['aucune', 'Aucune : il fait toujours jour'], ['jeu', 'Horloge du jeu (elle avance quand on joue)'], ['reelle', 'Heure réelle du PC (comme Pokémon Or et Argent)']];
@@ -277,6 +284,7 @@ const Donnees = (() => {
   const REGLES = [
     ['pokemon', 'Pokémon : types, créatures, captures, natures, EV et IV, badges'],
     ['jrpg', 'JRPG classique : un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres'],
+    ['jdr', 'JDR (D&D 5e et règles maison) : création de personnages, tests au d20, sorts, combats à l\'initiative'],
   ];
   // La forme des menus que chaque pack donne par défaut dans Saga 0.6 (regles.js › menus) : Tafl la
   // montre en gris ; ce que le jeu règle dans Interface › Menus passe par-dessus (vide = celle du pack).
@@ -288,6 +296,10 @@ const Donnees = (() => {
     jrpg: {
       equipe: 'Groupe', dex: 'Bestiaire', pc: 'Réserve', boite: 'Réserve', places: 12, colonnes: 4, forme_boites: 'liste',
       pages: [['infos', 'Infos'], ['stats', 'Statistiques'], ['equipement', 'Équipement'], ['competences', 'Compétences']],
+    },
+    jdr: {
+      equipe: 'Groupe', dex: 'Bestiaire', pc: 'Réserve', boite: 'Réserve', places: 12, colonnes: 4, forme_boites: 'liste',
+      pages: [['infos', 'Infos'], ['caracteristiques', 'Caractéristiques'], ['competences', 'Compétences'], ['combat', 'Combat'], ['sorts', 'Sorts'], ['inventaire', 'Inventaire'], ['traits', 'Aptitudes et traits']],
     },
   };
   const FORMES_BOITES = [['', 'Celle du pack de règles'], ['grille', 'Grille (des cases, comme les PC Pokémon)'], ['liste', 'Liste (une ligne par créature, avec son nom)']];
@@ -334,6 +346,7 @@ const Donnees = (() => {
       temps: normTemps(r.temps),
       audio: normAudio(r.audio),
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
+      ...(J ? { jdr: J.normRegles(r.jdr) } : {}),
       scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
       badges: (() => {
         const out = [];
@@ -346,7 +359,7 @@ const Donnees = (() => {
       })(),
     };
   }
-  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], reglages: reglagesVides() });
+  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries((J ? J.SORTES : []).map((k) => [k, []])), reglages: reglagesVides() });
   // Normalise toutes les sortes de Tafl 0.8 (les identifiants deviennent uniques dans leur sorte).
   function normer(d) {
     const out = {};
@@ -422,6 +435,7 @@ const Donnees = (() => {
     }
     if (sorte === 'type') for (const o of d.objets) if (o.equipement?.element === id) out.add(`Objet ${o.nom} (élément de l'arme)`);
     if (sorte === 'classe') for (const o of d.objets) if (o.equipement?.classes.includes(id)) out.add(`Objet ${o.nom}`);
+    J?.utilisations(doc, sorte, id, out);
     return [...out];
   }
 
@@ -537,7 +551,7 @@ const Donnees = (() => {
   // Rend l'élément à mettre dans Dialogs.form ; la liste est modifiée sur place (c'est une copie).
   function tableRencontres(doc, rencontres) {
     listes(doc.data);
-    if (packDe(doc) === 'jrpg') return tableGroupes(doc, rencontres);
+    if (['jrpg', 'jdr'].includes(packDe(doc))) return tableGroupes(doc, rencontres);
     const total = el('p', { className: 'modal-info' });
     const majTotal = () => {
       const t = rencontres.reduce((n, r) => n + (r.chance || 0), 0);
@@ -568,7 +582,9 @@ const Donnees = (() => {
     majTotal();
     return el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Groupes de monstres' }), box, total]);
   }
-  const resumeGroupe = (d, g) => g.monstres.map((x) => `${(d.monstres || []).find((m) => m.id === x.monstre)?.nom || x.monstre}${x.nombre > 1 ? ` ×${x.nombre}` : ''}`).join(', ') || 'vide';
+  // Les monstres d'un groupe : ceux du pack JDR (monstres_jdr), sinon ceux du pack JRPG.
+  const monstresDe = (d) => (packDe(d) === 'jdr' ? d.monstres_jdr || [] : d.monstres || []);
+  const resumeGroupe = (d, g) => g.monstres.map((x) => `${monstresDe(d).find((m) => m.id === x.monstre)?.nom || x.monstre}${x.nombre > 1 ? ` ×${x.nombre}` : ''}`).join(', ') || 'vide';
   const normRencontres = (list) => arr(list).filter((r) => r?.creature || r?.groupe).slice(0, 20).map((r) => {
     if (!r.creature) return { groupe: Doc.slug(r.groupe, ''), chance: int(r.chance, 10, 1, 100) };
     const min = int(r.niveau_min, 2, 1, 100);
@@ -616,6 +632,7 @@ const Donnees = (() => {
     datalist('tafl-classes', (data.classes || []).map((a) => [a.id, a.nom]));
     datalist('tafl-monstres', (data.monstres || []).map((a) => [a.id, a.nom]));
     datalist('tafl-groupes', (data.groupes || []).map((a) => [a.id, a.nom]));
+    J?.listes(data);
   }
   const choixTypes = (work, vide = 'Aucun') => [['', vide], ...work.types.map((t) => [t.id, t.nom])];
   const COURT = { attaque: 'Att', defense: 'Déf', att_spe: 'Att.Spé', def_spe: 'Déf.Spé', vitesse: 'Vit' };
@@ -1046,8 +1063,9 @@ const Donnees = (() => {
       el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), ctx.zone(o, 'description', 2, 'Le texte du sac.')]),
       section('Ce qu\'il fait'),
       effet,
+      ...(packDe(ctx.work) === 'jdr' && J ? J.formObjet(o, ctx) : []),
       ...(jrpg ? [section('Équipement'), blocEquipement(o, ctx), info('Un objet porté (arme, bouclier, casque, armure, accessoire) ajoute ses bonus aux statistiques du héros. Le joueur le met dans le menu du groupe › Équipement ; un personnage peut aussi commencer avec (onglet Personnages).')] : []),
-      jrpg ? null : info('Une menthe change l\'effet de la nature sur les statistiques ; une capsule met des IV au maximum ; une vitamine donne des EV. Un objet « Ouvre un passage » remplace les CS : mets-le comme objet requis d\'une zone (eau, rocher, arbre…).'),
+      jrpg || packDe(ctx.work) === 'jdr' ? null : info('Une menthe change l\'effet de la nature sur les statistiques ; une capsule met des IV au maximum ; une vitamine donne des EV. Un objet « Ouvre un passage » remplace les CS : mets-le comme objet requis d\'une zone (eau, rocher, arbre…).'),
       section('Utilisation'),
       ctx.usages('objet', o.id),
     );
@@ -1220,7 +1238,7 @@ const Donnees = (() => {
       champ('On peut fuir', ctx.coche(g, 'fuite'), 'décoche pour un boss'),
       section('Monstres (8 au plus en tout)'),
       table(g.monstres, [
-        ['Monstre', (x) => refInfo(x, 'monstre', 'tafl-monstres', 'slime', descNom(work.monstres)), true],
+        ['Monstre', (x) => (packDe(work) === 'jdr' ? refInfo(x, 'monstre', 'tafl-monstres-jdr', 'gobelin', (id) => { const m = (work.monstres_jdr || []).find((o) => o.id === id); return m ? el('span', { textContent: `${m.nom} · FP ${m.fp}` }) : null; }) : refInfo(x, 'monstre', 'tafl-monstres', 'slime', descNom(work.monstres))), true],
         ['Combien', (x) => nombreIn(x, 'nombre', 1, 8)],
       ], () => ({ monstre: g.monstres.at(-1)?.monstre || '', nombre: 1 }), { ajouter: '+ Monstre', max: 8, vide: 'Groupe vide.', change: ctx.renderListe }),
       info('Un groupe surgit dans les zones (herbes, grottes : leur table de rencontres) ou par la commande « Combat contre un groupe de monstres » (un boss, une embuscade).'),
@@ -1340,6 +1358,7 @@ const Donnees = (() => {
   }
   function formReglages(r, ctx) {
     const jrpg = r.regles === 'jrpg';
+    const groupe = r.regles !== 'pokemon'; // JRPG et JDR : un groupe de héros, pas de créatures à capturer
     const natures = el('table', { className: 'natures' }, [
       el('tr', {}, [el('th', { textContent: 'Nature' }), el('th', { textContent: '+10 %' }), el('th', { textContent: '−10 %' })]),
       ...NATURES.map(([, n, p, m]) => el('tr', {}, [el('td', { textContent: n }), el('td', { textContent: p ? libelleStat(p) : '—' }), el('td', { textContent: m ? libelleStat(m) : '—' })])),
@@ -1355,8 +1374,8 @@ const Donnees = (() => {
       info('Le pack de règles décide des combats, des personnages qui se battent et des statistiques ; Saga le suit. Les onglets du groupe Combat sont ses données, et changent avec lui. Changer de pack ne touche ni aux cartes, ni aux événements, ni aux quêtes.'),
       champ('Règles', sel(REGLES.some(([k]) => k === r.regles) ? REGLES : [...REGLES, [r.regles, `${r.regles} (inconnu de ce Tafl)`]], r.regles, (v) => {
         r.regles = v;
-        // Un groupe JRPG se bat à 4 ; Pokémon à 6.
-        if (v === 'jrpg' && r.equipe_max === 6) r.equipe_max = 4;
+        // Un groupe JRPG ou JDR se bat à 4 ; Pokémon à 6.
+        if (v !== 'pokemon' && r.equipe_max === 6) r.equipe_max = 4;
         if (v === 'pokemon' && r.equipe_max === 4) r.equipe_max = 6;
         ctx.render();
       })),
@@ -1368,18 +1387,19 @@ const Donnees = (() => {
         ]),
         el('div', { className: 'field' }, [el('button', { className: 'button small', textContent: 'Ajouter des données d\'exemple (4 classes, 16 compétences, 10 monstres, équipement)', onclick: (e) => { e.preventDefault(); const n = ajouterExemple(ctx.work); ctx.render(); notify(n ? `${n} éléments d'exemple ajoutés : à modifier ou supprimer comme tu veux. Valide pour les garder.` : 'Les données d\'exemple sont déjà là.', 'success'); } })]),
       ] : []),
+      ...(r.regles === 'jdr' && J ? J.formRegles(r, ctx) : []),
       ...formReglesMaison(r, ctx),
       section('Badges'),
       info('Les badges que le joueur gagne (commande « Donner un badge »). Leur nombre fait monter le niveau maximum de l\'équipe (ci-dessous) et le niveau des dresseurs qui s\'ajustent. Saga les montre dans le carnet, avec leur icône.'),
       tableBadges(r, ctx),
-      section(jrpg ? 'Argent et groupe' : 'Argent et équipe'),
+      section(groupe ? 'Argent et groupe' : 'Argent et équipe'),
       el('div', { className: 'field-grid' }, [
-        champ('Monnaie', ctx.input(r, 'monnaie', jrpg ? 'Or' : 'Pokédollars')),
+        champ('Monnaie', ctx.input(r, 'monnaie', groupe ? 'Or' : 'Pokédollars')),
         champ('Argent de départ', nombreIn(r, 'argent_depart', 0, 9999999)),
-        champ(jrpg ? 'Héros qui se battent' : 'Créatures dans l\'équipe', nombreIn(r, 'equipe_max', 1, jrpg ? 8 : 12), jrpg ? 'les autres attendent dans la Réserve' : ''),
-        jrpg ? null : champ('Chance d\'une chromatique', nombreIn(r, 'chance_chromatique', 0, 100000), '1 sur… (0 = jamais)'),
+        champ(groupe ? 'Héros qui se battent' : 'Créatures dans l\'équipe', nombreIn(r, 'equipe_max', 1, groupe ? 8 : 12), groupe ? 'les autres attendent dans la Réserve' : ''),
+        groupe ? null : champ('Chance d\'une chromatique', nombreIn(r, 'chance_chromatique', 0, 100000), '1 sur… (0 = jamais)'),
       ]),
-      ...(jrpg ? [] : [
+      ...(groupe ? [] : [
       section('Niveau maximum (selon les badges)'),
       info('Les créatures du joueur ne dépassent pas ce niveau tant qu\'il n\'a pas assez de badges : l\'aventure reste un défi.'),
       table(r.plafonds, [
@@ -1576,9 +1596,9 @@ const Donnees = (() => {
 
   const leadImage = (src) => el('img', { className: 'row-portrait pixel', src, alt: '' });
   const ONGLETS = [
-    { key: 'types', groupe: 'Combat', label: 'Types', labels: { jrpg: 'Éléments' }, icon: 'symbol-color', kind: 'type', base: 'Nouveau type', nouveau: (id) => NORMES.types({ id, nom: 'Nouveau type' }), meta: () => '', lead: (t) => el('span', { className: 'row-dot', style: { background: t.couleur || COULEUR_TYPE } }), vide: 'Aucun type. Le plus simple : « Importer les données officielles » (les 18 types et leur table).', form: formType },
+    { key: 'types', packs: ['pokemon', 'jrpg'], groupe: 'Combat', label: 'Types', labels: { jrpg: 'Éléments' }, icon: 'symbol-color', kind: 'type', base: 'Nouveau type', nouveau: (id) => NORMES.types({ id, nom: 'Nouveau type' }), meta: () => '', lead: (t) => el('span', { className: 'row-dot', style: { background: t.couleur || COULEUR_TYPE } }), vide: 'Aucun type. Le plus simple : « Importer les données officielles » (les 18 types et leur table).', form: formType },
     { key: 'talents', packs: ['pokemon'], groupe: 'Combat', label: 'Talents', icon: 'sparkle', kind: 'talent', base: 'Nouveau talent', nouveau: (id) => NORMES.talents({ id, nom: 'Nouveau talent' }), meta: () => '', vide: 'Aucun talent.', form: formTalent },
-    { key: 'attaques', groupe: 'Combat', label: 'Attaques', labels: { jrpg: 'Compétences' }, icon: 'flame', kind: 'attaque', base: 'Nouvelle attaque', nouveau: (id) => NORMES.attaques({ id, nom: 'Nouvelle attaque', puissance: 40 }), meta: (a, work) => (packDe(work) === 'jrpg' ? [work.types.find((t) => t.id === a.type)?.nom || '', `${a.cout_pm} PM`].filter(Boolean).join(' · ') : [work.types.find((t) => t.id === a.type)?.nom || '', a.puissance || ''].filter(Boolean).join(' · ')), vide: 'Aucune attaque.', form: formAttaque },
+    { key: 'attaques', packs: ['pokemon', 'jrpg'], groupe: 'Combat', label: 'Attaques', labels: { jrpg: 'Compétences' }, icon: 'flame', kind: 'attaque', base: 'Nouvelle attaque', nouveau: (id) => NORMES.attaques({ id, nom: 'Nouvelle attaque', puissance: 40 }), meta: (a, work) => (packDe(work) === 'jrpg' ? [work.types.find((t) => t.id === a.type)?.nom || '', `${a.cout_pm} PM`].filter(Boolean).join(' · ') : [work.types.find((t) => t.id === a.type)?.nom || '', a.puissance || ''].filter(Boolean).join(' · ')), vide: 'Aucune attaque.', form: formAttaque },
     { key: 'creatures', packs: ['pokemon'], groupe: 'Combat', label: 'Créatures', icon: 'bug', kind: 'creature', base: 'Nouvelle créature', nouveau: (id, work) => NORMES.creatures({ id, nom: 'Nouvelle créature', numero: Math.max(0, ...work.creatures.map((c) => c.numero)) + 1, types: work.types[0] ? [work.types[0].id] : [] }), meta: (c) => `#${String(c.numero).padStart(3, '0')}${c.legendaire ? ' ★' : ''}`, lead: (c) => (c.sprites.face ? leadImage(c.sprites.face) : null), vide: 'Aucune créature. Importe les officielles, ou crée les tiennes : sprites de face et de dos, types, statistiques, évolutions, attaques.', form: formCreature },
     { key: 'objets', groupe: 'Combat', label: 'Objets', icon: 'package', kind: 'objet', base: 'Nouvel objet', nouveau: (id) => NORMES.objets({ id, nom: 'Nouvel objet', prix: 100 }), meta: (o) => CATEGORIES_OBJET.find(([k]) => k === o.categorie)?.[1] || '', lead: (o) => (o.icone ? leadImage(o.icone) : null), vide: 'Aucun objet.', form: formObjet },
     { key: 'classes', packs: ['jrpg'], groupe: 'Combat', label: 'Classes', icon: 'shield', kind: 'classe', base: 'Nouvelle classe', nouveau: (id) => NORMES.classes({ id, nom: 'Nouvelle classe' }), meta: (k) => `${k.competences.length} compétence(s)`, lead: (k) => el('span', { className: 'row-dot', style: { background: k.couleur || COULEUR_TYPE } }), vide: 'Aucune classe. Guerrier, mage, voleur… (ou le bouton « données d\'exemple » des Réglages).', form: formClasse },
@@ -1588,16 +1608,17 @@ const Donnees = (() => {
     { key: 'boutiques', groupe: 'Monde', label: 'Boutiques', icon: 'tag', kind: 'boutique', base: 'Nouvelle boutique', nouveau: (id) => NORMES.boutiques({ id, nom: 'Nouvelle boutique' }), meta: (b) => `${b.articles.length} article(s)`, vide: 'Aucune boutique.', form: formBoutique },
     { key: 'reglages', groupe: 'Monde', label: 'Réglages', icon: 'settings-gear', unique: true, form: formReglages },
   ];
-  for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);
 
   // Une ligne de texte par élément (pour Claude).
   function resumer(doc, sorte, o) {
     const d = doc.data;
+    const jdr = J?.resumer(doc, sorte, o);
+    if (jdr) return jdr;
     if (sorte === 'types') return `${o.id} « ${o.nom} » ×2 contre [${o.efficace.join(', ')}], ×½ [${o.peu_efficace.join(', ')}], ×0 [${o.sans_effet.join(', ')}]`;
     if (sorte === 'talents') return `${o.id} « ${o.nom} » : ${o.description}`;
     if (sorte === 'attaques') return `${o.id} « ${o.nom} » ${o.type} ${o.categorie} puissance ${o.puissance} précision ${o.precision || '—'} PP ${o.pp}${o.priorite ? ` priorité ${o.priorite}` : ''}${o.statut ? `, ${o.statut} ${o.chance_statut || 100} %` : ''}${o.stats.length ? `, stats ${o.stats_cible} ${o.stats.map((s) => `${s.stat} ${s.etages > 0 ? '+' : ''}${s.etages}`).join(' ')}` : ''}${o.effet ? ` : ${o.effet}` : ''}`;
     if (sorte === 'creatures') return `${o.id} « ${o.nom} » #${o.numero} [${o.types.join('/')}] ${STATS.map(([k]) => o.stats[k]).join('/')}${o.legendaire ? ` ${o.legendaire}` : ''}${o.evolutions.length ? `, évolue en ${o.evolutions.map((e) => `${e.vers} (${e.mode}${e.mode === 'niveau' ? ` ${e.niveau}` : e.objet ? ` ${e.objet}` : ''})`).join(', ')}` : ''}${o.sprites.face ? '' : ', sans sprite'}`;
-    if (sorte === 'objets') return `${o.id} « ${o.nom} » ${o.categorie} ${o.prix} ${d.reglages.monnaie}, effet ${o.effet.type}${o.effet.valeur !== undefined ? ` ${o.effet.valeur}` : ''}${o.effet.stat ? ` ${o.effet.stat}` : ''}${o.effet.nature ? ` ${o.effet.nature}` : ''}`;
+    if (sorte === 'objets') return `${o.id} « ${o.nom} » ${o.categorie} ${o.prix} ${d.reglages.monnaie}, effet ${o.effet.type}${o.effet.valeur !== undefined ? ` ${o.effet.valeur}` : ''}${o.effet.des ? ` ${o.effet.des}` : ''}${o.effet.stat ? ` ${o.effet.stat}` : ''}${o.effet.nature ? ` ${o.effet.nature}` : ''}${o.jdr ? ` jdr ${JSON.stringify(o.jdr)}` : ''}`;
     if (sorte === 'dresseurs') return `${o.id} « ${o.nom} » ${o.classe}${o.personnage ? ` (personnage ${o.personnage})` : ''} : ${o.equipe.map((m) => `${m.creature} niv. ${m.niveau}`).join(', ') || 'équipe vide'}${o.ajuste ? ', s\'ajuste' : ''}`;
     if (sorte === 'classes') return `${o.id} « ${o.nom} » N.1 ${STATS_JRPG.map(([k]) => `${k} ${o.stats[k]}`).join(' ')} ; par niveau ${STATS_JRPG.map(([k]) => `${k} +${o.gains[k]}`).join(' ')} ; compétences ${o.competences.map((c) => `${c.competence} (N.${c.niveau})`).join(', ') || 'aucune'}`;
     if (sorte === 'monstres') return `${o.id} « ${o.nom} » N°${o.numero} N.${o.niveau}${o.boss ? ' boss' : ''} ${STATS_JRPG.map(([k]) => `${k} ${o.stats[k]}`).join(' ')}${o.faiblesses.length ? `, faible ${o.faiblesses.join('/')}` : ''}${o.resistances.length ? `, résiste ${o.resistances.join('/')}` : ''}${o.immunites.length ? `, insensible ${o.immunites.join('/')}` : ''}, compétences ${o.competences.map((c) => `${c.competence} (${c.poids})`).join(', ') || 'aucune'}, xp ${o.xp}, or ${o.or}${o.butin.length ? `, butin ${o.butin.map((b) => `${b.objet} ${b.chance} %`).join(', ')}` : ''}${o.image ? '' : ', sans image'}`;
@@ -1608,8 +1629,19 @@ const Donnees = (() => {
     return JSON.stringify(o);
   }
 
+  // Les petits outils des formulaires, pour donnees-jdr.js.
+  const ui = { champ, section, info, sel, table, nombreIn, texteIn, ref, refInfo, cases, blocImage, descNom, petitBouton, datalist, dessinMonstre };
+  // Les onglets du pack JDR : avec ceux du groupe Combat (les monstres) et les leurs à part.
+  if (J) {
+    ONGLETS.splice(ONGLETS.findIndex((o) => o.key === 'groupes'), 0, ...J.ONGLETS.filter((o) => o.groupe === 'Combat'));
+    ONGLETS.unshift(...J.ONGLETS.filter((o) => o.groupe !== 'Combat'));
+  }
+  ONGLETS.find((o) => o.key === 'groupes').packs = ['jrpg', 'jdr'];
+  ONGLETS.find((o) => o.key === 'groupes').labels = { jdr: 'Rencontres' };
+  for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);
+
   return {
-    SORTES, REGLES, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
+    ui, SORTES, REGLES, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
     METEOS, ambianceVide, normAmbiance, lumiereVide, normLumiere, son, SONS_INTEGRES, HORLOGES, tableRencontres, normRencontres,
     vides, normer, normElement, reglagesVides, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };

@@ -141,7 +141,11 @@ const Moteur = (() => {
     const ecranDuJeu = () => (jeu && Regles.ecran(jeu) === 'groupe' ? ecranGroupe : ecranCombat);
     const ecranPerso = Personnaliser.creer(canvas.parentElement);
     const menus = Menus.creer(canvas.parentElement);
-    let enCombat = false;
+    // Saga 0.13 : le plateau de dés (pack JDR), au-dessus de tout le reste, prêté aux combats en groupe et
+    // aux menus hors combat (ui.des).
+    const ecranDes = EcranDes.creer(canvas.parentElement);
+    ecranGroupe.des = (o) => ecranDes.montrer(o);
+    let enCombat = false, debutAFaire = false;
     let ecrans = null; // l'équipe, le Pokédex, le PC (Saga 0.6, ecrans.js)
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
@@ -210,6 +214,12 @@ const Moteur = (() => {
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
       if (!partieGardee && test) appliquerTest(test);
+      // Saga 0.13 : les conditions du pack (jdr_perception…), la vitesse des dés, et ce que le pack fait au
+      // début d'une nouvelle partie (la création des personnages du pack JDR), dès que le joueur est libre.
+      Monde.brancherConditions((cond, p) => Regles.condition(jeu, cond, p));
+      ecranDes.vitesse(jeu.donnees.reglages?.reglages?.jdr?.animation_des || 'normale');
+      ecranDes.cacher();
+      debutAFaire = !partieGardee;
       // Saga 0.12 : les variables du jeu, et la graine du hasard des scripts (gardée dans la sauvegarde :
       // mêmes jets de dés, même résultat).
       partie.variables = { ...Monde.variablesDeDepart(jeu), ...(partie.variables && typeof partie.variables === 'object' ? partie.variables : {}) };
@@ -251,6 +261,8 @@ const Moteur = (() => {
         heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
         scriptsJs: () => scriptsJs,
+        // Saga 0.13 : le plateau de dés (pack JDR).
+        des: (o) => ecranDes.montrer(o),
         signaler,
       });
       scriptsJs.fermer();
@@ -315,6 +327,7 @@ const Moteur = (() => {
       scriptsJs = ScriptsJs.AUCUN;
       reactions = [];
       jeu = null;
+      ecranDes.cacher();
       audio.vider();
       jeuSons = null;
     }
@@ -587,6 +600,28 @@ const Moteur = (() => {
           await scriptsJs.quand(r.moment, r.infos);
         }
       } finally {
+        dialogue.fermer();
+        if (jeu && carte) {
+          Collection.noterTout(partie);
+          presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+        }
+        enScript = false;
+        entrees.oublier();
+      }
+    }
+
+    // Saga 0.13 : le début d'une nouvelle partie selon le pack (pack JDR : créer ses personnages), avant
+    // les scènes « auto » et les réactions des scripts.
+    async function lancerDebut() {
+      debutAFaire = false;
+      enScript = true;
+      entrees.oublier();
+      try {
+        await Regles.debut({ jeu, partie, ui: scripts.ui, ranger: (c) => Collection.ranger(jeu, partie, c) });
+      } catch (err) {
+        rappels.message?.(`Erreur au début de la partie : ${err.message}`);
+      } finally {
+        menus.fermer();
         dialogue.fermer();
         if (jeu && carte) {
           Collection.noterTout(partie);
@@ -880,7 +915,8 @@ const Moteur = (() => {
         for (const a of attentes) a.reste -= dt;
         for (const a of attentes.filter((x) => x.reste <= 0)) a.resoudre();
         attentes = attentes.filter((x) => x.reste > 0);
-        if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
+        if (debutAFaire && !fondu && !enScript && !enCombat) lancerDebut();
+        else if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
         else if (autoAFaire && !fondu && !enScript) lancerAuto();
       } else entrees.appuis();
       placerCamera();
@@ -960,6 +996,9 @@ const Moteur = (() => {
       utiliserObjet: (id) => horsScript(() => Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id }), 'Erreur avec cet objet'),
       // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
+      // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
+      actionsPause: () => (jeu ? Regles.actionsPause(jeu) : []),
+      agirPause: (id) => horsScript(() => Regles.agirPause({ jeu, partie, ui: scripts.ui, id }), 'Erreur dans ce menu'),
       // La forme des menus du jeu (leurs noms, le Pokédex montré ou non), pour la pause et le carnet.
       formeMenus: () => (jeu ? Regles.menus(jeu) : null),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),

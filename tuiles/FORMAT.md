@@ -28,6 +28,9 @@ MonJeu/
     dresseurs.json      les dresseurs et leur équipe
     boutiques.json      les boutiques et ce qui débloque leurs articles
     reglages.json       argent, niveau maximum, niveau des dresseurs
+    classes.json, monstres.json, groupes.json      le pack JRPG (Tafl 0.25)
+    caracteristiques.json, competences.json, etats.json, origines.json,
+    classes_jdr.json, sorts.json, monstres_jdr.json  le pack JDR (Tafl 0.32)
   sons/                 musiques, bruitages et fonds sonores (MP3, OGG, WAV…), Tafl 0.29
   scripts/              les scripts JS du jeu, un fichier par script (Tafl 0.31, voir SCRIPTS.md)
     cadeau.js
@@ -359,6 +362,14 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `combat_groupe` | `groupe` | (Tafl 0.25, pack JRPG) Un combat contre un groupe de `groupes.json` (un boss, une embuscade). Perdu : le script s'arrête, comme pour les autres combats. |
 | `variable` | `id`, `action` (`"regler"`, `"ajouter"` ou `"retirer"`), `valeur` | (Tafl 0.31) Change une variable de `variables.json`. `regler` : `valeur` est un nombre ou un texte ; `ajouter` et `retirer` : un nombre (une variable qui contient un texte compte pour 0). |
 | `script` | `nom`, `params` | (Tafl 0.31) Joue la commande `nom` déclarée par un script JS actif (`commande('nom', …)`, voir SCRIPTS.md), avec ses réglages `params` (un objet ; un réglage absent prend son défaut). Le script de l'événement attend qu'elle finisse ; elle peut l'arrêter (`saga.fin()`). Une commande que personne ne déclare, ou une erreur dans le script, est signalée et le script de l'événement continue. |
+| `test` | `competence`, `dd`, `qui`, `avantage`, `desavantage`, `quoi`, `variable`, `reussi`, `rate` | (Tafl 0.32, pack JDR) Un test d20 + bonus contre le DD (1 à 40). `competence` : l'id d'une compétence de `competences.json`, ou d'une caractéristique (`"dex"` : un test de Dextérité pure). `qui` : `"choix"` (le joueur choisit qui le tente), `"meilleur"` (le meilleur bonus du groupe), `"premier"` (le héros), `"tous"` (chacun lance, réussi si l'un réussit) ou `"groupe"` (test de groupe : réussi si la moitié réussit). `quoi` : le titre montré sur le plateau de dés (« Forcer la grille »). `variable` : une variable de `variables.json` qui reçoit le total. Puis le moteur joue la branche `reussi` ou `rate` (deux listes de commandes). |
+| `sauvegarde` | `carac`, `dd`, `qui`, `quoi`, `degats`, `type_degats`, `moitie`, `etat`, `reussi`, `rate` | (Tafl 0.32, pack JDR) Un jet de sauvegarde pour chaque personnage visé : `qui` vaut `"tous"`, `"premier"` ou `"choix"`. `degats` (facultatif, `"2d6"`) : les dégâts d'un piège, la moitié pour ceux qui réussissent si `moitie` ; hors combat, le dernier debout ne descend jamais sous 1 PV. `etat` : l'état mis à ceux qui ratent (`"empoisonne"`). La branche `reussi` se joue si tous ont réussi, sinon `rate`. |
+| `test_oppose` | `competence`, `qui`, `nom_adverse`, `monstre`, `competence_adverse`, `contre`, `reussi`, `rate` | (Tafl 0.32, pack JDR) Un test opposé : la `competence` d'un héros contre celle d'un adversaire. Adversaire : un `monstre` de `monstres_jdr.json` (sa compétence `competence_adverse`, ou la même), ou un PNJ décrit par un bonus `contre` (−10 à 30). `nom_adverse` : son nom sur le plateau de dés. Égalité : celui qui tente échoue. |
+| `jet` | `formule`, `quoi`, `variable` | (Tafl 0.32, pack JDR) Un jet de dés libre (`"1d20"`, `"2d6+3"`, `"d100"`), montré sur le plateau et noté dans le journal des jets. `variable` reçoit le total. |
+| `repos` | `sorte` (`"court"` ou `"long"`) | (Tafl 0.32, pack JDR) Le groupe se repose. Court : chacun peut dépenser des dés de vie, certaines aptitudes reviennent. Long : tous les PV, la moitié des dés de vie, les emplacements de sorts et les aptitudes reviennent. La durée affichée suit `reglages.jdr.repos`. |
+| `xp` | `montant`, `jalon` | (Tafl 0.32, pack JDR) Chaque héros gagne `montant` XP ; ceux qui peuvent monter de niveau le font depuis le menu du groupe. `jalon: true` : un jalon de l'histoire, tout le groupe monte d'un niveau tout de suite (pour la progression `"jalons"`). |
+| `etat` | `action` (`"ajouter"` ou `"retirer"`), `etat`, `qui` | (Tafl 0.32, pack JDR) Met ou enlève un état de `etats.json` (`"empoisonne"`, `"a_terre"`…) aux personnages visés (`qui` : comme pour `sauvegarde`). |
+| `creer_personnage` | | (Tafl 0.32, pack JDR) Ouvre la création de personnage : un nouveau membre rejoint le groupe (ou la Réserve si le groupe est complet). Le joueur peut annuler. |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
 
@@ -376,6 +387,12 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `membre` | `personnage` | (Tafl 0.25, pack JRPG) ce personnage est avec le joueur : dans le groupe ou dans la Réserve. |
 | `moment` | `moment` | (Tafl 0.29) c'est ce moment de la journée, selon l'horloge du jeu (`reglages.temps`) : `"matin"` (6 h à 10 h), `"jour"` (6 h à 20 h), `"soir"` (17 h à 20 h) ou `"nuit"` (20 h à 6 h). Sans horloge, il est toujours midi : seul `"jour"` est vrai. Le moteur refait le choix des pages quand le moment change. |
 | `variable` | `id`, `comparaison`, `valeur` | (Tafl 0.31) la variable compare à `valeur` : `comparaison` vaut `"=="`, `"!="`, `">"`, `">="`, `"<"` ou `"<="`. Deux nombres se comparent comme des nombres, sinon comme des textes (`"=="` et `"!="` seulement ont du sens). Une variable jamais changée vaut son `defaut`. |
+| `jdr_perception` | `min` | (Tafl 0.32, pack JDR) un héros du groupe a une Perception passive (10 + son bonus de Perception) d'au moins `min` : il remarque le piège ou le passage secret sans jet. |
+| `jdr_maitrise` | `competence` | (Tafl 0.32, pack JDR) un héros maîtrise cette compétence. |
+| `jdr_etat` | `etat`, `valeur` | (Tafl 0.32, pack JDR) `valeur: true` : un héros a cet état ; `false` : personne ne l'a. |
+| `jdr_classe` | `classe` | (Tafl 0.32, pack JDR) un héros est de cette classe (`classes_jdr.json`). |
+| `jdr_origine` | `origine` | (Tafl 0.32, pack JDR) un héros est de cette origine (`origines.json`). |
+| `jdr_niveau` | `min` | (Tafl 0.32, pack JDR) un héros est au moins au niveau `min`. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
@@ -638,7 +655,7 @@ Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, 
 - `evolution_dresseurs` et `evolution_sauvages` (Tafl 0.24, `false` par défaut) : une créature montée par l'ajustement (dresseur, ou sauvage) prend la forme de son niveau en suivant les évolutions `"niveau"` (un Bulbizarre de dresseur monté au niveau 40 devient Florizarre). Ses attaques sont celles de ce niveau, sauf si le dresseur en a choisi.
 - `seuil_amitie` (Tafl 0.24) : l'amitié qu'il faut pour une évolution `"amitie"` (sur 255, 220 par défaut). L'amitié d'une créature part du `bonheur` de son espèce ; elle monte en gagnant des niveaux (+5, +3 au-dessus de 100, +2 au-dessus de 200), en marchant (tous les 128 pas), avec les vitamines et les objets d'effet `amitie` ; elle baisse de 1 quand la créature tombe K.O. L'évolution se fait à la montée de niveau (au `niveau` de l'évolution au moins, s'il est donné).
 - `chance_chromatique` : une rencontre sur combien est chromatique (0 = jamais).
-- `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. `"pokemon"` (les types, talents, attaques, créatures, objets et dresseurs de `donnees/` sont ses données) ou, depuis Tafl 0.25, `"jrpg"` (voir « Le pack JRPG » plus bas). Saga en décrit chaque fonction dans `moteur/renderer/moteur/regles/REGLES.md`. Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
+- `regles` (Tafl 0.16) : le pack de règles du jeu, c'est-à-dire ce qui décide des combats, des captures et des statistiques. `"pokemon"` (les types, talents, attaques, créatures, objets et dresseurs de `donnees/` sont ses données) ou, depuis Tafl 0.25, `"jrpg"` (voir « Le pack JRPG » plus bas), ou, depuis Tafl 0.32, `"jdr"` (voir « Le pack JDR » plus bas). Saga en décrit chaque fonction dans `moteur/renderer/moteur/regles/REGLES.md`. Le moteur choisit ses règles d'après lui ; s'il ne connaît pas ce pack, il prend `"pokemon"`. Les cartes, événements, quêtes et personnages ne dépendent pas des règles.
 - `temps` (Tafl 0.29, lu par Saga 0.11) : l'horloge du jeu, `{ "horloge": "aucune", "duree_jour": 24, "heure_depart": 8 }`. `horloge` : `"aucune"` (il fait toujours jour), `"jeu"` (une horloge à part, gardée dans la partie, qui avance quand le joueur est sur la carte : une journée dure `duree_jour` minutes réelles ; une partie neuve commence à `heure_depart` heures) ou `"reelle"` (l'heure du PC du joueur). Les cartes extérieures s'assombrissent la nuit, se dorent à l'aube et au couchant (voir `ambiance.jour_nuit`), et les lumières brillent. Le carnet du jeu montre l'heure.
 - `audio` (Tafl 0.29) : `{ "musique_combat": "", "musique_dresseur": "", "musique_victoire": "", "sons": { "curseur": "", "valider": "", "retour": "", "texte": "", "porte": "", "sauvegarde": "", "choc": "" } }`. `musique_combat` : la musique des combats (`""` = la musique de la carte continue) ; `musique_dresseur` : contre un dresseur (`""` = celle des combats) ; `musique_victoire` : une fanfare jouée une fois après une victoire, puis la musique de la carte revient. `sons` : chaque bruitage du moteur, `""` = le son intégré, `"aucun"` = rien, ou un fichier de `sons/`.
 - `sauvegarde_auto` (Tafl 0.29) : `{ "active": false, "carte": true, "minutes": 5 }`. Avec `active`, le moteur sauvegarde tout seul en changeant de carte (`carte`) et/ou toutes les `minutes` minutes (`0` = jamais), dans une place à part ; il attend que le joueur soit libre (pas pendant un dialogue, un combat ou un fondu), et au plus une fois toutes les 20 secondes. À l'ouverture du jeu, il propose la plus récente des deux sauvegardes.
@@ -737,6 +754,188 @@ Huit monstres au plus en tout. `fuite: false` : on ne peut pas fuir (un boss).
 
 `niveau_max` (99 par défaut) et `courbe_xp` : l'expérience totale qu'il faut pour le niveau n vaut 10 × (n − 1)², fois 0,7 (`"rapide"`), 1 (`"normale"`) ou 1,4 (`"lente"`). `equipe_max` : le nombre de héros qui se battent (4 conseillé) ; les autres attendent dans la Réserve. `plafonds`, `ajustement`, `ecart` et `chance_chromatique` ne servent pas.
 
+### Le pack JDR (Tafl 0.32, Saga 0.13)
+
+Quand `reglages.regles` vaut `"jdr"` : un jeu de rôle sur table façon D&D 5e (le SRD 5.1, en français), pour accompagner de vraies parties. Les joueurs créent leurs personnages (ou prennent un pré-tiré), font des tests au d20 contre un DD, et se battent au tour par tour contre des rencontres de monstres. Les distances sont écrites en mètres (1,5 m = une case). Il n'y a ni capture, ni types, ni dresseurs.
+
+Chaque fichier ci-dessous peut rester vide : Saga prend alors la liste de la 5e (six caractéristiques, 18 compétences, 15 états), pour qu'un jeu tout neuf marche déjà. Dans Tafl, **Données › Réglages › Règles du JDR › Charger le modèle D&D 5e** ajoute ce qui manque : les listes de la 5e, 9 origines, 12 classes (niveaux 1 à 20), des sorts, des monstres, des rencontres, des armes, des armures et des potions (contenu du SRD 5.1, sous licence CC-BY-4.0 : `reglages.jdr.attribution` en garde la mention). Les ids gardent les « _ » (`a_terre`, `attaque_sournoise`) : Saga les connaît ainsi.
+
+Les fichiers servent ainsi :
+
+- `caracteristiques.json`, `competences.json`, `etats.json` : les listes de base.
+- `origines.json`, `classes_jdr.json`, `sorts.json` : ce qui fait un personnage.
+- `monstres_jdr.json` : les monstres ; `groupes.json` : les **rencontres** (mêmes champs que pour le pack JRPG, `monstre` est alors un id de `monstres_jdr.json`). Les `rencontres` des zones visent ces groupes, comme pour le pack JRPG.
+- `objets.json`, `boutiques.json` : comme pour Pokémon, plus les armes et armures (`jdr`).
+- `personnages.json` : l'apparence des personnages (sprite, portraits) ; un personnage avec une fiche `jdr` est un **pré-tiré**.
+
+#### `donnees/caracteristiques.json`, `competences.json`, `etats.json`
+
+```json
+{ "format": "tafl-caracteristiques", "version": 1, "caracteristiques": [{ "id": "for", "nom": "Force", "court": "FOR" }] }
+{ "format": "tafl-competences", "version": 1, "competences": [{ "id": "athletisme", "nom": "Athlétisme", "carac": "for" }] }
+{ "format": "tafl-etats", "version": 1, "etats": [
+  { "id": "empoisonne", "nom": "Empoisonné", "description": "Désavantage aux attaques et aux tests.", "effets": ["desavantage_attaques", "desavantage_tests"] }
+] }
+```
+
+`court` : 4 lettres au plus. Les `effets` d'un état sont ceux que Saga sait jouer : `incapable` (ne peut ni agir ni réagir), `desavantage_attaques`, `avantage_attaques`, `avantage_contre` (on l'attaque avec avantage), `desavantage_contre`, `desavantage_tests`, `echec_for_dex` (rate ses sauvegardes de Force et de Dextérité), `critique_contact` (un coup au contact est critique), `desavantage_sauvegardes_dex`. Un état sans effet reste un texte sur la fiche.
+
+#### `donnees/origines.json`
+
+```json
+{ "format": "tafl-origines", "version": 1, "origines": [
+  { "id": "nain", "nom": "Nain des collines", "description": "…", "bonus": { "con": 2, "sag": 1 }, "vitesse": 7.5, "taille": "moyenne",
+    "langues": "Commun, nain", "pv_bonus_niveau": 1, "resistances": ["poison"],
+    "maitrises": { "armes": ["hache-d-armes", "marteau-de-guerre"], "competences": [], "armures": [] },
+    "competences_choix": { "nombre": 0 },
+    "traits": [{ "nom": "Vision dans le noir", "description": "…" }] }
+] }
+```
+
+`bonus` : ce qu'elle ajoute aux caractéristiques. `vitesse` en mètres. `taille` : `tres_petite`, `petite`, `moyenne`, `grande`, `tres_grande` ou `gigantesque`. `pv_bonus_niveau` : des PV en plus à chaque niveau (0 à 5). `resistances` : des types de dégâts. `competences_choix.nombre` : des compétences au choix à la création (le demi-elfe). Les `traits` sont du texte sur la fiche.
+
+#### `donnees/classes_jdr.json`
+
+```json
+{ "format": "tafl-classes_jdr", "version": 1, "classes_jdr": [
+  { "id": "magicien", "nom": "Magicien", "couleur": "#6f8cff", "description": "…", "de_vie": 6, "carac_principale": "int",
+    "sauvegardes": ["int", "sag"], "maitrises": { "armures": [], "armes": ["dague", "baton"] },
+    "competences_choix": { "nombre": 2, "parmi": ["arcanes", "histoire", "intuition", "investigation", "medecine", "religion"] },
+    "equipement_depart": [{ "objet": "baton", "nombre": 1 }], "or_depart": "4d4*10",
+    "lanceur": { "type": "complet", "carac": "int", "tours": 3, "prepare": true },
+    "ameliorations": [4, 8, 12, 16, 19],
+    "niveaux": [
+      { "niveau": 1, "aptitudes": [{ "nom": "Restauration arcanique", "effet": "recuperation_arcanique", "description": "…" }] },
+      { "niveau": 2, "aptitudes": [{ "nom": "Tradition arcanique", "description": "…" }] }
+    ] }
+] }
+```
+
+- `de_vie` : 6, 8, 10 ou 12. Au niveau 1, le héros a le maximum du dé + son modificateur de Constitution ; ensuite, selon `reglages.jdr.pv_niveau`.
+- `carac_principale` : un id, ou une liste (`["for", "dex"]`). `sauvegardes` : les sauvegardes maîtrisées.
+- `maitrises.armures` : `legere`, `intermediaire`, `lourde`, `bouclier` ; `maitrises.armes` : `courante`, `guerre`, ou des ids d'objets.
+- `or_depart` : une formule de dés (le `*10` est permis), à la place de l'équipement si le joueur le choisit.
+- `lanceur` (facultatif) : `type` vaut `complet` (clerc, magicien…), `demi` (paladin, rôdeur, à partir du niveau 2) ou `occultiste` (magie de pacte : peu d'emplacements, tous au plus haut niveau, rendus au repos court). `carac` : la caractéristique de magie. `tours` : le nombre de sorts mineurs (niveau 0) connus. `prepare` : il prépare ses sorts chaque jour (sinon il les connaît, autant que `connus[niveau − 1]`). Les emplacements suivent la table de la 5e.
+- `ameliorations` : les niveaux où il gagne +2 à répartir (ou un don ; défaut 4, 8, 12, 16, 19).
+- `niveaux[].aptitudes` : ce qu'il gagne à chaque niveau. Une aptitude avec un `effet` est jouée par Saga, avec sa `valeur` si elle en a une : `rage` (valeur : bonus aux dégâts), `defense_sans_armure_barbare`, `defense_sans_armure_moine`, `attaque_supplementaire`, `attaque_sournoise` (valeur : les dés, `"2d6"`), `ruse`, `second_souffle`, `sursaut`, `critique_ameliore` (valeur : 19), `style_defense`, `style_archerie`, `style_duel`, `style_deux_armes`, `arts_martiaux` (valeur : le dé), `ki`, `chatiment_divin`, `imposition_des_mains`, `inspiration_bardique` (valeur : le dé), `canalisation`, `sorcellerie`, `recuperation_arcanique`. Les autres sont du texte sur la fiche.
+
+#### `donnees/sorts.json`
+
+```json
+{ "format": "tafl-sorts", "version": 1, "sorts": [
+  { "id": "boule-de-feu", "nom": "Boule de feu", "niveau": 3, "ecole": "evocation", "classes": ["ensorceleur", "magicien"],
+    "temps": "1 action", "portee": "45 m", "duree": "instantanée", "composantes": "V, S, M", "concentration": false, "rituel": false,
+    "description": "…",
+    "effet": { "type": "sauvegarde", "cibles": "zone", "sauvegarde": "dex", "degats": "8d6", "type_degats": "feu", "moitie": true, "niveau_sup": "1d6" } }
+] }
+```
+
+`niveau` : 0 (un sort mineur, sans emplacement) à 9. `ecole` : `abjuration`, `divination`, `enchantement`, `evocation`, `illusion`, `invocation`, `necromancie` ou `transmutation`. `effet` dit à Saga comment le jouer en combat :
+
+| `effet.type` | Ce que fait le sort | Champs |
+|---|---|---|
+| `aucun` | rien en combat : seulement sa description (un sort d'exploration) | |
+| `attaque` | un jet d'attaque de sort contre la CA | `degats`, `type_degats`, `etat`, `tours` |
+| `sauvegarde` | la cible fait une sauvegarde contre le DD des sorts du lanceur | `sauvegarde` (la caractéristique), `degats`, `type_degats`, `moitie` (la moitié si réussi), `etat`, `tours` |
+| `auto` | touche toujours (Projectile magique) | `degats`, `type_degats` |
+| `soin` | rend des PV | `soin` (les dés), `ajouter_mod` (ajoute le modificateur de magie ; vrai par défaut) |
+| `pv_temp` | donne des PV temporaires | `soin`, `ajouter_mod` |
+| `bonus` | un bonus pour un temps | `bonus_ca`, `bonus_attaque`, `bonus_sauvegarde` (un nombre ou un dé, `"1d4"`), `tours` |
+| `etat` | met un état à ceux qui ratent leur sauvegarde | `sauvegarde`, `etat`, `tours` |
+| `sommeil` | endort des PV de créatures, des plus faibles aux plus fortes | `soin` (les dés de PV) |
+
+Pour tous : `cibles` vaut `un`, `plusieurs`, `zone` (tous les adversaires), `allie`, `allies` ou `soi` ; `niveau_sup` : ce qui s'ajoute par niveau d'emplacement au-dessus du sien ; `action: "bonus"` : il se lance avec l'action bonus. Les sorts à `concentration` s'arrêtent quand le lanceur en lance un autre, ou rate sa sauvegarde de Constitution en prenant des coups.
+
+#### `donnees/monstres_jdr.json`
+
+```json
+{ "format": "tafl-monstres_jdr", "version": 1, "monstres_jdr": [
+  { "id": "gobelin", "nom": "Gobelin", "numero": 1, "image": "data:image/png;base64,...",
+    "fp": "1/4", "type": "humanoïde", "taille": "petite", "ca": 15, "ca_texte": "armure de cuir, bouclier", "pv_des": "2d6", "pv": 7, "vitesse": 9,
+    "carac": { "for": 8, "dex": 14, "con": 10, "int": 10, "sag": 8, "cha": 8 },
+    "sauvegardes": {}, "competences": { "discretion": 6 }, "sens": "vision dans le noir 18 m", "langues": "commun, gobelin",
+    "resistances_degats": [], "vulnerabilites_degats": [], "immunites_degats": [], "immunites_etats": [],
+    "multiattaque": 0, "boss": false, "or": "1d6", "butin": [{ "objet": "dague", "chance": 20 }],
+    "traits": [{ "nom": "Fuite agile", "description": "…" }],
+    "actions": [
+      { "nom": "Cimeterre", "attaque": 4, "degats": "1d6+2", "type_degats": "tranchant" },
+      { "nom": "Arc court", "attaque": 4, "degats": "1d6+2", "type_degats": "perforant", "distance": true },
+      { "nom": "Souffle", "sauvegarde": { "carac": "dex", "dd": 12, "moitie": true }, "degats": "4d6", "type_degats": "feu", "zone": true, "recharge": "5-6" }
+    ],
+    "description": "…" }
+] }
+```
+
+- `fp` : le facteur de puissance (`"0"`, `"1/8"`, `"1/4"`, `"1/2"`, `"1"` à `"30"`) ; il donne l'XP du monstre (table de la 5e : 50 XP pour 1/4, 200 pour 1…) et son bonus de maîtrise.
+- `pv` : ses PV (si `pv_des` est donné et `pv` absent, la moyenne des dés). `vitesse` en mètres.
+- `sauvegardes` et `competences` : les bonus écrits sur sa fiche ; les autres se calculent depuis `carac`.
+- `actions` : une attaque (`attaque` : le bonus pour toucher) ou une sauvegarde (`sauvegarde`). `etat`, `tours` et `etat_sauvegarde` (`{ carac, dd }`) : un état en plus quand ça touche (la morsure qui empoisonne). `distance`, `zone` (tous les héros), `repete` (fait partie de la multiattaque), `recharge` (`"5-6"` : revient sur un d6 de 5 ou 6), `poids` (sa chance d'être choisie, 0 à 100).
+- `multiattaque` : le nombre d'attaques `repete` par tour. Un `boss` est dessiné plus grand.
+- `image`, `numero` : comme pour le pack JRPG (le Bestiaire).
+
+#### Les objets (`objets.json`)
+
+Une arme ou une armure a une partie `jdr` ; un objet de soin peut lancer des dés (`effet.des`) :
+
+```json
+{ "id": "epee-longue", "nom": "Épée longue", "categorie": "arme", "prix": 15, "effet": { "type": "aucun" },
+  "jdr": { "arme": { "categorie": "guerre", "degats": "1d8", "type": "tranchant", "proprietes": ["polyvalente"], "polyvalente": "1d10" } } }
+{ "id": "cotte-de-mailles", "nom": "Cotte de mailles", "categorie": "armure", "prix": 75, "effet": { "type": "aucun" },
+  "jdr": { "armure": { "type": "lourde", "ca": 16, "discretion": true, "force": 13 } } }
+{ "id": "potion-de-soins", "nom": "Potion de soins", "categorie": "soin", "prix": 50, "effet": { "type": "soin", "valeur": 0, "des": "2d4+2" } }
+```
+
+- `arme.categorie` : `courante` ou `guerre`. `type` : le type de dégâts (`contondant`, `perforant`, `tranchant`, `acide`, `feu`, `froid`, `foudre`, `force`, `necrotique`, `poison`, `psychique`, `radiant`, `tonnerre`). `proprietes` : `finesse` (Force ou Dextérité), `legere` (combat à deux armes), `lourde`, `deux_mains`, `polyvalente` (avec le dé à deux mains), `lancer`, `munitions`, `chargement`, `allonge`. `distance: true` avec sa `portee` en mètres.
+- `armure.type` : `legere` (CA + Dex), `intermediaire` (CA + Dex, 2 au plus), `lourde` (CA sans Dex) ou `bouclier` (+`ca`). `discretion` : désavantage en Discrétion. `force` : la Force qu'il faut pour ne pas être ralenti.
+- Un héros porte `arme`, `seconde` (la main gauche : une arme légère ou un bouclier) et `armure`. Un objet porté quitte le sac.
+
+#### Dans `personnages.json` : les pré-tirés
+
+```json
+{ "id": "thorgrim", "nom": "Thorgrim", "jdr": { "origine": "nain", "classe": "guerrier", "niveau": 1,
+  "carac": { "for": 16, "dex": 12, "con": 15, "int": 8, "sag": 13, "cha": 10 },
+  "competences": ["athletisme", "intimidation"], "expertises": [], "sorts": [],
+  "equipement": { "arme": "hache-d-armes", "seconde": "bouclier", "armure": "cotte-de-mailles" } } }
+```
+
+`carac` : les valeurs avant le bonus d'origine. À la création, le joueur peut prendre un pré-tiré tel quel (si `reglages.jdr.creation.pretires`). Le personnage `heros` donne son apparence au premier personnage ; les autres choisissent la leur parmi les personnages du jeu.
+
+#### Dans `reglages.json` : `jdr`
+
+```json
+"jdr": {
+  "creation": { "active": true, "methodes": ["standard", "points", "des"], "niveau_depart": 1, "nombre": 1, "pretires": true },
+  "pv_niveau": "moyenne", "critiques": "doubler", "echec_critique": true, "progression": "xp", "repos": "normal", "repos_menu": true,
+  "morts": "jets", "potion_bonus": false, "tenaille": false, "unite": "m", "monnaie": "po", "mj_decide": false, "animation_des": "normale",
+  "attribution": "Ce jeu utilise le SRD 5.1 (CC-BY-4.0)…"
+}
+```
+
+Les règles maison, réglées dans Tafl (**Données › Réglages › Règles du JDR**) :
+
+| Champ | Valeurs |
+|---|---|
+| `creation` | `active` : la création au début d'une nouvelle partie (sinon le groupe commence avec le héros pré-tiré) ; `methodes` : `standard` (15, 14, 13, 12, 10, 8), `points` (27 points), `des` (4d6, on garde les 3 meilleurs) ; `niveau_depart` (1 à 20) ; `nombre` : les personnages à créer (1 à 6) ; `pretires` : proposer les pré-tirés. |
+| `pv_niveau` | `moyenne` (la moyenne du dé de vie, arrondie au-dessus), `jet` (on lance le dé), `choix` (le joueur choisit à chaque niveau). |
+| `critiques` | `doubler` (on lance deux fois les dés de dégâts, la règle officielle) ou `max` (le maximum des dés, plus un jet). |
+| `echec_critique` | `true` : un 1 naturel rate toujours une attaque. |
+| `progression` | `xp` (les combats en donnent) ou `jalons` (on monte aux moments clés, avec la commande `xp` et `jalon: true`). |
+| `repos` | `normal` (court 1 h, long 8 h), `heroique` (5 min, 1 h), `realiste` (8 h, 7 jours) : le texte montré au joueur. `repos_menu` : se reposer depuis le menu de pause. |
+| `morts` | `jets` (jets contre la mort : 3 réussites ou 3 échecs) ou `ko` (simplement K.O. jusqu'à la fin du combat). |
+| `potion_bonus` | `true` : boire une potion est une action bonus. |
+| `tenaille` | `true` : la prise en tenaille : avantage au contact contre une cible qu'un allié a déjà frappée au contact ce tour-ci. |
+| `unite` | `m` (mètres), `cases` (1,5 m = une case) ou `pieds` : l'affichage des distances (les données restent en mètres). |
+| `monnaie` | `po` (pièces d'or) ou `unique` (la monnaie du jeu, `reglages.monnaie`) : le nom de l'argent. |
+| `mj_decide` | `true` : après chaque test, le MJ garde le jet ou force la réussite ou l'échec. |
+| `animation_des` | `normale`, `rapide` ou `aucune` : le plateau de dés. |
+| `attribution` | la mention de licence du contenu SRD (écrite par le modèle D&D 5e). |
+
+Pour un jeu JDR, Tafl met aussi `equipe_max` à 4 et `argent_depart` à 0 au chargement du modèle. `niveau_max` vaut au plus 20.
+
+#### Ce que le moteur garde dans une sauvegarde
+
+`partie.jdr` : `graine` (le hasard des dés : recharger rejoue les mêmes jets) et `journal` (les 200 derniers jets : `{ n, qui, quoi, formule, des: [{ faces, valeur, garde }], bonus, total, contre, resultat, cache }`). Chaque membre du groupe garde sa fiche : `origine`, `classe`, `niveau`, `xp`, `carac`, `competences`, `expertises`, `pv`, `pv_temp`, `pv_niveaux`, `des_vie`, `equipement`, `sorts`, `emplacements`, `ressources`, `etats`, `mort`, et `joueur` (vide pour l'instant : l'ami à qui appartient la fiche, pour le multijoueur). La CA, les bonus et les PV max se recalculent depuis les données, pour qu'un changement fait dans Tafl se voie aussitôt.
+
 ## Test rapide
 
 (Tafl 0.27, joué par Saga 0.10.) Jeu › Test rapide lance le moteur avec un **état de départ** : une partie neuve, puis cet état posé par-dessus. Tafl le passe en ligne de commande, dans un fichier : `Saga.exe <dossier> --test=<fichier.json>`. Les états enregistrés vont dans `jeu.json`, champ `tests` (une liste).
@@ -794,3 +993,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.27** : `tests` dans `jeu.json` (les états du test rapide) et l'option `--test` du moteur. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.29** : le dossier `sons/`, `musique`, `fond_sonore`, `volume_fond` et `jour_nuit` dans l'ambiance des cartes, `lumiere` dans les tuiles et les événements, `temps`, `audio` et `sauvegarde_auto` dans les réglages, les commandes `musique`, `son` et `heure`, la condition `moment`, `heure` dans les états du test rapide, `temps` et `musique` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.31** : le dossier `scripts/` et `scripts` dans `jeu.json` (les scripts JS, voir SCRIPTS.md), `donnees/variables.json`, les commandes `variable` et `script`, la condition `variable`, `scripts.formules_coupees` dans les réglages, `variables` et `graine` dans la sauvegarde. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.32** : le pack de règles `"jdr"` : les fichiers `caracteristiques.json`, `competences.json`, `origines.json`, `classes_jdr.json`, `sorts.json`, `monstres_jdr.json` et `etats.json`, `jdr` dans les objets (arme, armure) et `effet.des`, `jdr` dans les personnages (pré-tirés), `reglages.jdr` (création et règles maison), les rencontres de groupes de ce pack, les commandes `test`, `sauvegarde`, `test_oppose`, `jet`, `repos`, `xp`, `etat` et `creer_personnage` (les trois premières ont deux branches, `reussi` et `rate`), les conditions `jdr_perception`, `jdr_maitrise`, `jdr_etat`, `jdr_classe`, `jdr_origine` et `jdr_niveau`, `jdr` dans la sauvegarde. Des champs en plus, donc la version reste 1.

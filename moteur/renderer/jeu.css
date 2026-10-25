@@ -602,3 +602,65 @@ body.plein-ecran #scene { cursor: none; }
 
 /* Saga 0.11 : l'heure du jeu dans le carnet. */
 #carnet-heure { color: var(--muted); font-size: 13px; margin-left: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---------- Saga 0.13 : le pack JDR (plateau de dés, achat de points) ---------- */
+.menu-note { white-space: pre-line; }
+.menu-rep-ligne { grid-template-columns: 110px auto 1fr; }
+.menu-repartir { display: inline-flex; align-items: center; gap: 8px; }
+.menu-repartir .perso-fleche { width: 28px; height: 28px; font-size: 11px; }
+.menu-repartir .menu-ev-valeur { min-width: 26px; text-align: center; }
+.menu-rep-ligne .combat-liste-detail { text-align: right; }
+
+.des-plateau {
+  position: absolute; top: 14px; right: 14px; z-index: 12; width: min(440px, calc(100% - 28px)); max-height: calc(100% - 28px); overflow: hidden;
+  padding: 10px 14px 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.16); border-left: 3px solid var(--accent);
+  background: rgba(14, 14, 22, 0.72); backdrop-filter: blur(18px) saturate(150%); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text-strong, #fff); cursor: pointer; user-select: none;
+}
+/* En combat : en haut au milieu, entre les monstres (à gauche) et les héros (à droite). */
+.des-plateau.en-combat { right: auto; left: 50%; transform: translateX(-50%); width: min(360px, calc(100% - 28px)); }
+.des-titre { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; }
+.des-titre:empty { display: none; }
+.des-ligne + .des-ligne { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.des-quoi { font-size: 13px; color: rgba(255, 255, 255, 0.7); margin-bottom: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.des-qui { color: #fff; font-weight: 600; }
+.des-mode { margin-left: 8px; padding: 0 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); font-size: 11px; }
+.des-corps { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.des-des { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.des-de {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+  border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.1);
+  font-weight: 700; font-size: 15px; font-variant-numeric: tabular-nums; transition: opacity 0.2s;
+}
+.des-de.vingt { width: 40px; height: 40px; border-radius: 0; border: none; background: none; }
+.des-de.vingt::before { content: ""; position: absolute; inset: 4px; transform: rotate(45deg); border-radius: 5px; border: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); }
+.des-de.vingt .des-valeur { position: relative; }
+.des-faces { position: absolute; bottom: -2px; right: -2px; font-size: 8px; font-weight: 600; color: rgba(255, 255, 255, 0.5); }
+.des-de.vingt .des-faces { bottom: 0; right: 0; }
+.des-de.max::before { border-color: #ffd966; background: rgba(255, 210, 80, 0.3); box-shadow: 0 0 14px rgba(255, 210, 80, 0.7); }
+.des-de.max { color: #ffe9a6; }
+.des-de.min::before { border-color: #f0503c; background: rgba(240, 80, 60, 0.3); }
+.des-de.min { color: #ffb4a8; }
+.des-de.ecarte { opacity: 0.35; }
+.des-bonus, .des-egal { color: rgba(255, 255, 255, 0.7); font-size: 15px; }
+.des-total { font-size: 22px; font-weight: 800; color: #fff; min-width: 28px; font-variant-numeric: tabular-nums; }
+.des-contre { color: rgba(255, 255, 255, 0.55); font-size: 13px; }
+.des-resultat { margin-left: auto; padding: 2px 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: rgba(255, 255, 255, 0.1); }
+.des-resultat.reussi, .des-resultat.touche { color: #8be39a; background: rgba(80, 200, 110, 0.16); }
+.des-resultat.rate, .des-resultat.manque { color: #ff9c8c; background: rgba(240, 80, 60, 0.16); }
+.des-resultat.critique { color: #ffe08a; background: rgba(255, 200, 60, 0.2); box-shadow: 0 0 12px rgba(255, 200, 60, 0.35); }
+.des-resultat.echec_critique { color: #ff8070; background: rgba(240, 60, 40, 0.24); }
+@media (max-width: 700px) { .des-plateau, .des-plateau.en-combat { top: 8px; right: 8px; left: 8px; width: auto; transform: none; } .des-de { width: 28px; height: 28px; font-size: 13px; } .des-de.vingt { width: 34px; height: 34px; } }
+
+#scene[data-theme="pixel"] .des-plateau {
+  font-family: 'Jersey 10', monospace; border-radius: 0; border: 3px solid var(--px-clair); background: var(--px-fond); backdrop-filter: none;
+  box-shadow: 0 0 0 3px var(--px-ombre), inset 0 0 0 3px var(--px-creux);
+}
+#scene[data-theme="pixel"] .des-titre { font-size: 18px; font-weight: 400; }
+#scene[data-theme="pixel"] .des-quoi { font-size: 18px; }
+#scene[data-theme="pixel"] .des-qui, #scene[data-theme="pixel"] .des-de, #scene[data-theme="pixel"] .des-total, #scene[data-theme="pixel"] .des-resultat { font-weight: 400; }
+#scene[data-theme="pixel"] .des-de { border-radius: 0; font-size: 20px; border-width: 2px; }
+#scene[data-theme="pixel"] .des-de.vingt::before { border-radius: 0; border-width: 2px; }
+#scene[data-theme="pixel"] .des-total { font-size: 30px; }
+#scene[data-theme="pixel"] .des-resultat, #scene[data-theme="pixel"] .des-mode { border-radius: 0; font-size: 18px; }
+#scene[data-theme="pixel"] .des-bonus, #scene[data-theme="pixel"] .des-contre { font-size: 18px; }

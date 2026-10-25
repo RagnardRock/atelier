@@ -61,6 +61,54 @@ const BacASable = (() => {
         exemple: { total: 120, heros: 3, normal: 120 },
       },
     },
+    // Le pack JDR (Saga 0.13) : D&D 5e. Les jets passent par des d20 : une formule rend le total (ou le bonus).
+    jdr: {
+      attaque: {
+        nom: 'Bonus d\'attaque', rend: 'Le bonus ajouté au d20 d\'une attaque (arme ou sort), avant les bonus de sorts (Bénédiction).',
+        valeurs: { naturel: 'Le d20 (1 à 20)', bonus: 'Le bonus de la fiche (modificateur + maîtrise + magie de l\'arme)', magie: 'Le bonus magique de l\'arme', sort: 'true pour une attaque de sort', distance: 'true pour une attaque à distance', normal: 'Le bonus selon les règles' },
+        exemple: { naturel: 14, bonus: 5, magie: 0, sort: false, distance: false, normal: 5 },
+      },
+      degats: {
+        nom: 'Dégâts d\'une attaque', rend: 'Les PV perdus par la cible, avant ses résistances (au moins 1 pour une arme).',
+        valeurs: { des: 'Le total des dés (déjà doublés sur un critique)', mod: 'Ce qui s\'ajoute (modificateur, rage, style de combat)', critique: 'true sur un coup critique', type: 'Le type de dégâts (tranchant, feu…)', sort: 'true pour un sort', normal: 'Les dégâts selon les règles (des + mod)' },
+        exemple: { des: 6, mod: 3, critique: false, type: 'tranchant', sort: false, normal: 9 },
+      },
+      critique: {
+        nom: 'Coup critique à partir de…', rend: 'Le d20 naturel à partir duquel une attaque est critique (20 ; 19 pour un champion).',
+        valeurs: { niveau: 'Le niveau de l\'attaquant (0 pour un monstre)', classe: 'L\'id de sa classe (\'\' pour un monstre)', normal: 'Le seuil selon les règles' },
+        exemple: { niveau: 3, classe: 'guerrier', normal: 20 },
+      },
+      test: {
+        nom: 'Test de compétence', rend: 'Le total d\'un test (d20 + bonus), comparé au DD.',
+        valeurs: { naturel: 'Le d20 (1 à 20)', bonus: 'Le bonus de la fiche', dd: 'Le DD (0 : pas de DD)', competence: 'L\'id de la compétence (ou de la caractéristique)', carac: 'Sa caractéristique', maitrise: 'true si elle est maîtrisée', normal: 'Le total selon les règles (naturel + bonus)' },
+        exemple: { naturel: 12, bonus: 5, dd: 15, competence: 'discretion', carac: 'dex', maitrise: true, normal: 17 },
+      },
+      sauvegarde: {
+        nom: 'Jet de sauvegarde', rend: 'Le total d\'une sauvegarde (d20 + bonus), comparé au DD.',
+        valeurs: { naturel: 'Le d20 (1 à 20)', bonus: 'Le bonus de sauvegarde', dd: 'Le DD', carac: 'La caractéristique', maitrise: 'true si elle est maîtrisée', normal: 'Le total selon les règles' },
+        exemple: { naturel: 9, bonus: 4, dd: 13, carac: 'con', maitrise: true, normal: 13 },
+      },
+      initiative: {
+        nom: 'Initiative', rend: 'Le total d\'initiative d\'un combattant (le plus grand joue en premier).',
+        valeurs: { naturel: 'Le d20 (1 à 20)', dex: 'Son modificateur de Dextérité', normal: 'Le total selon les règles' },
+        exemple: { naturel: 11, dex: 3, normal: 14 },
+      },
+      pv_niveau: {
+        nom: 'PV gagnés en montant de niveau', rend: 'Les PV gagnés, sans la Constitution (ajoutée ensuite, au moins 1 en tout).',
+        valeurs: { de: 'Le dé de vie de la classe (6, 8, 10, 12)', con: 'Le modificateur de Constitution', jet: 'Le jet du dé (0 si on prend la moyenne)', niveau: 'Le nouveau niveau', normal: 'Les PV selon les règles (la moyenne ou le jet)' },
+        exemple: { de: 10, con: 2, jet: 0, niveau: 2, normal: 6 },
+      },
+      soin: {
+        nom: 'Soin d\'un sort', rend: 'Les PV rendus.',
+        valeurs: { des: 'Le total des dés du sort', mod: 'Le modificateur de la caractéristique de magie', sort: 'L\'id du sort', normal: 'Le soin selon les règles (des + mod)' },
+        exemple: { des: 5, mod: 3, sort: 'soins', normal: 8 },
+      },
+      experience: {
+        nom: 'Expérience gagnée', rend: 'L\'XP que reçoit chaque héros après une victoire.',
+        valeurs: { total: 'L\'XP de tous les monstres vaincus', heros: 'Le nombre de héros (pas morts)', normal: 'L\'XP selon les règles (partagée)' },
+        exemple: { total: 200, heros: 4, normal: 50 },
+      },
+    },
     pokemon: {
       degats: {
         nom: 'Dégâts d\'une attaque', rend: 'Les PV perdus par la cible (au moins 1).',
@@ -265,6 +313,16 @@ const BacASable = (() => {
         teleporter: (carte, x, y, direction = 'bas') => cmd({ type: 'teleporter', carte: String(carte), x: Number(x) || 0, y: Number(y) || 0, direction }),
         creature: (creature, niveau = 5) => cmd({ type: 'creature', creature: String(creature), niveau: Number(niveau) || 5 }),
         groupe: (personnage, action = 'rejoindre', niveau = 0) => cmd({ type: 'groupe', personnage: String(personnage), action, niveau: Number(niveau) || 0 }),
+        // Le pack JDR (Saga 0.13) : les tests et les jets se font chez Saga (le script demande, Saga lance).
+        test: (o = {}) => cmd({ ...(o && typeof o === 'object' ? o : {}), type: 'test', reussi: [], rate: [] }),
+        sauvegarde: (o = {}) => cmd({ ...(o && typeof o === 'object' ? o : {}), type: 'sauvegarde', reussi: [], rate: [] }),
+        oppose: (o = {}) => cmd({ ...(o && typeof o === 'object' ? o : {}), type: 'test_oppose', reussi: [], rate: [] }),
+        jet: (formule = 'd20', quoi = '') => cmd({ type: 'jet', formule: String(formule), quoi: String(quoi || '') }),
+        repos: (sorte = 'long') => cmd({ type: 'repos', sorte: sorte === 'court' ? 'court' : 'long' }),
+        xp: (montant) => cmd({ type: 'xp', montant: Number(montant) || 0 }),
+        etat: (etat, action = 'ajouter', qui = 'tous') => cmd({ type: 'etat', etat: String(etat), action, qui }),
+        fiche: (i = 0) => (courant.fiches || [])[Number(i) || 0] || null,
+        get fiches() { return courant.fiches || []; },
         combattre(o = {}) {
           if (o.dresseur) return cmd({ type: 'combat_dresseur', dresseur: String(o.dresseur) });
           if (o.groupe) return cmd({ type: 'combat_groupe', groupe: String(o.groupe) });

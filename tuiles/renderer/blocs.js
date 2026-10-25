@@ -16,15 +16,15 @@ const Blocs = (() => {
   const COULEURS = {
     Dialogue: '#5ec8ff', Logique: '#b9a8ff', 'Objets et créatures': '#ffd040', Histoire: '#ff9e4a',
     Héros: '#ff7aa8', Progression: '#7bd88f', Services: '#4ad6c4', Déplacements: '#d27bff',
-    Ambiance: '#7f9cff', Scripts: '#a3e635',
+    Ambiance: '#7f9cff', Scripts: '#a3e635', 'Dés et règles': '#f0c75e',
   };
   const couleur = (type) => COULEURS[Events.COMMANDES[type]?.groupe] || '#9aa0ac';
   const SANS_APERCU = 'Clique sur un dialogue ou un choix pour voir sa boîte telle qu\'elle sera dans Saga.';
 
   let glisse = null; // ce qu'on glisse : { liste, i, c } (un bloc) ou { type } (de la palette)
 
-  // Toutes les listes rangées dans une commande (réponses d'un choix, alors / sinon d'un si).
-  const sousListes = (c) => (c.type === 'choix' ? c.options.map((o) => o.commandes) : c.type === 'si' ? [c.alors, c.sinon] : []);
+  // Toutes les listes rangées dans une commande (réponses d'un choix, alors / sinon d'un si, réussi / raté d'un test).
+  const sousListes = (c) => Events.branches(c).map(([, l]) => l);
   // La liste `liste` est-elle dans la commande c (on ne range pas un bloc dans ses propres branches) ?
   function contient(c, liste) {
     for (const l of sousListes(c)) {
@@ -173,7 +173,7 @@ const Blocs = (() => {
         return b;
       };
       if (c.type === 'choix') c.options.forEach((r) => f.append(branche(`« ${r.texte} »`, r.commandes, 'reponse')));
-      else { f.append(branche('Alors', c.alors, 'alors')); f.append(branche('Sinon', c.sinon, 'sinon')); }
+      else for (const [titre, l, sorte] of Events.branches(c)) f.append(branche(titre.replace(/^Si c'est (.)/, (_, a) => a.toUpperCase()), l, sorte));
       return f;
     }
 
