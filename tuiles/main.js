@@ -196,12 +196,13 @@ handle('file:write', async (_event, file, bytes) => {
 // MonJeu/jeu.json, MonJeu/tuiles.tafl, MonJeu/cartes/*.json, MonJeu/donnees/*.json (Tafl 0.7) et
 // MonJeu/FORMAT.md. Tafl n'écrit dans un dossier de jeu que si tu l'as ouvert ou choisi, et seulement
 // ces fichiers-là.
-const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9-]+\.json|donnees\/[a-z0-9-]+\.json|scripts\/[a-z0-9][a-z0-9-]{0,59}\.js)$/;
-const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
-const DATA_FILE = /^donnees\/[a-z0-9-]+\.json$/;
+// Les noms de données du JDR ont un tiret bas (donnees/classes_jdr.json) : il est permis partout.
+const GAME_FILE = /^(jeu\.json|[\w.-]+\.tafl|cartes\/[a-z0-9_-]+\.json|donnees\/[a-z0-9_-]+\.json|scripts\/[a-z0-9][a-z0-9_-]{0,59}\.js)$/;
+const MAP_FILE = /^cartes\/[a-z0-9_-]+\.json$/;
+const DATA_FILE = /^donnees\/[a-z0-9_-]+\.json$/;
 // Tafl 0.31 : les scripts JS du jeu (scripts/*.js). Tafl ne les exécute jamais ici : seulement dans le
 // bac à sable de la fenêtre (commun/bac-a-sable.js), comme Saga.
-const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9-]{0,59}\.js$/;
+const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9_-]{0,59}\.js$/;
 const relGame = (rel) => String(rel).replace(/\\/g, '/');
 async function mapFilesIn(folder) {
   const names = await fs.readdir(path.join(folder, 'cartes')).catch(() => []);
@@ -294,9 +295,10 @@ handle('game:write', async (_event, folder, files, remove = []) => {
   await fs.mkdir(path.join(root, 'cartes'), { recursive: true });
   await fs.mkdir(path.join(root, 'donnees'), { recursive: true });
   if (files.some(([rel]) => SCRIPT_FILE.test(relGame(rel)))) await fs.mkdir(path.join(root, 'scripts'), { recursive: true });
+  // Tout vérifier d'abord : un seul nom refusé ne doit pas laisser le dossier à moitié enregistré.
+  for (const [rel] of files) if (!GAME_FILE.test(relGame(rel))) throw new Error(`Fichier refusé dans le dossier de jeu : ${rel}`);
   for (const [rel, bytes] of files) {
     const r = relGame(rel);
-    if (!GAME_FILE.test(r)) throw new Error(`Fichier refusé dans le dossier de jeu : ${rel}`);
     const full = path.join(root, r);
     const temp = `${full}.tafl-tmp`;
     await fs.writeFile(temp, Buffer.from(bytes));

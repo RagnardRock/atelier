@@ -124,9 +124,10 @@ handle('app:version', async () => app.getVersion());
 // donnees/*.json. On lit tout d'un coup et on l'envoie à l'interface sous forme de textes : le moteur
 // (renderer/moteur/) ne touche jamais au disque, ce qui lui permettra un jour de tourner dans un
 // navigateur (un export web du jeu).
-const MAP_FILE = /^cartes\/[a-z0-9-]+\.json$/;
-const DATA_FILE = /^donnees\/[a-z0-9-]+\.json$/;
-const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9-]{0,59}\.js$/; // les scripts JS du jeu (Saga 0.12)
+// Le tiret bas est permis : les données du pack JDR s'appellent donnees/classes_jdr.json, monstres_jdr.json…
+const MAP_FILE = /^cartes\/[a-z0-9_-]+\.json$/;
+const DATA_FILE = /^donnees\/[a-z0-9_-]+\.json$/;
+const SCRIPT_FILE = /^scripts\/[a-z0-9][a-z0-9_-]{0,59}\.js$/; // les scripts JS du jeu (Saga 0.12)
 const TILES_FILE = /^[\w.-]+\.tafl$/;
 const relJeu = (rel) => String(rel || '').replace(/\\/g, '/');
 
