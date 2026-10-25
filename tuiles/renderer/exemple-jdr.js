@@ -136,6 +136,12 @@ const ExempleJdr = (() => {
       { id: 'w-2', x: 8, y: 11, carte: 'brumeval', tx: 10, ty: 3, direction: 'bas' },
     ];
     crypte.ambiance = { ...crypte.ambiance, teinte: '#1c2440', force: 45, jour_nuit: false };
+    // Tafl 0.33 : les deux pièces de la crypte, pour le mode table de Saga. L'entrée se voit dès l'arrivée ;
+    // la salle des tombes reste sous le brouillard jusqu'à ce que le MJ la révèle.
+    crypte.zones = [
+      { id: 'entree', name: 'Entrée de la crypte', type: 'autre', x: 0, y: 6, w: 16, h: 6, objet: '', taux: 0, rencontres: [], piece: true, visible: 'tous' },
+      { id: 'tombes', name: 'Salle des tombes', type: 'autre', x: 0, y: 0, w: 16, h: 6, objet: '', taux: 0, rencontres: [], piece: true, visible: 'mj' },
+    ];
 
     // --- Les événements du village ---
     village.events = [
@@ -238,7 +244,7 @@ const ExempleJdr = (() => {
     for (const g of [
       { id: 'gobelins-de-la-route', nom: 'Gobelins de la route', monstres: [{ monstre: 'gobelin', nombre: 2 }] },
       { id: 'morts-reveilles', nom: 'Les morts réveillés', monstres: [{ monstre: 'squelette', nombre: 1 }, { monstre: 'zombi', nombre: 1 }] },
-      { id: 'gardien-de-la-crypte', nom: 'Le gardien de la crypte', monstres: [{ monstre: 'goule', nombre: 1 }], fuite: false },
+      { id: 'gardien-de-la-crypte', nom: 'Le gardien de la crypte', monstres: [{ monstre: 'goule', nombre: 1 }], fuite: false, visible_par: 'mj' },
     ]) data.groupes.push(Donnees.normElement('groupes', g, data.groupes.length));
     // Le héros : seulement son apparence (les personnages créés par le joueur la prennent) ; sa fiche se crée dans Saga.
     data.personnages.unshift({ id: 'aventurier', nom: 'Aventurier', description: 'L\'apparence des personnages que le joueur crée.', heros: true, couleur: '#ffb347', tuile: -1, portraits: [], sprite: null, tenues: [], classe: '', niveau: 1, equipement: {} });

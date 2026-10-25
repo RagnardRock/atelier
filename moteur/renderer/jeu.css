@@ -664,3 +664,105 @@ body.plein-ecran #scene { cursor: none; }
 #scene[data-theme="pixel"] .des-total { font-size: 30px; }
 #scene[data-theme="pixel"] .des-resultat, #scene[data-theme="pixel"] .des-mode { border-radius: 0; font-size: 18px; }
 #scene[data-theme="pixel"] .des-bonus, #scene[data-theme="pixel"] .des-contre { font-size: 18px; }
+
+/* ================= Le mode table (Saga 0.14) ================= */
+/* Le plateau prend la place du canvas du jeu ; le panneau du MJ est à droite. */
+body.mode-table { --table-panneau: 310px; }
+body.mode-table #ecran { visibility: hidden; }
+.table-plateau { position: absolute; inset: 0 var(--table-panneau, 0) 0 0; display: block; cursor: default; z-index: 1; }
+body:not(.mode-table) .table-plateau, body:not(.mode-table) .table-colonne { display: none; }
+.table-plateau.pinceau { cursor: crosshair; }
+body.ecran-joueurs { --table-panneau: 0px; }
+body.mode-table:not(.ecran-joueurs) #scene .dialogue { left: calc((100% - var(--table-panneau)) / 2); width: min(820px, calc(100% - var(--table-panneau) - 40px)); }
+body.mode-table:not(.ecran-joueurs) #scene .dialogue-choix { right: calc(var(--table-panneau) + 24px); }
+body.mode-table:not(.ecran-joueurs) #scene .des-plateau { right: calc(var(--table-panneau) + 14px); }
+body.mode-table:not(.ecran-joueurs) #scene .annonces { right: calc(var(--table-panneau) + 14px); }
+@media (max-width: 900px) { body.mode-table { --table-panneau: 260px; } }
+
+.table-colonne {
+  position: absolute; top: 0; right: 0; bottom: 0; width: var(--table-panneau); z-index: 6; display: flex; flex-direction: column;
+  background: rgba(14, 14, 22, 0.86); backdrop-filter: blur(18px) saturate(140%); border-left: 1px solid rgba(255, 255, 255, 0.10);
+}
+.table-panneau { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 10px 18px; color: var(--text); font-size: 13px; }
+.table-panneau-tete { display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 10px; color: var(--text-strong); font-weight: 600; }
+.table-panneau-tete small { margin-left: auto; color: var(--text); font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.table-panneau-rune { color: var(--accent); font-size: 18px; }
+.table-section { border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; margin-bottom: 8px; background: rgba(255, 255, 255, 0.025); }
+.table-section-titre { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 10px; background: none; border: 0; color: var(--text-strong); font-weight: 600; text-align: left; cursor: pointer; }
+.table-section-corps { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.table-ligne { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.table-ligne > span:first-child:not(.table-nom):not(.table-init) { flex: 0 0 auto; color: var(--text); }
+.table-ligne.coche { gap: 8px; cursor: pointer; }
+.table-ligne.pion, .table-ligne.ordre { padding: 4px 6px; border-radius: 7px; cursor: pointer; }
+.table-ligne.pion:hover { background: rgba(255, 255, 255, 0.05); }
+.table-ligne.choisi { background: rgba(255, 255, 255, 0.09); }
+.table-ligne.actif { box-shadow: inset 3px 0 0 #ffd36b; }
+.table-nom { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-strong); }
+.table-pv { flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.table-init { flex: 0 0 26px; text-align: right; color: var(--accent); font-variant-numeric: tabular-nums; }
+.table-select, .table-champ { flex: 1 1 auto; min-width: 0; max-width: 100%; padding: 4px 6px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(0, 0, 0, 0.3); font-size: 12px; }
+.table-ligne.pion .table-select, .table-ligne.piece .table-select { flex: 0 1 112px; }
+.table-boutons { display: flex; flex-wrap: wrap; gap: 6px; }
+.table-bouton { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05); color: var(--text-strong); font-size: 12px; cursor: pointer; }
+.table-bouton:hover { background: rgba(255, 255, 255, 0.11); }
+.table-bouton.actif { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+.table-bouton.petit { padding: 2px 6px; font-size: 11px; align-self: flex-start; }
+.table-note { margin: 0; color: var(--text); font-size: 12px; opacity: 0.85; line-height: 1.4; }
+.table-sous-titre { margin-top: 4px; color: var(--accent); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; }
+.table-journal { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.table-jet { padding: 5px 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.04); display: flex; flex-direction: column; gap: 2px; }
+.table-jet.cache { background: rgba(150, 120, 255, 0.14); box-shadow: inset 3px 0 0 #9a7dff; }
+.table-jet-tete { display: flex; gap: 4px; color: var(--text-strong); }
+.table-jet-total { margin-left: auto; font-weight: 700; color: var(--accent); }
+.table-jet-detail { font-size: 11px; color: var(--text); }
+
+/* Le petit menu d'un pion (clic droit) */
+.table-menu { position: absolute; z-index: 20; min-width: 220px; max-width: 280px; padding: 6px; border-radius: 10px; background: rgba(18, 18, 28, 0.96); border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); }
+.table-menu-titre { padding: 4px 8px 6px; color: var(--text-strong); font-weight: 700; }
+.table-menu-note { padding: 4px 8px; font-size: 11px; color: var(--text); }
+.table-menu-choix { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: none; color: var(--text-strong); text-align: left; cursor: pointer; font-size: 13px; }
+.table-menu-choix:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* La boîte des combats : en haut de la colonne du MJ (le plateau reste tout visible) */
+.table-combat {
+  flex: 0 0 auto; max-height: 62%; display: flex; flex-direction: column; gap: 8px; margin: 10px 10px 0;
+  padding: 12px 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.16); border-top: 3px solid var(--accent);
+  background: rgba(30, 26, 40, 0.9); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4); color: var(--text-strong);
+}
+.table-combat[hidden] { display: none; }
+.table-combat-tete { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; }
+.table-combat-texte { font-size: 15px; line-height: 1.4; min-height: 1.4em; }
+.table-combat-texte.attend::after { content: ' ▼'; color: var(--accent); font-size: 12px; }
+.table-combat-choix { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; min-height: 0; }
+.table-combat-titre { grid-column: 1 / -1; color: var(--text); font-size: 12px; }
+.table-combat-option { display: flex; align-items: center; gap: 7px; padding: 7px 9px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.12); background: rgba(255, 255, 255, 0.05); color: var(--text-strong); text-align: left; cursor: pointer; font-size: 13px; }
+.table-combat-option small { margin-left: auto; color: var(--text); font-size: 11px; }
+.table-combat-option.actif, .table-combat-option:hover:not(:disabled) { background: rgba(255, 255, 255, 0.13); border-color: var(--accent); }
+.table-combat-option:disabled { opacity: 0.4; cursor: default; }
+.table-combat-option.retour { color: var(--text); }
+.table-combat-aide { font-size: 12px; color: #8fd6ff; }
+
+/* L'écran des joueurs */
+body.plein-ecran.mode-table #scene { cursor: default; }
+.joueurs-ordre { position: absolute; z-index: 5; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px);
+  padding: 6px 10px; border-radius: 12px; background: rgba(14, 14, 22, 0.78); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.12); }
+.joueurs-tour { color: var(--accent); font-weight: 700; font-size: 12px; text-transform: uppercase; margin-right: 4px; }
+.joueurs-ordre-nom { padding: 3px 9px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); color: #f4f4f6; font-size: 14px; }
+.joueurs-ordre-nom.actif { background: #ffd36b; color: #1a1a1a; font-weight: 700; }
+.joueurs-scene { position: absolute; z-index: 5; left: 50%; bottom: 22px; transform: translateX(-50%); width: min(900px, calc(100% - 40px)); padding: 14px 20px;
+  border-radius: 14px; background: rgba(14, 14, 22, 0.82); backdrop-filter: blur(18px); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; }
+.joueurs-qui { color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+.joueurs-texte { font-size: 20px; line-height: 1.45; }
+.joueurs-choix { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.joueurs-choix span { padding: 4px 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); }
+.joueurs-jets { position: absolute; z-index: 6; top: 64px; right: 14px; width: min(360px, calc(100% - 28px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.joueurs-jet { padding: 9px 12px; border-radius: 12px; background: rgba(14, 14, 22, 0.86); border-left: 3px solid var(--accent); color: #f4f4f6; transition: opacity 0.5s, transform 0.5s; }
+.joueurs-jet.part { opacity: 0; transform: translateX(20px); }
+.joueurs-jet.critique, .joueurs-jet.reussi, .joueurs-jet.touche { border-left-color: #7ddc8a; }
+.joueurs-jet.rate, .joueurs-jet.manque, .joueurs-jet.echec_critique { border-left-color: #ef5b5b; }
+.joueurs-jet-tete { display: flex; gap: 4px; font-size: 15px; }
+.joueurs-jet-total { margin-left: auto; font-weight: 800; font-size: 18px; color: var(--accent); }
+.joueurs-jet-detail { font-size: 12px; opacity: 0.8; }
+.joueurs-pause { position: absolute; z-index: 9; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 48px; font-weight: 800; letter-spacing: 6px; text-transform: uppercase; }
+.joueurs-attente { position: absolute; z-index: 9; inset: 0; display: grid; place-items: center; color: var(--text); font-size: 18px; }
+.joueurs-pause[hidden], .joueurs-attente[hidden] { display: none; }

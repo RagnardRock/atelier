@@ -14,6 +14,14 @@
 // qu'à la fin (PV, ressources, emplacements, XP, or, butin, bestiaire). Les dés passent par des.js et
 // sont montrés sur le plateau (ui.des) ; les formules remplaçables par une règle maison (attaque,
 // degats, critique, initiative, soin, experience) passent par Maison.formule.
+//
+// Saga 0.14 : le mode table donne une `grille` (table/combat-table.js). Les mêmes règles se jouent alors
+// sur la carte : chacun se déplace à son tour (sa vitesse en cases), une attaque au contact vise une case
+// voisine, une attaque à distance sa portée (au-delà, jusqu'à 4 fois plus loin, avec désavantage), un sort
+// sa portée, et un mur cache la cible. Sans grille, rien ne change.
+//   grille : { placer({ heros, monstres }), cases(metres), distance(u, t), voit(u, t), autour(t, rayon, liste),
+//              deplacer(u, reste) → cases faites, approcher(u, t, portee, max) → cases faites,
+//              actif(u, tour, reste), vaincu(u), ordre(liste), jetsCaches }
 
 const JdrCombat = (() => {
   const B = JdrBase, P = JdrPerso, D = JdrDes, T = JdrTests;
@@ -27,7 +35,7 @@ const JdrCombat = (() => {
     return [avant.split(' ').map((w) => w.split('-').length > 1 ? w : mot(w)).join(' '), ...apres].join('');
   }
 
-  async function lancer({ jeu, partie, ui, groupe = null, fond = 'herbes' }) {
+  async function lancer({ jeu, partie, ui, groupe = null, fond = 'herbes', grille = null }) {
     const R = B.regles(jeu);
     const g = typeof groupe === 'string' ? B.trouver(jeu, 'groupes', groupe) : groupe;
     partie.dex = partie.dex || { vus: {}, pris: {} };
@@ -53,6 +61,7 @@ const JdrCombat = (() => {
     for (const u of monstres) parNom[u.nom] = (parNom[u.nom] || 0) + 1;
     const vus = {};
     for (const u of monstres) if (parNom[u.nom] > 1) { vus[u.nom] = (vus[u.nom] || 0) + 1; u.nom = `${u.nom} ${LETTRES[vus[u.nom] - 1]}`; }
+    if (grille) grille.placer({ heros, monstres });
 
     // --- Lire un combattant ---
     const estHeros = (u) => u.camp === 'heros';
@@ -82,8 +91,29 @@ const JdrCombat = (() => {
       return l.join(' ');
     };
     const vueHeros = (u) => ({ nom: nom(u), apparence: P.apparence(jeu, u.c), pv: pv(u), pvMax: pvMax(u), pm: 0, pmMax: 0, info: `CA ${caDe(u)}${u.c.pv_temp ? ` · +${u.c.pv_temp}` : ''}`, statut: statutCourt(u), ko: !debout(u) });
-    const vueMonstre = (u) => ({ nom: u.nom, image: u.m.image || '', taille: u.m.taille_ecran || (['grande', 'tres_grande', 'gigantesque', 'grand'].includes(u.m.taille) ? 'grand' : ['tres_petite', 'petite', 'petit'].includes(u.m.taille) ? 'petit' : 'moyen'), boss: Boolean(u.m.boss), ko: !debout(u) });
+    const vueMonstre = (u) => ({ nom: u.nom, pv: u.pv, pvMax: u.pvMax, statut: statutCourt(u), image: u.m.image || '', taille: u.m.taille_ecran || (['grande', 'tres_grande', 'gigantesque', 'grand'].includes(u.m.taille) ? 'grand' : ['tres_petite', 'petite', 'petit'].includes(u.m.taille) ? 'petit' : 'moyen'), boss: Boolean(u.m.boss), ko: !debout(u) });
     const maj = (u) => (estHeros(u) ? ui.heros(u.i, vueHeros(u)) : ui.ennemi(u.i, vueMonstre(u)));
+    // Un jet d'un monstre, caché aux joueurs si le MJ le veut (mode table, règle maison jets_mj_caches).
+    const noterJet = (u, l) => D.noter(partie, { ...l, cache: Boolean(grille?.jetsCaches && u && !estHeros(u)) });
+
+    // --- Sur la grille (mode table) ---
+    const vitesseDe = (u) => (aEtat(u, 'agrippe') || aEtat(u, 'entrave') || aEtat(u, 'paralyse') || aEtat(u, 'petrifie') ? 0 : grille.cases(estHeros(u) ? P.vitesse(jeu, u.c) : Number(u.m.vitesse) || 9));
+    // La portée d'une attaque, en cases : { normale, longue } ; au contact : 1 (2 avec l'allonge, soit 3 m).
+    function porteeAttaque(a) {
+      if (!a.distance) return { normale: a.allonge ? Math.max(1, grille.cases(3)) : 1, longue: 0 };
+      const n = grille.cases(Number(a.portee) || 24);
+      return { normale: n, longue: grille.cases(Number(a.portee_longue) || (Number(a.portee) || 24) * 4) };
+    }
+    // Les mètres écrits dans la portée d'un sort (« 18 m », « contact », « personnelle »), en cases.
+    function porteeSort(s) {
+      const t = String(s.portee || '').toLowerCase();
+      if (/personnel|soi/.test(t)) return 0;
+      if (/contact/.test(t) || !t) return 1;
+      const m = t.match(/(\d+(?:[.,]\d+)?)\s*m/);
+      return m ? grille.cases(Number(m[1].replace(',', '.'))) : 1;
+    }
+    const aPortee = (u, t, cases) => !grille || (grille.distance(u, t) <= cases && grille.voit(u, t));
+    const contactEnnemi = (u) => Boolean(grille) && vivants(adversaires(u)).some((t) => grille.distance(u, t) <= 1);
 
     // --- Les états ---
     async function mettreEtat(u, id, { tours = 0, sauvegarde = null, source = null } = {}) {
@@ -117,6 +147,7 @@ const JdrCombat = (() => {
         await ui.animer(u.camp, u.i, 'ko');
         await ui.message(`${Le(u)} est vaincu !`);
         partie.dex.pris[u.m.id] = true;
+        grille?.vaincu(u);
         return;
       }
       finirConcentration(u, false);
@@ -191,7 +222,7 @@ const JdrCombat = (() => {
       }
       const ef = effets(u);
       if (ef.has('echec_for_dex') && (carac === 'for' || carac === 'dex')) {
-        await montrer(quoi || 'Sauvegarde', [D.noter(partie, { qui: nom(u), quoi: quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, total: 0, contre: `DD ${dd}`, resultat: 'rate' })]);
+        await montrer(quoi || 'Sauvegarde', [noterJet(u, { qui: nom(u), quoi: quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, total: 0, contre: `DD ${dd}`, resultat: 'rate' })]);
         return false;
       }
       const des = D.d20(partie, { avantage, desavantage: carac === 'dex' && ef.has('desavantage_sauvegardes_dex') });
@@ -199,7 +230,7 @@ const JdrCombat = (() => {
       const bonus = (Number.isFinite(Number(k)) && k !== null && k !== '' ? Number(k) : modDe(u, carac)) + bonusSorts;
       const total = Math.round(await Maison.formule('sauvegarde', { naturel: des.naturel, bonus, dd, carac, maitrise: k !== undefined }, () => des.naturel + bonus));
       const ok = total >= dd;
-      await montrer(quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, [D.noter(partie, { qui: nom(u), quoi: quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, formule: 'd20', des: des.des, bonus: total - des.naturel, total, contre: `DD ${dd}`, resultat: ok ? 'reussi' : 'rate', mode: des.mode })]);
+      await montrer(quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, [noterJet(u, { qui: nom(u), quoi: quoi || `Sauvegarde de ${B.nomCarac(jeu, carac)}`, formule: 'd20', des: des.des, bonus: total - des.naturel, total, contre: `DD ${dd}`, resultat: ok ? 'reussi' : 'rate', mode: des.mode })]);
       return ok;
     }
 
@@ -226,7 +257,7 @@ const JdrCombat = (() => {
       const terre = aEtat(t, 'a_terre');
       const contre = terre && a.distance ? P.effetsEtats(jeu, t.etats.filter((e) => e.id !== 'a_terre').map((e) => e.id)) : eft;
       let avantage = ef.has('avantage_attaques') || contre.has('avantage_contre') || u.cache || u.avantageProchain;
-      const desavantage = ef.has('desavantage_attaques') || eft.has('desavantage_contre') || t.esquive || (terre && a.distance);
+      const desavantage = ef.has('desavantage_attaques') || eft.has('desavantage_contre') || t.esquive || (terre && a.distance) || Boolean(a.loin) || (a.distance && contactEnnemi(u));
       if (R.tenaille && !a.distance && [...(frappesAuContact.get(t) || [])].some((x) => x !== u && x.camp === u.camp)) avantage = true;
       u.cache = false;
       u.avantageProchain = false;
@@ -241,7 +272,7 @@ const JdrCombat = (() => {
       let critique = des.naturel >= seuil;
       const touche = critique || (!(des.naturel === 1 && R.echec_critique) && total >= ca);
       if (touche && !a.distance && eft.has('critique_contact')) critique = true;
-      const ligne = D.noter(partie, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: 'd20', des: des.des, bonus, total, contre: `CA ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
+      const ligne = noterJet(u, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: 'd20', des: des.des, bonus, total, contre: `CA ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
       if (!touche) {
         await montrer(a.nom, [ligne]);
         ui.nombre(t.camp, t.i, 'Raté', 'rate');
@@ -277,7 +308,7 @@ const JdrCombat = (() => {
       }
       const dmgNormal = Math.max(0, r.total + plus);
       let n = Math.max(sort ? 0 : 1, Math.round(await Maison.formule('degats', { des: r.total, mod: plus, critique, type: a.type || '', sort: Boolean(sort) }, () => dmgNormal)));
-      lignes.push(D.noter(partie, { qui: nom(u), quoi: `Dégâts (${B.nomDegats(a.type).toLowerCase()})`, formule: r.formule, des: r.des, bonus: n - r.total, total: n }));
+      lignes.push(noterJet(u, { qui: nom(u), quoi: `Dégâts (${B.nomDegats(a.type).toLowerCase()})`, formule: r.formule, des: r.des, bonus: n - r.total, total: n }));
       for (const x of extra) lignes.push(D.noter(partie, { qui: nom(u), quoi: x.nom, formule: x.r.formule, des: x.r.des, bonus: x.r.bonus, total: x.r.total }));
       await montrer(a.nom, lignes);
       if (critique) ui.nombre(t.camp, t.i, 'Critique !', 'info');
@@ -316,23 +347,33 @@ const JdrCombat = (() => {
     // Les cibles d'un sort : 'un' (un adversaire), 'plusieurs' (jusqu'à `nombre`), 'zone' (tous les
     // adversaires), 'soi', 'allie', 'allies'. Rend la liste, ou null si le joueur revient en arrière.
     async function ciblesDuSort(u, s) {
-      const e = s.effet, l = vivants(monstres);
+      const e = s.effet;
+      // Sur la grille : seulement ce qui est à portée (et en vue) ; une zone touche autour de son centre.
+      const portee = grille ? porteeSort(s) : 0;
+      const proche = (t) => aPortee(u, t, portee) || t === u;
+      const l = vivants(monstres).filter(proche);
+      if (grille && ['un', 'plusieurs', 'zone'].includes(e.cibles || 'un') && !l.length) { await ui.message(`Personne à portée de ${s.nom} (${B.distance(jeu, portee * grille.caseM)}).`); return null; }
       switch (e.cibles) {
         case 'soi': return [u];
-        case 'allies': return heros.filter((h) => debout(h) || (e.type === 'soin' && !h.c.mort_definitive));
+        case 'allies': return heros.filter((h) => (debout(h) || (e.type === 'soin' && !h.c.mort_definitive)) && (!grille || proche(h)));
         case 'allie': {
-          const i = await ui.cible({ camp: 'heros', possibles: heros.map((h) => !h.c.mort_definitive && (debout(h) || e.type === 'soin')), depart: u.i });
+          const i = await ui.cible({ camp: 'heros', possibles: heros.map((h) => !h.c.mort_definitive && (debout(h) || e.type === 'soin') && proche(h)), depart: u.i });
           return i == null ? null : [heros[i]];
         }
-        case 'zone': return (await ui.cible({ camp: 'ennemis', tous: true, possibles: monstres.map(debout) })) == null ? null : l;
+        case 'zone': {
+          if (!grille) return (await ui.cible({ camp: 'ennemis', tous: true, possibles: monstres.map(debout) })) == null ? null : l;
+          // Le centre : un adversaire à portée ; la zone : ceux qui sont à `rayon` mètres de lui (3 m par défaut).
+          const i = await ui.cible({ camp: 'ennemis', possibles: monstres.map((t) => debout(t) && proche(t)), zone: grille.cases(Number(e.rayon) || 3) });
+          return i == null ? null : grille.autour(monstres[i], grille.cases(Number(e.rayon) || 3), vivants(monstres));
+        }
         case 'plusieurs': {
-          const i = await ui.cible({ camp: 'ennemis', possibles: monstres.map(debout) });
+          const i = await ui.cible({ camp: 'ennemis', possibles: monstres.map((t) => debout(t) && proche(t)) });
           if (i == null) return null;
           const n = B.borne(Number(e.nombre) || 2, 1, 8);
           return [monstres[i], ...l.filter((x) => x !== monstres[i])].slice(0, n);
         }
         default: {
-          const i = await ui.cible({ camp: 'ennemis', possibles: monstres.map(debout) });
+          const i = await ui.cible({ camp: 'ennemis', possibles: monstres.map((t) => debout(t) && proche(t)) });
           return i == null ? null : [monstres[i]];
         }
       }
@@ -459,6 +500,19 @@ const JdrCombat = (() => {
       const l = camp === 'heros' ? heros : monstres;
       return ui.cible({ camp, possibles: possibles || l.map(debout), depart });
     }
+    // La cible d'une attaque d'un héros : sur la grille, à portée et en vue. Rend { t, a } (a : l'attaque,
+    // avec `loin` au-delà de la portée normale) ou null.
+    async function cibleAttaque(u, a, camp = 'ennemis') {
+      if (!grille) { const i = await choisirCible(camp); return i == null ? null : { t: monstres[i], a }; }
+      const p = porteeAttaque(a);
+      const max = Math.max(p.normale, p.longue);
+      const possibles = monstres.map((t) => debout(t) && aPortee(u, t, max));
+      if (!possibles.some(Boolean)) { await ui.message(`Aucun ennemi à portée de ${a.nom} (${B.distance(jeu, p.normale * grille.caseM)}).`); return null; }
+      const i = await ui.cible({ camp, possibles });
+      if (i == null) return null;
+      const t = monstres[i];
+      return { t, a: grille.distance(u, t) > p.normale ? { ...a, loin: true } : a };
+    }
     async function tourHeros(u) {
       u.esquive = false;
       u.sournoise = false;
@@ -466,12 +520,16 @@ const JdrCombat = (() => {
       const attaques = () => P.attaques(jeu, c);
       const sorts = () => (P.lanceur(jeu, c) ? sortsDe(u) : []);
       let actionFaite = false, bonusFait = false, attaqueFaite = false;
+      // Sur la grille : le déplacement de ce tour, en cases (la moitié après s'être relevé).
+      let reste = grille ? Math.floor(vitesseDe(u) / (u.releve ? 2 : 1)) : 0;
+      u.releve = false;
       const nombreAttaques = 1 + (P.palier(jeu, c, 'attaque_supplementaire') ? Math.max(1, Number(P.palier(jeu, c, 'attaque_supplementaire').valeur) || 1) : 0);
       // L'action, puis l'action bonus (s'il en a une à faire).
       for (;;) {
         if (fini() || !debout(u)) return;
         const bonusPossibles = actionsBonus(u, attaqueFaite);
-        if (actionFaite && (bonusFait || !bonusPossibles.length)) return;
+        if (actionFaite && (bonusFait || !bonusPossibles.length) && reste <= 0) return;
+        grille?.actif(u, tour, reste);
         const items = actionFaite ? [] : [
           { id: 'attaque', texte: `Attaquer (${attaques()[0].nom})`, icone: 'flame' },
           ...(P.lanceur(jeu, c) ? [{ id: 'sort', texte: 'Lancer un sort', icone: 'sparkle', desactive: !sorts().some((s) => !estBonus(s) && peutLancer(u, s)) }] : []),
@@ -481,11 +539,15 @@ const JdrCombat = (() => {
           { id: 'cacher', texte: 'Se cacher', icone: 'eye-closed' },
           { id: 'fuir', texte: 'Fuir', icone: 'run-all', desactive: g.fuite === false },
         ];
+        if (grille && !actionFaite) items.splice(1, 0, { id: 'foncer', texte: 'Foncer (déplacement doublé)', icone: 'run-all', desactive: vitesseDe(u) <= 0 });
+        if (grille) items.unshift({ id: 'deplacer', texte: `Se déplacer (${reste} case${reste > 1 ? 's' : ''})`, icone: 'move', desactive: reste <= 0 });
         if (!bonusFait) for (const b of bonusPossibles) items.push({ ...b, texte: `${b.texte} (bonus)` });
-        if (actionFaite) items.push({ id: 'fin', texte: 'Finir le tour', icone: 'check' });
+        if (actionFaite || grille) items.push({ id: 'fin', texte: 'Finir le tour', icone: 'check' });
         const choix = await ui.commande(u.i, items);
         if (choix == null) { if (actionFaite) return; continue; }
         if (choix === 'fin') return;
+        if (choix === 'deplacer') { reste -= Math.max(0, Number(await grille.deplacer(u, reste)) || 0); continue; }
+        if (choix === 'foncer') { reste += vitesseDe(u); actionFaite = true; ui.nombre('heros', u.i, 'Foncer', 'hausse'); continue; }
         const b = bonusPossibles.find((x) => x.id === choix);
         if (b) { if (await b.faire()) bonusFait = true; continue; }
         if (choix === 'attaque') {
@@ -493,11 +555,11 @@ const JdrCombat = (() => {
           let n = 0;
           for (let k = 0; k < nombreAttaques; k++) {
             if (fini()) break;
-            const i = await choisirCible('ennemis');
-            if (i == null) { if (k === 0) break; continue; }
+            const x = await cibleAttaque(u, a);
+            if (!x) { if (k === 0) break; continue; }
             ui.bandeau(a.nom);
             await ui.animer('heros', u.i, 'avance');
-            await attaquer(u, monstres[i], a);
+            await attaquer(u, x.t, x.a);
             await ui.animer('heros', u.i, 'recule');
             ui.bandeau('');
             n++;
@@ -522,7 +584,7 @@ const JdrCombat = (() => {
           const k = await ui.liste('Objet', l.map((x) => ({ texte: x.o.nom, detail: `×${x.n}`, image: x.o.icone || '' })), true);
           if (k == null) continue;
           const rappel = l[k].o.effet.type === 'rappel';
-          const j = await choisirCible('heros', u.i, heros.map((h) => !h.c.mort_definitive && (rappel ? !debout(h) : true)));
+          const j = await choisirCible('heros', u.i, heros.map((h) => !h.c.mort_definitive && (rappel ? !debout(h) : true) && (!grille || h === u || grille.distance(u, h) <= 1)));
           if (j == null) continue;
           await utiliserObjet(u, l[k], heros[j]);
           if (R.potion_bonus && !bonusFait) bonusFait = true; else actionFaite = true;
@@ -532,7 +594,7 @@ const JdrCombat = (() => {
           await ui.message(`${nom(u)} se tient sur ses gardes.`);
           actionFaite = true;
         } else if (choix === 'aider') {
-          const j = await choisirCible('heros', -1, heros.map((h) => h !== u && debout(h)));
+          const j = await choisirCible('heros', -1, heros.map((h) => h !== u && debout(h) && (!grille || grille.distance(u, h) <= 1)));
           if (j == null) continue;
           heros[j].avantageProchain = true;
           ui.nombre('heros', j, 'Avantage', 'hausse');
@@ -565,10 +627,10 @@ const JdrCombat = (() => {
     function actionsBonus(u, attaqueFaite) {
       const c = u.c, out = [];
       const a2 = P.attaques(jeu, c).find((a) => a.seconde);
-      if (a2 && attaqueFaite) out.push({ id: 'b-seconde', texte: `Attaquer de la main gauche (${a2.nom})`, icone: 'flame', faire: async () => { const i = await choisirCible('ennemis'); if (i == null) return false; await attaquer(u, monstres[i], a2); return true; } });
+      if (a2 && attaqueFaite) out.push({ id: 'b-seconde', texte: `Attaquer de la main gauche (${a2.nom})`, icone: 'flame', faire: async () => { const x = await cibleAttaque(u, a2); if (!x) return false; await attaquer(u, x.t, x.a); return true; } });
       if (P.a(jeu, c, 'arts_martiaux') && attaqueFaite && !c.equipement?.armure && !c.equipement?.seconde) {
         const mn = P.attaques(jeu, { ...c, equipement: {} })[0];
-        out.push({ id: 'b-mains', texte: 'Frappe à mains nues', icone: 'flame', faire: async () => { const i = await choisirCible('ennemis'); if (i == null) return false; await attaquer(u, monstres[i], mn); return true; } });
+        out.push({ id: 'b-mains', texte: 'Frappe à mains nues', icone: 'flame', faire: async () => { const x = await cibleAttaque(u, mn); if (!x) return false; await attaquer(u, x.t, x.a); return true; } });
       }
       if (P.a(jeu, c, 'second_souffle') && P.resteRessource(jeu, c, 'second_souffle') > 0 && pv(u) < pvMax(u)) {
         out.push({ id: 'b-souffle', texte: 'Second souffle', icone: 'heart', faire: async () => {
@@ -617,7 +679,22 @@ const JdrCombat = (() => {
       }
       const cibles = vivants(heros);
       if (!cibles.length) return;
-      const viser = () => { const l = vivants(heros); return D.chance(partie, 25) ? plusBlesse(l) : D.choisir(partie, l); };
+      // Sur la grille : le héros le plus proche (parfois le plus blessé), choisi une fois pour le tour.
+      let visee = null;
+      const viser = () => {
+        const l = vivants(heros);
+        if (!grille) return D.chance(partie, 25) ? plusBlesse(l) : D.choisir(partie, l);
+        if (!visee || !debout(visee)) visee = D.chance(partie, 25) ? plusBlesse(l) : [...l].sort((a, b) => grille.distance(u, a) - grille.distance(u, b))[0];
+        return visee;
+      };
+      let pas = grille ? vitesseDe(u) : 0;
+      // Se mettre à portée de la cible (en marchant, une fois par tour) ; rend faux si elle reste trop loin.
+      async function aPorteeDe(t, a) {
+        if (!grille || !t) return Boolean(t);
+        const p = a.sauvegarde?.carac ? { normale: grille.cases(Number(a.portee) || (a.zone ? 4.5 : 9)) } : porteeAttaque(a);
+        if (!aPortee(u, t, p.normale) && pas > 0) pas -= Math.max(0, Number(await grille.approcher(u, t, p.normale, pas)) || 0);
+        return aPortee(u, t, p.normale);
+      }
       const dispo = actionsMonstre(u).filter((a) => !a.recharge || u.recharges[a.nom] !== false);
       const armes = dispo.filter((a) => Number.isFinite(Number(a.attaque)) && a.attaque !== '' && a.attaque !== null);
       // Multiattaque : `multiattaque` attaques avec ses armes ; sinon une action tirée selon les poids.
@@ -633,15 +710,17 @@ const JdrCombat = (() => {
       if (!plan.length) { await ui.message(`${Le(u)} observe le groupe.`); return; }
       for (const a of plan) {
         if (fini() || !debout(u)) return;
+        if (grille && !(await aPorteeDe(viser(), a))) { await ui.message(`${Le(u)} ${pas < vitesseDe(u) ? 's\'approche' : 'attend'}.`); return; }
         if (a.recharge) u.recharges[a.nom] = false;
         ui.bandeau(a.nom);
         await ui.animer('ennemis', u.i, 'attaque');
         if (a.sauvegarde?.carac) {
-          // Un souffle, un cri : chaque héros visé fait une sauvegarde.
-          const vises = a.zone ? vivants(heros) : [viser()].filter(Boolean);
+          // Un souffle, un cri : chaque héros visé fait une sauvegarde (sur la grille, une zone touche
+          // ceux qui sont à `rayon` mètres de la cible, 3 m par défaut).
+          const vises = a.zone ? (grille ? grille.autour(viser(), grille.cases(Number(a.rayon) || 3), vivants(heros)) : vivants(heros)) : [viser()].filter(Boolean);
           await ui.effet(vises.map((t) => ['heros', t.i]), a.couleur || '#ff9d4a');
           const r = a.degats ? D.lancer(partie, a.degats) : null;
-          if (r) await montrer(a.nom, [D.noter(partie, { qui: nom(u), quoi: `${a.nom} : dégâts`, formule: r.formule, des: r.des, bonus: r.bonus, total: r.total })]);
+          if (r) await montrer(a.nom, [noterJet(u, { qui: nom(u), quoi: `${a.nom} : dégâts`, formule: r.formule, des: r.des, bonus: r.bonus, total: r.total })]);
           for (const t of vises) {
             const ok = await sauver(t, a.sauvegarde.carac, Number(a.sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde de ${B.nomCarac(jeu, a.sauvegarde.carac)}` });
             if (r) { const n = ok ? (a.sauvegarde.moitie !== false ? Math.floor(r.total / 2) : 0) : r.total; if (n) await blesser(t, n, { type: a.type_degats }); }
@@ -650,7 +729,7 @@ const JdrCombat = (() => {
         } else if (Number.isFinite(Number(a.attaque)) && a.attaque !== '' && a.attaque !== null) {
           const t = viser();
           if (!t) return;
-          const r = await attaquer(u, t, { nom: a.nom, bonus: Number(a.attaque), des: a.degats || '1d4', mod: 0, type: a.type_degats || 'contondant', distance: Boolean(a.distance) });
+          const r = await attaquer(u, t, { nom: a.nom, bonus: Number(a.attaque), des: a.degats || '1d4', mod: 0, type: a.type_degats || 'contondant', distance: Boolean(a.distance), portee: a.portee, allonge: a.allonge });
           if (r.touche && a.etat && debout(t)) {
             if (a.etat_sauvegarde?.carac) {
               const ok = await sauver(t, a.etat_sauvegarde.carac, Number(a.etat_sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde` });
@@ -719,10 +798,11 @@ const JdrCombat = (() => {
       const dex = estHeros(u) ? P.initiative(jeu, u.c) : modDe(u, 'dex') + (Number(u.m.initiative) || 0);
       u.init = Math.round(await Maison.formule('initiative', { naturel: des.naturel, dex }, () => des.naturel + dex));
       u.departage = dex + (estHeros(u) ? 0.5 : 0) + D.aleatoire(partie) * 0.1;
-      lignesInit.push(D.noter(partie, { qui: nom(u), quoi: 'Initiative', formule: 'd20', des: des.des, bonus: u.init - des.naturel, total: u.init }));
+      lignesInit.push(noterJet(u, { qui: nom(u), quoi: 'Initiative', formule: 'd20', des: des.des, bonus: u.init - des.naturel, total: u.init }));
     }
     await montrer('Initiative', lignesInit);
     const ordre = [...heros, ...monstres].sort((a, b) => b.init - a.init || b.departage - a.departage);
+    grille?.ordre(ordre.map((u) => ({ u, nom: nom(u), init: u.init })));
     await ui.message(`Ordre du tour : ${ordre.filter((u) => debout(u) || estHeros(u)).map((u) => nom(u)).join(', ')}.`, { attendre: true });
 
     // 2. Les tours, jusqu'à la fin.
@@ -732,12 +812,14 @@ const JdrCombat = (() => {
       frappesAuContact = new Map();
       for (const u of ordre) {
         if (fini()) break;
-        if (estHeros(u) && !debout(u)) { if (!u.c.mort_definitive) await jetContreLaMort(u); continue; }
+        if (estHeros(u) && !debout(u)) { if (!u.c.mort_definitive) { grille?.actif(u, tour, 0); await jetContreLaMort(u); } continue; }
         if (!debout(u)) continue;
+        grille?.actif(u, tour, grille ? vitesseDe(u) : 0);
         if (incapable(u)) {
           await ui.message(`${Le(u)} ne peut pas agir (${u.etats.filter((e) => B.trouver(jeu, 'etats', e.id)?.effets?.includes('incapable')).map((e) => B.nomEtat(jeu, e.id).toLowerCase()).join(', ')}).`);
         } else if (aEtat(u, 'a_terre')) {
-          oterEtat(u, 'a_terre'); // se relever : la moitié de son déplacement (on ne compte pas les cases ici)
+          oterEtat(u, 'a_terre'); // se relever : la moitié de son déplacement (comptée sur la grille, en mode table)
+          u.releve = true;
           await ui.message(`${Le(u)} se relève.`);
           if (estHeros(u)) await tourHeros(u); else await tourMonstre(u);
         } else if (estHeros(u)) await tourHeros(u);

@@ -223,6 +223,7 @@ Dans Tafl (Données du jeu › Réglages › Menus du jeu), le créateur du jeu 
 | `vendre` | Les boutiques achètent et vendent des membres | oui | non |
 | `groupe` | La commande `groupe` (rejoindre, quitter) | non | oui |
 | `tenir` | Menu Équipe › Faire tenir un objet | oui | non |
+| `table` | Le mode table de Saga 0.14 (plateau, brouillard, vue du MJ) ; `combattre` reçoit alors `grille` | non | non (`jdr` : oui) |
 
 Saga cache ce que le pack ne sait pas faire ; Tafl cache les commandes, conditions et onglets de données qui n'ont pas de sens pour le pack choisi.
 
@@ -658,6 +659,23 @@ Tout ce qui ne vit que le temps du combat (l'initiative, le tour, les états de 
 
 Toutes ont aussi `normal`. Elles sont décrites pour Tafl dans `BacASable.FORMULES.jdr`.
 
-### 8.7 Prévu pour la suite
+### 8.7 Le mode table (Saga 0.14)
 
-Le pack reste pur (une partie en entrée, une partie en sortie, les dés depuis la graine) pour le mode « table » et le multijoueur : `cache` dans une ligne du journal (un jet caché du MJ, toujours faux pour l'instant) et `joueur` sur chaque fiche sont déjà là.
+Avec la capacité `table`, `combattre` reçoit en plus un objet `grille` (absent hors du mode table : le combat reste celui de l'écran de groupe). Le pack ne connaît que des cases et ne touche jamais le plateau lui-même :
+
+| Méthode | Ce qu'elle fait |
+|---|---|
+| `placer({ heros, monstres })` | Pose chaque combattant sur un pion (les monstres qui manquent apparaissent près du lieu du combat). |
+| `ordre(liste)`, `actif(u)`, `vaincu(u)` | L'ordre d'initiative, le combattant dont c'est le tour, un combattant tombé (pour le plateau et l'écran des joueurs). |
+| `cases(metres)` | Des mètres en cases (`reglages.jdr.case_m`). |
+| `distance(u, t)`, `voit(u, t)` | La distance en cases (selon `diagonales`), la ligne de vue (les murs la coupent). |
+| `autour(t, rayon, liste)` | Ceux de `liste` à `rayon` cases ou moins de `t` (les zones). |
+| `deplacer(u, max)` | Le joueur choisit une case atteignable (`max` cases au plus) ; rend le nombre de cases parcourues (0 s'il annule). |
+| `approcher(u, t, portee, max)` | Un monstre s'approche de `t` jusqu'à l'avoir à `portee` cases et en vue (`max` cases au plus) ; rend les cases parcourues. |
+| `jetsCaches` | `true` : les jets des monstres vont au journal avec `cache: true`. |
+
+L'état de la table (`partie.table` : pions, brouillard, pièces révélées, pause) et le filtrage par rôle sont dans `table/etat.js` (`TableEtat.vue(jeu, partie, role)`), hors du pack. C'est l'hôte qui l'a en entier ; chaque écran ne reçoit que sa vue, prêt pour le multijoueur.
+
+### 8.8 Prévu pour la suite
+
+Le pack reste pur (une partie en entrée, une partie en sortie, les dés depuis la graine) pour le mode « table » et le multijoueur : `cache` dans une ligne du journal (un jet caché du MJ, utilisé par le mode table) et `joueur` sur chaque fiche sont déjà là.

@@ -150,6 +150,8 @@ const Jeu = (() => {
         objetRequis: z.objetRequis || null,
         taux: nombre(z.taux, 10),
         rencontres: Array.isArray(z.rencontres) ? z.rencontres : [],
+        // Tafl 0.33 (mode table) : une pièce, sous le brouillard, et qui la voit au départ.
+        piece: Boolean(z.piece), visible_par: typeof z.visible_par === 'string' ? z.visible_par : '',
       })),
       teleporteurs: (Array.isArray(data.teleporteurs) ? data.teleporteurs : []).filter((t) => t && t.vers),
       evenements: (Array.isArray(data.evenements) ? data.evenements : []).filter((e) => e && Array.isArray(e.pages)),

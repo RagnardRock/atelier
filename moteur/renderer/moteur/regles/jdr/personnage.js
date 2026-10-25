@@ -146,6 +146,8 @@ const JdrPerso = (() => {
         bonus: k + (maitriseArme(jeu, c, o) ? pb(c) : 0) + magie + archer,
         des: deuxMains ? w.polyvalente : w.degats || '1d4', mod: mod + magie + duel, type: w.type || 'contondant',
         finesse, legere: (w.proprietes || []).includes('legere'),
+        // Saga 0.14 (mode table) : la portée en mètres d'une arme à distance, l'allonge (3 m au contact).
+        portee: Number(w.portee) || 0, portee_longue: Number(w.portee_longue) || 0, allonge: (w.proprietes || []).includes('allonge'),
       });
     };
     ajouter(objet(jeu, c.equipement?.arme));

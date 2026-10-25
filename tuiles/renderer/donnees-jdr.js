@@ -45,6 +45,7 @@ const DonneesJdr = (() => {
     creation: { active: true, methodes: ['standard', 'points', 'des'], niveau_depart: 1, nombre: 1, pretires: true },
     pv_niveau: 'moyenne', critiques: 'doubler', echec_critique: true, progression: 'xp', repos: 'normal', repos_menu: true,
     morts: 'jets', potion_bonus: false, tenaille: false, unite: 'm', monnaie: 'po', mj_decide: false, animation_des: 'normale', attribution: '',
+    case_m: 1.5, diagonales: 'simple', jets_mj_caches: false, // Tafl 0.33 : le mode table de Saga
   };
   const METHODES = [['standard', 'Tableau standard (15, 14, 13, 12, 10, 8)'], ['points', 'Achat de points (27 points)'], ['des', 'Aux dés (4d6, on garde les 3 meilleurs)']];
 
@@ -231,6 +232,7 @@ const DonneesJdr = (() => {
       morts: pick(r.morts, MORTS, d.morts), potion_bonus: Boolean(r.potion_bonus), tenaille: Boolean(r.tenaille),
       unite: pick(r.unite, UNITES, d.unite), monnaie: pick(r.monnaie, MONNAIES, d.monnaie), mj_decide: Boolean(r.mj_decide),
       animation_des: pick(r.animation_des, ANIMATIONS, d.animation_des), attribution: str(r.attribution),
+      case_m: Math.round(num(r.case_m, d.case_m, 0.5, 30) * 10) / 10, diagonales: pick(r.diagonales, DIAGONALES, d.diagonales), jets_mj_caches: Boolean(r.jets_mj_caches),
     };
   }
   const PV_NIVEAU = [['moyenne', 'La moyenne du dé de vie (arrondie au-dessus)'], ['jet', 'Un jet du dé de vie'], ['choix', 'Le joueur choisit à chaque niveau']];
@@ -238,7 +240,8 @@ const DonneesJdr = (() => {
   const PROGRESSIONS = [['xp', 'Points d\'expérience (les combats en donnent)'], ['jalons', 'Jalons : on monte aux moments clés de l\'histoire']];
   const REPOS = [['normal', 'Normal (repos court 1 h, long 8 h)'], ['heroique', 'Héroïque (court 5 min, long 1 h)'], ['realiste', 'Réaliste (court 8 h, long 7 jours)']];
   const MORTS = [['jets', 'Jets contre la mort (3 réussites ou 3 échecs)'], ['ko', 'Simplement K.O. jusqu\'à la fin du combat']];
-  const UNITES = [['m', 'Mètres (9 m)'], ['cases', 'Cases de 1,5 m (6 cases)'], ['pieds', 'Pieds (30 pieds)']];
+  const UNITES = [['m', 'Mètres (9 m)'], ['cases', 'Cases (6 cases de 1,5 m)'], ['pieds', 'Pieds (30 pieds)']];
+  const DIAGONALES = [['simple', 'Une diagonale = 1 case (règle simple)'], ['alternees', '1 case, puis 2, en alternance (plus réaliste)']];
   const MONNAIES = [['po', 'Pièces d\'or (po)'], ['unique', 'La monnaie du jeu (Réglages › Argent)']];
   const ANIMATIONS = [['normale', 'Normale'], ['rapide', 'Rapide'], ['aucune', 'Aucune : le résultat tout de suite']];
 
@@ -661,6 +664,11 @@ const DonneesJdr = (() => {
     const choixR = (cle, l, unit) => champ(LIBELLES[cle], sel(l, j[cle], (v) => { j[cle] = v; }), unit);
     const coche = (o, cle, label, unit) => { const i = el('input', { type: 'checkbox', checked: Boolean(o[cle]) }); i.onchange = () => { o[cle] = i.checked; }; return champ(label, i, unit); };
     const modele = el('button', { className: 'button small', textContent: 'Charger le modèle D&D 5e (SRD 5.1)' });
+    // La taille d'une case, et ce que ça donne pour une vitesse de 9 m.
+    const exemple = el('small', { className: 'field-unit' });
+    const majExemple = () => { const n = Math.floor(9 / (Number(j.case_m) || 1.5) + 1e-9); exemple.textContent = `une vitesse de 9 m = ${n} case${n > 1 ? 's' : ''}`; };
+    const caseM = el('span', { className: 'inline' }, [nombreIn(j, 'case_m', 0.5, 30, 0.5, majExemple), exemple]);
+    majExemple();
     modele.onclick = (e) => {
       e.preventDefault();
       const n = chargerModele(ctx.work);
@@ -694,9 +702,22 @@ const DonneesJdr = (() => {
       choixR('unite', UNITES, 'les distances écrites en mètres dans les données'),
       choixR('animation_des', ANIMATIONS),
       coche(j, 'mj_decide', 'Le MJ peut forcer un test', 'en vraie partie : après le jet, garder le résultat ou forcer la réussite ou l\'échec'),
+      section('Mode table'),
+      info('Dans Saga, le mode table fait jouer le jeu sur un plateau, avec un MJ : une case de la grille est une tuile de la carte. Les vitesses et les portées des données, en mètres, deviennent des cases selon la taille d\'une case.'),
+      champ('Une case vaut', caseM, 'mètres'),
+      choixR('diagonales', DIAGONALES),
+      coche(j, 'jets_mj_caches', 'Les jets des monstres sont cachés aux joueurs', 'le MJ les voit, et peut les révéler'),
     ];
   }
-  const LIBELLES = { pv_niveau: 'PV en montant de niveau', critiques: 'Coups critiques', morts: 'À 0 PV', progression: 'Progression', repos: 'Durée des repos', unite: 'Distances', monnaie: 'Monnaie', animation_des: 'Animation des dés' };
+  // « Visible par » (Tafl 0.33, le mode table de Saga) : tout le monde, le MJ seulement, ou le joueur
+  // d'un personnage (un pré-tiré, ou le personnage dont part une création).
+  function visibilites(work) {
+    return [['tous', 'Tout le monde'], ['mj', 'Le MJ seulement'],
+      ...(work?.personnages || []).filter((p) => p.jdr || p.heros).map((p) => [`perso:${p.id}`, `Le joueur de ${p.nom || p.id}`])];
+  }
+  const normVisible = (v, d = 'tous') => (['tous', 'mj'].includes(v) || /^perso:[a-z0-9_-]+$/.test(String(v || '')) ? v : d);
+
+  const LIBELLES = { diagonales: 'Diagonales', pv_niveau: 'PV en montant de niveau', critiques: 'Coups critiques', morts: 'À 0 PV', progression: 'Progression', repos: 'Durée des repos', unite: 'Distances', monnaie: 'Monnaie', animation_des: 'Animation des dés' };
 
   // --- Le modèle D&D 5e (modele-dnd5e.js) ---
   // Une petite image en pixels pour chaque monstre, d'après son type (Donnees.ui.dessinMonstre).
@@ -815,6 +836,6 @@ const DonneesJdr = (() => {
 
   return {
     SORTES, NORMES, ONGLETS, DEFAUTS_REGLES, TYPES_DEGATS, EFFETS_APTITUDE, normObjet, normFiche, normRegles, listes, resumer, utilisations,
-    formObjet, formPersonnage, formRegles, chargerModele, imageMonstre, des, moyenne,
+    formObjet, formPersonnage, formRegles, chargerModele, imageMonstre, des, moyenne, visibilites, normVisible,
   };
 })();

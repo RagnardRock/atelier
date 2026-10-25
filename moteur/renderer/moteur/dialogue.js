@@ -26,6 +26,11 @@ const Dialogue = (() => {
 
     let attente = null;   // { type: 'texte' | 'choix', resoudre, ... }
     let ecrit = 0, complet = '', chrono = 0;
+    // Saga 0.14 (mode table) : qui veut savoir ce que dit la boîte (l'écran des joueurs la recopie).
+    let observateur = null, dernier = null;
+    const dit = (o) => { dernier = o; observateur?.(o); };
+    // Un clic sur la boîte vaut la touche Action (le MJ joue à la souris).
+    boite.addEventListener('click', () => touche('action'));
 
     function montrerBoite({ nom: n = '', couleur = '', portrait: img = '' }) {
       boite.hidden = false;
@@ -45,6 +50,7 @@ const Dialogue = (() => {
       chrono = 0;
       texte.textContent = '';
       suite.hidden = true;
+      dit({ qui: qui?.nom || '', texte: ligne });
       if (vitesse === Infinity) { ecrit = complet.length; texte.textContent = complet; suite.hidden = false; }
       return new Promise((resoudre) => { attente = { type: 'texte', resoudre }; });
     }
@@ -59,6 +65,7 @@ const Dialogue = (() => {
       });
       choix.hidden = false;
       suite.hidden = true;
+      dit({ ...(dernier || { qui: '', texte: '' }), choix: options.map(String) });
       const a = { type: 'choix', i: 0, n: options.length };
       surligner(a);
       return new Promise((resoudre) => { a.resoudre = resoudre; attente = a; });
@@ -77,6 +84,7 @@ const Dialogue = (() => {
       boite.hidden = true;
       choix.hidden = true;
       attente = null;
+      if (dernier) dit(null);
     }
 
     // Les touches, envoyées par le moteur. Renvoie true si la boîte les a prises.
@@ -122,6 +130,7 @@ const Dialogue = (() => {
 
     return {
       dire, choisir, fermer, touche, avancer, annoncer,
+      observer(f) { observateur = f; },
       get ouvert() { return !boite.hidden; },
       regler({ vitesseTexte } = {}) { vitesse = VITESSES[vitesseTexte] || VITESSES.normale; },
     };

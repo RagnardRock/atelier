@@ -128,7 +128,7 @@ const Jdr = (() => {
   const pack = {
     nom: 'jdr',
     ecran: 'groupe',
-    capacites: { capture: false, relacher: false, ev: false, vendre: false, groupe: true, tenir: false },
+    capacites: { capture: false, relacher: false, ev: false, vendre: false, groupe: true, tenir: false, table: true },
     menus: {
       equipe: 'Groupe', dex: 'Bestiaire', dex_visible: true, pc: 'Réserve', boite: 'Réserve',
       places: 12, colonnes: 4, forme_boites: 'liste',

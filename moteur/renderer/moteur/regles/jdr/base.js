@@ -133,6 +133,10 @@ const JdrBase = (() => {
     monnaie: 'po',            // 'po' (pièces d'or) | 'unique' (la monnaie du jeu, reglages.monnaie)
     mj_decide: false,         // le « MJ » peut forcer un jet (réussi, raté) en vraie partie
     animation_des: 'normale', // 'normale' | 'rapide' | 'aucune'
+    // Saga 0.14 : le mode table.
+    case_m: 1.5,              // une case de la grille (une tuile) vaut tant de mètres
+    diagonales: 'simple',     // 'simple' (une diagonale = 1 case) | 'alternees' (1 puis 2)
+    jets_mj_caches: false,    // les jets des monstres sont cachés aux joueurs (le MJ peut les révéler)
   };
   function regles(jeu) {
     const r = jeu.donnees.reglages?.reglages?.jdr || {};
@@ -143,7 +147,8 @@ const JdrBase = (() => {
   function distance(jeu, metres) {
     const m = Number(metres) || 0;
     const u = regles(jeu).unite;
-    if (u === 'cases') return `${Math.round(m / 1.5)} case${Math.round(m / 1.5) > 1 ? 's' : ''}`;
+    const c = Number(regles(jeu).case_m) > 0 ? Number(regles(jeu).case_m) : 1.5;
+    if (u === 'cases') { const n = Math.floor(m / c + 1e-9); return `${n} case${n > 1 ? 's' : ''}`; }
     if (u === 'pieds') return `${Math.round(m / 0.3)} pieds`;
     return `${String(m).replace('.', ',')} m`;
   }

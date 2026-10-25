@@ -245,6 +245,8 @@ const Donnees = (() => {
       nom: str(g?.nom || g?.id, `Groupe ${i + 1}`),
       monstres: arr(g?.monstres).filter((x) => x?.monstre).slice(0, 8).map((x) => ({ monstre: Doc.slug(x.monstre, ''), nombre: int(x.nombre, 1, 1, 8) })),
       fuite: g?.fuite !== false,
+      // Tafl 0.33 (pack JDR, mode table de Saga) : qui voit les monstres de la rencontre posée sur la table.
+      ...(J && g?.visible_par && g.visible_par !== 'tous' ? { visible_par: J.normVisible(g.visible_par) } : {}),
     }),
     ...(J ? J.NORMES : {}),
   };
@@ -1243,6 +1245,7 @@ const Donnees = (() => {
       champ('Nom', ctx.input(g, 'nom', '3 slimes, Gobelins de la forêt…', idl.maj)),
       idl.el,
       champ('On peut fuir', ctx.coche(g, 'fuite'), 'décoche pour un boss'),
+      ...(packDe(work) === 'jdr' && J ? [champ('Visible par', sel(J.visibilites(work), g.visible_par || 'tous', (v) => { if (v === 'tous') delete g.visible_par; else g.visible_par = v; }), 'mode table de Saga : posée sur la table, qui voit ses monstres')] : []),
       section('Monstres (8 au plus en tout)'),
       table(g.monstres, [
         ['Monstre', (x) => (packDe(work) === 'jdr' ? refInfo(x, 'monstre', 'tafl-monstres-jdr', 'gobelin', (id) => { const m = (work.monstres_jdr || []).find((o) => o.id === id); return m ? el('span', { textContent: `${m.nom} · FP ${m.fp}` }) : null; }) : refInfo(x, 'monstre', 'tafl-monstres', 'slime', descNom(work.monstres))), true],
