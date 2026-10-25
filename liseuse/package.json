@@ -1,7 +1,7 @@
 {
   "name": "atelier-liseuse",
   "productName": "Kenning",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Kenning, ma liseuse d'eBooks : bibliothèque (couvertures, collections, reprise de lecture) et lecture confortable des EPUB, MOBI, AZW3, FB2, un des outils d'Atelier",
   "main": "main.js",
   "scripts": {

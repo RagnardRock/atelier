@@ -758,8 +758,10 @@ function construireReglages() {
   const p = $('#reglages-lecture');
   p.innerHTML = '';
   const r = L();
+  // L() à chaque changement, pas r : après chaque enregistrement, etat.config est remplacé par la
+  // réponse de main.js, et r ne serait plus qu'une ancienne copie (le réglage ne marchait qu'une fois).
   const changer = (cle, valeur, { miseEnPage = false } = {}) => {
-    r[cle] = valeur;
+    L()[cle] = valeur;
     if (miseEnPage) appliquerMiseEnPage();
     appliquerStyles();
     ecrireLecturePlusTard();
