@@ -7,7 +7,7 @@
 // (hors combat) et parler à un PNJ voisin : ce sont des demandes, que le MJ (l'hôte) vérifie.
 
 const TableClient = (() => {
-  function demarrer({ dossier }) {
+  function demarrer({ dossier, reseau = false }) {
     document.body.classList.add('ecran-joueurs', 'mode-table');
     document.title = 'Saga · écran des joueurs';
     $('#accueil').hidden = true;
@@ -21,8 +21,12 @@ const TableClient = (() => {
     const jets = el('div', { className: 'joueurs-jets' });
     const pauseEl = el('div', { className: 'joueurs-pause', hidden: true, textContent: 'Pause' });
     const attente = el('div', { className: 'joueurs-attente', textContent: 'En attente du MJ…' });
-    scene.append(canvas, ordre, boite, jets, pauseEl, attente);
+    // Saga 1.0 : la fiche du joueur (seul celui qui joue un héros la reçoit), avec ses jets.
+    const fiche = el('aside', { className: 'joueurs-fiche', hidden: true });
+    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche);
     const plateau = Plateau.creer(canvas);
+    // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
+    const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
     let jeu = null, vue = null, selection = null, survol = null;
     let dernierEffet = -1, dernierJet = -1;
 
@@ -42,6 +46,7 @@ const TableClient = (() => {
       vue = v;
       if (carteAvant !== v.carte) plateau.oublier();
       montrer();
+      montrerFiche();
     });
 
     // Ce qui n'est pas sur le canvas : l'ordre du tour, ce qui se dit, les jets montrés à tous, la pause.
@@ -85,6 +90,62 @@ const TableClient = (() => {
       }
     }
 
+    // --- La fiche du joueur : la lire, et lancer ses jets (c'est l'hôte qui lance les dés) ---
+    let ongletFiche = 'caracs';
+    let signature = '';
+    function montrerFiche() {
+      const f = vue?.fiche;
+      fiche.hidden = !f;
+      if (!f) return;
+      // On ne redessine que si quelque chose a changé (sinon on gênerait les clics).
+      const s = JSON.stringify([f.nom, f.pv, f.pvMax, f.ca, f.etats, ongletFiche]);
+      if (s === signature) return;
+      signature = s;
+      fiche.innerHTML = '';
+      fiche.append(el('div', { className: 'joueurs-fiche-tete' },
+        el('b', { textContent: f.nom }),
+        el('span', { className: 'joueurs-fiche-pv', textContent: `${f.pv} / ${f.pvMax} PV` }),
+        el('span', { className: 'joueurs-fiche-ca', textContent: `CA ${f.ca}` })));
+      if (f.etats?.length) fiche.append(el('div', { className: 'joueurs-fiche-etats', textContent: f.etats.join(', ') }));
+      const onglets = el('div', { className: 'joueurs-onglets' });
+      for (const [id, nom] of [['caracs', 'Caractéristiques'], ['competences', 'Compétences'], ['attaques', 'Attaques']]) {
+        const b = el('button', { className: `joueurs-onglet${ongletFiche === id ? ' actif' : ''}`, type: 'button', textContent: nom });
+        b.onclick = () => { ongletFiche = id; signature = ''; montrerFiche(); };
+        onglets.append(b);
+      }
+      fiche.append(onglets);
+      const corps = el('div', { className: 'joueurs-fiche-corps' });
+      const signe = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
+      const jet = (sorte, id, quoi) => window.saga.tableDemander({ type: 'jet', sorte, id, quoi });
+      if (ongletFiche === 'caracs') {
+        for (const c of f.caracs) {
+          corps.append(el('div', { className: 'joueurs-fiche-ligne' },
+            el('span', { className: 'joueurs-fiche-nom', textContent: `${c.nom} ${c.valeur}` }),
+            bouton(`${signe(c.mod)}`, () => jet('test', c.id, c.nom), 'Lancer un test de cette caractéristique'),
+            bouton(`Sauv. ${signe(c.sauvegarde)}`, () => jet('sauvegarde', c.id, ''), 'Lancer une sauvegarde')));
+        }
+      } else if (ongletFiche === 'competences') {
+        for (const c of f.competences) {
+          corps.append(el('div', { className: `joueurs-fiche-ligne${c.maitrise ? ' maitrise' : ''}` },
+            el('span', { className: 'joueurs-fiche-nom', textContent: c.nom }),
+            bouton(signe(c.bonus), () => jet('test', c.id, c.nom), 'Lancer ce test')));
+        }
+      } else {
+        for (const a of f.attaques) {
+          corps.append(el('div', { className: 'joueurs-fiche-ligne' },
+            el('span', { className: 'joueurs-fiche-nom', textContent: a.nom }),
+            el('small', { textContent: `${signe(a.bonus)} · ${a.des}${a.mod ? ` ${signe(a.mod)}` : ''}` })));
+        }
+        corps.append(el('p', { className: 'joueurs-fiche-note', textContent: 'En combat, c\'est le MJ qui mène les tours sur le plateau : dis-lui ce que tu fais (ou écris-le dans la discussion).' }));
+      }
+      fiche.append(corps);
+    }
+    function bouton(texte, faire, titre = '') {
+      const b = el('button', { className: 'joueurs-jet-bouton', type: 'button', textContent: texte, title: titre });
+      b.onclick = faire;
+      return b;
+    }
+
     // --- La souris : un héros, puis une case (ou un PNJ à côté) ---
     let glisse = null;
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
@@ -120,7 +181,7 @@ const TableClient = (() => {
       plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection, survol });
     }
     requestAnimationFrame(tour);
-    return { plateau, get vue() { return vue; } };
+    return { plateau, multi, get vue() { return vue; } };
   }
   return { demarrer };
 })();

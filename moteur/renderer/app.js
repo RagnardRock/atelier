@@ -9,7 +9,17 @@
 // manette sert partout (pad.js).
 
 // Saga 0.14 : la fenêtre de l'écran des joueurs (mode table) n'a que le plateau (table/client.js).
-const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJoueurs) : (() => {
+// Saga 1.0 : un ami qui a rejoint une partie depuis son navigateur (web/saga-reseau.js) passe d'abord par
+// l'écran du code (window.saga.reseau.prete) ; à la table, il n'a que le plateau, comme l'écran des joueurs.
+const creerApp = () => (window.saga.ecranJoueurs || window.saga.reseau?.mode === 'table'
+  ? TableClient.demarrer(window.saga.ecranJoueurs || { dossier: 'reseau', reseau: true })
+  : creerSaga());
+let App = null;
+if (window.saga.reseau) window.saga.reseau.prete().then(() => { App = creerApp(); window.App = App; });
+else App = creerApp();
+
+function creerSaga() {
+  return (() => {
   // Le mode joueur (Saga 0.9) : un jeu exporté (.exe ou web). Le jeu seul, sans les outils de Saga.
   const joueur = window.saga.joueur || null;
   if (joueur) document.body.classList.add('joueur', ...(joueur.web ? ['web'] : []));
@@ -154,9 +164,61 @@ const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJou
       if (moteur.modeTable !== avant) await enregistrerConfig({ modeTable: { ...(config.modeTable || {}), [textes.dossier]: moteur.modeTable } });
     }
     moteur.demarrer(jeu, d, partie, partie ? null : test);
+    moteur.apparence = { personnage: config.multiApparence || '' };
     autoAFaire = false;
     derniereAuto = Date.now();
     for (const p of jeu.problemes) notify(`À savoir : ${p}.`, 'warning', 9000);
+  }
+
+  // --- Saga 1.0 : jouer à plusieurs (l'hôte) ---
+  // Saga ouvre un petit serveur sur le réseau de la maison : les amis ouvrent l'adresse dans leur
+  // navigateur et entrent le code. En mode table, chacun reçoit la vue de son rôle ; sinon, chacun joue
+  // sa partie dans le même jeu et on se voit, on échange, on se défie (moteur/reseau/).
+  async function multijoueur() {
+    if (!ouvert) return;
+    if (moteur.multi?.actif) {
+      const oui = await Dialogs.ask('Partie à plusieurs', 'Fermer la partie ? Tes amis seront déconnectés.', [{ label: 'Fermer', value: true, primary: true }, { label: 'Garder ouverte', value: false }]);
+      if (oui) await moteur.multi.fermer();
+      return;
+    }
+    const nomAvant = config.multiNom || '';
+    const v = await Dialogs.form({
+      title: 'Jouer à plusieurs',
+      okLabel: 'Ouvrir la partie',
+      width: 500,
+      fields: [
+        { key: 'nom', label: 'Ton nom pour les autres', type: 'text', value: nomAvant || (moteur.modeTable ? 'MJ' : 'Hôte') },
+        { type: 'info', text: moteur.modeTable
+          ? 'Tes amis ouvriront l\'adresse que Saga affichera, dans le navigateur de leur PC, de leur tablette ou de leur téléphone. Tu donneras un héros à chacun dans le panneau du MJ.'
+          : 'Tes amis ouvriront l\'adresse que Saga affichera, dans leur navigateur. Chacun joue sa propre partie dans ton jeu : vous vous voyez marcher, vous discutez, vous échangez et vous vous défiez.' },
+        { type: 'info', text: 'Il faut être sur le même réseau (le Wi-Fi de la maison). Si Windows demande à autoriser Saga sur le réseau, dis oui pour les réseaux privés.' },
+      ],
+    });
+    if (!v) return;
+    const nom = String(v.nom || '').trim().slice(0, 24) || 'Hôte';
+    if (nom !== nomAvant) await enregistrerConfig({ multiNom: nom });
+    try {
+      const infos = await moteur.multi.ouvrir({ mode: moteur.modeTable ? 'table' : 'monde', nom, titre: ouvert.jeu.titre });
+      notify(`Partie ouverte : ${infos.adresses[0] ? `http://${infos.adresses[0]}:${infos.port}` : `port ${infos.port}`} · code ${infos.code}`, 'success', 12000);
+      if (!moteur.modeTable) await choisirApparence();
+    } catch (err) {
+      notify(`Impossible d'ouvrir la partie : ${cleanError(err)}`, 'error');
+    }
+  }
+  // L'apparence qu'on montre aux autres joueurs (le héros du jeu, ou un personnage du jeu).
+  async function choisirApparence() {
+    const l = moteur.apparences();
+    if (l.length < 2) return;
+    const gardee = config.multiApparence || '';
+    const choix = await moteur.choisirApparence({
+      nom: moteur.multi?.moi?.nom || '',
+      tenues: l.map((a) => ({ id: a.id, nom: a.nom, sprite: a.sprite })),
+      tenue: l.some((a) => a.id === gardee) ? gardee : '',
+      demanderNom: false, demanderTenue: true,
+    });
+    const id = choix?.tenue || '';
+    moteur.apparence = { personnage: id, tenue: '' };
+    if (id !== gardee) await enregistrerConfig({ multiApparence: id });
   }
 
   async function sauvegarder() {
@@ -277,6 +339,9 @@ const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJou
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
     $('.pause-choix[data-action="mode"]').hidden = !moteur.peutTable(ouvert.jeu) || Boolean(ouvert.test);
     $('#pause-mode').textContent = moteur.modeTable ? 'Revenir en aventure (seul)' : 'Passer en mode table (MJ)';
+    // Saga 1.0 : le multijoueur. Un ami (dans son navigateur) ne l'ouvre pas : c'est l'hôte qui invite.
+    $('.pause-choix[data-action="multi"]').hidden = Boolean(joueur) || Boolean(ouvert.test);
+    $('#pause-multi').textContent = moteur.multi?.actif ? 'Fermer la partie à plusieurs' : 'Jouer à plusieurs (inviter des amis)…';
     // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer), après le Pokédex.
     for (const b of $$('.pause-choix[data-pack]')) b.remove();
     let apres = $('.pause-choix[data-action="dex"]');
@@ -311,6 +376,7 @@ const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJou
       enregistrerConfig({ modeTable: { ...(config.modeTable || {}), [ouvert.dossier]: moteur.modeTable } });
       moteur.demarrer(ouvert.jeu, partie.position, partie);
     }
+    else if (action === 'multi') { fermerPause(); multijoueur(); }
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
@@ -550,4 +616,5 @@ const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJou
   init();
 
   return { ouvrir, ouvrirDossier, recharger, moteur };
-})();
+  })();
+}

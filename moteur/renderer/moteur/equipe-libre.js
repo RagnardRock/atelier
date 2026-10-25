@@ -1,0 +1,159 @@
+// Composer son équipe librement (Saga 1.0, commande « composer son équipe » de Tafl 1.0).
+//
+// Un écran posé sur le jeu : toutes les créatures du jeu, une recherche, et jusqu'à N choix au niveau
+// écrit par la carte. C'est fait pour les jeux « arène » (un duel entre deux joueurs qui prennent chacun
+// leur équipe), mais un jeu peut s'en servir pour autre chose (un tournoi, un prêt de créatures…).
+//
+// Chaque créature choisie se règle ensuite : ses quatre attaques (parmi tout ce qu'elle sait à ce
+// niveau, apprentissage et CT) et l'objet qu'elle tient. Sans rien toucher, elle a les attaques
+// qu'elle connaîtrait à ce niveau et aucun objet.
+//
+//   EquipeLibre.creer(conteneur) → { ouvrir({ jeu, nombre, niveau, titre }), fermer, get ouvert }
+// ouvrir() rend la liste des membres choisis — [{ id, attaques: [id], objet }] — ou null si le joueur
+// ferme l'écran sans rien valider quand il en a le droit ; le jeu, lui, remplace l'équipe (scripts.js).
+
+const EquipeLibre = (() => {
+  function creer(conteneur) {
+    const racine = el('div', { className: 'libre-ecran', hidden: true });
+    conteneur.append(racine);
+    let ouvert = null;
+
+    // Échap ferme l'écran (quand on a le droit), et les touches ne vont pas au jeu derrière.
+    window.addEventListener('keydown', (e) => {
+      if (!ouvert) return;
+      if (e.key === 'Escape') {
+        if (ouvert.reglage) { e.preventDefault(); e.stopImmediatePropagation(); ouvert.reglage(); return; }
+        if (ouvert.annulable) { e.preventDefault(); e.stopImmediatePropagation(); ouvert.finir(null); return; }
+      }
+      if (!e.target.closest?.('input')) e.stopImmediatePropagation();
+    }, true);
+
+    function ouvrir({ jeu, nombre = 6, niveau = 50, titre = 'Compose ton équipe', annulable = false } = {}) {
+      const especes = (jeu.donnees.creatures?.creatures || []).filter((c) => c && c.id);
+      const objets = Regles.objetsTenables(jeu);
+      return new Promise((resoudre) => {
+        const choisies = []; // [{ id, attaques: [id], objet }]
+        const carte = el('div', { className: 'libre-carte' });
+        const tete = el('div', { className: 'libre-tete' },
+          el('h2', { textContent: titre }),
+          el('span', { className: 'libre-compte' }));
+        const recherche = el('input', { className: 'libre-recherche', type: 'search', placeholder: 'Chercher une créature…', spellcheck: false });
+        const liste = el('div', { className: 'libre-liste' });
+        const choix = el('div', { className: 'libre-choix' });
+        const ok = el('button', { className: 'libre-ok', type: 'button', textContent: 'C\'est mon équipe !' });
+        const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}). Clique une créature de ta liste, en bas, pour régler ses attaques et son objet.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
+        const reglage = el('div', { className: 'libre-reglage', hidden: true });
+        carte.append(tete, recherche, liste, el('div', { className: 'libre-bas' }, choix, ok), aide, reglage);
+        racine.append(carte);
+        racine.hidden = false;
+
+        const finir = (r) => {
+          racine.hidden = true;
+          racine.innerHTML = '';
+          ouvert = null;
+          resoudre(r);
+        };
+        ouvert = { finir, annulable, reglage: null };
+
+        function dessiner() {
+          const q = recherche.value.trim().toLowerCase();
+          liste.innerHTML = '';
+          for (const e of especes) {
+            if (q && !`${e.nom || ''} ${e.id} ${e.officiel || ''}`.toLowerCase().includes(q)) continue;
+            const prise = choisies.filter((x) => x.id === e.id).length;
+            const b = el('button', { className: `libre-creature${prise ? ' prise' : ''}`, type: 'button', title: e.nom || e.id });
+            const im = e.sprites?.face || e.image || '';
+            b.append(im ? el('img', { src: im, alt: '' }) : el('span', { className: 'libre-vide', textContent: (e.nom || '?')[0] }),
+              el('span', { className: 'libre-nom', textContent: e.nom || e.id }),
+              prise ? el('b', { className: 'libre-prise', textContent: `×${prise}` }) : null);
+            b.onclick = () => {
+              const i = choisies.map((x) => x.id).lastIndexOf(e.id);
+              if (i >= 0 && choisies.length >= nombre) choisies.splice(i, 1);
+              else if (choisies.length < nombre) choisies.push({ id: e.id, attaques: Regles.attaquesDefaut(jeu, e.id, niveau).slice(0, 4), objet: '' });
+              else return;
+              dessiner();
+            };
+            liste.append(b);
+          }
+          if (!liste.children.length) liste.append(el('p', { className: 'libre-aide', textContent: especes.length ? 'Aucune créature ne correspond.' : '' }));
+          tete.querySelector('.libre-compte').textContent = `${choisies.length} / ${nombre}`;
+          choix.innerHTML = '';
+          choisies.forEach((m, k) => {
+            const e = especes.find((x) => x.id === m.id);
+            const im = e?.sprites?.face || e?.image || '';
+            const b = el('button', { className: 'libre-petite', type: 'button', title: `${e?.nom || m.id} : régler ses attaques et son objet` },
+              im ? el('img', { src: im, alt: '' }) : el('span', { textContent: (e?.nom || '?')[0] }),
+              m.objet ? el('i', { className: 'codicon codicon-circle-filled libre-tenu', title: 'Elle tient un objet' }) : null);
+            b.onclick = () => regler(k);
+            const moins = el('button', { className: 'libre-enlever', type: 'button', title: `Enlever ${e?.nom || m.id}` }, el('i', { className: 'codicon codicon-close' }));
+            moins.onclick = () => { choisies.splice(k, 1); dessiner(); };
+            choix.append(el('span', { className: 'libre-membre' }, b, moins));
+          });
+          ok.disabled = !choisies.length;
+        }
+
+        // --- Le réglage d'une créature choisie : ses attaques et son objet ---
+        function regler(k) {
+          const m = choisies[k];
+          const e = especes.find((x) => x.id === m.id);
+          const possibles = Regles.attaquesPossibles(jeu, m.id, niveau);
+          reglage.innerHTML = '';
+          const fermer = () => { reglage.hidden = true; reglage.innerHTML = ''; ouvert.reglage = null; dessiner(); };
+          ouvert.reglage = fermer;
+
+          const attaques = el('div', { className: 'libre-attaques' });
+          const compte = el('span', { className: 'libre-compte' });
+          const dessinerAttaques = () => {
+            attaques.innerHTML = '';
+            for (const a of possibles) {
+              const prise = m.attaques.includes(a.id);
+              const b = el('button', { className: `libre-attaque${prise ? ' prise' : ''}`, type: 'button', style: `--type: ${a.couleur}` },
+                el('span', { className: 'libre-attaque-nom' },
+                  el('i', { className: `codicon codicon-${prise ? 'check' : 'add'}` }),
+                  el('span', { textContent: a.nom })),
+                el('span', { className: 'libre-attaque-info' },
+                  el('span', { className: 'libre-type', textContent: a.type || '—', style: `background: ${a.couleur}` }),
+                  el('span', { textContent: a.puissance ? `${a.puissance}` : 'statut' })));
+              b.onclick = () => {
+                if (prise) m.attaques = m.attaques.filter((x) => x !== a.id);
+                else if (m.attaques.length < 4) m.attaques.push(a.id);
+                else return;
+                dessinerAttaques();
+              };
+              attaques.append(b);
+            }
+            if (!possibles.length) attaques.append(el('p', { className: 'libre-aide', textContent: 'Cette créature n\'a aucune attaque dans les données du jeu.' }));
+            compte.textContent = `${m.attaques.length} / 4 attaques`;
+          };
+          dessinerAttaques();
+
+          const bloc = el('div', { className: 'libre-reglage-carte' },
+            el('div', { className: 'libre-tete' }, el('h2', { textContent: `${e?.nom || m.id}  N.${niveau}` }), compte),
+            el('p', { className: 'libre-aide', textContent: 'Quatre attaques au plus. Sans choix, elle garde celles qu\'elle connaît à ce niveau.' }),
+            attaques);
+
+          if (objets.length) {
+            const select = el('select', { className: 'libre-objet' },
+              el('option', { value: '', textContent: 'Aucun objet' }),
+              ...objets.map((o) => el('option', { value: o.id, textContent: o.nom, selected: o.id === m.objet })));
+            select.onchange = () => { m.objet = select.value; };
+            bloc.append(el('label', { className: 'libre-ligne' }, el('span', { textContent: 'Objet tenu' }), select));
+          }
+          const fini = el('button', { className: 'libre-ok', type: 'button', textContent: 'C\'est bon' });
+          fini.onclick = fermer;
+          bloc.append(el('div', { className: 'libre-bas' }, el('span', { className: 'libre-espace' }), fini));
+          reglage.append(bloc);
+          reglage.hidden = false;
+        }
+
+        recherche.oninput = dessiner;
+        ok.onclick = () => { if (choisies.length) finir(choisies.map((m) => ({ ...m, attaques: [...m.attaques] }))); };
+        dessiner();
+        recherche.focus();
+      });
+    }
+    function fermer() { if (ouvert) ouvert.finir(null); }
+    return { ouvrir, fermer, get ouvert() { return Boolean(ouvert); } };
+  }
+  return { creer };
+})();

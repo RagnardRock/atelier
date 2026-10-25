@@ -1,6 +1,7 @@
 // Le mode table (Saga 0.14) : le panneau du MJ, à droite du plateau. Rien ici n'est montré aux joueurs.
 //
 //   Table      voir comme (MJ, les joueurs, un joueur), ouvrir l'écran des joueurs, pause
+//   Amis       le multijoueur (Saga 1.0) : qui est connecté et quel héros chacun joue
 //   Pièces     qui voit chaque pièce, le brouillard, le pinceau (révéler ou cacher des cases à la main)
 //   Pions      les héros et les monstres de la carte : leurs PV, qui les voit
 //   Rencontres poser une rencontre sur la table, lancer le combat
@@ -57,6 +58,27 @@ const TablePanneau = (() => {
             btn('screen-normal', 'Recadrer', () => T.cadrer(), { titre: 'Remontrer toute la carte (molette : zoom, clic droit glissé : se déplacer)' })),
         ];
       }));
+
+      // Saga 1.0 : les amis connectés, et le héros de chacun.
+      const multi = T.multi?.();
+      if (multi?.actif) {
+        racine.append(section('amis', `Amis (${multi.joueurs.filter((j) => j.connecte && !j.hote).length})`, () => {
+          const out = [];
+          const i = multi.infos;
+          if (i.ouvert) out.push(el('p', { className: 'table-note', textContent: `Ils ouvrent ${i.adresses[0] ? `http://${i.adresses[0]}:${i.port}` : `le port ${i.port}`} et entrent le code ${i.code}.` }));
+          const heros = partie.equipe.filter((c) => c.jdr).map((c) => [c.creature, JdrPerso.nom(jeu, c)]);
+          for (const j of multi.joueurs) {
+            if (j.hote) continue;
+            out.push(el('div', { className: `table-ligne ami${j.connecte ? '' : ' absent'}` },
+              el('i', { className: `codicon codicon-${j.connecte ? 'person' : 'debug-disconnect'}` }),
+              el('span', { className: 'table-nom', textContent: j.nom }),
+              select(T.roleDe(j.nom), [['', 'Spectateur'], ...heros.map(([id, nom]) => [id, nom])], (v) => T.donnerRole(j.nom, v))));
+          }
+          if (multi.joueurs.length <= 1) out.push(el('p', { className: 'table-note', textContent: 'Personne encore. Donne l\'adresse et le code à tes amis : ils jouent depuis leur navigateur, sans rien installer.' }));
+          out.push(el('p', { className: 'table-note', textContent: 'Un joueur voit ce que son héros a le droit de voir, le déplace hors combat et joue son tour en combat. Un spectateur ne voit que l\'écran partagé.' }));
+          return out;
+        }));
+      }
 
       const ps = TableEtat.pieces(carte);
       racine.append(section('pieces', `Pièces et brouillard${ps.length ? ` (${ps.length})` : ''}`, () => {

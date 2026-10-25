@@ -434,6 +434,20 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Le vérificateur** signale aussi les erreurs des scripts, les blocs Script qui appellent une commande inconnue et les variables qui n'existent pas ; un clic ouvre le script à la bonne ligne. **Ctrl+K** trouve un script par son nom, ses commandes ou un bout de son code.
 - **Loki** lit, écrit et essaie les scripts (actions `scripts`, `script`, `essayer_script`) et crée les variables (`variable`), toujours avec Autoriser / Refuser et `Ctrl+Z`.
 
+## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
+
+Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils
+rejoignent depuis leur navigateur, avec un code. Ce que Tafl ajoute pour ça :
+
+- **Données › Réglages › Partie › Multijoueur** : les joueurs peuvent-ils **échanger** (une créature, un
+  objet, de l'argent) et se **défier** (duel amical) ? Pour une partie de table (pack JDR) : les joueurs
+  voient-ils les **PV exacts** des autres héros, ou seulement leur état (indemne, blessé, en sang) ?
+- **Nouveau bloc « Composer son équipe »** (pack Pokémon) : le joueur choisit lui-même jusqu'à six créatures
+  du jeu, au niveau écrit dans le bloc. L'équipe d'avant part au PC, rien n'est perdu.
+- **Nouveau modèle de jeu « Arène de duel »** (Fichier › Nouveau jeu › Partir de) : une carte d'arène, deux
+  bornes d'équipe, un terrain. Deux amis se rejoignent, prennent six créatures chacun et s'affrontent. Les
+  créatures viennent des données officielles, à importer une fois avec Loki.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).

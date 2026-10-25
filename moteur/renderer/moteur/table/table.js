@@ -36,6 +36,8 @@ const TableMode = (() => {
     let sceneTexte = null; // ce que dit la boîte de dialogue (recopié chez les joueurs)
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
     let derniereVue = null, envoye = '', chronoEnvoi = 0;
+    // Saga 1.0 : le multijoueur. Chaque ami connecté reçoit SA vue (celle de son rôle), jamais celle du MJ.
+    const envoyes = new Map(); // id du client → le dernier texte envoyé
     let panneau = null;
 
     const jeu = () => h.jeu();
@@ -48,7 +50,21 @@ const TableMode = (() => {
       carte: carte(), presents: h.presents(), scene: sceneTexte,
       combat: combat ? { tour: combat.tour, ordre: combat.ordre, actif: combat.actif, reste: combat.reste } : null,
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
+      ficheDe: (perso) => fichePour(perso),
     });
+    // La fiche qu'un joueur reçoit (la sienne) : de quoi la lire et lancer ses jets.
+    function fichePour(perso) {
+      const c = partie().equipe.find((q) => q.jdr && q.creature === perso);
+      if (!c) return null;
+      const j = jeu();
+      return {
+        nom: JdrPerso.nom(j, c), niveau: c.niveau, pv: Math.max(0, c.pv), pvMax: JdrPerso.pvMax(j, c), ca: JdrPerso.ca(j, c),
+        caracs: JdrBase.caracteristiques(j).map((x) => ({ id: x.id, nom: x.nom, court: x.court, valeur: JdrPerso.carac(j, c, x.id), mod: JdrBase.mod(JdrPerso.carac(j, c, x.id)), sauvegarde: JdrPerso.bonusSauvegarde(j, c, x.id) })),
+        competences: JdrBase.listeOuDefaut(j, 'competences').map((x) => ({ id: x.id, nom: x.nom, bonus: JdrPerso.bonusCompetence(j, c, x.id), maitrise: JdrPerso.competencesMaitrisees(j, c).includes(x.id) })),
+        attaques: JdrPerso.attaques(j, c).map((x) => ({ nom: x.nom, bonus: x.bonus, des: x.des, mod: x.mod })),
+        etats: c.etats || [],
+      };
+    }
     const vuePour = (r) => ({ ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) });
     const pion = (id) => table().pions.find((p) => p.id === id) || null;
     const presentDe = (id) => h.presents().find((q) => `ev:${q.ev.id}` === id) || null;
@@ -95,8 +111,20 @@ const TableMode = (() => {
     function agir(a, r = { mj: true }) {
       const res = E.agir(jeu(), partie(), r, a, ctxVue());
       if (!res.ok && r.mj) h.message(res.erreur);
+      if (res.jet) lancerJet(res.jet);
       panneau?.rafraichir();
       return res;
+    }
+    // Le jet demandé par un joueur : lancé ici (l'hôte), montré sur le plateau de dés et noté au journal.
+    async function lancerJet({ perso, sorte, id, quoi }) {
+      const c = partie().equipe.find((q) => q.jdr && q.creature === perso);
+      if (!c) return;
+      const o = { jeu: jeu(), partie: partie(), ui: { des: (x) => h.des(x) }, c, quoi };
+      try {
+        if (sorte === 'sauvegarde') await JdrTests.sauvegarde({ ...o, carac: id, dd: 0 });
+        else await JdrTests.test({ ...o, competence: id, dd: 0 });
+      } catch (err) { h.message(`Jet impossible : ${err.message}`); }
+      panneau?.rafraichir();
     }
     // Un héros arrivé sur sa case (hors combat) : le meneur du groupe est là ; un déclencheur ou un
     // téléporteur sous ses pieds se lance.
@@ -437,9 +465,36 @@ const TableMode = (() => {
       avancer() {},
     };
 
-    // --- Les joueurs (leur fenêtre) : leurs demandes, vérifiées ici ---
+    // --- Le multijoueur (Saga 1.0) : qui joue quoi ---
+    // Les rôles sont gardés dans la partie, par NOM de joueur : un ami qui se reconnecte (ou qui recharge
+    // sa page) retrouve son héros. '' = spectateur (il regarde, il ne touche à rien).
+    function roles() {
+      const t = table();
+      if (!t.roles || typeof t.roles !== 'object') t.roles = {};
+      return t.roles;
+    }
+    const roleDe = (nom) => String(roles()[nom] || '');
+    function donnerRole(nom, perso) {
+      roles()[nom] = String(perso || '');
+      envoyes.clear();
+      panneau?.rafraichir();
+    }
+    // Le rôle d'un ami, pour le filtrage et pour ses droits : un spectateur ne peut rien demander.
+    const rolePour = (nom) => {
+      const p = roleDe(nom);
+      return p ? { mj: false, perso: p } : { mj: false, perso: null, spectateur: true };
+    };
+
+    // --- Les joueurs (leur fenêtre, ou le navigateur d'un ami) : leurs demandes, vérifiées ici ---
     function recevoir(a) {
       if (!actif || !a || typeof a !== 'object') return;
+      // D'un ami par le réseau : son rôle décide, pas ce qu'il dit être.
+      if (a.client) {
+        const nom = h.multi?.()?.nomDe(a.client) || '';
+        const r = rolePour(nom);
+        if (r.spectateur) return;
+        a = { ...a, perso: r.perso };
+      }
       const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null };
       if (a.type === 'deplacer') {
         if (h.occupe()) return;
@@ -476,10 +531,22 @@ const TableMode = (() => {
       plateau.dessiner({ jeu: jeu(), carte: carte(), vue: derniereVue, maintenant, mj: r.mj, apercu: !r.mj, cases: cases || casesZone, cibles: picker?.sorte === 'pion' ? picker.cibles : null, selection, survol });
       // L'écran des joueurs : sa vue, au plus 8 fois par seconde, seulement quand elle change.
       chronoEnvoi += dt;
-      if (chronoEnvoi >= 0.12 && window.saga.tableEnvoyer) {
+      if (chronoEnvoi >= 0.12) {
         chronoEnvoi = 0;
-        const v = JSON.stringify(vuePour({ mj: false, perso: null }));
-        if (v !== envoye) { envoye = v; window.saga.tableEnvoyer(v); }
+        if (window.saga.tableEnvoyer) {
+          const v = JSON.stringify(vuePour({ mj: false, perso: null }));
+          if (v !== envoye) { envoye = v; window.saga.tableEnvoyer(v); }
+        }
+        // Le multijoueur : à chaque ami, la vue de SON rôle (un spectateur voit celle de l'écran partagé).
+        const multi = h.multi?.();
+        if (multi?.actif && window.saga.reseauEnvoyer) {
+          for (const j of multi.joueurs) {
+            if (j.hote || !j.connecte) continue;
+            const r = rolePour(j.nom);
+            const v = JSON.stringify(vuePour(r.spectateur ? { mj: false, perso: null } : r));
+            if (envoyes.get(j.id) !== v) { envoyes.set(j.id, v); window.saga.reseauEnvoyer(j.id, 'vue', v); }
+          }
+        }
       }
     }
 
@@ -499,6 +566,8 @@ const TableMode = (() => {
       get combatOuvert() { return Boolean(combat) && !boite.hidden; },
       // Pour le panneau du MJ.
       jeu, partie, carte, table, agir, pion, VISIBILITES: () => VISIBILITES(jeu(), partie()), libelleVisible,
+      // Le multijoueur (Saga 1.0) : qui joue quel héros (panneau du MJ).
+      roleDe, donnerRole, multi: () => h.multi?.(),
       get selection() { return selection; }, set selection(v) { selection = v; },
       get pinceau() { return pinceau; }, set pinceau(v) { pinceau = v; canvas.classList.toggle('pinceau', Boolean(v)); },
       get apercu() { return apercu; }, set apercu(v) { apercu = v; },

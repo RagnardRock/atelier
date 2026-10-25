@@ -195,7 +195,7 @@ async function exporterWeb({ textes, titre, sortie, moteur, version, configDefau
 // --- Version Windows (.exe) ---
 const MARQUE_EXE = 'LISEZMOI.txt';
 // Ce qu'on prend de l'application Saga pour en faire celle du jeu.
-const FICHIERS_APP = ['main.js', 'preload.js', 'exporter.js', 'renderer', 'commun', 'build/icon.ico', 'build/icon.png',
+const FICHIERS_APP = ['main.js', 'preload.js', 'exporter.js', 'reseau.js', 'web/saga-reseau.js', 'renderer', 'commun', 'build/icon.ico', 'build/icon.png',
   'node_modules/@vscode/codicons/dist/codicon.css', 'node_modules/@vscode/codicons/dist/codicon.ttf'];
 
 async function exporterExe({ textes, titre, sortie, moteur, version, runtime, exe, progres, dossierJeu }) {

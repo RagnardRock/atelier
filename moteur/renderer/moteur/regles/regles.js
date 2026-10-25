@@ -51,6 +51,10 @@
 //   actionsPause(jeu)               → [[id, nom, icône]] : des choix en plus dans le menu de pause
 //   agirPause({ jeu, partie, ui, id }) fait l'un de ces choix
 //   pourScript(jeu, partie)         → ce qu'un script JS lit des membres (saga.fiche)
+// Saga 1.0 (l'écran « compose ton équipe »), toutes facultatives :
+//   attaquesPossibles(jeu, id, niveau) → [{ id, nom, type, couleur, categorie, puissance, pp }]
+//   attaquesDefaut(jeu, id, niveau) → [id] : les quatre cochées au départ
+//   objetsTenables(jeu)             → [{ id, nom, description, icone }] (capacité « tenir »)
 
 const Regles = (() => {
   // Ce que les jeux d'un pack savent faire : le moteur et Tafl cachent le reste.
@@ -81,7 +85,25 @@ const Regles = (() => {
       dex_vide: 'Tu n\'as encore vu aucune créature. Celles que tu croises en combat s\'inscrivent ici.',
     },
     existe: (jeu, id) => Boolean(Creatures.trouver(jeu, 'creatures', id)),
-    creer: (jeu, id, niveau) => Creatures.creer(jeu, id, niveau),
+    creer: (jeu, id, niveau, o) => Creatures.creer(jeu, id, niveau, o),
+    // Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau (apprentissage + CT), pour l'écran
+    // « compose ton équipe » de l'arène. Les quatre premières sont celles qu'elle connaîtrait.
+    attaquesPossibles(jeu, id, niveau) {
+      const e = Creatures.trouver(jeu, 'creatures', id);
+      if (!e) return [];
+      const ids = [];
+      for (const a of (e.attaques || []).slice().sort((x, y) => (x.niveau || 0) - (y.niveau || 0))) {
+        if ((a.niveau || 0) <= niveau && !ids.includes(a.attaque)) ids.push(a.attaque);
+      }
+      for (const x of e.ct || []) if (!ids.includes(x)) ids.push(x);
+      return ids.map((x) => Creatures.trouver(jeu, 'attaques', x)).filter(Boolean).map((a) => {
+        const t = Creatures.trouver(jeu, 'types', a.type);
+        return { id: a.id, nom: a.nom || a.id, type: t?.nom || '', couleur: t?.couleur || '#888', categorie: a.categorie || '', puissance: Number(a.puissance) || 0, pp: Number(a.pp) || 10 };
+      });
+    },
+    attaquesDefaut: (jeu, id, niveau) => Creatures.attaquesAuNiveau(jeu, Creatures.trouver(jeu, 'creatures', id), niveau),
+    // Les objets qu'un membre peut tenir (menu Équipe › Faire tenir, et l'écran de l'arène).
+    objetsTenables: (jeu) => (jeu.donnees.objets?.objets || []).filter((o) => o && o.id).map((o) => ({ id: o.id, nom: o.nom || o.id, description: o.description || '', icone: o.icone || '' })),
     completer: (jeu, c) => Creatures.completer(jeu, c),
     soigner: (jeu, c) => Creatures.soigner(jeu, c),
     resume(jeu, c) {
@@ -167,6 +189,10 @@ const Regles = (() => {
     actionsMembre: (jeu, c) => pack(jeu).actionsMembre?.(jeu, c) || [],
     agirMembre: (o) => pack(o.jeu).agirMembre?.(o),
     rejoindre: (jeu, ...a) => pack(jeu).rejoindre?.(jeu, ...a) || null,
+    // Saga 1.0 : l'écran « compose ton équipe ». Sans elles, on ne choisit que les membres.
+    attaquesPossibles: (jeu, id, niveau) => pack(jeu).attaquesPossibles?.(jeu, id, niveau) || [],
+    attaquesDefaut: (jeu, id, niveau) => pack(jeu).attaquesDefaut?.(jeu, id, niveau) || [],
+    objetsTenables: (jeu) => (Regles.capacites(jeu).tenir ? pack(jeu).objetsTenables?.(jeu) || [] : []),
     // Le résumé : seulement les pages choisies, dans leur ordre.
     fiche(jeu, ...a) {
       const f = pack(jeu).fiche(jeu, ...a), ordre = menus(jeu).pages;
