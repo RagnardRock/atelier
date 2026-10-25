@@ -402,6 +402,25 @@ Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregi
 - **Test rapide** : l'heure de départ du test, quand le jeu a une horloge.
 - Loki connaît tout ça (action `ambiance`, commandes et conditions des scripts).
 
+## Les espaces de travail (Tafl 0.30)
+
+Tafl est devenu un éditeur de jeu : son interface est rangée en **espaces**, des onglets en haut de la fenêtre.
+
+- **Accueil** (`Alt+1`) : sans jeu ouvert, l'écran de bienvenue. Avec un jeu : son nom, son pack de règles, quelques chiffres, la **carte du monde** (un clic ouvre la carte cliquée), le **vérificateur** (un clic montre le problème), des raccourcis, les jeux récents et les dernières modifications.
+- **Tuiles** (`Alt+2`) et **Cartes** (`Alt+3`) : les deux modes d'avant. `Tab` passe toujours de l'un à l'autre.
+- **Événements** (`Alt+4`) : tous les événements du jeu, rangés par carte, avec une recherche ; l'éditeur d'événement en pleine page. Modifier un événement depuis la carte (outil Événement, double-clic dans le panneau) l'ouvre ici ; un nouvel événement est posé tout de suite (Ctrl+Z l'enlève).
+- **Données** (`Alt+5`, ou `Ctrl+Maj+D`) : les données du jeu en pleine page. Les listes suivent le **pack de règles du jeu ouvert** (Pokémon : types, talents, attaques, créatures, dresseurs ; JRPG : éléments, compétences, classes, monstres, groupes) ; personnages, quêtes, objets et boutiques sont communs.
+- **Jeu** (`Alt+6`) : jouer, test rapide, exporter, pack de règles et réglages, carte monde, titre et dossier, et le vérificateur complet (`Ctrl+Maj+V`).
+- `Ctrl+Tab` : l'espace suivant.
+
+Dans Événements et Données, on travaille sur une copie, comme dans les fenêtres d'avant : **Appliquer** (`Ctrl+Entrée`) la met dans le jeu, **Annuler les changements** la jette. Rien ne se perd : ce qui est en cours s'applique tout seul en changeant d'espace ou d'événement, en enregistrant, en jouant, et avant une action de Loki (la page se redessine ensuite avec ce qu'il a fait).
+
+**Chercher partout** (`Ctrl+K`, ou la case « Chercher… ») : un espace, une carte, un événement (par son nom ou une phrase de ses dialogues), une donnée du pack du jeu, une tuile, un tampon, ou une commande des menus. `↑` `↓` pour choisir, `Entrée` pour y aller.
+
+Les menus d'avant (Fichier, Édition, Tuile, Carte, Jeu, Générer, Affichage) sont derrière le bouton **☰**, à gauche du logo. `Ctrl+B` (ou le bouton à côté d'Enregistrer) cache les panneaux de droite pour dessiner en grand.
+
+Sur un écran classique, la barre se resserre : sous 1500 px de large les petits textes partent, sous 1280 px les onglets ne gardent que leur icône. L'accueil passe sur deux colonnes.
+
 ## Claude dans Tafl (depuis Tafl 0.3)
 
 Le bouton étincelle de la barre de titre (ou `Ctrl+Maj+K`) ouvre le **panneau Claude** à droite, le même que dans Skald, Tafl et Brokk (son code est dans `commun/`, voir `commun/LISEZMOI.md`).
@@ -462,6 +481,8 @@ Même organisation que Skald : Electron, sans framework ni bundler, tout le dess
 | `FORMAT.md` | La description des fichiers d'un dossier de jeu, pour le futur moteur (copiée dans chaque dossier de jeu). |
 | `renderer/palettes.js` | Les palettes proposées : une ligne par palette, facile à compléter. |
 | `renderer/samples.js` | Les tuiles d'exemple, dessinées en texte (une lettre par pixel). |
-| `renderer/app.js` | L'état, les menus, les raccourcis, les réglages et l'accueil. |
+| `renderer/espaces.js` | Tafl 0.30 : les espaces de travail (onglets), l'accueil d'un jeu, l'espace Jeu, et les éditeurs d'événement et de données en pleine page. |
+| `renderer/recherche.js` | Tafl 0.30 : chercher partout (Ctrl+K). |
+| `renderer/app.js` | L'état, les menus (☰), les raccourcis, les réglages et l'écran de bienvenue. |
 | `build/icon.svg` | L'icône (et `icon.png` / `icon.ico` qui en sont tirés). |
 | `../.github/workflows/tafl.yml` | La fabrication et la publication de l'installeur. |

@@ -9,6 +9,19 @@ const OutilsJeu = (() => {
   const jeuDe = (doc) => ({ cartes: doc.maps.map((m) => IO.mapToJSON(doc, m)), depart: doc.depart, donnees: doc.data });
 
   // --- Vérifier le jeu ---
+  // Montrer un problème : sa carte (espace Cartes) et sa case. Tafl 0.30 : « Revoir la liste » ouvre
+  // l'espace Jeu, où la liste reste affichée.
+  function allerA(p) {
+    const doc = App.doc;
+    const i = doc.maps.findIndex((m) => m.id === p.carte);
+    if (i < 0) return;
+    App.setMode('map');
+    App.selectMap(i);
+    if (Number.isInteger(p.x) && Number.isInteger(p.y)) requestAnimationFrame(() => Stage.montrer(p.x, p.y));
+    const actions = [{ label: 'Revoir la liste', run: () => Espaces.aller('jeu') }];
+    if (p.evenement) actions.unshift({ label: 'Ouvrir l\'événement', run: () => Espaces.aller('evenements', { carte: p.carte, evenement: p.evenement }) });
+    notify(p.message, p.gravite === 'erreur' ? 'error' : 'warning', 8000, actions);
+  }
   function verifier() {
     const doc = App.doc;
     if (!doc || Events.isOpen()) return;
@@ -24,17 +37,7 @@ const OutilsJeu = (() => {
       return [id, b, nom];
     });
     const fermer = () => { w.root.remove(); Events.occuper(null); };
-    const aller = (p) => {
-      fermer();
-      const i = doc.maps.findIndex((m) => m.id === p.carte);
-      if (i < 0) return;
-      if (App.mode !== 'map') App.setMode('map');
-      App.selectMap(i);
-      if (Number.isInteger(p.x) && Number.isInteger(p.y)) requestAnimationFrame(() => Stage.montrer(p.x, p.y));
-      const actions = [{ label: 'Revoir la liste', run: verifier }];
-      if (p.evenement) actions.unshift({ label: 'Ouvrir l\'événement', run: () => App.editEvent(p.evenement) });
-      notify(p.message, p.gravite === 'erreur' ? 'error' : 'warning', 8000, actions);
-    };
+    const aller = (p) => { fermer(); allerA(p); };
     function render() {
       for (const [id, b, nom] of onglets) {
         b.classList.toggle('active', id === filtre);
@@ -368,5 +371,5 @@ const OutilsJeu = (() => {
     renderTout();
   }
 
-  return { verifier, testRapide, jeuDe };
+  return { verifier, testRapide, jeuDe, allerA };
 })();

@@ -63,33 +63,66 @@ function drawChecker(ctx, x, y, w, h, cell = 8) {
 // items : [{ label, keys, run, disabled, checked }] ; null = séparateur.
 const Menus = (() => {
   let current = null;
+  // Tafl 0.30 : un élément peut ouvrir un sous-menu (submenu : la liste, ou une fonction qui la rend),
+  // affiché à droite au survol. C'est ainsi que le bouton ☰ range Fichier, Édition, Tuile…
+  function fermerSous() {
+    current?.sous?.el.remove();
+    current?.sous?.item?.classList.remove('open');
+    if (current) current.sous = null;
+  }
   function close() {
+    fermerSous();
     current?.el.remove();
     current?.button?.classList.remove('open');
     current = null;
   }
+  function remplir(menu, items, sous = false) {
+    for (const item of items) {
+      if (!item) { menu.append(el('div', { className: 'menu-sep' })); continue; }
+      const b = el('button', { className: `menu-item${item.className ? ` ${item.className}` : ''}${item.submenu ? ' has-submenu' : ''}`, disabled: Boolean(item.disabled), title: item.title || '' }, [
+        el('span', { className: 'menu-check' }, item.checked ? [icon('check')] : item.icon ? [icon(item.icon)] : []),
+        el('span', { className: 'menu-label', textContent: item.label }),
+        item.keys ? el('span', { className: 'menu-keys', textContent: item.keys }) : null,
+        item.submenu ? el('span', { className: 'menu-arrow' }, [icon('chevron-right')]) : null,
+      ]);
+      if (item.submenu) {
+        const ouvrir = () => {
+          if (current?.sous?.item === b) return;
+          fermerSous();
+          const liste = typeof item.submenu === 'function' ? item.submenu() : item.submenu;
+          const m = el('div', { className: 'menu submenu' });
+          remplir(m, liste, true);
+          document.body.append(m);
+          const r = b.getBoundingClientRect(), rm = m.getBoundingClientRect();
+          const x = r.right + 4 + rm.width > innerWidth - 8 ? r.left - rm.width - 4 : r.right + 4;
+          m.style.left = `${Math.max(8, x)}px`;
+          m.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - rm.height - 8))}px`;
+          b.classList.add('open');
+          current.sous = { el: m, item: b };
+        };
+        b.onmouseenter = ouvrir;
+        b.onclick = ouvrir;
+      } else {
+        if (!sous) b.onmouseenter = fermerSous;
+        b.onclick = () => { close(); item.run(); };
+      }
+      menu.append(b);
+    }
+  }
   function open(items, x, y, button = null, className = '') {
     close();
     const menu = el('div', { className: `menu${className ? ` ${className}` : ''}` });
-    for (const item of items) {
-      if (!item) { menu.append(el('div', { className: 'menu-sep' })); continue; }
-      const b = el('button', { className: `menu-item${item.className ? ` ${item.className}` : ''}`, disabled: Boolean(item.disabled), title: item.title || '' }, [
-        el('span', { className: 'menu-check' }, item.checked ? [icon('check')] : []),
-        el('span', { className: 'menu-label', textContent: item.label }),
-        item.keys ? el('span', { className: 'menu-keys', textContent: item.keys }) : null,
-      ]);
-      b.onclick = () => { close(); item.run(); };
-      menu.append(b);
-    }
+    current = { el: menu, button, sous: null };
+    remplir(menu, items);
     document.body.append(menu);
     // Le menu reste dans la fenêtre, même ouvert près du bord.
     const r = menu.getBoundingClientRect();
     menu.style.left = `${Math.min(x, innerWidth - r.width - 8)}px`;
     menu.style.top = `${Math.min(y, innerHeight - r.height - 8)}px`;
-    current = { el: menu, button };
     button?.classList.add('open');
   }
-  window.addEventListener('pointerdown', (e) => { if (current && !current.el.contains(e.target) && e.target !== current.button && !current.button?.contains(e.target)) close(); }, true);
+  const dedans = (t) => current && (current.el.contains(t) || current.sous?.el.contains(t));
+  window.addEventListener('pointerdown', (e) => { if (current && !dedans(e.target) && e.target !== current.button && !current.button?.contains(e.target)) close(); }, true);
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   window.addEventListener('blur', close);
   return { open, close, isOpen: () => Boolean(current) };
