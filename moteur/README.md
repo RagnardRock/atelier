@@ -198,7 +198,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/reseau/multi.js` | Saga 1.0 : le panneau des joueurs et la discussion (chez l'hôte comme chez un ami). |
 | `renderer/moteur/reseau/monde.js` | Saga 1.0 : le monde partagé (se voir, s'approcher, échanger, se défier). |
 | `renderer/moteur/reseau/duel.js` | Saga 1.0 : le duel entre deux joueurs (un calcule, l'autre voit et choisit). |
-| `renderer/moteur/equipe-libre.js` | Saga 1.0 : l'écran où le joueur compose son équipe (les jeux « arène »). |
+| `renderer/moteur/equipe-libre.js` | Saga 1.0 : l'écran où le joueur compose son équipe — ses créatures, leurs quatre attaques et leur objet (les jeux « arène »). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |

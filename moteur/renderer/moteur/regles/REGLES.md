@@ -592,6 +592,9 @@ Le pack JDR a demandé six nouveaux champs facultatifs. La façade les rend sans
 | `actionsPause(jeu)` → `[[id, nom, icône]]` | Des choix en plus dans le menu de pause (JDR : « Jets de dés », « Se reposer »). |
 | `agirPause({ jeu, partie, ui, id })` | Fait l'un de ces choix. |
 | `pourScript(jeu, partie)` → `[fiche]` | Ce qu'un script JS lit de chaque membre (`saga.fiche(i)`, `saga.fiches`). Des valeurs simples, déjà calculées. |
+| `attaquesPossibles(jeu, id, niveau)` → `[{ id, nom, type, couleur, categorie, puissance, pp }]` | Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau, pour l'écran « compose ton équipe » (`equipe-libre.js`). Sans elle, on ne choisit que les membres. |
+| `attaquesDefaut(jeu, id, niveau)` → `[id]` | Les attaques qu'elle connaîtrait à ce niveau (les quatre cochées au départ). |
+| `objetsTenables(jeu)` → `[{ id, nom, description, icone }]` | Les objets qu'un membre peut tenir (capacité `tenir`). Le même écran s'en sert pour l'objet tenu. |
 
 `scripts.ui` (3.1) gagne aussi `texte({ titre, valeur, max })` (taper un texte : le nom du personnage), `repartir({ … })` (répartir des valeurs, l'achat de points) et `des({ titre, lignes })` (le plateau de dés, `des-ecran.js`, qui montre des jets **déjà tirés** et ne décide rien). Sur l'écran groupe, une vue de héros peut donner `info` (un texte à la place des PM : le pack JDR y met la CA).
 

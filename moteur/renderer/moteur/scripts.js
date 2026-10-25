@@ -251,11 +251,15 @@ const Scripts = (() => {
           const nombre = Math.max(1, Math.min(6, Math.round(Number(c.nombre) || 6)));
           const niveau = Math.max(1, Math.min(100, Math.round(Number(c.niveau) || 50)));
           dialogue.fermer();
-          const ids = await moteur.composerEquipe({ nombre, niveau, titre: c.titre || 'Compose ton équipe' });
-          if (!ids?.length) break;
+          const membres = await moteur.composerEquipe({ nombre, niveau, titre: c.titre || 'Compose ton équipe' });
+          if (!membres?.length) break;
           // L'équipe d'avant est mise de côté (au PC) : on ne perd jamais ses créatures.
           if (c.garder !== false) for (const x of [...partie.equipe]) Collection.deposer(jeu, partie, x);
-          partie.equipe = ids.map((id) => Regles.creer(jeu, id, niveau)).filter(Boolean);
+          partie.equipe = membres.map((m) => {
+            const x = Regles.creer(jeu, m.id, niveau, { attaques: m.attaques });
+            if (x && m.objet) x.objet = m.objet;
+            return x;
+          }).filter(Boolean);
           Collection.noterTout(partie);
           await narrer(`Ton équipe : ${partie.equipe.map((x) => Regles.resume(jeu, x).nom).join(', ')}.`);
           break;
