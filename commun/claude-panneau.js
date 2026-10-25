@@ -247,6 +247,16 @@ const ClaudePanneau = (() => {
     }
   }
 
+  // Ouvre le panneau avec une question déjà écrite (par exemple « Explique ce passage… » depuis la
+  // bulle de sélection de Kenning). envoyer: true l'envoie tout de suite, sinon Ragna la complète.
+  function demander(texte, { envoyer = false } = {}) {
+    toggle(true);
+    input.value = texte;
+    autoGrow();
+    if (envoyer && !busy) send();
+    else { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  }
+
   function clearView() {
     endText();
     list.innerHTML = '';
@@ -744,5 +754,5 @@ const ClaudePanneau = (() => {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
   else demarrer();
 
-  return { init, toggle, isOpen, refreshProjet, actions, familles };
+  return { init, toggle, isOpen, refreshProjet, actions, familles, demander };
 })();

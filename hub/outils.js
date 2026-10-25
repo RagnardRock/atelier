@@ -86,6 +86,17 @@ const OUTILS = [
     categorie: 'bureautique',
   },
   {
+    id: 'kenning',
+    nom: 'Kenning',
+    glyphe: 'ᚲ',
+    description: 'Ma liseuse d\'eBooks : bibliothèque, EPUB, MOBI, AZW3, FB2, surlignages',
+    prefixe: 'kenning-v',
+    exe: 'Kenning.exe',
+    icone: 'kenning.svg',
+    dossier: 'liseuse',
+    categorie: 'bureautique',
+  },
+  {
     id: 'reikna',
     categorie: 'bureautique',
     nom: 'Reikna',

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <!-- Sécurité : seuls les scripts de Kenning s'exécutent (adresse kenning://, voir main.js). Les pages des
+       livres s'affichent dans des cadres blob: qui héritent de cette règle : les scripts d'un livre ne
+       s'exécutent jamais (blob: n'est pas dans script-src). -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' blob:; font-src 'self' data: blob:; img-src 'self' kenning://couvertures data: blob:; media-src 'self' blob: data:; connect-src 'self' data: blob:; frame-src 'self' blob:">
+  <title>Kenning</title>
+  <!-- Codicons : les icônes de VS Code (les mêmes que dans les autres outils) -->
+  <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <link rel="stylesheet" href="polices.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../commun/claude-panneau.css">
+</head>
+<body class="glass">
+  <!-- Barre de titre : on peut y déplacer la fenêtre. Windows dessine ses boutons à droite. -->
+  <header id="titlebar">
+    <span id="brand"><img class="logo" src="kenning.svg" alt="">Kenning</span>
+    <button id="btn-retour" class="button retour" title="Revenir à la bibliothèque (Échap)" hidden><i class="codicon codicon-library"></i><span>Bibliothèque</span></button>
+    <span id="titre-livre"></span>
+    <div class="title-actions">
+      <button id="btn-reglages" class="icon-button" title="Réglages de Kenning (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
+      <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version de Kenning"><i class="codicon codicon-cloud-download"></i></button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <!-- ===== Bibliothèque ===== -->
+    <section id="vue-biblio">
+      <aside id="rayons" class="panel">
+        <nav id="rayons-liste"></nav>
+      </aside>
+      <section id="biblio" class="panel">
+        <div id="biblio-barre">
+          <div class="groupe-recherche">
+            <i class="codicon codicon-search"></i>
+            <input id="biblio-recherche" type="search" placeholder="Chercher un titre, un auteur, une série…" spellcheck="false">
+          </div>
+          <select id="biblio-tri" title="Trier">
+            <option value="lu">Dernière lecture</option>
+            <option value="ajoute">Ajout récent</option>
+            <option value="titre">Titre</option>
+            <option value="auteur">Auteur</option>
+            <option value="progression">Progression</option>
+          </select>
+          <div class="groupe-vue">
+            <button id="vue-grille" class="icon-button" title="Couvertures"><i class="codicon codicon-layout"></i></button>
+            <button id="vue-liste" class="icon-button" title="Liste"><i class="codicon codicon-list-flat"></i></button>
+          </div>
+          <input id="biblio-taille" type="range" min="110" max="240" step="10" title="Taille des couvertures">
+          <span class="spacer"></span>
+          <button id="btn-dossiers" class="button"><i class="codicon codicon-folder-library"></i><span>Dossiers</span></button>
+          <button id="btn-ajouter" class="button primary"><i class="codicon codicon-add"></i><span>Ajouter des livres</span></button>
+        </div>
+        <div id="biblio-defile">
+          <div id="reprendre" hidden></div>
+          <h2 id="biblio-titre"></h2>
+          <div id="biblio-livres"></div>
+          <div id="biblio-vide" hidden></div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ===== Lecture ===== -->
+    <section id="vue-lecture" hidden>
+      <div id="lecture-barre" class="barre-outils"></div>
+      <div id="lecture-corps">
+        <aside id="lecture-cote" class="panel"></aside>
+        <section id="lecture-page">
+          <!-- Le livre (foliate-view) s'insère ici -->
+          <div id="filtre-chaud"></div>
+          <div id="lecture-chargement" hidden><i class="codicon codicon-loading codicon-modifier-spin"></i><span></span></div>
+        </section>
+        <aside id="reglages-lecture" class="panel" hidden></aside>
+      </div>
+      <footer id="lecture-pied"></footer>
+      <!-- Barre qui apparaît sur un passage sélectionné : surligner, noter, copier, demander à Loki -->
+      <div id="bulle-selection" hidden></div>
+    </section>
+    <div id="drop-hint">Lâche pour ajouter ces livres à la bibliothèque</div>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status-gauche"></span>
+    <span class="spacer"></span>
+    <span id="status-droite"></span>
+  </footer>
+
+  <div id="modal-root"></div>
+
+  <script src="base.js"></script>
+  <script src="notify.js"></script>
+  <script src="dialogs.js"></script>
+  <script src="update.js"></script>
+  <!-- Panneau Loki, commun aux outils de l'Atelier (../commun/LISEZMOI.md) -->
+  <script src="../commun/claude-panneau.js" data-outil="Kenning" data-bienvenue="Demande un résumé du chapitre, l'explication d'un passage ou d'un mot, ou de ranger tes livres dans des collections."></script>
+  <script src="claude-familles.js"></script>
+  <!-- L'application (modules : foliate-js en est un) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
