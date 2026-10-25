@@ -43,6 +43,14 @@
 //   plafond(jeu, partie)            → le niveau maximum de l'équipe, montré dans le menu Équipe (Saga 0.7)
 //   evolutionsEnAttente({ jeu, partie, ui }) après un script : ce qui évolue maintenant (Saga 0.7)
 //   marcher(jeu, partie)            après chaque pas du joueur (Pokémon : l'amitié monte) (Saga 0.7)
+// Saga 0.13 (pack JDR), toutes facultatives :
+//   commandes                       { type: async ({ jeu, partie, ui, c, jouer, narrer, ranger }) → résultat }
+//                                   les commandes des événements propres au pack (test, sauvegarde…)
+//   condition(jeu, cond, partie)    → vrai, faux, ou undefined (une condition que le pack ne connaît pas)
+//   debut({ jeu, partie, ui, ranger }) au début d'une nouvelle partie, quand le joueur est libre
+//   actionsPause(jeu)               → [[id, nom, icône]] : des choix en plus dans le menu de pause
+//   agirPause({ jeu, partie, ui, id }) fait l'un de ces choix
+//   pourScript(jeu, partie)         → ce qu'un script JS lit des membres (saga.fiche)
 
 const Regles = (() => {
   // Ce que les jeux d'un pack savent faire : le moteur et Tafl cachent le reste.
@@ -110,7 +118,7 @@ const Regles = (() => {
     evolutionsEnAttente: (o) => HorsCombat.evolutionsEnAttente(o),
     marcher: (jeu, partie) => HorsCombat.marcher(jeu, partie),
   };
-  const PACKS = { pokemon, ...(typeof Jrpg !== 'undefined' ? { jrpg: Jrpg.pack } : {}) };
+  const PACKS = { pokemon, ...(typeof Jrpg !== 'undefined' ? { jrpg: Jrpg.pack } : {}), ...(typeof Jdr !== 'undefined' ? { jdr: Jdr.pack } : {}) };
   const pack = (jeu) => PACKS[jeu?.donnees?.reglages?.reglages?.regles] || pokemon;
   // La forme des menus du jeu : celle du pack, et par-dessus ce que le jeu a réglé dans Tafl (un champ
   // vide ou faux garde celui du pack).
@@ -171,5 +179,12 @@ const Regles = (() => {
     plafond: (jeu, partie) => (pack(jeu).plafond ? pack(jeu).plafond(jeu, partie) : null),
     evolutionsEnAttente: async (o) => { await pack(o.jeu).evolutionsEnAttente?.(o); },
     marcher: (jeu, partie) => { pack(jeu).marcher?.(jeu, partie); },
+    // Saga 0.13 : facultatives (le pack JDR).
+    commande: (jeu, type) => (Object.prototype.hasOwnProperty.call(pack(jeu).commandes || {}, type) ? pack(jeu).commandes[type] : null),
+    condition: (jeu, cond, partie) => pack(jeu).condition?.(jeu, cond, partie),
+    debut: async (o) => { await pack(o.jeu).debut?.(o); },
+    actionsPause: (jeu) => pack(jeu).actionsPause?.(jeu) || [],
+    agirPause: async (o) => { await pack(o.jeu).agirPause?.(o); },
+    pourScript: (jeu, partie) => pack(jeu).pourScript?.(jeu, partie) || [],
   };
 })();

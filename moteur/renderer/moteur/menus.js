@@ -247,8 +247,66 @@ const Menus = (() => {
       });
     }
 
+    // --- Répartir des valeurs (Saga 0.13, l'achat de points du pack JDR) : lignes [{ id, nom, valeur,
+    // min, max }] ; entete(v) : le texte en haut à droite ; detail(id, v) : le texte de chaque ligne ;
+    // permis(v) : faux refuse le changement ; valide(v) : un avertissement sous la liste (vide = rien).
+    // Rend { id: valeur }, ou null (Échap).
+    function repartir({ titre, lignes: defs, entete, detail, permis, valide }) {
+      return new Promise((resoudre) => {
+        const v = Object.fromEntries(defs.map((d) => [d.id, d.valeur]));
+        const reste = el('span', { className: 'menu-entete' });
+        const avis = el('div', { className: 'menu-note' });
+        const lignes = [], valeurs = [], effets = [];
+        boite.replaceChildren(el('div', { className: 'combat-liste-titre menu-tete' }, el('span', { textContent: titre }), reste));
+        const regler = (i, d) => {
+          const def = defs[i];
+          const essai = { ...v, [def.id]: Math.max(def.min, Math.min(def.max, v[def.id] + d)) };
+          if (essai[def.id] === v[def.id] || (permis && !permis(essai))) return;
+          Object.assign(v, essai);
+          maj();
+        };
+        const bouton = (txt, i, d) => el('button', { className: 'perso-fleche', type: 'button', textContent: txt, onclick: (e) => { e.stopPropagation(); a.i = i; regler(i, d); surligner(); } });
+        defs.forEach((def, i) => {
+          const valeur = el('span', { className: 'menu-ev-valeur' });
+          const effet = el('span', { className: 'combat-liste-detail' });
+          const l = el('div', { className: 'combat-liste-ligne menu-ev-ligne menu-rep-ligne' }, el('span', { className: 'combat-liste-texte', textContent: def.nom }),
+            el('span', { className: 'menu-repartir' }, bouton('◀', i, -1), valeur, bouton('▶', i, 1)), effet);
+          l.onmousemove = () => { if (aBouge() && a.i !== i) { a.i = i; surligner(); } };
+          boite.append(l);
+          lignes.push(l); valeurs.push(valeur); effets.push(effet);
+        });
+        const ok = el('button', { className: 'combat-liste-ligne menu-ok', type: 'button', textContent: 'Valider', onclick: () => fermer({ ...v }) });
+        ok.onmousemove = () => { if (aBouge() && a.i !== defs.length) { a.i = defs.length; surligner(); } };
+        lignes.push(ok);
+        boite.append(avis, ok, aide('Haut/bas : choisir · Gauche/droite : −1/+1 · Échap : revenir'));
+        function maj() {
+          defs.forEach((def, i) => { valeurs[i].textContent = String(v[def.id]); effets[i].textContent = detail ? detail(def.id, v) : ''; });
+          reste.textContent = entete ? entete(v) : '';
+          const t = valide ? valide(v) : '';
+          avis.textContent = t || '';
+          avis.hidden = !t;
+        }
+        const surligner = () => lignes.forEach((l, i) => l.classList.toggle('actif', i === a.i));
+        const a = {
+          i: 0, resoudre,
+          touche(t) {
+            const n = lignes.length;
+            if (t === 'bas') a.i = (a.i + 1) % n;
+            else if (t === 'haut') a.i = (a.i - 1 + n) % n;
+            else if ((t === 'gauche' || t === 'droite') && a.i < defs.length) regler(a.i, t === 'droite' ? 1 : -1);
+            else if (t === 'action' && a.i === defs.length) return fermer({ ...v });
+            else if (t === 'retour') return fermer(null);
+            surligner();
+          },
+        };
+        ouvrir(a);
+        maj();
+        surligner();
+      });
+    }
+
     function touche(t) { attente?.touche(t); }
-    return { liste, quantite, ev, fiche, texte, ecran, touche, fermer: () => fermer(null), get ouvert() { return Boolean(attente); } };
+    return { liste, quantite, ev, repartir, fiche, texte, ecran, touche, fermer: () => fermer(null), get ouvert() { return Boolean(attente); } };
   }
 
   return { creer, aBouge };

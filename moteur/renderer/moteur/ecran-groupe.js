@@ -8,7 +8,7 @@
 //
 // Ce qu'il sait faire (REGLES.md › « L'écran de combat en groupe ») :
 //   ouvrir({ jeu, fond, heros: [vue], ennemis: [vue], boss })   vue d'un héros : { nom, apparence, pv, pvMax,
-//       pm, pmMax, statut, ko } ; vue d'un monstre : { nom, image, taille: petit|moyen|grand, boss, ko }
+//       pm, pmMax, info, statut, ko } (info, Saga 0.13 : un texte à la place des PM) ; vue d'un monstre : { nom, image, taille: petit|moyen|grand, boss, ko }
 //   heros(i, vue), ennemi(i, vue)         mettre à jour
 //   message(texte, { attendre, fanfare })  attendre : jusqu'à la touche Action ; sinon il passe tout seul
 //   bandeau(texte)                         le nom de l'action en cours, en haut ('' : le cacher)
@@ -79,7 +79,8 @@ const EcranGroupe = (() => {
       const k = Math.max(0, Math.min(1, vue.pv / Math.max(1, vue.pvMax)));
       u.barre.style.width = `${k * 100}%`;
       u.barre.dataset.niveau = k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas';
-      u.pmTexte.textContent = `${vue.pm}/${vue.pmMax} PM`;
+      // Saga 0.13 : un pack sans PM montre autre chose à la place (le pack JDR : la CA).
+      u.pmTexte.textContent = vue.info !== undefined ? vue.info : `${vue.pm}/${vue.pmMax} PM`;
       u.ligne.classList.toggle('ko', vue.ko);
       u.el.classList.toggle('ko', vue.ko);
       if (u.images.debout) { u.img.src = u.marche ? u.img.src : u.images.debout; u.img.hidden = false; u.vide.hidden = true; }
