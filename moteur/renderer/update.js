@@ -7,6 +7,8 @@
 
 const Updater = (() => {
   const button = $('#btn-update');
+  // Un jeu exporté (mode joueur, Saga 0.9) ne cherche pas de mise à jour de Saga.
+  if (window.saga.joueur) return { check: async () => ({ changes: [] }) };
   let busy = false;
 
   async function check() {

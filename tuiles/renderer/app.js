@@ -1058,6 +1058,42 @@ const App = (() => {
     notify(ici ? `Saga lance le jeu sur « ${doc.map.name} » (${depart.x}, ${depart.y})…` : 'Saga lance le jeu…', 'info', 2500);
   }
 
+  // --- Exporter le jeu (Tafl 0.26) : une version web et/ou Windows à envoyer à des testeurs ---
+  // Comme pour Jouer, on enregistre d'abord ; c'est Saga qui fabrique l'export (il a le moteur).
+  async function exporterJeu() {
+    const doc = api.doc;
+    if (!doc?.game) return notify('Pour exporter, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
+    const { config } = await window.tafl.readConfig();
+    const v = await Dialogs.form({
+      title: `Exporter « ${doc.name} »`,
+      okLabel: 'Choisir le dossier et exporter',
+      fields: [
+        { key: 'web', label: 'Version web (index.html, à ouvrir dans un navigateur ou à mettre sur itch.io)', type: 'checkbox', value: config.exportWeb ?? true },
+        { key: 'exe', label: 'Version Windows (.exe, rien à installer)', type: 'checkbox', value: config.exportExe ?? true },
+        { type: 'info', text: 'Chaque version donne un dossier et un .zip à envoyer. Les testeurs n\'ont besoin ni de Tafl ni de Saga. C\'est Saga qui fabrique l\'export : la version Windows est une copie de Saga qui lance directement ton jeu.' },
+      ],
+    });
+    if (!v) return;
+    await window.tafl.writeConfig({ exportWeb: v.web, exportExe: v.exe });
+    const formats = [v.web && 'web', v.exe && 'exe'].filter(Boolean);
+    if (!formats.length) return notify('Coche au moins une version.', 'info');
+    if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
+    const attente = notify(`Saga exporte le jeu (${formats.length > 1 ? 'web et Windows' : formats[0] === 'web' ? 'web' : 'Windows'})… La version Windows peut prendre une minute.`, 'info', 600000);
+    let r;
+    try {
+      r = await window.tafl.exporterJeu(doc.game.folder, formats);
+    } finally {
+      attente.remove();
+    }
+    if (!r) return;
+    const lignes = [r.web && `• Web : ${r.web.zip}`, r.exe && `• Windows : ${r.exe.zip}`].filter(Boolean);
+    const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nChaque .zip a son dossier à côté, pour essayer avant d'envoyer.`, [
+      { label: 'Fermer', value: null },
+      { label: 'Montrer dans l\'explorateur', value: (r.web || r.exe).zip, primary: true },
+    ]);
+    if (voir) await window.tafl.revealFile(voir);
+  }
+
   // --- Événements : personnages, panneaux, coffres, objets, déclencheurs (Tafl 0.7) ---
   // L'éditeur (events.js) travaille sur une copie ; on remet le résultat d'un bloc (un seul Ctrl+Z).
   function applyEvent(map, r, old) {
@@ -1237,6 +1273,7 @@ const App = (() => {
       { label: 'Exporter les tuiles séparées…', disabled: !api.doc, run: needDoc(IO.exportTiles) },
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', disabled: !api.doc, run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', disabled: !api.doc, run: needDoc(IO.exportMapImage) },
+      { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc?.game, run: () => run(exporterJeu) },
       null,
       { label: 'Réglages de Tafl…', keys: 'Ctrl+,', run: () => run(openSettings) },
     ],
@@ -1259,6 +1296,7 @@ const App = (() => {
     Jeu: () => (api.doc ? [
       { label: 'Jouer (dans Saga)', keys: 'F5', disabled: !api.doc.game, run: () => run(() => jouer(false)) },
       { label: 'Jouer depuis la case sous la souris', keys: 'Maj+F5', disabled: !api.doc.game, run: () => run(() => jouer(true)) },
+      { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc.game, run: () => run(exporterJeu) },
       null,
       { label: 'Titre du jeu…', run: () => run(renameGame) },
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).

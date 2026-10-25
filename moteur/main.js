@@ -11,12 +11,26 @@ const os = require('node:os');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 
+// Le mode joueur (Saga 0.9) : un jeu exporté en .exe (voir exporter.js) est une copie de Saga avec le
+// jeu rangé dans resources/jeu. Saga ouvre alors ce jeu tout de suite, sans ses menus (ouvrir un autre
+// jeu, recharger, mise à jour, exporter), et garde réglages et sauvegardes dans %APPDATA%\<NomDuJeu>.
+const JEU_INTEGRE = path.join(process.resourcesPath || '', 'jeu');
+const joueur = (() => {
+  if (!app.isPackaged) return null;
+  try {
+    const e = JSON.parse(fsSync.readFileSync(path.join(JEU_INTEGRE, 'export.json'), 'utf8'));
+    return fsSync.existsSync(path.join(JEU_INTEGRE, 'jeu.json')) ? { titre: String(e.titre || 'Jeu'), cle: String(e.cle || 'MonJeu') } : null;
+  } catch {
+    return null;
+  }
+})();
+
 // Réglages et journal dans %APPDATA%\atelier-moteur, que Saga soit lancé depuis le clone
 // (npm start) ou installé avec Saga-Setup.exe.
-app.setPath('userData', path.join(app.getPath('appData'), 'atelier-moteur'));
+app.setPath('userData', path.join(app.getPath('appData'), joueur ? joueur.cle : 'atelier-moteur'));
 // Même identifiant que l'installeur (package.json › build.appId) : Windows range la fenêtre
 // sous l'icône épinglée de Saga dans la barre des tâches.
-if (process.platform === 'win32') app.setAppUserModelId('fr.ragna.saga');
+if (process.platform === 'win32') app.setAppUserModelId(joueur ? `fr.ragna.saga.${joueur.cle.toLowerCase()}` : 'fr.ragna.saga');
 
 // --- Journal (saga.log) ---
 const logPath = () => path.join(app.getPath('userData'), 'saga.log');
@@ -133,7 +147,7 @@ async function lireJeu(cible) {
     const text = await fs.readFile(path.join(dossier, rel), 'utf8').catch(() => null);
     if (text !== null) donnees[rel] = text;
   }
-  await modifierConfig((config) => { config.jeuxRecents = [dossier, ...config.jeuxRecents.filter((d) => d !== dossier)].slice(0, 12); });
+  if (!joueur) await modifierConfig((config) => { config.jeuxRecents = [dossier, ...config.jeuxRecents.filter((d) => d !== dossier)].slice(0, 12); });
   log('INFO', `Jeu ouvert : ${dossier}`);
   return { dossier, jeu, tuiles, cartes, donnees };
 }
@@ -174,6 +188,56 @@ handle('sauvegarde:ecrire', async (_event, dossier, donnees) => {
   const temp = `${file}.tmp`;
   await fs.writeFile(temp, JSON.stringify({ ...donnees, dossier: dossierDuJeu(dossier) }, null, 1), 'utf8');
   await fs.rename(temp, file);
+});
+
+// --- Exporter le jeu (Saga 0.9) ---
+// En version web et/ou Windows (.exe), pour l'envoyer à des testeurs : voir exporter.js.
+// Depuis la pause de Saga (Exporter ce jeu…), ou depuis Tafl (Jeu › Exporter le jeu…), qui lance :
+//   Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports --rapport=C:\...\rapport.json
+// (sans fenêtre : Saga exporte, écrit le résultat dans le rapport et se ferme).
+const Exporter = require('./exporter');
+const FORMATS_EXPORT = ['web', 'exe'];
+const exportes = new Set(); // ce qu'on a le droit de montrer dans l'explorateur
+
+async function exporterJeu(dossier, formats, sortie, progres) {
+  formats = FORMATS_EXPORT.filter((f) => formats.includes(f));
+  if (!formats.length) throw new Error('Choisis au moins une version : web ou Windows');
+  const textes = await lireJeu(dossier);
+  let titre = '';
+  try { titre = String(JSON.parse(textes.jeu).titre || ''); } catch { /* jeu.json abîmé : le nom du dossier */ }
+  titre = titre.trim() || path.basename(textes.dossier);
+  await fs.mkdir(sortie, { recursive: true });
+  const commun = { textes, titre, sortie, moteur: __dirname, version: app.getVersion(), progres };
+  const resultat = { titre, sortie };
+  if (formats.includes('web')) {
+    const { jeuxRecents, ...configDefaut } = DEFAULT_CONFIG;
+    resultat.web = await Exporter.exporterWeb({ ...commun, configDefaut });
+  }
+  if (formats.includes('exe')) {
+    resultat.exe = await Exporter.exporterExe({ ...commun, runtime: path.dirname(process.execPath), exe: path.basename(process.execPath) });
+  }
+  for (const r of [resultat.web, resultat.exe]) if (r) { exportes.add(r.dossier); exportes.add(r.zip); }
+  log('INFO', `Export de « ${titre} » (${formats.join(', ')}) dans ${sortie}`);
+  return resultat;
+}
+
+handle('jeu:exporter', async (event, dossier, formats) => {
+  if (joueur) throw new Error('Un jeu exporté ne s\'exporte pas');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const config = await readConfig();
+  const choix = await dialog.showOpenDialog(win, {
+    title: 'Où ranger l\'export du jeu ?',
+    defaultPath: config.dossierExport || path.dirname(dossierDuJeu(dossier)),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (choix.canceled || !choix.filePaths[0]) return null;
+  const sortie = choix.filePaths[0];
+  await modifierConfig((c) => { c.dossierExport = sortie; });
+  return exporterJeu(dossier, formats, sortie, (texte) => event.sender.send('export:progres', texte));
+});
+handle('export:montrer', async (_event, chemin) => {
+  if (!exportes.has(chemin)) throw new Error('Ce fichier ne vient pas d\'un export');
+  shell.showItemInFolder(chemin);
 });
 
 // --- Mise à jour ---
@@ -235,6 +299,7 @@ function installerUpdater() {
 }
 
 handle('update:check', async () => {
+  if (joueur) return { mode: 'joueur', changes: [] }; // un jeu exporté ne se met pas à jour tout seul
   if (app.isPackaged) {
     let release;
     try {
@@ -309,7 +374,7 @@ function lancementDepuis(argv) {
   return { dossier, depart: carte && Number.isInteger(x) && Number.isInteger(y) ? { carte, x, y, direction: option('direction') || 'bas' } : null };
 }
 
-let lancement = lancementDepuis(process.argv);
+let lancement = joueur ? { dossier: JEU_INTEGRE, depart: null } : lancementDepuis(process.argv);
 handle('startup', async () => {
   const out = lancement;
   lancement = null;
@@ -323,7 +388,7 @@ function createWindow() {
     minWidth: 640,
     minHeight: 420,
     backgroundColor: '#0b0b0f',
-    title: 'Saga',
+    title: joueur ? joueur.titre : 'Saga',
     ...(fsSync.existsSync(WINDOW_ICON) ? { icon: WINDOW_ICON } : {}),
     // Pas de barre de titre système : celle de l'interface la remplace,
     // et Windows y dessine ses boutons réduire / agrandir / fermer.
@@ -334,6 +399,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      // Le mode joueur, lu par preload.js (window.saga.joueur).
+      ...(joueur ? { additionalArguments: [`--saga-joueur=${encodeURIComponent(JSON.stringify({ titre: joueur.titre }))}`] } : {}),
     },
   });
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -346,7 +413,7 @@ function createWindow() {
   win.webContents.on('before-input-event', (event, input) => {
     // F12 = outils de développement (comme dans Rune, Skald et Tafl). Ctrl+R ne recharge PAS
     // l'interface ici : dans un jeu, on appuie vite sur des touches. F5 recharge le jeu (voir app.js).
-    if (input.type === 'keyDown' && input.key === 'F12') {
+    if (input.type === 'keyDown' && input.key === 'F12' && !joueur) {
       event.preventDefault();
       win.webContents.toggleDevTools();
     }
@@ -356,7 +423,27 @@ function createWindow() {
 
 // Une seule fenêtre Saga : « Jouer » dans Tafl alors que Saga est déjà ouvert recharge le jeu
 // dans la fenêtre existante (avec les cartes que Tafl vient d'enregistrer).
-if (!app.requestSingleInstanceLock()) {
+const optionLigne = (nom) => process.argv.find((a) => a.startsWith(`--${nom}=`))?.slice(nom.length + 3) ?? null;
+if (optionLigne('exporter') !== null && !joueur) {
+  // Export demandé par Tafl : pas de fenêtre, pas de verrou (Saga peut déjà être ouvert à côté).
+  app.whenReady().then(async () => {
+    const rapport = optionLigne('rapport');
+    let resultat, code = 0;
+    try {
+      const l = lancementDepuis(process.argv);
+      if (!l) throw new Error('Pas de jeu.json dans le dossier à exporter');
+      if (!optionLigne('sortie')) throw new Error('Il manque le dossier de sortie (--sortie=)');
+      resultat = { ok: true, ...await exporterJeu(l.dossier, optionLigne('exporter').split(','), path.resolve(optionLigne('sortie'))) };
+    } catch (err) {
+      log('ERREUR', `Export : ${err.message}`);
+      resultat = { ok: false, erreur: err.message };
+      code = 1;
+    }
+    if (rapport) await fs.writeFile(rapport, JSON.stringify(resultat, null, 2), 'utf8').catch(() => {});
+    else console.log(JSON.stringify(resultat, null, 2));
+    app.exit(code);
+  });
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
