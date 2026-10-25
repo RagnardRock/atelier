@@ -147,6 +147,38 @@ const Moteur = (() => {
     ecranGroupe.des = (o) => ecranDes.montrer(o);
     let enCombat = false, debutAFaire = false;
     let ecrans = null; // l'équipe, le Pokédex, le PC (Saga 0.6, ecrans.js)
+    // Saga 0.14 : le mode table (pack JDR, table/table.js). Le MJ mène la partie sur un plateau ; le
+    // moteur lui prête ses scripts, ses dialogues, ses combats et son son.
+    let modeTable = false, origineCombat = null;
+    const table = TableMode.creer({
+      scene: canvas.parentElement,
+      hote: {
+        jeu: () => jeu, partie: () => partie, carte: () => carte, presents: () => presents, joueur: () => joueur,
+        occupe: () => enScript || enCombat || Boolean(fondu),
+        lancer: (p) => lancer(p),
+        teleporter: (vers) => { if (!fondu) { fondu = { phase: 'sortie', t: 0, vers }; bruit('porte'); } },
+        placerJoueur: (x, y, dir) => {
+          joueur.x = x; joueur.y = y; if (DIRECTIONS[dir]) joueur.dir = dir;
+          partie.position = { carte: carte.id, x, y, direction: joueur.dir };
+        },
+        origine: () => origineCombat,
+        combattreDepuisTable: async (groupe) => {
+          if (enScript || enCombat || fondu) return;
+          enScript = true;
+          try { await combattre({ groupe }); } finally {
+            presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+            enScript = false;
+            entrees.oublier();
+          }
+        },
+        dialogue,
+        des: (o) => ecranDes.montrer(o),
+        musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique || 'aucune' : chemin),
+        son: (chemin) => audio.fichier(chemin),
+        message: (t) => rappels.message?.(t),
+        bruit,
+      },
+    });
 
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
     function redimensionner() {
@@ -184,6 +216,7 @@ const Moteur = (() => {
       };
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       presents = Monde.evenementsPresents(jeu, carte, partie);
+      if (table.actif) table.entrerCarte(carte, joueur.x, joueur.y);
       ambiance.regler(carte.ambiance);
       lumieresCarte = null;
       placerCamera();
@@ -281,6 +314,8 @@ const Moteur = (() => {
         signaler,
       });
       if (!partieGardee) reagir('nouvelle_partie');
+      // Le mode table : seulement pour un jeu du pack JDR.
+      if (modeTable && Regles.capacites(jeu).table) table.demarrer(); else table.arreter();
       redimensionner();
       const d = partie.position;
       if (!entrerSur(d.carte, d.x, d.y, d.direction)) entrerSur(jeu.depart.carte, jeu.depart.x, jeu.depart.y, jeu.depart.direction);
@@ -327,6 +362,7 @@ const Moteur = (() => {
       scriptsJs = ScriptsJs.AUCUN;
       reactions = [];
       jeu = null;
+      table.arreter();
       ecranDes.cacher();
       audio.vider();
       jeuSons = null;
@@ -456,7 +492,8 @@ const Moteur = (() => {
       if (morceau) audio.musique(morceau, { fondu: 0.4 });
       let issue = 'fuite';
       try {
-        ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, fond: fondCombat() }));
+        if (table.actif) ({ issue } = await table.combattre({ jeu, partie, sauvage, dresseur, groupe, fond: fondCombat() }));
+        else ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, fond: fondCombat() }));
       } catch (err) {
         ecranDuJeu().fermer();
         rappels.message?.(`Erreur pendant le combat : ${err.message}`);
@@ -473,7 +510,10 @@ const Moteur = (() => {
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
       if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte: dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage' });
       if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
-      if (issue === 'defaite') {
+      if (issue === 'defaite' && table.actif) {
+        // À la table, le MJ décide de la suite : le groupe reste là où il est tombé.
+        dialogue.annoncer('Le groupe est vaincu…', 'Le MJ décide de la suite.');
+      } else if (issue === 'defaite') {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
         const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
         noir = 1;
@@ -484,6 +524,7 @@ const Moteur = (() => {
     }
 
     function avancerJoueur(dt) {
+      if (table.actif) return; // à la table, les pions bougent à la souris
       const libre = !enPause && !fondu && !enScript && !enCombat;
       const { dir, course: maj } = libre ? entrees.lire() : { dir: null, course: false };
       const course = options.courirParDefaut ? !maj : maj;
@@ -526,11 +567,13 @@ const Moteur = (() => {
       entrees.oublier();
       // Celui à qui on parle se tourne vers le joueur (sauf s'il est « fixe »).
       if (p.ev.deplacement !== 'fixe' && p.ev.declenchement === 'parler') p.direction = Monde.directionVers(p.x, p.y, joueur.x, joueur.y);
+      origineCombat = { x: p.x, y: p.y }; // un combat lancé par ce script : ses monstres arrivent ici (mode table)
       try {
         await scripts.executer(p.page.commandes, p.ev);
       } catch (err) {
         rappels.message?.(`Erreur dans le script de « ${p.ev.nom || p.ev.id} » : ${err.message}`);
       }
+      origineCombat = null;
       Collection.noterTout(partie);
       // Le script a pu changer des interrupteurs : chaque événement reprend sa bonne page.
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
@@ -652,7 +695,7 @@ const Moteur = (() => {
           if (p.mouvement.t >= p.mouvement.duree) p.mouvement = null;
           continue;
         }
-        if (enScript || (p.ev.deplacement !== 'aleatoire' && p.ev.deplacement !== 'tourne')) continue;
+        if (enScript || table.actif || (p.ev.deplacement !== 'aleatoire' && p.ev.deplacement !== 'tourne')) continue;
         p.attente -= dt;
         if (p.attente > 0) continue;
         p.attente = 1.2 + Math.random() * 2.8;
@@ -897,6 +940,8 @@ const Moteur = (() => {
         const sonMenu = (a) => bruit(DIRS.includes(a) ? 'curseur' : a === 'action' ? 'valider' : 'retour');
         for (const a of entrees.appuis()) {
           if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
+          else if (table.actif && enCombat && table.touche(a)) sonMenu(a === 'echap' ? 'retour' : a);
+          else if (table.actif && !enScript && (a === 'echap' || a === 'retour')) table.touche(a);
           else if (a === 'echap') { if (enCombat) { sonMenu('retour'); ecranDuJeu().touche('retour'); } }
           else if (enCombat) { sonMenu(a); ecranDuJeu().touche(a); }
           else if (enScript) dialogue.touche(a);
@@ -919,6 +964,7 @@ const Moteur = (() => {
         else if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
         else if (autoAFaire && !fondu && !enScript) lancerAuto();
       } else entrees.appuis();
+      if (table.actif) { table.dessiner(maintenant, dt); return; }
       placerCamera();
       ambiance.avancer(enPause ? 0 : dt, cam, options.meteo);
       // L'orage : le tonnerre suit l'éclair (sauf si la carte a son propre fond sonore).
@@ -1003,6 +1049,11 @@ const Moteur = (() => {
       formeMenus: () => (jeu ? Regles.menus(jeu) : null),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),
       basculerDebug() { debug = !debug; return debug; },
+      // Saga 0.14 : le mode table. modeTable est lu au prochain demarrer() ; peutTable : le jeu le permet.
+      get modeTable() { return modeTable; },
+      set modeTable(oui) { modeTable = Boolean(oui); },
+      peutTable: (j) => Boolean(j && Regles.capacites(j).table),
+      get table() { return table; },
       get debug() { return debug; },
       // Pour la barre d'infos (F3) et pour « Recharger » (F5 garde la position du joueur).
       infos() {

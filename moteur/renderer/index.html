@@ -55,6 +55,7 @@
         <button class="pause-choix" data-action="carnet"><i class="codicon codicon-book"></i>Carnet : équipe, sac, quêtes<kbd>Tab</kbd></button>
         <button class="pause-choix" data-action="equipe"><i class="codicon codicon-organization"></i><span id="pause-equipe">Équipe</span></button>
         <button class="pause-choix" data-action="dex"><i class="codicon codicon-library"></i><span id="pause-dex">Pokédex</span></button>
+        <button class="pause-choix" data-action="mode" hidden><i class="codicon codicon-table"></i><span id="pause-mode">Passer en mode table</span></button>
         <button class="pause-choix" data-action="sauvegarder"><i class="codicon codicon-save"></i>Sauvegarder<kbd>Ctrl+S</kbd></button>
         <button class="pause-choix" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
         <button class="pause-choix" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
@@ -118,6 +119,13 @@
   <script src="moteur/collection.js"></script>
   <script src="moteur/boutique.js"></script>
   <script src="moteur/ecrans.js"></script>
+  <!-- Le mode table (Saga 0.14) : la grille, l'état et ce que chacun voit, le plateau, le panneau du MJ -->
+  <script src="moteur/table/grille.js"></script>
+  <script src="moteur/table/etat.js"></script>
+  <script src="moteur/table/plateau.js"></script>
+  <script src="moteur/table/panneau.js"></script>
+  <script src="moteur/table/table.js"></script>
+  <script src="moteur/table/client.js"></script>
   <script src="moteur/moteur.js"></script>
   <script src="commandes.js"></script>
   <script src="pad.js"></script>

@@ -9,9 +9,25 @@ const joueur = (() => {
   try { return a ? JSON.parse(decodeURIComponent(a.slice('--saga-joueur='.length))) : null; } catch { return null; }
 })();
 
+// L'écran des joueurs du mode table (Saga 0.14) : main.js le passe en argument à cette fenêtre.
+const ecranJoueurs = (() => {
+  const a = process.argv.find((x) => x.startsWith('--saga-ecran-joueurs='));
+  try { return a ? JSON.parse(decodeURIComponent(a.slice('--saga-ecran-joueurs='.length))) : null; } catch { return null; }
+})();
+
 contextBridge.exposeInMainWorld('saga', {
   platform: process.platform,
   joueur,
+  ecranJoueurs,
+  // Le mode table (Saga 0.14) : ouvrir ou fermer l'écran des joueurs, lui envoyer sa vue (fenêtre du MJ),
+  // la recevoir et renvoyer ses demandes (fenêtre des joueurs). Les sons du jeu, pour le panneau Musique.
+  tableOuvrir: () => ipcRenderer.invoke('table:ouvrir'),
+  tableFermer: () => ipcRenderer.invoke('table:fermer'),
+  tableEnvoyer: (json) => ipcRenderer.send('table:vue', json),
+  onTableVue: (callback) => ipcRenderer.on('table:vue', (_event, json) => callback(json)),
+  tableDemander: (a) => ipcRenderer.send('table:action', a),
+  onTableAction: (callback) => ipcRenderer.on('table:action', (_event, a) => callback(a)),
+  listeSons: () => ipcRenderer.invoke('jeu:listeSons'),
   // Le jeu (un dossier écrit par Tafl) : renvoie { dossier, jeu, tuiles, cartes, donnees } en textes.
   choisirJeu: () => ipcRenderer.invoke('jeu:choisir'),
   ouvrirJeu: (dossier) => ipcRenderer.invoke('jeu:ouvrir', dossier),

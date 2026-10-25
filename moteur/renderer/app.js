@@ -8,7 +8,8 @@
 // Saga 0.11 : les touches du jeu (pause, carnet comprises) se changent dans Réglages › Commandes, et la
 // manette sert partout (pad.js).
 
-const App = (() => {
+// Saga 0.14 : la fenêtre de l'écran des joueurs (mode table) n'a que le plateau (table/client.js).
+const App = window.saga.ecranJoueurs ? TableClient.demarrer(window.saga.ecranJoueurs) : (() => {
   // Le mode joueur (Saga 0.9) : un jeu exporté (.exe ou web). Le jeu seul, sans les outils de Saga.
   const joueur = window.saga.joueur || null;
   if (joueur) document.body.classList.add('joueur', ...(joueur.web ? ['web'] : []));
@@ -27,6 +28,9 @@ const App = (() => {
   let ouvert = null; // { dossier, jeu } : le jeu en cours
 
   // --- Réglages ---
+  async function enregistrerConfig(changes) {
+    try { config = await window.saga.writeConfig(changes); } catch (err) { notify(cleanError(err), 'error'); }
+  }
   async function chargerConfig() {
     ({ config } = await window.saga.readConfig());
     moteur.regler(config);
@@ -137,6 +141,18 @@ const App = (() => {
     }
     // Une partie dont la carte n'existe plus (supprimée dans Tafl) repart du départ du jeu.
     if (partie && !jeu.cartes.has(partie.position?.carte)) partie = { ...partie, position: { ...jeu.depart } };
+    // Saga 0.14 : un jeu du pack JDR se joue seul ou en mode table (avec un MJ). F5 garde le mode en cours ;
+    // sinon on demande, en proposant celui de la dernière fois.
+    if (!moteur.peutTable(jeu) || test) moteur.modeTable = false;
+    else if (!(partie && depart)) {
+      const avant = Boolean(config.modeTable?.[textes.dossier]);
+      const m = await Dialogs.ask(jeu.titre, 'Comment jouer ?\nMode table : tu es le MJ. Les héros et les monstres sont des pions sur la carte, avec le brouillard sur les pièces et un écran à part pour les joueurs.', [
+        { label: 'Seul (aventure)', value: 'aventure', primary: !avant },
+        { label: 'Mode table (MJ)', value: 'table', primary: avant },
+      ]);
+      moteur.modeTable = m ? m === 'table' : avant;
+      if (moteur.modeTable !== avant) await enregistrerConfig({ modeTable: { ...(config.modeTable || {}), [textes.dossier]: moteur.modeTable } });
+    }
     moteur.demarrer(jeu, d, partie, partie ? null : test);
     autoAFaire = false;
     derniereAuto = Date.now();
@@ -259,6 +275,8 @@ const App = (() => {
     $('#pause-dex').textContent = forme.dex;
     $('#pause-equipe').textContent = forme.equipe;
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
+    $('.pause-choix[data-action="mode"]').hidden = !moteur.peutTable(ouvert.jeu) || Boolean(ouvert.test);
+    $('#pause-mode').textContent = moteur.modeTable ? 'Revenir en aventure (seul)' : 'Passer en mode table (MJ)';
     // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer), après le Pokédex.
     for (const b of $$('.pause-choix[data-pack]')) b.remove();
     let apres = $('.pause-choix[data-action="dex"]');
@@ -284,6 +302,15 @@ const App = (() => {
     if (action === 'reprendre') fermerPause();
     else if (action === 'recharger') recharger();
     else if (action === 'recommencer') { fermerPause(); moteur.demarrer(ouvert.jeu, null); }
+    else if (action === 'mode') {
+      // Passer du mode table à l'aventure (ou l'inverse), avec la même partie.
+      if (moteur.enScript) return;
+      fermerPause();
+      const partie = moteur.partie();
+      moteur.modeTable = !moteur.modeTable;
+      enregistrerConfig({ modeTable: { ...(config.modeTable || {}), [ouvert.dossier]: moteur.modeTable } });
+      moteur.demarrer(ouvert.jeu, partie.position, partie);
+    }
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
@@ -466,6 +493,7 @@ const App = (() => {
       e.preventDefault();
       if (!$('#carnet').hidden) fermerCarnet();
       else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
+      else if ($('#pause').hidden && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
       else if ($('#pause').hidden) ouvrirPause(); else fermerPause();
     }
   });
@@ -506,6 +534,9 @@ const App = (() => {
 
   // Sauvegarder en quittant Saga ? Non : la sauvegarde reste un geste du joueur (Ctrl+S ou la pause),
   // comme dans les jeux Pokémon. F5 garde la partie en mémoire.
+
+  // Saga 0.14 : ce que demandent les joueurs depuis leur écran (mode table) ; la table vérifie tout.
+  window.saga.onTableAction?.((a) => moteur.table.recevoir(a));
 
   // Un jeu lancé par Tafl (« Jouer ») ou Atelier alors que Saga est déjà ouvert.
   window.saga.onJeuExterne((l) => ouvrirDossier(l.dossier, l.depart, null, l.test));

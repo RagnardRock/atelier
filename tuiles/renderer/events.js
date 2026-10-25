@@ -941,6 +941,8 @@ const Events = (() => {
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
       // Tafl 0.29 : l'événement éclaire (un feu de camp, un PNJ avec une lanterne), quelle que soit sa page.
       ...(e?.lumiere && typeof Donnees !== 'undefined' ? { lumiere: Donnees.normLumiere(e.lumiere) } : {}),
+      // Tafl 0.33 (pack JDR) : qui le voit dans le mode table de Saga ('tous' n'est pas écrit).
+      ...(e?.visible_par && e.visible_par !== 'tous' && typeof DonneesJdr !== 'undefined' ? { visible_par: DonneesJdr.normVisible(e.visible_par) } : {}),
     };
   }
   function normObstacle(o) {
@@ -1462,6 +1464,9 @@ const Events = (() => {
           section('Déclenchement'),
           champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
           champ('Le joueur peut passer à travers', traversable),
+          ...(typeof Espaces !== 'undefined' && Espaces.packDe(doc) === 'jdr' && typeof DonneesJdr !== 'undefined'
+            ? [champ('Visible par', selectEl(DonneesJdr.visibilites(doc.data), work.visible_par || 'tous', (v) => { if (v === 'tous') delete work.visible_par; else work.visible_par = v; }), 'Mode table de Saga : un PNJ, un piège, un coffre que seul le MJ (ou un joueur) voit')]
+            : []),
           blocObstacle,
           blocLumiere,
           aide,

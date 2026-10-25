@@ -60,7 +60,8 @@ const Regles = (() => {
   //   vendre      les boutiques achètent et vendent des membres
   //   groupe      des héros rejoignent et quittent le groupe (commande groupe)
   //   tenir       un membre tient un objet (menu Équipe › Faire tenir un objet)
-  const CAPACITES = { capture: false, relacher: false, ev: false, vendre: false, groupe: false, tenir: false };
+  //   table       le mode table : un MJ, des pions sur la grille, le brouillard (Saga 0.14, pack JDR)
+  const CAPACITES = { capture: false, relacher: false, ev: false, vendre: false, groupe: false, tenir: false, table: false };
 
   // La forme des menus : leurs noms, l'encyclopédie montrée ou non, la taille et la forme des boîtes,
   // les pages du résumé d'un membre (des ids de pages que la fiche du pack sait faire), et les mots de

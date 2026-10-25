@@ -1018,11 +1018,18 @@ const App = (() => {
       { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
       { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
       { key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' },
+      // Tafl 0.33 (pack JDR) : une pièce pour le mode table de Saga, sous le brouillard jusqu'à ce que le MJ la révèle.
+      ...(Espaces.packDe(api.doc) === 'jdr' ? [
+        { key: 'piece', label: 'C\'est une pièce (mode table de Saga : sous le brouillard, le MJ la révèle d\'un clic)', type: 'checkbox', value: Boolean(z.piece) },
+        { key: 'visible', label: 'Au départ, visible par', type: 'select', value: z.visible || 'mj', choices: DonneesJdr.visibilites(api.doc.data) },
+      ] : []),
     ];
   }
   const zoneFrom = (v, map, base, rencontres) => {
     const x = clamp(Math.round(v.x), 0, map.width - 1), y = clamp(Math.round(v.y), 0, map.height - 1);
-    return { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y), taux: clamp(Math.round(v.taux ?? 10), 0, 100), rencontres: Donnees.normRencontres(rencontres) };
+    const z = { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y), taux: clamp(Math.round(v.taux ?? 10), 0, 100), rencontres: Donnees.normRencontres(rencontres) };
+    if ('piece' in v) { delete z.piece; delete z.visible; if (v.piece) Object.assign(z, { piece: true, visible: DonneesJdr.normVisible(v.visible, 'mj') }); }
+    return z;
   };
   async function createZone(rect) {
     const doc = api.doc, map = doc.map;

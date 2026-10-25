@@ -83,6 +83,7 @@ const DEFAULT_CONFIG = {
   touches: null,         // null = les touches par défaut ; sinon { haut: ['ArrowUp', 'KeyW'], … } (event.code)
   manette: null,         // null = les boutons par défaut ; sinon { action: [0], retour: [1], … }
   jeuxRecents: [],       // les dossiers de jeu ouverts, du plus récent au plus ancien
+  modeTable: {},         // Saga 0.14 : dossier du jeu → true s'il a été joué en mode table la dernière fois
 };
 
 async function readConfig() {
@@ -331,7 +332,7 @@ function installerUpdater() {
   autoUpdater.autoDownload = false; // on télécharge seulement quand tu cliques « Mettre à jour »
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.logger = { info: (m) => log('INFO', `Mise à jour : ${m}`), warn: (m) => log('INFO', `Mise à jour : ${m}`), error: (m) => log('ERREUR', `Mise à jour : ${m}`), debug: () => {} };
-  autoUpdater.on('download-progress', (p) => BrowserWindow.getAllWindows()[0]?.webContents.send('update:progress', Math.round(p.percent)));
+  autoUpdater.on('download-progress', (p) => fenetrePrincipale?.webContents.send('update:progress', Math.round(p.percent)));
   return autoUpdater;
 }
 
@@ -431,6 +432,7 @@ handle('startup', async () => {
   return out;
 });
 
+let fenetrePrincipale = null;
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -460,6 +462,8 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.on('enter-full-screen', () => win.webContents.send('window:pleinEcran', true));
   win.on('leave-full-screen', () => win.webContents.send('window:pleinEcran', false));
+  fenetrePrincipale = win;
+  win.on('closed', () => { if (fenetreJoueurs && !fenetreJoueurs.isDestroyed()) fenetreJoueurs.close(); });
   win.webContents.on('before-input-event', (event, input) => {
     // F12 = outils de développement (comme dans Rune, Skald et Tafl). Ctrl+R ne recharge PAS
     // l'interface ici : dans un jeu, on appuie vite sur des touches. F5 recharge le jeu (voir app.js).
@@ -470,6 +474,55 @@ function createWindow() {
   });
   return win;
 }
+
+// --- Le mode table (Saga 0.14) : l'écran des joueurs ---
+// Une deuxième fenêtre (sur la télé ou un 2e écran), qui ne reçoit que la vue des joueurs envoyée par la
+// fenêtre du MJ : main.js ne fait que passer les messages d'une fenêtre à l'autre. Elle lit le jeu
+// elle-même (les tuiles et les cartes) ; l'état de la table, lui, ne vient que du MJ.
+let fenetreJoueurs = null;
+handle('table:ouvrir', async () => {
+  if (fenetreJoueurs && !fenetreJoueurs.isDestroyed()) { fenetreJoueurs.show(); fenetreJoueurs.focus(); return true; }
+  if (!dossierOuvert) throw new Error('Aucun jeu ouvert');
+  fenetreJoueurs = new BrowserWindow({
+    width: 1280, height: 760, minWidth: 480, minHeight: 320,
+    backgroundColor: '#05060a',
+    title: 'Saga · écran des joueurs',
+    ...(fsSync.existsSync(WINDOW_ICON) ? { icon: WINDOW_ICON } : {}),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+      additionalArguments: [`--saga-ecran-joueurs=${encodeURIComponent(JSON.stringify({ dossier: dossierOuvert }))}`],
+    },
+  });
+  fenetreJoueurs.setMenu(null);
+  fenetreJoueurs.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  fenetreJoueurs.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  fenetreJoueurs.webContents.on('will-navigate', (event) => event.preventDefault());
+  fenetreJoueurs.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F11') { event.preventDefault(); fenetreJoueurs.setFullScreen(!fenetreJoueurs.isFullScreen()); }
+  });
+  fenetreJoueurs.on('closed', () => { fenetreJoueurs = null; });
+  return true;
+});
+handle('table:fermer', async () => { if (fenetreJoueurs && !fenetreJoueurs.isDestroyed()) fenetreJoueurs.close(); return true; });
+// La vue des joueurs (un texte JSON), du MJ vers leur fenêtre ; leurs demandes, de leur fenêtre vers le MJ.
+ipcMain.on('table:vue', (event, json) => {
+  if (event.sender !== fenetrePrincipale?.webContents || typeof json !== 'string' || json.length > 4e6) return;
+  if (fenetreJoueurs && !fenetreJoueurs.isDestroyed()) fenetreJoueurs.webContents.send('table:vue', json);
+});
+ipcMain.on('table:action', (event, a) => {
+  if (event.sender !== fenetreJoueurs?.webContents || !a || typeof a !== 'object') return;
+  fenetrePrincipale?.webContents.send('table:action', { type: String(a.type || ''), pion: String(a.pion || ''), id: String(a.id || ''), x: Number(a.x), y: Number(a.y) });
+});
+// Les sons du dossier sons/ du jeu ouvert (le panneau Musique du MJ).
+handle('jeu:listeSons', async () => {
+  if (!dossierOuvert) return [];
+  const noms = await fs.readdir(path.join(dossierOuvert, 'sons')).catch(() => []);
+  return noms.map((n) => `sons/${n}`).filter((r) => SOUND_FILE.test(r)).sort((a, b) => a.localeCompare(b, 'fr'));
+});
 
 // Une seule fenêtre Saga : « Jouer » dans Tafl alors que Saga est déjà ouvert recharge le jeu
 // dans la fenêtre existante (avec les cartes que Tafl vient d'enregistrer).
@@ -497,8 +550,8 @@ if (optionLigne('exporter') !== null && !joueur) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return;
+    const win = fenetrePrincipale;
+    if (!win || win.isDestroyed()) return;
     if (win.isMinimized()) win.restore();
     win.focus();
     const l = lancementDepuis(argv);
