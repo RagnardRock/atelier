@@ -41,11 +41,13 @@ const EcranDes = (() => {
       clearTimeout(minuterie);
       const l = lignes.slice(-8).map(ligne);
       racine.replaceChildren(el('div', { className: 'des-titre', textContent: titre }), ...l.map((x) => x.el));
-      // En combat, le plateau passe en haut à gauche : à droite, il cacherait les héros.
+      // En combat, le plateau passe en haut au milieu : à droite il cacherait les héros, à gauche les monstres.
       racine.classList.toggle('en-combat', Boolean(conteneur.querySelector('.combat:not([hidden])')));
       racine.hidden = false;
       racine.getAnimations().forEach((a) => a.cancel());
-      racine.animate([{ opacity: 0, transform: 'translateY(-8px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+      const base = getComputedStyle(racine).transform; // le centrage du combat (sauf sur petit écran)
+      const x = base && base !== 'none' ? `${base} ` : '';
+      racine.animate([{ opacity: 0, transform: `${x}translateY(-8px)` }, { opacity: 1, transform: x.trim() || 'none' }], { duration: 160, easing: 'ease-out' });
       const duree = DUREES[vitesse] ?? DUREES.normale;
       if (duree > 0) {
         // Les dés roulent : des valeurs au hasard (purement visuelles), puis les vraies.
