@@ -20,6 +20,9 @@
 
 /* Barre de titre : le nom du jeu au milieu */
 #titre-jeu { color: var(--muted); padding-left: 10px; border-left: 1px solid var(--border); }
+/* Saga 0.10 : un test rapide lancé par Tafl (ses sauvegardes vont à part). */
+.badge-test { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #1a1206; background: var(--accent); -webkit-app-region: no-drag; }
+.badge-test[hidden] { display: none; }
 #btn-debug.actif { color: var(--accent); background: var(--hover); }
 
 /* La scène : le canvas centré, agrandi sans lissage (chaque pixel du jeu reste un carré net) */

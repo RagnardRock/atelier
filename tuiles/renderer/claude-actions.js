@@ -263,6 +263,20 @@
   }
 
   ClaudePanneau.actions({
+    // Tafl 0.27 : le vérificateur du jeu (verificateur.js), comme Jeu › Vérifier le jeu.
+    verifier: {
+      lecture: true,
+      icone: 'checklist',
+      libelle: () => 'Vérifie le jeu',
+      description: 'Vérifie tout le jeu (ce qui est dans Tafl, même pas encore enregistré) : téléporteurs cassés (carte ou case d\'arrivée qui n\'existe pas, case bloquée, pas de retour), cartes et personnages que le joueur ne peut pas atteindre depuis le départ, quêtes impossibles à commencer ou à finir, étapes jamais atteintes, conditions jamais vraies (interrupteur jamais allumé, objet que personne ne donne), ids inconnus. Il suppose que le joueur obtient tout ce que le jeu donne ou vend. Lance-le après une grosse modification, corrige les erreurs, puis relance-le. Ragna voit la même liste avec Jeu › Vérifier le jeu (Ctrl+Maj+V).',
+      faire: () => {
+        const doc = besoinJeu();
+        const r = Verificateur.verifier(OutilsJeu.jeuDe(doc));
+        if (!r.problemes.length) return 'Aucun problème trouvé.';
+        const lignes = r.problemes.slice(0, 80).map((p) => `- [${p.gravite === 'erreur' ? 'erreur' : 'à vérifier'}] ${p.message}${p.carte ? ` (carte ${p.carte}${Number.isInteger(p.x) ? `, case ${p.x}, ${p.y}` : ''}${p.evenement ? `, événement ${p.evenement}` : ''})` : ''}`);
+        return [`${r.erreurs} erreur(s), ${r.attentions} à vérifier.`, ...lignes, r.problemes.length > 80 ? `… et ${r.problemes.length - 80} de plus.` : ''].filter(Boolean).join('\n');
+      },
+    },
     infos: {
       lecture: true,
       icone: 'info',

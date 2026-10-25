@@ -155,7 +155,8 @@ const Moteur = (() => {
 
     // partieGardee : une partie déjà commencée (une sauvegarde, ou F5 qui recharge le jeu sans
     // perdre ce que le joueur a fait). depart : où commencer, à la place de la position de la partie.
-    function demarrer(nouveauJeu, depart, partieGardee = null) {
+    // test : l'état de départ d'un test rapide de Tafl (Saga 0.10), posé sur une partie neuve.
+    function demarrer(nouveauJeu, depart, partieGardee = null, test = null) {
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
@@ -166,6 +167,7 @@ const Moteur = (() => {
       // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
+      if (!partieGardee && test) appliquerTest(test);
       enCombat = false;
       ecranCombat.fermer();
       ecranGroupe.fermer();
@@ -199,6 +201,35 @@ const Moteur = (() => {
       noir = 1;
       fondu = { phase: 'entree', t: 0 };
       if (!boucle) { avant = performance.now(); boucle = requestAnimationFrame(tour); }
+    }
+
+    // Un test rapide (Tafl 0.27, FORMAT.md › Test rapide) : l'équipe, les objets, l'argent, les badges,
+    // les interrupteurs et les quêtes choisis dans Tafl, sur une partie toute neuve. Ce qui n'est pas
+    // donné reste comme dans une nouvelle partie (une équipe vide garde le héros du groupe JRPG).
+    function appliquerTest(test) {
+      const membres = (Array.isArray(test.equipe) ? test.equipe : []).filter((m) => m && typeof m.id === 'string' && m.id);
+      if (membres.length) {
+        partie.equipe = [];
+        const groupe = Regles.capacites(jeu).groupe;
+        for (const m of membres) {
+          const niveau = Math.max(1, Math.round(Number(m.niveau) || 5));
+          const c = groupe ? Regles.rejoindre(jeu, partie, m.id, niveau) : Regles.existe(jeu, m.id) ? Regles.creer(jeu, m.id, niveau) : null;
+          if (c) Collection.ranger(jeu, partie, c);
+          else rappels.message?.(`Test rapide : « ${m.id} » n'existe pas dans les données du jeu.`);
+        }
+      }
+      if (test.objets && typeof test.objets === 'object') {
+        for (const [id, n] of Object.entries(test.objets)) if (Number(n) > 0) partie.sac[id] = Math.round(Number(n));
+      }
+      if (Number.isFinite(Number(test.argent)) && test.argent !== null && test.argent !== '') partie.argent = Math.max(0, Math.round(Number(test.argent)));
+      if (Array.isArray(test.badges)) partie.badges = test.badges.filter((b) => typeof b === 'string');
+      if (Array.isArray(test.interrupteurs)) for (const id of test.interrupteurs) if (typeof id === 'string') partie.interrupteurs[id] = true;
+      if (test.quetes && typeof test.quetes === 'object') {
+        for (const [id, q] of Object.entries(test.quetes)) {
+          if (q?.etat === 'finie') partie.quetes[id] = { etat: 'finie', etape: Math.max(0, Number(q.etape) || 0) };
+          else if (q?.etat === 'en_cours') partie.quetes[id] = { etat: 'en_cours', etape: Math.max(1, Number(q.etape) || 1) };
+        }
+      }
     }
 
     function arreter() {

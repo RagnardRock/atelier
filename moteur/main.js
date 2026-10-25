@@ -177,13 +177,14 @@ handle('jeu:montrer', async (_event, dossier) => {
 // Saga ne l'écrit pas, et la sauvegarde ne doit pas partir dans Git avec le jeu). Le nom du fichier
 // vient du chemin du dossier du jeu.
 const crypto = require('node:crypto');
-const sauvegardePath = (dossier) => path.join(app.getPath('userData'), 'sauvegardes',
-  `${crypto.createHash('sha1').update(dossierDuJeu(dossier).toLowerCase()).digest('hex').slice(0, 16)}.json`);
-handle('sauvegarde:lire', async (_event, dossier) => {
-  try { return JSON.parse(await fs.readFile(sauvegardePath(dossier), 'utf8')); } catch { return null; }
+// Un test rapide de Tafl (Saga 0.10) sauvegarde à part (…-test.json) : il n'écrase jamais la vraie partie.
+const sauvegardePath = (dossier, test = false) => path.join(app.getPath('userData'), 'sauvegardes',
+  `${crypto.createHash('sha1').update(dossierDuJeu(dossier).toLowerCase()).digest('hex').slice(0, 16)}${test ? '-test' : ''}.json`);
+handle('sauvegarde:lire', async (_event, dossier, test) => {
+  try { return JSON.parse(await fs.readFile(sauvegardePath(dossier, Boolean(test)), 'utf8')); } catch { return null; }
 });
-handle('sauvegarde:ecrire', async (_event, dossier, donnees) => {
-  const file = sauvegardePath(dossier);
+handle('sauvegarde:ecrire', async (_event, dossier, donnees, test) => {
+  const file = sauvegardePath(dossier, Boolean(test));
   await fs.mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.tmp`;
   await fs.writeFile(temp, JSON.stringify({ ...donnees, dossier: dossierDuJeu(dossier) }, null, 1), 'utf8');
@@ -360,6 +361,8 @@ handle('window:pleinEcran', async (event, oui) => {
 // Ce qu'on passe en ligne de commande (c'est ainsi que Tafl et Atelier lancent un jeu) :
 //   Saga.exe D:\Jeux\MonJeu                     le jeu, depuis le départ du joueur
 //   Saga.exe D:\Jeux\MonJeu --carte=route-1 --x=4 --y=7   le jeu, sur cette case (« Jouer ici » de Tafl)
+//   Saga.exe D:\Jeux\MonJeu --test=C:\…\tafl-test-rapide.json   un test rapide de Tafl (Saga 0.10) : une partie
+//                                               neuve avec l'état de départ écrit dans ce fichier (équipe, objets…)
 // (Lancé depuis le clone, un des arguments est le dossier de Saga lui-même : on le saute.)
 function lancementDepuis(argv) {
   const args = argv.slice(app.isPackaged ? 1 : 2);
@@ -371,7 +374,18 @@ function lancementDepuis(argv) {
   if (!dossier) return null;
   const carte = option('carte');
   const x = Number(option('x')), y = Number(option('y'));
-  return { dossier, depart: carte && Number.isInteger(x) && Number.isInteger(y) ? { carte, x, y, direction: option('direction') || 'bas' } : null };
+  return { dossier, depart: carte && Number.isInteger(x) && Number.isInteger(y) ? { carte, x, y, direction: option('direction') || 'bas' } : null, test: lireTest(option('test')) };
+}
+// L'état de départ d'un test rapide (voir ../tuiles/FORMAT.md › Test rapide), ou null.
+function lireTest(fichier) {
+  if (!fichier) return null;
+  try {
+    const test = JSON.parse(fsSync.readFileSync(fichier, 'utf8'));
+    return test && typeof test === 'object' && !Array.isArray(test) ? test : null;
+  } catch (err) {
+    log('ERREUR', `Test rapide illisible (${fichier}) : ${err.message}`);
+    return null;
+  }
 }
 
 let lancement = joueur ? { dossier: JEU_INTEGRE, depart: null } : lancementDepuis(process.argv);

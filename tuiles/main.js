@@ -393,13 +393,22 @@ function sagaInstalle() {
     });
   });
 }
-handle('jeu:jouer', async (_event, dossier, depart) => {
+// test (Tafl 0.27) : un test rapide, l'état de départ choisi dans Tafl (FORMAT.md › Test rapide). Il passe
+// à Saga par un petit fichier dans le dossier temporaire : --test=<ce fichier>.
+handle('jeu:jouer', async (_event, dossier, depart, test) => {
   const root = path.resolve(String(dossier));
   if (!gameFolders.has(root) || !fsSync.existsSync(path.join(root, 'jeu.json'))) throw new Error('Enregistre d\'abord le jeu dans un dossier');
   const saga = (!app.isPackaged && sagaDuClone()) || (await sagaInstalle()) || sagaDuClone();
   if (!saga) throw new Error('Saga, le moteur du jeu, n\'est pas installé : installe-le depuis Atelier');
   const args = [...saga.args, root];
   if (depart?.carte) args.push(`--carte=${depart.carte}`, `--x=${Math.round(depart.x)}`, `--y=${Math.round(depart.y)}`, `--direction=${depart.direction || 'bas'}`);
+  if (test && typeof test === 'object') {
+    const fichier = path.join(app.getPath('temp'), 'tafl-test-rapide.json');
+    const texte = JSON.stringify(test);
+    if (texte.length > 1e6) throw new Error('Cet état de test est trop gros');
+    await fs.writeFile(fichier, texte, 'utf8');
+    args.push(`--test=${fichier}`);
+  }
   const child = spawn(saga.exe, args, { cwd: root, detached: true, stdio: 'ignore' });
   child.on('error', (err) => log('ERREUR', `Saga : ${err.message}`));
   child.unref();
@@ -454,6 +463,9 @@ const CLAUDE_CONSIGNES = [
   '- Un dossier de jeu (jeu.json, tuiles.tafl, cartes/, donnees/) est décrit dans le FORMAT.md copié dans ce',
   '  dossier : ouvre-le avec Read seulement si une question porte sur le format des fichiers (pour le moteur Saga).',
   '- Pour enregistrer : enregistrer_jeu (ou enregistrer). Pour essayer le jeu : Ragna clique sur « Jouer ».',
+  '- Après une grosse modification (cartes, téléporteurs, quêtes, scripts), lance l\'action verifier et corrige les',
+  '  erreurs qu\'elle trouve. Pour essayer un passage précis avec une équipe, des objets ou des badges : Ragna ouvre',
+  '  Jeu › Test rapide (Ctrl+F5).',
   '',
   '### Économiser les jetons (la limite d\'utilisation de Ragna)',
   '',

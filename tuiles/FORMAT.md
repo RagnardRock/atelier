@@ -72,6 +72,7 @@ Chaque fichier a un champ `format` (son type) et un champ `version` (sa version)
 | `cartes` | Les cartes, dans l'ordre du panneau Cartes de Tafl. `id` ne change jamais (même si tu renommes la carte) : c'est lui que les téléporteurs utilisent. |
 | `depart` | Où le joueur commence une nouvelle partie, ou `null` s'il n'est pas encore placé. |
 | `donnees` | Les fichiers des données du jeu, par sorte (voir « Données du jeu »). Absent dans un jeu enregistré par Tafl 0.6 : pas encore de données. |
+| `tests` | (Tafl 0.27) Les états de départ enregistrés du **test rapide** de Tafl (voir « Test rapide » plus bas). Le moteur n'en a pas besoin pour jouer. |
 
 ## `tuiles.tafl`
 
@@ -674,6 +675,35 @@ Huit monstres au plus en tout. `fuite: false` : on ne peut pas fuir (un boss).
 
 `niveau_max` (99 par défaut) et `courbe_xp` : l'expérience totale qu'il faut pour le niveau n vaut 10 × (n − 1)², fois 0,7 (`"rapide"`), 1 (`"normale"`) ou 1,4 (`"lente"`). `equipe_max` : le nombre de héros qui se battent (4 conseillé) ; les autres attendent dans la Réserve. `plafonds`, `ajustement`, `ecart` et `chance_chromatique` ne servent pas.
 
+## Test rapide
+
+(Tafl 0.27, joué par Saga 0.10.) Jeu › Test rapide lance le moteur avec un **état de départ** : une partie neuve, puis cet état posé par-dessus. Tafl le passe en ligne de commande, dans un fichier : `Saga.exe <dossier> --test=<fichier.json>`. Les états enregistrés vont dans `jeu.json`, champ `tests` (une liste).
+
+```json
+{
+  "nom": "Avant l'arène 2",
+  "depart": { "carte": "route-3", "x": 4, "y": 9, "direction": "haut" },
+  "equipe": [{ "id": "salameche", "niveau": 30 }, { "id": "carapuce", "niveau": 12 }],
+  "objets": { "potion": 5, "super-ball": 2 },
+  "argent": 4000,
+  "badges": ["badge-roche"],
+  "interrupteurs": ["rival-battu-au-labo"],
+  "quetes": { "le-premier-compagnon": { "etat": "finie", "etape": 3 }, "legende-du-lac": { "etat": "en_cours", "etape": 2 } }
+}
+```
+
+| Champ | Sens |
+|---|---|
+| `depart` | Où commencer, ou `null` : le départ du jeu. |
+| `equipe` | Les membres de l'équipe, à la place de celle de départ : des ids de `creatures.json` (Pokémon) ou de personnages qui ont une `classe` (pack JRPG), avec leur niveau. Au-delà de la taille de l'équipe, ils vont dans les boîtes (ou la Réserve). Vide : l'équipe d'une partie neuve. |
+| `objets` | Le sac : id d'objet → nombre. |
+| `argent` | L'argent, ou `null` : `argent_depart` des réglages. |
+| `badges` | Les ids des badges reçus (le compteur `badges` suit). |
+| `interrupteurs` | Les interrupteurs allumés au départ. |
+| `quetes` | L'état des quêtes : `{ "etat": "en_cours", "etape": n }` ou `{ "etat": "finie" }`. Les absentes ne sont pas commencées. |
+
+Le moteur sauvegarde une partie de test à part, pour ne pas écraser la vraie partie du joueur.
+
 ## Exemple de lecture (JavaScript)
 
 ```js
@@ -698,3 +728,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.21** : la commande `ecran_boites` et `interface.menus` dans les réglages. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.24** : le type d'événement `obstacle` et son champ `obstacle`, les compteurs `sauvages_battus`, `especes_vues`, `especes_prises` et `quetes_finies`, les effets d'objet `stase` et `amitie`, `verrouille_visible` dans les articles de boutique, `ajustement_sauvages`, `ecart_sauvages`, `evolution_dresseurs`, `evolution_sauvages` et `seuil_amitie` dans les réglages, l'`amitie` de chaque créature dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.25** : le pack de règles `"jrpg"` : les fichiers `classes.json`, `monstres.json` et `groupes.json`, `cout_pm`, `ranime` et `guerit` dans les attaques, `equipement` et l'effet `soin_pm` dans les objets, `classe`, `niveau` et `equipement` dans les personnages, `niveau_max` et `courbe_xp` dans les réglages, les rencontres de groupes dans les zones, les commandes `groupe` et `combat_groupe`, la condition `membre`, le compteur `monstres_vaincus`. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 0.27** : `tests` dans `jeu.json` (les états du test rapide) et l'option `--test` du moteur. Des champs en plus, donc la version reste 1.

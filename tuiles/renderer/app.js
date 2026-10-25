@@ -1042,7 +1042,8 @@ const App = (() => {
   // Saga lit les fichiers du dossier de jeu : on enregistre donc d'abord s'il y a des modifications.
   // ici = false : depuis le départ du joueur. ici = true : depuis la case sous la souris (ou le milieu
   // de la carte affichée), pour tester tout de suite l'endroit qu'on vient de dessiner.
-  async function jouer(ici = false) {
+  // test (Tafl 0.27) : un état de départ du test rapide (outils-jeu.js), avec son propre départ.
+  async function jouer(ici = false, test = null) {
     const doc = api.doc;
     if (!doc?.game) return notify('Pour jouer, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
     if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
@@ -1051,11 +1052,17 @@ const App = (() => {
       const map = doc.map, h = api.mode === 'map' ? Stage.hover : null;
       const dedans = h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
       depart = { carte: map.id, x: dedans ? h.x : Math.floor(map.width / 2), y: dedans ? h.y : Math.floor(map.height / 2), direction: 'bas' };
-    } else if (!doc.depart) {
+    } else if (!doc.depart && !test?.depart) {
       notify('Pas encore de départ : Saga commence sur la première carte. Place-le avec l\'outil Départ du joueur (J).', 'info', 5000);
     }
-    await window.tafl.jouer(doc.game.folder, depart);
-    notify(ici ? `Saga lance le jeu sur « ${doc.map.name} » (${depart.x}, ${depart.y})…` : 'Saga lance le jeu…', 'info', 2500);
+    await window.tafl.jouer(doc.game.folder, depart, test);
+    notify(test ? `Saga lance le test rapide${test.nom ? ` « ${test.nom} »` : ''}…` : ici ? `Saga lance le jeu sur « ${doc.map.name} » (${depart.x}, ${depart.y})…` : 'Saga lance le jeu…', 'info', 2500);
+  }
+  // Le test rapide (Ctrl+F5), ouvert depuis la case sous la souris quand elle est sur la carte.
+  function testRapide() {
+    const map = api.doc?.map, h = api.mode === 'map' ? Stage.hover : null;
+    const dedans = map && h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
+    OutilsJeu.testRapide({ ici: dedans ? { carte: map.id, x: h.x, y: h.y, direction: 'bas' } : null });
   }
 
   // --- Exporter le jeu (Tafl 0.26) : une version web et/ou Windows à envoyer à des testeurs ---
@@ -1296,6 +1303,8 @@ const App = (() => {
     Jeu: () => (api.doc ? [
       { label: 'Jouer (dans Saga)', keys: 'F5', disabled: !api.doc.game, run: () => run(() => jouer(false)) },
       { label: 'Jouer depuis la case sous la souris', keys: 'Maj+F5', disabled: !api.doc.game, run: () => run(() => jouer(true)) },
+      { label: 'Test rapide (équipe, objets, badges choisis)…', keys: 'Ctrl+F5', disabled: !api.doc.game, run: () => run(testRapide) },
+      { label: 'Vérifier le jeu…', keys: 'Ctrl+Maj+V', run: () => run(OutilsJeu.verifier) },
       { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc.game, run: () => run(exporterJeu) },
       null,
       { label: 'Titre du jeu…', run: () => run(renameGame) },
@@ -1456,6 +1465,8 @@ const App = (() => {
       if (k === 'y') return go(redo);
       if (k === 'd' && e.shiftKey) return go(needDoc(() => openData()));
       if (k === 'm' && e.shiftKey) return go(needDoc(openWorld));
+      if (k === 'v' && e.shiftKey) return go(needDoc(OutilsJeu.verifier));
+      if (e.key === 'F5') return go(needDoc(testRapide));
       if (k === 'd') return go(needDoc(duplicateTile));
       if (k === 'm') return go(needDoc(toggleMosaic));
       if (k === 'a' && e.shiftKey) return go(needDoc(addFrame));
@@ -1623,7 +1634,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { jouer, testRapide, refresh, refreshLive, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 
