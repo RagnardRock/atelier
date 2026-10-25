@@ -392,7 +392,7 @@ const Stage = (() => {
       ctx.lineWidth = 2;
       ctx.strokeRect(v.x + hover.x * cell, v.y + hover.y * cell, (st ? st.w : 1) * cell, (st ? st.h : 1) * cell);
     }
-    // La case montrée par le vérificateur (Tafl 0.26) : un cadre qui pulse quelques secondes.
+    // La case montrée par le vérificateur (Tafl 0.27) : un cadre qui pulse quelques secondes.
     if (signal && signal.carte === map.id) {
       const t = performance.now() - signal.debut;
       if (t > 3200) signal = null;
@@ -407,7 +407,7 @@ const Stage = (() => {
     }
   }
 
-  // Centre la vue de la carte sur la case (x, y) et la fait clignoter (le vérificateur, Tafl 0.26).
+  // Centre la vue de la carte sur la case (x, y) et la fait clignoter (le vérificateur, Tafl 0.27).
   let signal = null;
   function montrer(x, y) {
     const map = App.doc?.map;

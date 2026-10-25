@@ -263,7 +263,7 @@
   }
 
   ClaudePanneau.actions({
-    // Tafl 0.26 : le vérificateur du jeu (verificateur.js), comme Jeu › Vérifier le jeu.
+    // Tafl 0.27 : le vérificateur du jeu (verificateur.js), comme Jeu › Vérifier le jeu.
     verifier: {
       lecture: true,
       icone: 'checklist',

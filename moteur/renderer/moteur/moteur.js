@@ -155,7 +155,7 @@ const Moteur = (() => {
 
     // partieGardee : une partie déjà commencée (une sauvegarde, ou F5 qui recharge le jeu sans
     // perdre ce que le joueur a fait). depart : où commencer, à la place de la position de la partie.
-    // test : l'état de départ d'un test rapide de Tafl (Saga 0.9), posé sur une partie neuve.
+    // test : l'état de départ d'un test rapide de Tafl (Saga 0.10), posé sur une partie neuve.
     function demarrer(nouveauJeu, depart, partieGardee = null, test = null) {
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
@@ -203,7 +203,7 @@ const Moteur = (() => {
       if (!boucle) { avant = performance.now(); boucle = requestAnimationFrame(tour); }
     }
 
-    // Un test rapide (Tafl 0.26, FORMAT.md › Test rapide) : l'équipe, les objets, l'argent, les badges,
+    // Un test rapide (Tafl 0.27, FORMAT.md › Test rapide) : l'équipe, les objets, l'argent, les badges,
     // les interrupteurs et les quêtes choisis dans Tafl, sur une partie toute neuve. Ce qui n'est pas
     // donné reste comme dans une nouvelle partie (une équipe vide garde le héros du groupe JRPG).
     function appliquerTest(test) {

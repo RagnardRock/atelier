@@ -1105,7 +1105,7 @@ body.resizing-row { cursor: row-resize; }
 .comfy-voile { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: rgba(0, 0, 0, 0.75); cursor: zoom-out; }
 .comfy-brute-grande { max-width: 90vw; max-height: 82vh; border-radius: var(--radius); box-shadow: var(--shadow); }
 
-/* Vérifier le jeu (Tafl 0.26) */
+/* Vérifier le jeu (Tafl 0.27) */
 .verif { gap: 4px; }
 .verif-ligne { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px; background: rgba(255, 255, 255, 0.025); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .verif-ligne:hover:not(:disabled) { border-color: var(--border); background: var(--hover); }
@@ -1119,7 +1119,7 @@ body.resizing-row { cursor: row-resize; }
 .verif-vide .codicon { font-size: 40px; color: var(--accent); }
 .verif-vide strong { color: var(--text-strong); font-size: 15px; }
 
-/* Test rapide (Tafl 0.26) */
+/* Test rapide (Tafl 0.27) */
 .test-side { width: 260px; gap: 8px; }
 .test-side .rows { padding: 0; }
 .test-main { max-width: 760px; }

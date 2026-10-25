@@ -281,7 +281,7 @@ const IO = (() => {
       cartes: doc.maps.map((m) => ({ id: m.id, nom: m.name, fichier: mapFile(m) })),
       depart: doc.depart,
       donnees: Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
-      // Tafl 0.26 : les états de départ enregistrés du test rapide (Saga n'en a pas besoin pour jouer).
+      // Tafl 0.27 : les états de départ enregistrés du test rapide (Saga n'en a pas besoin pour jouer).
       tests: doc.tests || [],
     };
     return [

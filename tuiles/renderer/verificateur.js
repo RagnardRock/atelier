@@ -1,4 +1,4 @@
-// Le vérificateur du jeu (Tafl 0.26) : Jeu › Vérifier le jeu (Ctrl+Maj+V), et l'action verifier de Loki.
+// Le vérificateur du jeu (Tafl 0.27) : Jeu › Vérifier le jeu (Ctrl+Maj+V), et l'action verifier de Loki.
 // Il cherche ce qui empêcherait de jouer ou de finir le jeu : les téléporteurs cassés, les personnages
 // qu'on ne peut pas atteindre, les quêtes impossibles à finir, et les ids qui n'existent pas.
 //

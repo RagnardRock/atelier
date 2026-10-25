@@ -119,7 +119,7 @@ const Doc = (() => {
       mapIndex: 0,
       map: null,
       depart: null,
-      tests: [],            // Tafl 0.26 : les états de départ du test rapide (gardés dans jeu.json)
+      tests: [],            // Tafl 0.27 : les états de départ du test rapide (gardés dans jeu.json)
       data: Events.emptyData(),
       stamps: [],
       current: 0,

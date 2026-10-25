@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('tafl', {
   revealFile: (file) => ipcRenderer.invoke('file:reveal', file),
   // Lancer le jeu dans Saga (le moteur) ; depart = { carte, x, y, direction } pour « Jouer ici ».
   jouer: (dossier, depart, test) => ipcRenderer.invoke('jeu:jouer', dossier, depart, test),
+  // Exporter le jeu en version web et/ou Windows (Tafl 0.26, fait par Saga) : formats = ['web', 'exe'].
+  exporterJeu: (dossier, formats) => ipcRenderer.invoke('jeu:exporter', dossier, formats),
   // Dossier de jeu (jeu.json, tuiles.tafl, cartes/*.json : voir FORMAT.md)
   pickGameFolder: () => ipcRenderer.invoke('game:pick'),
   openGame: (target) => ipcRenderer.invoke('game:open', target),

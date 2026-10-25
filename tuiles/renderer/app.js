@@ -1042,7 +1042,7 @@ const App = (() => {
   // Saga lit les fichiers du dossier de jeu : on enregistre donc d'abord s'il y a des modifications.
   // ici = false : depuis le départ du joueur. ici = true : depuis la case sous la souris (ou le milieu
   // de la carte affichée), pour tester tout de suite l'endroit qu'on vient de dessiner.
-  // test (Tafl 0.26) : un état de départ du test rapide (outils-jeu.js), avec son propre départ.
+  // test (Tafl 0.27) : un état de départ du test rapide (outils-jeu.js), avec son propre départ.
   async function jouer(ici = false, test = null) {
     const doc = api.doc;
     if (!doc?.game) return notify('Pour jouer, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
@@ -1063,6 +1063,42 @@ const App = (() => {
     const map = api.doc?.map, h = api.mode === 'map' ? Stage.hover : null;
     const dedans = map && h && h.x >= 0 && h.y >= 0 && h.x < map.width && h.y < map.height;
     OutilsJeu.testRapide({ ici: dedans ? { carte: map.id, x: h.x, y: h.y, direction: 'bas' } : null });
+  }
+
+  // --- Exporter le jeu (Tafl 0.26) : une version web et/ou Windows à envoyer à des testeurs ---
+  // Comme pour Jouer, on enregistre d'abord ; c'est Saga qui fabrique l'export (il a le moteur).
+  async function exporterJeu() {
+    const doc = api.doc;
+    if (!doc?.game) return notify('Pour exporter, il faut un dossier de jeu : Fichier › Enregistrer comme dossier de jeu.', 'info', 5000);
+    const { config } = await window.tafl.readConfig();
+    const v = await Dialogs.form({
+      title: `Exporter « ${doc.name} »`,
+      okLabel: 'Choisir le dossier et exporter',
+      fields: [
+        { key: 'web', label: 'Version web (index.html, à ouvrir dans un navigateur ou à mettre sur itch.io)', type: 'checkbox', value: config.exportWeb ?? true },
+        { key: 'exe', label: 'Version Windows (.exe, rien à installer)', type: 'checkbox', value: config.exportExe ?? true },
+        { type: 'info', text: 'Chaque version donne un dossier et un .zip à envoyer. Les testeurs n\'ont besoin ni de Tafl ni de Saga. C\'est Saga qui fabrique l\'export : la version Windows est une copie de Saga qui lance directement ton jeu.' },
+      ],
+    });
+    if (!v) return;
+    await window.tafl.writeConfig({ exportWeb: v.web, exportExe: v.exe });
+    const formats = [v.web && 'web', v.exe && 'exe'].filter(Boolean);
+    if (!formats.length) return notify('Coche au moins une version.', 'info');
+    if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
+    const attente = notify(`Saga exporte le jeu (${formats.length > 1 ? 'web et Windows' : formats[0] === 'web' ? 'web' : 'Windows'})… La version Windows peut prendre une minute.`, 'info', 600000);
+    let r;
+    try {
+      r = await window.tafl.exporterJeu(doc.game.folder, formats);
+    } finally {
+      attente.remove();
+    }
+    if (!r) return;
+    const lignes = [r.web && `• Web : ${r.web.zip}`, r.exe && `• Windows : ${r.exe.zip}`].filter(Boolean);
+    const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nChaque .zip a son dossier à côté, pour essayer avant d'envoyer.`, [
+      { label: 'Fermer', value: null },
+      { label: 'Montrer dans l\'explorateur', value: (r.web || r.exe).zip, primary: true },
+    ]);
+    if (voir) await window.tafl.revealFile(voir);
   }
 
   // --- Événements : personnages, panneaux, coffres, objets, déclencheurs (Tafl 0.7) ---
@@ -1244,6 +1280,7 @@ const App = (() => {
       { label: 'Exporter les tuiles séparées…', disabled: !api.doc, run: needDoc(IO.exportTiles) },
       { label: 'Exporter la carte pour Tiled (.tmj)…', keys: 'Ctrl+Maj+E', disabled: !api.doc, run: needDoc(IO.exportMap) },
       { label: 'Exporter la carte en image…', disabled: !api.doc, run: needDoc(IO.exportMapImage) },
+      { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc?.game, run: () => run(exporterJeu) },
       null,
       { label: 'Réglages de Tafl…', keys: 'Ctrl+,', run: () => run(openSettings) },
     ],
@@ -1268,6 +1305,7 @@ const App = (() => {
       { label: 'Jouer depuis la case sous la souris', keys: 'Maj+F5', disabled: !api.doc.game, run: () => run(() => jouer(true)) },
       { label: 'Test rapide (équipe, objets, badges choisis)…', keys: 'Ctrl+F5', disabled: !api.doc.game, run: () => run(testRapide) },
       { label: 'Vérifier le jeu…', keys: 'Ctrl+Maj+V', run: () => run(OutilsJeu.verifier) },
+      { label: 'Exporter le jeu (web, Windows)…', disabled: !api.doc.game, run: () => run(exporterJeu) },
       null,
       { label: 'Titre du jeu…', run: () => run(renameGame) },
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).

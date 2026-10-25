@@ -63,7 +63,7 @@ Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour cou
 - **PNJ qui bougent** : un événement en déplacement `aleatoire` se promène (sans s'éloigner de plus de 2 cases), `tourne` regarde autour de lui.
 - **Sauvegarde** : Ctrl+S ou le menu de pause. Elle va dans `%APPDATA%\atelier-moteur\sauvegardes` (jamais dans le dossier du jeu), une par jeu. Quand on rouvre le jeu, Saga propose **Continuer** ou **Nouvelle partie**. F5 (recharger) garde la partie en cours.
 
-## Test rapide (Saga 0.9, avec Tafl 0.26)
+## Test rapide (Saga 0.10, avec Tafl 0.27)
 
 Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de départ choisi : la case de départ, l'équipe et ses niveaux (les héros pour le pack JRPG), les objets, l'argent, les badges, les interrupteurs et l'avancée des quêtes. Tafl l'écrit dans un petit fichier temporaire et lance `Saga.exe <dossier> --test=<ce fichier>` (le format est dans `tuiles/FORMAT.md`, « Test rapide »).
 
@@ -123,6 +123,16 @@ Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de dépa
 - **Les obstacles, à la place des CS** (événement « Obstacle » de Tafl 0.24) : un arbre à couper ou un rocher à briser (A devant lui ; avec l'objet, Saga demande « Utiliser la Hache ? » et il disparaît), un rocher à pousser d'une case en marchant contre lui. Sans l'objet, Saga dit lequel il faudrait. Un arbre peut repousser quand on quitte la carte ; un rocher poussé revient à sa place. Un rocher poussé sur un déclencheur le lance (une énigme).
 - Côté règles : `Regles` gagne trois fonctions facultatives (`sauvage`, `plafond`, `evolutionsEnAttente`) ; un autre pack qui ne les a pas garde le comportement simple.
 
+## Ce que fait Saga 0.9 : exporter le jeu pour des testeurs
+
+Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu › **Exporter le jeu…** (Tafl lance Saga sans fenêtre). On coche une version ou les deux, on choisit un dossier, et Saga y range :
+
+- **`MonJeu-web/` et `MonJeu-web.zip`** : `index.html` + le moteur (`saga/`) + le jeu emballé dans `jeu.js`. On double-clique sur `index.html` (pas besoin d'Internet ni de serveur), ou on envoie le `.zip` sur itch.io (projet « HTML »). Les réglages et la sauvegarde restent dans le navigateur du joueur (localStorage). Le pont `web/saga-web.js` remplace `preload.js`.
+- **`MonJeu/` et `MonJeu-windows.zip`** : `MonJeu.exe`, une copie de Saga (son Electron) avec Saga dans `resources/app` et le jeu dans `resources/jeu`. Rien à installer : on dézippe et on double-clique. Au lancement, Saga voit `resources/jeu` et passe en **mode joueur** : le jeu s'ouvre directement, sans les outils de Saga (pas d'ouverture d'un autre jeu, ni de rechargement F5, de vue F3, de mise à jour, d'export ou d'outils de développement F12), « Quitter le jeu » dans la pause, réglages et sauvegardes dans `%APPDATA%\MonJeu`. Windows peut prévenir que l'exe n'est pas signé (« Informations complémentaires › Exécuter quand même ») : c'est écrit dans le `LISEZMOI.txt` de l'export.
+- L'export ne prend que ce que Saga lit (jeu.json, le .tafl, cartes/, donnees/) : ni les fichiers de travail, ni les sauvegardes, ni le chemin du dossier sur ton disque. Exporter à nouveau remplace l'export précédent (seulement s'il vient de Saga).
+- En ligne de commande : `Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports [--rapport=rapport.json]`.
+- Pour l'instant, l'exe garde l'icône de Saga.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
@@ -136,6 +146,8 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 |---|---|
 | `main.js` | La fenêtre, les réglages, la lecture du dossier de jeu (Saga n'y écrit jamais), les sauvegardes, la ligne de commande (`Saga.exe <dossier> --carte=… --x=… --y=…`, `--test=<fichier>` pour un test rapide de Tafl), la mise à jour. |
 | `preload.js` | Le pont entre l'interface et `main.js` (`window.saga`). |
+| `exporter.js` | L'export du jeu en version web et Windows (Saga 0.9), et un petit écrivain de .zip. |
+| `web/saga-web.js` | Le pont `window.saga` dans un navigateur (export web). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |

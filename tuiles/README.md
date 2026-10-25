@@ -184,7 +184,7 @@ Le bouton **Jouer** de la barre de titre (ou `F5`, ou Jeu › Jouer) lance le je
 - Saga déjà ouvert : il recharge le jeu dans sa fenêtre, avec ce que Tafl vient d'enregistrer.
 - Lancé depuis le clone (`npm start`), Tafl lance le Saga du clone (`moteur/`, après un `npm install` dans `moteur`) ; installé, il lance le Saga installé (depuis Atelier).
 
-## Vérifier le jeu et test rapide (Tafl 0.26, avec Saga 0.9)
+## Vérifier le jeu et test rapide (Tafl 0.27, avec Saga 0.10)
 
 **Jeu › Vérifier le jeu** (`Ctrl+Maj+V`) lit tout le jeu, même ce qui n'est pas encore enregistré, et liste ce qui empêcherait de jouer ou de finir l'histoire. Les **erreurs** (rouge) sont à corriger ; les lignes **à vérifier** (jaune) sont peut-être voulues. Un clic sur une ligne ferme la liste, ouvre la carte et fait clignoter la case ; la notification propose d'ouvrir l'événement ou de revoir la liste.
 
@@ -376,6 +376,10 @@ Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuil
 - **Boutiques** : colonne « Grisé avant » dans les articles (l'article se montre grisé avec son déblocage au lieu d'être caché).
 - **Compteurs** : créatures sauvages battues, espèces vues, espèces attrapées, quêtes finies, en plus des captures, dresseurs battus, évolutions, badges et pas.
 - Loki connaît tout ça (actions `evenement` avec `obstacle`, `donnee`).
+
+## Exporter le jeu (Tafl 0.26, avec Saga 0.9)
+
+Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (`index.html`, à ouvrir dans un navigateur ou à mettre sur itch.io) et/ou une **version Windows** (`MonJeu.exe`, rien à installer). Chacune donne un dossier et un `.zip` à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
 
 ## Claude dans Tafl (depuis Tafl 0.3)
 

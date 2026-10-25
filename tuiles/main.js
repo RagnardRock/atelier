@@ -393,7 +393,7 @@ function sagaInstalle() {
     });
   });
 }
-// test (Tafl 0.26) : un test rapide, l'état de départ choisi dans Tafl (FORMAT.md › Test rapide). Il passe
+// test (Tafl 0.27) : un test rapide, l'état de départ choisi dans Tafl (FORMAT.md › Test rapide). Il passe
 // à Saga par un petit fichier dans le dossier temporaire : --test=<ce fichier>.
 handle('jeu:jouer', async (_event, dossier, depart, test) => {
   const root = path.resolve(String(dossier));
@@ -413,6 +413,43 @@ handle('jeu:jouer', async (_event, dossier, depart, test) => {
   child.on('error', (err) => log('ERREUR', `Saga : ${err.message}`));
   child.unref();
   log('INFO', `Jouer : ${saga.exe} ${args.join(' ')}`);
+});
+
+// --- Exporter le jeu (Tafl 0.26) : une version web et/ou Windows (.exe) à envoyer à des testeurs ---
+// C'est Saga (0.9 ou plus) qui fabrique l'export : il a le moteur et Electron. Tafl le lance sans fenêtre :
+//   Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports --rapport=<fichier temporaire>
+// puis lit le rapport (les dossiers et les .zip créés, ou l'erreur) quand Saga a fini.
+handle('jeu:exporter', async (event, dossier, formats) => {
+  const root = path.resolve(String(dossier));
+  if (!gameFolders.has(root) || !fsSync.existsSync(path.join(root, 'jeu.json'))) throw new Error('Enregistre d\'abord le jeu dans un dossier');
+  formats = ['web', 'exe'].filter((f) => Array.isArray(formats) && formats.includes(f));
+  if (!formats.length) throw new Error('Choisis au moins une version : web ou Windows');
+  const saga = (!app.isPackaged && sagaDuClone()) || (await sagaInstalle()) || sagaDuClone();
+  if (!saga) throw new Error('Saga, le moteur du jeu, n\'est pas installé : installe-le depuis Atelier (c\'est lui qui fabrique l\'export)');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const config = await readConfig();
+  const choix = await dialog.showOpenDialog(win, {
+    title: 'Où ranger l\'export du jeu ?',
+    defaultPath: config.dossierExport || path.dirname(root),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (choix.canceled || !choix.filePaths[0]) return null;
+  const sortie = choix.filePaths[0];
+  await writeConfig({ ...(await readConfig()), dossierExport: sortie });
+  const rapport = path.join(os.tmpdir(), `tafl-export-${process.pid}-${Date.now()}.json`);
+  const args = [...saga.args, root, `--exporter=${formats.join(',')}`, `--sortie=${sortie}`, `--rapport=${rapport}`];
+  log('INFO', `Export : ${saga.exe} ${args.join(' ')}`);
+  await new Promise((resolve, reject) => {
+    const child = spawn(saga.exe, args, { cwd: root, stdio: 'ignore', windowsHide: true });
+    const minuterie = setTimeout(() => { child.kill(); reject(new Error('Saga met trop de temps à exporter (plus de 10 minutes) : regarde saga.log')); }, 10 * 60 * 1000);
+    child.on('error', (err) => { clearTimeout(minuterie); reject(new Error(`Impossible de lancer Saga : ${err.message}`)); });
+    child.on('exit', () => { clearTimeout(minuterie); resolve(); });
+  });
+  const r = await fs.readFile(rapport, 'utf8').then(JSON.parse).catch(() => null);
+  await fs.rm(rapport, { force: true });
+  if (!r) throw new Error('Saga n\'a rien exporté : il est peut-être trop ancien (il faut Saga 0.9 ou plus, mets-le à jour depuis Atelier)');
+  if (!r.ok) throw new Error(r.erreur || 'L\'export a échoué');
+  return r;
 });
 
 // --- Panneau Claude (le même que dans Skald, Brokk : voir ../commun/LISEZMOI.md) ---

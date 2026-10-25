@@ -1,4 +1,4 @@
-// Deux outils pour essayer son jeu (Tafl 0.26), dans le menu Jeu :
+// Deux outils pour essayer son jeu (Tafl 0.27), dans le menu Jeu :
 // - Vérifier le jeu (Ctrl+Maj+V) : la liste de ce que trouve verificateur.js (téléporteurs cassés,
 //   personnages inaccessibles, quêtes impossibles, ids inconnus). Un clic sur une ligne montre la case.
 // - Test rapide (Ctrl+F5) : lancer Saga avec un état de départ choisi (case de départ, équipe et niveau,
