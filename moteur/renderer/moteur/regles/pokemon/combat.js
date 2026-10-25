@@ -7,6 +7,12 @@
 //
 // lancer() rend { issue } : 'victoire', 'defaite', 'fuite' ou 'capture'. La partie est modifiée
 // sur place (PV, PP, expérience, sac, captures, argent).
+//
+// Saga 1.0 : un duel amical entre deux joueurs (multijoueur) passe `duel` :
+//   { nom, equipe, choisir(infos) }  nom et équipe de l'autre joueur, et ce qu'il décide à chaque tour
+//                                    (l'IA est remplacée par ses choix, envoyés par le réseau).
+// Dans un duel, personne ne gagne d'expérience, d'argent ni de créature : les équipes sont remises en
+// état par celui qui a lancé le duel (reseau/duel.js).
 
 const Combat = (() => {
   const C = Creatures;
@@ -19,7 +25,8 @@ const Combat = (() => {
   const il = (c) => (c?.sexe === 'f' ? 'Elle' : 'Il');
   const NOMS_STATUTS = { brulure: 'BRU', paralysie: 'PAR', poison: 'PSN', poison_grave: 'PSN', sommeil: 'SOM', gel: 'GEL' };
 
-  async function lancer({ jeu, partie, ui, sauvage = null, dresseur = null, fond = 'herbes' }) {
+  async function lancer({ jeu, partie, ui, sauvage = null, dresseur = null, fond = 'herbes', duel = null }) {
+    if (duel) dresseur = { nom: duel.nom, equipe: duel.equipe, argent: 0, personnage: duel.personnage || '', ajuste: false };
     const trouver = (sorte, id) => C.trouver(jeu, sorte, id);
     const monnaie = jeu.donnees.reglages?.reglages?.monnaie || '₽';
     const tag = (o, k) => o?.officiel || o?.id || k;
@@ -28,7 +35,12 @@ const Combat = (() => {
     const camp = (equipe, joueur) => ({ equipe, joueur, actif: equipe.findIndex((c) => c.pv > 0), etages: {}, confusion: 0, toxique: 0, peur: false, participants: new Set() });
     const nous = camp(partie.equipe, true);
     let adverses;
-    if (dresseur) {
+    if (duel) {
+      // Un duel entre deux joueurs : l'équipe d'en face est celle de l'autre joueur, telle qu'elle est
+      // (ses PV, ses PP, ses attaques apprises) ; rien n'est recréé ni ajusté.
+      adverses = (duel.equipe || []).filter((c) => c && trouver('creatures', c.creature)).slice(0, 6);
+      if (!adverses.length) { await ui.message(`${nomDresseur()} n'a pas de créature !`); return { issue: 'victoire' }; }
+    } else if (dresseur) {
       // Un dresseur qui « suit la progression » du joueur : son niveau monte avec lui.
       const r = jeu.donnees.reglages?.reglages || {};
       const ref = dresseur.ajuste ? C.reference(jeu, partie, r.ajustement) : 0;
@@ -96,6 +108,25 @@ const Combat = (() => {
     const aLeType = (c, ...noms) => types(c).some((t) => noms.includes(tag(typeDe(t), t)));
 
     // --- Choix de l'adversaire ---
+    // En duel, c'est l'autre joueur qui décide (par le réseau) : il attaque ou il change de créature.
+    async function choixDuel() {
+      const c = actif(eux);
+      const possibles = c.attaques.filter((a) => a.pp > 0 && trouver('attaques', a.id));
+      const a = await duel.choisir({
+        actif: { nom: C.nom(jeu, c), pv: c.pv, pvMax: C.pvMax(jeu, c) },
+        attaques: possibles.map((x) => { const d = trouver('attaques', x.id); return { id: x.id, nom: d?.nom || x.id, pp: x.pp, ppMax: x.ppMax, type: typeDe(d?.type)?.nom || '', couleur: typeDe(d?.type)?.couleur || '#888', categorie: d?.categorie || '' }; }),
+        equipe: eux.equipe.map((q, i) => ({ nom: C.nom(jeu, q), niveau: q.niveau, pv: q.pv, pvMax: C.pvMax(jeu, q), i, actif: i === eux.actif })),
+      });
+      if (a?.type === 'changer') {
+        const i = Math.round(Number(a.cible));
+        if (eux.equipe[i]?.pv > 0 && i !== eux.actif) return { type: 'changer', cible: i };
+      }
+      if (a?.type === 'attaque') {
+        const x = possibles.find((q) => q.id === a.attaque);
+        if (x) return { type: 'attaque', attaque: x };
+      }
+      return { type: 'attaque', attaque: possibles.length ? possibles[hasard(possibles.length)] : null };
+    }
     function choixAdverse() {
       const c = actif(eux);
       const possibles = c.attaques.filter((a) => a.pp > 0 && trouver('attaques', a.id));
@@ -504,7 +535,7 @@ const Combat = (() => {
       }
 
       // 2. Les actions passent : changer et objets d'abord, puis les attaques (priorité, puis vitesse).
-      const adverse = choixAdverse();
+      const adverse = duel ? await choixDuel() : choixAdverse();
       nous.aJoue = false;
       eux.aJoue = false;
       if (action.type === 'changer') {
@@ -517,10 +548,17 @@ const Combat = (() => {
         if (await lancerBalle(action)) { ui.fermer(); return { issue: 'capture' }; }
         nous.aJoue = true;
       } else if (action.type === 'rien') nous.aJoue = true;
+      // L'autre joueur change de créature : cela passe avant les attaques, comme pour nous.
+      if (adverse.type === 'changer') {
+        await ui.message(`${nomDresseur()} rappelle ${C.nom(jeu, actif(eux))} !`);
+        await ui.animer('adversaire', 'sortie');
+        await envoyer(eux, adverse.cible);
+        eux.aJoue = true;
+      }
 
       const ordre = [];
       if (!nous.aJoue) ordre.push([nous, eux, action.attaque]);
-      ordre.push([eux, nous, adverse.attaque]);
+      if (!eux.aJoue) ordre.push([eux, nous, adverse.attaque]);
       if (ordre.length === 2) {
         const prio = ([, , a]) => Number(trouver('attaques', a?.id)?.priorite) || 0;
         const p0 = prio(ordre[0]), p1 = prio(ordre[1]);
@@ -540,14 +578,14 @@ const Combat = (() => {
         const battue = actif(eux);
         await ui.animer('adversaire', 'ko');
         await ui.message(`${nomDe(eux)} est K.O. !`);
-        await recompenses(battue);
+        if (!duel) await recompenses(battue);
         nous.participants = new Set([actif(nous)].filter((c) => c.pv > 0));
         const suivant = eux.equipe.findIndex((c) => c.pv > 0);
         if (suivant < 0) {
           if (dresseur) {
             await ui.message(`Tu as battu ${nomDresseur()} !`);
             if (dresseur.dialogue_victoire) await ui.message(dresseur.dialogue_victoire, { qui: nomDresseur() });
-            const argent = Number(dresseur.argent) || 0;
+            const argent = duel ? 0 : Number(dresseur.argent) || 0;
             if (argent) { partie.argent = (partie.argent || 0) + argent; await ui.message(`Tu gagnes ${argent} ${monnaie} !`); }
           }
           ui.fermer();
@@ -556,13 +594,13 @@ const Combat = (() => {
         await envoyer(eux, suivant);
       }
       if (actif(nous).pv <= 0) {
-        C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)
+        if (!duel) C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)
         await ui.animer('joueur', 'ko');
         await ui.message(`${C.nom(jeu, actif(nous))} est K.O. !`);
         if (!vivants(nous).length) {
           await ui.message('Tu n\'as plus de créature en état de se battre…');
           if (dresseur?.dialogue_defaite) await ui.message(dresseur.dialogue_defaite, { qui: nomDresseur() });
-          const perdu = Math.floor((partie.argent || 0) / 2);
+          const perdu = duel ? 0 : Math.floor((partie.argent || 0) / 2);
           if (perdu) { partie.argent -= perdu; await ui.message(`Dans la panique, tu perds ${perdu} ${monnaie}…`); }
           ui.fermer();
           return { issue: 'defaite' };

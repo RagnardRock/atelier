@@ -152,6 +152,32 @@ Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu �
 - **Les variables** du jeu (nombres ou textes), leur commande et leur condition ; **les dés** des scripts partent d'une graine gardée dans la sauvegarde.
 - **Export** : le bac à sable part avec le jeu (version web et exe).
 
+## Ce que fait Saga 1.0 : jouer à plusieurs (avec Tafl 1.0)
+
+Menu de pause › **Jouer à plusieurs** : Saga ouvre un petit serveur sur le réseau de la maison et affiche
+une adresse (`http://192.168.x.x:7777`) et un code de quatre lettres. Les amis ouvrent l'adresse dans leur
+navigateur (PC, tablette, téléphone), entrent le code et leur prénom : **rien à installer**.
+
+- **La discussion** : un panneau avec la liste des joueurs, les messages à tous ou en privé, et des bulles
+  quand le panneau est replié. L'hôte peut retirer quelqu'un de la partie.
+- **Les autres jeux (Pokémon, JRPG…)** : chacun joue **sa** partie (gardée dans son navigateur) dans le jeu
+  de l'hôte, et on se voit marcher sur les mêmes cartes, avec son prénom au-dessus de la tête. Chacun
+  choisit son apparence parmi les personnages du jeu.
+  - **Échanger** (face à face, touche Action) : une créature, un objet, de l'argent ; les deux voient les
+    deux offres et confirment.
+  - **Défier** : un duel amical. Rien n'est perdu ni gagné : les équipes reviennent comme avant. Celui qui
+    défie calcule le combat, l'autre le voit et choisit ses attaques et ses changements.
+- **Les parties de table (pack JDR)** : chaque ami reçoit la vue de **son rôle** (le MJ donne un héros à
+  chacun dans son panneau, ou laisse un spectateur). Un joueur déplace son héros, parle aux PNJ, lit sa
+  fiche et lance ses jets (c'est l'hôte qui lance les dés, et la ligne va au journal commun). Ce qui est
+  caché ne quitte **jamais** la machine du MJ : chaque vue est calculée pour son rôle avant de partir.
+- **L'écran « compose ton équipe »** (commande de Tafl) : le joueur choisit lui-même jusqu'à six créatures
+  du jeu, à un niveau donné. Le modèle de jeu **Arène de duel** de Tafl s'en sert : deux bornes, un terrain,
+  et deux amis qui s'affrontent.
+
+Tout passe par des messages simples (rejoindre, vue, action) : un relais sur un serveur pourra plus tard
+remplacer le réseau local pour jouer à distance.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
@@ -167,6 +193,12 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `preload.js` | Le pont entre l'interface et `main.js` (`window.saga`). |
 | `exporter.js` | L'export du jeu en version web et Windows (Saga 0.9), et un petit écrivain de .zip. |
 | `web/saga-web.js` | Le pont `window.saga` dans un navigateur (export web). |
+| `reseau.js` | Saga 1.0 : le petit serveur de l'hôte (les amis rejoignent par leur navigateur), le relais des vues, des positions, du chat et des messages entre joueurs. |
+| `web/saga-reseau.js` | Saga 1.0 : le pont `window.saga` chez un ami qui a rejoint (l'écran du code, le flux de l'hôte, sa sauvegarde dans son navigateur). |
+| `renderer/moteur/reseau/multi.js` | Saga 1.0 : le panneau des joueurs et la discussion (chez l'hôte comme chez un ami). |
+| `renderer/moteur/reseau/monde.js` | Saga 1.0 : le monde partagé (se voir, s'approcher, échanger, se défier). |
+| `renderer/moteur/reseau/duel.js` | Saga 1.0 : le duel entre deux joueurs (un calcule, l'autre voit et choisit). |
+| `renderer/moteur/equipe-libre.js` | Saga 1.0 : l'écran où le joueur compose son équipe (les jeux « arène »). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |

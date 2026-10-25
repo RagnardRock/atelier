@@ -134,12 +134,19 @@ const Moteur = (() => {
     const reagir = (moment, infos = {}) => { if (scriptsJs.actif) reactions.push({ moment, infos }); };
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
+    // Saga 1.0 : le multijoueur (reseau/monde.js). Les autres joueurs sur cette carte (des fantômes : ils
+    // ne bloquent pas le passage) : [{ id, nom, carte, x, y, direction, tenue }], et où chacun est dessiné.
+    let autres = [];
+    let monApparence = { personnage: '', tenue: '' }; // l'apparence choisie pour moi en multijoueur
+    const dessinAutres = new Map(); // id → { px, py, pas, t, ex, ey } (ex, ey : à l'écran, pour son nom)
     // Les combats (Saga 0.3) : leur écran, posé sur le jeu comme la boîte de dialogue.
     const ecranCombat = EcranCombat.creer(canvas.parentElement);
     // Saga 0.8 : l'écran des combats en groupe (pack JRPG). Le pack de règles du jeu choisit le sien.
     const ecranGroupe = EcranGroupe.creer(canvas.parentElement);
     const ecranDuJeu = () => (jeu && Regles.ecran(jeu) === 'groupe' ? ecranGroupe : ecranCombat);
     const ecranPerso = Personnaliser.creer(canvas.parentElement);
+    // Saga 1.0 : composer son équipe librement (commande de Tafl, les jeux « arène »).
+    const ecranEquipe = EquipeLibre.creer(canvas.parentElement);
     const menus = Menus.creer(canvas.parentElement);
     // Saga 0.13 : le plateau de dés (pack JDR), au-dessus de tout le reste, prêté aux combats en groupe et
     // aux menus hors combat (ui.des).
@@ -150,6 +157,10 @@ const Moteur = (() => {
     // Saga 0.14 : le mode table (pack JDR, table/table.js). Le MJ mène la partie sur un plateau ; le
     // moteur lui prête ses scripts, ses dialogues, ses combats et son son.
     let modeTable = false, origineCombat = null;
+    // Saga 1.0 : le multijoueur (reseau/). multi : les joueurs et la discussion ; monde : se voir, échanger,
+    // se défier (les jeux hors table) ; duel : un combat entre deux joueurs. Créés tout en bas, quand
+    // l'objet du moteur existe (ils s'en servent).
+    let multi = null, monde = null, duel = null;
     const table = TableMode.creer({
       scene: canvas.parentElement,
       hote: {
@@ -172,6 +183,8 @@ const Moteur = (() => {
           }
         },
         dialogue,
+        // Saga 1.0 : le multijoueur (les amis connectés, pour leur envoyer leur vue).
+        multi: () => multi,
         des: (o) => ecranDes.montrer(o),
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique || 'aucune' : chemin),
         son: (chemin) => audio.fichier(chemin),
@@ -261,6 +274,7 @@ const Moteur = (() => {
       ecranCombat.fermer();
       ecranGroupe.fermer();
       ecranPerso.fermer();
+      ecranEquipe.fermer();
       menus.fermer();
       // L'horloge du jeu (Saga 0.11) : une partie d'avant Saga 0.11 part de l'heure de départ du jeu.
       Temps.utiliser(jeu);
@@ -271,6 +285,9 @@ const Moteur = (() => {
       partie.badges = [...new Set(Array.isArray(partie.badges) ? partie.badges : [])];
       partie.partis = partie.partis && typeof partie.partis === 'object' ? partie.partis : {};
       partie.compteurs = { ...Monde.nouvellePartie(jeu).compteurs, ...partie.compteurs, badges: partie.badges.length };
+      // Saga 1.0 : le monde partagé (multijoueur), dès qu'une partie en réseau est ouverte et qu'on
+      // n'est pas à la table (là, c'est le MJ qui mène : table/table.js).
+      if (multi?.actif && !modeTable) monde.demarrer(); else monde?.arreter();
       carte = null;
       enScript = false;
       attentes = [];
@@ -285,6 +302,8 @@ const Moteur = (() => {
         combattre,
         // L'écran du nom et de la tenue (commande personnaliser, Tafl 0.16).
         personnaliser: (o) => ecranPerso.ouvrir(o),
+        // L'écran où le joueur compose son équipe (commande composer_equipe, Tafl 1.0).
+        composerEquipe: (o) => ecranEquipe.ouvrir({ ...o, jeu }),
         menus,
         ecrans,
         position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
@@ -363,6 +382,7 @@ const Moteur = (() => {
       reactions = [];
       jeu = null;
       table.arreter();
+      monde?.arreter();
       ecranDes.cacher();
       audio.vider();
       jeuSons = null;
@@ -484,6 +504,7 @@ const Moteur = (() => {
     // réveille au dernier endroit où il s'est soigné (sinon au départ du jeu), son équipe soignée.
     async function combattre({ sauvage = null, dresseur = null, groupe = null }) {
       enCombat = true;
+      document.body.classList.add('en-combat');
       entrees.oublier();
       dialogue.fermer();
       // La musique du combat (Saga 0.11) : celle des dresseurs pour un dresseur, sinon celle des combats.
@@ -499,6 +520,7 @@ const Moteur = (() => {
         rappels.message?.(`Erreur pendant le combat : ${err.message}`);
       }
       enCombat = false;
+      document.body.classList.remove('en-combat');
       entrees.oublier();
       if (morceau) {
         // Gagné : la fanfare de victoire (jouée une fois), puis la musique de la carte revient.
@@ -542,6 +564,8 @@ const Moteur = (() => {
       if (libre && actionDemandee) {
         actionDemandee = false;
         const [dx, dy] = DIRECTIONS[joueur.dir];
+        // Un autre joueur devant (multijoueur) : échanger, se défier (reseau/monde.js).
+        if (monde?.devant(joueur.x + dx, joueur.y + dy)) return;
         const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy) || Monde.presentEn(presents, joueur.x, joueur.y);
         if (p && Monde.obstacle(p.ev)) { franchir(p); return; }
         if (p && p.ev.declenchement === 'parler') { lancer(p); return; }
@@ -804,6 +828,29 @@ const Moteur = (() => {
           pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,
         }, maintenant) });
       }
+      // Les autres joueurs (multijoueur) : ils glissent vers leur case, au pas.
+      const vus = new Set();
+      for (const a of autres) {
+        if (a.carte !== carte.id) continue;
+        vus.add(a.id);
+        let d = dessinAutres.get(a.id);
+        if (!d) { d = { px: a.x * t, py: a.y * t, pas: 0, t: 0 }; dessinAutres.set(a.id, d); }
+        const cx = a.x * t, cy = a.y * t, ecart = Math.hypot(cx - d.px, cy - d.py);
+        if (ecart > t * 3) { d.px = cx; d.py = cy; } else if (ecart > 0) {
+          const v = Math.min(ecart, (t / DUREE_PAS) * (1 / 60) * (ecart > t * 1.2 ? 2 : 1));
+          d.px += ((cx - d.px) / ecart) * v; d.py += ((cy - d.py) / ecart) * v;
+          d.t += 1 / 60;
+        }
+        const bouge = Math.hypot(cx - d.px, cy - d.py) > 0.5;
+        const pas = bouge ? (Math.floor(d.t / (DUREE_PAS / 2)) % 2 ? 1 : 2) : 0;
+        const x = Math.round(d.px) - cam.x, y = Math.round(d.py) - cam.y;
+        d.ex = x + t / 2; d.ey = y;
+        // Son apparence : le personnage qu'il a choisi (sinon le héros du jeu), et sa tenue.
+        const perso = (a.personnage && jeu.personnages.get(a.personnage)) || jeu.heros;
+        const tenue = a.tenue ? perso?.tenues?.find((q) => q.id === a.tenue) : null;
+        liste.push({ y: Math.round(d.py), dessiner: () => dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : perso, couleur: '#e0a040', direction: a.direction, pas, x, y }, maintenant) });
+      }
+      for (const id of [...dessinAutres.keys()]) if (!vus.has(id)) dessinAutres.delete(id);
       const pj = pixelsJoueur();
       liste.push({ y: pj.y, dessiner: () => {
         const m = joueur.mouvement;
@@ -970,6 +1017,8 @@ const Moteur = (() => {
       // L'orage : le tonnerre suit l'éclair (sauf si la carte a son propre fond sonore).
       if (ambiance.nouvelEclair && !carte.ambiance.fond_sonore && !enCombat) audio.tonnerre(0.4 + carte.ambiance.intensite / 160);
       dessiner(maintenant);
+      // Le monde partagé (multijoueur) : ma position part, les noms des autres suivent leurs pions.
+      monde?.dessiner(dt);
     }
 
     // Le matin devient le jour, le soir la nuit : les pages qui dépendent du moment (condition
@@ -1011,7 +1060,7 @@ const Moteur = (() => {
       return true;
     }
 
-    return {
+    const API = {
       demarrer,
       arreter,
       redimensionner,
@@ -1061,7 +1110,65 @@ const Moteur = (() => {
         return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau };
       },
       position() { return joueur ? { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
+      // --- Saga 1.0 : le multijoueur (reseau/monde.js) ---
+      get jeuOuvert() { return jeu; },
+      get multi() { return multi; },
+      get monde() { return monde; },
+      get duel() { return duel; },
+      set autres(l) { autres = Array.isArray(l) ? l : []; },
+      // Où sont dessinés les autres joueurs, en pixels de la page (pour écrire leur nom au-dessus).
+      etiquettes() {
+        if (!jeu || table.actif) return [];
+        const r = canvas.getBoundingClientRect(), k = r.width / Math.max(1, canvas.width);
+        return [...dessinAutres].filter(([, d]) => d.ex !== undefined).map(([id, d]) => ({ id, x: r.left + d.ex * k, y: r.top + d.ey * k }));
+      },
+      // La partie elle-même (pas une copie) : un échange y ajoute et en retire.
+      get partieVive() { return partie; },
+      get tenue() { return partie?.tenue || ''; },
+      // Mon apparence aux yeux des autres joueurs (multijoueur) : { personnage, tenue }.
+      get apparence() { return monApparence; },
+      set apparence(a) { monApparence = { personnage: String(a?.personnage || ''), tenue: String(a?.tenue || '') }; },
+      // Les apparences possibles : le héros du jeu et les personnages qui ont un sprite ou une tuile.
+      apparences() {
+        if (!jeu) return [];
+        const out = [{ id: '', nom: `${jeu.heros?.nom || 'Héros'} (par défaut)`, sprite: jeu.heros?.sprite || null }];
+        for (const p of jeu.personnages.values()) {
+          if (p.heros || (!p.sprite && !(p.tuile >= 0))) continue;
+          out.push({ id: p.id, nom: p.nom || p.id, sprite: p.sprite || null });
+        }
+        return out;
+      },
+      // L'écran du nom et de l'apparence, prêté au multijoueur (le même qu'en jeu : personnaliser.js).
+      choisirApparence(o) { return ecranPerso.ouvrir(o); },
+      // Un combat qui ne vient pas du jeu (un duel entre joueurs) : faire({ jeu, partie, ui }) sur l'écran
+      // de combat du jeu, avec la musique des dresseurs. Rend false si ce n'est pas le moment.
+      async duel(faire) {
+        if (!jeu || enScript || enCombat || fondu) return false;
+        enCombat = true;
+        document.body.classList.add('en-combat');
+        entrees.oublier();
+        dialogue.fermer();
+        const ra = reglagesAudio(), avant = partie.musique;
+        const morceau = Jeu.son(ra.musique_dresseur || ra.musique_combat);
+        if (morceau) audio.musique(morceau, { fondu: 0.4 });
+        try {
+          return await faire({ jeu, partie, ui: ecranDuJeu() });
+        } catch (err) {
+          ecranDuJeu().fermer();
+          rappels.message?.(`Erreur pendant le duel : ${err.message}`);
+          return false;
+        } finally {
+          enCombat = false;
+          document.body.classList.remove('en-combat');
+          entrees.oublier();
+          if (morceau) audio.musique(avant, { fondu: 0.8 });
+        }
+      },
     };
+    multi = Multi.creer({ scene: canvas.parentElement, moteur: API, message: (t) => rappels.message?.(t) });
+    duel = typeof Duel !== 'undefined' ? Duel.creer({ moteur: API, multi, message: (t) => rappels.message?.(t) }) : null;
+    monde = MondePartage.creer({ moteur: API, multi, scene: canvas.parentElement, message: (t) => rappels.message?.(t), duel });
+    return API;
   }
 
   return { creer, TOUCHES_DEFAUT, MANETTE_DEFAUT, COMMANDES };

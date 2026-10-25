@@ -258,6 +258,8 @@ const Donnees = (() => {
     regles: 'pokemon', badges: [],
     niveau_max: 99, courbe_xp: 'normale',
     temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
+    // Tafl 1.0 (Saga 1.0) : le multijoueur (jouer à plusieurs sur le réseau de la maison).
+    multijoueur: { echanges: true, duels: true, pv_autres: 'exacts' },
     scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
     ...(J ? { jdr: J.normRegles({}) } : {}), // Tafl 0.32 : les règles maison du pack JDR
   });
@@ -342,6 +344,11 @@ const Donnees = (() => {
       evolution_dresseurs: Boolean(r.evolution_dresseurs),
       evolution_sauvages: Boolean(r.evolution_sauvages),
       seuil_amitie: int(r.seuil_amitie, 220, 1, 255),
+      multijoueur: {
+        echanges: r.multijoueur?.echanges !== false,
+        duels: r.multijoueur?.duels !== false,
+        pv_autres: pick(r.multijoueur?.pv_autres, [['exacts'], ['etat']], 'exacts'),
+      },
       chance_chromatique: int(r.chance_chromatique, 4096, 0, 100000),
       interface: {
         theme: pick(r.interface?.theme, THEMES, 'verre'),
@@ -1521,7 +1528,28 @@ const Donnees = (() => {
         tableBadges(r, ctx),
       );
     }
-    out.push(...formSauvegarde(r, ctx));
+    out.push(...formMultijoueur(r, ctx), ...formSauvegarde(r, ctx));
+    return out;
+  }
+  // Réglages › Partie › Multijoueur (Tafl 1.0, joué par Saga 1.0) : ce que les amis ont le droit de faire.
+  function formMultijoueur(r, ctx) {
+    const m = r.multijoueur;
+    const out = [
+      section('Multijoueur'),
+      info('Jouer à plusieurs sur le réseau de la maison : dans Saga, menu de pause › « Jouer à plusieurs ». Les amis ouvrent l\'adresse affichée dans leur navigateur, sans rien installer.'),
+    ];
+    if (r.regles === 'jdr') {
+      out.push(
+        info('Partie de table : chaque ami reçoit la vue de son rôle (le MJ donne un héros à chacun dans le panneau du MJ). Ce qui est caché ne quitte jamais la machine du MJ.'),
+        champ('Les joueurs voient les PV des autres héros', sel([['exacts', 'Exacts (12 / 18 PV)'], ['etat', 'Juste l\'état (indemne, blessé…)']], m.pv_autres, (v) => { m.pv_autres = v; ctx.change?.(); })),
+      );
+      return out;
+    }
+    out.push(
+      info('Les autres jeux : chacun joue sa propre partie dans ton jeu, et vous vous voyez marcher sur les mêmes cartes.'),
+      champ('Les joueurs peuvent échanger', ctx.coche(m, 'echanges'), 'une créature, un objet, de l\'argent ; les deux confirment'),
+      champ('Les joueurs peuvent se défier', ctx.coche(m, 'duels'), 'un duel amical : rien n\'est perdu ni gagné'),
+    );
     return out;
   }
   function ongletInterface(r, ctx) {

@@ -27,6 +27,19 @@ contextBridge.exposeInMainWorld('saga', {
   onTableVue: (callback) => ipcRenderer.on('table:vue', (_event, json) => callback(json)),
   tableDemander: (a) => ipcRenderer.send('table:action', a),
   onTableAction: (callback) => ipcRenderer.on('table:action', (_event, a) => callback(a)),
+  // Le multijoueur (Saga 1.0) : ouvrir la partie aux amis (sur le réseau local), leur envoyer leur vue,
+  // recevoir leurs demandes et la liste de qui est là.
+  // o : { mode: 'table' | 'monde', nom (celui de l'hôte), titre, port }.
+  reseauOuvrir: (o) => ipcRenderer.invoke('reseau:ouvrir', o),
+  reseauDire: (texte, pour) => ipcRenderer.send('reseau:dire', texte, pour),
+  reseauBouger: (p) => ipcRenderer.send('reseau:bouger', p),
+  reseauPair: (vers, donnees) => ipcRenderer.send('reseau:pair', vers, donnees),
+  reseauFermer: () => ipcRenderer.invoke('reseau:fermer'),
+  reseauInfos: () => ipcRenderer.invoke('reseau:infos'),
+  reseauExpulser: (id) => ipcRenderer.invoke('reseau:expulser', id),
+  reseauEnvoyer: (id, sorte, json) => ipcRenderer.send('reseau:envoyer', id, sorte, json),
+  onReseauAction: (callback) => ipcRenderer.on('reseau:action', (_event, a) => callback(a)),
+  onReseauClients: (callback) => ipcRenderer.on('reseau:clients', (_event, l) => callback(l)),
   listeSons: () => ipcRenderer.invoke('jeu:listeSons'),
   // Le jeu (un dossier écrit par Tafl) : renvoie { dossier, jeu, tuiles, cartes, donnees } en textes.
   choisirJeu: () => ipcRenderer.invoke('jeu:choisir'),

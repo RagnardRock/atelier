@@ -84,6 +84,9 @@ const DEFAULT_CONFIG = {
   manette: null,         // null = les boutons par défaut ; sinon { action: [0], retour: [1], … }
   jeuxRecents: [],       // les dossiers de jeu ouverts, du plus récent au plus ancien
   modeTable: {},         // Saga 0.14 : dossier du jeu → true s'il a été joué en mode table la dernière fois
+  // Saga 1.0 : le multijoueur. Le nom qu'on montre aux amis, et l'apparence choisie (un personnage du jeu).
+  multiNom: '',
+  multiApparence: '',
 };
 
 async function readConfig() {
@@ -176,13 +179,17 @@ async function lireJeu(cible) {
 // seulement dans le dossier du jeu ouvert. Le moteur les décode lui-même (Web Audio).
 let dossierOuvert = null;
 const SOUND_FILE = /^sons\/[^/\\:*?"<>|]+\.(ogg|oga|mp3|wav|m4a|aac|opus|flac|webm)$/i;
-handle('jeu:son', async (_event, rel) => {
+async function lireSonDuJeu(rel) {
   const r = relJeu(rel);
   if (!dossierOuvert || !SOUND_FILE.test(r) || r.includes('..')) throw new Error(`Son refusé : ${rel}`);
   const full = path.join(dossierOuvert, r);
   if (path.relative(dossierOuvert, full).startsWith('..')) throw new Error(`Son refusé : ${rel}`);
   const octets = await fs.readFile(full).catch(() => null);
   if (!octets) throw new Error(`introuvable dans le dossier du jeu`);
+  return octets;
+}
+handle('jeu:son', async (_event, rel) => {
+  const octets = await lireSonDuJeu(rel);
   return new Uint8Array(octets.buffer, octets.byteOffset, octets.byteLength);
 });
 
@@ -199,7 +206,12 @@ handle('jeu:choisir', async (event) => {
   return lireJeu(result.filePaths[0]);
 });
 // Ouvrir (ou recharger, F5) un jeu dont on connaît le dossier.
-handle('jeu:ouvrir', async (_event, dossier) => lireJeu(dossier));
+handle('jeu:ouvrir', async (_event, dossier) => {
+  const textes = await lireJeu(dossier);
+  // Le multijoueur : les amis relisent le jeu (Tafl vient peut-être de l'enregistrer).
+  if (reseau.ouvert) reseau.oublierJeu();
+  return textes;
+});
 handle('jeu:recents', async () => (await readConfig()).jeuxRecents.filter((d) => fsSync.existsSync(path.join(d, 'jeu.json'))));
 handle('jeu:montrer', async (_event, dossier) => {
   const err = await shell.openPath(dossierDuJeu(dossier));
@@ -517,6 +529,43 @@ ipcMain.on('table:action', (event, a) => {
   if (event.sender !== fenetreJoueurs?.webContents || !a || typeof a !== 'object') return;
   fenetrePrincipale?.webContents.send('table:action', { type: String(a.type || ''), pion: String(a.pion || ''), id: String(a.id || ''), x: Number(a.x), y: Number(a.y) });
 });
+// --- Le multijoueur (Saga 1.0) : les amis rejoignent depuis leur navigateur (voir reseau.js) ---
+// main.js ne fait que passer les messages : la fenêtre de Saga (l'hôte) calcule la vue de chacun et
+// décide de chaque demande.
+const Reseau = require('./reseau.js');
+const reseau = Reseau.creer({
+  moteur: __dirname,
+  version: app.getVersion(),
+  config: (({ jeuxRecents, modeTable, ...c }) => c)(DEFAULT_CONFIG),
+  log,
+  // À la table (JDR), les amis ne reçoivent que de quoi dessiner ; dans le monde partagé, le jeu entier.
+  lireJeuPublic: async (mode) => {
+    if (!dossierOuvert) throw new Error('Aucun jeu ouvert');
+    const textes = await lireJeu(dossierOuvert);
+    return mode === 'table' ? Reseau.jeuPublic(textes) : { ...textes, dossier: 'reseau' };
+  },
+  lireSon: (chemin) => lireSonDuJeu(chemin),
+  versHote: (a) => fenetrePrincipale?.webContents.send('reseau:action', a),
+  clientsChanges: (l) => fenetrePrincipale?.webContents.send('reseau:clients', l),
+});
+handle('reseau:ouvrir', async (_event, o) => {
+  if (joueur) throw new Error('Le multijoueur se lance depuis Saga');
+  if (!dossierOuvert) throw new Error('Aucun jeu ouvert');
+  return reseau.ouvrir(o && typeof o === 'object' ? o : {});
+});
+// L'hôte joue aussi : il parle, il bouge, il écrit à un autre joueur (échanges, duels).
+ipcMain.on('reseau:dire', (event, texte, pour) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous')); });
+ipcMain.on('reseau:bouger', (event, p) => { if (event.sender === fenetrePrincipale?.webContents) reseau.bouger(p); });
+ipcMain.on('reseau:pair', (event, vers, donnees) => { if (event.sender === fenetrePrincipale?.webContents) reseau.pair(String(vers || ''), donnees); });
+handle('reseau:fermer', async () => { reseau.fermer(); return reseau.infos(); });
+handle('reseau:infos', async () => reseau.infos());
+handle('reseau:expulser', async (_event, id) => { reseau.expulser(String(id || '')); return true; });
+ipcMain.on('reseau:envoyer', (event, id, sorte, json) => {
+  if (event.sender !== fenetrePrincipale?.webContents || typeof json !== 'string' || json.length > 4e6) return;
+  reseau.envoyer(String(id), ['vue', 'jeu', 'fin'].includes(sorte) ? sorte : 'vue', json);
+});
+app.on('before-quit', () => reseau.fermer());
+
 // Les sons du dossier sons/ du jeu ouvert (le panneau Musique du MJ).
 handle('jeu:listeSons', async () => {
   if (!dossierOuvert) return [];

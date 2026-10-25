@@ -30,6 +30,8 @@ const TableEtat = (() => {
       caseM: caseM > 0 && caseM <= 30 ? caseM : 1.5,
       diagonales: r.diagonales === 'alternees' ? 'alternees' : 'simple',
       jetsCaches: Boolean(r.jets_mj_caches),
+      // Tafl 1.0 : ce qu'un joueur voit des PV des AUTRES héros ('exacts' ou 'etat').
+      pvAutres: jeu.donnees?.reglages?.reglages?.multijoueur?.pv_autres === 'etat' ? 'etat' : 'exacts',
     };
   }
 
@@ -165,7 +167,13 @@ const TableEtat = (() => {
       if (p.sorte === 'heros') {
         const c = membreDe(partie, p);
         if (!c) continue;
-        Object.assign(v, { nom: ctx.nomHeros?.(c) || c.nom || c.creature, personnage: c.creature || '', pv: Math.max(0, c.pv), pvMax: ctx.pvMaxHeros?.(c) || c.pvMax || c.pv, ko: c.pv <= 0, joueur: c.joueur || '' });
+        const pvMax = ctx.pvMaxHeros?.(c) || c.pvMax || c.pv;
+        Object.assign(v, { nom: ctx.nomHeros?.(c) || c.nom || c.creature, personnage: c.creature || '', pv: Math.max(0, c.pv), pvMax, ko: c.pv <= 0, joueur: c.joueur || '' });
+        // Les PV des autres héros : exacts, ou seulement leur état, selon le réglage du jeu (Tafl 1.0).
+        if (!mj && reglages(jeu).pvAutres === 'etat' && (!role.perso || role.perso !== c.creature)) {
+          delete v.pv; delete v.pvMax;
+          v.sante = sante(Math.max(0, c.pv), Math.max(1, pvMax));
+        }
       } else {
         Object.assign(v, { monstre: p.monstre, sante: sante(p.pv, p.pvMax), ko: p.pv <= 0 });
         if (mj) Object.assign(v, { pv: p.pv, pvMax: p.pvMax });
@@ -199,6 +207,8 @@ const TableEtat = (() => {
       scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '' } : null,
       caseM: reglages(jeu).caseM,
     };
+    // Saga 1.0 : le joueur d'un héros reçoit sa fiche (lui seul), pour la lire et lancer ses jets.
+    if (!mj && role.perso && ctx.ficheDe) out.fiche = ctx.ficheDe(role.perso);
     if (mj) out.pieces = pieces(carte).map((z) => ({ id: z.id, nom: z.nom || z.id, x: z.x, y: z.y, largeur: z.largeur, hauteur: z.hauteur, visible: visibilitePiece(table, carte, z) }));
     return out;
   }
@@ -210,6 +220,12 @@ const TableEtat = (() => {
     const non = (erreur) => ({ ok: false, erreur });
     const pion = typeof a.pion === 'string' ? table.pions.find((p) => p.id === a.pion) : null;
     switch (a.type) {
+      // Un joueur lance un jet de SON personnage (caractéristique, sauvegarde ou compétence) : c'est
+      // l'hôte qui lance, et la ligne va au journal, vue de tous.
+      case 'jet': {
+        if (!role.mj && !role.perso) return non('Les spectateurs ne lancent pas de dés.');
+        return { ok: true, jet: { perso: role.mj ? String(a.perso || '') : role.perso, quoi: String(a.quoi || ''), sorte: a.sorte === 'sauvegarde' ? 'sauvegarde' : 'test', id: String(a.id || '') } };
+      }
       case 'deplacer': {
         if (!pion || pion.carte !== carte.id) return non('Ce pion n\'est pas sur cette carte.');
         if (!role.mj) {
