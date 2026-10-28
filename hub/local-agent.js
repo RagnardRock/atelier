@@ -55,7 +55,7 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', sender, 
   const controller = activeController;
   try {
     if (context && history.length === 0) {
-      history.push({ role: 'system', content: 'Tu es Loki, l’assistant intégré à Atelier. Réponds en français sauf demande contraire. Le contexte ci-dessous est informatif : ne prétends pas avoir exécuté une action si tu ne l’as pas réellement faite.\n\n' + context });
+      history.push({ role: 'system', content: 'Tu es Loki, l’assistant intégré à Atelier. Réponds en français sauf demande contraire. Dans cette première version locale, tu peux consulter le contexte fourni mais tu ne disposes pas encore d’outils pour exécuter des actions dans Atelier. Ne prétends jamais avoir ajouté une note, modifié le calendrier, lancé un minuteur ou exécuté une autre action.\n\n' + context });
     }
     history.push({ role: 'user', content: text });
     emit({ kind: 'init', sessionId: 'local' });
