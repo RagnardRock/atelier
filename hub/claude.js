@@ -640,11 +640,12 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   // Bouton stop : Claude arrête ce qu'il est en train de faire, la conversation continue.
   handle('claude:interrupt', async () => {
+    if (procOptions.startsWith('[\"local\"')) { localAgent.interrupt(); return; }
     write({ type: 'control_request', request_id: `interrupt-${nextRequestId++}`, request: { subtype: 'interrupt' } });
   });
 
   // Nouvelle conversation.
-  handle('claude:reset', async () => { lastSessionId = null; messageEnAttente = null; stop(); });
+  handle('claude:reset', async () => { lastSessionId = null; messageEnAttente = null; localAgent.reset(); stop(); });
 
   // Au démarrage d'Atelier, ou en rouvrant une conversation de la liste : elle reprend au prochain message.
   handle('claude:reprendre', async (_event, sessionId) => {
