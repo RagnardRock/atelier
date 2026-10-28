@@ -29,7 +29,7 @@ const App = (() => {
   ];
   const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets'], ['installation', 'Installer, mettre à jour ou désinstaller un outil']];
   const LANGUES = [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']];
-  const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
+  const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)'], ['local:qwen2.5:7b', 'Local · Qwen 2.5 7B (Ollama)'], ['local:llama3.1:8b', 'Local · Llama 3.1 8B (Ollama)']];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
   }
@@ -59,6 +59,7 @@ const App = (() => {
         { key: 'garderPressePapiers', label: 'Garder cet historique après la fermeture d\'Atelier', type: 'checkbox', value: config.garderPressePapiers },
         { type: 'info', text: 'Widget Loki :' },
         { key: 'claudeModel', label: 'Modèle', type: 'select', choices: MODELES, value: config.claudeModel || '' },
+        { key: 'localAgentUrl', label: 'API locale', type: 'text', value: config.localAgentUrl || 'http://127.0.0.1:11434/v1/chat/completions' },
         { key: 'claudeCommand', label: 'Commande', type: 'text', value: config.claudeCommand || 'claude' },
         { key: 'claudeLitProjets', label: 'Loki peut aussi lire les fichiers de mes projets (pas seulement leur état Git)', type: 'checkbox', value: config.claudeLitProjets !== false },
         { key: 'claudeActions', label: 'Loki peut agir dans Atelier (notes, calendrier, minuteurs, projets, installer un outil…)', type: 'checkbox', value: config.claudeActions !== false },
