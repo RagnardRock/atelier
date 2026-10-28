@@ -130,9 +130,9 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
         // Résolution déterministe du titre avant toute permission ou exécution : un modèle local
         // peut confondre le titre d'une note avec son identifiant réel.
         if (action === 'supprimer_note' && args && typeof args === 'object' && !Array.isArray(args) && typeof args.id === 'string') {
-          const section = context.match(/--- notes\\.md ---\\n([\\s\\S]*?)(?=\\n--- [\\w.-]+ ---|$)/);
+          const section = context.match(/--- notes\.md ---\n([\s\S]*?)(?=\n--- [\w.-]+ ---|$)/);
           const notesTexte = section?.[1] || '';
-          const notes = [...notesTexte.matchAll(/^---\\s*\\n\\s*\\n## (.*?)\\n\\s*\\n_id : (.*?) ·/gm)]
+          const notes = [...notesTexte.matchAll(/^---\s*\n\s*\n## (.*?)\n\s*\n_id : (.*?) ·/gm)]
             .map((m) => ({ titre: m[1].trim(), id: m[2].trim() }));
           const valeur = args.id.trim();
           const parId = notes.find((n) => n.id === valeur);
