@@ -141,8 +141,8 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
           if (!parId) {
             const correspondantes = notes.filter((n) => n.titre.localeCompare(valeur, undefined, { sensitivity: 'accent' }) === 0);
             if (correspondantes.length === 1) args.id = correspondantes[0].id;
-            else if (correspondantes.length > 1) resolutionNoteErreur = \`Plusieurs notes portent le titre « \${valeur} ». Aucune action n'a été effectuée ; précise laquelle.\`;
-            else resolutionNoteErreur = \`Je ne trouve aucune note intitulée « \${valeur} » dans le contexte actuel. Aucune action n'a été effectuée.\`;
+            else if (correspondantes.length > 1) resolutionNoteErreur = `Plusieurs notes portent le titre « ${valeur} ». Aucune action n'a été effectuée ; précise laquelle.`;
+            else resolutionNoteErreur = `Je ne trouve aucune note intitulée « ${valeur} » dans le contexte actuel. Aucune action n'a été effectuée.`;
           }
         }
         emit({ kind: 'tool', id: toolUseId, name: PREFIXE_ACTIONS + action, input: args || {} });
