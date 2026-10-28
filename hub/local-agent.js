@@ -33,4 +33,59 @@ async function completion({ baseUrl = DEFAULT_URL, model, messages, tools, signa
   return choice.message;
 }
 
-module.exports = { completion, DEFAULT_URL };
+
+let history = [];
+let activeController = null;
+let currentModel = null;
+let currentBaseUrl = null;
+
+async function send({ baseUrl = DEFAULT_URL, model, text, context = '', sender, emit, log }) {
+  if (activeController) throw new Error('Le modèle local est déjà en train de répondre.');
+  if (!model) {
+    emit({ kind: 'error', message: 'Modèle local manquant. Dans les réglages, indique claudeModel avec le préfixe local:, par exemple local:qwen2.5:7b.' });
+    emit({ kind: 'result' });
+    return;
+  }
+  if (model !== currentModel || baseUrl !== currentBaseUrl) {
+    history = [];
+    currentModel = model;
+    currentBaseUrl = baseUrl;
+  }
+  activeController = new AbortController();
+  const controller = activeController;
+  try {
+    if (context && history.length === 0) {
+      history.push({ role: 'system', content: 'Tu es Loki, l’assistant intégré à Atelier. Réponds en français sauf demande contraire. Le contexte ci-dessous est informatif : ne prétends pas avoir exécuté une action si tu ne l’as pas réellement faite.\n\n' + context });
+    }
+    history.push({ role: 'user', content: text });
+    emit({ kind: 'init', sessionId: 'local' });
+    const message = await completion({ baseUrl, model, messages: history, signal: controller.signal });
+    const answer = typeof message.content === 'string' ? message.content : '';
+    if (answer) {
+      history.push({ role: 'assistant', content: answer });
+      emit({ kind: 'text', text: answer });
+    }
+    emit({ kind: 'result', sessionId: 'local' });
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      log?.('ERREUR', `Loki local : ${err.message}`);
+      emit({ kind: 'error', message: err.message });
+    } else emit({ kind: 'notice', message: 'Réponse locale interrompue.' });
+    emit({ kind: 'result', sessionId: 'local' });
+  } finally {
+    if (activeController === controller) activeController = null;
+  }
+}
+
+function interrupt() {
+  activeController?.abort();
+}
+
+function reset() {
+  interrupt();
+  history = [];
+  currentModel = null;
+  currentBaseUrl = null;
+}
+
+module.exports = { completion, send, interrupt, reset, DEFAULT_URL };
