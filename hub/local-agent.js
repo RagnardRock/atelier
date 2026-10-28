@@ -94,7 +94,7 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
       'Tu es Loki, l’assistant intégré à Atelier. Réponds toujours en français, sauf demande explicite contraire.\n' +
       'RÈGLES DE TRAVAIL :\n' +
       '1. Pour toute action demandée, utilise l’outil Atelier correspondant. Ne donne pas du code ou des instructions à la place d’une action que tu peux exécuter.\n' +
-      '2. Avant de modifier ou supprimer une note/évènement, cherche le titre et l’identifiant dans les fichiers de contexte. Si l’utilisateur donne le titre d’une note et qu’une seule note correspond dans notes.md, appelle directement l’outil avec son id exact : ne demande jamais à l’utilisateur de fournir un id que le contexte contient déjà. Si aucune correspondance n’existe, explique que tu ne trouves pas la note. Si plusieurs notes correspondent, demande laquelle. Même règle pour les évènements avec calendrier.md. N’invente jamais d’identifiant.\n' +
+      '2. Pour une note, retrouve l’id dans notes.md ; l’utilisateur n’a pas à connaître les ids. Pour modifier/supprimer, si tu fournis le titre dans le champ id, le programme le résout. Pour « cette note », « la », « elle » ou « ajoute +1 », utilise l’historique récent pour identifier la note et son contenu, puis envoie le texte complet pour une modification. Ne redemande pas une information déjà donnée. Si plusieurs notes sont possibles, demande une précision. Même règle pour les évènements avec calendrier.md. N’invente jamais d’identifiant.\n' +
       '3. Pour une demande concernant les outils, widgets, versions ou projets d’Atelier, vérifie les fichiers de contexte ci-dessous au lieu de deviner.\n' +
       '4. Après un échec d’outil, lis précisément l’erreur, corrige les arguments ou explique le blocage. Ne pars pas sur une tâche différente et ne prétends pas que l’action a réussi.\n' +
       '5. Pour une demande composée, effectue les étapes nécessaires dans l’ordre et vérifie les résultats.\n' +
@@ -127,9 +127,9 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
         try { args = JSON.parse(fn.arguments || '{}'); } catch { args = null; }
         const famille = FAMILLES[action];
         let resolutionNoteErreur = null;
-        // Résolution déterministe du titre avant toute permission ou exécution : un modèle local
-        // peut confondre le titre d'une note avec son identifiant réel.
-        if (action === 'supprimer_note' && args && typeof args === 'object' && !Array.isArray(args) && typeof args.id === 'string') {
+        // Les petits modèles locaux renvoient parfois le titre au lieu de l'id demandé par le schéma.
+        // Résoudre titre -> id ici, avant permission/exécution, pour modifier ET supprimer sans deviner.
+        if (['modifier_note', 'supprimer_note'].includes(action) && args && typeof args === 'object' && !Array.isArray(args) && typeof args.id === 'string') {
           const section = context.match(/--- notes\.md ---\n([\s\S]*?)(?=\n--- [\w.-]+ ---|$)/);
           const notesTexte = section?.[1] || '';
           const notes = [...notesTexte.matchAll(/^---\s*\n\s*\n## (.*?)\n\s*\n_id : (.*?) ·/gm)]
@@ -139,8 +139,8 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
           if (!parId) {
             const correspondantes = notes.filter((n) => n.titre.localeCompare(valeur, undefined, { sensitivity: 'accent' }) === 0);
             if (correspondantes.length === 1) args.id = correspondantes[0].id;
-            else if (correspondantes.length > 1) resolutionNoteErreur = `Plusieurs notes portent le titre « ${valeur} ». Aucune n'a été supprimée ; demande laquelle.`;
-            else resolutionNoteErreur = `Je ne trouve aucune note intitulée « ${valeur} » dans le contexte actuel. Aucune note n'a été supprimée.`;
+            else if (correspondantes.length > 1) resolutionNoteErreur = \`Plusieurs notes portent le titre « \${valeur} ». Aucune action n'a été effectuée ; précise laquelle.\`;
+            else resolutionNoteErreur = \`Je ne trouve aucune note intitulée « \${valeur} » dans le contexte actuel. Aucune action n'a été effectuée.\`;
           }
         }
         emit({ kind: 'tool', id: toolUseId, name: PREFIXE_ACTIONS + action, input: args || {} });
