@@ -126,9 +126,28 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
         let args;
         try { args = JSON.parse(fn.arguments || '{}'); } catch { args = null; }
         const famille = FAMILLES[action];
+        let resolutionNoteErreur = null;
+        // Résolution déterministe du titre avant toute permission ou exécution : un modèle local
+        // peut confondre le titre d'une note avec son identifiant réel.
+        if (action === 'supprimer_note' && args && typeof args === 'object' && !Array.isArray(args) && typeof args.id === 'string') {
+          const section = context.match(/--- notes\\.md ---\\n([\\s\\S]*?)(?=\\n--- [\\w.-]+ ---|$)/);
+          const notesTexte = section?.[1] || '';
+          const notes = [...notesTexte.matchAll(/^---\\s*\\n\\s*\\n## (.*?)\\n\\s*\\n_id : (.*?) ·/gm)]
+            .map((m) => ({ titre: m[1].trim(), id: m[2].trim() }));
+          const valeur = args.id.trim();
+          const parId = notes.find((n) => n.id === valeur);
+          if (!parId) {
+            const correspondantes = notes.filter((n) => n.titre.localeCompare(valeur, undefined, { sensitivity: 'accent' }) === 0);
+            if (correspondantes.length === 1) args.id = correspondantes[0].id;
+            else if (correspondantes.length > 1) resolutionNoteErreur = `Plusieurs notes portent le titre « ${valeur} ». Aucune n'a été supprimée ; demande laquelle.`;
+            else resolutionNoteErreur = `Je ne trouve aucune note intitulée « ${valeur} » dans le contexte actuel. Aucune note n'a été supprimée.`;
+          }
+        }
         emit({ kind: 'tool', id: toolUseId, name: PREFIXE_ACTIONS + action, input: args || {} });
         let result;
-        if (!famille || !args || typeof args !== 'object' || Array.isArray(args)) {
+        if (resolutionNoteErreur) {
+          result = { erreur: resolutionNoteErreur };
+        } else if (!famille || !args || typeof args !== 'object' || Array.isArray(args)) {
           result = { erreur: !famille ? 'Outil inconnu ou non autorisé.' : 'Arguments JSON invalides.' };
           emit({ kind: 'denied', toolName: fn.name, input: args || {} });
         } else if (!actions && famille !== 'lecture') {
