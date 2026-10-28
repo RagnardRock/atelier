@@ -8,7 +8,7 @@ const PREFIXE_ACTIONS = 'mcp__atelier__';
 const OUTILS = [
   ['ajouter_note', "Ajoute une note dans le widget Notes. La première ligne devient son titre.", { texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['texte']],
   ['modifier_note', 'Modifie une note existante. Cherche son id dans notes.md ; remplace le texte complet si texte est fourni, et/ou son épingle.', { id: { type: 'string' }, texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['id']],
-  ['supprimer_note', 'Supprime une note. Utilise l’id exact correspondant au titre demandé, trouvé dans notes.md ; ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
+  ['supprimer_note', 'Supprime la note demandée. Si l’utilisateur donne un titre, repère la note correspondante dans notes.md et utilise son id exact. Ne demande pas l’id à l’utilisateur si une seule note correspond sans ambiguïté. Ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
   ['ajouter_evenement', 'Ajoute un évènement au calendrier.', { titre: { type: 'string' }, date: { type: 'string', description: 'Date AAAA-MM-JJ' }, heure: { type: 'string', description: 'Heure HH:MM ou vide' }, note: { type: 'string' } }, ['titre', 'date']],
   ['modifier_evenement', 'Modifie seulement les champs fournis d’un évènement. Trouve son id exact dans calendrier.md.', { id: { type: 'string' }, titre: { type: 'string' }, date: { type: 'string' }, heure: { type: 'string' }, note: { type: 'string' } }, ['id']],
   ['supprimer_evenement', 'Supprime l’évènement correspondant à la demande avec son id exact trouvé dans calendrier.md ; ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
