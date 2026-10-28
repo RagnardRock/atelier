@@ -30,6 +30,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const OUTILS = require('./outils');
+const localAgent = require('./local-agent');
 
 let proc = null;          // processus Claude Code en cours
 let sender = null;        // webContents de la fenêtre d'Atelier
@@ -585,6 +586,22 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   handle('claude:send', async (event, text) => {
     sender = event.sender;
+    const initialConfig = await readConfig();
+    if (typeof initialConfig.claudeModel === 'string' && initialConfig.claudeModel.startsWith('local:')) {
+      const model = initialConfig.claudeModel.slice('local:'.length).trim();
+      const localOptions = JSON.stringify(['local', model, initialConfig.localAgentUrl || localAgent.DEFAULT_URL, initialConfig.claudeActions !== false]);
+      if (proc) stop();
+      procOptions = localOptions;
+      const projetsDir = initialConfig.dossierProjets && fs.existsSync(initialConfig.dossierProjets) ? path.resolve(initialConfig.dossierProjets) : null;
+      const addDir = initialConfig.claudeLitProjets !== false ? projetsDir : null;
+      const actions = actionsActives(initialConfig);
+      await preparerContexte(addDir, actions);
+      const contexte = await Promise.all(['CLAUDE.md', 'atelier.md', 'notes.md', 'calendrier.md', 'projets.md'].map(async (nom) => {
+        try { return `--- ${nom} ---\\n${await fsp.readFile(path.join(cwd, nom), 'utf8')}`; } catch { return ''; }
+      }));
+      await localAgent.send({ model, baseUrl: initialConfig.localAgentUrl || localAgent.DEFAULT_URL, text, context: contexte.filter(Boolean).join('\\n\\n'), actions, sender, emit, log });
+      return;
+    }
     const config = await readConfig();
     const projetsDir = config.dossierProjets && fs.existsSync(config.dossierProjets) ? path.resolve(config.dossierProjets) : null;
     const addDir = config.claudeLitProjets !== false ? projetsDir : null;
