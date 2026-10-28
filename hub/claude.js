@@ -633,7 +633,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   // Ta réponse sur la carte Autoriser / Refuser.
   handle('claude:permission', async (_event, { requestId, toolUseId, autoriser, input }) => {
-    if (procOptions.startsWith('[\\"local\\"')) {
+    if (procOptions.startsWith('["local"')) {
       localAgent.demanderPermission({ requestId: String(requestId), autoriser: Boolean(autoriser) });
       return;
     }
