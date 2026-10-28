@@ -113,7 +113,11 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
     const tools = actions && config.claudeActions !== false ? OUTILS : OUTILS.filter(t => ['calculer','verifier_mises_a_jour'].includes(t.function.name));
     let termine = false;
     for (let tour = 0; tour < 8 && !termine; tour++) {
+      // Diagnostic ciblé : vérifier que le modèle reçoit bien les tours précédents,
+      // sans écrire le prompt système complet ni le contenu privé des notes dans les logs.
+      log?.('DEBUG', `Loki local → Ollama : tour ${tour + 1}, ${history.length} messages (${history.map(m => m.role).join(', ')}).`);
       const message = await completion({ baseUrl, model, messages: history, tools, signal: controller.signal });
+      log?.('DEBUG', `Loki local ← Ollama : tour ${tour + 1}, réponse=${message.tool_calls?.length ? message.tool_calls.map(c => c.function?.name || 'outil').join(', ') : 'texte'}.`);
       history.push(message);
       if (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0) {
         if (typeof message.content === 'string' && message.content) emit({ kind: 'text', text: message.content });
@@ -176,6 +180,13 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
           }
         }
         emit({ kind: 'tool-result', id: toolUseId, isError: Boolean(result?.erreur) });
+        // Le diagnostic note expose le résultat utile (notamment l'identifiant retourné),
+        // afin de voir si une référence permettant les messages suivants est perdue ici.
+        if (action.endsWith('_note')) {
+          let resume;
+          try { resume = JSON.stringify(result); } catch { resume = String(result); }
+          log?.('DEBUG', `Loki local : résultat ${action} : ${String(resume).slice(0, 1200)}`);
+        }
         history.push({ role: 'tool', tool_call_id: toolUseId, content: String(result?.erreur || result?.texte || 'Fait.') });
       }
     }
