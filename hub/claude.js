@@ -599,7 +599,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
       const contexte = await Promise.all(['CLAUDE.md', 'atelier.md', 'notes.md', 'calendrier.md', 'projets.md'].map(async (nom) => {
         try { return `--- ${nom} ---\\n${await fsp.readFile(path.join(cwd, nom), 'utf8')}`; } catch { return ''; }
       }));
-      await localAgent.send({ model, baseUrl: initialConfig.localAgentUrl || localAgent.DEFAULT_URL, text, context: contexte.filter(Boolean).join('\\n\\n'), actions, sender, emit, log });
+      await localAgent.send({ model, baseUrl: initialConfig.localAgentUrl || localAgent.DEFAULT_URL, text, context: contexte.filter(Boolean).join('\\n\\n'), actions, config: initialConfig, sender, emit, log, executerAction });
       return;
     }
     const config = await readConfig();
@@ -633,6 +633,10 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   // Ta réponse sur la carte Autoriser / Refuser.
   handle('claude:permission', async (_event, { requestId, toolUseId, autoriser, input }) => {
+    if (procOptions.startsWith('[\\"local\\"')) {
+      localAgent.demanderPermission({ requestId: String(requestId), autoriser: Boolean(autoriser) });
+      return;
+    }
     repondrePermission(String(requestId), String(toolUseId), Boolean(autoriser), input);
   });
   // Résultat d'une action, exécutée par les widgets.
