@@ -6,13 +6,13 @@ const crypto = require('node:crypto');
 const DEFAULT_URL = 'http://127.0.0.1:11434/v1/chat/completions';
 const PREFIXE_ACTIONS = 'mcp__atelier__';
 const OUTILS = [
-  ['ajouter_note', "Ajoute une note. La première ligne devient son titre.", { texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['texte']],
-  ['modifier_note', 'Remplace le texte complet d’une note existante et/ou son épingle.', { id: { type: 'string' }, texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['id']],
-  ['supprimer_note', 'Supprime une note existante.', { id: { type: 'string' } }, ['id']],
+  ['ajouter_note', "Ajoute une note dans le widget Notes. La première ligne devient son titre.", { texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['texte']],
+  ['modifier_note', 'Modifie une note existante. Cherche son id dans notes.md ; remplace le texte complet si texte est fourni, et/ou son épingle.', { id: { type: 'string' }, texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['id']],
+  ['supprimer_note', 'Supprime une note. Utilise l’id exact correspondant au titre demandé, trouvé dans notes.md ; ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
   ['ajouter_evenement', 'Ajoute un évènement au calendrier.', { titre: { type: 'string' }, date: { type: 'string', description: 'Date AAAA-MM-JJ' }, heure: { type: 'string', description: 'Heure HH:MM ou vide' }, note: { type: 'string' } }, ['titre', 'date']],
-  ['modifier_evenement', 'Modifie les champs fournis d’un évènement existant.', { id: { type: 'string' }, titre: { type: 'string' }, date: { type: 'string' }, heure: { type: 'string' }, note: { type: 'string' } }, ['id']],
-  ['supprimer_evenement', 'Supprime un évènement existant.', { id: { type: 'string' } }, ['id']],
-  ['lancer_minuteur', 'Lance un minuteur dans Atelier.', { nom: { type: 'string' }, minutes: { type: 'number', description: 'Durée en minutes' } }, ['minutes']],
+  ['modifier_evenement', 'Modifie seulement les champs fournis d’un évènement. Trouve son id exact dans calendrier.md.', { id: { type: 'string' }, titre: { type: 'string' }, date: { type: 'string' }, heure: { type: 'string' }, note: { type: 'string' } }, ['id']],
+  ['supprimer_evenement', 'Supprime l’évènement correspondant à la demande avec son id exact trouvé dans calendrier.md ; ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
+  ['lancer_minuteur', 'Lance réellement un compte à rebours dans le widget Minuteurs d’Atelier. Utilise cet outil plutôt que de fournir du code.', { nom: { type: 'string' }, minutes: { type: 'number', description: 'Durée en minutes' } }, ['minutes']],
   ['ouvrir_projet', 'Ouvre un projet récent dans son outil ou l’outil indiqué.', { nom: { type: 'string' }, outil: { type: 'string' } }, ['nom']],
   ['lancer_outil', 'Lance un outil Atelier installé.', { outil: { type: 'string' } }, ['outil']],
   ['installer_outil', 'Installe ou met à jour un outil Atelier.', { outil: { type: 'string' }, attendre: { type: 'boolean' } }, ['outil']],
@@ -71,7 +71,11 @@ function demanderPermission({ requestId, autoriser }) {
 }
 
 async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions = true, config = {}, sender, emit, log, executerAction }) {
-  if (activeController) throw new Error('Le modèle local est déjà en train de répondre.');
+  if (activeController) {
+    emit({ kind: 'error', message: 'Le modèle local est déjà en train de répondre.' });
+    emit({ kind: 'result', sessionId: 'local' });
+    return;
+  }
   if (!model) {
     emit({ kind: 'error', message: 'Modèle local manquant. Vérifie les réglages de Loki.' });
     emit({ kind: 'result' });
@@ -86,12 +90,22 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
   activeController = controller;
   const sessionId = 'local';
   try {
+    const systemContent =
+      'Tu es Loki, l’assistant intégré à Atelier. Réponds toujours en français, sauf demande explicite contraire.\n' +
+      'RÈGLES DE TRAVAIL :\n' +
+      '1. Pour toute action demandée, utilise l’outil Atelier correspondant. Ne donne pas du code ou des instructions à la place d’une action que tu peux exécuter.\n' +
+      '2. Avant de modifier ou supprimer une note/évènement, cherche son titre et son identifiant dans le contexte fourni. N’invente jamais d’identifiant. Si plusieurs éléments correspondent, demande lequel.\n' +
+      '3. Pour une demande concernant les outils, widgets, versions ou projets d’Atelier, vérifie les fichiers de contexte ci-dessous au lieu de deviner.\n' +
+      '4. Après un échec d’outil, lis précisément l’erreur, corrige les arguments ou explique le blocage. Ne pars pas sur une tâche différente et ne prétends pas que l’action a réussi.\n' +
+      '5. Pour une demande composée, effectue les étapes nécessaires dans l’ordre et vérifie les résultats.\n' +
+      '6. Garde le sujet de la conversation et les contraintes précédentes tant que l’utilisateur ne les remplace pas. Ne change pas de langue spontanément.\n' +
+      '7. Les actions modifiantes passent par la confirmation Atelier, sauf autorisation permanente configurée.\n' +
+      '8. N’invente jamais le contenu des fichiers, les résultats d’outils, les versions ni les actions réalisées.\n\n' +
+      'CONTEXTE ACTUEL D’ATELIER (actualisé à chaque message) :\n\n' + context;
     if (history.length === 0) {
-      history.push({ role: 'system', content:
-        'Tu es Loki, l’assistant intégré à Atelier. Réponds en français sauf demande contraire. ' +
-        'Tu peux utiliser les outils Atelier fournis. Pour toute action, appelle l’outil : ne prétends jamais avoir agi sans résultat. ' +
-        'Les actions qui changent les données demandent confirmation dans Atelier, sauf si la famille est autorisée sans demander. ' +
-        'N’invente jamais les résultats des outils.\n\n' + context });
+      history.push({ role: 'system', content: systemContent });
+    } else {
+      history[0] = { role: 'system', content: systemContent };
     }
     history.push({ role: 'user', content: text });
     emit({ kind: 'init', sessionId, model });
