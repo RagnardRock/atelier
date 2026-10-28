@@ -597,9 +597,9 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
       const actions = actionsActives(initialConfig);
       await preparerContexte(addDir, actions);
       const contexte = await Promise.all(['CLAUDE.md', 'atelier.md', 'notes.md', 'calendrier.md', 'projets.md'].map(async (nom) => {
-        try { return `--- ${nom} ---\\n${await fsp.readFile(path.join(cwd, nom), 'utf8')}`; } catch { return ''; }
+        try { return `--- ${nom} ---\n${await fsp.readFile(path.join(cwd, nom), 'utf8')}`; } catch { return ''; }
       }));
-      await localAgent.send({ model, baseUrl: initialConfig.localAgentUrl || localAgent.DEFAULT_URL, text, context: contexte.filter(Boolean).join('\\n\\n'), actions, config: initialConfig, sender, emit, log, executerAction });
+      await localAgent.send({ model, baseUrl: initialConfig.localAgentUrl || localAgent.DEFAULT_URL, text, context: contexte.filter(Boolean).join('\n\n'), actions, config: initialConfig, sender, emit, log, executerAction });
       return;
     }
     const config = await readConfig();
