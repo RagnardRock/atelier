@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const DEFAULT_URL = 'http://127.0.0.1:11434/v1/chat/completions';
 const PREFIXE_ACTIONS = 'mcp__atelier__';
 const OUTILS = [
+  ['lister_notes', 'Affiche les notes présentes dans notes.md. Utilise cet outil quand l’utilisateur demande de lister ou consulter ses notes.', {}, []],
   ['ajouter_note', "Ajoute une note dans le widget Notes. La première ligne devient son titre.", { texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['texte']],
   ['modifier_note', 'Modifie une note existante. Cherche son id dans notes.md ; remplace le texte complet si texte est fourni, et/ou son épingle.', { id: { type: 'string' }, texte: { type: 'string' }, epinglee: { type: 'boolean' } }, ['id']],
   ['supprimer_note', 'Supprime la note demandée. Si l’utilisateur donne un titre, repère la note correspondante dans notes.md et utilise son id exact. Ne demande pas l’id à l’utilisateur si une seule note correspond sans ambiguïté. Ne devine jamais l’id.', { id: { type: 'string' } }, ['id']],
@@ -32,7 +33,7 @@ const FAMILLES = {
   lancer_minuteur: 'minuteurs', ouvrir_projet: 'projets', lancer_outil: 'projets',
   retenir_projet: 'memoire', oublier_projet: 'memoire',
   installer_outil: 'installation', desinstaller_outil: 'installation',
-  calculer: 'lecture', verifier_mises_a_jour: 'lecture',
+  calculer: 'lecture', verifier_mises_a_jour: 'lecture', lister_notes: 'lecture',
 };
 const FAMILLES_TOUJOURS = ['notes', 'calendrier', 'minuteurs', 'projets', 'memoire', 'installation'];
 
@@ -127,6 +128,7 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
         try { args = JSON.parse(fn.arguments || '{}'); } catch { args = null; }
         const famille = FAMILLES[action];
         let resolutionNoteErreur = null;
+        if (action === 'lancer_minuteur' && args && typeof args === 'object' && !Array.isArray(args) && (typeof args.nom !== 'string' || !args.nom.trim())) args.nom = 'Minuteur';
         // Les petits modèles locaux renvoient parfois le titre au lieu de l'id demandé par le schéma.
         // Résoudre titre -> id ici, avant permission/exécution, pour modifier ET supprimer sans deviner.
         if (['modifier_note', 'supprimer_note'].includes(action) && args && typeof args === 'object' && !Array.isArray(args) && typeof args.id === 'string') {
@@ -145,7 +147,11 @@ async function send({ baseUrl = DEFAULT_URL, model, text, context = '', actions 
         }
         emit({ kind: 'tool', id: toolUseId, name: PREFIXE_ACTIONS + action, input: args || {} });
         let result;
-        if (resolutionNoteErreur) {
+        if (action === 'lister_notes') {
+          const section = context.match(/--- notes\.md ---\n([\s\S]*?)(?=\n--- [\w.-]+ ---|$)/);
+          const notesTexte = section?.[1]?.trim();
+          result = { texte: notesTexte || 'Je ne peux pas lire les notes dans le contexte actuel.' };
+        } else if (resolutionNoteErreur) {
           result = { erreur: resolutionNoteErreur };
         } else if (!famille || !args || typeof args !== 'object' || Array.isArray(args)) {
           result = { erreur: !famille ? 'Outil inconnu ou non autorisé.' : 'Arguments JSON invalides.' };
