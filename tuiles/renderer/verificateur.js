@@ -63,6 +63,13 @@ const Verificateur = (() => {
       monstres_jdr: ids('monstres_jdr'), classes_jdr: ids('classes_jdr'), origines: ids('origines'),
       badges: new Set((reglages.badges || []).map((b) => b.id)),
     };
+    // Tafl 1.2 : un module activé que ce Tafl ne connaît pas (écrit à la main, ou par un Tafl plus récent).
+    // Dit avant tout le reste : même un jeu sans carte doit l'apprendre.
+    if (typeof ModulesJeu !== 'undefined') {
+      for (const id of ModulesJeu.actifs(reglages)) {
+        if (!ModulesJeu.CATALOGUE[id]) ajouter('attention', 'references', `Le module « ${id} » est activé (Réglages › Règles du jeu › Modules), mais ce Tafl ne le connaît pas : Saga jouera sans lui s'il ne le connaît pas non plus.`);
+      }
+    }
     const nomCarte = (id) => cartes.get(id)?.nom || id;
     const nomEv = (ev) => `« ${ev.nom || ev.id} »`;
     const nomQuete = (id) => `« ${liste('quetes').find((q) => q.id === id)?.titre || id} »`;

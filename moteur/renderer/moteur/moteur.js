@@ -132,6 +132,16 @@ const Moteur = (() => {
     let scriptsJs = ScriptsJs.AUCUN, reactions = [];
     const signaler = (texte) => (rappels.erreurScript || rappels.message)?.(texte);
     const reagir = (moment, infos = {}) => { if (scriptsJs.actif) reactions.push({ moment, infos }); };
+    // Saga 1.4 : ce que le moteur prête aux modules du jeu (modules/modules.js, MODULES.md) : annoncer un
+    // moment aux scripts, refaire la liste des événements présents (et leurs pages), dire un message, et
+    // les menus hors combat (ui, prêt quand une partie a démarré).
+    const hoteModules = {
+      reagir: (moment, infos = {}) => reagir(String(moment), infos && typeof infos === 'object' ? infos : {}),
+      rafraichir: () => { if (jeu && carte) presents = Monde.evenementsPresents(jeu, carte, partie, presents); },
+      message: (t) => rappels.message?.(String(t)),
+      get ui() { return scripts?.ui || null; },
+    };
+    Modules.brancher({ message: (t) => rappels.message?.(t) });
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
     // Saga 1.0 : le multijoueur (reseau/monde.js). Les autres joueurs sur cette carte (des fantômes : ils
@@ -240,6 +250,8 @@ const Moteur = (() => {
         rappels.carteChangee?.(carte);
         reagir('carte', { carte: carte.id, depuis });
       }
+      // Saga 1.4 : les modules du jeu voient le joueur arriver (aussi au chargement d'une partie).
+      Modules.entrerCarte(jeu, partie, hoteModules, carte, depuis);
       // Les événements « auto » de cette carte se joueront dès la fin du fondu.
       autoAFaire = true;
       return true;
@@ -256,13 +268,18 @@ const Moteur = (() => {
       Object.defineProperty(jeu, 'joueur', { configurable: true, get: () => ({ nom: partie?.nom || '', tenue: partie?.tenue || '' }) });
       // Une partie toute neuve : le pack la prépare (le héros principal rejoint le groupe JRPG).
       if (!partieGardee) Regles.nouvellePartie(jeu, partie);
+      // Saga 1.4 : les modules du jeu préparent leur état (partie.modules[id]), neuf ou chargé.
+      if (!partieGardee) Modules.nouvellePartie(jeu, partie, hoteModules);
+      Modules.preparer(jeu, partie, hoteModules);
       // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
       if (!partieGardee && test) appliquerTest(test);
       // Saga 0.13 : les conditions du pack (jdr_perception…), la vitesse des dés, et ce que le pack fait au
       // début d'une nouvelle partie (la création des personnages du pack JDR), dès que le joueur est libre.
-      Monde.brancherConditions((cond, p) => Regles.condition(jeu, cond, p));
+      // Saga 1.4 : puis celles des modules, et les cases qu'ils bloquent (un bâtiment posé en jeu).
+      Monde.brancherConditions((cond, p) => { const r = Regles.condition(jeu, cond, p); return r !== undefined ? r : Modules.condition(jeu, cond, p); });
+      Monde.brancherBlocage((c, x, y) => Modules.bloque(jeu, partie, c, x, y));
       ecranDes.vitesse(jeu.donnees.reglages?.reglages?.jdr?.animation_des || 'normale');
       ecranDes.cacher();
       debutAFaire = !partieGardee;
@@ -316,6 +333,8 @@ const Moteur = (() => {
         // Saga 0.13 : le plateau de dés (pack JDR).
         des: (o) => ecranDes.montrer(o),
         signaler,
+        // Saga 1.4 : les commandes des modules du jeu reçoivent ce que le moteur leur prête.
+        hoteModules,
       });
       scriptsJs.fermer();
       reactions = [];
@@ -928,6 +947,17 @@ const Moteur = (() => {
       ctx.restore();
     }
 
+    // Saga 1.4 : un module dessine sur la carte (modules/MODULES.md › dessiner). Il reçoit le contexte du
+    // canvas, la caméra, et tuile(n, cx, cy) qui pose la tuile n sur la case (cx, cy) de la carte.
+    function dessinerModules(profondeur, maintenant) {
+      Modules.dessiner(jeu, partie, {
+        ctx, carte, profondeur, maintenant, taille: jeu.taille, cam: { x: cam.x, y: cam.y }, largeur: W, hauteur: H,
+        tuile: (n, cx, cy) => dessinerTuile(Number(n), Math.round(cx * jeu.taille - cam.x), Math.round(cy * jeu.taille - cam.y), maintenant),
+      });
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     function dessiner(maintenant) {
       ctx.imageSmoothingEnabled = false;
       ctx.globalCompositeOperation = 'source-over';
@@ -935,10 +965,13 @@ const Moteur = (() => {
       ctx.fillRect(0, 0, W, H);
       // 1. les calques « dessous » et « joueur », dans l'ordre de la liste ;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') dessinerCalque(c, maintenant);
+      // (Saga 1.4) ce que les modules posent au sol, sous les personnages ;
+      dessinerModules('sol', maintenant);
       // 2. les personnages ;
       dessinerPersonnages(maintenant);
-      // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur ;
+      // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur, puis ce que les modules y mettent ;
       for (const c of carte.calques) if (c.visible && c.profondeur === 'dessus') dessinerCalque(c, maintenant);
+      dessinerModules('dessus', maintenant);
       // 4. l'ambiance : la lumière (teinte de la carte, jour et nuit, lampes), puis la météo.
       ambiance.dessinerLumiere(ctx, ciel(), sourcesLumiere());
       if (options.meteo) ambiance.dessinerMeteo(ctx);
@@ -1092,8 +1125,11 @@ const Moteur = (() => {
       // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
       // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
-      actionsPause: () => (jeu ? Regles.actionsPause(jeu) : []),
-      agirPause: (id) => horsScript(() => Regles.agirPause({ jeu, partie, ui: scripts.ui, id }), 'Erreur dans ce menu'),
+      // Saga 1.4 : puis ceux des modules du jeu (leur id commence par « module: »).
+      actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie)] : []),
+      agirPause: (id) => horsScript(() => (Modules.estActionPause(id)
+        ? Modules.agirPause(jeu, partie, hoteModules, id)
+        : Regles.agirPause({ jeu, partie, ui: scripts.ui, id })), 'Erreur dans ce menu'),
       // La forme des menus du jeu (leurs noms, le Pokédex montré ou non), pour la pause et le carnet.
       formeMenus: () => (jeu ? Regles.menus(jeu) : null),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),

@@ -191,6 +191,16 @@ navigateur (PC, tablette, téléphone), entrent le code et leur prénom : **rien
 Tout passe par des messages simples (rejoindre, vue, action) : un relais sur un serveur pourra plus tard
 remplacer le réseau local pour jouer à distance.
 
+## Ce que fait Saga 1.4 : les modules de jeu
+
+Un jeu a toujours **un pack de règles** (Pokémon, JRPG ou JDR : comment on se bat et comment on progresse). Il peut maintenant activer en plus des **modules** : chacun ajoute au monde une chose que le jeu sait faire en plus, quel que soit le pack, et un jeu peut en avoir plusieurs (« JRPG + gestion », « Pokémon + gestion »…).
+
+- Le jeu choisit ses modules dans Tafl 1.2 (Données › Réglages › Règles du jeu › Modules), c'est-à-dire `reglages.modules`.
+- Un module garde son état dans la partie (`partie.modules`), sauvegardé avec elle. Il peut dessiner sur la carte, bloquer des cases (un bâtiment posé en jeu), ajouter des commandes d'événement, des conditions de page, des choix au menu de pause, et annoncer ses moments aux scripts JS (`quand(...)`), qui le lisent dans `saga.modules`.
+- Le contrat complet, ce qu'un module a le droit de faire et un exemple : `renderer/moteur/modules/MODULES.md`. La description des modules pour Tafl : `commun/modules.js`.
+
+Saga 1.4 pose les fondations : aucun module n'est encore livré. Le premier prévu est « gestion » (un domaine à bâtir : stock, bâtiments, habitants, journées).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

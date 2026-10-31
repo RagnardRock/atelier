@@ -323,6 +323,8 @@ const BacASable = (() => {
         etat: (etat, action = 'ajouter', qui = 'tous') => cmd({ type: 'etat', etat: String(etat), action, qui }),
         fiche: (i = 0) => (courant.fiches || [])[Number(i) || 0] || null,
         get fiches() { return courant.fiches || []; },
+        // Saga 1.4 : ce que les modules du jeu donnent à lire, par id de module (saga.modules.gestion…).
+        get modules() { return courant.modules || {}; },
         combattre(o = {}) {
           if (o.dresseur) return cmd({ type: 'combat_dresseur', dresseur: String(o.dresseur) });
           if (o.groupe) return cmd({ type: 'combat_groupe', groupe: String(o.groupe) });

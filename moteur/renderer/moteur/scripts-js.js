@@ -71,7 +71,8 @@ const ScriptsJs = (() => {
         etat: (a) => {
           const ev = a.contexte?.ev || null;
           // Saga 0.13 : les fiches des membres, déjà calculées par le pack (saga.fiche).
-          return { partie: copie(), fiches: Regles.pourScript(jeu, partie()), ...lieu(ev), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
+          // Saga 1.4 : ce que les modules du jeu donnent à lire (saga.modules).
+          return { partie: copie(), fiches: Regles.pourScript(jeu, partie()), modules: typeof Modules !== 'undefined' ? Modules.pourScript(jeu, partie()) : {}, ...lieu(ev), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
         },
         graine: (n) => { if (partie()) partie().graine = n; },
         console: (c) => {

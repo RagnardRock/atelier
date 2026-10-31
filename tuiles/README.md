@@ -434,6 +434,14 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Le vérificateur** signale aussi les erreurs des scripts, les blocs Script qui appellent une commande inconnue et les variables qui n'existent pas ; un clic ouvre le script à la bonne ligne. **Ctrl+K** trouve un script par son nom, ses commandes ou un bout de son code.
 - **Loki** lit, écrit et essaie les scripts (actions `scripts`, `script`, `essayer_script`) et crée les variables (`variable`), toujours avec Autoriser / Refuser et `Ctrl+Z`.
 
+## Les modules de jeu (Tafl 1.2, pour Saga 1.4)
+
+**Données › Réglages › Règles du jeu › Modules** : en plus de son pack de règles (un seul), un jeu peut activer des **modules**, qui ajoutent au monde une chose que le jeu sait faire en plus, quel que soit le pack. Aucun module n'est encore livré (le premier prévu est « gestion ») : la section le dit.
+
+- Tafl garde maintenant tel quel tout fichier de `donnees/` qu'il ne sait pas éditer (les données d'un module, ou d'un Tafl plus récent) et le réécrit à l'enregistrement.
+- Le vérificateur signale un module activé que Tafl ne connaît pas, et accepte dans `quand()` les moments des modules actifs.
+- Le contrat des modules : `moteur/renderer/moteur/modules/MODULES.md` ; leur description commune à Tafl et Saga : `commun/modules.js`.
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils
