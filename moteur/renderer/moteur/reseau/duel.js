@@ -26,6 +26,7 @@ const Duel = (() => {
       if (jeu2) return;
       const equipe = equipeDe();
       if (!equipe.some((c) => c.pv > 0)) { message('Aucune de tes créatures n\'est en état de se battre.'); envoyer({ etape: 'annuler' }); finir(); return; }
+      presse = false;
       jeu2 = { avec, role, envoyer, finir, equipeAvant: copie(moteur.partieVive.equipe) };
       // Les deux côtés s'envoient leur équipe (telle qu'elle est maintenant) : l'arbitre a besoin de celle
       // de l'autre pour jouer le combat ; l'autre n'a besoin de rien, il regarde et choisit.
@@ -47,7 +48,7 @@ const Duel = (() => {
     // --- Ce que l'autre joueur nous envoie ---
     function recevoir(de, d) {
       if (!jeu2 || jeu2.avec !== de) return;
-      if (d.etape === 'annuler') { message('Le duel est annulé.'); arreter(); return; }
+      if (d.etape === 'annuler') { presse = true; message('Le duel est annulé.'); arreter(); return; }
       if (d.etape === 'equipe') {
         jeu2.equipeAutre = Array.isArray(d.equipe) ? d.equipe : [];
         if (jeu2.role === 'demandeur') jouer();
@@ -57,9 +58,13 @@ const Duel = (() => {
       if (d.etape === 'demande') { demander(d); return; }
       if (d.etape === 'reponse') { attentes.get(d.n)?.(d.valeur); attentes.delete(d.n); return; }
       if (d.etape === 'fin') {
+        // Mon écran a peut-être encore des messages en retard : on les laisse finir, puis on annonce.
+        presse = true;
         const gagne = d.issue === 'defaite'; // l'issue est celle de l'arbitre
-        moteur.annoncer('Duel terminé', gagne ? 'Tu as gagné !' : 'Tu as perdu…');
-        arreter();
+        file = file.then(() => {
+          moteur.annoncer('Duel terminé', gagne ? 'Tu as gagné !' : 'Tu as perdu…');
+          arreter();
+        }).catch(() => {});
       }
     }
 
@@ -89,14 +94,45 @@ const Duel = (() => {
     function enveloppe(ui) {
       const passer = (nom, args) => jeu2?.envoyer({ etape: 'ui', appel: { nom, args } });
       const cote = (c) => COTE[c] || c;
+      // Les côtés sont inversés chez l'autre joueur : ce que je vois de dos, il le voit de face
+      // (Saga 1.2 ; avant, les deux écrans montraient le même sprite et tout semblait à l'envers).
+      const retourner = (c, e) => {
+        const sp = (moteur.jeuOuvert?.donnees?.creatures?.creatures || []).find((x) => x.id === e?.espece)?.sprites;
+        if (!sp || !e) return e;
+        return { ...e, image: (c === 'joueur' ? sp.face : sp.dos || sp.face) || e.image };
+      };
+      // Les textes aussi changent de camp : « Zaza adverse » chez moi, c'est « Zaza » chez lui, et mes
+      // créatures deviennent les siennes « adverses ». On ne touche qu'aux noms des deux équipes.
+      const nomsDe = (equipe) => (equipe || []).map((c) => (c?.surnom || espece(c)?.nom || '')).filter(Boolean);
+      const espece = (c) => (moteur.jeuOuvert?.donnees?.creatures?.creatures || []).find((x) => x.id === c?.creature);
+      const echapper = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      function texteRetourne(t) {
+        if (typeof t !== 'string' || !t) return t;
+        let s = t;
+        const moi = multi.moi?.nom || 'L\'adversaire', lui = multi.nomDe(jeu2?.avec) || 'L\'adversaire';
+        const [GARDE, MOI] = ['\u0000', '\u0001']; // des marques, pour ne pas retraiter ce qu'on vient d'écrire
+        // Les entrées en jeu changent de bouche : « Léo envoie Zaza ! » se lit « En avant, Zaza ! », et
+        // mon « En avant, Rono ! » se lit « Ragna envoie Rono ! ».
+        const sienne = new RegExp(`^${echapper(lui)} envoie (.+) !$`);
+        if (sienne.test(s)) s = s.replace(sienne, 'En avant, $1 !');
+        else s = s.replace(/^(?:En avant|À toi), (.+) !$/, `${MOI} envoie $1 !`);
+        // Les deux joueurs échangent leur place dans la phrase.
+        s = s.replace(new RegExp(echapper(lui), 'g'), '\u0002').replace(new RegExp(echapper(moi), 'g'), '\u0003');
+        s = s.replace(/\u0002/g, moi).replace(/\u0003/g, lui).replace(new RegExp(MOI, 'g'), moi);
+        // Et « Zaza adverse » devient « Zaza », pendant que mes créatures deviennent les adverses.
+        for (const n of nomsDe(jeu2?.equipeAutre)) s = s.replace(new RegExp(`${echapper(n)} adverse`, 'g'), `${GARDE}${n}${GARDE}`);
+        for (const n of nomsDe(moteur.partieVive?.equipe)) s = s.replace(new RegExp(`${echapper(n)}(?![\\w${GARDE}])`, 'g'), `${n} adverse`);
+        return s.replace(new RegExp(GARDE, 'g'), '');
+      }
       return {
         ...ui,
         ouvrir: (o) => { passer('ouvrir', [{ fond: o?.fond || 'arene', dresseur: { nom: multi.moi?.nom || 'Adversaire', portrait: '' } }]); return ui.ouvrir(o); },
         // Pendant que je choisis, l'autre joueur voit qu'on l'attend.
-        menu: (nom, dresseur) => { passer('message', [`Au tour de ${multi.moi?.nom || 'l\'adversaire'}…`]); return ui.menu(nom, dresseur); },
-        message: (t, o) => { passer('message', [t, o]); return ui.message(t, o); },
-        creature: (c, e) => { passer('creature', [cote(c), e]); return ui.creature(c, e); },
+        menu: (nom, dresseur) => { passer('message', [`Au tour de ${multi.moi?.nom || 'l\'adversaire'}…`, { discret: true }]); return ui.menu(nom, dresseur); },
+        message: (t, o) => { passer('message', [texteRetourne(t), o]); return ui.message(t, o); },
+        creature: (c, e) => { passer('creature', [cote(c), retourner(c, e)]); return ui.creature(c, e); },
         pv: (c, v, m) => { passer('pv', [cote(c), v, m]); return ui.pv(c, v, m); },
+        etats: (c, l) => { passer('etats', [cote(c), l]); return ui.etats?.(c, l); },
         animer: (c, n, im) => { passer('animer', [cote(c), n, im]); return ui.animer(c, n, im); },
         evolution: (c, im) => { passer('evolution', [cote(c), im]); return ui.evolution(c, im); },
         fermer: () => { passer('fermer', []); return ui.fermer(); },
@@ -115,7 +151,7 @@ const Duel = (() => {
 
     // --- L'autre joueur : son écran suit celui de l'arbitre, et lui demande ses choix ---
     let ui2 = null, enChoix = false; // enChoix : c'est à moi de choisir, l'écran ne doit pas bouger
-    const AUTORISES = new Set(['ouvrir', 'message', 'creature', 'pv', 'animer', 'evolution', 'fermer']);
+    const AUTORISES = new Set(['ouvrir', 'message', 'creature', 'etats', 'pv', 'animer', 'evolution', 'fermer']);
     // Les appels se jouent l'un après l'autre, dans l'ordre où l'arbitre les a faits : sinon deux
     // animations se marcheraient dessus (une entrée annulerait la barre de PV de l'autre côté).
     let file = Promise.resolve();
@@ -123,17 +159,20 @@ const Duel = (() => {
       if (!appel || !AUTORISES.has(appel.nom)) return;
       file = file.then(() => jouerAppel(appel)).catch(() => {});
     }
+    const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+    let presse = false; // le combat est fini chez l'arbitre : on rattrape le retard sans traîner
     async function jouerAppel(appel) {
-      // Pendant que je choisis, un message de l'arbitre effacerait mon menu : on le laisse tomber (il
-      // redira la suite juste après).
-      if (enChoix && appel.nom === 'message') return;
-      if (!ui2) { ouvrirEcran(); for (let k = 0; !ui2 && k < 40; k++) await new Promise((r) => setTimeout(r, 50)); }
+      // Pendant que je choisis, la suite attend : un message de l'arbitre effacerait mon menu.
+      for (let k = 0; enChoix && k < 1200; k++) await pause(100);
+      if (!ui2) { ouvrirEcran(); for (let k = 0; !ui2 && k < 40; k++) await pause(50); }
       if (!ui2) return;
-      // Un message attend la touche Action de son lecteur : ici c'est l'arbitre qui mène le rythme,
-      // alors on l'affiche sans l'attendre. Le reste (entrées, PV, animations) s'attend.
+      // Un message attend la touche Action de son lecteur : ici c'est l'arbitre qui mène le rythme.
+      // On ne l'attend donc pas, mais on le laisse le temps d'être lu (Saga 1.2 : avant, le message
+      // suivant l'effaçait aussitôt et l'invité ne voyait aucun texte).
       try {
         const r = ui2[appel.nom](...(appel.args || []));
-        if (appel.nom !== 'message') await r;
+        if (appel.nom === 'message') await pause(presse ? 220 : Math.min(2600, 700 + 28 * String(appel.args?.[0] || '').length));
+        else await r;
       } catch { /* un appel qu'on ne sait pas jouer : tant pis */ }
       if (appel.nom === 'fermer') { ui2 = null; fermerEcran?.(); }
     }
@@ -160,6 +199,20 @@ const Duel = (() => {
       } finally { enChoix = false; }
     }
     async function choisir(d, infos) {
+      // Ma créature est K.O. : pas de menu, je choisis seulement qui j'envoie (Saga 1.2).
+      if (infos.force) {
+        const vivantes = (infos.equipe || []).filter((c) => c.pv > 0);
+        if (!vivantes.length) { jeu2?.envoyer({ etape: 'reponse', n: d.n, valeur: null }); return; }
+        for (;;) {
+          const i = await ui2.liste('Qui envoyer ?', (infos.equipe || []).map((c) => ({
+            texte: `${c.nom}  N.${c.niveau}`, detail: c.pv > 0 ? `${c.pv} / ${c.pvMax} PV` : 'K.O.',
+            desactive: c.pv <= 0, pv: c.pv / Math.max(1, c.pvMax),
+          })), false);
+          if (i == null) continue; // on ne peut pas refuser : il en faut une
+          jeu2?.envoyer({ etape: 'reponse', n: d.n, valeur: { type: 'changer', cible: i } });
+          return;
+        }
+      }
       for (;;) {
         const quoi = await ui2.menu(infos.actif?.nom || '…', true);
         if (quoi === 'attaque') {

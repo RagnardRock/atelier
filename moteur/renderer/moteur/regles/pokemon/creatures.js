@@ -130,11 +130,15 @@ const Creatures = (() => {
       statut: '',
       sommeil: 0,
       nature: NATURES[o.nature] !== undefined ? o.nature : natures[hasard(natures.length)],
-      talent: (() => { const t = e?.talents || []; return t.length ? t[hasard(t.length)] : ''; })(),
+      talent: (() => {
+        const t = [...(e?.talents || []), e?.talent_cache].filter(Boolean);
+        if (o.talent && t.includes(o.talent)) return o.talent;
+        return e?.talents?.length ? e.talents[hasard(e.talents.length)] : '';
+      })(),
       sexe: o.sexe || (!e || Number(e.male) < 0 ? '' : Math.random() * 100 < Number(e.male ?? 50) ? 'm' : 'f'),
       chromatique: o.chromatique ?? (chance > 0 && hasard(chance) === 0),
-      ivs: Object.fromEntries(STATS.map((s) => [s, hasard(32)])),
-      evs: Object.fromEntries(STATS.map((s) => [s, 0])),
+      ivs: Object.fromEntries(STATS.map((s) => [s, Number.isFinite(Number(o.ivs?.[s])) ? Math.max(0, Math.min(31, Math.round(o.ivs[s]))) : hasard(32)])),
+      evs: Object.fromEntries(STATS.map((s) => [s, Math.max(0, Math.min(252, Math.round(Number(o.evs?.[s]) || 0)))])),
       amitie: amitieDepart(e),
       attaques: (o.attaques?.length ? o.attaques.filter((a) => trouver(jeu, 'attaques', a)).slice(0, 4) : attaquesAuNiveau(jeu, e, niveau)).map((a) => attaque(jeu, a)),
     };

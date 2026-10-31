@@ -166,7 +166,7 @@ async function importer(options, progres, telecharger) {
   const ordreVersion = new Map(t.version_groups.map((v) => [v.id, nombre(v.order)]));
   const parPokemon = new Map();
   for (const m of t.pokemon_moves) {
-    if (m.pokemon_move_method_id !== '1' && m.pokemon_move_method_id !== '4') continue;
+    if (!['1', '2', '4'].includes(m.pokemon_move_method_id)) continue;
     let l = parPokemon.get(m.pokemon_id);
     if (!l) parPokemon.set(m.pokemon_id, l = []);
     l.push(m);
@@ -297,6 +297,8 @@ async function importer(options, progres, telecharger) {
     };
     const niveau = recent('1').map((m) => ({ niveau: nombre(m.level), attaque: attaqueId.get(m.move_id) })).filter((m) => m.attaque).sort((a, b) => a.niveau - b.niveau);
     const ct = [...new Set(recent('4').map((m) => attaqueId.get(m.move_id)).filter(Boolean))];
+    // Tafl 1.5 : les capacités œufs (méthode 2), qu'on ne peut avoir que par l'élevage.
+    const oeufs = [...new Set(recent('2').map((m) => attaqueId.get(m.move_id)).filter(Boolean))].filter((x) => !ct.includes(x));
     const tal = (talentsDe.get(p?.id) || []).sort((a, b) => a.slot - b.slot);
     const n = nomsEspeces.get(s.id);
     const g = nombre(s.gender_rate);
@@ -321,6 +323,7 @@ async function importer(options, progres, telecharger) {
       evolutions: evolutionsDe.get(s.id) || [],
       attaques: niveau,
       ct,
+      oeufs,
       description: textesEspeces.get(s.id) || '',
       sprites: { face: '', dos: '' },
       generation: nombre(s.generation_id),

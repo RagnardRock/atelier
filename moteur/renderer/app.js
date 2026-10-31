@@ -595,6 +595,7 @@ function creerSaga() {
       e.preventDefault();
       if (!$('#carnet').hidden) fermerCarnet();
       else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
+      else if (moteur.enCombat) return; // ni pendant un combat : Échap y sert à revenir en arrière
       else if ($('#pause').hidden && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
       else if ($('#pause').hidden) ouvrirPause(); else pauseOuArriere();
     }
