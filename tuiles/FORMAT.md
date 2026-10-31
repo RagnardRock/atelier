@@ -357,7 +357,7 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `argent` | `action` (`"donner"` ou `"retirer"`), `montant` | (Tafl 0.16) Ajoute ou retire de l'argent. Retirer ne descend jamais sous 0 : s'il n'a pas assez, le joueur tombe à 0 et le script continue. Pour un péage, teste d'abord avec la condition `argent`. |
 | `badge` | `badge` | (Tafl 0.16) Donne au joueur le badge `badge` (un id de `reglages.badges`). Un badge déjà reçu ne compte pas deux fois. Le compteur `badges` vaut toujours le nombre de badges différents reçus : c'est lui qui fait monter les `plafonds` et le niveau des dresseurs qui s'ajustent. |
 | `personnaliser` | `nom` (`true`/`false`), `tenue` (`true`/`false`) | (Tafl 0.16) Ouvre l'écran où le joueur tape son nom (`nom`) et/ou choisit la tenue du héros parmi sa tenue de base et ses `tenues` (`tenue`). Le nom devient `{joueur}` dans les dialogues. |
-| `composer_equipe` | `nombre`, `niveau`, `titre`, `garder` | (Tafl 1.0, pack Pokémon) Ouvre l'écran où le joueur choisit lui-même jusqu'à `nombre` créatures (1 à 6) du jeu, au `niveau` écrit (1 à 100), puis pour chacune ses quatre attaques (tout ce qu'elle sait à ce niveau, apprentissage et CT) et l'objet qu'elle tient : elles deviennent son équipe. `titre` : le titre de l'écran (`""` = « Compose ton équipe »). `garder` (`true` par défaut) : l'équipe d'avant part au PC au lieu d'être perdue. Pour les jeux « arène » et les duels entre amis. |
+| `composer_equipe` | `nombre`, `niveau`, `titre`, `garder` | (Tafl 1.0, pack Pokémon) Ouvre l'écran où le joueur choisit lui-même jusqu'à `nombre` créatures (1 à 6) du jeu, au `niveau` écrit (1 à 100), puis pour chacune ses quatre attaques (tout ce qu'elle sait à ce niveau : apprentissage, CT et capacités œufs), l'objet qu'elle tient, sa nature, son talent et ses IV et EV : elles deviennent son équipe. `titre` : le titre de l'écran (`""` = « Compose ton équipe »). `garder` (`true` par défaut) : l'équipe d'avant part au PC au lieu d'être perdue. Pour les jeux « arène » et les duels entre amis. |
 | `tenue` | `tenue` | (Tafl 0.16) Met au héros la tenue `tenue` (un id de ses `tenues`), ou `""` pour sa tenue de base. Pour l'histoire : un uniforme pour s'infiltrer, une combinaison de plongée… |
 | `groupe` | `action` (`"rejoindre"` ou `"quitter"`), `personnage`, `niveau` | (Tafl 0.25, pack JRPG) Le personnage rejoint le groupe du joueur (dans la Réserve si le groupe est complet), avec sa `classe`, son `niveau` de départ (ou `niveau` s'il n'est pas 0) et son `equipement` de départ porté ; ou il le quitte. Un héros parti puis revenu retrouve son niveau, son expérience et son équipement. Le dernier héros du groupe ne peut pas partir. Sans effet dans un jeu Pokémon. |
 | `combat_groupe` | `groupe` | (Tafl 0.25, pack JRPG) Un combat contre un groupe de `groupes.json` (un boss, une embuscade). Perdu : le script s'arrête, comme pour les autres combats. |
@@ -559,7 +559,7 @@ Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `eff
     "talents": ["brasier"], "talent_cache": "force-soleil", "taux_capture": 45, "xp_base": 62, "croissance": "parabolique", "bonheur": 70,
     "male": 87.5, "legendaire": "", "taille": 0.6, "poids": 8.5,
     "evolutions": [{ "vers": "reptincel", "mode": "niveau", "niveau": 16, "objet": "", "quete": "", "condition": "" }],
-    "attaques": [{ "niveau": 1, "attaque": "griffe" }, { "niveau": 4, "attaque": "flammeche" }], "ct": ["lance-flammes", "abri"],
+    "attaques": [{ "niveau": 1, "attaque": "griffe" }, { "niveau": 4, "attaque": "flammeche" }], "ct": ["lance-flammes", "abri"], "oeufs": ["morsure"],
     "description": "Depuis sa naissance, une petite flamme brûle au bout de sa queue…",
     "sprites": { "face": "data:image/png;base64,...", "dos": "data:image/png;base64,..." }, "generation": 1, "officiel": "charmander" }
 ] }
@@ -579,6 +579,7 @@ Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `eff
 | `evolutions` | `mode` : `"niveau"` (au `niveau`), `"objet"` (avec l'`objet`, par exemple une pierre), `"echange"` (en tenant `objet` s'il y en a un), `"amitie"` (quand son amitié atteint `seuil_amitie` des réglages), `"quete"` (quand la quête `quete` est finie), `"autre"` (`condition` dit laquelle). Le moteur peut aussi faire évoluer en plein combat. Saga 0.7 joue `"niveau"` (en combat, avec le Super Bonbon), `"objet"` (pierre utilisée depuis le sac) `"amitie"` (à la montée de niveau) et `"quete"` (dès que la quête finit, ou à la montée de niveau suivante) ; le joueur peut arrêter une évolution au niveau ou de quête (touche Retour pendant l'animation), et une créature qui tient un objet `stase` n'évolue pas. |
 | `attaques` | Apprises au niveau `niveau` (0 = en évoluant). |
 | `ct` | Les attaques qu'elle peut apprendre par CT ou par un maître des capacités. |
+| `oeufs` | (Tafl 1.1) Les capacités œufs : ce qu'elle ne sait que par l'élevage. L'import officiel les remplit. Dans l'arène du multijoueur, on peut les choisir comme les autres. |
 | `sprites` | Face (vue par le joueur) et dos (sa propre créature en combat), en image encodée en texte. `""` = pas encore d'image. |
 
 #### `donnees/objets.json`
@@ -610,6 +611,23 @@ Ce que fait une attaque de ce type contre un défenseur : ×2 s'il est dans `eff
 | `passage` | Ouvre un passage : un objet requis de zone ou d'obstacle, à la place des CS. |
 | `amitie` | (Tafl 0.24) Fait monter l'amitié de `valeur` points (sur 255). |
 | `stase` | (Tafl 0.24) Tenu par une créature, il l'empêche d'évoluer (la Pierre Stase ; l'objet officiel `everstone` importé compte aussi). Dans Saga, le menu Équipe › Faire tenir un objet. |
+
+##### `tenu` : ce qu'il fait quand une créature le tient (Tafl 1.1)
+
+Un objet peut avoir un champ `tenu` à côté de son `effet` (qui, lui, est ce qu'il fait depuis le sac) : Saga le joue en plein combat. `{ "tenu": { "type": "degats", "valeur": 1.3, "recul": 10 } }` fait un Orbe Vie.
+
+| `tenu.type` | Ce qu'il fait |
+|---|---|
+| `degats` | Multiplie ses dégâts par `valeur` ; `categorie` (`""`, `"physique"` ou `"speciale"`) limite à une sorte d'attaque ; `recul` : le % des PV max qu'elle perd en attaquant (Orbe Vie : 10). |
+| `type` | Multiplie par `valeur` les dégâts de ses attaques du type `element` (un id de `types.json`) : le Charbon, l'Eau Mystique… |
+| `stat` | Multiplie la statistique `stat` par `valeur` (Veste de Combat : `def_spe` × 1,5). `verrou: true` : un objet Choix, elle ne peut plus lancer que sa première attaque jusqu'à ce qu'elle revienne. |
+| `soin_tour` | Lui rend `valeur` % de ses PV max à chaque fin de tour (les Restes : 6,25). |
+| `drain` | Lui rend `valeur` % des dégâts qu'elle vient d'infliger (le Grelot Coque : 12,5). |
+| `baie` | Elle la mange toute seule quand ses PV tombent à `seuil` % ou moins, et récupère `valeur` % de ses PV max (ou `pv` PV tout rond). L'objet est consommé. |
+| `soin_statut` | Guérit le `statut` (`"tous"` = tous, confusion comprise) dès qu'il arrive. L'objet est consommé. |
+| `survie` | À PV pleins, elle survit à 1 PV d'un coup qui l'aurait mise K.O. (la Ceinture Force). L'objet est consommé. |
+
+Les objets officiels importés les plus connus marchent **sans rien régler** : Orbe Vie, Bandeau Muscle, Lunettes Sages, Bandeau / Lunettes / Mouchoir Choix, Veste de Combat, Évoluroc, Restes, Grelot Coque, Ceinture Force, Baies Sitrus, Oran, Prine, Sucrée, Pêcha, Fraive, Mepo, Kika, et les dix-huit objets qui renforcent un type (Charbon, Eau Mystique, Ceinture Noire…).
 
 Les 25 natures sont celles du jeu officiel (`hardi`, `solo`, `brave`, `rigide`, `mauvais`, `assure`, `docile`, `relax`, `malin`, `lache`, `timide`, `presse`, `serieux`, `jovial`, `naif`, `modeste`, `doux`, `discret`, `pudique`, `foufou`, `calme`, `gentil`, `malpoli`, `prudent`, `bizarre`) : +10 % sur une statistique, −10 % sur une autre (les cinq neutres ne changent rien).
 

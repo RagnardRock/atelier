@@ -256,7 +256,7 @@ const Scripts = (() => {
           // L'équipe d'avant est mise de côté (au PC) : on ne perd jamais ses créatures.
           if (c.garder !== false) for (const x of [...partie.equipe]) Collection.deposer(jeu, partie, x);
           partie.equipe = membres.map((m) => {
-            const x = Regles.creer(jeu, m.id, niveau, { attaques: m.attaques });
+            const x = Regles.creer(jeu, m.id, niveau, { attaques: m.attaques, nature: m.nature, talent: m.talent, ivs: m.ivs, evs: m.evs });
             if (x && m.objet) x.objet = m.objet;
             return x;
           }).filter(Boolean);

@@ -109,6 +109,14 @@ Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de dépa
 - Une créature reçue quand l'équipe est pleine va dans la première place libre du PC, et le jeu dit dans quelle boîte. Une sauvegarde de Saga 0.5 (une seule « boîte » sans places) est rangée dans les boîtes toute seule, et son Pokédex est rempli avec les créatures qu'elle a.
 - Ce qu'une fiche montre vient du pack de règles (`Regles.fiche`, `Regles.dex`, `Regles.ficheEspece`, dans `regles/pokemon/fiches.js`) ; l'équipe, les boîtes et le Pokédex eux-mêmes ne dépendent d'aucune règle (`collection.js`, `ecrans.js`).
 
+## Ce que fait Saga 1.3 : les objets tenus en combat, l'arène au détail
+
+- **Les objets tenus agissent enfin en combat.** Un objet peut décrire ce qu'il fait quand une créature le tient (champ `tenu` de Tafl 1.1 : dégâts, type renforcé, statistique, PV par tour, PV rendus en blessant, baie, guérison d'un statut, survie à un coup fatal). Les objets officiels importés les plus connus marchent sans rien régler : Orbe Vie (+30 % de dégâts, 10 % de PV en moins à chaque attaque), Bandeau Muscle, Lunettes Sages, Bandeau / Lunettes / Mouchoir Choix (+50 %, mais une seule attaque jusqu'au changement), Veste de Combat, Évoluroc, Restes, Grelot Coque, Ceinture Force, Baies Sitrus, Oran, Prine (et les baies de statut), et les dix-huit objets de type (Charbon, Eau Mystique…). Une baie mangée disparaît.
+- **Des pastilles au-dessus de la créature** disent ce qui est en cours : « Atq +2 », « Déf −1 », « Confus », « Apeuré », « Choix » et l'objet tenu. Vert quand c'est bon pour elle, rouge sinon. L'invité d'un duel les voit aussi, de son côté.
+- **L'arène au détail** : la fiche de chaque créature choisie a trois onglets, Attaques (avec recherche), Objet tenu (une recherche, plus une liste de 800 objets) et Détails : nature, talent, IV et EV aux curseurs, avec « Tout au max », « Tout à zéro » et le total des EV (510 au plus).
+- **Les capacités œufs** comptent dans les attaques qu'on peut choisir dans l'arène (Tafl 1.1 les importe depuis PokeAPI, champ `oeufs` de chaque espèce).
+- Côté règles : `Regles` gagne `detailsPossibles` (facultatif) et l'écran de combat `etats(cote, liste)`.
+
 ## Ce que fait Saga 0.7 : des combats plus riches, des boutiques à débloquer, les obstacles
 
 - **Les dresseurs qui s'ajustent peuvent évoluer** (facultatif, case « Ils évoluent avec leur niveau » de Tafl 0.24) : un Bulbizarre de dresseur monté au niveau 40 par l'ajustement devient Florizarre, avec les attaques de ce niveau (sauf celles choisies dans Tafl).
@@ -236,7 +244,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ecrans.js` | Le menu Équipe, le Pokédex et le PC. |
 | `renderer/moteur/boutique.js` | Les boutiques : acheter, revendre, vendre des créatures, articles débloqués par les succès. |
 | `renderer/moteur/personnaliser.js` | L'écran du nom et de la tenue du héros. |
-| `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus et animations. |
+| `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus, animations et le journal du combat (touche J, Saga 1.2). |
 | `renderer/moteur/sprites.js` | Les personnages sur la carte : leur sprite de Tafl, ou le petit bonhomme en pixel art. |
 
 **Des règles remplaçables.** Les règles de combat et de créatures (aujourd'hui celles de Pokémon) sont rangées à part, dans `renderer/moteur/regles/pokemon/`. Le moteur (cartes, déplacements, scripts, sauvegarde) ne les appelle jamais directement : il passe par `regles.js`, qui dit en tête de fichier la petite liste de fonctions qu'un jeu de règles doit fournir (créer une créature, la soigner, la résumer pour le carnet, lancer un combat…). Pour un jeu avec d'autres règles, on écrira un autre dossier à côté de `pokemon/`, sans toucher au moteur. L'écran de combat, lui, ne connaît aucune règle : il montre ce qu'on lui dit.
