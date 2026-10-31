@@ -935,6 +935,13 @@ const Events = (() => {
       depuis: (v) => ({ type: 'gestion_habitants', action: v.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(Math.round(v.nombre) || 1, 1, 999), forcer: Boolean(v.forcer), annoncer: Boolean(v.annoncer) }),
       resume: (doc, c) => `${c.action === 'retirer' ? 'Des habitants partent' : 'Des habitants arrivent'} : ${c.nombre}${c.forcer && c.action !== 'retirer' ? ' (même sans logement)' : ''}`,
     },
+    // Tafl 1.4.1 : ressortir d'un bâtiment par sa porte (dans l'intérieur, sur un déclencheur de sortie).
+    gestion_sortir: {
+      nom: 'Ressortir du bâtiment (devant sa porte)', icone: 'sign-out', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_sortir' }),
+      champs: () => [{ type: 'info', text: 'Pour l\'intérieur d\'un bâtiment posé par le joueur : le ramène devant la porte par laquelle il est entré (chaque maison du même type a le même intérieur, mais pas la même place). Mets-la sur un déclencheur « toucher » à la sortie de l\'intérieur.' }],
+      resume: () => 'Ressortir du bâtiment, devant sa porte',
+    },
     gestion_domaine: {
       nom: 'Ouvrir l\'écran du domaine', icone: 'home', groupe: 'Gestion', modules: MODULE_GESTION,
       nouveau: () => ({ type: 'gestion_domaine' }),
@@ -1075,6 +1082,7 @@ const Events = (() => {
       case 'gestion_placer': return { type: 'gestion_placer', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
       case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
+      case 'gestion_sortir': return { type: 'gestion_sortir' };
       case 'gestion_habitants': return { type: 'gestion_habitants', action: c.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(int(c.nombre, 1), 1, 999), forcer: Boolean(c.forcer), annoncer: vrai(c.annoncer) };
       case 'gestion_domaine': return { type: 'gestion_domaine' };
       case 'variable': {

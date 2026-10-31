@@ -545,7 +545,8 @@ const Moteur = (() => {
         return true;
       }
       // Un téléporteur sous les pieds : fondu au noir, puis la carte d'arrivée.
-      const tp = Monde.teleporteur(carte, joueur.x, joueur.y);
+      // Saga 1.6.1 : ou une porte posée par un module (un bâtiment construit en jeu).
+      const tp = Monde.teleporteur(carte, joueur.x, joueur.y) || (() => { const v = Modules.teleporteur(jeu, partie, hoteModules, carte, joueur.x, joueur.y); return v ? { vers: v } : null; })();
       if (tp) {
         fondu = { phase: 'sortie', t: 0, vers: tp.vers };
         bruit('porte');

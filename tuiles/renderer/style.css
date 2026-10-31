@@ -1488,3 +1488,7 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .reglages-details .modal-info { margin-bottom: 8px; }
 /* Sur un écran ultralarge, les réglages gardent une largeur lisible. */
 .reglages-onglets ~ * { max-width: 1100px; }
+
+/* Tafl 1.4.1 : le passage d'un bâtiment du module gestion, réglé à la souris sur son tampon. */
+.gestion-pinceaux { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.gestion-passage { display: block; max-width: 100%; cursor: crosshair; image-rendering: pixelated; border-radius: 4px; background: repeating-conic-gradient(#ffffff10 0% 25%, transparent 0% 50%) 0 0 / 16px 16px; }

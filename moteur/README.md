@@ -211,6 +211,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 
 - **Ce qui repousse** (pour tous les jeux) : un événement avec `repousse_nuits` (un buisson de baies, un arbre fruitier, un arbre coupé, un coffre qui se remplit) revient à sa première page après ce nombre de nuits : son « déjà fait » s'éteint tout seul quand le joueur dort.
 - **Les habitants** (module gestion) : ils logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas` dans les réglages du module) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent la nuit quand il reste un logement et que personne n'a eu faim ; s'il manque à manger, ils travaillent quand même (Saga 1.6.1 : avant, une ferme sans blé restait sans ouvriers pour toujours), et chaque jeu choisit ce que fait la faim : rien, bloquer les arrivées (par défaut), ou en plus des départs après quelques nuits. La commande `gestion_habitants` en amène ou en fait partir (une histoire), la condition `gestion_habitants` compte, le moment `gestion_arrivee` prévient les scripts, et l'écran du domaine montre les habitants et le travail. Ils ne se promènent pas encore sur la carte.
+- **Saga 1.6.1** : un bâtiment posé ne bloque plus tout son rectangle. Son passage se règle case par case (une ombre ou le toit laissent passer), et sa porte peut mener à un intérieur ; la commande `gestion_sortir` en ressort. Le contrat des modules gagne `teleporteur(o, x, y)`.
 
 ## La suite
 

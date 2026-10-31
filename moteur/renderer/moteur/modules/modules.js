@@ -18,6 +18,8 @@
 //   entrerCarte(o)                      le joueur arrive sur une carte (o.carte, o.depuis)
 //   finDeJournee(o)                     le joueur dort : le jour o.jour se termine (Saga 1.5) ; → [lignes du rapport]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
+//   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
+//                                         emmène (Saga 1.6.1 : la porte d'un bâtiment posé), sinon null
 //   dessiner(o)                         dessine sur la carte, à la profondeur o.profondeur ('sol' | 'dessus')
 //   commandes                           { type: async (o) → résultat } : ses commandes d'événement
 //   condition(o, cond)                  → vrai, faux, ou undefined (une condition qu'il ne connaît pas)
@@ -124,6 +126,18 @@ const Modules = (() => {
         try { if (m.bloque(objet(m, jeu, partie, null, { carte }), x, y) === true) return true; } catch (err) { dire(m.id, 'bloque', err); }
       }
       return false;
+    },
+    // Saga 1.6.1 : marcher sur (x, y) emmène-t-il ailleurs (la porte d'un bâtiment) ? → { carte, x, y,
+    // direction } ou null. Appelé à chaque pas, après les téléporteurs de la carte.
+    teleporteur(jeu, partie, hote, carte, x, y) {
+      for (const m of actifs(jeu)) {
+        if (typeof m.teleporteur !== 'function') continue;
+        try {
+          const v = m.teleporteur(objet(m, jeu, partie, hote, { carte }), x, y);
+          if (v && typeof v.carte === 'string' && v.carte) return { carte: v.carte, x: Math.round(Number(v.x) || 0), y: Math.round(Number(v.y) || 0), direction: typeof v.direction === 'string' ? v.direction : 'bas' };
+        } catch (err) { dire(m.id, 'teleporteur', err); }
+      }
+      return null;
     },
     // Dessiner sur la carte. o : { ctx, carte, cam, taille, maintenant, profondeur, tuile(n, cx, cy) }.
     dessiner(jeu, partie, o) {

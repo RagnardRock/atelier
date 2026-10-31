@@ -38,6 +38,7 @@ const ModulesJeu = (() => {
         gestion_stock: { nom: 'Ajouter ou retirer une ressource du stock' },
         gestion_deposer: { nom: 'Déposer le sac au stock' },
         gestion_habitants: { nom: 'Des habitants arrivent ou partent' },
+        gestion_sortir: { nom: 'Ressortir du bâtiment (devant sa porte)' },
         gestion_domaine: { nom: 'Ouvrir l\'écran du domaine' },
       },
       conditions: {

@@ -47,6 +47,9 @@ const DonneesGestion = (() => {
       largeur: int(b?.largeur, 1, 1, 32),
       hauteur: int(b?.hauteur, 1, 1, 32),
       porte: b?.porte && typeof b.porte === 'object' ? { x: int(b.porte.x, 0, 0, 31), y: int(b.porte.y, 0, 0, 31) } : null,
+      // Tafl 1.4.1 : le passage case par case ('bloque', 'libre', 'porte', 'auto') et où mène la porte.
+      passage: Array.isArray(b?.passage) ? b.passage.slice(0, 1024).map((v) => (['bloque', 'libre', 'porte', 'auto'].includes(v) ? v : 'auto')) : null,
+      porte_vers: b?.porte_vers && typeof b.porte_vers === 'object' && b.porte_vers.carte ? { carte: str(b.porte_vers.carte), x: int(b.porte_vers.x, 0, 0, 9999), y: int(b.porte_vers.y, 0, 0, 9999), direction: ['haut', 'bas', 'gauche', 'droite'].includes(b.porte_vers.direction) ? b.porte_vers.direction : 'haut' } : null,
       // Tafl 1.4 (Saga 1.6) : les habitants qu'il loge, et les ouvriers qu'il lui faut pour produire.
       logement: int(b?.logement, 0, 0, 999),
       ouvriers: int(b?.ouvriers, 0, 0, 999),
@@ -126,35 +129,116 @@ const DonneesGestion = (() => {
   }
 
   // Où et comment le bâtiment se pose (placement libre, dans une zone « Constructible ») : son tampon (sa
-  // taille vient de lui), celui du chantier, sa taille sans tampon, et la case de la porte qu'on traverse.
+  // taille vient de lui), celui du chantier, sa taille sans tampon, et (Tafl 1.4.1) son passage case par
+  // case, réglé à la souris sur l'image du tampon : bloque, libre ou porte, et où mène la porte.
+  const PASSAGES = [['bloque', 'Bloque', '#e5484d'], ['libre', 'Libre', '#46a758'], ['porte', 'Porte', '#3e9eff']];
+  // Le passage proposé d'office : les rangées « dessus » (le toit) et les cases vides sont libres ; sinon la
+  // tuile décide (son passage), et une tuile « auto » surtout transparente (une ombre) est libre.
+  function passageDefaut(doc, b, st, w, h) {
+    const out = [];
+    for (let k = 0; k < w * h; k++) {
+      const j = Math.floor(k / w);
+      const n = st ? st.cells[k] : 0;
+      const t = st && n >= 0 ? doc.tiles?.[n] : null;
+      if (!st) { out.push('bloque'); continue; }
+      if (j < (st.dessus || 0) || n < 0 || !t) { out.push('libre'); continue; }
+      if (t.passage === 'libre' || t.passage === 'bloque') { out.push(t.passage); continue; }
+      const px = t.frames?.[0];
+      let pleins = 0;
+      if (px) for (let a = 3; a < px.length; a += 4) if (px[a] > 128) pleins++;
+      out.push(px && pleins >= px.length / 8 ? 'bloque' : 'libre'); // au moins la moitié des pixels
+    }
+    if (b.porte && b.porte.x < w && b.porte.y < h) out[b.porte.y * w + b.porte.x] = 'porte';
+    return out;
+  }
   function placeChamps(b, ctx) {
     const { champ, info, nombreIn, sel } = U();
-    const noms = arr(ctx.doc?.stamps).map((st) => st.name);
+    const doc = ctx.doc || {};
+    const noms = arr(doc.stamps).map((st) => st.name);
     const choix = (vide) => [['', vide], ...noms.map((n) => [n, n]), ...[b.tampon, b.tampon_chantier].filter((n) => n && !noms.includes(n)).map((n) => [n, `${n} (inconnu)`])];
-    const taille = el('div', { className: 'field-grid' });
-    const majTaille = () => {
-      const st = arr(ctx.doc?.stamps).find((x) => x.name === b.tampon);
-      taille.replaceChildren(...(st
-        ? [info(`Taille : ${st.w} × ${st.h} cases (celle du tampon).`)]
-        : [champ('Largeur', nombreIn(b, 'largeur', 1, 32), 'cases'), champ('Hauteur', nombreIn(b, 'hauteur', 1, 32), 'cases')]));
-    };
-    majTaille();
-    const porte = el('input', { type: 'checkbox', checked: Boolean(b.porte) });
-    const casePorte = el('div', { className: 'field-grid' });
+    const tampon = () => arr(doc.stamps).find((x) => x.name === b.tampon) || null;
+    const taille = () => { const st = tampon(); return st ? [st.w, st.h] : [b.largeur || 1, b.hauteur || 1]; };
+    // La grille du passage : l'image du tampon, une couleur par case. Un clic peint avec le pinceau choisi.
+    let pinceau = 'bloque';
+    const grille = el('canvas', { className: 'gestion-passage pixel' });
+    const pinceaux = el('div', { className: 'gestion-pinceaux' });
+    const vers = el('div');
     const majPorte = () => {
-      casePorte.replaceChildren(...(b.porte ? [champ('Porte : colonne', nombreIn(b.porte, 'x', 0, 31), 'depuis la gauche, 0 = la première'), champ('Porte : rangée', nombreIn(b.porte, 'y', 0, 31), 'depuis le haut')] : []));
+      const [w] = taille();
+      const k = arr(b.passage).indexOf('porte');
+      b.porte = k >= 0 ? { x: k % w, y: Math.floor(k / w) } : null;
+      vers.replaceChildren(...(b.porte ? champsVers() : []));
     };
-    porte.onchange = () => { b.porte = porte.checked ? { x: 0, y: 0 } : null; majPorte(); };
-    majPorte();
+    const assurer = (refaire = false) => {
+      const [w, h] = taille();
+      if (refaire || !Array.isArray(b.passage) || b.passage.length !== w * h) b.passage = passageDefaut(doc, b, tampon(), w, h);
+      majPorte();
+    };
+    const dessiner = () => {
+      const [w, h] = taille();
+      const st = tampon();
+      const c = 32;
+      grille.width = w * c; grille.height = h * c;
+      const g = grille.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      g.clearRect(0, 0, grille.width, grille.height);
+      for (let k = 0; k < w * h; k++) {
+        const x = (k % w) * c, y = Math.floor(k / w) * c;
+        const n = st ? st.cells[k] : -1;
+        if (n >= 0 && doc.tiles?.[n] && typeof Doc !== 'undefined') g.drawImage(Doc.tileCanvas(doc.tiles[n], doc.tileSize), x, y, c, c);
+        const coul = PASSAGES.find(([v]) => v === b.passage[k])?.[2] || '#888';
+        g.fillStyle = `${coul}55`; g.fillRect(x, y, c, c);
+        g.strokeStyle = coul; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, c - 2, c - 2);
+        if (b.passage[k] === 'porte') { g.fillStyle = '#fff'; g.font = 'bold 14px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('P', x + c / 2, y + c / 2); }
+      }
+    };
+    grille.onclick = (e) => {
+      const [w, h] = taille();
+      const r = grille.getBoundingClientRect();
+      const i = Math.floor(((e.clientX - r.left) / r.width) * w), j = Math.floor(((e.clientY - r.top) / r.height) * h);
+      if (i < 0 || j < 0 || i >= w || j >= h) return;
+      const k = j * w + i;
+      // Une seule porte : en poser une ailleurs rend l'ancienne libre.
+      if (pinceau === 'porte') b.passage = b.passage.map((v) => (v === 'porte' ? 'libre' : v));
+      b.passage[k] = pinceau;
+      majPorte(); dessiner();
+    };
+    const majPinceaux = () => pinceaux.replaceChildren(...PASSAGES.map(([v, nom, coul]) => {
+      const bt = el('button', { className: `chip${pinceau === v ? ' on' : ''}`, textContent: nom, style: `border-color: ${coul}` });
+      bt.onclick = (e) => { e.preventDefault(); pinceau = v; majPinceaux(); };
+      return bt;
+    }), (() => { const bt = el('button', { className: 'chip', textContent: 'Recalculer', title: 'Le passage proposé d\'après les tuiles du tampon (toit et ombres libres)' }); bt.onclick = (e) => { e.preventDefault(); assurer(true); dessiner(); }; return bt; })());
+    // Où mène la porte : une carte, une case, une direction (vide : nulle part, on la traverse simplement).
+    function champsVers() {
+      if (!b.porte_vers || typeof b.porte_vers !== 'object') b.porte_vers = { carte: '', x: 0, y: 0, direction: 'haut' };
+      const cartes = [['', 'Nulle part (on la traverse)'], ...arr(doc.maps).map((m) => [m.id, m.name || m.id])];
+      return [
+        champ('La porte mène à', sel(cartes, b.porte_vers.carte, (v) => { b.porte_vers.carte = v; })),
+        el('div', { className: 'field-grid' }, [
+          champ('Colonne (x)', nombreIn(b.porte_vers, 'x', 0, 9999)),
+          champ('Rangée (y)', nombreIn(b.porte_vers, 'y', 0, 9999)),
+          champ('Regarde', sel([['haut', 'Vers le haut'], ['bas', 'Vers le bas'], ['gauche', 'Vers la gauche'], ['droite', 'Vers la droite']], b.porte_vers.direction, (v) => { b.porte_vers.direction = v; })),
+        ]),
+        info('Toutes les maisons de ce type mènent au même intérieur. Pour en ressortir : dans l\'intérieur, un déclencheur avec la commande « Ressortir du bâtiment » ramène le joueur devant la porte par laquelle il est entré.'),
+      ];
+    }
+    const tailleBox = el('div', { className: 'field-grid' });
+    const majTaille = () => {
+      const st = tampon();
+      tailleBox.replaceChildren(...(st
+        ? [info(`Taille : ${st.w} × ${st.h} cases (celle du tampon).`)]
+        : [champ('Largeur', nombreIn(b, 'largeur', 1, 32, 1, () => { assurer(true); dessiner(); }), 'cases'), champ('Hauteur', nombreIn(b, 'hauteur', 1, 32, 1, () => { assurer(true); dessiner(); }), 'cases')]));
+    };
+    assurer(); majTaille(); majPinceaux(); dessiner();
     return [
       el('div', { className: 'field-grid' }, [
-        champ('Tampon', sel(choix('Aucun (un rectangle)'), b.tampon, (v) => { b.tampon = v; majTaille(); })),
+        champ('Tampon', sel(choix('Aucun (un rectangle)'), b.tampon, (v) => { b.tampon = v; majTaille(); assurer(true); dessiner(); })),
         champ('Tampon du chantier', sel(choix('Le bâtiment, en transparence'), b.tampon_chantier, (v) => { b.tampon_chantier = v; })),
       ]),
-      taille,
-      champ('Une porte', porte, 'une case de l\'emprise qu\'on traverse'),
-      casePorte,
-      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (menu de pause › Construire, ou la commande « Placer un bâtiment »). Son emprise bloque le passage, sauf la porte. Les tampons se créent dans l\'éditeur de cartes.'),
+      tailleBox,
+      el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Passage : choisis un pinceau, puis clique sur les cases' }), pinceaux, grille]),
+      vers,
+      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (menu de pause › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
     ];
   }
 

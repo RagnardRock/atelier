@@ -13,12 +13,14 @@
 //   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y }], habitants, prochain, resolu }
 //   habitants (Saga 1.6) = combien de gens vivent au domaine (ils logent dans les bâtiments finis)
 //   faim (Saga 1.6.1)    = combien de nuits de suite quelqu'un n'a pas mangé
+//   retour (Saga 1.6.1)  = { carte, x, y, direction } : devant la porte du dernier bâtiment où le joueur est entré
 //   carte, x, y : où il est posé (Saga 1.5 ; absent pour un bâtiment construit sans place, par un événement)
 //   reste   = les nuits qu'il faut encore à un chantier
 //   resolu  = le dernier jour dont la fin a été calculée : la recalculer ne fait rien
 
 const GestionCalcul = (() => {
   const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+  const PASSAGES = ['auto', 'libre', 'bloque', 'porte'];
   const entier = (v, d = 0, min = 0, max = 1e9) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
   const texte = (v, max = 200) => (typeof v === 'string' ? v.slice(0, max) : '');
   const tableau = (v) => (Array.isArray(v) ? v : []);
@@ -62,6 +64,16 @@ const GestionCalcul = (() => {
         // faut pour qu'il produise (0 : il produit seul).
         logement: entier(b.logement, 0, 0, 999), ouvriers: entier(b.ouvriers, 0, 0, 999),
       });
+      // Saga 1.6.1 : le passage case par case (Tafl le règle à la souris), rangée par rangée :
+      // 'auto' (selon la tuile du tampon), 'libre', 'bloque' ou 'porte' (on la traverse, et elle mène à
+      // porte_vers). Une case 'porte' remplace le champ porte.
+      const def = batiments.get(b.id);
+      const n = def.largeur * def.hauteur;
+      def.passage = Array.isArray(b.passage) ? Array.from({ length: n }, (_, k) => (PASSAGES.includes(b.passage[k]) ? b.passage[k] : 'auto')) : null;
+      const kp = def.passage ? def.passage.indexOf('porte') : -1;
+      if (kp >= 0) def.porte = { x: kp % def.largeur, y: Math.floor(kp / def.largeur) };
+      const v = b.porte_vers;
+      def.porte_vers = v && typeof v === 'object' && typeof v.carte === 'string' && v.carte ? { carte: v.carte, x: entier(v.x, 0, 0, 9999), y: entier(v.y, 0, 0, 9999), direction: ['haut', 'bas', 'gauche', 'droite'].includes(v.direction) ? v.direction : 'haut' } : null;
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
     const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
@@ -99,7 +111,10 @@ const GestionCalcul = (() => {
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
       batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu });
     }
-    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999), prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
+    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
+      // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
+      ...(etat.retour && typeof etat.retour === 'object' && typeof etat.retour.carte === 'string' ? { retour: { carte: etat.retour.carte, x: entier(etat.retour.x, 0, 0, 9999), y: entier(etat.retour.y, 0, 0, 9999), direction: typeof etat.retour.direction === 'string' ? etat.retour.direction : 'bas' } } : {}),
+      prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
   }
 
   // La place pour chaque ressource (0 = sans limite).
