@@ -15,6 +15,7 @@ const Monde = (() => {
       nom: jeu.heros?.nom || 'Héros', // {joueur} dans les dialogues
       interrupteurs: {},   // id → true (les absents sont éteints)
       locaux: {},          // "carte/ev-1" → true
+      repousses: {},       // "carte/ev-1" → nuits passées depuis la récolte (Saga 1.6, événements avec repousse_nuits)
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
       compteurs: { captures: 0, dresseurs_battus: 0, sauvages_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
@@ -229,5 +230,26 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  // Saga 1.6 : ce qui repousse. Un événement avec repousse_nuits (une récolte, un arbre coupé, un coffre
+  // qui se remplit) : une fois son « déjà fait » allumé, il s'éteint après ce nombre de nuits, et
+  // l'événement revient à sa première page. Appelé par la commande dormir. Rend combien ont repoussé.
+  function repousser(jeu, partie) {
+    if (!partie.repousses || typeof partie.repousses !== 'object' || Array.isArray(partie.repousses)) partie.repousses = {};
+    const vues = new Set();
+    let n = 0;
+    for (const c of jeu.cartes.values()) {
+      for (const ev of c.evenements) {
+        const nuits = Math.round(Number(ev.repousse_nuits) || 0);
+        if (nuits < 1) continue;
+        const cle = `${c.id}/${ev.id}`;
+        if (!partie.locaux[cle]) continue;
+        const k = (Number(partie.repousses[cle]) || 0) + 1;
+        if (k >= nuits) { delete partie.locaux[cle]; n++; } else { partie.repousses[cle] = k; vues.add(cle); }
+      }
+    }
+    for (const cle of Object.keys(partie.repousses)) if (!vues.has(cle)) delete partie.repousses[cle];
+    return n;
+  }
+
+  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

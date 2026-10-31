@@ -5,11 +5,13 @@
 // Les définitions viennent du dossier du jeu (FORMAT.md › Le module gestion) :
 //   donnees/ressources.json  { ressources: [{ id, nom, description, icone, objet }] }
 //   donnees/batiments.json   { batiments: [{ id, nom, description, cout, jours, production, consommation, maximum }] }
-//   reglages.modules_reglages.gestion  { nom, stock_depart, capacite, menu }
+//   reglages.modules_reglages.gestion  { nom, stock_depart, capacite, menu, construire_menu,
+//                                        habitants_depart, repas, arrivees }
 // cout, production, consommation et stock_depart sont des listes [{ ressource, nombre }].
 //
 // L'état (partie.modules.gestion) :
-//   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y }], prochain, resolu }
+//   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y }], habitants, prochain, resolu }
+//   habitants (Saga 1.6) = combien de gens vivent au domaine (ils logent dans les bâtiments finis)
 //   carte, x, y : où il est posé (Saga 1.5 ; absent pour un bâtiment construit sans place, par un événement)
 //   reste   = les nuits qu'il faut encore à un chantier
 //   resolu  = le dernier jour dont la fin a été calculée : la recalculer ne fait rien
@@ -55,10 +57,16 @@ const GestionCalcul = (() => {
         largeur: Math.max(1, tailleTampon(b.tampon, 'largeur') || entier(b.largeur, 1, 1, 32)),
         hauteur: Math.max(1, tailleTampon(b.tampon, 'hauteur') || entier(b.hauteur, 1, 1, 32)),
         porte: b.porte && typeof b.porte === 'object' && Number.isFinite(Number(b.porte.x)) && Number.isFinite(Number(b.porte.y)) ? { x: entier(b.porte.x, 0, 0, 31), y: entier(b.porte.y, 0, 0, 31) } : null,
+        // Saga 1.6 : les habitants. logement : combien il en loge une fois fini ; ouvriers : combien il en
+        // faut pour qu'il produise (0 : il produit seul).
+        logement: entier(b.logement, 0, 0, 999), ouvriers: entier(b.ouvriers, 0, 0, 999),
       });
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
-    const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false };
+    const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
+      // Saga 1.6 : les habitants. repas : ce que chacun mange par nuit ; arrivees : combien en arrivent au
+      // plus par nuit quand il reste de la place (0 : ils ne viennent que par la commande).
+      habitants_depart: entier(g.habitants_depart, 0, 0, 9999), repas: quantites(g.repas), arrivees: entier(g.arrivees, 1, 0, 99) };
     return { ressources, batiments, reglages };
   }
 
@@ -68,7 +76,7 @@ const GestionCalcul = (() => {
   const dire = (d, q) => Object.entries(q).map(([r, n]) => `${n} ${nomRessource(d, r)}`).join(', ');
 
   // L'état d'une partie neuve : le stock de départ.
-  const etatNeuf = (d) => ({ stock: { ...d.reglages.stock_depart }, batiments: [], prochain: 1, resolu: 0 });
+  const etatNeuf = (d) => ({ stock: { ...d.reglages.stock_depart }, batiments: [], habitants: d.reglages.habitants_depart, prochain: 1, resolu: 0 });
 
   // Un état lu dans une sauvegarde (ou écrit à la main) remis en forme. Les bâtiments d'un type que le jeu
   // n'a plus sont gardés (le jeu peut le remettre) mais ne produisent rien.
@@ -86,11 +94,13 @@ const GestionCalcul = (() => {
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
       batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu });
     }
-    return { stock, batiments, prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
+    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
   }
 
   // La place pour chaque ressource (0 = sans limite).
   const capacite = (d) => d.reglages.capacite;
+  // Saga 1.6 : la place pour loger des habitants (les bâtiments finis).
+  const logement = (d, e) => e.batiments.reduce((t, b) => t + (b.etat === 'fini' ? d.batiments.get(b.type)?.logement || 0 : 0), 0);
   // Combien de bâtiments de ce type (chantiers compris, ou seulement les finis).
   const combien = (e, type, finis = false) => e.batiments.filter((b) => b.type === type && (!finis || b.etat === 'fini')).length;
 
@@ -108,9 +118,6 @@ const GestionCalcul = (() => {
 
   const manque = (stock, q) => Object.entries(q).filter(([r, n]) => (stock[r] || 0) < n).map(([r, n]) => [r, n - (stock[r] || 0)]);
 
-  // Lancer la construction d'un bâtiment : il faut de quoi le payer, et ne pas dépasser son maximum.
-  // lieu (Saga 1.5) : { carte, x, y } s'il est posé sur une carte (vérifié avant par placement()).
-  // Rend { ok, etat, raison, batiment } (raison : une phrase pour le joueur).
   // Les cases qu'un bâtiment posé occupe sur sa carte ; bloquantes : toutes sauf sa porte.
   function cases(d, b, bloquantes = false) {
     const def = d.batiments.get(b.type);
@@ -139,6 +146,9 @@ const GestionCalcul = (() => {
     return { ok: true };
   }
 
+  // Lancer la construction d'un bâtiment : il faut de quoi le payer, et ne pas dépasser son maximum.
+  // lieu (Saga 1.5) : { carte, x, y } s'il est posé sur une carte (vérifié avant par placement()).
+  // Rend { ok, etat, raison, batiment } (raison : une phrase pour le joueur).
   function construire(d, e, type, lieu = null) {
     const def = d.batiments.get(type);
     if (!def) return { ok: false, etat: e, raison: `Ce bâtiment n'existe pas (${type}).` };
@@ -152,6 +162,17 @@ const GestionCalcul = (() => {
     etat.prochain += 1;
     etat.batiments.push(batiment);
     return { ok: true, etat, batiment };
+  }
+
+  // Saga 1.6 : des habitants arrivent (n > 0) ou partent (n < 0). Ils ne dépassent pas le logement, sauf
+  // forcer (une histoire qui amène quelqu'un même sans maison). Rend { etat, change }.
+  function habitants(d, e, n, forcer = false) {
+    const etat = copie(e);
+    const avant = etat.habitants || 0;
+    let apres = Math.max(0, avant + entier(n, 0, -1e9));
+    if (n > 0 && !forcer) apres = Math.min(apres, Math.max(avant, logement(d, etat)));
+    etat.habitants = apres;
+    return { etat, change: apres - avant };
   }
 
   // Le sac du joueur vers le stock : chaque objet qui représente une ressource (ressource.objet). Rend
@@ -174,35 +195,64 @@ const GestionCalcul = (() => {
   }
 
   // La fin du jour `jour`, dans un ordre fixe :
-  //   1. les bâtiments finis produisent, s'ils ont ce qu'ils consomment dans le stock du coucher (s'ils sont
+  //   1. les habitants mangent (repas, dans le stock du coucher) ; ceux qui n'ont pas mangé ne travaillent pas ;
+  //   2. les habitants nourris vont aux bâtiments finis qui demandent des ouvriers, dans l'ordre de
+  //      construction ; un bâtiment qui n'a pas tous ses ouvriers ne produit pas ;
+  //   3. les bâtiments finis produisent, s'ils ont ce qu'ils consomment dans le stock du coucher (s'ils sont
   //      plusieurs à vouloir la même ressource, le premier bâti passe d'abord) ;
-  //   2. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira la nuit suivante) ;
-  //   3. le stock est ramené à sa capacité.
-  // Rend { etat, lignes, termines } (lignes : le rapport du matin). Le même jour une deuxième fois : rien.
+  //   4. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira la nuit suivante) ;
+  //   5. s'il reste de la place pour loger et que tous ont mangé, des habitants arrivent (ils travaillent à
+  //      partir de la nuit suivante) ;
+  //   6. le stock est ramené à sa capacité.
+  // Rend { etat, lignes, termines, arrives } (lignes : le rapport du matin). Le même jour une deuxième fois : rien.
   function finDeJournee(d, e, jour) {
     const n = entier(jour, 0);
-    if (n <= e.resolu) return { etat: e, lignes: [], termines: [] };
+    if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0 };
     const etat = copie(e);
+    etat.habitants = entier(etat.habitants, 0, 0, 9999);
     const lignes = [];
+    const retirer = (q) => { for (const [r, k] of Object.entries(q)) { etat.stock[r] -= k; if (!etat.stock[r]) delete etat.stock[r]; } };
+    // 1. Les repas : autant d'habitants que le stock peut en nourrir.
+    let nourris = etat.habitants;
+    const repas = d.reglages.repas;
+    if (etat.habitants && Object.keys(repas).length) {
+      nourris = Math.min(etat.habitants, ...Object.entries(repas).map(([r, k]) => Math.floor((etat.stock[r] || 0) / k)));
+      const mange = Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * nourris]).filter(([, k]) => k > 0));
+      retirer(mange);
+      if (nourris < etat.habitants) lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}. Ils ne travaillent pas.`);
+    }
+    // 2 et 3. Le travail et la production. Ce qui est produit cette nuit n'arrive au stock qu'à la fin : un
+    // bâtiment ne consomme que ce qu'il y avait au coucher, quel que soit l'ordre des bâtiments.
+    let libres = nourris;
+    const sansOuvriers = [];
     const produit = {};
-    // Ce qui est produit cette nuit n'arrive au stock qu'à la fin : un bâtiment ne consomme que ce qu'il y
-    // avait au coucher, quel que soit l'ordre des bâtiments (sinon le résultat dépendrait de cet ordre).
     for (const b of etat.batiments) {
       const def = d.batiments.get(b.type);
       if (b.etat !== 'fini' || !def || !Object.keys(def.production).length) continue;
+      if (def.ouvriers > libres) { sansOuvriers.push(def.nom); continue; }
       const m = manque(etat.stock, def.consommation);
       if (m.length) { lignes.push(`${def.nom} n'a rien produit : il manque ${dire(d, Object.fromEntries(m))}.`); continue; }
-      for (const [r, q] of Object.entries(def.consommation)) { etat.stock[r] -= q; if (!etat.stock[r]) delete etat.stock[r]; }
+      libres -= def.ouvriers;
+      retirer(def.consommation);
       for (const [r, q] of Object.entries(def.production)) produit[r] = (produit[r] || 0) + q;
     }
+    if (sansOuvriers.length) lignes.push(`Pas assez d'habitants pour faire tourner : ${sansOuvriers.join(', ')}.`);
     for (const [r, q] of Object.entries(produit)) etat.stock[r] = (etat.stock[r] || 0) + q;
     if (Object.keys(produit).length) lignes.unshift(`Production : ${dire(d, produit)}.`);
+    // 4. Les chantiers.
     const termines = [];
     for (const b of etat.batiments) {
       if (b.etat !== 'chantier') continue;
       b.reste = Math.max(0, b.reste - 1);
       if (b.reste === 0) { b.etat = 'fini'; termines.push(b.type); lignes.push(`Chantier terminé : ${nomBatiment(d, b.type)}.`); }
     }
+    // 5. Les arrivées : seulement si personne n'a eu faim.
+    let arrives = 0;
+    if (nourris === etat.habitants && d.reglages.arrivees > 0) {
+      arrives = Math.max(0, Math.min(d.reglages.arrivees, logement(d, etat) - etat.habitants));
+      if (arrives) { etat.habitants += arrives; lignes.push(arrives > 1 ? `${arrives} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.'); }
+    }
+    // 6. La capacité du stock.
     const cap = capacite(d);
     if (cap > 0) {
       const perdu = {};
@@ -210,10 +260,24 @@ const GestionCalcul = (() => {
       if (Object.keys(perdu).length) lignes.push(`Le stock est plein : ${dire(d, perdu)} perdus.`);
     }
     etat.resolu = n;
-    return { etat, lignes, termines };
+    return { etat, lignes, termines, arrives };
   }
 
-  return { definitions, etatNeuf, normaliser, capacite, combien, ajouter, construire, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
+  // Saga 1.6 : qui travaille où, ce soir (pour l'écran du domaine et les scripts) : les ouvriers que
+  // demandent les bâtiments finis, et combien d'habitants sont libres.
+  function emplois(d, e) {
+    let libres = entier(e.habitants, 0);
+    let demandes = 0;
+    for (const b of e.batiments) {
+      const def = d.batiments.get(b.type);
+      if (b.etat !== 'fini' || !def?.ouvriers || !Object.keys(def.production).length) continue;
+      demandes += def.ouvriers;
+      if (def.ouvriers <= libres) libres -= def.ouvriers;
+    }
+    return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
+  }
+
+  return { definitions, etatNeuf, normaliser, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;
