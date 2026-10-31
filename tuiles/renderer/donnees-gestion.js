@@ -71,6 +71,16 @@ const DonneesGestion = (() => {
     // Tafl 1.4.1 : ce que fait la faim (voir FAIMS).
     faim: FAIMS.some(([k]) => k === g?.faim) ? g.faim : 'arrivees',
     faim_nuits: int(g?.faim_nuits, 3, 1, 99),
+    // Tafl 1.5 (Saga 1.7) : les habitants qu'on voit marcher, et les sentiers qu'ils creusent.
+    promeneurs: g?.promeneurs !== false,
+    promeneur_perso: str(g?.promeneur_perso).slice(0, 64),
+    promeneurs_max: int(g?.promeneurs_max, 12, 1, 40),
+    usure: g?.usure !== false,
+    tuile_usee: int(g?.tuile_usee, -1, -1, 99999),
+    tuile_sentier: int(g?.tuile_sentier, -1, -1, 99999),
+    seuil_usee: int(g?.seuil_usee, 6, 1, 9999),
+    seuil_sentier: int(g?.seuil_sentier, 20, 1, 9999),
+    usure_repousse: int(g?.usure_repousse, 2, 0, 9999),
   });
 
   const U = () => Donnees.ui;
@@ -284,8 +294,47 @@ const DonneesGestion = (() => {
         champ('Quand ils ont faim', U().sel(FAIMS, g.faim, (v) => { g.faim = v; majNuits(); })),
         nuits,
       ]),
+      ...champsPromeneurs(g, ctx),
       info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
+    ];
+  }
+
+  // Tafl 1.5 (Saga 1.7) : les habitants qu'on voit marcher, et les sentiers qui se creusent sous leurs pas.
+  function champsPromeneurs(g, ctx) {
+    const { champ, info, nombreIn, sel } = U();
+    const tuiles = [['-1', 'Dessinée par Saga'], ...arr(ctx.doc?.tiles).map((t, i) => [String(i), `${i}. ${t.name}`])];
+    const persos = [['', 'Un petit bonhomme (une couleur chacun)'], ...arr(ctx.work?.personnages).map((p) => [p.id, p.nom || p.id])];
+    const voir = el('input', { type: 'checkbox', checked: g.promeneurs });
+    const user = el('input', { type: 'checkbox', checked: g.usure });
+    const detailsVoir = el('div');
+    const detailsUsure = el('div');
+    const maj = () => {
+      detailsVoir.replaceChildren(...(g.promeneurs ? [el('div', { className: 'field-grid' }, [
+        champ('Leur apparence', sel(persos, g.promeneur_perso, (v) => { g.promeneur_perso = v; })),
+        champ('Au plus', nombreIn(g, 'promeneurs_max', 1, 40), 'à la fois sur la carte'),
+      ])] : []));
+      detailsUsure.replaceChildren(...(g.usure ? [
+        el('div', { className: 'field-grid' }, [
+          champ('Herbe tassée', sel(tuiles, String(g.tuile_usee), (v) => { g.tuile_usee = Number(v); })),
+          champ('Après', nombreIn(g, 'seuil_usee', 1, 9999), 'passages'),
+        ]),
+        el('div', { className: 'field-grid' }, [
+          champ('Sentier', sel(tuiles, String(g.tuile_sentier), (v) => { g.tuile_sentier = Number(v); })),
+          champ('Après', nombreIn(g, 'seuil_sentier', 1, 9999), 'passages'),
+        ]),
+        champ('L\'herbe repousse de', nombreIn(g, 'usure_repousse', 0, 9999), 'passages par nuit (0 : jamais)'),
+      ] : []));
+    };
+    voir.onchange = () => { g.promeneurs = voir.checked; maj(); };
+    user.onchange = () => { g.usure = user.checked; maj(); };
+    maj();
+    return [
+      champ('On voit les habitants', voir, 'ils vont de chez eux au travail, flânent et rentrent'),
+      detailsVoir,
+      champ('Leurs pas creusent des sentiers', user, 'l\'herbe se tasse, puis un sentier se dessine là où ils passent souvent'),
+      detailsUsure,
+      info('Les habitants prennent le plus court chemin, mais préfèrent les cases déjà usées : les sentiers se renforcent d\'eux-mêmes. Une tuile « Dessinée par Saga » : une terre battue posée sur la carte. Un sentier qu\'on ne prend plus repousse, nuit après nuit.'),
     ];
   }
 

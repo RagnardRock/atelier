@@ -149,6 +149,13 @@ const Moteur = (() => {
       // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
       // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
       viser: (o = {}) => viser(o),
+      // Saga 1.7 : un chemin entre deux cases de la carte du joueur (moteur/chemins.js), sur les cases où l'on
+      // marche (ni bloquées, ni rebords, ni sous un bâtiment ou un événement qui bloque).
+      chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
+        largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
+        libre: (x, y) => { const c = Monde.code(carte, x, y); return c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c] && !Monde.bloqueParModule(carte, x, y) && !presents.some((p) => p.x === x && p.y === y && p.bloque); },
+        cout: typeof o.cout === 'function' ? o.cout : undefined, coutMin: o.coutMin,
+      }) : null),
     };
     // La visée en cours (hoteModules.viser) : { x, y, largeur, hauteur, valide, resoudre }.
     let visee = null;
@@ -914,6 +921,11 @@ const Moteur = (() => {
           pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,
         }, maintenant) });
       }
+      // Saga 1.7 : les passants des modules (les habitants du domaine).
+      for (const f of Modules.figurants(jeu, partie, carte)) {
+        const perso = f.personnage ? jeu.personnages.get(f.personnage) : null;
+        liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: f.direction || 'bas', pas: f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y }, maintenant) });
+      }
       // Les autres joueurs (multijoueur) : ils glissent vers leur case, au pas.
       const vus = new Set();
       for (const a of autres) {
@@ -1114,6 +1126,8 @@ const Moteur = (() => {
         avancerJoueur(dt);
         actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
         avancerPNJ(dt);
+        // Saga 1.7 : les figurants des modules (les habitants qui vont et viennent).
+        if (!enCombat && !table.actif) Modules.avancer(jeu, partie, hoteModules, carte, dt);
         avancerFondu(dt);
         dialogue.avancer(dt);
         ecranCombat.avancer(dt);
