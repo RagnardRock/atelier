@@ -19,6 +19,8 @@ const EcranCombat = (() => {
       const niveau = el('span', { className: 'combat-niveau' });
       const statut = el('span', { className: 'combat-statut', hidden: true });
       const typesEl = el('div', { className: 'combat-types' });
+      // Saga 1.3 : les pastilles d'état (étages de statistiques, confusion, objet tenu).
+      const etatsEl = el('div', { className: 'combat-etats' });
       const barre = el('div', { className: 'combat-pv-barre' });
       const pvTexte = el('div', { className: 'combat-pv-texte' });
       const xp = el('div', { className: 'combat-xp-barre' });
@@ -30,10 +32,10 @@ const EcranCombat = (() => {
       const sprite = el('img', { className: 'combat-sprite', alt: '' });
       const vide = el('div', { className: 'combat-sprite combat-sprite-vide' });
       const balle = el('div', { className: 'combat-balle', hidden: true });
-      const place = el('div', { className: 'combat-place' }, el('div', { className: 'combat-sol' }), sprite, vide, balle);
+      const place = el('div', { className: 'combat-place' }, el('div', { className: 'combat-sol' }), sprite, vide, balle, etatsEl);
       const bloc = el('div', { className: `combat-cote ${cote}` }, carte, place);
       scene.append(bloc);
-      cotes[cote] = { nom, niveau, statut, typesEl, barre, pvTexte, xp, carte, sprite, vide, balle, place, bloc, pv: 0, pvMax: 1 };
+      cotes[cote] = { nom, niveau, statut, typesEl, etatsEl, barre, pvTexte, xp, carte, sprite, vide, balle, place, bloc, pv: 0, pvMax: 1 };
     }
     const badge = el('div', { className: 'combat-dresseur', hidden: true });
     scene.append(badge);
@@ -80,6 +82,14 @@ const EcranCombat = (() => {
       c.sprite.classList.toggle('chromatique', Boolean(e.chromatique));
       barrePv(cote, e.pv, e.pvMax);
       if (cote === 'joueur') c.xp.style.width = `${Math.round(e.xp * 100)}%`;
+    }
+    // Ce qui est en cours sur une créature, en pastilles : « Atq +2 », « Confus », « Restes ».
+    function etats(cote, liste) {
+      const c = cotes[cote];
+      if (!c) return;
+      c.etatsEl.replaceChildren(...(liste || []).map((x) => el('span', {
+        className: `combat-etat${x.sens > 0 ? ' monte' : x.sens < 0 ? ' baisse' : ''}`, textContent: x.texte, title: x.detail || x.texte,
+      })));
     }
     function barrePv(cote, pv, max) {
       const c = cotes[cote];
@@ -377,7 +387,8 @@ const EcranCombat = (() => {
       liste.hidden = true;
       menu.hidden = true;
       texte.textContent = '';
-      journalLignes.innerHTML = ''; // un nouveau combat, un journal neuf
+      journalLignes.innerHTML = '';
+      for (const cote of ['joueur', 'adversaire']) etats(cote, []); // un nouveau combat, un journal neuf
       journal.hidden = true;
       // Les créatures et leurs cartes restent cachées jusqu'à leur entrée (animer('…', 'entree')).
       for (const c of Object.values(cotes)) {
@@ -401,7 +412,7 @@ const EcranCombat = (() => {
     }
 
     return {
-      ouvrir, fermer, creature, pv, xp, animer, evolution, message, avancer, touche,
+      ouvrir, fermer, creature, etats, pv, xp, animer, evolution, message, avancer, touche,
       menu: menuPrincipal, attaques, liste: choisir, journal: basculerJournal, noter,
       get ouvert() { return !racine.hidden; },
     };

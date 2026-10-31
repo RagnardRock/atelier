@@ -132,6 +132,7 @@ const Duel = (() => {
         message: (t, o) => { passer('message', [texteRetourne(t), o]); return ui.message(t, o); },
         creature: (c, e) => { passer('creature', [cote(c), retourner(c, e)]); return ui.creature(c, e); },
         pv: (c, v, m) => { passer('pv', [cote(c), v, m]); return ui.pv(c, v, m); },
+        etats: (c, l) => { passer('etats', [cote(c), l]); return ui.etats?.(c, l); },
         animer: (c, n, im) => { passer('animer', [cote(c), n, im]); return ui.animer(c, n, im); },
         evolution: (c, im) => { passer('evolution', [cote(c), im]); return ui.evolution(c, im); },
         fermer: () => { passer('fermer', []); return ui.fermer(); },
@@ -150,7 +151,7 @@ const Duel = (() => {
 
     // --- L'autre joueur : son écran suit celui de l'arbitre, et lui demande ses choix ---
     let ui2 = null, enChoix = false; // enChoix : c'est à moi de choisir, l'écran ne doit pas bouger
-    const AUTORISES = new Set(['ouvrir', 'message', 'creature', 'pv', 'animer', 'evolution', 'fermer']);
+    const AUTORISES = new Set(['ouvrir', 'message', 'creature', 'etats', 'pv', 'animer', 'evolution', 'fermer']);
     // Les appels se jouent l'un après l'autre, dans l'ordre où l'arbitre les a faits : sinon deux
     // animations se marcheraient dessus (une entrée annulerait la barre de PV de l'autre côté).
     let file = Promise.resolve();

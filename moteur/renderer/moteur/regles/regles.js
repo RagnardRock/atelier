@@ -86,7 +86,7 @@ const Regles = (() => {
     },
     existe: (jeu, id) => Boolean(Creatures.trouver(jeu, 'creatures', id)),
     creer: (jeu, id, niveau, o) => Creatures.creer(jeu, id, niveau, o),
-    // Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau (apprentissage + CT), pour l'écran
+    // Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau (apprentissage, CT, capacités œufs), pour l'écran
     // « compose ton équipe » de l'arène. Les quatre premières sont celles qu'elle connaîtrait.
     attaquesPossibles(jeu, id, niveau) {
       const e = Creatures.trouver(jeu, 'creatures', id);
@@ -96,6 +96,8 @@ const Regles = (() => {
         if ((a.niveau || 0) <= niveau && !ids.includes(a.attaque)) ids.push(a.attaque);
       }
       for (const x of e.ct || []) if (!ids.includes(x)) ids.push(x);
+      // Saga 1.3 : les capacités œufs comptent aussi pour l'arène (on choisit librement).
+      for (const x of e.oeufs || []) if (!ids.includes(x)) ids.push(x);
       return ids.map((x) => Creatures.trouver(jeu, 'attaques', x)).filter(Boolean).map((a) => {
         const t = Creatures.trouver(jeu, 'types', a.type);
         return { id: a.id, nom: a.nom || a.id, type: t?.nom || '', couleur: t?.couleur || '#888', categorie: a.categorie || '', puissance: Number(a.puissance) || 0, pp: Number(a.pp) || 10 };
@@ -104,6 +106,21 @@ const Regles = (() => {
     attaquesDefaut: (jeu, id, niveau) => Creatures.attaquesAuNiveau(jeu, Creatures.trouver(jeu, 'creatures', id), niveau),
     // Les objets qu'un membre peut tenir (menu Équipe › Faire tenir, et l'écran de l'arène).
     objetsTenables: (jeu) => (jeu.donnees.objets?.objets || []).filter((o) => o && o.id).map((o) => ({ id: o.id, nom: o.nom || o.id, description: o.description || '', icone: o.icone || '' })),
+    // Saga 1.3 : ce qu'on peut régler en détail sur un membre choisi (l'arène), avec ses limites.
+    detailsPossibles(jeu, id) {
+      const e = Creatures.trouver(jeu, 'creatures', id);
+      if (!e) return null;
+      const nomTalent = (t) => Creatures.trouver(jeu, 'talents', t)?.nom || t;
+      return {
+        natures: Object.keys(Creatures.NATURES).map((n) => {
+          const [haut, bas] = Creatures.NATURES[n] || [];
+          return [n, `${n[0].toUpperCase()}${n.slice(1)}${haut ? ` (+${Creatures.NOMS_STATS[haut]}, −${Creatures.NOMS_STATS[bas]})` : ' (neutre)'}`];
+        }),
+        talents: [...new Set([...(e.talents || []), e.talent_cache].filter(Boolean))].map((t) => [t, nomTalent(t)]),
+        stats: Creatures.STATS.map((x) => [x, Creatures.NOMS_STATS[x]]),
+        ivMax: 31, evMax: 252, evTotal: 510,
+      };
+    },
     completer: (jeu, c) => Creatures.completer(jeu, c),
     soigner: (jeu, c) => Creatures.soigner(jeu, c),
     resume(jeu, c) {
@@ -193,6 +210,7 @@ const Regles = (() => {
     attaquesPossibles: (jeu, id, niveau) => pack(jeu).attaquesPossibles?.(jeu, id, niveau) || [],
     attaquesDefaut: (jeu, id, niveau) => pack(jeu).attaquesDefaut?.(jeu, id, niveau) || [],
     objetsTenables: (jeu) => (Regles.capacites(jeu).tenir ? pack(jeu).objetsTenables?.(jeu) || [] : []),
+    detailsPossibles: (jeu, id) => pack(jeu).detailsPossibles?.(jeu, id) || null,
     // Le résumé : seulement les pages choisies, dans leur ordre.
     fiche(jeu, ...a) {
       const f = pack(jeu).fiche(jeu, ...a), ordre = menus(jeu).pages;
