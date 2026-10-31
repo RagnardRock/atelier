@@ -234,7 +234,11 @@ const Verificateur = (() => {
     } else if (code(cartes.get(depart.carte), depart.x, depart.y) === BLOQUE) {
       ajouter('erreur', 'acces', 'Le départ du joueur est sur une case bloquée.', { carte: depart.carte, x: depart.x, y: depart.y });
     }
-    const monde = marcher([{ carte: depart.carte, x: depart.x, y: depart.y }]);
+    // Tafl 1.4.2 : la porte d'un bâtiment du module gestion mène à son intérieur. Le joueur pourra y entrer
+    // dès qu'il en pose un : ces intérieurs comptent comme atteints (un départ de plus).
+    const gestionPortes = (Array.isArray(reglages.modules) && reglages.modules.includes('gestion') ? liste('batiments') : [])
+      .map((b) => b.porte_vers).filter((v) => v?.carte && cartes.has(v.carte)).map((v) => ({ carte: v.carte, x: Number(v.x), y: Number(v.y) }));
+    const monde = marcher([{ carte: depart.carte, x: depart.x, y: depart.y }, ...gestionPortes]);
 
     // --- 1. Téléporteurs ---
     // L'arrivée d'un téléporteur ou d'une commande « téléporter » : la carte existe, la case aussi, on peut s'y tenir.
