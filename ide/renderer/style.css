@@ -1433,3 +1433,12 @@ body.glass .np-card { border-color: var(--glass-border); }
 
 /* Loki, l'assistant de l'Atelier : sa rune ᛚ (Laguz) à la place de l'icône étincelle */
 .codicon.rune-loki { font-family: 'Segoe UI Historic', 'Segoe UI Symbol', 'Noto Sans Runic', sans-serif; font-weight: 700; font-style: normal; line-height: 1; }
+
+/* Le moteur de Loki : Claude, local (Ollama) ou auto */
+#claude-moteur {
+  font: inherit; font-size: 11px; color: var(--muted, inherit);
+  background: transparent; border: 1px solid var(--border, rgba(255, 255, 255, 0.12)); border-radius: 6px;
+  padding: 1px 4px; margin-right: 2px; cursor: pointer;
+}
+#claude-moteur:hover, #claude-moteur:focus { color: var(--text, inherit); outline: none; border-color: var(--accent, currentColor); }
+#claude-moteur option { background: var(--panel-2, #252526); color: var(--text, #ccc); }

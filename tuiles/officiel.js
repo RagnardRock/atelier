@@ -297,7 +297,7 @@ async function importer(options, progres, telecharger) {
     };
     const niveau = recent('1').map((m) => ({ niveau: nombre(m.level), attaque: attaqueId.get(m.move_id) })).filter((m) => m.attaque).sort((a, b) => a.niveau - b.niveau);
     const ct = [...new Set(recent('4').map((m) => attaqueId.get(m.move_id)).filter(Boolean))];
-    // Tafl 1.1 : les capacités œufs (méthode 2), qu'on ne peut avoir que par l'élevage.
+    // Tafl 1.5 : les capacités œufs (méthode 2), qu'on ne peut avoir que par l'élevage.
     const oeufs = [...new Set(recent('2').map((m) => attaqueId.get(m.move_id)).filter(Boolean))].filter((x) => !ct.includes(x));
     const tal = (talentsDe.get(p?.id) || []).sort((a, b) => a.slot - b.slot);
     const n = nomsEspeces.get(s.id);

@@ -292,6 +292,16 @@ const Scripts = (() => {
         case 'son':
           moteur.son(Jeu.son(c.fichier));
           break;
+        // Saga 1.5 : dormir. Le jour se termine (les modules font leur calcul), fondu au noir, réveil à l'heure
+        // dite le lendemain, puis le rapport du matin. Rend { jour } : le nouveau jour.
+        case 'dormir': {
+          dialogue.fermer();
+          if (c.texte) await narrer(c.texte);
+          dialogue.fermer();
+          const { lignes, jour } = await moteur.dormir({ soigner: c.soigner !== false, heure: c.heure });
+          if (lignes.length) await ui.liste({ titre: `Jour ${jour}`, items: lignes.map((texte) => ({ texte })), annulable: true, note: 'Ce qui s\'est passé pendant la nuit.' });
+          return { jour };
+        }
         case 'heure':
           moteur.heure({ action: c.action === 'avancer' ? 'avancer' : 'regler', heures: Number(c.heures) || 0 });
           break;
@@ -324,9 +334,15 @@ const Scripts = (() => {
           // Saga 0.13 : une commande du pack de règles du jeu (test, sauvegarde, repos… pour le pack JDR).
           // Elle rend un résultat simple, que reçoit un script JS (saga.test…).
           const f = Regles.commande(jeu, c.type);
-          if (!f) break; // commande inconnue : on la saute
+          if (f) {
+            dialogue.fermer();
+            return await f({ jeu, partie, ui, c, jouer: (l) => jouer(l, ev), narrer, ranger: (m) => Collection.ranger(jeu, partie, m) });
+          }
+          // Saga 1.4 : une commande d'un module du jeu (modules/MODULES.md › commandes).
+          const g = typeof Modules !== 'undefined' ? Modules.commande(jeu, c.type) : null;
+          if (!g) break; // commande inconnue : on la saute
           dialogue.fermer();
-          return await f({ jeu, partie, ui, c, jouer: (l) => jouer(l, ev), narrer, ranger: (m) => Collection.ranger(jeu, partie, m) });
+          return await g(partie, moteur.hoteModules, { c, ev, ui, jouer: (l) => jouer(l, ev), narrer });
         }
       }
     }

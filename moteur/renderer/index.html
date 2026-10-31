@@ -58,11 +58,13 @@
         <button class="pause-choix" data-action="mode" hidden><i class="codicon codicon-table"></i><span id="pause-mode">Passer en mode table</span></button>
         <button class="pause-choix" data-action="multi" hidden><i class="codicon codicon-broadcast"></i><span id="pause-multi">Jouer à plusieurs…</span></button>
         <button class="pause-choix" data-action="sauvegarder"><i class="codicon codicon-save"></i>Sauvegarder<kbd>Ctrl+S</kbd></button>
-        <button class="pause-choix" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
-        <button class="pause-choix" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
+        <button class="pause-choix" data-action="vue" data-vers="outils"><i class="codicon codicon-wrench"></i>Outils du créateur…</button>
+        <button class="pause-choix" data-vue="outils" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
+        <button class="pause-choix" data-vue="outils" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
         <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Options : son, texte, commandes<kbd>Ctrl+,</kbd></button>
-        <button class="pause-choix" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
-        <button class="pause-choix" data-action="exporter"><i class="codicon codicon-package"></i>Exporter ce jeu (web, Windows)…</button>
+        <button class="pause-choix" data-vue="outils" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
+        <button class="pause-choix" data-vue="outils" data-action="exporter"><i class="codicon codicon-package"></i>Exporter ce jeu (web, Windows)…</button>
+        <button class="pause-choix" data-vue="outils" data-action="vue" data-vers="principal"><i class="codicon codicon-arrow-left"></i>Retour</button>
         <button class="pause-choix" data-action="quitter"><i class="codicon codicon-home"></i><span id="pause-quitter">Changer de jeu</span></button>
         <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11 · Manette : A valider, B retour, Start pause, Select carnet. Les touches se changent dans Options.</p>
       </div>
@@ -71,6 +73,7 @@
     <div id="carnet" hidden>
       <div class="carnet-carte">
         <div class="carnet-tete"><span id="carnet-titre"></span><span id="carnet-heure" hidden></span><span id="carnet-argent"></span><button class="carnet-bouton" data-ecran="equipe" type="button"><i class="codicon codicon-organization"></i><span id="carnet-equipe">Équipe</span></button><button class="carnet-bouton" data-ecran="dex" type="button"><i class="codicon codicon-library"></i><span id="carnet-dex">Pokédex</span></button><button class="icon-button carnet-fermer" title="Fermer (Tab ou Échap)"><i class="codicon codicon-close"></i></button></div>
+        <div id="carnet-actions" hidden></div>
         <div id="carnet-corps"></div>
       </div>
     </div>
@@ -90,6 +93,7 @@
   <script src="moteur/dialogue.js"></script>
   <!-- Les scripts JS du jeu (Saga 0.12) : le bac à sable commun à Tafl et Saga, puis son hôte -->
   <script src="../commun/bac-a-sable.js"></script>
+  <script src="../commun/modules.js"></script>
   <script src="moteur/scripts-js.js"></script>
   <script src="moteur/scripts.js"></script>
   <script src="moteur/regles/pokemon/creatures.js"></script>
@@ -112,6 +116,10 @@
   <script src="moteur/regles/jdr/fiches.js"></script>
   <script src="moteur/regles/jdr/pack.js"></script>
   <script src="moteur/regles/regles.js"></script>
+  <!-- Saga 1.4 : les modules du jeu (MODULES.md). Chaque module ajoute ici les fichiers de son dossier, après modules.js. -->
+  <script src="moteur/modules/modules.js"></script>
+  <script src="moteur/modules/gestion/calcul.js"></script>
+  <script src="moteur/modules/gestion/gestion.js"></script>
   <script src="moteur/ecran-combat.js"></script>
   <script src="moteur/ecran-groupe.js"></script>
   <script src="moteur/des-ecran.js"></script>

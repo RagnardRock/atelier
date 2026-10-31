@@ -15,6 +15,7 @@ const Monde = (() => {
       nom: jeu.heros?.nom || 'Héros', // {joueur} dans les dialogues
       interrupteurs: {},   // id → true (les absents sont éteints)
       locaux: {},          // "carte/ev-1" → true
+      repousses: {},       // "carte/ev-1" → nuits passées depuis la récolte (Saga 1.6, événements avec repousse_nuits)
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
       compteurs: { captures: 0, dresseurs_battus: 0, sauvages_battus: 0, evolutions: 0, badges: 0, pas: 0 },
       sac: {},             // id d'objet → nombre
@@ -31,6 +32,8 @@ const Monde = (() => {
       musique: null,       // la musique en cours (Saga 0.11), pour la retrouver en chargeant la partie
       variables: variablesDeDepart(jeu), // id → nombre ou texte (Saga 0.12)
       graine: Math.floor(Math.random() * 2147483647), // le hasard des scripts JS (Saga 0.12)
+      modules: {},         // l'état de chaque module du jeu, par id (Saga 1.4, modules/MODULES.md)
+      jour: 1,             // le numéro du jour (Saga 1.5) : la commande « dormir » passe au suivant
       position: { ...depart },
     };
   }
@@ -81,6 +84,8 @@ const Monde = (() => {
       case 'variable': return comparer(partie.variables?.[cond.id] ?? 0, cond.comparaison || '>=', cond.valeur ?? 0);
       // Le moment de la journée (Saga 0.11) : matin, jour, soir ou nuit, selon l'horloge du jeu.
       case 'moment': return typeof Temps === 'undefined' || Temps.moment(null, partie, cond.moment);
+      // Le numéro du jour (Saga 1.5), comparé à une valeur.
+      case 'jour': return comparer(Number(partie.jour) || 1, cond.comparaison || '>=', Number(cond.valeur) || 1);
       // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
       case 'membre': return [...(partie.equipe || []), ...(partie.boites || []).flatMap((b) => b.creatures || [])]
         .some((c) => c && c.heros && c.creature === cond.personnage);
@@ -98,9 +103,13 @@ const Monde = (() => {
       }
     }
   }
-  // Le moteur branche ici les conditions du pack du jeu en cours (Regles.condition).
+  // Le moteur branche ici les conditions du pack du jeu en cours (Regles.condition), puis des modules.
   let conditionPack = null;
   const brancherConditions = (f) => { conditionPack = f; };
+  // Saga 1.4 : les cases qu'un module bloque (un bâtiment posé en jeu), en plus de collisions.
+  let blocage = null;
+  const brancherBlocage = (f) => { blocage = f; };
+  const bloqueParModule = (carte, x, y) => Boolean(blocage && blocage(carte, x, y));
 
   // Une condition dite au joueur (Saga 0.7) : le déblocage d'un article de boutique montré grisé.
   // Un interrupteur ne se raconte pas (ce serait dévoiler l'histoire).
@@ -124,6 +133,7 @@ const Monde = (() => {
         const titre = q?.titre || cond.quete;
         return cond.etat === 'finie' ? `Après la quête « ${titre} »` : cond.etat === 'en_cours' ? `Pendant la quête « ${titre} »` : 'Bientôt';
       }
+      case 'jour': return `À partir du jour ${Number(cond.valeur) || 1}`;
       case 'moment': return { matin: 'Le matin', jour: 'Le jour', soir: 'Le soir', nuit: 'La nuit' }[cond.moment] || 'À un autre moment';
       default: return 'Plus tard dans l\'aventure';
     }
@@ -199,10 +209,11 @@ const Monde = (() => {
       if (REBORDS[c] !== dir) return null;
       const lx = tx + dx, ly = ty + dy;
       const cl = code(carte, lx, ly);
-      if (!dansCarte(carte, lx, ly) || cl === PASSAGE.bloque || REBORDS[cl] || occupe(lx, ly)) return null;
+      if (!dansCarte(carte, lx, ly) || cl === PASSAGE.bloque || REBORDS[cl] || occupe(lx, ly) || bloqueParModule(carte, lx, ly)) return null;
       return { x: lx, y: ly, saut: true };
     }
     if (occupe(tx, ty)) return null;
+    if (bloqueParModule(carte, tx, ty)) return null;
     if (c === PASSAGE.bloque) {
       const ouverte = zonesEn(carte, tx, ty).some((z) => z.objetRequis && (partie.sac[z.objetRequis] || 0) > 0);
       if (!ouverte) return null;
@@ -219,5 +230,28 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { brancherConditions, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  // Saga 1.6 : ce qui repousse. Un événement avec repousse_nuits (une récolte, un arbre coupé, un coffre
+  // qui se remplit) : une fois son « déjà fait » allumé, il s'éteint après ce nombre de nuits, et
+  // l'événement revient à sa première page. Appelé par la commande dormir. Rend combien ont repoussé.
+  function repousser(jeu, partie) {
+    if (!partie.repousses || typeof partie.repousses !== 'object' || Array.isArray(partie.repousses)) partie.repousses = {};
+    const vues = new Set();
+    let n = 0;
+    // Saga 1.6.1 : on part de ce que la partie a retenu (et non des cartes), pour compter aussi les copies
+    // de carte (« base@copie », l'intérieur d'un bâtiment) que le joueur n'a pas revues depuis le chargement.
+    for (const cle of Object.keys(partie.locaux || {})) {
+      if (!partie.locaux[cle]) continue;
+      const i = cle.lastIndexOf('/');
+      const c = i > 0 ? jeu.cartes.get(cle.slice(0, i)) : null;
+      const ev = c?.evenements.find((e) => String(e.id) === cle.slice(i + 1));
+      const nuits = Math.round(Number(ev?.repousse_nuits) || 0);
+      if (nuits < 1) continue;
+      const k = (Number(partie.repousses[cle]) || 0) + 1;
+      if (k >= nuits) { delete partie.locaux[cle]; n++; } else { partie.repousses[cle] = k; vues.add(cle); }
+    }
+    for (const cle of Object.keys(partie.repousses)) if (!vues.has(cle)) delete partie.repousses[cle];
+    return n;
+  }
+
+  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

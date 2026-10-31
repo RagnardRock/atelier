@@ -19,7 +19,7 @@ const EcranCombat = (() => {
       const niveau = el('span', { className: 'combat-niveau' });
       const statut = el('span', { className: 'combat-statut', hidden: true });
       const typesEl = el('div', { className: 'combat-types' });
-      // Saga 1.3 : les pastilles d'état (étages de statistiques, confusion, objet tenu).
+      // Saga 1.7 : les pastilles d'état (étages de statistiques, confusion, objet tenu).
       const etatsEl = el('div', { className: 'combat-etats' });
       const barre = el('div', { className: 'combat-pv-barre' });
       const pvTexte = el('div', { className: 'combat-pv-texte' });

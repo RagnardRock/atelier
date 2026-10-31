@@ -10,6 +10,8 @@ Trois packs existent (Saga 0.13) :
 | `jrpg` | `regles/jrpg/` | `groupe` (`ecran-groupe.js`) | Un groupe de héros avec des classes, des PV et des PM, des compétences et de l'équipement, contre des groupes de monstres au tour par tour. |
 | `jdr` | `regles/jdr/` | `groupe` (`ecran-groupe.js`) | Un jeu de rôle sur table façon D&D 5e (SRD 5.1) : création de personnage, tests au d20 contre un DD, sauvegardes, sorts et emplacements, jets contre la mort, règles maison. |
 
+Un pack n'est pas un **module** : un jeu a exactement un pack (les combats, la progression), et zéro, un ou plusieurs modules qui ajoutent au monde une chose qu'il sait faire en plus (gérer un domaine…), quel que soit le pack. Les modules ont leur propre contrat : `modules/MODULES.md` (Saga 1.4).
+
 Le jeu choisit son pack dans Tafl (Données du jeu › Réglages › Règles), c'est-à-dire `donnees/reglages.json` › `reglages.regles`. Un pack que Saga ne connaît pas retombe sur `pokemon`. Les fichiers de données de chaque pack sont décrits dans `tuiles/FORMAT.md` (« Le pack JRPG » pour `jrpg`, « Le pack JDR » pour `jdr`).
 
 Ce document décrit :
@@ -273,7 +275,7 @@ Pour les packs avec `ecran: 'duel'` : un contre un, l'adversaire en haut à droi
 | `ouvrir({ fond, dresseur })` | — | Ouvre l'écran avec son flash d'entrée. `dresseur` : `{ nom, portrait }` ou `null`. |
 | `creature(cote, vue)` | — | Montre ou met à jour la créature d'un côté. `vue` : `{ nom, niveau, sexe, pv, pvMax, statut, xp (0 à 1), image, chromatique, types: [{ nom, couleur }] }`. |
 | `pv(cote, pv, pvMax)` | — | La barre de PV glisse vers sa nouvelle valeur. |
-| `etats(cote, liste)` | — | (Saga 1.3, facultatif) Les pastilles au-dessus de la créature : `[{ texte, sens (1, 0 ou −1), detail }]`. Un écran qui ne l'a pas est ignoré. |
+| `etats(cote, liste)` | — | (Saga 1.7, facultatif) Les pastilles au-dessus de la créature : `[{ texte, sens (1, 0 ou −1), detail }]`. Un écran qui ne l'a pas est ignoré. |
 | `xp(ratio, niveaux)` | — | La barre d'expérience se remplit (`niveaux` fois en entier d'abord). |
 | `animer(cote, nom)` | — | `entree`, `sortie`, `touche`, `ko`, `monte`, `baisse`, `capture`, `secoue`, `attrape`, `sort`. |
 | `evolution(cote, image)` | `true` si elle a évolué | L'animation d'évolution ; Retour l'arrête. |
@@ -593,10 +595,10 @@ Le pack JDR a demandé six nouveaux champs facultatifs. La façade les rend sans
 | `actionsPause(jeu)` → `[[id, nom, icône]]` | Des choix en plus dans le menu de pause (JDR : « Jets de dés », « Se reposer »). |
 | `agirPause({ jeu, partie, ui, id })` | Fait l'un de ces choix. |
 | `pourScript(jeu, partie)` → `[fiche]` | Ce qu'un script JS lit de chaque membre (`saga.fiche(i)`, `saga.fiches`). Des valeurs simples, déjà calculées. |
-| `attaquesPossibles(jeu, id, niveau)` → `[{ id, nom, type, couleur, categorie, puissance, pp }]` | Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau (apprentissage, CT et, depuis Saga 1.3, capacités œufs), pour l'écran « compose ton équipe » (`equipe-libre.js`). Sans elle, on ne choisit que les membres. |
+| `attaquesPossibles(jeu, id, niveau)` → `[{ id, nom, type, couleur, categorie, puissance, pp }]` | Saga 1.0 : ce qu'une espèce peut apprendre à ce niveau (apprentissage, CT et, depuis Saga 1.7, capacités œufs), pour l'écran « compose ton équipe » (`equipe-libre.js`). Sans elle, on ne choisit que les membres. |
 | `attaquesDefaut(jeu, id, niveau)` → `[id]` | Les attaques qu'elle connaîtrait à ce niveau (les quatre cochées au départ). |
 | `objetsTenables(jeu)` → `[{ id, nom, description, icone }]` | Les objets qu'un membre peut tenir (capacité `tenir`). Le même écran s'en sert pour l'objet tenu. |
-| `detailsPossibles(jeu, id)` → `{ natures, talents, stats, ivMax, evMax, evTotal }` | (Saga 1.3, facultatif) Ce qu'on peut régler en détail sur un membre choisi dans l'arène : natures et talents (`[[id, nom]]`), statistiques réglables, et les limites des IV et des EV. Sans elle, l'onglet « Détails » ne s'affiche pas. |
+| `detailsPossibles(jeu, id)` → `{ natures, talents, stats, ivMax, evMax, evTotal }` | (Saga 1.7, facultatif) Ce qu'on peut régler en détail sur un membre choisi dans l'arène : natures et talents (`[[id, nom]]`), statistiques réglables, et les limites des IV et des EV. Sans elle, l'onglet « Détails » ne s'affiche pas. |
 
 `scripts.ui` (3.1) gagne aussi `texte({ titre, valeur, max })` (taper un texte : le nom du personnage), `repartir({ … })` (répartir des valeurs, l'achat de points) et `des({ titre, lignes })` (le plateau de dés, `des-ecran.js`, qui montre des jets **déjà tirés** et ne décide rien). Sur l'écran groupe, une vue de héros peut donner `info` (un texte à la place des PM : le pack JDR y met la CA).
 

@@ -116,36 +116,41 @@ function demanderAtelier(outil, args) {
   });
 }
 
-const envoyer = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+// Loki en local (commun/loki-local.js) prend la même liste d'actions : il charge ce fichier.
+module.exports = { OUTILS };
 
-async function recevoir(m) {
-  const { id, method, params = {} } = m;
-  if (method === 'initialize') {
-    return envoyer({ id, result: { protocolVersion: params.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'atelier', version: '1.0.0' } } });
+if (require.main === module) {
+  const envoyer = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
+
+  async function recevoir(m) {
+    const { id, method, params = {} } = m;
+    if (method === 'initialize') {
+      return envoyer({ id, result: { protocolVersion: params.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'atelier', version: '1.0.0' } } });
+    }
+    if (id === undefined) return; // notification (notifications/initialized…) : rien à répondre
+    if (method === 'ping') return envoyer({ id, result: {} });
+    if (method === 'tools/list') return envoyer({ id, result: { tools: OUTILS } });
+    if (method === 'tools/call') {
+      if (!OUTILS.some((o) => o.name === params.name)) return envoyer({ id, result: { content: [{ type: 'text', text: `Outil inconnu : ${params.name}` }], isError: true } });
+      const r = await demanderAtelier(params.name, params.arguments || {});
+      return envoyer({ id, result: { content: [{ type: 'text', text: r.erreur || r.texte || 'Fait.' }], isError: Boolean(r.erreur) } });
+    }
+    envoyer({ id, error: { code: -32601, message: `Méthode inconnue : ${method}` } });
   }
-  if (id === undefined) return; // notification (notifications/initialized…) : rien à répondre
-  if (method === 'ping') return envoyer({ id, result: {} });
-  if (method === 'tools/list') return envoyer({ id, result: { tools: OUTILS } });
-  if (method === 'tools/call') {
-    if (!OUTILS.some((o) => o.name === params.name)) return envoyer({ id, result: { content: [{ type: 'text', text: `Outil inconnu : ${params.name}` }], isError: true } });
-    const r = await demanderAtelier(params.name, params.arguments || {});
-    return envoyer({ id, result: { content: [{ type: 'text', text: r.erreur || r.texte || 'Fait.' }], isError: Boolean(r.erreur) } });
-  }
-  envoyer({ id, error: { code: -32601, message: `Méthode inconnue : ${method}` } });
+
+  let tampon = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    tampon += chunk;
+    let i;
+    while ((i = tampon.indexOf('\n')) >= 0) {
+      const ligne = tampon.slice(0, i).trim();
+      tampon = tampon.slice(i + 1);
+      if (!ligne) continue;
+      let message;
+      try { message = JSON.parse(ligne); } catch { continue; }
+      recevoir(message).catch((err) => message.id !== undefined && envoyer({ id: message.id, error: { code: -32603, message: err.message } }));
+    }
+  });
+  process.stdin.on('end', () => process.exit(0));
 }
-
-let tampon = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
-  tampon += chunk;
-  let i;
-  while ((i = tampon.indexOf('\n')) >= 0) {
-    const ligne = tampon.slice(0, i).trim();
-    tampon = tampon.slice(i + 1);
-    if (!ligne) continue;
-    let message;
-    try { message = JSON.parse(ligne); } catch { continue; }
-    recevoir(message).catch((err) => message.id !== undefined && envoyer({ id: message.id, error: { code: -32603, message: err.message } }));
-  }
-});
-process.stdin.on('end', () => process.exit(0));

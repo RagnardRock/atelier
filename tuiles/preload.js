@@ -88,6 +88,7 @@ contextBridge.exposeInMainWorld('claude', {
   // Ce que Claude peut faire sans demander (bouclier du panneau, réglages de Tafl)
   autorisations: () => ipcRenderer.invoke('claude:autorisations'),
   retirerAutorisation: (quoi) => ipcRenderer.invoke('claude:autorisations:retirer', quoi),
+  moteur: (choix) => ipcRenderer.invoke('claude:moteur', choix), // Claude, local (Ollama) ou auto
   onEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
   // Actions de l'outil (renderer/claude-actions.js)
   declarerActions: (liste) => ipcRenderer.invoke('claude:actions', liste),

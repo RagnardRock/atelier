@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('atelier', {
   claudeHistoryDelete: (id) => ipcRenderer.invoke('claude:history:delete', id),
   claudeAutorisations: () => ipcRenderer.invoke('claude:autorisations'),
   claudeRetirerAutorisation: (quoi) => ipcRenderer.invoke('claude:autorisations:retirer', quoi),
+  claudeMoteur: (choix) => ipcRenderer.invoke('claude:moteur', choix), // Claude, local (Ollama) ou auto
   onClaudeEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
   platform: process.platform,
   readFolder: (dir) => ipcRenderer.invoke('folder:read', dir),

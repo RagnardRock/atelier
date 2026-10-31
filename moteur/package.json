@@ -1,12 +1,12 @@
 {
   "name": "atelier-moteur",
   "productName": "Saga",
-  "version": "1.3.0",
+  "version": "1.7.0",
   "description": "Saga, le moteur qui fait tourner les jeux décrits dans Tafl (cartes, calques, parallaxe, déplacements, téléporteurs, météo), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "postinstall": "node ../commun/copier.js github.js bac-a-sable.js",
+    "postinstall": "node ../commun/copier.js github.js bac-a-sable.js modules.js",
     "dist": "electron-builder --win nsis --publish never"
   },
   "author": "Ragna",

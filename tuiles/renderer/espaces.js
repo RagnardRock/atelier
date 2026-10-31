@@ -284,7 +284,8 @@ const Espaces = (() => {
     return p ? p[1].split(' :')[0] : packDe(doc);
   };
   // Les listes de données du pack du jeu (comme la page Données).
-  const ongletsDuPack = (doc) => [...Events.ONGLETS, ...(typeof Donnees !== 'undefined' ? Donnees.ONGLETS : [])].filter((d) => !d.packs || d.packs.includes(packDe(doc)));
+  // Tafl 1.3 : et ceux d'un module seulement si le jeu l'active (Réglages › Règles du jeu › Modules).
+  const ongletsDuPack = (doc) => [...Events.ONGLETS, ...(typeof Donnees !== 'undefined' ? Donnees.ONGLETS : [])].filter((d) => (!d.packs || d.packs.includes(packDe(doc))) && (!d.modules || d.modules.some((m) => (doc.data?.reglages?.modules || []).includes(m))));
   const libelle = (doc, d) => d.labels?.[packDe(doc)] || d.label;
 
   const verification = (doc) => Verificateur.verifier(OutilsJeu.jeuDe(doc));

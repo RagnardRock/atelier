@@ -272,7 +272,14 @@ const IO = (() => {
     doc.tests = Array.isArray(jeu.tests) ? jeu.tests.filter((t) => t && typeof t === 'object' && !Array.isArray(t)) : [];
     // Les données du jeu : un fichier par sorte (donnees/personnages.json…).
     const donnees = {};
+    // Tafl 1.2 : les données que ce Tafl ne sait pas éditer (celles d'un module, ou d'un Tafl plus récent)
+    // sont gardées telles quelles et réécrites à l'enregistrement : Saga les lit toujours.
+    doc.donneesAutres = {};
     for (const [kind, fichier] of Object.entries(jeu.donnees || {})) {
+      if (!DATA_KINDS.includes(kind) && /^[a-z0-9_-]+$/.test(kind) && typeof g.donnees?.[fichier] === 'string' && /^donnees\/[a-z0-9_-]+\.json$/.test(fichier)) {
+        doc.donneesAutres[kind] = { fichier, texte: g.donnees[fichier] };
+        continue;
+      }
       if (!DATA_KINDS.includes(kind) || typeof g.donnees?.[fichier] !== 'string') continue;
       try {
         donnees[kind] = JSON.parse(g.donnees[fichier])[kind];
@@ -303,7 +310,10 @@ const IO = (() => {
       tuiles: 'tuiles.tafl',
       cartes: doc.maps.map((m) => ({ id: m.id, nom: m.name, fichier: mapFile(m) })),
       depart: doc.depart,
-      donnees: Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
+      donnees: {
+        ...Object.fromEntries(DATA_KINDS.map((k) => [k, dataFile(k)])),
+        ...Object.fromEntries(Object.entries(doc.donneesAutres || {}).map(([k, d]) => [k, d.fichier])),
+      },
       // Tafl 0.27 : les états de départ enregistrés du test rapide (Saga n'en a pas besoin pour jouer).
       tests: doc.tests || [],
       // Tafl 0.31 : les scripts JS, dans l'ordre (Saga les charge dans cet ordre, sauf ceux coupés).
@@ -313,6 +323,8 @@ const IO = (() => {
       ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],
       ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify(mapToJSON(doc, m)))]),
       ...DATA_KINDS.map((k) => [dataFile(k), textBytes(JSON.stringify({ format: `tafl-${k}`, version: 1, [k]: doc.data[k] }, null, 1))]),
+      // Tafl 1.2 : les données gardées telles quelles (un module, un Tafl plus récent).
+      ...Object.values(doc.donneesAutres || {}).filter((d) => !DATA_KINDS.some((k) => dataFile(k) === d.fichier)).map((d) => [d.fichier, textBytes(d.texte)]),
       ...(doc.scripts || []).map((s) => [scriptFile(s), textBytes(s.code)]),
       // jeu.json en dernier : s'il manque, le jeu ne s'ouvre pas à moitié.
       ['jeu.json', textBytes(JSON.stringify(jeu, null, 2))],

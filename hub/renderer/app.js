@@ -29,6 +29,8 @@ const App = (() => {
   ];
   const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets'], ['installation', 'Installer, mettre à jour ou désinstaller un outil']];
   const LANGUES = [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']];
+  // Pour Loki, dans Atelier (chaque outil a son propre choix, en haut de son panneau Loki).
+  const MOTEURS = [['auto', 'Auto : Claude, et l\'IA locale quand Claude n\'est pas là'], ['claude', 'Toujours Claude'], ['local', 'Toujours l\'IA locale (Ollama)']];
   const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
   function applyWidgets(c) {
     for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
@@ -58,7 +60,8 @@ const App = (() => {
         { key: 'surveillerPressePapiers', label: 'Retenir ce que je copie (historique du presse-papiers)', type: 'checkbox', value: config.surveillerPressePapiers },
         { key: 'garderPressePapiers', label: 'Garder cet historique après la fermeture d\'Atelier', type: 'checkbox', value: config.garderPressePapiers },
         { type: 'info', text: 'Widget Loki :' },
-        { key: 'claudeModel', label: 'Modèle', type: 'select', choices: MODELES, value: config.claudeModel || '' },
+        { key: 'lokiMoteur', label: 'Qui répond', type: 'select', choices: MOTEURS, value: config.lokiMoteur || 'auto' },
+        { key: 'claudeModel', label: 'Modèle Claude', type: 'select', choices: MODELES, value: config.claudeModel || '' },
         { key: 'claudeCommand', label: 'Commande', type: 'text', value: config.claudeCommand || 'claude' },
         { key: 'claudeLitProjets', label: 'Loki peut aussi lire les fichiers de mes projets (pas seulement leur état Git)', type: 'checkbox', value: config.claudeLitProjets !== false },
         { key: 'claudeActions', label: 'Loki peut agir dans Atelier (notes, calendrier, minuteurs, projets, installer un outil…)', type: 'checkbox', value: config.claudeActions !== false },
@@ -69,6 +72,7 @@ const App = (() => {
         { type: 'info', text: `Atelier ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
       buttons: [
+        { label: 'IA locale…', run: () => IaLocale.ouvrir() },
         { label: 'Dossier des notes', run: () => window.atelier.montrerNotes() },
         { label: 'Dossier partagé avec les outils', run: () => window.atelier.ouvrirCommun() },
       ],

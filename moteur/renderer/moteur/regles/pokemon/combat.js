@@ -23,7 +23,7 @@ const Combat = (() => {
   // Accorder au genre de la créature (Saga 0.7) : « gelé » / « gelée », « Il » / « Elle ».
   const fe = (c) => (c?.sexe === 'f' ? 'e' : '');
   const il = (c) => (c?.sexe === 'f' ? 'Elle' : 'Il');
-  // Les noms courts des statistiques, pour les pastilles de l'écran (Saga 1.3).
+  // Les noms courts des statistiques, pour les pastilles de l'écran (Saga 1.7).
   const COURT_STATS = { attaque: 'Atq', defense: 'Déf', att_spe: 'Atq.Spé', def_spe: 'Déf.Spé', vitesse: 'Vit', precision: 'Préc', esquive: 'Esq' };
   const NOMS_STATUTS = { brulure: 'BRU', paralysie: 'PAR', poison: 'PSN', poison_grave: 'PSN', sommeil: 'SOM', gel: 'GEL' };
 
@@ -79,7 +79,7 @@ const Combat = (() => {
       };
     }
     const montrer = (k) => { ui.creature(k.joueur ? 'joueur' : 'adversaire', etat(k)); montrerEtats(k); };
-    // Saga 1.3 : les pastilles de l'écran, pour voir ce qui est en cours (étages, confusion, objet tenu).
+    // Saga 1.7 : les pastilles de l'écran, pour voir ce qui est en cours (étages, confusion, objet tenu).
     function montrerEtats(k) {
       if (!ui.etats) return;
       const c = actif(k), l = [];
@@ -100,8 +100,8 @@ const Combat = (() => {
       if (c === actif(k) && c.pv !== avant) await ui.pv(k.joueur ? 'joueur' : 'adversaire', c.pv, C.pvMax(jeu, c));
     }
 
-    // --- Les objets tenus (Saga 1.3) ---
-    // Un objet peut dire ce qu'il fait quand une créature le tient (champ « tenu », Tafl 1.1).
+    // --- Les objets tenus (Saga 1.7) ---
+    // Un objet peut dire ce qu'il fait quand une créature le tient (champ « tenu », Tafl 1.5).
     // Les objets officiels les plus connus marchent sans rien régler, par leur nom PokeAPI.
     const TENUS_OFFICIELS = {
       'life-orb': { type: 'degats', valeur: 1.3, recul: 10 },

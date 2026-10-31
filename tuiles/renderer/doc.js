@@ -60,7 +60,7 @@ const Doc = (() => {
   const PASSAGE_NOMS = ['Auto (selon les tuiles)', 'Libre', 'Bloqué', 'Rebord ↓', 'Rebord ↑', 'Rebord ←', 'Rebord →'];
   const PROFONDEURS = [['dessous', 'Sous le joueur'], ['joueur', 'Au niveau du joueur'], ['dessus', 'Au-dessus du joueur']];
   const FUSIONS = [['normal', 'Normal'], ['multiply', 'Produit (ombres)'], ['screen', 'Superposition claire (lumières)'], ['overlay', 'Incrustation'], ['soft-light', 'Lumière douce'], ['lighter', 'Addition (lueurs)'], ['color', 'Couleur (teinte)']];
-  const ZONES = [['herbes', 'Herbes hautes'], ['eau', 'Eau'], ['grotte', 'Grotte'], ['autre', 'Autre']];
+  const ZONES = [['herbes', 'Herbes hautes'], ['eau', 'Eau'], ['grotte', 'Grotte'], ['constructible', 'Constructible (module gestion)'], ['autre', 'Autre']];
   const DIRECTIONS = [['bas', 'Vers le bas'], ['haut', 'Vers le haut'], ['gauche', 'Vers la gauche'], ['droite', 'Vers la droite']];
 
   function emptyTile(size, name) {

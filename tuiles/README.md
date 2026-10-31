@@ -434,6 +434,29 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Le vérificateur** signale aussi les erreurs des scripts, les blocs Script qui appellent une commande inconnue et les variables qui n'existent pas ; un clic ouvre le script à la bonne ligne. **Ctrl+K** trouve un script par son nom, ses commandes ou un bout de son code.
 - **Loki** lit, écrit et essaie les scripts (actions `scripts`, `script`, `essayer_script`) et crée les variables (`variable`), toujours avec Autoriser / Refuser et `Ctrl+Z`.
 
+## Les modules de jeu (Tafl 1.2, pour Saga 1.4)
+
+**Données › Réglages › Règles du jeu › Modules** : en plus de son pack de règles (un seul), un jeu peut activer des **modules**, qui ajoutent au monde une chose que le jeu sait faire en plus, quel que soit le pack. Aucun module n'est encore livré (le premier prévu est « gestion ») : la section le dit.
+
+- Tafl garde maintenant tel quel tout fichier de `donnees/` qu'il ne sait pas éditer (les données d'un module, ou d'un Tafl plus récent) et le réécrit à l'enregistrement.
+- Le vérificateur signale un module activé que Tafl ne connaît pas, et accepte dans `quand()` les moments des modules actifs.
+- Le contrat des modules : `moteur/renderer/moteur/modules/MODULES.md` ; leur description commune à Tafl et Saga : `commun/modules.js`.
+
+## Les journées et le module gestion (Tafl 1.3, pour Saga 1.5)
+
+- **Dormir** : la commande « Dormir (passer au jour suivant) » (groupe Ambiance), avec l'heure du réveil et le soin du groupe ; la condition « Le numéro du jour ». Pour tous les jeux.
+- **Le module gestion** (Réglages › Règles du jeu › Modules › Gestion) : ses réglages juste sous sa case (nom du domaine, capacité du stock, stock de départ, écran dans le carnet), et un groupe **Gestion** dans les Données : **Ressources** (nom, icône, l'objet du sac qui la représente) et **Bâtiments** (coût, nuits de chantier, production et consommation par nuit, nombre maximum). Ces onglets, ses commandes et ses conditions n'apparaissent que si le jeu active le module.
+- **Le placement libre** : le type de zone **Constructible** (là où le joueur peut poser ses bâtiments), et pour chaque bâtiment une section **Sur la carte** : son tampon (son apparence et sa taille), celui du chantier, sa taille sans tampon, et sa porte. La commande « Placer un bâtiment (le joueur choisit où) », avec ses branches réussi / raté, et la case « Construire depuis le carnet » dans les réglages du module.
+- Le vérificateur signale une ressource, un bâtiment ou un tampon qui n'existe pas, une page qui attend un bâtiment que rien ne construit (un bâtiment que le joueur peut poser librement compte comme construit), et « Placer un bâtiment » sans aucune zone constructible.
+
+## Les habitants et les récoltes (Tafl 1.4, pour Saga 1.6)
+
+- **Repousse après N nuits** (fenêtre d'un événement, pour tous les jeux) : son « déjà fait » s'éteint tout seul après ce nombre de nuits, et il revient à sa page 1. Pour une récolte : page 1 « donner l'objet + déjà fait », page 2 avec la condition « déjà fait » et la case « absent ».
+- **Les habitants** (module gestion) : dans un bâtiment, **Logement** (combien il loge) et **Ouvriers** (combien il lui faut pour produire) ; dans les réglages du module, les habitants au départ, les arrivées par nuit le repas d'un habitant, et ce que fait la faim (Tafl 1.4.1 : rien, bloquer les arrivées, ou des départs après N nuits ; ils travaillent toujours). La commande « Des habitants arrivent ou partent » et la condition « Le domaine a assez d'habitants ».
+- **Tafl 1.4.1 : le passage d'un bâtiment à la souris.** Dans la fiche du bâtiment, l'image du tampon avec une couleur par case : choisis un pinceau (Bloque, Libre, Porte) et clique. Le passage proposé d'office laisse libres le toit, les cases vides et les tuiles surtout transparentes (les ombres). La porte peut mener à une carte (l'intérieur), et la commande « Ressortir du bâtiment » ramène devant elle. Le choix **Intérieur** dit si chaque bâtiment posé a le sien (par défaut) ou si tous partagent le même (une boutique).
+- Le vérificateur signale une ressource de repas qui n'existe pas, et un bâtiment qui demande des ouvriers alors qu'aucun habitant ne peut venir.
+- **Tafl 1.4.2 : le modèle « Le petit domaine »** (Fichier › Nouveau jeu › Partir de) : une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp, du bois et du blé qui repoussent, et trois bâtiments (la maison et son intérieur, un par maison ; la ferme, qui a besoin d'un ouvrier ; le grenier, au même intérieur pour tous). Pour essayer tout le module gestion en quelques minutes. Le vérificateur compte maintenant les intérieurs des bâtiments comme accessibles. (Tafl 1.4.3 : sa monnaie est l'écu, et l'on commence sans argent.)
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils

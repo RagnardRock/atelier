@@ -27,9 +27,9 @@ const net = require('node:net');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
-const COMMUN = process.env.ATELIER_COMMUN;
-const PROJET = process.env.ATELIER_PROJET || ''; // nom du dossier du projet, celui qu'utilise Atelier ; vide : aucun projet
-const NOM = PROJET || 'en cours (aucun pour l\'instant)';
+let COMMUN = process.env.ATELIER_COMMUN;
+let PROJET = process.env.ATELIER_PROJET || ''; // nom du dossier du projet, celui qu'utilise Atelier ; vide : aucun projet
+let NOM = PROJET || 'en cours (aucun pour l\'instant)';
 const memoirePath = () => path.join(COMMUN, 'memoire-projets.json');
 
 const OUTILS = [
@@ -163,21 +163,31 @@ async function recevoir(m) {
   envoyer({ id, error: { code: -32601, message: `Méthode inconnue : ${method}` } });
 }
 
-let tampon = '';
-const enCours = new Set(); // appels pas encore terminés : on les laisse finir avant de quitter
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
-  tampon += chunk;
-  let i;
-  while ((i = tampon.indexOf('\n')) >= 0) {
-    const ligne = tampon.slice(0, i).trim();
-    tampon = tampon.slice(i + 1);
-    if (!ligne) continue;
-    let message;
-    try { message = JSON.parse(ligne); } catch { continue; }
-    const appel = recevoir(message).catch((err) => message.id !== undefined && envoyer({ id: message.id, error: { code: -32603, message: err.message } }));
-    enCours.add(appel);
-    appel.finally(() => enCours.delete(appel));
-  }
-});
-process.stdin.on('end', () => Promise.allSettled([...enCours]).then(() => process.exit(0)));
+// Loki en local (loki-local.js) se sert des mêmes outils sans passer par MCP : il charge ce fichier.
+function configurer({ commun, projet }) {
+  COMMUN = commun;
+  PROJET = projet || '';
+  NOM = PROJET || 'en cours (aucun pour l\'instant)';
+}
+module.exports = { OUTILS, appeler, configurer };
+
+if (require.main === module) {
+  let tampon = '';
+  const enCours = new Set(); // appels pas encore terminés : on les laisse finir avant de quitter
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk) => {
+    tampon += chunk;
+    let i;
+    while ((i = tampon.indexOf('\n')) >= 0) {
+      const ligne = tampon.slice(0, i).trim();
+      tampon = tampon.slice(i + 1);
+      if (!ligne) continue;
+      let message;
+      try { message = JSON.parse(ligne); } catch { continue; }
+      const appel = recevoir(message).catch((err) => message.id !== undefined && envoyer({ id: message.id, error: { code: -32603, message: err.message } }));
+      enCours.add(appel);
+      appel.finally(() => enCours.delete(appel));
+    }
+  });
+  process.stdin.on('end', () => Promise.allSettled([...enCours]).then(() => process.exit(0)));
+}

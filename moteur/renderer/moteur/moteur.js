@@ -132,6 +132,57 @@ const Moteur = (() => {
     let scriptsJs = ScriptsJs.AUCUN, reactions = [];
     const signaler = (texte) => (rappels.erreurScript || rappels.message)?.(texte);
     const reagir = (moment, infos = {}) => { if (scriptsJs.actif) reactions.push({ moment, infos }); };
+    // Saga 1.4 : ce que le moteur prête aux modules du jeu (modules/modules.js, MODULES.md) : annoncer un
+    // moment aux scripts, refaire la liste des événements présents (et leurs pages), dire un message, et
+    // les menus hors combat (ui, prêt quand une partie a démarré).
+    const hoteModules = {
+      reagir: (moment, infos = {}) => reagir(String(moment), infos && typeof infos === 'object' ? infos : {}),
+      rafraichir: () => { if (jeu && carte) presents = Monde.evenementsPresents(jeu, carte, partie, presents); },
+      message: (t) => rappels.message?.(String(t)),
+      get ui() { return scripts?.ui || null; },
+      // Saga 1.5 : la carte du joueur et sa case, et si une case est libre pour y poser quelque chose
+      // (dans la carte, pas bloquée ni rebord, sans événement visible ni joueur).
+      get carte() { return carte; },
+      get joueur() { return joueur ? { x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
+      libre: (x, y) => Boolean(carte && Monde.dansCarte(carte, x, y) && Monde.code(carte, x, y) !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[Monde.code(carte, x, y)]
+        && !presents.some((p) => p.x === x && p.y === y && (p.visible || p.bloque)) && !(joueur && joueur.x === x && joueur.y === y)),
+      // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
+      // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
+      viser: (o = {}) => viser(o),
+    };
+    // La visée en cours (hoteModules.viser) : { x, y, largeur, hauteur, valide, resoudre }.
+    let visee = null;
+    function viser({ largeur = 1, hauteur = 1, x, y, valide = () => true } = {}) {
+      if (!carte || !joueur) return Promise.resolve(null);
+      if (visee) visee.resoudre(null);
+      const [dx, dy] = Jeu.DIRECTIONS[joueur.dir] || [0, 1];
+      const l = Math.max(1, Math.round(largeur)), h = Math.max(1, Math.round(hauteur));
+      return new Promise((resoudre) => {
+        visee = {
+          x: Number.isFinite(x) ? x : joueur.x + (dx > 0 ? 1 : dx < 0 ? -l : -Math.floor(l / 2)),
+          y: Number.isFinite(y) ? y : joueur.y + (dy > 0 ? 1 : dy < 0 ? -h : -Math.floor(h / 2)),
+          largeur: l, hauteur: h, valide,
+          resoudre: (v) => { visee = null; resoudre(v); },
+        };
+        borner();
+      });
+      function borner() {
+        visee.x = Math.max(0, Math.min(carte.largeur - visee.largeur, visee.x));
+        visee.y = Math.max(0, Math.min(carte.hauteur - visee.hauteur, visee.y));
+      }
+    }
+    const viseeValide = () => { try { return Boolean(visee && visee.valide(visee.x, visee.y)); } catch { return false; } };
+    function toucheVisee(a) {
+      const d = { haut: [0, -1], bas: [0, 1], gauche: [-1, 0], droite: [1, 0] }[a];
+      if (d) {
+        visee.x = Math.max(0, Math.min(carte.largeur - visee.largeur, visee.x + d[0]));
+        visee.y = Math.max(0, Math.min(carte.hauteur - visee.hauteur, visee.y + d[1]));
+        bruit('curseur');
+      } else if (a === 'action') {
+        if (viseeValide()) { bruit('valider'); visee.resoudre({ x: visee.x, y: visee.y }); } else bruit('retour');
+      } else if (a === 'retour' || a === 'echap') { bruit('retour'); visee.resoudre(null); }
+    }
+    Modules.brancher({ message: (t) => rappels.message?.(t) });
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
     // Saga 1.0 : le multijoueur (reseau/monde.js). Les autres joueurs sur cette carte (des fantômes : ils
@@ -240,6 +291,8 @@ const Moteur = (() => {
         rappels.carteChangee?.(carte);
         reagir('carte', { carte: carte.id, depuis });
       }
+      // Saga 1.4 : les modules du jeu voient le joueur arriver (aussi au chargement d'une partie).
+      Modules.entrerCarte(jeu, partie, hoteModules, carte, depuis);
       // Les événements « auto » de cette carte se joueront dès la fin du fondu.
       autoAFaire = true;
       return true;
@@ -249,6 +302,7 @@ const Moteur = (() => {
     // perdre ce que le joueur a fait). depart : où commencer, à la place de la position de la partie.
     // test : l'état de départ d'un test rapide de Tafl (Saga 0.10), posé sur une partie neuve.
     function demarrer(nouveauJeu, depart, partieGardee = null, test = null) {
+      if (visee) visee.resoudre(null);
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
@@ -256,13 +310,18 @@ const Moteur = (() => {
       Object.defineProperty(jeu, 'joueur', { configurable: true, get: () => ({ nom: partie?.nom || '', tenue: partie?.tenue || '' }) });
       // Une partie toute neuve : le pack la prépare (le héros principal rejoint le groupe JRPG).
       if (!partieGardee) Regles.nouvellePartie(jeu, partie);
+      // Saga 1.4 : les modules du jeu préparent leur état (partie.modules[id]), neuf ou chargé.
+      if (!partieGardee) Modules.nouvellePartie(jeu, partie, hoteModules);
+      Modules.preparer(jeu, partie, hoteModules);
       // Les créatures d'une sauvegarde : complétées (une partie de Saga 0.2 n'avait que l'espèce et le niveau).
       // Saga 0.6 : les boîtes du PC et le Pokédex (une partie de Saga 0.5 avait une seule « boite »).
       Collection.preparer(jeu, partie);
       if (!partieGardee && test) appliquerTest(test);
       // Saga 0.13 : les conditions du pack (jdr_perception…), la vitesse des dés, et ce que le pack fait au
       // début d'une nouvelle partie (la création des personnages du pack JDR), dès que le joueur est libre.
-      Monde.brancherConditions((cond, p) => Regles.condition(jeu, cond, p));
+      // Saga 1.4 : puis celles des modules, et les cases qu'ils bloquent (un bâtiment posé en jeu).
+      Monde.brancherConditions((cond, p) => { const r = Regles.condition(jeu, cond, p); return r !== undefined ? r : Modules.condition(jeu, cond, p); });
+      Monde.brancherBlocage((c, x, y) => Modules.bloque(jeu, partie, c, x, y));
       ecranDes.vitesse(jeu.donnees.reglages?.reglages?.jdr?.animation_des || 'normale');
       ecranDes.cacher();
       debutAFaire = !partieGardee;
@@ -279,6 +338,8 @@ const Moteur = (() => {
       // L'horloge du jeu (Saga 0.11) : une partie d'avant Saga 0.11 part de l'heure de départ du jeu.
       Temps.utiliser(jeu);
       Temps.preparer(jeu, partie);
+      // Saga 1.5 : le numéro du jour (une partie d'avant Saga 1.5 est au jour 1).
+      if (!Number.isInteger(partie.jour) || partie.jour < 1) partie.jour = 1;
       if (nouveauJeu !== jeuSons) { audio.vider(); jeuSons = nouveauJeu; }
       for (const k of ['musique_combat', 'musique_dresseur', 'musique_victoire']) audio.precharger(reglagesAudio()[k]);
       // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
@@ -311,11 +372,33 @@ const Moteur = (() => {
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique : chemin),
         son: (chemin) => audio.fichier(chemin),
         heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
+        // Saga 1.5 : dormir (commande dormir). Tout le calcul de la nuit se fait d'un coup, sans attendre :
+        // une sauvegarde ne peut jamais tomber au milieu. Puis le fondu au noir, sur place.
+        dormir: async ({ soigner = true, heure = null } = {}) => {
+          const fini = Number.isInteger(partie.jour) && partie.jour > 0 ? partie.jour : 1;
+          if (soigner) {
+            for (const x of partie.equipe) Regles.soigner(jeu, x);
+            partie.dernierSoin = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+          }
+          const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
+          // Saga 1.6 : les récoltes repoussent (événements avec repousse_nuits).
+          if (Monde.repousser(jeu, partie)) hoteModules.rafraichir?.();
+          partie.jour = fini + 1;
+          const h = heure !== null && heure !== '' && Number.isFinite(Number(heure)) ? Number(heure) : Temps.reglages(jeu).heure_depart;
+          Temps.regler(jeu, partie, { heures: h });
+          momentsAvant = '';
+          await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }, resoudre }; });
+          reagir('fin_de_journee', { jour: fini });
+          reagir('matin', { jour: partie.jour });
+          return { lignes, jour: partie.jour };
+        },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
         scriptsJs: () => scriptsJs,
         // Saga 0.13 : le plateau de dés (pack JDR).
         des: (o) => ecranDes.montrer(o),
         signaler,
+        // Saga 1.4 : les commandes des modules du jeu reçoivent ce que le moteur leur prête.
+        hoteModules,
       });
       scriptsJs.fermer();
       reactions = [];
@@ -462,7 +545,8 @@ const Moteur = (() => {
         return true;
       }
       // Un téléporteur sous les pieds : fondu au noir, puis la carte d'arrivée.
-      const tp = Monde.teleporteur(carte, joueur.x, joueur.y);
+      // Saga 1.6.1 : ou une porte posée par un module (un bâtiment construit en jeu).
+      const tp = Monde.teleporteur(carte, joueur.x, joueur.y) || (() => { const v = Modules.teleporteur(jeu, partie, hoteModules, carte, joueur.x, joueur.y); return v ? { vers: v } : null; })();
       if (tp) {
         fondu = { phase: 'sortie', t: 0, vers: tp.vers };
         bruit('porte');
@@ -746,7 +830,9 @@ const Moteur = (() => {
       if (!joueur) return;
       const t = jeu.taille, p = pixelsJoueur();
       const lw = carte.largeur * t, lh = carte.hauteur * t;
-      const cx = p.x + Math.floor(t / 2) - Math.floor(W / 2), cy = p.y + Math.floor(t / 2) - Math.floor(H / 2);
+      // Saga 1.5 : pendant une visée, la caméra suit le rectangle visé.
+      const centre = visee ? { x: (visee.x + visee.largeur / 2) * t - t / 2, y: (visee.y + visee.hauteur / 2) * t - t / 2 } : p;
+      const cx = Math.round(centre.x) + Math.floor(t / 2) - Math.floor(W / 2), cy = Math.round(centre.y) + Math.floor(t / 2) - Math.floor(H / 2);
       cam.x = Math.round(lw <= W ? (lw - W) / 2 : Math.min(lw - W, Math.max(0, cx)));
       cam.y = Math.round(lh <= H ? (lh - H) / 2 : Math.min(lh - H, Math.max(0, cy)));
     }
@@ -928,6 +1014,30 @@ const Moteur = (() => {
       ctx.restore();
     }
 
+    // Saga 1.4 : un module dessine sur la carte (modules/MODULES.md › dessiner). Il reçoit le contexte du
+    // canvas, la caméra, et tuile(n, cx, cy) qui pose la tuile n sur la case (cx, cy) de la carte.
+    function dessinerModules(profondeur, maintenant) {
+      Modules.dessiner(jeu, partie, {
+        ctx, carte, profondeur, maintenant, taille: jeu.taille, cam: { x: cam.x, y: cam.y }, largeur: W, hauteur: H,
+        tuile: (n, cx, cy) => dessinerTuile(Number(n), Math.round(cx * jeu.taille - cam.x), Math.round(cy * jeu.taille - cam.y), maintenant),
+        // Saga 1.5 : la visée en cours (hote.viser) : { x, y, largeur, hauteur, ok }, ou null.
+        visee: visee ? { x: visee.x, y: visee.y, largeur: visee.largeur, hauteur: visee.hauteur, ok: viseeValide() } : null,
+      });
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // Le rectangle visé, vert s'il convient, rouge sinon, par-dessus tout.
+      if (visee && profondeur === 'dessus') {
+        const t = jeu.taille, ok = viseeValide();
+        const x = visee.x * t - cam.x, y = visee.y * t - cam.y, l = visee.largeur * t, h = visee.hauteur * t;
+        const clignote = 0.18 + 0.1 * Math.sin(maintenant / 160);
+        ctx.fillStyle = ok ? `rgba(80, 220, 120, ${clignote})` : `rgba(240, 70, 70, ${clignote + 0.08})`;
+        ctx.fillRect(x, y, l, h);
+        ctx.strokeStyle = ok ? 'rgba(120, 255, 150, 0.95)' : 'rgba(255, 110, 110, 0.95)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, l - 1, h - 1);
+      }
+    }
+
     function dessiner(maintenant) {
       ctx.imageSmoothingEnabled = false;
       ctx.globalCompositeOperation = 'source-over';
@@ -935,10 +1045,13 @@ const Moteur = (() => {
       ctx.fillRect(0, 0, W, H);
       // 1. les calques « dessous » et « joueur », dans l'ordre de la liste ;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') dessinerCalque(c, maintenant);
+      // (Saga 1.4) ce que les modules posent au sol, sous les personnages ;
+      dessinerModules('sol', maintenant);
       // 2. les personnages ;
       dessinerPersonnages(maintenant);
-      // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur ;
+      // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur, puis ce que les modules y mettent ;
       for (const c of carte.calques) if (c.visible && c.profondeur === 'dessus') dessinerCalque(c, maintenant);
+      dessinerModules('dessus', maintenant);
       // 4. l'ambiance : la lumière (teinte de la carte, jour et nuit, lampes), puis la météo.
       ambiance.dessinerLumiere(ctx, ciel(), sourcesLumiere());
       if (options.meteo) ambiance.dessinerMeteo(ctx);
@@ -986,7 +1099,8 @@ const Moteur = (() => {
         // Dans un menu ou un combat, chaque appui a son petit son (Saga 0.11).
         const sonMenu = (a) => bruit(DIRS.includes(a) ? 'curseur' : a === 'action' ? 'valider' : 'retour');
         for (const a of entrees.appuis()) {
-          if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
+          if (visee && !menus.ouvert) toucheVisee(a);
+          else if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
           else if (table.actif && enCombat && table.touche(a)) sonMenu(a === 'echap' ? 'retour' : a);
           else if (table.actif && !enScript && (a === 'echap' || a === 'retour')) table.touche(a);
           else if (a === 'echap') { if (enCombat) { sonMenu('retour'); ecranDuJeu().touche('retour'); } }
@@ -1092,8 +1206,11 @@ const Moteur = (() => {
       // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
       // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
-      actionsPause: () => (jeu ? Regles.actionsPause(jeu) : []),
-      agirPause: (id) => horsScript(() => Regles.agirPause({ jeu, partie, ui: scripts.ui, id }), 'Erreur dans ce menu'),
+      // Saga 1.4 : puis ceux des modules du jeu (leur id commence par « module: »).
+      actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie, hoteModules)] : []),
+      agirPause: (id) => horsScript(() => (Modules.estActionPause(id)
+        ? Modules.agirPause(jeu, partie, hoteModules, id)
+        : Regles.agirPause({ jeu, partie, ui: scripts.ui, id })), 'Erreur dans ce menu'),
       // La forme des menus du jeu (leurs noms, le Pokédex montré ou non), pour la pause et le carnet.
       formeMenus: () => (jeu ? Regles.menus(jeu) : null),
       objetUtilisable: (id) => Boolean(jeu && Regles.utilisable(jeu, jeu.donnees.objets?.objets?.find((o) => o.id === id))),
@@ -1110,6 +1227,8 @@ const Moteur = (() => {
         return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau };
       },
       position() { return joueur ? { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
+      // Saga 1.5 : la case visée en ce moment (un module demande où poser quelque chose), ou null.
+      visee: () => (visee ? { x: visee.x, y: visee.y, largeur: visee.largeur, hauteur: visee.hauteur, ok: viseeValide() } : null),
       // --- Saga 1.0 : le multijoueur (reseau/monde.js) ---
       get jeuOuvert() { return jeu; },
       get multi() { return multi; },

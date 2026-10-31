@@ -1015,7 +1015,7 @@ const App = (() => {
       { key: 'y', label: 'Rangée (y)', type: 'number', value: z.y, min: 0, max: map.height - 1 },
       { key: 'w', label: 'Largeur', type: 'number', value: z.w, min: 1, max: map.width, unit: 'cases' },
       { key: 'h', label: 'Hauteur', type: 'number', value: z.h, min: 1, max: map.height, unit: 'cases' },
-      { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
+      { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS). Constructible : là où le joueur peut poser ses bâtiments (module gestion).' },
       { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
       { key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' },
       // Tafl 0.33 (pack JDR) : une pièce pour le mode table de Saga, sous le brouillard jusqu'à ce que le MJ la révèle.
@@ -1341,7 +1341,7 @@ const App = (() => {
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec des tuiles d\'exemple (herbe, hautes herbes, chemin, eau, fleur) et une petite carte', type: 'checkbox', value: true },
         // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
-        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez']] }] : []),
+        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs']] }] : []),
         ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
@@ -1350,6 +1350,7 @@ const App = (() => {
     const doc = Doc.create({ name: v.name.trim() || (game ? 'Mon jeu' : 'mon-jeu'), tileSize, palette: paletteById(v.palette).couleurs, mapWidth: clamp(Math.round(v.mapWidth), 1, 256), mapHeight: clamp(Math.round(v.mapHeight), 1, 256), mapName: (game && v.mapName.trim()) || 'Carte 1' });
     if (game && v.modele === 'jdr') ExempleJdr.remplir(doc);
     else if (game && v.modele === 'arene') ExempleArene.remplir(doc);
+    else if (game && v.modele === 'domaine') ExempleDomaine.remplir(doc);
     else if (v.samples) Samples.fill(doc);
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut

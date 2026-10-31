@@ -32,7 +32,7 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
 | Tab | Le **carnet** : équipe, badges, sac (avec « Utiliser »), argent, quêtes. |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
-| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
+| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, options, changer de jeu ; « Outils du créateur… » regroupe recharger, recommencer, dossier du jeu et exporter (Saga 1.6.1). |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
@@ -108,14 +108,6 @@ Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de dépa
 - **Le PC** (nouvelle commande `ecran_boites` de Tafl 0.21, à mettre sur l'ordinateur du centre) : des boîtes de 30 places à gauche, l'équipe à droite. Action prend une créature, Action la pose (sur une autre, elles s'échangent) ; ou, sur une créature : déposer, prendre dans l'équipe, résumé, surnom, relâcher. En haut, gauche/droite change de boîte (une nouvelle boîte s'ajoute après la dernière qui n'est pas vide) et Action renomme la boîte. L'équipe garde toujours au moins une créature en état de se battre.
 - Une créature reçue quand l'équipe est pleine va dans la première place libre du PC, et le jeu dit dans quelle boîte. Une sauvegarde de Saga 0.5 (une seule « boîte » sans places) est rangée dans les boîtes toute seule, et son Pokédex est rempli avec les créatures qu'elle a.
 - Ce qu'une fiche montre vient du pack de règles (`Regles.fiche`, `Regles.dex`, `Regles.ficheEspece`, dans `regles/pokemon/fiches.js`) ; l'équipe, les boîtes et le Pokédex eux-mêmes ne dépendent d'aucune règle (`collection.js`, `ecrans.js`).
-
-## Ce que fait Saga 1.3 : les objets tenus en combat, l'arène au détail
-
-- **Les objets tenus agissent enfin en combat.** Un objet peut décrire ce qu'il fait quand une créature le tient (champ `tenu` de Tafl 1.1 : dégâts, type renforcé, statistique, PV par tour, PV rendus en blessant, baie, guérison d'un statut, survie à un coup fatal). Les objets officiels importés les plus connus marchent sans rien régler : Orbe Vie (+30 % de dégâts, 10 % de PV en moins à chaque attaque), Bandeau Muscle, Lunettes Sages, Bandeau / Lunettes / Mouchoir Choix (+50 %, mais une seule attaque jusqu'au changement), Veste de Combat, Évoluroc, Restes, Grelot Coque, Ceinture Force, Baies Sitrus, Oran, Prine (et les baies de statut), et les dix-huit objets de type (Charbon, Eau Mystique…). Une baie mangée disparaît.
-- **Des pastilles au-dessus de la créature** disent ce qui est en cours : « Atq +2 », « Déf −1 », « Confus », « Apeuré », « Choix » et l'objet tenu. Vert quand c'est bon pour elle, rouge sinon. L'invité d'un duel les voit aussi, de son côté.
-- **L'arène au détail** : la fiche de chaque créature choisie a trois onglets, Attaques (avec recherche), Objet tenu (une recherche, plus une liste de 800 objets) et Détails : nature, talent, IV et EV aux curseurs, avec « Tout au max », « Tout à zéro » et le total des EV (510 au plus).
-- **Les capacités œufs** comptent dans les attaques qu'on peut choisir dans l'arène (Tafl 1.1 les importe depuis PokeAPI, champ `oeufs` de chaque espèce).
-- Côté règles : `Regles` gagne `detailsPossibles` (facultatif) et l'écran de combat `etats(cote, liste)`.
 
 ## Ce que fait Saga 0.7 : des combats plus riches, des boutiques à débloquer, les obstacles
 
@@ -198,6 +190,37 @@ navigateur (PC, tablette, téléphone), entrent le code et leur prénom : **rien
 
 Tout passe par des messages simples (rejoindre, vue, action) : un relais sur un serveur pourra plus tard
 remplacer le réseau local pour jouer à distance.
+
+## Ce que fait Saga 1.4 : les modules de jeu
+
+Un jeu a toujours **un pack de règles** (Pokémon, JRPG ou JDR : comment on se bat et comment on progresse). Il peut maintenant activer en plus des **modules** : chacun ajoute au monde une chose que le jeu sait faire en plus, quel que soit le pack, et un jeu peut en avoir plusieurs (« JRPG + gestion », « Pokémon + gestion »…).
+
+- Le jeu choisit ses modules dans Tafl 1.2 (Données › Réglages › Règles du jeu › Modules), c'est-à-dire `reglages.modules`.
+- Un module garde son état dans la partie (`partie.modules`), sauvegardé avec elle. Il peut dessiner sur la carte, bloquer des cases (un bâtiment posé en jeu), ajouter des commandes d'événement, des conditions de page, des choix au menu de pause, et annoncer ses moments aux scripts JS (`quand(...)`), qui le lisent dans `saga.modules`.
+- Le contrat complet, ce qu'un module a le droit de faire et un exemple : `renderer/moteur/modules/MODULES.md`. La description des modules pour Tafl : `commun/modules.js`.
+
+Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
+
+## Ce que fait Saga 1.5 : les journées et le module « gestion »
+
+- **Dormir** (pour tous les jeux) : la commande `dormir` termine le jour. Les modules font leur calcul de la nuit, le jour passe au suivant (`partie.jour`), fondu au noir, réveil à l'heure dite et rapport du matin. La condition `jour` et `saga.jour` lisent le numéro du jour ; les scripts reçoivent les moments `fin_de_journee` et `matin`. Les modules ont une fonction de plus dans leur contrat, `finDeJournee` (MODULES.md).
+- **Le module gestion** (`renderer/moteur/modules/gestion/`) : un stock commun et des bâtiments définis par les données du jeu (coût, nuits de chantier, production et consommation par nuit). La nuit se calcule une seule fois par jour, en fonctions pures (`calcul.js`, testé sans écran). Ses commandes : construire (branches réussi / raté), ajouter ou retirer du stock, déposer le sac au stock, ouvrir l'écran du domaine ; ses conditions : un bâtiment construit, un chantier en cours, assez d'une ressource ; l'écran du domaine dans le carnet (Tab) ; `saga.modules.gestion` pour les scripts.
+- **Le placement libre** : le joueur pose ses bâtiments où il veut dans une zone « constructible » de la carte (carnet › Construire, ou la commande « Placer un bâtiment ») : il les déplace avec les flèches, vert s'ils tiennent, rouge sinon, et les pose avec la touche d'action. Le bâtiment est dessiné avec son tampon de Tafl (le toit passe devant le joueur), son chantier en transparence ou avec son propre tampon, et son emprise bloque le passage sauf la porte. Le contrat des modules prête pour ça la carte, le joueur, `libre(x, y)` et `viser(…)` (MODULES.md). Un bâtiment peut aussi rester à un emplacement fixe (un événement avec la condition « Un bâtiment est construit »).
+
+## Ce que fait Saga 1.6 : les habitants et les récoltes qui repoussent
+
+- **Ce qui repousse** (pour tous les jeux) : un événement avec `repousse_nuits` (un buisson de baies, un arbre fruitier, un arbre coupé, un coffre qui se remplit) revient à sa première page après ce nombre de nuits : son « déjà fait » s'éteint tout seul quand le joueur dort.
+- **Les habitants** (module gestion) : ils logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas` dans les réglages du module) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent la nuit quand il reste un logement et que personne n'a eu faim ; s'il manque à manger, ils travaillent quand même (Saga 1.6.1 : avant, une ferme sans blé restait sans ouvriers pour toujours), et chaque jeu choisit ce que fait la faim : rien, bloquer les arrivées (par défaut), ou en plus des départs après quelques nuits. La commande `gestion_habitants` en amène ou en fait partir (une histoire), la condition `gestion_habitants` compte, le moment `gestion_arrivee` prévient les scripts, et l'écran du domaine montre les habitants et le travail. Ils ne se promènent pas encore sur la carte.
+- **Saga 1.6.1** : un bâtiment posé ne bloque plus tout son rectangle. Son passage se règle case par case (une ombre ou le toit laissent passer), et sa porte peut mener à un intérieur ; la commande `gestion_sortir` en ressort. Le contrat des modules gagne `teleporteur(o, x, y)`. Chaque bâtiment posé a sa propre copie de son intérieur (la carte `intérieur@b3` : mêmes calques, mais ce qu'on y fait ne vaut que pour elle), sauf si son type le partage (`interieur: "partage"`). Les copies de carte (`base@copie`) sont dans le cœur de Saga, pour tout module. Le menu de pause s'allège : les choix du pack et des modules (le domaine, construire, les jets de dés) deviennent des boutons du carnet (Tab), et les outils du créateur ont leur page.
+- **Saga 1.6.2** : le carnet se mène au clavier (et à la manette). Les choix du jeu (le domaine, construire) ont leur rangée sous l'en-tête et reçoivent le focus à l'ouverture ; les flèches passent d'un bouton à l'autre, Action appuie. Pendant la visée d'un bâtiment, le reste de la carte s'assombrit et les zones constructibles ressortent, bordées de pointillés.
+
+## Ce que fait Saga 1.7 : les objets tenus en combat, l'arène au détail
+
+- **Les objets tenus agissent enfin en combat.** Un objet peut décrire ce qu'il fait quand une créature le tient (champ `tenu` de Tafl 1.5 : dégâts, type renforcé, statistique, PV par tour, PV rendus en blessant, baie, guérison d'un statut, survie à un coup fatal). Les objets officiels importés les plus connus marchent sans rien régler : Orbe Vie (+30 % de dégâts, 10 % de PV en moins à chaque attaque), Bandeau Muscle, Lunettes Sages, Bandeau / Lunettes / Mouchoir Choix (+50 %, mais une seule attaque jusqu'au changement), Veste de Combat, Évoluroc, Restes, Grelot Coque, Ceinture Force, Baies Sitrus, Oran, Prine (et les baies de statut), et les dix-huit objets de type (Charbon, Eau Mystique…). Une baie mangée disparaît.
+- **Des pastilles au-dessus de la créature** disent ce qui est en cours : « Atq +2 », « Déf −1 », « Confus », « Apeuré », « Choix » et l'objet tenu. Vert quand c'est bon pour elle, rouge sinon. L'invité d'un duel les voit aussi, de son côté.
+- **L'arène au détail** : la fiche de chaque créature choisie a trois onglets, Attaques (avec recherche), Objet tenu (une recherche, plus une liste de 800 objets) et Détails : nature, talent, IV et EV aux curseurs, avec « Tout au max », « Tout à zéro » et le total des EV (510 au plus).
+- **Les capacités œufs** comptent dans les attaques qu'on peut choisir dans l'arène (Tafl 1.5 les importe depuis PokeAPI, champ `oeufs` de chaque espèce).
+- Côté règles : `Regles` gagne `detailsPossibles` (facultatif) et l'écran de combat `etats(cote, liste)`.
 
 ## La suite
 

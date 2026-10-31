@@ -139,7 +139,7 @@ const EquipeLibre = (() => {
             el('div', { className: 'libre-tete' }, el('h2', { textContent: `${e?.nom || m.id}  N.${niveau}` }), compte),
             aideAttaques, rechercheA, attaques);
 
-          // --- L'objet tenu : une recherche, pas une liste déroulante de 800 objets (Saga 1.3) ---
+          // --- L'objet tenu : une recherche, pas une liste déroulante de 800 objets (Saga 1.7) ---
           const objetsBloc = el('div', { className: 'libre-objets', hidden: true });
           const rechercheO = el('input', { className: 'libre-recherche', type: 'search', placeholder: 'Chercher un objet…', spellcheck: false, hidden: true });
           const dessinerObjets = () => {
@@ -161,7 +161,7 @@ const EquipeLibre = (() => {
 
           rechercheO.oninput = dessinerObjets;
 
-          // --- Les détails : nature, talent, IV et EV (Saga 1.3) ---
+          // --- Les détails : nature, talent, IV et EV (Saga 1.7) ---
           const details = Regles.detailsPossibles(jeu, m.id);
           const detailsBloc = el('div', { className: 'libre-details', hidden: true });
           if (details) {

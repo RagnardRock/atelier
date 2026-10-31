@@ -13,10 +13,10 @@ name: Atelier (installeur Windows)
 
 on:
   pull_request:
-    paths: ['hub/**', 'commun/github.js', 'commun/copier.js', '.github/workflows/atelier.yml']
+    paths: ['hub/**', 'commun/github.js', 'commun/ollama.js', 'commun/loki-local.js', 'commun/copier.js', '.github/workflows/atelier.yml']
   push:
     branches: [main]
-    paths: ['hub/**', 'commun/github.js', 'commun/copier.js', '.github/workflows/atelier.yml']
+    paths: ['hub/**', 'commun/github.js', 'commun/ollama.js', 'commun/loki-local.js', 'commun/copier.js', '.github/workflows/atelier.yml']
     tags: ['atelier-v*']
   workflow_dispatch:
 

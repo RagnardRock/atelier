@@ -15,7 +15,9 @@
 const Donnees = (() => {
   // Tafl 0.32 : les sortes du pack JDR viennent de donnees-jdr.js (DonneesJdr), lu juste avant.
   const J = typeof DonneesJdr !== 'undefined' ? DonneesJdr : null;
-  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), 'reglages'];
+  // Tafl 1.3 : les sortes du module gestion viennent de donnees-gestion.js (DonneesGestion), lu avant aussi.
+  const G = typeof DonneesGestion !== 'undefined' ? DonneesGestion : null;
+  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), ...(G ? G.SORTES : []), 'reglages'];
   const STATS = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Attaque Spé.'], ['def_spe', 'Défense Spé.'], ['vitesse', 'Vitesse']];
   const STATS_COMBAT = [...STATS.slice(1), ['precision', 'Précision'], ['esquive', 'Esquive']];
   // Les 25 natures officielles : [identifiant, nom, stat augmentée de 10 %, stat baissée de 10 %].
@@ -54,7 +56,7 @@ const Donnees = (() => {
     ['stase', 'Empêche d\'évoluer, tenu (Pierre Stase)', []],
     ['amitie', 'Fait monter l\'amitié', ['valeur']],
   ];
-  // Tafl 1.1 : ce qu'un objet fait quand une créature le TIENT (Saga le joue en combat).
+  // Tafl 1.5 : ce qu'un objet fait quand une créature le TIENT (Saga le joue en combat).
   const TENUS_OBJET = [
     ['', 'Rien de spécial en combat', []],
     ['degats', 'Renforce ses attaques', ['valeur', 'categorie', 'recul']],
@@ -180,7 +182,7 @@ const Donnees = (() => {
           ...(effet.nature ? { nature: pick(effet.nature, NATURES, 'hardi') } : {}),
           ...(J?.des(effet.des) ? { des: J.des(effet.des) } : {}), // pack JDR : une potion soigne aux dés (2d4+2)
         },
-        // Tafl 1.1 : ce qu'il fait quand une créature le tient, en combat.
+        // Tafl 1.5 : ce qu'il fait quand une créature le tient, en combat.
         ...(TENUS_OBJET.some(([k]) => k && k === o?.tenu?.type) ? { tenu: (() => {
           const t = o.tenu, champs = TENUS_OBJET.find(([k]) => k === t.type)[2];
           return {
@@ -279,6 +281,7 @@ const Donnees = (() => {
       ...(J && g?.visible_par && g.visible_par !== 'tous' ? { visible_par: J.normVisible(g.visible_par) } : {}),
     }),
     ...(J ? J.NORMES : {}),
+    ...(G ? G.NORMES : {}),
   };
   const reglagesVides = () => ({
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
@@ -286,6 +289,8 @@ const Donnees = (() => {
     ajustement: 'badges', ecart: 0, ajustement_sauvages: 'aucun', ecart_sauvages: -2, evolution_dresseurs: false, evolution_sauvages: false, seuil_amitie: 220, chance_chromatique: 4096,
     interface: { theme: 'verre', accent: '', menus: menusVides() },
     regles: 'pokemon', badges: [],
+    // Tafl 1.2 : les modules du jeu (commun/modules.js), et leurs réglages par id de module.
+    modules: [], modules_reglages: {},
     niveau_max: 99, courbe_xp: 'normale',
     temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
     // Tafl 1.0 (Saga 1.0) : le multijoueur (jouer à plusieurs sur le réseau de la maison).
@@ -387,6 +392,11 @@ const Donnees = (() => {
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
       regles,
+      // Tafl 1.2 : les modules activés (un module que ce Tafl ne connaît pas est gardé : Saga le dira), et
+      // les réglages de chacun, gardés tels quels (c'est le module qui les lit et les borne).
+      modules: typeof ModulesJeu !== 'undefined' ? ModulesJeu.actifs(r) : [],
+      modules_reglages: Object.fromEntries(Object.entries(r.modules_reglages && typeof r.modules_reglages === 'object' && !Array.isArray(r.modules_reglages) ? r.modules_reglages : {})
+        .filter(([k, v]) => /^[a-z][a-z0-9-]{0,39}$/.test(k) && v && typeof v === 'object' && !Array.isArray(v)).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))])),
       niveau_max: int(r.niveau_max, 99, 1, 999),
       courbe_xp: pick(r.courbe_xp, COURBES_XP, 'normale'),
       temps: normTemps(r.temps),
@@ -405,7 +415,7 @@ const Donnees = (() => {
       })(),
     };
   }
-  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries((J ? J.SORTES : []).map((k) => [k, []])), reglages: reglagesVides() });
+  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries([...(J ? J.SORTES : []), ...(G ? G.SORTES : [])].map((k) => [k, []])), reglages: reglagesVides() });
   // Normalise toutes les sortes de Tafl 0.8 (les identifiants deviennent uniques dans leur sorte).
   function normer(d) {
     const out = {};
@@ -482,6 +492,7 @@ const Donnees = (() => {
     if (sorte === 'type') for (const o of d.objets) if (o.equipement?.element === id) out.add(`Objet ${o.nom} (élément de l'arme)`);
     if (sorte === 'classe') for (const o of d.objets) if (o.equipement?.classes.includes(id)) out.add(`Objet ${o.nom}`);
     J?.utilisations(doc, sorte, id, out);
+    G?.utilisations(doc, sorte, id, out);
     return [...out];
   }
 
@@ -680,6 +691,7 @@ const Donnees = (() => {
     datalist('tafl-monstres', (data.monstres || []).map((a) => [a.id, a.nom]));
     datalist('tafl-groupes', (data.groupes || []).map((a) => [a.id, a.nom]));
     J?.listes(data);
+    G?.listes(data);
   }
   const choixTypes = (work, vide = 'Aucun') => [['', vide], ...work.types.map((t) => [t.id, t.nom])];
   const COURT = { attaque: 'Att', defense: 'Déf', att_spe: 'Att.Spé', def_spe: 'Déf.Spé', vitesse: 'Vit' };
@@ -990,7 +1002,7 @@ const Donnees = (() => {
     // Les faiblesses calculées depuis la table des types.
     const def = work.types.map((a) => [a, c.types.reduce((m, t) => m * efficacite(a, t), 1)]).filter(([, m]) => m !== 1);
     const faiblesses = el('div', { className: 'chips' }, def.length ? def.sort((x, y) => y[1] - x[1]).map(([a, m]) => el('span', { className: 'chip faiblesse' }, [pastille(a.couleur, a.nom), el('span', { textContent: `×${m === 0.5 ? '½' : m === 0.25 ? '¼' : m}` })])) : [el('span', { className: 'chips-empty', textContent: work.types.length ? 'Aucune faiblesse ni résistance.' : 'Ajoute des types (onglet Types, ou l\'import officiel) pour voir ses faiblesses.' })]);
-    // Les listes d'attaques en pastilles : par CT, et (Tafl 1.1) les capacités œufs.
+    // Les listes d'attaques en pastilles : par CT, et (Tafl 1.5) les capacités œufs.
     const chipsAttaques = (cle, invite) => {
       const boite = el('div', { className: 'chips' });
       const maj = () => {
@@ -1104,7 +1116,7 @@ const Donnees = (() => {
     };
     majEffet();
 
-    // Tafl 1.1 : ce qu'il fait quand une créature le tient (l'Orbe Vie, les Restes, une baie…).
+    // Tafl 1.5 : ce qu'il fait quand une créature le tient (l'Orbe Vie, les Restes, une baie…).
     const tenu = el('div', { className: 'field-grid' });
     const majTenu = () => {
       const t = o.tenu || { type: '' };
@@ -1521,7 +1533,34 @@ const Donnees = (() => {
       );
     }
     if (r.regles === 'jdr' && J) out.push(...J.formRegles(r, ctx));
+    out.push(...formModules(r, ctx));
     out.push(...formReglesMaison(r, ctx));
+    return out;
+  }
+  // Tafl 1.2 : les modules du jeu (commun/modules.js). Le pack décide des combats ; un module ajoute au
+  // monde une chose que le jeu sait faire en plus, quel que soit le pack. On peut en cocher plusieurs.
+  function formModules(r, ctx) {
+    const cat = typeof ModulesJeu !== 'undefined' ? ModulesJeu.CATALOGUE : {};
+    const ids = Object.keys(cat);
+    if (!Array.isArray(r.modules)) r.modules = [];
+    const inconnus = r.modules.filter((id) => !cat[id]);
+    const out = [
+      section('Modules'),
+      info('Le pack de règles décide des combats et de la progression. Un module ajoute au jeu une chose qu\'il sait faire en plus (gérer un domaine…), quel que soit le pack. Un jeu peut en activer plusieurs.'),
+    ];
+    if (!ids.length) out.push(info('Aucun module n\'est encore disponible dans cette version de Tafl.'));
+    for (const id of ids) {
+      const c = el('input', { type: 'checkbox', checked: r.modules.includes(id) });
+      c.onchange = () => {
+        r.modules = c.checked ? [...new Set([...r.modules, id])] : r.modules.filter((x) => x !== id);
+        ctx.render?.();
+      };
+      out.push(champ(cat[id].nom || id, c));
+      if (cat[id].description) out.push(info(cat[id].description));
+      // Tafl 1.3 : les réglages d'un module activé, juste sous sa case.
+      if (id === 'gestion' && G && r.modules.includes(id)) out.push(...G.formReglages(r, ctx));
+    }
+    if (inconnus.length) out.push(info(`Aussi activé, mais inconnu de ce Tafl (gardé tel quel) : ${inconnus.join(', ')}.`));
     return out;
   }
   // Le JDR s'arrête au niveau 20 (Saga borne niveau_max) : on montre ce que Saga utilisera, sans toucher au 99 des autres packs.
@@ -1820,7 +1859,7 @@ const Donnees = (() => {
   // Une ligne de texte par élément (pour Claude).
   function resumer(doc, sorte, o) {
     const d = doc.data;
-    const jdr = J?.resumer(doc, sorte, o);
+    const jdr = J?.resumer(doc, sorte, o) || G?.resumer(doc, sorte, o);
     if (jdr) return jdr;
     if (sorte === 'types') return `${o.id} « ${o.nom} » ×2 contre [${o.efficace.join(', ')}], ×½ [${o.peu_efficace.join(', ')}], ×0 [${o.sans_effet.join(', ')}]`;
     if (sorte === 'talents') return `${o.id} « ${o.nom} » : ${o.description}`;
@@ -1844,6 +1883,7 @@ const Donnees = (() => {
     ONGLETS.splice(ONGLETS.findIndex((o) => o.key === 'groupes'), 0, ...J.ONGLETS.filter((o) => o.groupe === 'Combat'));
     ONGLETS.unshift(...J.ONGLETS.filter((o) => o.groupe !== 'Combat'));
   }
+  if (G) ONGLETS.push(...G.ONGLETS); // le groupe Gestion, en bas
   ONGLETS.find((o) => o.key === 'groupes').packs = ['jrpg', 'jdr'];
   ONGLETS.find((o) => o.key === 'groupes').labels = { jdr: 'Rencontres' };
   for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);

@@ -149,9 +149,24 @@ quand('apres_combat', async (saga, infos) => {
 | `apres_combat` | après un combat | `issue` (`victoire`, `defaite`, `fuite`, `capture`), `sorte` (`sauvage`, `dresseur`, `groupe`) |
 | `moment` | le moment de la journée change (horloge du jeu) | `moment` (`matin`, `jour`, `soir`, `nuit`) |
 | `pas` | le joueur fait un pas (reste court !) | `x`, `y` |
+| `fin_de_journee` | (Saga 1.5) le joueur a dormi : le jour est fini (après le calcul des modules) | `jour` (celui qui vient de finir) |
+| `matin` | (Saga 1.5) le joueur se réveille au jour suivant | `jour` (le nouveau) |
 
 Les réactions se jouent quand le joueur est libre (pas pendant un dialogue), dans l'ordre des
 fichiers. Plusieurs scripts peuvent écouter le même moment.
+
+Les **modules** du jeu (Réglages › Règles du jeu › Modules, Saga 1.4) peuvent annoncer leurs propres
+moments : ils sont listés dans la documentation de chaque module, et le vérificateur de Tafl les
+connaît quand le module est actif. Le module **gestion** (Saga 1.5) annonce `gestion_termine`
+(`infos.batiment` : le type du bâtiment dont le chantier vient de finir, pendant la nuit), et depuis Saga 1.6 `gestion_arrivee` (`infos.nombre` : combien d'habitants viennent d'arriver, `infos.habitants` : combien vivent maintenant au domaine), et depuis Saga 1.6.1 `gestion_depart` (un habitant part après trop de nuits de faim, si le jeu l'a choisi ; mêmes `infos`).
+
+```js
+// Une lettre arrive deux jours après la décision du conseil.
+quand('matin', async (saga, infos) => {
+  const decide = saga.variable('jour_decision');
+  if (decide && infos.jour === decide + 2) await saga.dire('Un messager t\'attend à la porte.');
+});
+```
 
 ## L'objet `saga`
 
@@ -173,6 +188,8 @@ Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse
 | `saga.etatQuete(id)` | `pas_commencee`, `en_cours` ou `finie` |
 | `saga.fiche(i)` | (pack JDR) la fiche du membre `i` du groupe (0 = le premier), ou `null` : `nom`, `personnage`, `joueur`, `origine`, `classe`, `niveau`, `xp`, `pv`, `pvMax`, `pv_temp`, `ca`, `maitrise`, `vitesse`, `caracteristiques`, `modificateurs`, `sauvegardes` et `competences` (les bonus, par id), `maitrises`, `perception_passive`, `etats`, `sorts`, `dd_sorts`, `mort` |
 | `saga.fiches` | (pack JDR) toutes les fiches du groupe |
+| `saga.jour` | (Saga 1.5) le numéro du jour : 1 au début, +1 à chaque commande « Dormir » |
+| `saga.modules` | (Saga 1.4) ce que les **modules** du jeu donnent à lire, par id de module (voir la documentation de chaque module). `{}` sans module. Le module **gestion** (Saga 1.5) : `saga.modules.gestion.stock` (`{ bois: 12 }`), `.capacite` (0 = sans limite), `.batiments` (`[{ id, type, etat: 'chantier' \| 'fini', reste }]`) ; Saga 1.6 : `.habitants`, `.logement` (la place dans les bâtiments finis) et `.ouvriers` (`{ demandes, libres }`). Pour agir sur lui, ses commandes : `await saga.commande({ type: 'gestion_stock', action: 'ajouter', ressource: 'bois', nombre: 5 })` (FORMAT.md › Le module gestion). |
 
 ### Parler au joueur
 

@@ -124,6 +124,28 @@ const Jeu = (() => {
     return out;
   }
 
+  // Saga 1.6.1 : les copies de carte. « base@copie » est une copie de la carte « base » : mêmes calques,
+  // mêmes événements, mais tout ce que la partie retient d'elle (déjà fait, objets ramassés, ce qui repousse)
+  // lui est propre, puisque la partie le range sous son id. Un module s'en sert pour donner à chaque bâtiment
+  // posé son propre intérieur. La copie naît à la première demande ; values() et la boucle ne rendent que
+  // les vraies cartes du jeu.
+  class Cartes extends Map {
+    constructor(...a) { super(...a); this.copies = new Map(); }
+    get(id) {
+      const vraie = super.get(id);
+      if (vraie || typeof id !== 'string') return vraie;
+      if (this.copies.has(id)) return this.copies.get(id);
+      const m = id.match(/^(.+)@([A-Za-z0-9_-]{1,40})$/);
+      const base = m && super.get(m[1]);
+      if (!base) return undefined;
+      const copie = Object.assign(Object.create(Object.getPrototypeOf(base)), base, { id, copieDe: base.id });
+      this.copies.set(id, copie);
+      return copie;
+    }
+    has(id) { return Boolean(this.get(id)); }
+  }
+  const baseDe = (id) => String(id || '').replace(/@[A-Za-z0-9_-]{1,40}$/, '');
+
   function preparerCarte(data, entree, taille, tuiles) {
     verifierVersion(data, `La carte ${entree.nom || entree.id}`);
     const largeur = Math.max(1, nombre(data.largeur, 1)), hauteur = Math.max(1, nombre(data.hauteur, 1));
@@ -202,7 +224,7 @@ const Jeu = (() => {
     const taille = Math.max(1, nombre(jeu.tailleTuiles, nombre(tuilesData.tileSize, 16)));
     const { planche, tuiles } = await chargerTuiles(tuilesData, taille);
 
-    const cartes = new Map();
+    const cartes = new Cartes();
     const problemes = [];
     for (const entree of Array.isArray(jeu.cartes) ? jeu.cartes : []) {
       const texte = textes.cartes[String(entree.fichier || '').replace(/\\/g, '/')];
@@ -258,6 +280,12 @@ const Jeu = (() => {
       titre: jeu.titre || 'Mon jeu',
       taille,
       planche, tuiles,
+      // Saga 1.5 : les tampons de Tafl (objets de plusieurs tuiles), par nom. Les cartes n'en ont pas
+      // besoin (ils y sont déjà des tuiles) ; un module s'en sert pour dessiner ce qu'il pose en jeu.
+      tampons: new Map((Array.isArray(tuilesData.tampons) ? tuilesData.tampons : []).filter((t) => t && typeof t.nom === 'string' && Array.isArray(t.cases)).map((t) => {
+        const largeur = Math.max(1, Math.round(nombre(t.largeur, 1))), hauteur = Math.max(1, Math.round(nombre(t.hauteur, 1)));
+        return [t.nom, { nom: t.nom, largeur, hauteur, dessus: Math.min(hauteur, Math.max(0, Math.round(nombre(t.dessus, 0)))), cases: Array.from({ length: largeur * hauteur }, (_, i) => Math.round(nombre(t.cases[i], -1))) }];
+      })),
       cartes,
       donnees,
       personnages,
@@ -268,5 +296,5 @@ const Jeu = (() => {
     };
   }
 
-  return { charger, ErreurJeu, PASSAGE, DIRECTIONS, REBORDS, lumiere, son };
+  return { charger, ErreurJeu, baseDe, PASSAGE, DIRECTIONS, REBORDS, lumiere, son };
 })();

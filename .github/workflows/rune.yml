@@ -10,10 +10,10 @@ name: Rune (installeur Windows)
 
 on:
   pull_request:
-    paths: ['ide/**', '.github/workflows/rune.yml']
+    paths: ['ide/**', 'commun/ollama.js', 'commun/loki-local.js', 'commun/mcp-commun.js', 'commun/copier.js', '.github/workflows/rune.yml']
   push:
     branches: [main]
-    paths: ['ide/**', '.github/workflows/rune.yml']
+    paths: ['ide/**', 'commun/ollama.js', 'commun/loki-local.js', 'commun/mcp-commun.js', 'commun/copier.js', '.github/workflows/rune.yml']
     tags: ['rune-v*']
   workflow_dispatch:
 

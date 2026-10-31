@@ -169,6 +169,8 @@ async function exporterWeb({ textes, titre, sortie, moteur, version, configDefau
   // Le bac à sable des scripts JS (Saga 0.12), commun à Tafl et Saga : index.html le cherche dans ../commun/.
   await fs.mkdir(path.join(dossier, 'commun'), { recursive: true });
   await fs.writeFile(path.join(dossier, 'commun', 'bac-a-sable.js'), await lireCommun(moteur, 'bac-a-sable.js'));
+  // Le catalogue des modules de jeu (Saga 1.4), commun lui aussi.
+  await fs.writeFile(path.join(dossier, 'commun', 'modules.js'), await lireCommun(moteur, 'modules.js'));
   // Le jeu : les textes que lit le moteur, sans le chemin du dossier de Ragna.
   const jeu = { titre, cle: nom.toLowerCase(), saga: version, config: configDefaut, textes: { ...textes, dossier: nom } };
   await fs.writeFile(path.join(dossier, 'jeu.js'), `// ${titre} : le jeu, exporté par Saga ${version}.\nwindow.SAGA_JEU = ${JSON.stringify(jeu)};\n`, 'utf8');
@@ -222,7 +224,7 @@ async function exporterExe({ textes, titre, sortie, moteur, version, runtime, ex
   }
   // commun/ manque dans le clone si npm install n'a pas tourné : on prend celui d'atelier/.
   if (!(await fs.stat(path.join(app, 'commun')).catch(() => null))) {
-    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => r === 'github.js' || r === 'bac-a-sable.js');
+    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js'].includes(r));
   }
   const pkg = JSON.parse(await fs.readFile(path.join(moteur, 'package.json'), 'utf8'));
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({

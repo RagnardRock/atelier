@@ -96,7 +96,7 @@ const Regles = (() => {
         if ((a.niveau || 0) <= niveau && !ids.includes(a.attaque)) ids.push(a.attaque);
       }
       for (const x of e.ct || []) if (!ids.includes(x)) ids.push(x);
-      // Saga 1.3 : les capacités œufs comptent aussi pour l'arène (on choisit librement).
+      // Saga 1.7 : les capacités œufs comptent aussi pour l'arène (on choisit librement).
       for (const x of e.oeufs || []) if (!ids.includes(x)) ids.push(x);
       return ids.map((x) => Creatures.trouver(jeu, 'attaques', x)).filter(Boolean).map((a) => {
         const t = Creatures.trouver(jeu, 'types', a.type);
@@ -106,7 +106,7 @@ const Regles = (() => {
     attaquesDefaut: (jeu, id, niveau) => Creatures.attaquesAuNiveau(jeu, Creatures.trouver(jeu, 'creatures', id), niveau),
     // Les objets qu'un membre peut tenir (menu Équipe › Faire tenir, et l'écran de l'arène).
     objetsTenables: (jeu) => (jeu.donnees.objets?.objets || []).filter((o) => o && o.id).map((o) => ({ id: o.id, nom: o.nom || o.id, description: o.description || '', icone: o.icone || '' })),
-    // Saga 1.3 : ce qu'on peut régler en détail sur un membre choisi (l'arène), avec ses limites.
+    // Saga 1.7 : ce qu'on peut régler en détail sur un membre choisi (l'arène), avec ses limites.
     detailsPossibles(jeu, id) {
       const e = Creatures.trouver(jeu, 'creatures', id);
       if (!e) return null;
