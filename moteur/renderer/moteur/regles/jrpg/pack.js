@@ -8,6 +8,8 @@ const Jrpg = (() => {
   const pack = {
     nom: 'jrpg',
     ecran: 'groupe',
+    // Saga 1.11 : les bonus du groupe touchent ces statistiques en combat (pas les PV ni les PM).
+    statsBonus: { force: 'Force', magie: 'Magie', defense: 'Défense', esprit: 'Esprit', agilite: 'Agilité', chance: 'Chance' },
     capacites: { capture: false, relacher: false, ev: false, vendre: false, groupe: true },
     menus: {
       equipe: 'Groupe', dex: 'Bestiaire', dex_visible: true, pc: 'Réserve', boite: 'Réserve',

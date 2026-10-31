@@ -55,6 +55,9 @@
 //   attaquesPossibles(jeu, id, niveau) → [{ id, nom, type, couleur, categorie, puissance, pp }]
 //   attaquesDefaut(jeu, id, niveau) → [id] : les quatre cochées au départ
 //   objetsTenables(jeu)             → [{ id, nom, description, icone }] (capacité « tenir »)
+// Saga 1.11 (les bonus du groupe, moteur/bonus.js), facultatif :
+//   statsBonus                      { stat: nom } : les statistiques de combat que le pack multiplie par
+//                                   Bonus.mult(partie, stat) pour le groupe du joueur
 
 const Regles = (() => {
   // Ce que les jeux d'un pack savent faire : le moteur et Tafl cachent le reste.
@@ -73,6 +76,8 @@ const Regles = (() => {
   //   { equipe, dex, dex_visible, pc, boite, places, colonnes, forme_boites: 'grille' | 'liste',
   //     pages: [id], toutes_pages: [[id, nom]], dex_pris, dex_pris_un, dex_vide }
   const pokemon = {
+    // Saga 1.11 : les bonus du groupe touchent ces statistiques en combat.
+    statsBonus: { attaque: 'Attaque', defense: 'Défense', att_spe: 'Att. Spé.', def_spe: 'Déf. Spé.', vitesse: 'Vitesse' },
     nom: 'pokemon',
     ecran: 'duel',
     capacites: { capture: true, relacher: true, ev: true, vendre: true, groupe: false, tenir: true },
@@ -231,5 +236,8 @@ const Regles = (() => {
     actionsPause: (jeu) => pack(jeu).actionsPause?.(jeu) || [],
     agirPause: async (o) => { await pack(o.jeu).agirPause?.(o); },
     pourScript: (jeu, partie) => pack(jeu).pourScript?.(jeu, partie) || [],
+    // Saga 1.11 : les statistiques que les bonus du groupe (moteur/bonus.js) peuvent toucher, { id: nom }.
+    // Un pack sans statsBonus ignore les bonus (ils restent dans la partie, sans effet).
+    statsBonus: (jeu) => ({ ...(pack(jeu).statsBonus || {}) }),
   };
 })();

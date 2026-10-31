@@ -78,7 +78,8 @@ const JrpgCombat = (() => {
     function mettrePm(u, v) { v = borne(Math.round(v), 0, pmMax(u)); if (estHeros(u)) u.c.pm = v; else u.pm = v; }
     // Une statistique en combat : avec l'équipement, et les hausses et baisses (étages de −4 à +4).
     const multEtage = (e) => (e >= 0 ? (2 + e) / 2 : 2 / (2 - e));
-    const statBrute = (u, s) => (estHeros(u) ? H.stats(jeu, u.c)[s] : Number(u.s[s]) || 0);
+    // Saga 1.11 : les bonus du groupe (un bain chaud, un bon repas) multiplient les statistiques des héros.
+    const statBrute = (u, s) => (estHeros(u) ? H.stats(jeu, u.c)[s] * (typeof Bonus !== 'undefined' ? Bonus.mult(partie, s) : 1) : Number(u.s[s]) || 0);
     const stat = (u, s) => Math.max(1, Math.floor(statBrute(u, s) * multEtage(u.etages[s] || 0)));
     const allies = (u) => (estHeros(u) ? heros : monstres);
     const ennemis = (u) => (estHeros(u) ? monstres : heros);
