@@ -6,10 +6,11 @@ Mes outils perso, réunis dans un seul dépôt :
 - **Rune** ᚱ, mon IDE (`ide/`), décrit ci-dessous.
 - **Skald** ᛋ, ma retouche d'images et de logos, à la Photoshop (`retouche/`) : voir [retouche/README.md](retouche/README.md).
 - **Brokk** ᛒ, l'export d'assets : un PSD ou un logo vers toutes les tailles web d'un projet (`export/`) : voir [export/README.md](export/README.md).
-- **Tafl** ᛏ, mes tuiles et cartes en pixel art, façon Pokémon (`tuiles/`) : voir [tuiles/README.md](tuiles/README.md).
-- **Saga** ᛃ, le moteur qui fait tourner les jeux décrits dans Tafl (`moteur/`) : voir [moteur/README.md](moteur/README.md).
+- **Tafl** ᛏ, l'éditeur de jeu : tuiles, cartes, événements, scripts et données, avec les règles Pokémon, JRPG ou JDR et des modules (`tuiles/`) : voir [tuiles/README.md](tuiles/README.md).
+- **Saga** ᛃ, le moteur qui fait tourner les jeux décrits dans Tafl : combats, mode table JDR, multijoueur en réseau ou sur Internet, export web et .exe (`moteur/`) : voir [moteur/README.md](moteur/README.md).
 - **Mímir** ᛗ, le lecteur de documents : PDF (annoter, signer, remplir les formulaires), EPUB, BD, Word, images et textes (`lecteur/`) : voir [lecteur/README.md](lecteur/README.md).
 - **Kenning** ᚲ, la liseuse d'eBooks : une bibliothèque (couvertures, collections, progression) et une lecture confortable des EPUB, MOBI, AZW3 et FB2, avec surlignages et notes (`liseuse/`) : voir [liseuse/README.md](liseuse/README.md).
+- **Reikna** ᛞ, le tableur : Excel (xlsx, xls), LibreOffice (ods) et CSV, formules en français, graphiques et mise en forme conditionnelle (`tableur/`) : voir [tableur/README.md](tableur/README.md).
 - **Edda** ᛖ, le traitement de texte : Word (.docx), LibreOffice (.odt), RTF, Markdown, HTML et texte, avec images, vidéos et sons dans la page (`texte/`) : voir [texte/README.md](texte/README.md).
 
 Les prochains (panneau serveur…) viendront à côté.
@@ -35,7 +36,7 @@ Le `.exe` est fabriqué par GitHub, sur un PC Windows à lui (fichier `.github/w
 1. Quand la PR est fusionnée dans `main`, GitHub voit que l'étiquette `rune-v0.13.0` n'existe pas encore : il fabrique `Rune-Setup-0.13.0.exe`, crée l'étiquette et publie la Release, avec comme notes la liste des commits de `ide/` depuis la version précédente.
 2. Tous les Rune installés (et Atelier) la proposent ensuite.
 
-Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk, Tafl, Saga, Mímir, Kenning, Edda et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json`, `tuiles/package.json`, `moteur/package.json`, `lecteur/package.json`, `liseuse/package.json`, `texte/package.json` et `hub/package.json`.
+Pas d'étiquette à poser à la main (c'est encore possible : `git tag rune-v0.13.0` puis `git push origin rune-v0.13.0`). Skald, Brokk, Tafl, Saga, Mímir, Kenning, Reikna, Edda et Atelier marchent pareil, avec `retouche/package.json`, `export/package.json`, `tuiles/package.json`, `moteur/package.json`, `lecteur/package.json`, `liseuse/package.json`, `tableur/package.json`, `texte/package.json` et `hub/package.json`.
 
 Sur chaque pull request qui touche `ide/`, GitHub fabrique aussi l'installeur, sans le publier : il se télécharge depuis l'onglet **Checks** de la PR, rubrique « Artifacts ». Pratique pour essayer une version avant de fusionner.
 
