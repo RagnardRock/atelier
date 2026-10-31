@@ -37,7 +37,7 @@ const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (on les confond avec 
 const MAX_ATTENTE = 6;            // demandes en attente de l'hôte, au plus
 const MAX_MAUVAIS_CODES = 20;     // sur Internet : mauvais codes par minute, toutes adresses confondues
 // Les seuls fichiers de commun/ dont l'interface a besoin.
-const COMMUN = new Set(['bac-a-sable.js']);
+const COMMUN = new Set(['bac-a-sable.js', 'modules.js']);
 const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
