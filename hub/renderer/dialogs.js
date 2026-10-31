@@ -93,6 +93,7 @@ const Dialogs = (() => {
         button.type = 'button';
         button.className = 'button';
         button.textContent = b.label;
+        if (b.title) button.title = b.title;
         button.onclick = () => b.run(api);
         footer.appendChild(button);
       }
@@ -104,6 +105,8 @@ const Dialogs = (() => {
       ok.type = 'submit';
       ok.className = 'button primary';
       ok.textContent = okLabel;
+      // Annuler / OK restent groupés à droite, même quand les boutons en plus passent sur une autre ligne.
+      (cancelLabel ? cancel : ok).classList.add('pousse-droite');
       if (cancelLabel) footer.append(cancel);
       footer.append(ok);
       if (extra) card.querySelector('.modal-extra').append(extra);
