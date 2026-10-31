@@ -542,8 +542,23 @@ const claudePanel = (() => {
     puis lance <code>claude</code> une fois pour te connecter à ton compte Claude.
     Si Claude Code est installé ailleurs, indique son chemin dans Réglages › Loki.`;
 
+  // Qui répond : Claude, l'IA locale (Ollama) ou auto (voir claude.js).
+  const OLLAMA_HELP = 'L\'IA locale n\'est pas installée sur ce PC. Dans <strong>Atelier › Réglages › IA locale</strong>, installe Ollama puis télécharge un modèle (Qwen3 14B conseillé pour une carte de 12 Go).';
+  const LIMITES_LOCAL = (modele) => `Loki répond maintenant avec l'IA locale (<code>${escapeHtml(modele || '?')}</code>) : gratuit et hors ligne, mais plus lent, et moins fiable que Claude sur les longues tâches. Demande une chose à la fois. Pas de commandes ni de web.`;
+  const moteur = document.querySelector('#claude-moteur');
+  window.atelier.claudeMoteur().then((m) => { moteur.value = m.choix; }).catch(() => {});
+  moteur.onchange = async () => {
+    const m = await window.atelier.claudeMoteur(moteur.value);
+    if (m.choix === 'local') addNotice('info', m.ollama ? LIMITES_LOCAL(m.modele) : OLLAMA_HELP);
+    if (m.choix === 'claude' && m.actif === 'local') addNotice('info', 'Le prochain message part vers Claude, dans une nouvelle conversation.');
+  };
+
   window.atelier.onClaudeEvent((e) => {
     switch (e.kind) {
+      case 'moteur':
+        addNotice('info', `${escapeHtml(e.raison.charAt(0).toUpperCase() + e.raison.slice(1))}. ${LIMITES_LOCAL(e.modele)}`);
+        break;
+      case 'status': setBusy(true, e.text); break;
       case 'init':
         document.querySelector('#claude-model').textContent = e.model ? `· ${e.model}` : '';
         conv.sessionId = e.sessionId;
@@ -586,7 +601,7 @@ const claudePanel = (() => {
       case 'error':
         endText();
         setBusy(false);
-        addNotice('error', e.notInstalled ? INSTALL_HELP : `Impossible de lancer Claude Code : ${escapeHtml(e.message)}`);
+        addNotice('error', e.ollamaAbsent ? OLLAMA_HELP : e.notInstalled ? `${INSTALL_HELP}<br>Ou choisis <strong>Local</strong> en haut du panneau pour l'IA locale.` : `Impossible de lancer Claude Code : ${escapeHtml(e.message)}`);
         break;
       case 'exit':
         endText();

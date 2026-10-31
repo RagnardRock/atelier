@@ -21,6 +21,11 @@
 //   Les actions qui ne changent rien (calculer, chercher les mises à jour) ne demandent pas.
 //   Toute autre demande de permission est refusée d'office.
 // Le presse-papiers n'est jamais donné à Claude (il peut contenir un mot de passe).
+//
+// L'IA locale (commun/loki-local.js, Ollama) : comme dans les outils, Loki peut répondre avec un
+// modèle qui tourne sur le PC (config.lokiMoteur : auto, claude ou local ; Réglages › IA locale).
+// En local, les quatre fichiers de contexte sont donnés d'office au modèle (il a moins de mémoire
+// et s'en sort mieux sans devoir les lire), avec les mêmes actions et les mêmes cartes.
 
 const { spawn, execFile } = require('node:child_process');
 const crypto = require('node:crypto');
@@ -30,6 +35,9 @@ const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const OUTILS = require('./outils');
+const ollama = require('./commun/ollama');
+const lokiLocal = require('./commun/loki-local');
+const { OUTILS: ACTIONS_ATELIER } = require('./mcp-atelier');
 
 let proc = null;          // processus Claude Code en cours
 let sender = null;        // webContents de la fenêtre d'Atelier
@@ -58,8 +66,25 @@ const FAMILLES = {
 const FAMILLES_TOUJOURS = ['notes', 'calendrier', 'minuteurs', 'projets', 'memoire', 'installation'];
 const actionsActives = (config) => config.claudeActions !== false;
 
-function emit(event) {
+function envoyerAuWidget(event) {
   if (sender && !sender.isDestroyed()) sender.send('claude:event', event);
+}
+
+// Le moteur de la conversation en cours (voir commun/claude.js : même logique).
+let moteurActif = null;   // 'claude' ou 'local'
+let claudeIndispo = null; // { jusqua, raison }
+let tourAuto = null;      // { texte } : le message envoyé à Claude en « auto »
+let basculer = null;      // (raison) => passe en local avec ce message
+let session = null;       // la conversation locale
+const permissionsLocales = new Map();
+
+function emit(event) {
+  if (tourAuto && basculer) {
+    const raison = lokiLocal.echecClaude(event);
+    if (raison) return basculer(raison);
+    if (event.kind === 'result' || event.kind === 'exit' || event.kind === 'error') tourAuto = null;
+  }
+  envoyerAuWidget(event);
 }
 
 function write(message) {
@@ -314,6 +339,7 @@ async function ecrireConfigMcp(cwd, log) {
 }
 
 function stop() {
+  session?.arreter();
   if (!proc) return;
   const current = proc;
   proc = null;
@@ -583,9 +609,71 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
     return changes;
   }
 
+  // --- Loki en local ---
+  ollama.configurer({ commun: path.join(path.dirname(dataDir), 'atelier-commun') });
+  const dossierLocal = path.join(dataDir, 'loki-local');
+  async function autoriserLocal({ id, nomAffiche, entree }) {
+    const action = nomAffiche.startsWith(PREFIXE_ACTIONS) ? nomAffiche.slice(PREFIXE_ACTIONS.length) : null;
+    const famille = FAMILLES[action];
+    if (!action) return true; // lire un fichier de contexte
+    const config = await readConfig();
+    if (!famille || !actionsActives(config)) return false;
+    if (famille === 'lecture' || config.claudeSansDemander?.[famille]) return true;
+    const requestId = `local-${id}`;
+    return new Promise((resolve) => {
+      permissionsLocales.set(requestId, resolve);
+      envoyerAuWidget({ kind: 'permission', requestId, toolUseId: id, action, famille, input: entree });
+    });
+  }
+  session = lokiLocal.creerSession({ log, emit: envoyerAuWidget, autoriser: autoriserLocal, dossier: dossierLocal });
+
+  const COUPE = 8000; // caractères par fichier de contexte donnés d'office au modèle local
+  async function envoyerLocal(text) {
+    moteurActif = 'local';
+    const config = await readConfig();
+    const actions = actionsActives(config);
+    await preparerContexte(null, actions);
+    const contexte = [];
+    for (const nom of ['atelier.md', 'notes.md', 'calendrier.md', 'projets.md']) {
+      let t = '';
+      try { t = await fsp.readFile(path.join(cwd, nom), 'utf8'); } catch { /* pas encore écrit */ }
+      contexte.push('', `## ${nom} (à jour)`, '', t.length > COUPE ? `${t.slice(0, COUPE)}\n… (coupé : lire_fichier ${nom} pour la suite)` : t);
+    }
+    const consignes = `${claudeMd(null, actions)
+      .replace('(il est propulsé par Claude)', '(ici, il tourne sur un modèle local)')
+      .replace('Lis le ou les fichiers utiles avant de répondre, et relis-les à chaque question : ils changent.', 'Ils sont recopiés plus bas, à jour : pas besoin de les relire.')
+      .replace('Tu ne peux pas lire les fichiers des projets eux-mêmes : seulement ces quatre fichiers.', 'En local, tu ne lis pas les fichiers des projets eux-mêmes : seulement ces quatre fichiers.')
+      .replace(/\(mcp__atelier__…\) /, '')}${contexte.join('\n')}`;
+    const lecture = lokiLocal.outilsFichiers(cwd).filter((o) => o.lecture);
+    const deLAtelier = actions ? ACTIONS_ATELIER.map((a) => ({
+      name: a.name, description: a.description, parameters: a.inputSchema, affiche: `${PREFIXE_ACTIONS}${a.name}`,
+      faire: (args) => executerAction(a.name, args, log),
+    })) : [];
+    await session.envoyer(text, { consignes, outils: [...lecture, ...deLAtelier] });
+  }
+
+  basculer = (raison) => {
+    const texte = tourAuto?.texte;
+    tourAuto = null;
+    stop();
+    claudeIndispo = { jusqua: Date.now() + 30 * 60_000, raison };
+    log('INFO', `Loki : ${raison}, passage au modèle local`);
+    ollama.reglages().then((r) => envoyerAuWidget({ kind: 'notice', message: `${raison.charAt(0).toUpperCase()}${raison.slice(1)} : Loki continue avec l'IA locale (${r.modele}). Plus lent, et moins fiable sur les longues tâches : une chose à la fois.` }));
+    if (texte) envoyerLocal(texte).catch((err) => log('ERREUR', `Loki local : ${err.message}`));
+  };
+
   handle('claude:send', async (event, text) => {
     sender = event.sender;
     const config = await readConfig();
+    const choix = config.lokiMoteur || 'auto';
+    const local = choix === 'local' || (choix === 'auto' && (moteurActif === 'local' || (!moteurActif && claudeIndispo?.jusqua > Date.now())));
+    if (local) {
+      if (moteurActif === 'claude') { stop(); lastSessionId = null; }
+      return envoyerLocal(String(text));
+    }
+    if (moteurActif === 'local') session.reinitialiser();
+    moteurActif = 'claude';
+    tourAuto = choix === 'auto' ? { texte: String(text) } : null;
     const projetsDir = config.dossierProjets && fs.existsSync(config.dossierProjets) ? path.resolve(config.dossierProjets) : null;
     const addDir = config.claudeLitProjets !== false ? projetsDir : null;
     const actions = actionsActives(config);
@@ -616,6 +704,8 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   // Ta réponse sur la carte Autoriser / Refuser.
   handle('claude:permission', async (_event, { requestId, toolUseId, autoriser, input }) => {
+    const local = permissionsLocales.get(String(requestId));
+    if (local) { permissionsLocales.delete(String(requestId)); return local(Boolean(autoriser)); }
     repondrePermission(String(requestId), String(toolUseId), Boolean(autoriser), input);
   });
   // Résultat d'une action, exécutée par les widgets.
@@ -623,14 +713,28 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
 
   // Bouton stop : Claude arrête ce qu'il est en train de faire, la conversation continue.
   handle('claude:interrupt', async () => {
+    if (moteurActif === 'local') { session.arreter(); for (const r of permissionsLocales.values()) r(false); permissionsLocales.clear(); return; }
     write({ type: 'control_request', request_id: `interrupt-${nextRequestId++}`, request: { subtype: 'interrupt' } });
   });
 
   // Nouvelle conversation.
-  handle('claude:reset', async () => { lastSessionId = null; messageEnAttente = null; stop(); });
+  handle('claude:reset', async () => {
+    lastSessionId = null; messageEnAttente = null; stop();
+    session.reinitialiser(); moteurActif = null; tourAuto = null;
+    for (const r of permissionsLocales.values()) r(false);
+    permissionsLocales.clear();
+  });
 
   // Au démarrage d'Atelier, ou en rouvrant une conversation de la liste : elle reprend au prochain message.
   handle('claude:reprendre', async (_event, sessionId) => {
+    if (String(sessionId).startsWith('local:')) {
+      stop();
+      session.reinitialiser();
+      await session.reprendre(dossierLocal, sessionId);
+      moteurActif = 'local';
+      return;
+    }
+    if (moteurActif === 'local') { session.reinitialiser(); moteurActif = null; }
     if (!proc) lastSessionId = typeof sessionId === 'string' && /^[\w-]+$/.test(sessionId) ? sessionId : null;
   });
 

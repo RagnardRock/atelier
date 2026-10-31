@@ -72,6 +72,9 @@ const ClaudePanneau = (() => {
       <header class="cp-entete">
         <span class="cp-titre"><i class="codicon rune-loki">ᛚ</i>Loki <span class="cp-modele"></span></span>
         <span class="cp-espace"></span>
+        <select class="cp-moteur" title="Qui répond : Claude, ou l'IA locale de ton PC (Ollama). Auto : Claude, et l'IA locale quand Claude n'est pas disponible." hidden>
+          <option value="auto">Auto</option><option value="claude">Claude</option><option value="local">Local</option>
+        </select>
         <button class="icon-button cp-autorisations" title="Ce que Loki peut faire sans te demander"><i class="codicon codicon-shield"></i></button>
         <button class="icon-button cp-historique" title="Conversations précédentes de ce projet"><i class="codicon codicon-history"></i></button>
         <button class="icon-button cp-nouvelle" title="Nouvelle conversation"><i class="codicon codicon-add"></i></button>
@@ -116,6 +119,18 @@ const ClaudePanneau = (() => {
       autorisationsList.hidden = true;
       if (historyList.hidden) showHistory(); else historyList.hidden = true;
     };
+    // Le moteur (Claude, local, auto) : seulement si l'outil le connaît (preload.js à jour).
+    const moteur = $('.cp-moteur');
+    if (api().moteur) {
+      moteur.hidden = false;
+      api().moteur().then((m) => { moteur.value = m.choix; }).catch(() => {});
+      moteur.onchange = async () => {
+        const m = await api().moteur(moteur.value);
+        if (m.choix === 'local') addNotice('info', LIMITES_LOCAL(m.modele, m.ollama));
+        if (m.choix === 'claude' && m.actif === 'local') addNotice('info', 'Le prochain message part vers Claude, dans une nouvelle conversation.');
+      };
+      moteur.addEventListener('keydown', (e) => e.stopPropagation());
+    } else moteur.remove();
     // Le bouclier : seulement si l'outil sait lister les autorisations (preload.js à jour).
     if (!api().autorisations) $('.cp-autorisations').remove();
     else {
@@ -406,6 +421,13 @@ const ClaudePanneau = (() => {
     record({ t: 'jetons', jetons: j });
     const ligne = document.createElement('div');
     ligne.className = 'cp-jetons';
+    if (j.local) {
+      // En local, rien n'est compté sur la limite de Claude : seulement la mémoire du modèle.
+      ligne.title = 'Réponse du modèle local (Ollama) : gratuite, rien n\'est compté sur ta limite Claude.';
+      ligne.textContent = `Local · ${kilo(j.lus)} jetons lus · ${kilo(j.ecrits)} écrits · ${j.appels} appel${j.appels > 1 ? 's' : ''}`;
+      list.appendChild(ligne);
+      return scrollDown();
+    }
     ligne.title = 'Jetons lus : la conversation, relue à chaque action (la partie en cache coûte moins). Jetons écrits : la réponse et les actions de Loki.';
     ligne.textContent = `${kilo(j.lus)} jetons lus${j.lus ? ` (${Math.round((100 * j.enCache) / j.lus)} % en cache)` : ''} · ${kilo(j.ecrits)} écrits · ${j.appels} appel${j.appels > 1 ? 's' : ''}${j.conversation ? ` · conversation : ${kilo(j.conversation)}` : ''}`;
     list.appendChild(ligne);
@@ -628,6 +650,12 @@ const ClaudePanneau = (() => {
     card.querySelector('.allow').focus();
   }
 
+  // Ce qu'il faut savoir du mode local, dit une fois quand on y passe.
+  const LIMITES_LOCAL = (modele, installe = true) => (installe
+    ? `Loki répond maintenant avec l'IA locale (<code>${escapeHtml(modele || '?')}</code>), sur ta carte graphique : gratuit et hors ligne, mais plus lent, et moins fiable que Claude sur les longues tâches en plusieurs étapes. Demande une chose à la fois. Pas de web ni de commandes.`
+    : OLLAMA_HELP);
+  const OLLAMA_HELP = 'L\'IA locale n\'est pas installée sur ce PC. Dans <strong>Atelier › Réglages › IA locale</strong>, installe Ollama puis télécharge un modèle (Qwen3 14B conseillé pour une carte de 12 Go).';
+
   // --- Événements venant de Claude Code ---
   const INSTALL_HELP = `Claude Code n'est pas installé (ou la commande <code>claude</code> est introuvable).<br>
     Pour l'installer, dans un terminal : <code>npm install -g @anthropic-ai/claude-code</code>,
@@ -651,6 +679,9 @@ const ClaudePanneau = (() => {
         setBusy(true, `Loki ne répond pas (${raison}), nouvel essai ${e.attempt || '?'}/${e.max || '?'}`);
         break;
       }
+      case 'moteur':
+        addNotice('info', `${escapeHtml(e.raison.charAt(0).toUpperCase() + e.raison.slice(1))}. ${LIMITES_LOCAL(e.modele)}`);
+        break;
       case 'tool': addTool(e); break;
       case 'tool-result': toolDone(e); break;
       case 'permission': askPermission(e); break;
@@ -679,7 +710,7 @@ const ClaudePanneau = (() => {
       case 'error':
         endText();
         setBusy(false);
-        addNotice('error', e.notInstalled ? INSTALL_HELP : `Impossible de lancer Claude Code : ${escapeHtml(e.message)}`);
+        addNotice('error', e.ollamaAbsent ? OLLAMA_HELP : e.notInstalled ? `${INSTALL_HELP}<br>Ou choisis <strong>Local</strong> en haut du panneau pour l'IA locale.` : `Impossible de lancer Claude Code : ${escapeHtml(e.message)}`);
         break;
       case 'exit':
         endText();

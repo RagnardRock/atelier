@@ -1,7 +1,7 @@
 {
   "name": "atelier-lecteur",
   "productName": "Mimir",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Mímir, mon lecteur de documents : PDF (annotations, signature, formulaires), EPUB, BD, Word, images et textes, un des outils d'Atelier",
   "main": "main.js",
   "scripts": {

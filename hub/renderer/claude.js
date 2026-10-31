@@ -311,7 +311,9 @@ const ClaudeWidget = (() => {
       case 'exit':
         finTexte();
         arreterOutils();
-        if (e.notInstalled) {
+        if (e.ollamaAbsent) {
+          avis('erreur', 'L\'IA locale n\'est pas installée : Réglages d\'Atelier (Ctrl+,) › IA locale…, puis installe Ollama et un modèle.');
+        } else if (e.notInstalled) {
           avis('erreur', 'Claude Code est introuvable sur ce PC. Installe-le (claude.com/claude-code), ou indique le chemin de la commande dans les réglages d\'Atelier (Ctrl+,).');
         } else if (e.kind === 'error' || (occupe && e.code)) {
           avis('erreur', `Loki s'est arrêté${e.code ? ` (code ${e.code})` : ''}. ${e.stderr || e.message || ''}`.trim());
