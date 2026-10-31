@@ -166,6 +166,7 @@
       poser(o, r.etat);
       for (const type of r.termines) o.hote.reagir?.('gestion_termine', { batiment: type });
       if (r.arrives) o.hote.reagir?.('gestion_arrivee', { nombre: r.arrives, habitants: r.etat.habitants });
+      if (r.partis) o.hote.reagir?.('gestion_depart', { nombre: r.partis, habitants: r.etat.habitants });
       if (r.termines.length) o.hote.rafraichir?.();
       return r.lignes;
     },

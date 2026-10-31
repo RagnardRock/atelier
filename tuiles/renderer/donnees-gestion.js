@@ -19,6 +19,9 @@ const DonneesGestion = (() => {
   // Une liste [{ ressource, nombre }] (coût, production, consommation, stock de départ).
   const normQuantites = (l) => arr(l).filter((q) => q && q.ressource).slice(0, 20).map((q) => ({ ressource: ident(q.ressource, ''), nombre: int(q.nombre, 1, 1, 99999) })).filter((q) => q.ressource);
 
+  // Ce que fait la faim des habitants (Saga 1.6.1). Dans tous les cas, ils travaillent quand même.
+  const FAIMS = [['arrivees', 'Personne n\'arrive tant que quelqu\'un a faim'], ['rien', 'Rien (seulement le rapport du matin)'], ['departs', 'Personne n\'arrive, et après plusieurs nuits de faim, des habitants partent']];
+
   const NORMES = {
     ressources: (r, i) => ({
       ...propre(r),
@@ -61,6 +64,9 @@ const DonneesGestion = (() => {
     habitants_depart: int(g?.habitants_depart, 0, 0, 9999),
     repas: normQuantites(g?.repas),
     arrivees: int(g?.arrivees, 1, 0, 99),
+    // Tafl 1.4.1 : ce que fait la faim (voir FAIMS).
+    faim: FAIMS.some(([k]) => k === g?.faim) ? g.faim : 'arrivees',
+    faim_nuits: int(g?.faim_nuits, 3, 1, 99),
   });
 
   const U = () => Donnees.ui;
@@ -170,6 +176,10 @@ const DonneesGestion = (() => {
     const menu = el('input', { type: 'checkbox', checked: g.menu });
     menu.onchange = () => { g.menu = menu.checked; };
     const construire = el('input', { type: 'checkbox', checked: g.construire_menu });
+    // Les nuits de faim avant un départ : seulement pour « des habitants partent ».
+    const nuits = el('span');
+    const majNuits = () => nuits.replaceChildren(...(g.faim === 'departs' ? [champ('Départ après', nombreIn(g, 'faim_nuits', 1, 99), 'nuits de faim de suite (un habitant par nuit ensuite)')] : []));
+    majNuits();
     construire.onchange = () => { g.construire_menu = construire.checked; };
     return [
       el('div', { className: 'field-grid' }, [
@@ -184,7 +194,11 @@ const DonneesGestion = (() => {
         champ('Arrivées par nuit', nombreIn(g, 'arrivees', 0, 99), 'au plus, s\'il reste un logement (0 = seulement par la commande)'),
       ]),
       tableQuantites(ctx, g, 'repas', 'Repas d\'un habitant, chaque nuit', 'Les habitants ne mangent rien.'),
-      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même, mais personne n\'arrive cette nuit-là. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
+      el('div', { className: 'field-grid' }, [
+        champ('Quand ils ont faim', U().sel(FAIMS, g.faim, (v) => { g.faim = v; majNuits(); })),
+        nuits,
+      ]),
+      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
   }

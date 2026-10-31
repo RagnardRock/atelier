@@ -158,7 +158,7 @@ fichiers. Plusieurs scripts peuvent écouter le même moment.
 Les **modules** du jeu (Réglages › Règles du jeu › Modules, Saga 1.4) peuvent annoncer leurs propres
 moments : ils sont listés dans la documentation de chaque module, et le vérificateur de Tafl les
 connaît quand le module est actif. Le module **gestion** (Saga 1.5) annonce `gestion_termine`
-(`infos.batiment` : le type du bâtiment dont le chantier vient de finir, pendant la nuit), et depuis Saga 1.6 `gestion_arrivee` (`infos.nombre` : combien d'habitants viennent d'arriver, `infos.habitants` : combien vivent maintenant au domaine).
+(`infos.batiment` : le type du bâtiment dont le chantier vient de finir, pendant la nuit), et depuis Saga 1.6 `gestion_arrivee` (`infos.nombre` : combien d'habitants viennent d'arriver, `infos.habitants` : combien vivent maintenant au domaine), et depuis Saga 1.6.1 `gestion_depart` (un habitant part après trop de nuits de faim, si le jeu l'a choisi ; mêmes `infos`).
 
 ```js
 // Une lettre arrive deux jours après la décision du conseil.

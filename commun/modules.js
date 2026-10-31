@@ -30,6 +30,7 @@ const ModulesJeu = (() => {
       moments: {
         gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } },
         gestion_arrivee: { nom: 'Des habitants arrivent (pendant la nuit)', infos: { nombre: 'Combien sont arrivés', habitants: 'Combien vivent maintenant au domaine' } },
+        gestion_depart: { nom: 'Un habitant part, après trop de nuits de faim', infos: { nombre: 'Combien sont partis', habitants: 'Combien vivent maintenant au domaine' } },
       },
       commandes: {
         gestion_construire: { nom: 'Construire un bâtiment' },

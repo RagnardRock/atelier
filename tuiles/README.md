@@ -452,7 +452,7 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 ## Les habitants et les récoltes (Tafl 1.4, pour Saga 1.6)
 
 - **Repousse après N nuits** (fenêtre d'un événement, pour tous les jeux) : son « déjà fait » s'éteint tout seul après ce nombre de nuits, et il revient à sa page 1. Pour une récolte : page 1 « donner l'objet + déjà fait », page 2 avec la condition « déjà fait » et la case « absent ».
-- **Les habitants** (module gestion) : dans un bâtiment, **Logement** (combien il loge) et **Ouvriers** (combien il lui faut pour produire) ; dans les réglages du module, les habitants au départ, les arrivées par nuit et le repas d'un habitant. La commande « Des habitants arrivent ou partent » et la condition « Le domaine a assez d'habitants ».
+- **Les habitants** (module gestion) : dans un bâtiment, **Logement** (combien il loge) et **Ouvriers** (combien il lui faut pour produire) ; dans les réglages du module, les habitants au départ, les arrivées par nuit le repas d'un habitant, et ce que fait la faim (Tafl 1.4.1 : rien, bloquer les arrivées, ou des départs après N nuits ; ils travaillent toujours). La commande « Des habitants arrivent ou partent » et la condition « Le domaine a assez d'habitants ».
 - Le vérificateur signale une ressource de repas qui n'existe pas, et un bâtiment qui demande des ouvriers alors qu'aucun habitant ne peut venir.
 
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
