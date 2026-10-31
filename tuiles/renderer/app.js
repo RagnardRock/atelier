@@ -1017,7 +1017,8 @@ const App = (() => {
       { key: 'h', label: 'Hauteur', type: 'number', value: z.h, min: 1, max: map.height, unit: 'cases' },
       { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS). Constructible : là où le joueur peut poser ses bâtiments (module gestion).' },
       { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
-      { key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' },
+      // Tafl 1.10 (pack action) : les ennemis sont déjà sur la carte, pas de rencontre au hasard.
+      ...(Espaces.packDe(api.doc) === 'action' ? [] : [{ key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' }]),
       // Tafl 0.33 (pack JDR) : une pièce pour le mode table de Saga, sous le brouillard jusqu'à ce que le MJ la révèle.
       ...(Espaces.packDe(api.doc) === 'jdr' ? [
         { key: 'piece', label: 'C\'est une pièce (mode table de Saga : sous le brouillard, le MJ la révèle d\'un clic)', type: 'checkbox', value: Boolean(z.piece) },
@@ -1341,7 +1342,7 @@ const App = (() => {
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec des tuiles d\'exemple (herbe, hautes herbes, chemin, eau, fleur) et une petite carte', type: 'checkbox', value: true },
         // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
-        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs']] }] : []),
+        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien']] }] : []),
         ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
@@ -1351,6 +1352,7 @@ const App = (() => {
     if (game && v.modele === 'jdr') ExempleJdr.remplir(doc);
     else if (game && v.modele === 'arene') ExempleArene.remplir(doc);
     else if (game && v.modele === 'domaine') ExempleDomaine.remplir(doc);
+    else if (game && v.modele === 'donjon') ExempleDonjon.remplir(doc);
     else if (v.samples) Samples.fill(doc);
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut
@@ -1440,7 +1442,9 @@ const App = (() => {
       // Sans attendre la fermeture : la fenêtre reste ouverte pour Ragna (et Claude n'attend pas).
       { label: 'Données du jeu (personnages, créatures, objets…)…', keys: 'Ctrl+Maj+D', run: () => { run(() => openData()); } },
       // Le raccourci vers la liste principale du pack de règles du jeu.
-      Espaces.packDe(api.doc) === 'jdr'
+      Espaces.packDe(api.doc) === 'action'
+        ? { label: 'Ennemis (temps réel)…', run: () => { run(() => openData('ennemis')); } }
+        : Espaces.packDe(api.doc) === 'jdr'
         ? { label: 'Monstres du JDR (bestiaire)…', run: () => { run(() => openData('monstres_jdr')); } }
         : Espaces.packDe(api.doc) === 'jrpg'
         ? { label: 'Monstres (bestiaire)…', run: () => { run(() => openData('monstres')); } }

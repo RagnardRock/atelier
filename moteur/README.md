@@ -231,6 +231,16 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - Les attaques officielles correspondantes sont **reconnues à l'import** (Vent Arrière, Provoc, Vampigraine, Danse Pluie, Abri, Ligotage…) ; pour une attaque à soi, Tafl a un champ « Effet de combat ».
 - **Le défi inversé** : la commande `composer_equipe` de Tafl peut être « pour l'adversaire ». Les deux joueurs choisissent en même temps, chacun pour l'autre ; quand les deux ont fini, chacun reçoit l'équipe que l'autre lui a composée. Le modèle « Arène de duel » a une borne du milieu qui le lance à trois créatures. Le menu devant un autre joueur a aussi « Composer vos équipes ».
 
+## Ce que fait Saga 1.12 : le temps réel (pack action, avec Tafl 1.10)
+
+- **Un jeu façon Zelda** (`reglages.regles = "action"`) : le héros se déplace librement (clavier, stick ou croix de la manette), avec les collisions de la carte, et frappe à l'épée (la touche d'action). Sa vie se compte en cœurs, en haut à gauche, avec son argent.
+- **Les ennemis sont sur la carte** : ils apparaissent dans les zones (Tafl › rencontres), patrouillent, suivent, gardent leur place, fuient ou ne bougent pas, et vont vers le joueur par le plus court chemin (l'A* de `chemins.js`, en 8 directions). Un ennemi au comportement **Script** suit un `comportement()` écrit en JavaScript (SCRIPTS.md).
+- **Les coups** : boîtes de corps et de coup, recul (selon le poids), invincibilité après un coup, dégâts au contact ou coup préparé (on a le temps de le voir venir). Vaincus, ils laissent de l'argent, parfois un cœur ou un objet ; l'XP fait monter de niveau. Un boss ne revient pas.
+- **Les animations** des personnages (repos, attaque, coup reçu, mort), et des sons intégrés (épée, touche, vaincu…).
+- Sans vie, le héros se réveille au dernier soin, soigné. Les bonus du groupe (Saga 1.11) touchent son attaque, sa défense et sa vitesse.
+- **F3** montre les boîtes, les chemins des ennemis et ce qu'ils font.
+- Pour l'instant en solo : le temps réel à plusieurs viendra ensuite (le mode table reste au tour par tour).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

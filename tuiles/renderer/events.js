@@ -37,7 +37,7 @@ const Events = (() => {
   const EXPRESSIONS = ['normal', 'content', 'rire', 'triste', 'colere', 'surpris', 'inquiet', 'gene', 'determine'];
   const COMPTEURS = [['captures', 'Créatures capturées'], ['dresseurs_battus', 'Dresseurs battus'], ['sauvages_battus', 'Créatures sauvages battues'], ['evolutions', 'Évolutions vues'], ['especes_vues', 'Espèces vues (Pokédex)'], ['especes_prises', 'Espèces attrapées (Pokédex)'], ['quetes_finies', 'Quêtes finies'], ['badges', 'Badges'], ['pas', 'Pas du joueur'], ['monstres_vaincus', 'Monstres vaincus']];
   // Tafl 0.32.1 : les compteurs que le pack de règles du jeu fait vraiment monter (les autres restent à 0).
-  const COMPTEURS_PACK = { captures: ['pokemon'], dresseurs_battus: ['pokemon'], sauvages_battus: ['pokemon'], evolutions: ['pokemon'], especes_vues: ['pokemon'], especes_prises: ['pokemon'], badges: ['pokemon'], monstres_vaincus: ['jrpg', 'jdr'] };
+  const COMPTEURS_PACK = { captures: ['pokemon'], dresseurs_battus: ['pokemon'], sauvages_battus: ['pokemon'], evolutions: ['pokemon'], especes_vues: ['pokemon'], especes_prises: ['pokemon'], badges: ['pokemon'], monstres_vaincus: ['jrpg', 'jdr', 'action'] };
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
   // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
@@ -1242,6 +1242,8 @@ const Events = (() => {
           equipement: Object.fromEntries(['arme', 'bouclier', 'casque', 'armure', 'accessoire'].map((k) => [k, Doc.slug(p?.equipement?.[k], '')]).filter(([, v]) => v)),
           // Tafl 0.32 (pack JDR) : la fiche d'un pré-tiré (donnees-jdr.js › normFiche).
           ...(p?.jdr && typeof DonneesJdr !== 'undefined' ? { jdr: DonneesJdr.normFiche(p.jdr) } : {}),
+          // Tafl 1.10 (temps réel, pack action) : ses animations et ses boîtes (donnees-action.js › normPersonnage).
+          ...(typeof DonneesAction !== 'undefined' ? DonneesAction.normPersonnage(p) : {}),
         };
       })),
       quetes: uniques(arr(d?.quetes).map((q, i) => ({
@@ -2115,6 +2117,7 @@ const Events = (() => {
           ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
           ...(pack() === 'jrpg' ? groupeJrpg(p) : []),
           ...(pack() === 'jdr' && typeof DonneesJdr !== 'undefined' ? DonneesJdr.formPersonnage(p, work, render) : []),
+          ...(pack() === 'action' && typeof DonneesAction !== 'undefined' ? DonneesAction.formPersonnage(p, work, renderListe, doc) : []),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,

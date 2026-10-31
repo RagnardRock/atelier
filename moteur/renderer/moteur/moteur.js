@@ -43,7 +43,7 @@ const Moteur = (() => {
     const tenues = []; // directions tenues, la dernière appuyée à la fin
     let course = false;
     let appuis = [];   // les touches appuyées depuis la dernière image : 'action', 'retour', 'haut'…
-    let pad = null;    // ce que la manette tient en ce moment : { dir, course }
+    let pad = null;    // ce que la manette tient en ce moment : { dir, course, ax, ay }
     const lacher = (dir) => { const i = tenues.indexOf(dir); if (i >= 0) tenues.splice(i, 1); };
     window.addEventListener('keydown', (e) => {
       if (e.target.closest?.('input, select, textarea, button, .modal')) return;
@@ -90,7 +90,10 @@ const Moteur = (() => {
         if (etat.b && !padAvant.b) appuis.push('retour');
         if (dir && dir !== padAvant.dir) appuis.push(dir);
         padAvant = etat;
-        pad = { dir, course: un(cmd.manette.courir) };
+        // Saga 1.12 (temps réel) : le stick tel quel, pour aller en diagonale et doucement.
+        const fort = Math.hypot(ax, ay) > 0.25;
+        const croix = { x: (b(15) ? 1 : 0) - (b(14) ? 1 : 0), y: (b(13) ? 1 : 0) - (b(12) ? 1 : 0) };
+        pad = { dir, course: un(cmd.manette.courir), ax: croix.x || croix.y ? croix.x : fort ? ax : 0, ay: croix.x || croix.y ? croix.y : fort ? ay : 0 };
         return;
       }
       padAvant = {};
@@ -99,6 +102,13 @@ const Moteur = (() => {
       sonder,
       lire() {
         return { dir: tenues[tenues.length - 1] || pad?.dir || null, course: course || Boolean(pad?.course) };
+      },
+      // Saga 1.12 (temps réel) : toutes les directions tenues ensemble (haut + droite = la diagonale), ou le stick.
+      vecteur() {
+        const x = (tenues.includes('droite') ? 1 : 0) - (tenues.includes('gauche') ? 1 : 0);
+        const y = (tenues.includes('bas') ? 1 : 0) - (tenues.includes('haut') ? 1 : 0);
+        if (x || y) return { x, y };
+        return { x: pad?.ax || 0, y: pad?.ay || 0 };
       },
       // Les appuis depuis la dernière fois (chacun n'est rendu qu'une fois).
       appuis() { const a = appuis; appuis = []; return a; },
@@ -258,6 +268,52 @@ const Moteur = (() => {
       },
     });
 
+    // Saga 1.12 : le temps réel (action/temps-reel.js), pour les jeux du pack action. Le joueur bouge au
+    // pixel près et se bat sur la carte ; joueur.x et joueur.y restent la case sous ses pieds (les événements,
+    // les téléporteurs, la sauvegarde et le multijoueur la lisent comme avant).
+    let tempsReel = false;
+    const rt = TempsReel.creer({
+      jeu: () => jeu, partie: () => partie, carte: () => carte,
+      bloque: (x, y) => {
+        if (!carte || !Monde.dansCarte(carte, x, y)) return true;
+        const c = Monde.code(carte, x, y);
+        if (Jeu.REBORDS[c] || Monde.bloqueParModule(carte, x, y)) return true;
+        if (c === Jeu.PASSAGE.bloque && !Monde.zonesEn(carte, x, y).some((z) => z.objetRequis && (partie.sac[z.objetRequis] || 0) > 0)) return true;
+        return presents.some((p) => p.bloque && p.x === x && p.y === y);
+      },
+      surCase: (x, y, dir, pousse) => { joueur.x = x; joueur.y = y; joueur.dir = dir; return pousse ? null : surCase(); },
+      agir: (x, y, dir) => {
+        joueur.dir = dir;
+        if (monde?.devant(x, y)) return true;
+        const p = Monde.presentEn(presents, x, y) || Monde.presentEn(presents, joueur.x, joueur.y);
+        if (p && Monde.obstacle(p.ev)) { franchir(p); return true; }
+        if (p && p.ev.declenchement === 'parler' && p.page?.commandes?.length) { lancer(p); return true; }
+        return false;
+      },
+      corps: (o, maintenant) => dessinerCorps(o, maintenant),
+      bruit,
+      defaite: () => defaiteTempsReel(),
+      annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
+      reagir: (moment, infos) => { if (scriptsJs.ecoute(moment)) reagir(moment, infos); },
+      comportement: (nom, etat) => scriptsJs.comportement?.(nom, etat) || null,
+      signaler,
+    });
+    // Le héros n'a plus de vie : fondu au noir, il se réveille au dernier soin (ou au départ), tous ses cœurs.
+    let reveil = false, rtRecommencer = false;
+    async function defaiteTempsReel() {
+      if (reveil) return;
+      reveil = true;
+      enScript = true;
+      try {
+        if (scriptsJs.ecoute('defaite')) reagir('defaite', {});
+        for (const c of partie.equipe) Regles.soigner(jeu, c);
+        const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
+        rtRecommencer = true; // les ennemis reviennent : on recommence la carte d'arrivée, même si c'est celle-ci
+        await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { ...d, direction: d.direction || 'bas' }, resoudre }; });
+        dialogue.annoncer('Tu te réveilles…', 'Tous tes cœurs sont revenus.');
+      } finally { enScript = false; reveil = false; entrees.oublier(); }
+    }
+
     // --- Taille : le plus grand zoom entier qui montre au moins `casesVisibles` cases en hauteur ---
     function redimensionner() {
       const parent = canvas.parentElement;
@@ -295,6 +351,10 @@ const Moteur = (() => {
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       presents = Monde.evenementsPresents(jeu, carte, partie);
       if (table.actif) table.entrerCarte(carte, joueur.x, joueur.y);
+      if (tempsReel) {
+        if (change || rtRecommencer) rt.entrerCarte(carte, joueur.x, joueur.y, joueur.dir); else rt.placer(joueur.x, joueur.y, joueur.dir);
+        rtRecommencer = false;
+      }
       ambiance.regler(carte.ambiance);
       lumieresCarte = null;
       placerCamera();
@@ -436,6 +496,8 @@ const Moteur = (() => {
       if (!partieGardee) reagir('nouvelle_partie');
       // Le mode table : seulement pour un jeu du pack JDR.
       if (modeTable && Regles.capacites(jeu).table) table.demarrer(); else table.arreter();
+      // Saga 1.12 : le temps réel, pour un jeu du pack action.
+      tempsReel = Boolean(Regles.capacites(jeu).tempsReel) && !table.actif;
       redimensionner();
       const d = partie.position;
       if (!entrerSur(d.carte, d.x, d.y, d.direction)) entrerSur(jeu.depart.carte, jeu.depart.x, jeu.depart.y, jeu.depart.direction);
@@ -514,6 +576,7 @@ const Moteur = (() => {
 
     // --- Le joueur ---
     function pixelsJoueur() {
+      if (tempsReel) { const p = rt.pixels(); if (p) return p; }
       const t = jeu.taille;
       const m = joueur.mouvement;
       if (!m) return { x: joueur.x * t, y: joueur.y * t, saut: 0 };
@@ -552,6 +615,10 @@ const Moteur = (() => {
       joueur.x = m.vers.x;
       joueur.y = m.vers.y;
       joueur.mouvement = null;
+      return surCase();
+    }
+    // Le joueur arrive sur une case (au bout d'un pas, ou en temps réel quand ses pieds en changent).
+    function surCase() {
       partie.compteurs.pas++;
       Regles.marcher(jeu, partie); // Saga 0.7 : l'amitié qui monte en marchant (pack Pokémon)
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
@@ -655,6 +722,13 @@ const Moteur = (() => {
 
     function avancerJoueur(dt) {
       if (table.actif) return; // à la table, les pions bougent à la souris
+      if (tempsReel) {
+        const libre = !enPause && !fondu && !enScript && !enCombat && !visee && !menus.ouvert;
+        const { course: maj } = libre ? entrees.lire() : { course: false };
+        rt.avancer(dt, { vecteur: libre ? entrees.vecteur() : { x: 0, y: 0 }, courir: options.courirParDefaut ? !maj : maj, action: libre && actionDemandee, libre });
+        actionDemandee = false;
+        return;
+      }
       const libre = !enPause && !fondu && !enScript && !enCombat;
       const { dir, course: maj } = libre ? entrees.lire() : { dir: null, course: false };
       const course = options.courirParDefaut ? !maj : maj;
@@ -841,6 +915,7 @@ const Moteur = (() => {
         const autres = presents.filter((q) => q !== p);
         const d = Monde.destination(carte, partie, autres, p.x, p.y, dir, prises);
         if (!d || d.saut || Monde.teleporteur(carte, d.x, d.y)) continue;
+        if (tempsReel && rt.occupe(d.x, d.y)) continue;
         // Il prend tout de suite sa nouvelle case (personne d'autre ne peut y entrer) et y glisse.
         p.pas++;
         p.mouvement = { de: { x: p.x * t, y: p.y * t }, t: 0, duree: DUREE_PAS * 1.4 };
@@ -966,6 +1041,15 @@ const Moteur = (() => {
         liste.push({ y: Math.round(d.py), dessiner: () => dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : perso, couleur: '#e0a040', direction: a.direction, pas, x, y }, maintenant) });
       }
       for (const id of [...dessinAutres.keys()]) if (!vus.has(id)) dessinAutres.delete(id);
+      if (tempsReel) {
+        // Le héros et les ennemis du temps réel ; le héros avec sa tenue choisie.
+        const tenue = partie.tenue ? jeu.heros?.tenues?.find((q) => q.id === partie.tenue) : null;
+        const perso = tenue?.sprite ? { ...jeu.heros, sprite: tenue.sprite } : jeu.heros;
+        for (const e of rt.aDessiner(cam, maintenant)) liste.push({ y: e.y, dessiner: () => e.dessiner(ctx, e.heros ? { perso } : {}) });
+        liste.sort((a, b) => a.y - b.y);
+        for (const e of liste) e.dessiner();
+        return;
+      }
       const pj = pixelsJoueur();
       liste.push({ y: pj.y, dessiner: () => {
         const m = joueur.mouvement;
@@ -1084,7 +1168,9 @@ const Moteur = (() => {
       // 4. l'ambiance : la lumière (teinte de la carte, jour et nuit, lampes), puis la météo.
       ambiance.dessinerLumiere(ctx, ciel(), sourcesLumiere());
       if (options.meteo) ambiance.dessinerMeteo(ctx);
-      if (debug) dessinerDebug();
+      // Saga 1.12 : les nombres des coups, les cœurs et l'argent du temps réel, par-dessus la nuit.
+      if (tempsReel) rt.dessinerDessus(ctx, cam, W);
+      if (debug) { dessinerDebug(); if (tempsReel) rt.dessinerDebug(ctx, cam); }
       // 5. le fondu au noir des téléporteurs.
       if (noir > 0) {
         ctx.fillStyle = `rgba(0, 0, 0, ${noir})`;
@@ -1251,11 +1337,13 @@ const Moteur = (() => {
       set modeTable(oui) { modeTable = Boolean(oui); },
       peutTable: (j) => Boolean(j && Regles.capacites(j).table),
       get table() { return table; },
+      // Saga 1.12 : le temps réel (pour les tests, et plus tard le multijoueur en temps réel).
+      get tempsReel() { return tempsReel ? rt : null; },
       get debug() { return debug; },
       // Pour la barre d'infos (F3) et pour « Recharger » (F5 garde la position du joueur).
       infos() {
         if (!jeu || !joueur) return null;
-        return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau };
+        return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau, ...(tempsReel ? { ennemis: rt.ennemis.length } : {}) };
       },
       position() { return joueur ? { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
       // Saga 1.5 : la case visée en ce moment (un module demande où poser quelque chose), ou null.

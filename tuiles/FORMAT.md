@@ -1075,6 +1075,59 @@ Après la nuit (Saga 1.11), les bâtiments de repos « matin » finis donnent le
 
 `partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment), `habitants` (Saga 1.6 : combien vivent au domaine), `faim` (Saga 1.6.1 : les nuits de suite où quelqu'un n'a pas mangé), `retour` (Saga 1.6.1 : `{ carte, x, y, direction }`, devant la porte du dernier bâtiment où le joueur est entré) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
 
+### Le pack action (Tafl 1.10, Saga 1.12)
+
+`reglages.regles = "action"` : un jeu d'action en temps réel, façon Zelda. Le héros se déplace
+librement (pas case par case), frappe à l'épée, et les ennemis se battent sur la carte, sans écran de
+combat. Les collisions restent celles de la grille de passage de la carte.
+
+**`donnees/ennemis.json`** : les ennemis.
+
+| Champ | Sens |
+|---|---|
+| `id`, `nom`, `numero`, `description` | comme les autres bases (`numero` : sa place au bestiaire) |
+| `personnage` | l'id d'un personnage de `personnages.json` pour son sprite et ses animations (vide : un rond de `couleur`) |
+| `pv`, `attaque`, `defense` | sa vie et ses forces |
+| `vitesse` | en cases par seconde (0 à 20, 2,5 par défaut) |
+| `vue` | à combien de cases il remarque le joueur |
+| `comportement` | `patrouiller`, `suivre`, `garde`, `fuir`, `immobile` ou `script` |
+| `script` | avec `script` : le nom d'un `comportement()` déclaré dans un script du jeu (SCRIPTS.md) |
+| `portee`, `recharge` | d'où il frappe (en cases, 0 : au contact seulement) et le temps entre deux coups (secondes) |
+| `contact` | `true` (par défaut) : le toucher blesse |
+| `poids` | 0,1 à 10 : plus il est lourd, moins les coups le repoussent |
+| `xp`, `argent`, `coeur` | ce qu'il donne vaincu ; `coeur` : chance (%) de laisser un cœur |
+| `butin` | `[{ objet, chance }]` : les objets qu'il peut laisser |
+| `boss` | `true` : une fois vaincu, il ne revient plus (gardé dans la sauvegarde) |
+
+**Les zones** : avec ce pack, `rencontres` est une liste `[{ ennemi, nombre }]` ; ces ennemis
+apparaissent dans la zone quand le joueur arrive sur la carte (à 4 cases de lui au moins), et `taux`
+ne sert pas. Ils reviennent quand on revient sur la carte, sauf les boss.
+
+**`reglages.action`** : le héros.
+
+| Champ | Défaut | Sens |
+|---|---|---|
+| `coeurs`, `pv_coeur` | 3, 4 | sa vie au départ : des cœurs de quelques PV |
+| `attaque`, `defense`, `vitesse` | 2, 0, 5 | ses forces ; `vitesse` en cases par seconde |
+| `invincibilite` | 1 | secondes d'invincibilité après un coup reçu |
+| `recul` | 1,5 | en cases : le recul d'un coup |
+| `pv_niveau`, `attaque_niveau`, `xp_niveau` | 2, 1, 20 | ce qu'un niveau ajoute, et l'XP pour le premier (la suite monte) |
+
+Le héros est `partie.equipe[0]` dans la sauvegarde (`niveau`, `xp`, `pv`, `equipement`). Les objets de
+soin utilisent `effet.type` `soin` ou `rappel`. Sans PV, il se réveille au dernier soin (ou au départ),
+soigné, et les ennemis de la carte reviennent.
+
+**Dans les personnages** (tous champs facultatifs, Saga choisit sinon) :
+
+- `animations` : `repos`, `attaque`, `coup`, `mort`, chacune une planche comme `sprite` (4 directions)
+  avec `duree` (ms par image, 16 à 2000, 80 par défaut). Sans `attaque`, Saga dessine un arc d'épée.
+- `hitbox` : `{ x, y, largeur, hauteur }` en pixels dans la case : son corps (par défaut, le centre bas
+  de la case).
+- `frappe` : `{ portee, largeur }` en pixels : la zone de son coup devant lui.
+
+Dans Saga, F3 montre les boîtes, les chemins des ennemis et ce qu'ils font. Le chemin d'un ennemi est
+l'A* de `moteur/chemins.js`, en 8 directions.
+
 ## Test rapide
 
 (Tafl 0.27, joué par Saga 0.10.) Jeu › Test rapide lance le moteur avec un **état de départ** : une partie neuve, puis cet état posé par-dessus. Tafl le passe en ligne de commande, dans un fichier : `Saga.exe <dossier> --test=<fichier.json>`. Les états enregistrés vont dans `jeu.json`, champ `tests` (une liste).
@@ -1139,3 +1192,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 1.9** : la commande et la condition `bonus`, `bonus` dans la sauvegarde (Saga 1.11) ; pour le module gestion, `repos` des bâtiments, `butin_au_stock` et `perte_defaite` dans ses réglages, la commande `gestion_repos`. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.3** : la commande `dormir`, la condition `jour`, `jour` dans la sauvegarde (Saga 1.5) ; le module gestion : `donnees/ressources.json`, `donnees/batiments.json`, `modules_reglages.gestion`, ses commandes et conditions `gestion_…`, `modules.gestion` dans la sauvegarde. Des champs et des fichiers en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.33** : le mode table du pack `"jdr"` : `case_m`, `diagonales` et `jets_mj_caches` dans `reglages.jdr`, `piece` et `visible_par` dans les zones, `visible_par` dans les événements et les rencontres, `portee_longue`, `allonge` et `rayon` dans les attaques. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.10** : le pack de règles `"action"` (le temps réel de Saga 1.12) : `donnees/ennemis.json`, `reglages.action`, les rencontres `{ ennemi, nombre }` dans les zones, `animations`, `hitbox` et `frappe` dans les personnages, le compteur `monstres_vaincus` pour ce pack. Des champs en plus, donc la version reste 1.

@@ -229,6 +229,7 @@ Dans Tafl (Données du jeu › Réglages › Menus du jeu), le créateur du jeu 
 | `groupe` | La commande `groupe` (rejoindre, quitter) | non | oui |
 | `tenir` | Menu Équipe › Faire tenir un objet | oui | non |
 | `table` | Le mode table de Saga 0.14 (plateau, brouillard, vue du MJ) ; `combattre` reçoit alors `grille` | non | non (`jdr` : oui) |
+| `tempsReel` | Le temps réel de Saga 1.12 : déplacement libre, épée, ennemis sur la carte (`action/temps-reel.js`) ; plus d'écran de combat | non | non (`action` : oui) |
 
 Saga cache ce que le pack ne sait pas faire ; Tafl cache les commandes, conditions et onglets de données qui n'ont pas de sens pour le pack choisi.
 
@@ -412,6 +413,25 @@ Le tour où un héros se réveille ou se remet de la paralysie, il ne fait rien 
 - **Menu Groupe › Équipement** : changer ce que porte un héros, place par place ; l'objet porté quitte le sac, l'ancien y revient. Seuls les objets de la bonne `place` et des bonnes `classes` sont proposés, avec l'écart de statistiques.
 - **Menu Groupe › Compétences** : lancer une compétence de soin (`soin`, `ranime` ou `guerit`, cible `allie`, `equipe` ou `soi`) en payant ses PM.
 - **Commande `groupe`** : rejoindre (dans le groupe, sinon la Réserve) ou quitter (le héros est gardé dans `partie.partis`). Le dernier héros du groupe ne peut pas partir.
+
+---
+
+## 4 bis. Le pack action (Saga 1.12)
+
+`regles/action/pack.js` (global `ActionRegles`). Sa capacité `tempsReel` fait passer Saga en temps
+réel : `action/temps-reel.js` gère le déplacement libre, les boîtes (corps, pieds, coup), le recul,
+l'invincibilité, les ennemis (apparition par zone, décisions de `action/comportements.js` ou d'un
+script, chemins A* de `chemins.js` en 8 directions) et le butin. Le pack, lui, reste pur : il ne fait
+que des calculs sur `jeu` et `partie`.
+
+- **Le héros** : `partie.equipe[0]` = `{ creature, nom, niveau, xp, pv, equipement }`. `stats`, `pvMax`
+  et `xpPour` lisent `reglages.action` (FORMAT.md › Le pack action) et l'équipement.
+- **Un coup** : `coupDuHeros` et `coupDeLEnnemi` rendent les PV perdus par `degats` (formule `degats`
+  remplaçable par `Maison.formule`, donc parfois une promesse) ; `blesser` et `soignerPv` changent les PV.
+- **Un ennemi vaincu** : `vaincu` donne l'XP (et les niveaux), l'argent, le butin tiré, le bestiaire et
+  le compteur `monstres_vaincus`.
+- `rencontre` rend toujours `null` et `combattre` rend `{ issue: 'fuite' }` : il n'y a pas d'écran de
+  combat. Menus : Héros et Bestiaire.
 
 ---
 

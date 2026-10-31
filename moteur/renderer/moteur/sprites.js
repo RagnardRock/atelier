@@ -145,6 +145,17 @@ const Sprites = (() => {
       x + Math.floor((taille - sprite.largeur) / 2), y + taille - sprite.hauteur, sprite.largeur, sprite.hauteur);
   }
 
+  // Saga 1.12 (temps réel) : une animation d'un personnage (attaque, coup, mort, repos), une planche comme
+  // le sprite (4 rangées, une par direction) avec `duree` millisecondes par image. temps : depuis son début
+  // (secondes) ; boucle : recommencer à la fin (repos), sinon rester sur la dernière image.
+  function dessinerAnimation(ctx, anim, direction, temps, x, y, taille, boucle = true) {
+    const r = Math.max(0, ORDRE.indexOf(direction));
+    const n = Math.floor((temps * 1000) / Math.max(16, anim.duree || 80));
+    const k = boucle ? n % anim.images : Math.min(anim.images - 1, n);
+    ctx.drawImage(anim.img, k * anim.largeur, r * anim.hauteur, anim.largeur, anim.hauteur,
+      x + Math.floor((taille - anim.largeur) / 2), y + taille - anim.hauteur, anim.largeur, anim.hauteur);
+  }
+
   // Saga 0.8 : une image d'un personnage, en data: URL, pour les menus et l'écran de combat en groupe
   // (le héros de côté, debout ou en marche). perso : { sprite, tuile, couleur } (un personnage de
   // personnages.json, ou une tenue) ; jeu : pour sa tuile. Rend '' si rien ne se dessine.
@@ -178,5 +189,5 @@ const Sprites = (() => {
     return url;
   }
 
-  return { dessiner, dessinerSprite, imageDeMarche, ombre, images, vignette };
+  return { dessiner, dessinerSprite, dessinerAnimation, imageDeMarche, ombre, images, vignette };
 })();

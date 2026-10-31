@@ -132,6 +132,14 @@ const BacASable = (() => {
       },
     },
   };
+  // Saga 1.12 : le pack action (le temps réel).
+  FORMULES.action = {
+    degats: {
+      nom: 'Dégâts d\'un coup', rend: 'Les PV perdus (le héros a des cœurs de quelques PV chacun ; au moins 0).',
+      valeurs: { A: 'Attaque de celui qui frappe (le héros avec son niveau et son équipement, ou l\'ennemi)', D: 'Défense de celui qui est touché', puissance: 'Puissance du coup (1 pour l\'épée et le contact)', normal: 'Les dégâts selon le pack : A × puissance − D, au moins 1' },
+      exemple: { A: 3, D: 1, puissance: 1, normal: 2 },
+    },
+  };
   const formulesDuPack = (pack) => FORMULES[pack] || FORMULES.pokemon;
 
   // Les moments du jeu qu'un script peut écouter avec quand(moment, fn).
@@ -144,6 +152,10 @@ const BacASable = (() => {
     // Saga 1.5 : la commande « dormir ».
     fin_de_journee: { nom: 'Le joueur s\'est couché : le jour est fini (après le calcul des modules)', infos: { jour: 'Le numéro du jour qui vient de finir' } },
     matin: { nom: 'Le joueur se réveille, un nouveau jour commence', infos: { jour: 'Le numéro du nouveau jour' } },
+    // Saga 1.12 : le temps réel (pack action).
+    ennemi_vaincu: { nom: 'Un ennemi est vaincu (temps réel)', infos: { ennemi: 'L\'id de l\'ennemi', x: 'Sa case', y: 'Sa case' } },
+    heros_touche: { nom: 'Le héros est touché (temps réel)', infos: { degats: 'Les PV perdus', pv: 'Les PV qui lui restent' } },
+    defaite: { nom: 'Le héros n\'a plus de vie (temps réel), avant son réveil', infos: {} },
   };
 
   // Les réglages qu'une commande de script peut demander dans Tafl (bloc Script).
@@ -209,7 +221,7 @@ const BacASable = (() => {
     });
 
     // 3. Ce que les scripts déclarent.
-    const commandes = new Map(), formules = new Map(), reactions = new Map();
+    const commandes = new Map(), formules = new Map(), reactions = new Map(), comportements = new Map();
     let fichier = null, erreursChargement = [];
     const texteDe = (v) => {
       if (typeof v === 'string') return v;
@@ -249,6 +261,14 @@ const BacASable = (() => {
       if (formules.has(nom)) throw new Error(`formule('${nom}') est déjà remplacée (dans ${formules.get(nom).fichier})`);
       formules.set(nom, { fn, fichier });
     }
+    // Saga 1.12 (temps réel) : ce que décide un ennemi au comportement « script ». fn(etat) → décision
+    // ({ etat, but: { x, y }, fuir, frapper }), sans attendre le joueur (pas de saga ici : c'est pur).
+    function comportement(nom, fn) {
+      verifierNom('comportement()', nom);
+      if (typeof fn !== 'function') throw new Error(`comportement('${nom}') : il manque la fonction ((etat, des) => ({ etat, but, fuir, frapper }))`);
+      if (comportements.has(nom)) throw new Error(`comportement('${nom}') existe déjà (dans ${comportements.get(nom).fichier})`);
+      comportements.set(nom, { fn, fichier });
+    }
     function quand(moment, fn) {
       verifierNom('quand()', moment);
       if (typeof fn !== 'function') throw new Error(`quand('${moment}') : il manque la fonction (async (saga, infos) => { … })`);
@@ -259,7 +279,7 @@ const BacASable = (() => {
     const donnees = {};
     self.__fichier = (nom, fabrique) => {
       fichier = nom;
-      try { fabrique(commande, formule, quand, des, donnees, console); } catch (err) { erreursChargement.push({ fichier: nom, message: err?.message || String(err), pile: err?.stack || '' }); }
+      try { fabrique(commande, formule, quand, des, donnees, console, comportement); } catch (err) { erreursChargement.push({ fichier: nom, message: err?.message || String(err), pile: err?.stack || '' }); }
       fichier = null;
     };
 
@@ -361,6 +381,12 @@ const BacASable = (() => {
         if (!nombreOk(v)) throw new Error(`La formule « ${nom} » doit rendre un nombre (elle a rendu ${texteDe(v)})`);
         return Number(v);
       }
+      if (sorte === 'comportement') {
+        const c = comportements.get(nom);
+        if (!c) return { absente: true };
+        const v = await c.fn(geler({ ...(args || {}) }), des);
+        return v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : null;
+      }
       if (sorte === 'quand') {
         for (const r of reactions.get(nom) || []) await r.fn(creerSaga(id, etat), geler({ ...(args || {}) }));
         return null;
@@ -406,6 +432,7 @@ const BacASable = (() => {
         commandes: [...commandes].map(([nom, c]) => ({ nom, params: c.params, fichier: c.fichier, aide: c.aide })),
         formules: [...formules].map(([nom, f]) => ({ nom, fichier: f.fichier })),
         quand: [...reactions].flatMap(([moment, l]) => l.map((r) => ({ moment, fichier: r.fichier }))),
+        comportements: [...comportements].map(([nom, c]) => ({ nom, fichier: c.fichier })),
         erreurs: erreursChargement,
       });
     };
@@ -422,7 +449,7 @@ const BacASable = (() => {
     const debuts = [];
     let n = lignes[0].split('\n').length;
     for (const f of fichiers) {
-      const entete = `__fichier(${JSON.stringify(f.fichier)}, function (commande, formule, quand, des, donnees, console) { 'use strict';`;
+      const entete = `__fichier(${JSON.stringify(f.fichier)}, function (commande, formule, quand, des, donnees, console, comportement) { 'use strict';`;
       lignes.push(entete);
       n += 1;
       debuts.push({ fichier: f.fichier, debut: n + 1, fin: n + String(f.code).split('\n').length });
@@ -467,7 +494,7 @@ const BacASable = (() => {
   //                arrêter le script), etat(appel) → { partie, carte, evenement, joueur },
   //                console({ niveau, texte, lieu }) , graine(n) }
   function creer({ fichiers = [], donnees = {}, graine = 1, hote = {} } = {}) {
-    let worker = null, debuts = [], inventaire = { commandes: [], formules: [], quand: [], erreurs: [] };
+    let worker = null, debuts = [], inventaire = { commandes: [], formules: [], quand: [], comportements: [], erreurs: [] };
     let pret = null, appels = new Map(), compteur = 0, graineCourante = graine | 0;
     let ping = null, dernierPong = 0, fini = false, resoudrePret = null;
     const fichiersOk = fichiers.filter((f) => NOM_FICHIER.test(f.fichier));
@@ -540,7 +567,7 @@ const BacASable = (() => {
         if (m.t === 'charge') {
           URL.revokeObjectURL(url);
           inventaire = {
-            commandes: m.commandes || [], formules: m.formules || [], quand: m.quand || [],
+            commandes: m.commandes || [], formules: m.formules || [], quand: m.quand || [], comportements: m.comportements || [],
             erreurs: [
               ...[...exclus.values()],
               ...(m.erreurs || []).map((x) => ({ ...x, ...(lieuDansPile(debuts, x.pile) || { fichier: x.fichier }) })),
@@ -591,7 +618,7 @@ const BacASable = (() => {
       return pret;
     }
 
-    // sorte : 'commande' | 'formule' | 'quand' ; contexte : ce que hote.demande et hote.etat recevront.
+    // sorte : 'commande' | 'formule' | 'quand' | 'comportement' (Saga 1.12) ; contexte : ce que hote.demande et hote.etat recevront.
     async function appeler(sorte, nom, args = {}, contexte = {}) {
       if (fini) throw new Error('Le bac à sable est fermé');
       if (!worker) demarrer();
@@ -601,7 +628,7 @@ const BacASable = (() => {
         const a = { id, sorte, nom, contexte, resoudre, rejeter, file: Promise.resolve(), finScript: false };
         appels.set(id, a);
         let etat = null;
-        try { etat = sorte === 'formule' ? null : hote.etat?.(a) || null; } catch { etat = null; }
+        try { etat = sorte === 'formule' || sorte === 'comportement' ? null : hote.etat?.(a) || null; } catch { etat = null; }
         worker.postMessage({ t: 'appel', id, sorte, nom, args: JSON.parse(JSON.stringify(args ?? {})), etat });
         surveiller();
       });
@@ -611,7 +638,7 @@ const BacASable = (() => {
     return {
       pret: () => pret,
       inventaire: () => inventaire,
-      a: (sorte, nom) => (sorte === 'commande' ? inventaire.commandes : sorte === 'formule' ? inventaire.formules : inventaire.quand.map((q) => ({ nom: q.moment })))
+      a: (sorte, nom) => (sorte === 'commande' ? inventaire.commandes : sorte === 'formule' ? inventaire.formules : sorte === 'comportement' ? inventaire.comportements || [] : inventaire.quand.map((q) => ({ nom: q.moment })))
         .some((x) => x.nom === nom),
       appeler,
       graine: () => graineCourante,
