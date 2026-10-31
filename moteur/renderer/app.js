@@ -426,14 +426,14 @@ function creerSaga() {
     $('.carnet-bouton[data-ecran="dex"]').hidden = !forme.dex_visible;
     // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer) et des modules (le
     // domaine, construire) : depuis Saga 1.6.1, des boutons du carnet, à côté de l'équipe (plus dans la pause).
-    for (const b of $$('.carnet-bouton[data-pack]')) b.remove();
-    let apres = $('.carnet-bouton[data-ecran="dex"]');
-    for (const [id, nom, icone] of moteur.actionsPause()) {
-      const b = el('button', { className: 'carnet-bouton', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
+    // Saga 1.6.2 : sur leur propre rangée, sous l'en-tête, et ce sont eux qui ont le focus en premier.
+    const actions = moteur.actionsPause();
+    $('#carnet-actions').replaceChildren(...actions.map(([id, nom, icone]) => {
+      const b = el('button', { className: 'carnet-bouton carnet-action', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
       b.dataset.pack = id;
-      apres.after(b);
-      apres = b;
-    }
+      return b;
+    }));
+    $('#carnet-actions').hidden = !actions.length;
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
     // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
     // Un clic sur une créature : son résumé (Saga 0.6).
@@ -472,7 +472,30 @@ function creerSaga() {
     fermerPause();
     moteur.pause(true);
     $('#carnet').hidden = false;
+    // Saga 1.6.2 : le carnet se mène au clavier : le premier bouton a le focus, les flèches passent de l'un
+    // à l'autre, Action (Espace, Entrée, E) appuie.
+    ($('#carnet-actions .carnet-bouton') || boutonsCarnet()[0])?.focus();
   }
+  const boutonsCarnet = () => $$('#carnet button').filter((b) => b.offsetParent !== null && !b.disabled && !b.classList.contains('carnet-fermer'));
+  $('#carnet').addEventListener('keydown', (e) => {
+    const liste = boutonsCarnet();
+    if (!liste.length) return;
+    const i = liste.indexOf(document.activeElement);
+    const sens = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
+      || (touche('droite', e) || touche('bas', e) ? 1 : touche('gauche', e) || touche('haut', e) ? -1 : 0);
+    if (sens) {
+      e.preventDefault();
+      e.stopPropagation();
+      const b = liste[i < 0 ? 0 : (i + sens + liste.length) % liste.length];
+      b.focus();
+      b.scrollIntoView?.({ block: 'nearest' });
+      moteur.bruit('curseur');
+    } else if (touche('action', e) && i >= 0 && e.key !== 'Enter' && e.key !== ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      liste[i].click();
+    }
+  });
   function fermerCarnet() {
     $('#carnet').hidden = true;
     moteur.pause(false);

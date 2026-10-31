@@ -455,6 +455,10 @@ body.plein-ecran #scene { cursor: none; }
 .menu-boite.menu-large { width: min(680px, calc(100% - 40px)); max-height: 86%; }
 .carnet-bouton { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 7px; background: rgba(255, 255, 255, 0.06); color: var(--text-strong); font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .carnet-bouton:hover { border-color: var(--accent); color: var(--accent); }
+#carnet-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 2px; }
+#carnet-actions[hidden] { display: none; }
+#carnet-actions .carnet-bouton { padding: 6px 14px; font-size: 13.5px; }
+.carnet-bouton:focus, .carnet-utiliser:focus { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--accent); border-color: var(--accent); } /* Saga 1.6.2 : le carnet au clavier */
 #carnet-corps li.carnet-creature { cursor: pointer; }
 #carnet-corps li.carnet-creature:hover { background: rgba(255, 255, 255, 0.08); }
 
