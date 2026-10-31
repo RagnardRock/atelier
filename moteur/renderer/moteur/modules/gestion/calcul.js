@@ -12,12 +12,15 @@
 // L'état (partie.modules.gestion) :
 //   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y }], habitants, prochain, resolu }
 //   habitants (Saga 1.6) = combien de gens vivent au domaine (ils logent dans les bâtiments finis)
+//   faim (Saga 1.6.1)    = combien de nuits de suite quelqu'un n'a pas mangé
+//   retour (Saga 1.6.1)  = { carte, x, y, direction } : devant la porte du dernier bâtiment où le joueur est entré
 //   carte, x, y : où il est posé (Saga 1.5 ; absent pour un bâtiment construit sans place, par un événement)
 //   reste   = les nuits qu'il faut encore à un chantier
 //   resolu  = le dernier jour dont la fin a été calculée : la recalculer ne fait rien
 
 const GestionCalcul = (() => {
   const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+  const PASSAGES = ['auto', 'libre', 'bloque', 'porte'];
   const entier = (v, d = 0, min = 0, max = 1e9) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d; };
   const texte = (v, max = 200) => (typeof v === 'string' ? v.slice(0, max) : '');
   const tableau = (v) => (Array.isArray(v) ? v : []);
@@ -61,12 +64,29 @@ const GestionCalcul = (() => {
         // faut pour qu'il produise (0 : il produit seul).
         logement: entier(b.logement, 0, 0, 999), ouvriers: entier(b.ouvriers, 0, 0, 999),
       });
+      // Saga 1.6.1 : le passage case par case (Tafl le règle à la souris), rangée par rangée :
+      // 'auto' (selon la tuile du tampon), 'libre', 'bloque' ou 'porte' (on la traverse, et elle mène à
+      // porte_vers). Une case 'porte' remplace le champ porte.
+      const def = batiments.get(b.id);
+      const n = def.largeur * def.hauteur;
+      def.passage = Array.isArray(b.passage) ? Array.from({ length: n }, (_, k) => (PASSAGES.includes(b.passage[k]) ? b.passage[k] : 'auto')) : null;
+      const kp = def.passage ? def.passage.indexOf('porte') : -1;
+      if (kp >= 0) def.porte = { x: kp % def.largeur, y: Math.floor(kp / def.largeur) };
+      const v = b.porte_vers;
+      def.porte_vers = v && typeof v === 'object' && typeof v.carte === 'string' && v.carte ? { carte: v.carte, x: entier(v.x, 0, 0, 9999), y: entier(v.y, 0, 0, 9999), direction: ['haut', 'bas', 'gauche', 'droite'].includes(v.direction) ? v.direction : 'haut' } : null;
+      // Saga 1.6.1 : 'propre' (défaut) : chaque bâtiment posé a sa copie de l'intérieur (la carte
+      // « porte_vers.carte@id du bâtiment ») ; 'partage' : tous ceux de ce type mènent à la même carte.
+      def.interieur = b.interieur === 'partage' ? 'partage' : 'propre';
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
     const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
       // Saga 1.6 : les habitants. repas : ce que chacun mange par nuit ; arrivees : combien en arrivent au
       // plus par nuit quand il reste de la place (0 : ils ne viennent que par la commande).
-      habitants_depart: entier(g.habitants_depart, 0, 0, 9999), repas: quantites(g.repas), arrivees: entier(g.arrivees, 1, 0, 99) };
+      habitants_depart: entier(g.habitants_depart, 0, 0, 9999), repas: quantites(g.repas), arrivees: entier(g.arrivees, 1, 0, 99),
+      // Saga 1.6.1 : ce que fait la faim (choisi par le jeu). 'arrivees' : personne n'arrive tant que
+      // quelqu'un a faim ; 'rien' : seulement le rapport ; 'departs' : de plus, après faim_nuits nuits de
+      // faim de suite, un habitant part chaque nuit tant qu'elle dure. Dans tous les cas, ils travaillent.
+      faim: ['arrivees', 'rien', 'departs'].includes(g.faim) ? g.faim : 'arrivees', faim_nuits: entier(g.faim_nuits, 3, 1, 99) };
     return { ressources, batiments, reglages };
   }
 
@@ -76,7 +96,7 @@ const GestionCalcul = (() => {
   const dire = (d, q) => Object.entries(q).map(([r, n]) => `${n} ${nomRessource(d, r)}`).join(', ');
 
   // L'état d'une partie neuve : le stock de départ.
-  const etatNeuf = (d) => ({ stock: { ...d.reglages.stock_depart }, batiments: [], habitants: d.reglages.habitants_depart, prochain: 1, resolu: 0 });
+  const etatNeuf = (d) => ({ stock: { ...d.reglages.stock_depart }, batiments: [], habitants: d.reglages.habitants_depart, faim: 0, prochain: 1, resolu: 0 });
 
   // Un état lu dans une sauvegarde (ou écrit à la main) remis en forme. Les bâtiments d'un type que le jeu
   // n'a plus sont gardés (le jeu peut le remettre) mais ne produisent rien.
@@ -94,7 +114,10 @@ const GestionCalcul = (() => {
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
       batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu });
     }
-    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
+    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
+      // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
+      ...(etat.retour && typeof etat.retour === 'object' && typeof etat.retour.carte === 'string' ? { retour: { carte: etat.retour.carte, x: entier(etat.retour.x, 0, 0, 9999), y: entier(etat.retour.y, 0, 0, 9999), direction: typeof etat.retour.direction === 'string' ? etat.retour.direction : 'bas' } } : {}),
+      prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
   }
 
   // La place pour chaque ressource (0 = sans limite).
@@ -195,19 +218,22 @@ const GestionCalcul = (() => {
   }
 
   // La fin du jour `jour`, dans un ordre fixe :
-  //   1. les habitants mangent (repas, dans le stock du coucher) ; ceux qui n'ont pas mangé ne travaillent pas ;
-  //   2. les habitants nourris vont aux bâtiments finis qui demandent des ouvriers, dans l'ordre de
+  //   1. les habitants mangent (repas, dans le stock du coucher). Ceux qui n'ont pas mangé travaillent quand
+  //      même (Saga 1.6.1) : sinon une ferme sans blé n'aurait plus d'ouvriers pour en produire, pour toujours.
+  //      Ce que fait la faim dépend du réglage faim (étape 5) ;
+  //   2. les habitants vont aux bâtiments finis qui demandent des ouvriers, dans l'ordre de
   //      construction ; un bâtiment qui n'a pas tous ses ouvriers ne produit pas ;
   //   3. les bâtiments finis produisent, s'ils ont ce qu'ils consomment dans le stock du coucher (s'ils sont
   //      plusieurs à vouloir la même ressource, le premier bâti passe d'abord) ;
   //   4. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira la nuit suivante) ;
-  //   5. s'il reste de la place pour loger et que tous ont mangé, des habitants arrivent (ils travaillent à
+  //   5. faim 'departs' : après faim_nuits nuits de faim de suite, un habitant part. Puis, s'il reste de la
+  //      place pour loger et que tous ont mangé (ou faim 'rien'), des habitants arrivent (ils travaillent à
   //      partir de la nuit suivante) ;
   //   6. le stock est ramené à sa capacité.
   // Rend { etat, lignes, termines, arrives } (lignes : le rapport du matin). Le même jour une deuxième fois : rien.
   function finDeJournee(d, e, jour) {
     const n = entier(jour, 0);
-    if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0 };
+    if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0, partis: 0 };
     const etat = copie(e);
     etat.habitants = entier(etat.habitants, 0, 0, 9999);
     const lignes = [];
@@ -219,11 +245,16 @@ const GestionCalcul = (() => {
       nourris = Math.min(etat.habitants, ...Object.entries(repas).map(([r, k]) => Math.floor((etat.stock[r] || 0) / k)));
       const mange = Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * nourris]).filter(([, k]) => k > 0));
       retirer(mange);
-      if (nourris < etat.habitants) lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}. Ils ne travaillent pas.`);
+      if (nourris < etat.habitants) {
+        const suite = { arrivees: ' Personne ne s\'installera tant que tout le monde n\'a pas mangé.', rien: '', departs: ' Personne ne s\'installera tant que tout le monde n\'a pas mangé, et au bout de quelques nuits, des habitants partiront.' }[d.reglages.faim];
+        lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}.${suite}`);
+      }
     }
+    const faim = nourris < etat.habitants;
+    etat.faim = faim ? entier(etat.faim, 0) + 1 : 0;
     // 2 et 3. Le travail et la production. Ce qui est produit cette nuit n'arrive au stock qu'à la fin : un
     // bâtiment ne consomme que ce qu'il y avait au coucher, quel que soit l'ordre des bâtiments.
-    let libres = nourris;
+    let libres = etat.habitants;
     const sansOuvriers = [];
     const produit = {};
     for (const b of etat.batiments) {
@@ -246,9 +277,15 @@ const GestionCalcul = (() => {
       b.reste = Math.max(0, b.reste - 1);
       if (b.reste === 0) { b.etat = 'fini'; termines.push(b.type); lignes.push(`Chantier terminé : ${nomBatiment(d, b.type)}.`); }
     }
-    // 5. Les arrivées : seulement si personne n'a eu faim.
+    // 5. Les départs (faim 'departs') puis les arrivées (pas de faim, ou faim 'rien').
+    let partis = 0;
+    if (faim && d.reglages.faim === 'departs' && etat.faim >= d.reglages.faim_nuits && etat.habitants > 0) {
+      partis = 1;
+      etat.habitants -= 1;
+      lignes.push(`Un habitant a eu faim ${etat.faim} nuits de suite : il quitte le domaine.`);
+    }
     let arrives = 0;
-    if (nourris === etat.habitants && d.reglages.arrivees > 0) {
+    if ((!faim || d.reglages.faim === 'rien') && d.reglages.arrivees > 0) {
       arrives = Math.max(0, Math.min(d.reglages.arrivees, logement(d, etat) - etat.habitants));
       if (arrives) { etat.habitants += arrives; lignes.push(arrives > 1 ? `${arrives} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.'); }
     }
@@ -260,7 +297,7 @@ const GestionCalcul = (() => {
       if (Object.keys(perdu).length) lignes.push(`Le stock est plein : ${dire(d, perdu)} perdus.`);
     }
     etat.resolu = n;
-    return { etat, lignes, termines, arrives };
+    return { etat, lignes, termines, arrives, partis };
   }
 
   // Saga 1.6 : qui travaille où, ce soir (pour l'écran du domaine et les scripts) : les ouvriers que

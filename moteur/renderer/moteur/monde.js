@@ -237,15 +237,17 @@ const Monde = (() => {
     if (!partie.repousses || typeof partie.repousses !== 'object' || Array.isArray(partie.repousses)) partie.repousses = {};
     const vues = new Set();
     let n = 0;
-    for (const c of jeu.cartes.values()) {
-      for (const ev of c.evenements) {
-        const nuits = Math.round(Number(ev.repousse_nuits) || 0);
-        if (nuits < 1) continue;
-        const cle = `${c.id}/${ev.id}`;
-        if (!partie.locaux[cle]) continue;
-        const k = (Number(partie.repousses[cle]) || 0) + 1;
-        if (k >= nuits) { delete partie.locaux[cle]; n++; } else { partie.repousses[cle] = k; vues.add(cle); }
-      }
+    // Saga 1.6.1 : on part de ce que la partie a retenu (et non des cartes), pour compter aussi les copies
+    // de carte (« base@copie », l'intérieur d'un bâtiment) que le joueur n'a pas revues depuis le chargement.
+    for (const cle of Object.keys(partie.locaux || {})) {
+      if (!partie.locaux[cle]) continue;
+      const i = cle.lastIndexOf('/');
+      const c = i > 0 ? jeu.cartes.get(cle.slice(0, i)) : null;
+      const ev = c?.evenements.find((e) => String(e.id) === cle.slice(i + 1));
+      const nuits = Math.round(Number(ev?.repousse_nuits) || 0);
+      if (nuits < 1) continue;
+      const k = (Number(partie.repousses[cle]) || 0) + 1;
+      if (k >= nuits) { delete partie.locaux[cle]; n++; } else { partie.repousses[cle] = k; vues.add(cle); }
     }
     for (const cle of Object.keys(partie.repousses)) if (!vues.has(cle)) delete partie.repousses[cle];
     return n;

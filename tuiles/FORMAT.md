@@ -962,7 +962,7 @@ Activé par `reglages.modules: ["gestion"]`, avec n'importe quel pack. Un **stoc
 
 Deux façons de mettre un bâtiment sur la carte :
 
-- **le placement libre** : le joueur choisit où le poser, dans une zone de type `"constructible"` de la carte (menu de pause › Construire, ou la commande `gestion_placer`). Il déplace le bâtiment avec les flèches (vert : il tient, rouge : non) et le pose avec la touche d'action ; retour annule. Saga le dessine avec son tampon et bloque son emprise, sauf la porte ;
+- **le placement libre** : le joueur choisit où le poser, dans une zone de type `"constructible"` de la carte (carnet › Construire, ou la commande `gestion_placer`). Il déplace le bâtiment avec les flèches (vert : il tient, rouge : non) et le pose avec la touche d'action ; retour annule. Saga le dessine avec son tampon et bloque son emprise, sauf la porte ;
 - **un emplacement fixe** : la commande `gestion_construire` (sans place) et un événement dont une page a la condition `gestion_batiment`.
 
 **Les habitants** (Tafl 1.4, Saga 1.6) logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas`) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent tout seuls, la nuit, quand il reste un logement et que personne n'a eu faim, ou par la commande `gestion_habitants`. Ils ne se promènent pas encore sur la carte.
@@ -999,21 +999,24 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `largeur`, `hauteur` (1 par défaut) : la taille en cases d'un bâtiment sans tampon (dessiné comme un simple bloc).
 - `logement` (Saga 1.6, 0 par défaut) : combien d'habitants il loge, une fois fini.
 - `ouvriers` (Saga 1.6, 0 par défaut) : combien d'habitants il lui faut pour produire ; il ne produit pas s'il ne les a pas tous. 0 : il produit seul.
+- `passage` (facultatif, Tafl 1.4.1, Saga 1.6.1) : le passage case par case, rangée par rangée (`largeur × hauteur` valeurs) : `"bloque"`, `"libre"` (une ombre, le toit), `"porte"` (on la traverse, et elle mène à `porte_vers`) ou `"auto"`. Tafl le règle à la souris sur l'image du tampon. Absent, ou `"auto"` : les rangées `dessus` du tampon et ses cases vides sont libres, sinon la tuile décide (une tuile au passage `"libre"` laisse passer, les autres bloquent) ; sans tampon, tout bloque.
+- `porte_vers` (facultatif, Saga 1.6.1, `{ "carte", "x", "y", "direction" }`) : où mène la porte d'un bâtiment fini (son intérieur). Chaque bâtiment posé a sa propre copie de cette carte (Saga la nomme `carte@id du bâtiment`), sauf avec `interieur`. Pour ressortir, la commande `gestion_sortir` ramène le joueur devant la porte par laquelle il est entré.
+- `interieur` (facultatif, Tafl 1.4.1, Saga 1.6.1) : `"propre"` (par défaut : un intérieur à chaque bâtiment posé) ou `"partage"` (tous ceux de ce type mènent à la même carte : une boutique, une grange commune).
 - `porte` (facultatif, `{ "x", "y" }`, depuis le coin haut gauche du bâtiment) : la case de l'emprise qu'on peut traverser ; toutes les autres bloquent.
 
 #### Dans `reglages.json` : `modules_reglages.gestion`
 
-`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son choix dans le menu de pause), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le menu de pause), `construire_menu` (`true` par défaut : « Construire » dans le menu de pause, sur une carte qui a une zone constructible), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve). Saga 1.6 : `habitants_depart` (les habitants d'une partie neuve, 0 par défaut), `repas` (`[{ ressource, nombre }]` : ce que mange un habitant chaque nuit ; vide : ils ne mangent rien), `arrivees` (combien d'habitants arrivent au plus par nuit s'il reste un logement, 1 par défaut ; 0 : seulement par la commande).
+`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son bouton dans le carnet), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le carnet), `construire_menu` (`true` par défaut : « Construire » dans le carnet, sur une carte qui a une zone constructible), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve). Saga 1.6 : `habitants_depart` (les habitants d'une partie neuve, 0 par défaut), `repas` (`[{ ressource, nombre }]` : ce que mange un habitant chaque nuit ; vide : ils ne mangent rien), `arrivees` (combien d'habitants arrivent au plus par nuit s'il reste un logement, 1 par défaut ; 0 : seulement par la commande). Saga 1.6.1 : `faim` (ce que fait la faim ; les habitants travaillent toujours) : `"arrivees"` (par défaut : personne n'arrive tant que quelqu'un a faim), `"rien"` (seulement le rapport) ou `"departs"` (en plus, après `faim_nuits` nuits de faim de suite, 3 par défaut, un habitant part chaque nuit).
 
 #### La nuit
 
 Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jour :
 
-1. les habitants mangent (`repas`, dans le stock du coucher) ; ceux qui n'ont pas pu manger ne travaillent pas cette nuit (personne ne part) ;
-2. les habitants nourris vont aux bâtiments finis qui demandent des `ouvriers`, dans l'ordre de construction ; un bâtiment qui ne les a pas tous ne produit pas (le rapport le dit) ;
+1. les habitants mangent (`repas`, dans le stock du coucher) ; s'il en manque, ils travaillent quand même (Saga 1.6.1 : sinon un bâtiment qui produit la nourriture s'arrêterait pour toujours) ; ce que fait la faim dépend du réglage `faim` (étape 5) ;
+2. les habitants vont aux bâtiments finis qui demandent des `ouvriers`, dans l'ordre de construction ; un bâtiment qui ne les a pas tous ne produit pas (le rapport le dit) ;
 3. les bâtiments finis produisent, chacun avec ce qu'il y avait dans le stock au coucher (ce qui est produit cette nuit ne sert que la nuit suivante ; si plusieurs bâtiments veulent la même ressource, le premier construit passe d'abord) ;
 4. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira à partir de la suivante) ;
-5. si tout le monde a mangé et qu'il reste un logement, jusqu'à `arrivees` habitants s'installent (ils travaillent à partir de la nuit suivante ; moment `gestion_arrivee` pour les scripts) ;
+5. avec `faim: "departs"`, après `faim_nuits` nuits de suite où quelqu'un n'a pas mangé, un habitant part (un par nuit tant que la faim dure ; moment `gestion_depart`). Puis, si tout le monde a mangé (ou avec `faim: "rien"`) et qu'il reste un logement, jusqu'à `arrivees` habitants s'installent (ils travaillent à partir de la nuit suivante ; moment `gestion_arrivee` pour les scripts) ;
 6. le stock est ramené à sa capacité (ce qui dépasse est perdu, le rapport le dit).
 
 #### Commandes
@@ -1025,6 +1028,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 | `gestion_stock` | `action` (`"ajouter"` ou `"retirer"`), `ressource`, `nombre`, `annoncer` | Ajoute ou retire une ressource du stock, sans passer sous 0 ni au-dessus de la capacité. Pour un script : `{ stock, change }`. |
 | `gestion_deposer` | `annoncer` | Change les objets du sac qui représentent une ressource (`ressource.objet`) en ressources du stock ; ce qui ne tient pas reste dans le sac. Pour un script : `{ depose: { ressource: nombre } }`. |
 | `gestion_habitants` | `action` (`"ajouter"` ou `"retirer"`), `nombre`, `forcer`, `annoncer` | (Saga 1.6) Des habitants arrivent ou partent. Sans `forcer`, ils ne dépassent pas les logements des bâtiments finis. Pour un script : `{ habitants, change }`. |
+| `gestion_sortir` | | (Saga 1.6.1) Ramène le joueur devant la porte du dernier bâtiment où il est entré (sur un déclencheur à la sortie de l'intérieur). Pour un script : `{ ok }`. |
 | `gestion_domaine` | | Ouvre l'écran du domaine : le jour, le stock et les bâtiments. |
 
 #### Conditions
@@ -1038,7 +1042,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 
 #### Ce que le moteur garde dans une sauvegarde
 
-`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment), `habitants` (Saga 1.6 : combien vivent au domaine) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
+`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment), `habitants` (Saga 1.6 : combien vivent au domaine), `faim` (Saga 1.6.1 : les nuits de suite où quelqu'un n'a pas mangé), `retour` (Saga 1.6.1 : `{ carte, x, y, direction }`, devant la porte du dernier bâtiment où le joueur est entré) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
 
 ## Test rapide
 

@@ -52,6 +52,45 @@
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true });
   }
 
+  // --- Le passage d'un bâtiment posé (Saga 1.6.1) ---
+  // Le masque d'un type de bâtiment : pour chaque case (rangée par rangée), 'bloque', 'libre' ou 'porte'.
+  // 'auto' (ou rien de réglé dans Tafl) : les rangées « dessus » du tampon et ses cases vides sont libres,
+  // sinon la tuile décide (son passage « libre » laisse passer, le reste bloque) ; sans tampon, tout bloque.
+  const masques = new WeakMap();
+  function masque(jeu, def) {
+    if (!masques.has(jeu)) masques.set(jeu, new Map());
+    const cache = masques.get(jeu);
+    if (cache.has(def.id)) return cache.get(def.id);
+    const t = def.tampon ? jeu.tampons?.get(def.tampon) : null;
+    const out = [];
+    for (let j = 0; j < def.hauteur; j++) {
+      for (let i = 0; i < def.largeur; i++) {
+        const k = j * def.largeur + i;
+        let v = def.passage?.[k] || 'auto';
+        if (def.porte && def.porte.x === i && def.porte.y === j) v = 'porte';
+        if (v === 'auto') {
+          const n = t && t.largeur === def.largeur ? t.cases[k] : 0;
+          if (!t) v = 'bloque';
+          else if (j < t.dessus || n < 0) v = 'libre';
+          else v = jeu.tuiles?.[n]?.passage === Jeu.PASSAGE.libre ? 'libre' : 'bloque';
+        }
+        out.push(v);
+      }
+    }
+    cache.set(def.id, out);
+    return out;
+  }
+  // Le bâtiment posé sur la case (x, y) de la carte affichée, avec sa définition, ou null.
+  function batimentEn(o, x, y) {
+    const d = defs(o.jeu);
+    for (const b of Array.isArray(o.etat.batiments) ? o.etat.batiments : []) {
+      if (b.carte !== o.carte?.id) continue;
+      const def = d.batiments.get(b.type);
+      if (def && x >= b.x && y >= b.y && x < b.x + def.largeur && y < b.y + def.hauteur) return { ...b, def };
+    }
+    return null;
+  }
+
   // --- Le placement libre (Saga 1.5) ---
   const constructible = (carte) => (carte?.zones || []).filter((z) => z.type === 'constructible');
   const lieuDe = (o) => {
@@ -148,16 +187,25 @@
       }
     },
 
+    // Saga 1.6.1 : case par case, selon le passage du bâtiment (masque) : une ombre ou une case vide du
+    // tampon ne bloque plus.
     bloque(o, x, y) {
-      const d = defs(o.jeu);
-      for (const b of Array.isArray(o.etat.batiments) ? o.etat.batiments : []) {
-        if (b.carte !== o.carte.id) continue;
-        const def = d.batiments.get(b.type);
-        if (!def || x < b.x || y < b.y || x >= b.x + def.largeur || y >= b.y + def.hauteur) continue;
-        if (def.porte && x === b.x + def.porte.x && y === b.y + def.porte.y) continue;
-        return true;
-      }
-      return false;
+      const b = batimentEn(o, x, y);
+      return Boolean(b && masque(o.jeu, b.def)[(y - b.y) * b.def.largeur + (x - b.x)] === 'bloque');
+    },
+    // Saga 1.6.1 : la porte d'un bâtiment fini qui mène quelque part (porte_vers : son intérieur). On retient
+    // la case d'où vient le joueur, pour l'y ramener (commande gestion_sortir).
+    teleporteur(o, x, y) {
+      const b = batimentEn(o, x, y);
+      if (!b || b.etat !== 'fini' || !b.def.porte_vers) return null;
+      if (masque(o.jeu, b.def)[(y - b.y) * b.def.largeur + (x - b.x)] !== 'porte') return null;
+      const dir = o.hote?.joueur?.direction || 'haut';
+      const [dx, dy] = { haut: [0, -1], bas: [0, 1], gauche: [-1, 0], droite: [1, 0] }[dir] || [0, -1];
+      const inverse = { haut: 'bas', bas: 'haut', gauche: 'droite', droite: 'gauche' }[dir] || 'bas';
+      o.etat.retour = { carte: o.carte.id, x: x - dx, y: y - dy, direction: inverse };
+      // Saga 1.6.1 : sa propre copie de l'intérieur, sauf si le type le partage.
+      const v = b.def.porte_vers;
+      return b.def.interieur === 'partage' ? v : { ...v, carte: `${Jeu.baseDe(v.carte)}@${b.id}` };
     },
     preparer(o) { poser(o, etatDe(o)); },
 
@@ -166,6 +214,7 @@
       poser(o, r.etat);
       for (const type of r.termines) o.hote.reagir?.('gestion_termine', { batiment: type });
       if (r.arrives) o.hote.reagir?.('gestion_arrivee', { nombre: r.arrives, habitants: r.etat.habitants });
+      if (r.partis) o.hote.reagir?.('gestion_depart', { nombre: r.partis, habitants: r.etat.habitants });
       if (r.termines.length) o.hote.rafraichir?.();
       return r.lignes;
     },
@@ -224,6 +273,14 @@
         o.hote.rafraichir?.();
         if (o.c.annoncer !== false) await o.narrer(Object.keys(r.depose).length ? `Tu déposes au stock : ${C.dire(d, r.depose)}.` : 'Tu n\'as rien à déposer.');
         return { depose: r.depose };
+      },
+      // Saga 1.6.1 : ressortir d'un bâtiment, devant la porte par laquelle le joueur est entré (sur un
+      // déclencheur à la sortie de l'intérieur). Sans porte connue : rien (branche raté si besoin).
+      async gestion_sortir(o) {
+        const r = etatDe(o).retour;
+        if (!r) return { ok: false };
+        await o.jouer([{ type: 'teleporter', carte: r.carte, x: r.x, y: r.y, direction: r.direction }]);
+        return { ok: true };
       },
       // Ouvrir l'écran du domaine.
       async gestion_domaine(o) { await ecran(o); return null; },

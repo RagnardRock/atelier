@@ -330,7 +330,16 @@ function creerSaga() {
   }
 
   // --- Pause ---
-  function ouvrirPause() {
+  // Saga 1.6.1 : le menu de pause a des pages (« principal », « outils ») : un choix montre
+  // sa page avec data-vue (sans : « principal »).
+  let vuePauseActive = 'principal';
+  function vuePause(v) {
+    vuePauseActive = v;
+    for (const b of $$('.pause-choix')) b.classList.toggle('hors-vue', !(b.dataset.vue || 'principal').split(' ').includes(v));
+    $$('.pause-choix').find((b) => b.offsetParent !== null)?.focus();
+  }
+  const pauseOuArriere = () => { if (vuePauseActive !== 'principal') vuePause('principal'); else fermerPause(); };
+  function ouvrirPause(vue = 'principal') {
     if (!ouvert) return;
     // Les noms des menus et le Pokédex montré ou non : la forme des menus du jeu (Saga 0.6).
     const forme = moteur.formeMenus();
@@ -342,20 +351,12 @@ function creerSaga() {
     // Saga 1.0 : le multijoueur. Un ami (dans son navigateur) ne l'ouvre pas : c'est l'hôte qui invite.
     $('.pause-choix[data-action="multi"]').hidden = Boolean(joueur) || Boolean(ouvert.test);
     $('#pause-multi').textContent = moteur.multi?.actif ? 'Fermer la partie à plusieurs' : 'Jouer à plusieurs (inviter des amis)…';
-    // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer), après le Pokédex.
-    for (const b of $$('.pause-choix[data-pack]')) b.remove();
-    let apres = $('.pause-choix[data-action="dex"]');
-    for (const [id, nom, icone] of moteur.actionsPause()) {
-      const b = el('button', { className: 'pause-choix' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
-      b.dataset.action = 'pack';
-      b.dataset.pack = id;
-      apres.after(b);
-      apres = b;
-    }
+    // Un jeu exporté n'a pas d'outils de créateur : il ne reste que « Recommencer ».
+    $('.pause-choix[data-action="vue"][data-vers="outils"]').lastChild.textContent = joueur ? 'Plus…' : 'Outils du créateur…';
     moteur.pause(true);
     moteur.bruit('valider');
     $('#pause').hidden = false;
-    $('.pause-choix').focus();
+    vuePause(vue);
   }
   function fermerPause() {
     $('#pause').hidden = true;
@@ -365,6 +366,7 @@ function creerSaga() {
     const action = e.target.closest('.pause-choix')?.dataset.action;
     if (!action) { if (e.target.id === 'pause') fermerPause(); return; }
     if (action === 'reprendre') fermerPause();
+    else if (action === 'vue') vuePause(e.target.closest('.pause-choix').dataset.vers);
     else if (action === 'recharger') recharger();
     else if (action === 'recommencer') { fermerPause(); moteur.demarrer(ouvert.jeu, null); }
     else if (action === 'mode') {
@@ -380,7 +382,6 @@ function creerSaga() {
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
-    else if (action === 'pack') { const id = e.target.closest('.pause-choix').dataset.pack; fermerPause(); moteur.agirPause(id); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'exporter') { fermerPause(); exporter(); }
@@ -388,7 +389,7 @@ function creerSaga() {
   });
   // Dans le menu de pause, les flèches passent d'un choix à l'autre.
   $('#pause').addEventListener('keydown', (e) => {
-    const choix = $$('.pause-choix');
+    const choix = $$('.pause-choix').filter((b) => b.offsetParent !== null);
     const i = choix.indexOf(document.activeElement);
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
@@ -423,6 +424,16 @@ function creerSaga() {
     $('#carnet-dex').textContent = `${forme.dex} · ${Regles.dex(jeu).especes.filter((e) => dex.pris[e.id]).length}`;
     $('#carnet-equipe').textContent = forme.equipe;
     $('.carnet-bouton[data-ecran="dex"]').hidden = !forme.dex_visible;
+    // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer) et des modules (le
+    // domaine, construire) : depuis Saga 1.6.1, des boutons du carnet, à côté de l'équipe (plus dans la pause).
+    for (const b of $$('.carnet-bouton[data-pack]')) b.remove();
+    let apres = $('.carnet-bouton[data-ecran="dex"]');
+    for (const [id, nom, icone] of moteur.actionsPause()) {
+      const b = el('button', { className: 'carnet-bouton', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
+      b.dataset.pack = id;
+      apres.after(b);
+      apres = b;
+    }
     $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
     // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
     // Un clic sur une créature : son résumé (Saga 0.6).
@@ -467,8 +478,10 @@ function creerSaga() {
     moteur.pause(false);
   }
   $('#carnet').addEventListener('click', (e) => {
+    const pack = e.target.closest('.carnet-bouton')?.dataset.pack;
     const ecran = e.target.closest('.carnet-bouton')?.dataset.ecran;
-    if (ecran) { fermerCarnet(); moteur.ouvrirEcran(ecran); }
+    if (pack) { fermerCarnet(); moteur.agirPause(pack); }
+    else if (ecran) { fermerCarnet(); moteur.ouvrirEcran(ecran); }
     else if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet();
   });
 
@@ -560,7 +573,7 @@ function creerSaga() {
       if (!$('#carnet').hidden) fermerCarnet();
       else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
       else if ($('#pause').hidden && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
-      else if ($('#pause').hidden) ouvrirPause(); else fermerPause();
+      else if ($('#pause').hidden) ouvrirPause(); else pauseOuArriere();
     }
   });
   // Les touches de pause et du carnet (Réglages › Commandes, Saga 0.11).
@@ -586,7 +599,7 @@ function creerSaga() {
     cibles: () => [
       Dialogs.isOpen() ? { racine: $('#modal-root .modal'), fermer: () => Dialogs.close(null) } : null,
       { racine: $('#carnet'), fermer: fermerCarnet },
-      { racine: $('#pause'), fermer: fermerPause },
+      { racine: $('#pause'), fermer: pauseOuArriere },
       { racine: $('#accueil'), fermer: null },
     ],
   });
