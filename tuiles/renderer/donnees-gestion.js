@@ -78,6 +78,12 @@ const DonneesGestion = (() => {
     usure: g?.usure !== false,
     tuile_usee: int(g?.tuile_usee, -1, -1, 99999),
     tuile_sentier: int(g?.tuile_sentier, -1, -1, 99999),
+    // Tafl 1.8 (Saga 1.10) : l'emploi du temps des habitants, quand le jeu a une horloge.
+    horaires: g?.horaires !== false,
+    heure_lever: int(g?.heure_lever, 7, 0, 23),
+    heure_travail: int(g?.heure_travail, 8, 0, 23),
+    heure_fin: int(g?.heure_fin, 17, 0, 23),
+    heure_coucher: int(g?.heure_coucher, 21, 0, 23),
     seuil_usee: int(g?.seuil_usee, 6, 1, 9999),
     seuil_sentier: int(g?.seuil_sentier, 20, 1, 9999),
     usure_repousse: int(g?.usure_repousse, 2, 0, 9999),
@@ -294,26 +300,40 @@ const DonneesGestion = (() => {
         champ('Quand ils ont faim', U().sel(FAIMS, g.faim, (v) => { g.faim = v; majNuits(); })),
         nuits,
       ]),
-      ...champsPromeneurs(g, ctx),
+      ...champsPromeneurs(g, ctx, r),
       info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
   }
 
   // Tafl 1.7 (Saga 1.9) : les habitants qu'on voit marcher, et les sentiers qui se creusent sous leurs pas.
-  function champsPromeneurs(g, ctx) {
+  function champsPromeneurs(g, ctx, r = {}) {
     const { champ, info, nombreIn, sel } = U();
     const tuiles = [['-1', 'Dessinée par Saga'], ...arr(ctx.doc?.tiles).map((t, i) => [String(i), `${i}. ${t.name}`])];
     const persos = [['', 'Un petit bonhomme (une couleur chacun)'], ...arr(ctx.work?.personnages).map((p) => [p.id, p.nom || p.id])];
     const voir = el('input', { type: 'checkbox', checked: g.promeneurs });
     const user = el('input', { type: 'checkbox', checked: g.usure });
+    const horaires = el('input', { type: 'checkbox', checked: g.horaires });
+    const sansHorloge = (r.temps?.horloge || 'aucune') === 'aucune';
     const detailsVoir = el('div');
     const detailsUsure = el('div');
     const maj = () => {
       detailsVoir.replaceChildren(...(g.promeneurs ? [el('div', { className: 'field-grid' }, [
         champ('Leur apparence', sel(persos, g.promeneur_perso, (v) => { g.promeneur_perso = v; })),
         champ('Au plus', nombreIn(g, 'promeneurs_max', 1, 40), 'à la fois sur la carte'),
-      ])] : []));
+      ]),
+      // Tafl 1.8 (Saga 1.10) : leur journée, à l'horloge du jeu.
+      champ('Ils suivent l\'heure', horaires, sansHorloge ? 'le jeu n\'a pas d\'horloge (Réglages › Ambiance) : ils vont et viennent sans regarder l\'heure' : 'travail le jour, flânerie avant et après, chez eux la nuit'),
+      ...(g.horaires ? [
+        el('div', { className: 'field-grid' }, [
+          champ('Lever', nombreIn(g, 'heure_lever', 0, 23), 'h'),
+          champ('Coucher', nombreIn(g, 'heure_coucher', 0, 23), 'h'),
+        ]),
+        el('div', { className: 'field-grid' }, [
+          champ('Travail de', nombreIn(g, 'heure_travail', 0, 23), 'h'),
+          champ('à', nombreIn(g, 'heure_fin', 0, 23), 'h'),
+        ]),
+      ] : [])] : []));
       detailsUsure.replaceChildren(...(g.usure ? [
         el('div', { className: 'field-grid' }, [
           champ('Herbe tassée', sel(tuiles, String(g.tuile_usee), (v) => { g.tuile_usee = Number(v); })),
@@ -328,6 +348,7 @@ const DonneesGestion = (() => {
     };
     voir.onchange = () => { g.promeneurs = voir.checked; maj(); };
     user.onchange = () => { g.usure = user.checked; maj(); };
+    horaires.onchange = () => { g.horaires = horaires.checked; maj(); };
     maj();
     return [
       champ('On voit les habitants', voir, 'ils vont de chez eux au travail, flânent et rentrent'),

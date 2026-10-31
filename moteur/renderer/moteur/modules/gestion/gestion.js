@@ -19,6 +19,10 @@
 // rentrent, par le plus court chemin (moteur/chemins.js, prêté par hote.chemin). Chaque pas use la case
 // (usure, gardée dans la partie) : l'herbe se tasse, puis un sentier se dessine, et les habitants préfèrent
 // les cases déjà usées. Un sentier qu'on ne prend plus repousse, nuit après nuit.
+//
+// Saga 1.10 : quand le jeu a une horloge, ils suivent un emploi du temps (horaires) : au travail de
+// heure_travail à heure_fin (avec quelques pas dehors de temps en temps), libres avant et après (ils
+// flânent, rendent visite à un voisin, rentrent), et chez eux de heure_coucher à heure_lever.
 
 (() => {
   const C = GestionCalcul;
@@ -105,7 +109,7 @@
   const entreeDe = (b, def) => (def.porte ? { x: b.x + def.porte.x, y: b.y + def.porte.y } : { x: b.x + Math.floor(def.largeur / 2), y: b.y + def.hauteur });
   // Les habitants visibles sur la carte : un logement chacun (les maisons de la carte, dans l'ordre), et un
   // travail pour les premiers (les bâtiments qui demandent des ouvriers, dans l'ordre de construction).
-  function composer(o, d) {
+  function composer(o, d, per = null) {
     const carte = o.carte, e = o.etat;
     const finis = (Array.isArray(e.batiments) ? e.batiments : []).filter((b) => b.carte === carte.id && b.etat === 'fini' && d.batiments.has(b.type));
     const maisons = [], travaux = [];
@@ -119,11 +123,16 @@
     if (foule && foule.cle === cle) return foule;
     const gens = [];
     for (let i = 0; i < n; i++) {
-      const m = maisons[i];
-      gens.push({ maison: m, travail: travaux[i] || null, x: m.x, y: m.y, de: null, t: 0, chemin: [], dedans: true, attente: hasard(0.3, 6), ensuite: travaux[i] ? 'travail' : 'flaner',
-        direction: 'bas', pas: 0, couleur: COULEURS[i % COULEURS.length] });
+      const m = maisons[i], w = travaux[i] || null;
+      // Saga 1.10 : en arrivant sur la carte, chacun est où l'heure le veut : au travail pendant le travail,
+      // sinon chez lui (la nuit, il y reste).
+      const p = per === 'travail' && w ? w : m;
+      gens.push({ maison: m, travail: w, x: p.x, y: p.y, de: null, t: 0, chemin: [], dedans: true, attente: hasard(0.3, 6), ensuite: w ? 'travail' : 'flaner',
+        periode: per, direction: 'bas', pas: 0, couleur: COULEURS[i % COULEURS.length] });
     }
-    foule = { carte: carte.id, cle, gens };
+    // Les portes de tous les bâtiments finis : on y rend visite le soir.
+    const lieux = finis.map((b) => entreeDe(b, d.batiments.get(b.type)));
+    foule = { carte: carte.id, cle, gens, lieux };
     return foule;
   }
   // Les cases où la carte a déjà la tuile du sentier (ou de l'herbe tassée) : un chemin dessiné dans Tafl.
@@ -159,7 +168,46 @@
     }
     return null;
   }
-  function avancerHabitant(o, d, h, dt) {
+  const memeCase = (p, h) => Boolean(p) && p.x === h.x && p.y === h.y;
+  // Arrivé au bout de son chemin : chez lui, au travail ou chez un voisin, il entre ; ailleurs, il reste un
+  // peu là. per : la période de l'emploi du temps (C.periode), ou null sans horloge.
+  function arriver(f, h, per) {
+    if (memeCase(h.maison, h)) {
+      h.dedans = true;
+      h.attente = per === 'nuit' ? hasard(3, 6) : hasard(4, 9);
+      h.ensuite = h.travail ? 'travail' : 'flaner';
+    } else if (memeCase(h.travail, h)) {
+      h.dedans = true;
+      h.attente = per === 'travail' ? hasard(18, 35) : per ? hasard(0.5, 2) : hasard(5, 10);
+      h.ensuite = 'flaner';
+    } else if (per === 'libre' && f.lieux.some((p) => memeCase(p, h))) {
+      h.dedans = true; // une visite
+      h.attente = hasard(3, 7);
+    } else {
+      h.attente = hasard(1, 3.5);
+      h.ensuite = Math.random() < 0.35 ? 'flaner' : 'maison';
+    }
+  }
+  // Où il va maintenant : une case, 'rester' (il ne bouge pas), ou null (rien trouvé).
+  function viserHabitant(o, f, h, per) {
+    const autre = () => { const l = f.lieux.filter((p) => !memeCase(p, h) && !memeCase(p, h.maison)); return l.length ? l[Math.floor(Math.random() * l.length)] : null; };
+    // Sans horloge (ou horaires coupé) : il va et vient, maison, travail, flânerie.
+    if (per === null) return h.ensuite === 'travail' ? h.travail : h.ensuite === 'maison' ? h.maison : coin(o, h);
+    // La nuit : chez lui, et il y reste.
+    if (per === 'nuit') return h.dedans && memeCase(h.maison, h) ? 'rester' : h.maison;
+    // Au travail : il y va, et de temps en temps sort faire quelques pas devant.
+    if (per === 'travail' && h.travail) return h.dedans && memeCase(h.travail, h) ? coin(o, h) : h.travail;
+    // Libre (avant et après le travail, ou sans travail) : il sort flâner, rend visite, rentre.
+    const r = Math.random();
+    if (h.dedans) return r < 0.25 ? autre() || coin(o, h) : coin(o, h);
+    return r < 0.4 ? h.maison : r < 0.55 ? autre() || coin(o, h) : coin(o, h);
+  }
+  function avancerHabitant(o, d, f, h, dt, per) {
+    // Saga 1.10 : l'heure passe à une autre période (le travail, la nuit) : il n'attend plus, chacun à son rythme.
+    if (per !== h.periode) {
+      h.periode = per;
+      if (!h.chemin.length) h.attente = Math.min(h.attente, hasard(0.2, 4));
+    }
     if (h.chemin.length) {
       const prochaine = h.chemin[0];
       h.t += dt;
@@ -173,20 +221,16 @@
       h.pas = (h.pas % 2) + 1;
       // Un pas de plus sur cette case (pas sous un bâtiment : ni sa porte ni son seuil).
       if (!batimentEn(o, h.x, h.y)) C.user(d, o.etat, o.carte.id, h.y * o.carte.largeur + h.x);
-      if (h.chemin.length) return;
-      // Arrivé : chez lui ou au travail, il entre ; ailleurs, il reste un peu là.
-      const chez = (p) => p && p.x === h.x && p.y === h.y;
-      if (chez(h.maison)) { h.dedans = true; h.attente = hasard(4, 9); h.ensuite = h.travail ? 'travail' : 'flaner'; }
-      else if (chez(h.travail)) { h.dedans = true; h.attente = hasard(5, 10); h.ensuite = 'flaner'; }
-      else { h.attente = hasard(1, 3.5); h.ensuite = Math.random() < 0.35 ? 'flaner' : 'maison'; }
+      if (!h.chemin.length) arriver(f, h, per);
       return;
     }
     if ((h.attente -= dt) > 0) return;
-    const but = h.ensuite === 'travail' ? h.travail : h.ensuite === 'maison' ? h.maison : coin(o, h);
+    const but = viserHabitant(o, f, h, per);
+    if (but === 'rester') { h.attente = hasard(2, 5); return; }
     if (but && partir(o, d, h, but)) return;
-    // Pas de chemin : il réessaie un peu plus tard, en rentrant.
+    // Pas de chemin : il réessaie un peu plus tard (sans horloge, en rentrant).
     h.attente = hasard(1.5, 4);
-    h.ensuite = h.ensuite === 'maison' ? 'flaner' : 'maison';
+    if (per === null) h.ensuite = h.ensuite === 'maison' ? 'flaner' : 'maison';
   }
 
   // --- Le placement libre (Saga 1.5) ---
@@ -354,9 +398,11 @@
     avancer(o) {
       const d = defs(o.jeu);
       if (!d.reglages.promeneurs || !o.carte) return;
-      const f = composer(o, d);
+      // Saga 1.10 : leur emploi du temps suit l'horloge du jeu (null : pas d'horloge, ou horaires coupé).
+      const per = C.periode(d, o.hote?.heure?.() ?? null);
+      const f = composer(o, d, per);
       const dt = Math.min(0.1, Math.max(0, Number(o.dt) || 0));
-      for (const h of f.gens) avancerHabitant(o, d, h, dt);
+      for (const h of f.gens) avancerHabitant(o, d, f, h, dt, per);
     },
     figurants(o) {
       const d = defs(o.jeu);
