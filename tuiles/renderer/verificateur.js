@@ -470,7 +470,7 @@ const Verificateur = (() => {
       else if (v.x >= c.largeur || v.y >= c.hauteur) ajouter('erreur', 'teleporteurs', `La porte du bâtiment « ${b.nom || b.id} » mène hors de la carte « ${c.nom || c.id} » (${v.x}, ${v.y}).`);
     }
     for (const q of gestionR.repas || []) verifierId('ressources', q.ressource, 'Les repas des habitants (Réglages › Modules)');
-    // Tafl 1.5 : l'apparence des habitants qu'on voit marcher est un personnage du jeu.
+    // Tafl 1.6 : l'apparence des habitants qu'on voit marcher est un personnage du jeu.
     if (gestionActif && gestionR.promeneurs !== false && gestionR.promeneur_perso) verifierId('personnages', gestionR.promeneur_perso, 'L\'apparence des habitants (Réglages › Modules)');
     if (gestionActif && !liste('batiments').some((b) => b.logement > 0) && !(gestionR.habitants_depart > 0) && !donne.habitants) {
       for (const b of liste('batiments')) if (b.ouvriers > 0 && (b.production || []).length) ajouter('attention', 'quetes', `Le bâtiment « ${b.nom || b.id} » demande ${b.ouvriers} ouvrier(s), mais aucun habitant ne peut venir : aucun bâtiment n'a de logement, il n'y a pas d'habitants au départ, et aucune commande n'en amène. Il ne produira jamais.`);

@@ -87,10 +87,10 @@ const GestionCalcul = (() => {
       // quelqu'un a faim ; 'rien' : seulement le rapport ; 'departs' : de plus, après faim_nuits nuits de
       // faim de suite, un habitant part chaque nuit tant qu'elle dure. Dans tous les cas, ils travaillent.
       faim: ['arrivees', 'rien', 'departs'].includes(g.faim) ? g.faim : 'arrivees', faim_nuits: entier(g.faim_nuits, 3, 1, 99),
-      // Saga 1.7 : les habitants qu'on voit aller et venir (promeneurs, false : on ne les voit pas), avec
+      // Saga 1.8 : les habitants qu'on voit aller et venir (promeneurs, false : on ne les voit pas), avec
       // l'apparence d'un personnage du jeu (vide : un petit bonhomme), au plus promeneurs_max à la fois.
       promeneurs: g.promeneurs !== false, promeneur_perso: texte(g.promeneur_perso, 64), promeneurs_max: entier(g.promeneurs_max, 12, 1, 40),
-      // Saga 1.7 : les sentiers qui se creusent (usure, false : rien). Chaque pas d'un habitant use la case ;
+      // Saga 1.8 : les sentiers qui se creusent (usure, false : rien). Chaque pas d'un habitant use la case ;
       // à seuil_usee pas, elle prend la tuile_usee (de l'herbe tassée), à seuil_sentier, la tuile_sentier
       // (-1 : un sentier dessiné par Saga). Chaque nuit, une case perd usure_repousse pas (l'herbe repousse).
       usure: g.usure !== false, tuile_usee: entier(g.tuile_usee, -1, -1, 99999), tuile_sentier: entier(g.tuile_sentier, -1, -1, 99999),
@@ -127,7 +127,7 @@ const GestionCalcul = (() => {
       // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
       ...(etat.retour && typeof etat.retour === 'object' && typeof etat.retour.carte === 'string' ? { retour: { carte: etat.retour.carte, x: entier(etat.retour.x, 0, 0, 9999), y: entier(etat.retour.y, 0, 0, 9999), direction: typeof etat.retour.direction === 'string' ? etat.retour.direction : 'bas' } } : {}),
       prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0),
-      // Saga 1.7 : l'usure des cases, par carte : { carte: { « indice de la case » : pas } }.
+      // Saga 1.8 : l'usure des cases, par carte : { carte: { « indice de la case » : pas } }.
       ...(etat.usure && typeof etat.usure === 'object' ? { usure: normUsure(etat.usure) } : {}) };
   }
   function normUsure(u) {
@@ -141,7 +141,7 @@ const GestionCalcul = (() => {
     return out;
   }
 
-  // Saga 1.7 : un pas de plus sur la case i de la carte (sur place, appelé à chaque pas : rapide). Le compte
+  // Saga 1.8 : un pas de plus sur la case i de la carte (sur place, appelé à chaque pas : rapide). Le compte
   // s'arrête un peu au-dessus du seuil du sentier, pour qu'un sentier délaissé repousse en quelques nuits.
   function user(d, e, carte, i) {
     if (!d.reglages.usure) return 0;
@@ -340,7 +340,7 @@ const GestionCalcul = (() => {
       for (const [r, q] of Object.entries(etat.stock)) if (q > cap) { perdu[r] = q - cap; etat.stock[r] = cap; }
       if (Object.keys(perdu).length) lignes.push(`Le stock est plein : ${dire(d, perdu)} perdus.`);
     }
-    // 7. (Saga 1.7) Les sentiers délaissés repoussent un peu.
+    // 7. (Saga 1.8) Les sentiers délaissés repoussent un peu.
     repousserUsure(d, etat);
     etat.resolu = n;
     return { etat, lignes, termines, arrives, partis };

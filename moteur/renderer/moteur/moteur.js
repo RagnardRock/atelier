@@ -149,7 +149,7 @@ const Moteur = (() => {
       // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
       // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
       viser: (o = {}) => viser(o),
-      // Saga 1.7 : un chemin entre deux cases de la carte du joueur (moteur/chemins.js), sur les cases où l'on
+      // Saga 1.8 : un chemin entre deux cases de la carte du joueur (moteur/chemins.js), sur les cases où l'on
       // marche (ni bloquées, ni rebords, ni sous un bâtiment ou un événement qui bloque).
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
         largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
@@ -921,7 +921,7 @@ const Moteur = (() => {
           pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,
         }, maintenant) });
       }
-      // Saga 1.7 : les passants des modules (les habitants du domaine).
+      // Saga 1.8 : les passants des modules (les habitants du domaine).
       for (const f of Modules.figurants(jeu, partie, carte)) {
         const perso = f.personnage ? jeu.personnages.get(f.personnage) : null;
         liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: f.direction || 'bas', pas: f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y }, maintenant) });
@@ -1126,7 +1126,7 @@ const Moteur = (() => {
         avancerJoueur(dt);
         actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
         avancerPNJ(dt);
-        // Saga 1.7 : les figurants des modules (les habitants qui vont et viennent).
+        // Saga 1.8 : les figurants des modules (les habitants qui vont et viennent).
         if (!enCombat && !table.actif) Modules.avancer(jeu, partie, hoteModules, carte, dt);
         avancerFondu(dt);
         dialogue.avancer(dt);

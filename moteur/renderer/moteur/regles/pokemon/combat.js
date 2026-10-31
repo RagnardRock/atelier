@@ -23,6 +23,8 @@ const Combat = (() => {
   // Accorder au genre de la créature (Saga 0.7) : « gelé » / « gelée », « Il » / « Elle ».
   const fe = (c) => (c?.sexe === 'f' ? 'e' : '');
   const il = (c) => (c?.sexe === 'f' ? 'Elle' : 'Il');
+  // Les noms courts des statistiques, pour les pastilles de l'écran (Saga 1.7).
+  const COURT_STATS = { attaque: 'Atq', defense: 'Déf', att_spe: 'Atq.Spé', def_spe: 'Déf.Spé', vitesse: 'Vit', precision: 'Préc', esquive: 'Esq' };
   const NOMS_STATUTS = { brulure: 'BRU', paralysie: 'PAR', poison: 'PSN', poison_grave: 'PSN', sommeil: 'SOM', gel: 'GEL' };
 
   async function lancer({ jeu, partie, ui, sauvage = null, dresseur = null, fond = 'herbes', duel = null }) {
@@ -72,15 +74,87 @@ const Combat = (() => {
         nom: C.nom(jeu, c), niveau: c.niveau, sexe: c.sexe, pv: c.pv, pvMax: C.pvMax(jeu, c), statut: NOMS_STATUTS[c.statut] || '',
         xp: c.niveau >= 100 ? 0 : Math.max(0, Math.min(1, (c.xp - xpMin) / Math.max(1, xpMax - xpMin))),
         image: (k.joueur ? e?.sprites?.dos || e?.sprites?.face : e?.sprites?.face) || '', chromatique: c.chromatique,
+        espece: c.creature, // en duel, l'autre joueur la voit de l'autre côté (reseau/duel.js)
         types: types(c).map((t) => ({ nom: typeDe(t)?.nom || t, couleur: typeDe(t)?.couleur || '#888' })),
       };
     }
-    const montrer = (k) => ui.creature(k.joueur ? 'joueur' : 'adversaire', etat(k));
+    const montrer = (k) => { ui.creature(k.joueur ? 'joueur' : 'adversaire', etat(k)); montrerEtats(k); };
+    // Saga 1.7 : les pastilles de l'écran, pour voir ce qui est en cours (étages, confusion, objet tenu).
+    function montrerEtats(k) {
+      if (!ui.etats) return;
+      const c = actif(k), l = [];
+      for (const s of ETAGES) {
+        const n = k.etages?.[s] || 0;
+        if (n) l.push({ texte: `${COURT_STATS[s] || s} ${n > 0 ? '+' : '−'}${Math.abs(n)}`, sens: n, detail: `${C.NOMS_STATS[s] || s} ${n > 0 ? '+' : ''}${n}` });
+      }
+      if (k.confusion > 0) l.push({ texte: 'Confus', sens: -1, detail: 'Elle peut se blesser toute seule.' });
+      if (k.peur) l.push({ texte: 'Apeuré', sens: -1, detail: 'Elle ne bouge pas ce tour-ci.' });
+      if (k.verrou) l.push({ texte: 'Choix', sens: -1, detail: `Elle ne peut plus lancer que ${trouver('attaques', k.verrou)?.nom || k.verrou}.` });
+      if (tenu(c)) l.push({ texte: nomObjet(c), sens: 0, detail: `Elle tient ${nomObjet(c)}.` });
+      ui.etats(k.joueur ? 'joueur' : 'adversaire', l);
+    }
     // Les PV changent : la barre glisse.
     async function pv(k, c, nouveau) {
       const avant = c.pv;
       c.pv = Math.max(0, Math.min(C.pvMax(jeu, c), Math.round(nouveau)));
       if (c === actif(k) && c.pv !== avant) await ui.pv(k.joueur ? 'joueur' : 'adversaire', c.pv, C.pvMax(jeu, c));
+    }
+
+    // --- Les objets tenus (Saga 1.7) ---
+    // Un objet peut dire ce qu'il fait quand une créature le tient (champ « tenu », Tafl 1.5).
+    // Les objets officiels les plus connus marchent sans rien régler, par leur nom PokeAPI.
+    const TENUS_OFFICIELS = {
+      'life-orb': { type: 'degats', valeur: 1.3, recul: 10 },
+      'muscle-band': { type: 'degats', valeur: 1.1, categorie: 'physique' },
+      'wise-glasses': { type: 'degats', valeur: 1.1, categorie: 'speciale' },
+      'choice-band': { type: 'stat', stat: 'attaque', valeur: 1.5, verrou: true },
+      'choice-specs': { type: 'stat', stat: 'att_spe', valeur: 1.5, verrou: true },
+      'choice-scarf': { type: 'stat', stat: 'vitesse', valeur: 1.5, verrou: true },
+      'assault-vest': { type: 'stat', stat: 'def_spe', valeur: 1.5 },
+      'eviolite': { type: 'stat', stat: 'defense', valeur: 1.5 },
+      leftovers: { type: 'soin_tour', valeur: 6.25 },
+      'shell-bell': { type: 'drain', valeur: 12.5 },
+      'focus-sash': { type: 'survie' },
+      'sitrus-berry': { type: 'baie', valeur: 25, seuil: 50 },
+      'oran-berry': { type: 'baie', pv: 10, seuil: 50 },
+      'lum-berry': { type: 'soin_statut', statut: 'tous' },
+      'chesto-berry': { type: 'soin_statut', statut: 'sommeil' },
+      'rawst-berry': { type: 'soin_statut', statut: 'brulure' },
+      'aspear-berry': { type: 'soin_statut', statut: 'gel' },
+      'cheri-berry': { type: 'soin_statut', statut: 'paralysie' },
+      'pecha-berry': { type: 'soin_statut', statut: 'poison' },
+      'persim-berry': { type: 'soin_statut', statut: 'confusion' },
+    };
+    // Les objets qui renforcent un type d'attaque (+20 %).
+    const TENUS_TYPE = {
+      charcoal: 'fire', 'mystic-water': 'water', 'miracle-seed': 'grass', magnet: 'electric', nevermeltice: 'ice',
+      'black-belt': 'fighting', 'poison-barb': 'poison', 'soft-sand': 'ground', 'sharp-beak': 'flying',
+      'twisted-spoon': 'psychic', 'silver-powder': 'bug', 'hard-stone': 'rock', 'spell-tag': 'ghost',
+      'dragon-fang': 'dragon', 'black-glasses': 'dark', 'metal-coat': 'steel', 'silk-scarf': 'normal', 'fairy-feather': 'fairy',
+    };
+    function tenu(c) {
+      const o = c?.objet ? trouver('objets', c.objet) : null;
+      if (!o) return null;
+      if (o.tenu?.type) return o.tenu;
+      const cle = o.officiel || o.id;
+      if (TENUS_OFFICIELS[cle]) return TENUS_OFFICIELS[cle];
+      if (TENUS_TYPE[cle]) return { type: 'type', element: TENUS_TYPE[cle], valeur: 1.2 };
+      return null;
+    }
+    const nomObjet = (c) => trouver('objets', c?.objet)?.nom || c?.objet || 'son objet';
+    // Le type de l'attaque est-il celui que l'objet renforce (id de types.json ou nom officiel) ?
+    const memeType = (t, element) => Boolean(t) && (t === element || tag(typeDe(t), t) === element);
+    // Une baie tenue se mange toute seule quand les PV tombent bas.
+    async function baie(k) {
+      const c = actif(k), t = tenu(c);
+      if (!t || t.type !== 'baie' || c.pv <= 0) return;
+      const max = C.pvMax(jeu, c);
+      if (c.pv > Math.floor(max * (Number(t.seuil) || 50) / 100) || c.pv >= max) return;
+      const n = nomObjet(c);
+      c.objet = '';
+      montrerEtats(k);
+      await pv(k, c, c.pv + (t.pv ? Number(t.pv) : Math.max(1, Math.floor(max * (Number(t.valeur) || 25) / 100))));
+      await ui.message(`${nomDe(k)} mange ${n} et récupère des PV !`);
     }
 
     // --- Les statistiques en combat (avec les étages, de −6 à +6) ---
@@ -89,6 +163,8 @@ const Combat = (() => {
       const c = actif(k);
       let v = C.stats(jeu, c)[s] * multEtage(s, k.etages[s] || 0);
       if (s === 'vitesse' && c.statut === 'paralysie') v *= 0.5;
+      const t = tenu(c);
+      if (t?.type === 'stat' && t.stat === s) v *= Number(t.valeur) || 1;
       return Math.max(1, Math.floor(v));
     }
 
@@ -111,7 +187,7 @@ const Combat = (() => {
     // En duel, c'est l'autre joueur qui décide (par le réseau) : il attaque ou il change de créature.
     async function choixDuel() {
       const c = actif(eux);
-      const possibles = c.attaques.filter((a) => a.pp > 0 && trouver('attaques', a.id));
+      const possibles = jouables(eux, c);
       const a = await duel.choisir({
         actif: { nom: C.nom(jeu, c), pv: c.pv, pvMax: C.pvMax(jeu, c) },
         attaques: possibles.map((x) => { const d = trouver('attaques', x.id); return { id: x.id, nom: d?.nom || x.id, pp: x.pp, ppMax: x.ppMax, type: typeDe(d?.type)?.nom || '', couleur: typeDe(d?.type)?.couleur || '#888', categorie: d?.categorie || '' }; }),
@@ -127,9 +203,26 @@ const Combat = (() => {
       }
       return { type: 'attaque', attaque: possibles.length ? possibles[hasard(possibles.length)] : null };
     }
+    // Sa créature est K.O. : il choisit celle qu'il envoie (Saga 1.2). S'il ne répond pas, la première.
+    async function choixDuelSuivant(defaut) {
+      const a = await duel.choisir({
+        force: true, // pas de menu : seulement la liste de son équipe
+        actif: { nom: C.nom(jeu, actif(eux)), pv: 0, pvMax: C.pvMax(jeu, actif(eux)) },
+        attaques: [],
+        equipe: eux.equipe.map((q, i) => ({ nom: C.nom(jeu, q), niveau: q.niveau, pv: q.pv, pvMax: C.pvMax(jeu, q), i, actif: false })),
+      });
+      const i = a?.type === 'changer' ? Math.round(Number(a.cible)) : -1;
+      return eux.equipe[i]?.pv > 0 ? i : defaut;
+    }
+    // Les attaques qu'elle peut encore lancer (un objet Choix n'en laisse qu'une).
+    function jouables(k, c) {
+      const l = c.attaques.filter((a) => a.pp > 0 && trouver('attaques', a.id));
+      const verrouillees = k.verrou ? l.filter((a) => a.id === k.verrou) : [];
+      return verrouillees.length ? verrouillees : l;
+    }
     function choixAdverse() {
       const c = actif(eux);
-      const possibles = c.attaques.filter((a) => a.pp > 0 && trouver('attaques', a.id));
+      const possibles = jouables(eux, c);
       if (!possibles.length) return { type: 'attaque', attaque: null };
       if (!dresseur || chance(30)) return { type: 'attaque', attaque: possibles[hasard(possibles.length)] };
       // Un dresseur choisit souvent l'attaque qui fait le plus mal.
@@ -161,10 +254,10 @@ const Combat = (() => {
         montrer(k);
         await ui.message(`${nom} dégèle !`);
       }
-      if (k.peur) { k.peur = false; await ui.message(`${nom} a peur et ne bouge pas !`); return; }
+      if (k.peur) { k.peur = false; montrerEtats(k); await ui.message(`${nom} a peur et ne bouge pas !`); return; }
       if (k.confusion > 0) {
         k.confusion--;
-        if (!k.confusion) await ui.message(`${nom} n'est plus confus${fe(c)}.`);
+        if (!k.confusion) { montrerEtats(k); await ui.message(`${nom} n'est plus confus${fe(c)}.`); }
         else {
           await ui.message(`${nom} est confus${fe(c)}…`);
           if (chance(33)) {
@@ -178,6 +271,8 @@ const Combat = (() => {
       }
       if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé${fe(c)} ! ${il(c)} ne peut pas attaquer !`); return; }
 
+      // Bandeau / Lunettes / Mouchoir Choix : la première attaque est la seule, jusqu'au changement.
+      if (slot && tenu(c)?.verrou && k.verrou !== slot.id) { k.verrou = slot.id; montrerEtats(k); }
       const a = slot ? trouver('attaques', slot.id) : null;
       const att = a || LUTTE;
       if (slot) slot.pp = Math.max(0, slot.pp - 1);
@@ -205,11 +300,20 @@ const Combat = (() => {
           const D = crit ? Math.min(stat(cible, physique ? 'defense' : 'def_spe'), C.stats(jeu, d)[physique ? 'defense' : 'def_spe']) : stat(cible, physique ? 'defense' : 'def_spe');
           let mult = eff * (types(c).includes(att.type) ? 1.5 : 1) * (crit ? 1.5 : 1);
           if (physique && c.statut === 'brulure') mult *= 0.5;
-          const deg = await degats(c, A, D, puissance, mult, crit);
+          // L'objet tenu de l'attaquant (Orbe Vie, Bandeau Muscle, Charbon…).
+          const to = tenu(c);
+          if (to?.type === 'degats' && (!to.categorie || to.categorie === (physique ? 'physique' : 'speciale'))) mult *= Number(to.valeur) || 1;
+          if (to?.type === 'type' && memeType(att.type, to.element)) mult *= Number(to.valeur) || 1;
+          let deg = await degats(c, A, D, puissance, mult, crit);
+          // Ceinture Force : à PV pleins, elle survit à un coup fatal.
+          const td = tenu(d);
+          const tientBon = td?.type === 'survie' && d.pv === C.pvMax(jeu, d) && deg >= d.pv;
+          if (tientBon) deg = d.pv - 1;
           ui.animer(cible.joueur ? 'joueur' : 'adversaire', 'touche');
           infliges += Math.min(d.pv, deg);
           await pv(cible, d, d.pv - deg);
           if (crit) await ui.message('Coup critique !');
+          if (tientBon) await consommer(cible, d, `${nomDe(cible)} tient bon grâce à {objet} !`);
         }
         if (eff > 1) await ui.message('C\'est super efficace !');
         else if (eff < 1) await ui.message('Ce n\'est pas très efficace…');
@@ -222,9 +326,26 @@ const Combat = (() => {
           await pv(k, c, c.pv - Math.max(1, Math.floor(infliges * -att.drain / 100)));
           await ui.message(`${nom} se blesse en attaquant !`);
         }
+        // L'objet tenu après l'attaque : le recul de l'Orbe Vie, les PV du Grelot Coque.
+        const apres = tenu(c);
+        if (apres && infliges > 0 && c.pv > 0) {
+          if (apres.type === 'drain') {
+            const max = C.pvMax(jeu, c);
+            if (c.pv < max) {
+              await pv(k, c, c.pv + Math.max(1, Math.floor(infliges * (Number(apres.valeur) || 12.5) / 100)));
+              await ui.message(`${nom} récupère des PV grâce à ${nomObjet(c)} !`);
+            }
+          }
+          if (Number(apres.recul) > 0) {
+            await pv(k, c, c.pv - Math.max(1, Math.floor(C.pvMax(jeu, c) * Number(apres.recul) / 100)));
+            await ui.message(`${nom} souffre de ${nomObjet(c)} !`);
+            await baie(k);
+          }
+        }
+        if (d.pv > 0) await baie(cible);
         if (d.pv <= 0) return;
         // La peur : seulement si l'attaquant passe en premier (le défenseur n'a pas encore agi).
-        if (att.peur && chance(att.peur) && !cible.aJoue) cible.peur = true;
+        if (att.peur && chance(att.peur) && !cible.aJoue) { cible.peur = true; montrerEtats(cible); }
       }
       // Les soins de l'attaque (Soin, Repos…).
       if (att.soin > 0 && c.pv > 0) {
@@ -255,12 +376,27 @@ const Combat = (() => {
       return Math.max(1, Math.round(n));
     }
 
+    // Un objet tenu qui se consomme disparaît, avec un mot pour le dire.
+    async function consommer(k, c, texte) {
+      const n = nomObjet(c);
+      c.objet = '';
+      montrerEtats(k);
+      await ui.message(texte.replace('{objet}', n));
+    }
+
     async function infliger(k, statut, annoncer) {
       const c = actif(k), nom = nomDe(k);
+      // L'objet tenu qui guérit ce problème (Baie Prine, Baie Sucrée…) se mange tout de suite.
+      const guerit = () => {
+        const t = tenu(c);
+        return t?.type === 'soin_statut' && (t.statut === 'tous' || t.statut === statut || (t.statut === 'poison' && statut === 'poison_grave'));
+      };
       if (statut === 'confusion') {
         if (k.confusion) { if (annoncer) await ui.message(`${nom} est déjà confus${fe(c)}.`); return; }
         k.confusion = 2 + hasard(4);
+        montrerEtats(k);
         await ui.message(`${nom} devient confus${fe(c)} !`);
+        if (guerit()) { k.confusion = 0; await consommer(k, c, `${nom} mange {objet} et retrouve ses esprits !`); }
         return;
       }
       if (!NOMS_STATUTS[statut]) { if (annoncer) await ui.message('Mais rien ne se passe…'); return; } // pas encore géré par Saga
@@ -278,6 +414,12 @@ const Combat = (() => {
         brulure: `${nom} est brûlé${fe(c)} !`, paralysie: `${nom} est paralysé${fe(c)} ! ${il(c)} aura du mal à attaquer !`, poison: `${nom} est empoisonné${fe(c)} !`,
         poison_grave: `${nom} est gravement empoisonné${fe(c)} !`, sommeil: `${nom} s'endort !`, gel: `${nom} est gelé${fe(c)} !`,
       }[statut]);
+      if (guerit()) {
+        c.statut = '';
+        k.toxique = 0;
+        montrer(k);
+        await consommer(k, c, `${nom} mange {objet} et guérit !`);
+      }
     }
 
     async function changerEtage(k, s, n) {
@@ -287,6 +429,7 @@ const Combat = (() => {
       const nomStat = C.NOMS_STATS[s] || s;
       if (apres === avant) { await ui.message(`${nomStat} de ${nomDe(k)} ne peut plus ${n > 0 ? 'monter' : 'baisser'} !`); return; }
       k.etages[s] = apres;
+      montrerEtats(k);
       ui.animer(k.joueur ? 'joueur' : 'adversaire', n > 0 ? 'monte' : 'baisse');
       const fort = Math.abs(apres - avant) >= 2 ? ' beaucoup' : '';
       await ui.message(`${nomStat} de ${nomDe(k)}${fort} ${n > 0 ? 'augmente' : 'baisse'} !`);
@@ -297,9 +440,16 @@ const Combat = (() => {
       const c = actif(k);
       if (c.pv <= 0) return;
       const max = C.pvMax(jeu, c);
+      // Les Restes et leurs pareils, avant les dégâts de statut comme dans les jeux officiels.
+      const t = tenu(c);
+      if (t?.type === 'soin_tour' && c.pv < max) {
+        await pv(k, c, c.pv + Math.max(1, Math.floor(max * (Number(t.valeur) || 6.25) / 100)));
+        await ui.message(`${nomDe(k)} récupère des PV grâce à ${nomObjet(c)} !`);
+      }
       if (c.statut === 'brulure') { await ui.message(`${nomDe(k)} souffre de sa brûlure !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max / 16))); }
       else if (c.statut === 'poison') { await ui.message(`${nomDe(k)} souffre du poison !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max / 8))); }
       else if (c.statut === 'poison_grave') { await ui.message(`${nomDe(k)} souffre du poison !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max * k.toxique / 16))); k.toxique = Math.min(15, k.toxique + 1); }
+      await baie(k);
     }
 
     // Changer de créature : les étages et la confusion s'effacent.
@@ -309,6 +459,7 @@ const Combat = (() => {
       k.confusion = 0;
       k.toxique = actif(k).statut === 'poison_grave' ? 1 : 0;
       k.peur = false;
+      k.verrou = '';
       if (k.joueur) nous.participants.add(actif(nous));
       else Collection.voir(partie, actif(k).creature); // le Pokédex : vue (Saga 0.6)
       montrer(k);
@@ -520,6 +671,10 @@ const Combat = (() => {
           }));
           if (i == null) continue;
           if (c.attaques[i].pp <= 0) { await ui.message('Il n\'y a plus de PP pour cette attaque !'); continue; }
+          if (nous.verrou && c.attaques[i].id !== nous.verrou) {
+            await ui.message(`${nomObjet(c)} ne laisse ${C.nom(jeu, c)} utiliser que ${trouver('attaques', nous.verrou)?.nom || nous.verrou} !`);
+            continue;
+          }
           action = { type: 'attaque', attaque: c.attaques[i] };
         } else if (choix === 'sac') {
           action = await utiliserObjet();
@@ -571,7 +726,7 @@ const Combat = (() => {
         k.aJoue = true;
         if (actif(nous).pv <= 0 || actif(eux).pv <= 0) break;
       }
-      for (const k of [nous, eux]) { k.peur = false; await finDeTour(k); }
+      for (const k of [nous, eux]) { k.peur = false; montrerEtats(k); await finDeTour(k); }
 
       // 3. Les K.O.
       if (actif(eux).pv <= 0) {
@@ -591,7 +746,8 @@ const Combat = (() => {
           ui.fermer();
           return { issue: 'victoire' };
         }
-        await envoyer(eux, suivant);
+        // En duel, c'est l'autre joueur qui choisit qui il envoie (Saga 1.2) ; sinon, la première valide.
+        await envoyer(eux, duel ? await choixDuelSuivant(suivant) : suivant);
       }
       if (actif(nous).pv <= 0) {
         if (!duel) C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)

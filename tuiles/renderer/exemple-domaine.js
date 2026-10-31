@@ -1,4 +1,4 @@
-// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.5 : habitants visibles et sentiers) : le petit jeu modèle pour essayer le module gestion.
+// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.6 : habitants visibles et sentiers) : le petit jeu modèle pour essayer le module gestion.
 //
 // Une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp pour dormir, du bois
 // et du blé à ramasser (ils repoussent après quelques nuits). Trois bâtiments : la maison (2 habitants,
@@ -192,7 +192,7 @@ const ExempleDomaine = (() => {
         nom: 'Domaine de la Clairière', capacite: 0, menu: true, construire_menu: true,
         stock_depart: [{ ressource: 'bois', nombre: 12 }, { ressource: 'ble', nombre: 4 }],
         habitants_depart: 0, repas: [{ ressource: 'ble', nombre: 1 }], arrivees: 1, faim: 'departs', faim_nuits: 3,
-        // Tafl 1.5 : on voit les habitants, et leurs pas creusent des sentiers (herbe tassée, puis chemin).
+        // Tafl 1.6 : on voit les habitants, et leurs pas creusent des sentiers (herbe tassée, puis chemin).
         promeneurs: true, usure: true, tuile_usee: T.herbe_tassee, tuile_sentier: T.chemin, seuil_usee: 6, seuil_sentier: 18, usure_repousse: 2,
       }),
     };

@@ -56,6 +56,20 @@ const Donnees = (() => {
     ['stase', 'Empêche d\'évoluer, tenu (Pierre Stase)', []],
     ['amitie', 'Fait monter l\'amitié', ['valeur']],
   ];
+  // Tafl 1.5 : ce qu'un objet fait quand une créature le TIENT (Saga le joue en combat).
+  const TENUS_OBJET = [
+    ['', 'Rien de spécial en combat', []],
+    ['degats', 'Renforce ses attaques', ['valeur', 'categorie', 'recul']],
+    ['type', 'Renforce un type d\'attaque', ['element', 'valeur']],
+    ['stat', 'Renforce une statistique', ['stat_combat', 'valeur', 'verrou']],
+    ['soin_tour', 'Rend des PV à chaque fin de tour', ['valeur']],
+    ['drain', 'Rend des PV quand il blesse', ['valeur']],
+    ['baie', 'Se mange quand les PV tombent bas', ['valeur', 'seuil']],
+    ['soin_statut', 'Guérit un statut dès qu\'il arrive', ['statut']],
+    ['survie', 'Survit à un coup fatal (à PV pleins)', []],
+  ];
+  const UNITES_TENU = { degats: '× les dégâts (1,3 = +30 %)', type: '× les dégâts de ce type', stat: '× la statistique (1,5 = +50 %)', soin_tour: '% des PV max par tour', drain: '% des dégâts rendus en PV', baie: '% des PV max rendus' };
+  const CATEGORIES_TENU = [['', 'Toutes ses attaques'], ['physique', 'Seulement les physiques'], ['speciale', 'Seulement les spéciales']];
   const UNITES_EFFET = { soin_pm: 'PM (9999 = tous)', soin: 'PV (9999 = tous)', rappel: '% des PV', pp: 'PP (99 = tous)', pp_toutes: 'PP (99 = tous)', pp_max: 'paliers (1 à 3)', ev: 'EV', niveau: 'niveaux', ivs: 'valeur des IV (31 = parfait)', balle: '× la chance de capture (255 = toujours)', repousse: 'pas', amitie: 'points d\'amitié (sur 255)' };
   const AJUSTEMENTS = [['aucun', 'Jamais : chaque dresseur garde ses niveaux'], ['equipe', 'Sur l\'équipe du joueur (son meilleur niveau)'], ['badges', 'Sur le niveau maximum des badges du joueur']];
   // Tafl 0.24 (Saga 0.7) : les créatures sauvages peuvent suivre aussi.
@@ -146,6 +160,7 @@ const Donnees = (() => {
       evolutions: arr(c?.evolutions).filter((e) => e?.vers).map((e) => ({ vers: Doc.slug(e.vers, ''), mode: pick(e.mode, MODES_EVOLUTION, 'niveau'), niveau: int(e.niveau, 0, 0, 100), objet: Doc.slug(e.objet, ''), quete: Doc.slug(e.quete, ''), condition: str(e.condition) })),
       attaques: arr(c?.attaques).filter((a) => a?.attaque).map((a) => ({ niveau: int(a.niveau, 1, 0, 100), attaque: Doc.slug(a.attaque, '') })).sort((a, b) => a.niveau - b.niveau),
       ct: ids(c?.ct),
+      oeufs: ids(c?.oeufs),
       description: str(c?.description),
       sprites: { face: image(c?.sprites?.face), dos: image(c?.sprites?.dos) },
       generation: int(c?.generation, 0, 0, 99),
@@ -167,6 +182,21 @@ const Donnees = (() => {
           ...(effet.nature ? { nature: pick(effet.nature, NATURES, 'hardi') } : {}),
           ...(J?.des(effet.des) ? { des: J.des(effet.des) } : {}), // pack JDR : une potion soigne aux dés (2d4+2)
         },
+        // Tafl 1.5 : ce qu'il fait quand une créature le tient, en combat.
+        ...(TENUS_OBJET.some(([k]) => k && k === o?.tenu?.type) ? { tenu: (() => {
+          const t = o.tenu, champs = TENUS_OBJET.find(([k]) => k === t.type)[2];
+          return {
+            type: t.type,
+            ...(champs.includes('valeur') ? { valeur: num(t.valeur, 1, 0, 9999) } : {}),
+            ...(champs.includes('categorie') ? { categorie: pick(t.categorie, CATEGORIES_TENU, '') } : {}),
+            ...(champs.includes('recul') && num(t.recul, 0, 0, 100) ? { recul: num(t.recul, 0, 0, 100) } : {}),
+            ...(champs.includes('element') ? { element: Doc.slug(t.element, '') } : {}),
+            ...(champs.includes('stat_combat') ? { stat: pick(t.stat, STATS_COMBAT, 'attaque') } : {}),
+            ...(champs.includes('verrou') && t.verrou ? { verrou: true } : {}),
+            ...(champs.includes('seuil') ? { seuil: int(t.seuil, 50, 1, 100) } : {}),
+            ...(champs.includes('statut') ? { statut: str(t.statut, 'tous') } : {}),
+          };
+        })() } : {}),
         icone: image(o?.icone),
         // Pack JRPG : un objet qu'un héros porte (arme, armure…), ses bonus et les classes qui le peuvent.
         ...(o?.equipement && PLACES.some(([k]) => k === o.equipement.place) ? { equipement: {
@@ -436,7 +466,7 @@ const Donnees = (() => {
     for (const c of d.creatures) {
       if (sorte === 'type' && c.types.includes(id)) out.add(`Créature ${c.nom}`);
       if (sorte === 'talent' && (c.talents.includes(id) || c.talent_cache === id)) out.add(`Créature ${c.nom}`);
-      if (sorte === 'attaque' && (c.attaques.some((a) => a.attaque === id) || c.ct.includes(id))) out.add(`Créature ${c.nom}`);
+      if (sorte === 'attaque' && (c.attaques.some((a) => a.attaque === id) || c.ct.includes(id) || c.oeufs.includes(id))) out.add(`Créature ${c.nom}`);
       if (sorte === 'creature' && c.evolutions.some((e) => e.vers === id)) out.add(`Créature ${c.nom} (évolution)`);
       if (sorte === 'objet' && c.evolutions.some((e) => e.objet === id)) out.add(`Créature ${c.nom} (évolution)`);
     }
@@ -502,6 +532,7 @@ const Donnees = (() => {
         talent_cache: c.talent_cache ? re('talents', c.talent_cache) : '',
         attaques: c.attaques.map((a) => ({ ...a, attaque: re('attaques', a.attaque) })),
         ct: c.ct.map((x) => re('attaques', x)),
+        oeufs: c.oeufs.map((x) => re('attaques', x)),
         evolutions: c.evolutions.map((e) => ({ ...e, vers: re('creatures', e.vers), objet: e.objet ? re('objets', e.objet) : '' })),
       }),
     };
@@ -542,7 +573,7 @@ const Donnees = (() => {
       okLabel: 'Importer',
       width: 560,
       fields: [
-        { type: 'info', text: 'Les 18 types et leurs faiblesses, les talents, les attaques, les créatures (statistiques, évolutions, attaques par niveau et par CT, talents, taux de capture…), les objets (soins, balles, menthes, capsules, pierres…), en français, depuis PokeAPI. Il faut Internet. Tu pourras tout modifier, et ajouter tes créatures et objets à toi à côté.' },
+        { type: 'info', text: 'Les 18 types et leurs faiblesses, les talents, les attaques, les créatures (statistiques, évolutions, attaques par niveau, par CT et capacités œufs, talents, taux de capture…), les objets (soins, balles, menthes, capsules, pierres…), en français, depuis PokeAPI. Il faut Internet. Tu pourras tout modifier, et ajouter tes créatures et objets à toi à côté.' },
         { type: 'element', element: el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Générations' }), gens]) },
         { key: 'sprites', label: 'Images des créatures (face et dos)', type: 'checkbox', value: true },
         { key: 'icones', label: 'Icônes des objets', type: 'checkbox', value: true },
@@ -971,15 +1002,21 @@ const Donnees = (() => {
     // Les faiblesses calculées depuis la table des types.
     const def = work.types.map((a) => [a, c.types.reduce((m, t) => m * efficacite(a, t), 1)]).filter(([, m]) => m !== 1);
     const faiblesses = el('div', { className: 'chips' }, def.length ? def.sort((x, y) => y[1] - x[1]).map(([a, m]) => el('span', { className: 'chip faiblesse' }, [pastille(a.couleur, a.nom), el('span', { textContent: `×${m === 0.5 ? '½' : m === 0.25 ? '¼' : m}` })])) : [el('span', { className: 'chips-empty', textContent: work.types.length ? 'Aucune faiblesse ni résistance.' : 'Ajoute des types (onglet Types, ou l\'import officiel) pour voir ses faiblesses.' })]);
-    const ct = el('div', { className: 'chips' });
-    const majCt = () => {
-      ct.replaceChildren(...c.ct.map((id) => el('span', { className: 'chip' }, [el('span', { textContent: work.attaques.find((a) => a.id === id)?.nom || id }), petitBouton('close', 'Retirer', () => { c.ct = c.ct.filter((x) => x !== id); majCt(); })])));
-      const o = { v: '' };
-      const i = ref(o, 'v', 'tafl-attaques', '+ attaque par CT');
-      i.onchange = () => { if (o.v && !c.ct.includes(o.v)) { c.ct = [...c.ct, o.v]; majCt(); ct.querySelector('input')?.focus(); } };
-      ct.append(i);
+    // Les listes d'attaques en pastilles : par CT, et (Tafl 1.5) les capacités œufs.
+    const chipsAttaques = (cle, invite) => {
+      const boite = el('div', { className: 'chips' });
+      const maj = () => {
+        boite.replaceChildren(...c[cle].map((id) => el('span', { className: 'chip' }, [el('span', { textContent: work.attaques.find((a) => a.id === id)?.nom || id }), petitBouton('close', 'Retirer', () => { c[cle] = c[cle].filter((x) => x !== id); maj(); })])));
+        const o = { v: '' };
+        const i = ref(o, 'v', 'tafl-attaques', invite);
+        i.onchange = () => { if (o.v && !c[cle].includes(o.v)) { c[cle] = [...c[cle], o.v]; maj(); boite.querySelector('input')?.focus(); } };
+        boite.append(i);
+      };
+      maj();
+      return boite;
     };
-    majCt();
+    const ct = chipsAttaques('ct', '+ attaque par CT');
+    const oeufs = chipsAttaques('oeufs', '+ capacité œuf');
     form.append(
       el('div', { className: 'creature-head' }, [
         blocImage(ctx, c, 'sprites', 'Face', 'face'),
@@ -1025,6 +1062,8 @@ const Donnees = (() => {
       ], () => ({ niveau: (c.attaques.at(-1)?.niveau || 0) + 3, attaque: '' }), { ajouter: '+ Attaque', vide: 'Aucune attaque. Niveau 0 : apprise en évoluant.' }),
       section('Attaques par CT'),
       ct,
+      section('Capacités œufs'),
+      oeufs,
       section('Utilisation'),
       ctx.usages('creature', c.id),
     );
@@ -1076,6 +1115,30 @@ const Donnees = (() => {
       if (champs.includes('nature') && !e.nature) e.nature = 'hardi';
     };
     majEffet();
+
+    // Tafl 1.5 : ce qu'il fait quand une créature le tient (l'Orbe Vie, les Restes, une baie…).
+    const tenu = el('div', { className: 'field-grid' });
+    const majTenu = () => {
+      const t = o.tenu || { type: '' };
+      const champs = TENUS_OBJET.find(([k]) => k === t.type)?.[2] || [];
+      if (champs.includes('valeur') && t.valeur === undefined) t.valeur = { degats: 1.3, type: 1.2, stat: 1.5, soin_tour: 6.25, drain: 12.5, baie: 25 }[t.type] ?? 1;
+      tenu.replaceChildren(...[
+        champ('Tenu, en combat', sel(TENUS_OBJET.map(([k, l]) => [k, l]), t.type, (v) => { if (v) o.tenu = { type: v }; else delete o.tenu; majTenu(); })),
+        champs.includes('valeur') ? champ('Valeur', nombreIn(t, 'valeur', 0, 9999, 0.1), UNITES_TENU[t.type] || '') : null,
+        champs.includes('categorie') ? champ('Quelles attaques', sel(CATEGORIES_TENU, t.categorie || '', (v) => { t.categorie = v; })) : null,
+        champs.includes('element') ? champ('Type renforcé', sel([['', '—'], ...ctx.work.types.map((x) => [x.id, x.nom])], t.element || '', (v) => { t.element = v; })) : null,
+        champs.includes('stat_combat') ? champ('Statistique', sel(STATS_COMBAT, t.stat || 'attaque', (v) => { t.stat = v; })) : null,
+        champs.includes('recul') ? champ('Recul', nombreIn(t, 'recul', 0, 100), '% des PV max perdus en attaquant (Orbe Vie : 10)') : null,
+        champs.includes('seuil') ? champ('Seuil', nombreIn(t, 'seuil', 1, 100), '% des PV sous lequel elle la mange') : null,
+        champs.includes('statut') ? champ('Statut guéri', sel([['tous', 'Tous'], ...STATUTS.slice(1)], t.statut || 'tous', (v) => { t.statut = v; })) : null,
+        champs.includes('verrou') ? champ('Objet Choix', ctx.coche(t, 'verrou'), 'elle ne peut plus lancer que sa première attaque') : null,
+      ].filter(Boolean));
+      if (champs.includes('stat_combat') && !t.stat) t.stat = 'attaque';
+      if (champs.includes('seuil') && t.seuil === undefined) t.seuil = 50;
+      if (champs.includes('statut') && !t.statut) t.statut = 'tous';
+    };
+    majTenu();
+
     ctx.form.append(
       el('div', { className: 'creature-head' }, [
         blocImage(ctx, o, 'icone', 'Icône'),
@@ -1091,6 +1154,8 @@ const Donnees = (() => {
       el('label', { className: 'field field-textarea' }, [el('span', { className: 'field-label', textContent: 'Description' }), ctx.zone(o, 'description', 2, 'Le texte du sac.')]),
       section('Ce qu\'il fait'),
       effet,
+      ...(jrpg || packDe(ctx.work) === 'jdr' ? [] : [section('Tenu par une créature'), tenu,
+        info('Saga joue ces effets en plein combat. Les objets officiels connus (Orbe Vie, Restes, Bandeau Choix, Ceinture Force, Baie Sitrus, Baie Prine, Charbon…) marchent déjà sans rien régler ici.')]),
       ...(packDe(ctx.work) === 'jdr' && J ? J.formObjet(o, ctx) : []),
       ...(jrpg ? [section('Équipement'), blocEquipement(o, ctx), info('Un objet porté (arme, bouclier, casque, armure, accessoire) ajoute ses bonus aux statistiques du héros. Le joueur le met dans le menu du groupe › Équipement ; un personnage peut aussi commencer avec (onglet Personnages).')] : []),
       jrpg || packDe(ctx.work) === 'jdr' ? null : info('Une menthe change l\'effet de la nature sur les statistiques ; une capsule met des IV au maximum ; une vitamine donne des EV. Un objet « Ouvre un passage » remplace les CS : mets-le comme objet requis d\'une zone (eau, rocher, arbre…).'),
