@@ -21,6 +21,10 @@ const { spawn, execFile } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+// L'IA locale (Ollama), quand Claude n'est pas là : recopiée depuis ../commun par npm install.
+const ollama = require('./commun/ollama');
+const lokiLocal = require('./commun/loki-local');
+const outilsCommuns = require('./commun/mcp-commun');
 
 let proc = null;          // processus Claude Code en cours
 let procCwd = null;       // dossier dans lequel il a été lancé
@@ -29,8 +33,27 @@ let buffer = '';          // morceau de ligne pas encore complet
 let nextRequestId = 1;
 let lastSession = null;   // { id, cwd } : pour reprendre la conversation si Claude Code s'arrête
 
-function emit(event) {
+function envoyerAuPanneau(event) {
   if (sender && !sender.isDestroyed()) sender.send('claude:event', event);
+}
+
+// Le moteur : Claude Code ou l'IA locale (config.lokiMoteur : auto, claude ou local), comme dans les
+// autres outils (voir ../commun/claude.js). En local : lire, chercher et modifier les fichiers du
+// projet, la mémoire du projet ; pas de commandes ni de web.
+let moteurActif = null;
+let claudeIndispo = null;
+let tourAuto = null;
+let basculer = null;
+let session = null;
+const permissionsLocales = new Map();
+
+function emit(event) {
+  if (tourAuto && basculer) {
+    const raison = lokiLocal.echecClaude(event);
+    if (raison) return basculer(raison);
+    if (event.kind === 'result' || event.kind === 'exit' || event.kind === 'error') tourAuto = null;
+  }
+  envoyerAuPanneau(event);
 }
 
 function write(message) {
@@ -249,6 +272,7 @@ function start({ command, model, cwd, log, resume, mcpConfig }) {
   });
   current.on('exit', (code) => {
     if (proc === current) proc = null;
+    if (current.silencieux) return; // arrêté parce qu'on passe en local
     // Sous Windows, une commande introuvable ne déclenche pas "error" mais un code 1 du shell.
     const notFound = process.platform === 'win32' && /n.est pas reconnu|is not recognized/i.test(stderr);
     if (code !== 0 && code !== null) log('ERREUR', `Claude s'est arrêté (code ${code}) : ${stderr.trim()}`);
@@ -266,6 +290,8 @@ function handleMessage(m) {
     lastSession = { id: m.session_id, cwd: procCwd };
     return emit({ kind: 'init', model: m.model, sessionId: m.session_id });
   }
+  // Les serveurs de Claude ne répondent pas (limite atteinte, pas de connexion…) : en « auto », on passe en local.
+  if (m.type === 'system' && m.subtype === 'api_retry') return emit({ kind: 'retry', attempt: m.attempt, max: m.max_retries, status: m.error_status });
   if (m.type === 'stream_event') {
     const e = m.event;
     if (m.parent_tool_use_id) return; // texte d'un sous-agent : on n'affiche que le fil principal
@@ -301,9 +327,11 @@ function handleMessage(m) {
   }
 }
 
-function stop() {
+function stop({ silencieux = false } = {}) {
+  session?.arreter();
   if (!proc) return;
   const current = proc;
+  current.silencieux = silencieux;
   proc = null;
   if (process.platform === 'win32') {
     // Avec le shell, kill() n'arrêterait que cmd.exe : taskkill arrête aussi Claude Code.
@@ -338,6 +366,70 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
   historyFile = path.join(dataDir, 'claude-conversations.json');
   communDir = path.join(path.dirname(dataDir), 'atelier-commun');
   mcpFile = path.join(dataDir, 'mcp-atelier.json');
+  ollama.configurer({ commun: communDir });
+  const dossierLocal = path.join(dataDir, 'loki-local');
+
+  // --- Loki en local ---
+  async function autoriserLocal({ id, nomAffiche, entree, lecture }) {
+    if (lecture || LECTURE.includes(nomAffiche)) return true;
+    const famille = familleDe(nomAffiche, entree);
+    const pourDeBon = toujoursPermis(await configActuelle(), famille);
+    if (pourDeBon || autoriseesConversation.has(famille)) {
+      envoyerAuPanneau({ kind: 'permission-auto', toolUseId: id, famille, libelle: libelleFamille(famille), pourDeBon });
+      return true;
+    }
+    const requestId = `local-${id}`;
+    return new Promise((resolve) => {
+      permissionsLocales.set(requestId, resolve);
+      envoyerAuPanneau({ kind: 'permission', requestId, toolUseId: id, toolName: nomAffiche, input: entree, famille, familleLibelle: libelleFamille(famille), gardable: gardable(famille) });
+    });
+  }
+  session = lokiLocal.creerSession({ log, emit: envoyerAuPanneau, autoriser: autoriserLocal, dossier: dossierLocal });
+  let localCwd = null;
+
+  async function envoyerLocal(texte) {
+    const root = getRoot();
+    if (localCwd && localCwd !== root) { session.reinitialiser(); autoriseesConversation.clear(); }
+    localCwd = root;
+    moteurActif = 'local';
+    const config = await readConfig();
+    const memoire = [];
+    if (config.claudeAtelier !== false) {
+      outilsCommuns.configurer({ commun: communDir, projet: path.basename(root) });
+      for (const o of outilsCommuns.OUTILS) {
+        memoire.push({
+          name: o.name, description: o.description, parameters: o.inputSchema, affiche: `mcp__atelier__${o.name}`, lecture: o.name.startsWith('lire_'),
+          faire: async (args) => ({ texte: await outilsCommuns.appeler(o.name, args) }),
+        });
+      }
+    }
+    const consignes = [
+      `Tu es Loki, l'assistant intégré à Rune, l'éditeur de code de Ragna (développeur web, Vue.js, sous Windows), un des outils de l'Atelier.`,
+      'Ici, tu tournes sur un modèle local. Réponds en français, simplement et brièvement.',
+      `Tu travailles dans le projet « ${path.basename(root)} », dossier ${root}. Les chemins sont relatifs à ce dossier.`,
+      'Pour les fichiers : lire_fichier, lister_fichiers, chercher_texte, modifier_fichier (remplace un passage exact), ecrire_fichier.',
+      'Avant de modifier un fichier, lis-le. Ragna valide chaque modification sur une carte Autoriser / Refuser.',
+      ...(memoire.length ? ['La mémoire du projet (décisions, client, hébergement…) : lire_contexte ; les notes de Ragna : lire_notes ; retenir_projet / oublier_projet pour garder une info utile plus tard.'] : []),
+    ].join('\n');
+    await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(root), ...memoire] });
+  }
+
+  basculer = (raison) => {
+    const texte = tourAuto?.texte;
+    tourAuto = null;
+    stop({ silencieux: true });
+    claudeIndispo = { jusqua: Date.now() + 30 * 60_000, raison };
+    log('INFO', `Loki : ${raison}, passage au modèle local`);
+    ollama.reglages().then((r) => envoyerAuPanneau({ kind: 'moteur', moteur: 'local', raison, modele: r.modele }));
+    if (texte) envoyerLocal(texte).catch((err) => log('ERREUR', `Loki local : ${err.message}`));
+  };
+
+  handle('claude:moteur', async (_event, choix) => {
+    if (['claude', 'local', 'auto'].includes(choix) && changerConfig) await changerConfig({ lokiMoteur: choix });
+    const config = await configActuelle();
+    const r = await ollama.reglages();
+    return { choix: config.lokiMoteur || 'auto', actif: moteurActif, indispo: claudeIndispo?.jusqua > Date.now() ? claudeIndispo.raison : null, modele: r.modele, ollama: Boolean(ollama.executable()) || Boolean(await ollama.version()) };
+  });
 
   // Les conversations du dossier ouvert, la plus récente d'abord (sans leur contenu).
   handle('claude:history', async () => {
@@ -362,6 +454,15 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
   handle('claude:resume', async (_event, sessionId) => {
     stop();
     autoriseesConversation.clear();
+    session.reinitialiser();
+    moteurActif = null;
+    if (String(sessionId).startsWith('local:')) {
+      await session.reprendre(dossierLocal, sessionId);
+      moteurActif = 'local';
+      localCwd = getRoot();
+      lastSession = null;
+      return;
+    }
     lastSession = sessionId && /^[\w-]+$/.test(sessionId) ? { id: sessionId, cwd: getRoot() } : null;
   });
 
@@ -369,6 +470,15 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
     const root = getRoot();
     if (!root) throw new Error("Ouvre d'abord un dossier : Loki travaille dans le projet ouvert.");
     sender = event.sender;
+    const choix = (await readConfig()).lokiMoteur || 'auto';
+    const local = choix === 'local' || (choix === 'auto' && (moteurActif === 'local' || (!moteurActif && claudeIndispo?.jusqua > Date.now())));
+    if (local) {
+      if (moteurActif === 'claude') { stop(); autoriseesConversation.clear(); }
+      return envoyerLocal(String(text));
+    }
+    if (moteurActif === 'local') { session.reinitialiser(); autoriseesConversation.clear(); }
+    moteurActif = 'claude';
+    tourAuto = choix === 'auto' ? { texte: String(text) } : null;
     // Le projet a changé depuis le lancement : on repart sur une conversation neuve dans le bon dossier.
     if (proc && procCwd !== root) { stop(); autoriseesConversation.clear(); }
     let intro = '';
@@ -394,7 +504,8 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
   // Ta réponse à une demande de permission. decision : allow, deny, always (ne plus demander pour
   // cette famille pendant la conversation) ou toujours (pour de bon, dans les réglages).
   handle('claude:permission', async (_event, { requestId, toolUseId, decision, input, famille }) => {
-    repondrePermission(String(requestId), String(toolUseId), decision !== 'deny', input);
+    const local = permissionsLocales.get(String(requestId));
+    if (local) { permissionsLocales.delete(String(requestId)); local(decision !== 'deny'); } else repondrePermission(String(requestId), String(toolUseId), decision !== 'deny', input);
     if (typeof famille !== 'string' || !famille) return;
     if (decision === 'always') autoriseesConversation.add(famille);
     if (decision === 'toujours' && gardable(famille)) {
@@ -428,10 +539,16 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
 
   // Bouton stop : Claude arrête ce qu'il est en train de faire, la conversation continue.
   handle('claude:interrupt', async () => {
+    if (moteurActif === 'local') { session.arreter(); for (const r of permissionsLocales.values()) r(false); permissionsLocales.clear(); return; }
     write({ type: 'control_request', request_id: `interrupt-${nextRequestId++}`, request: { subtype: 'interrupt' } });
   });
 
-  handle('claude:reset', async () => { lastSession = null; stop(); autoriseesConversation.clear(); });
+  handle('claude:reset', async () => {
+    lastSession = null; stop(); autoriseesConversation.clear();
+    session.reinitialiser(); moteurActif = null; tourAuto = null;
+    for (const r of permissionsLocales.values()) r(false);
+    permissionsLocales.clear();
+  });
 }
 
 module.exports = { register, stop };

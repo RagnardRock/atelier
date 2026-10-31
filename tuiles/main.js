@@ -389,6 +389,8 @@ handle('comfy:arreter', async () => comfy.arreter());
 handle('comfy:infos', async () => comfy.infos());
 handle('comfy:modeles', async () => comfy.modeles());
 handle('comfy:generer', async (event, graphe) => {
+  // Une seule carte graphique : l'IA locale de Loki (Ollama) lui laisse la place.
+  if (await require('./commun/ollama').liberer()) log('INFO', 'Ollama : modèles déchargés avant ComfyUI');
   const images = await comfy.generer(graphe, envoyer(event, 'comfy:progres'));
   return images.map((b) => new Uint8Array(b));
 });
@@ -604,7 +606,7 @@ const CLAUDE_CONSIGNES = [
   '- Animation : animer_tuile plutôt qu\'image par image : cycle de couleurs pour l\'eau, balancement d\'1 pixel pour',
   '  les herbes, scintillement pour les reflets ; 3 à 6 images de 150 à 300 ms, des mouvements petits et doux.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {

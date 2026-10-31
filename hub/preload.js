@@ -50,6 +50,17 @@ contextBridge.exposeInMainWorld('atelier', {
   claudeActionFaite: (id, resultat) => ipcRenderer.invoke('claude:actionFaite', id, resultat),
   onClaudeAction: (callback) => ipcRenderer.on('claude:action', (_event, data) => callback(data)),
   onClaude: (callback) => ipcRenderer.on('claude:event', (_event, data) => callback(data)),
+  // L'IA locale de Loki (Ollama) : Réglages › IA locale
+  iaEtat: () => ipcRenderer.invoke('ia:etat'),
+  iaDemarrer: () => ipcRenderer.invoke('ia:demarrer'),
+  iaInstaller: () => ipcRenderer.invoke('ia:installer'),
+  iaTelecharger: (nom) => ipcRenderer.invoke('ia:telecharger', nom),
+  iaAnnuler: (nom) => ipcRenderer.invoke('ia:annuler', nom),
+  iaSupprimer: (nom) => ipcRenderer.invoke('ia:supprimer', nom),
+  iaReglages: (changements) => ipcRenderer.invoke('ia:reglages', changements),
+  iaLiberer: () => ipcRenderer.invoke('ia:liberer'),
+  iaSiteOllama: () => ipcRenderer.invoke('ia:siteOllama'),
+  onIaProgres: (callback) => ipcRenderer.on('ia:progres', (_event, p) => callback(p)),
 
   // Dossier partagé avec Rune, Skald et Tafl (mémoire des projets, notes, projet en cours)
   ouvrirCommun: () => ipcRenderer.invoke('commun:ouvrir'),

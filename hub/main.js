@@ -827,6 +827,35 @@ handle('claude:ouvrirDossier', async () => {
   if (err) throw new Error(err);
 });
 
+// --- L'IA locale de Loki (Ollama, voir commun/ollama.js) : installer, télécharger les modèles ---
+// Les réglages (modèle choisi, mémoire) sont dans le dossier partagé : tous les outils les lisent.
+const ollama = require('./commun/ollama');
+ollama.configurer({ commun: communDir() });
+const telechargementsIa = new Map(); // nom du modèle -> AbortController
+const progresIa = (event, quoi) => (p) => { if (!event.sender.isDestroyed()) event.sender.send('ia:progres', { quoi, ...p }); };
+handle('ia:etat', async () => ({ ...(await ollama.etat()), enCours: [...telechargementsIa.keys()] }));
+handle('ia:demarrer', async () => ollama.demarrer(log));
+handle('ia:installer', async (event) => ollama.installer(progresIa(event, 'ollama'), log));
+handle('ia:telecharger', async (event, nom) => {
+  if (telechargementsIa.has(nom)) return;
+  if (!(await ollama.demarrer(log))) throw new Error('Ollama ne démarre pas : installe-le d\'abord.');
+  const arret = new AbortController();
+  telechargementsIa.set(nom, arret);
+  log('INFO', `Ollama : téléchargement du modèle ${nom}`);
+  try { await ollama.telecharger(nom, progresIa(event, nom), arret.signal); } finally { telechargementsIa.delete(nom); }
+});
+handle('ia:annuler', async (_event, nom) => telechargementsIa.get(nom)?.abort());
+handle('ia:supprimer', async (_event, nom) => { await ollama.supprimer(nom); log('INFO', `Ollama : modèle ${nom} supprimé`); });
+handle('ia:reglages', async (_event, changements) => {
+  const ok = {};
+  if (typeof changements?.modele === 'string') ok.modele = changements.modele;
+  if (Number.isFinite(changements?.contexte)) ok.contexte = Math.min(65536, Math.max(4096, Math.round(changements.contexte)));
+  if (typeof changements?.reflexion === 'boolean') ok.reflexion = changements.reflexion;
+  return ollama.changerReglages(ok);
+});
+handle('ia:liberer', async () => ollama.liberer());
+handle('ia:siteOllama', async () => shell.openExternal(ollama.SITE));
+
 // --- Mise à jour d'Atelier lui-même ---
 // Même principe que Skald :
 // - Installé avec Atelier-Setup.exe (app.isPackaged) : on cherche la Release atelier-vX.Y.Z la plus

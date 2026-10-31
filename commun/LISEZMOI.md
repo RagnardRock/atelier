@@ -10,6 +10,8 @@ Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude*
 | `mcp-commun.js` | Petit serveur MCP donné à Claude : la mémoire du projet et tes notes, lues et écrites dans le dossier partagé `%APPDATA%\atelier-commun` (tenu à jour par Atelier 0.8 ou plus). |
 | `claude-panneau.js` / `.css` | Le panneau dans la fenêtre : bulles, outils utilisés, cartes Autoriser / Refuser, historique. Bouton étincelle dans la barre de titre, ou `Ctrl+Maj+K`. |
 | `github.js` | Lit les Releases GitHub pour les mises à jour sans épuiser la limite de 60 demandes par heure de GitHub : le flux des Releases d'abord (non compté), l'API seulement en complément (au plus une fois par demi-heure, gardée sur le disque), et un message clair avec l'heure où réessayer si la limite est atteinte. Atelier et Saga l'utilisent aussi (`hub/commun/`, `moteur/commun/`, copiés par `npm install`). |
+| `ollama.js` | L'IA locale : parle à Ollama (serveur sur le PC, `127.0.0.1:11434`), le démarre, l'installe (Windows), télécharge ou supprime les modèles, libère la carte graphique. Réglages partagés : `%APPDATA%\atelier-commun\ia-locale.json`. |
+| `loki-local.js` | Loki avec un modèle local : la boucle « réfléchir → action → résultat » que Claude Code fait d'habitude, avec les mêmes actions, la même mémoire et les mêmes cartes Autoriser / Refuser. Aussi utilisé par Atelier et Rune. |
 | `copier.js` | Recopie ces fichiers dans `<outil>/commun/`. |
 
 **Pourquoi une copie ?** Chaque outil est fabriqué depuis son propre dossier, et son installeur
@@ -80,3 +82,21 @@ le `renderer/dialogs.js` de l'outil) : la vraie fenêtre s'ouvre, se remplit ave
 Claude comme au clavier, puis se valide toute seule. Une question (« Enregistrer ? ») prend le bouton
 demandé, sinon le bouton principal. Les fenêtres de Windows (choisir un fichier, un dossier) restent
 pour Ragna : pour écrire dans le projet, Claude a ses propres actions (exporter, enregistrer_sous…).
+
+## L'IA locale (quand Claude n'est pas là)
+
+En haut du panneau, **Auto / Claude / Local** (réglage `lokiMoteur` de chaque outil) :
+
+- **Auto** (par défaut) : Claude Code ; si Claude n'est pas installé, pas connecté, hors ligne ou à
+  sa limite d'utilisation, Loki passe au modèle local avec le même message, le dit dans le panneau,
+  et reste en local jusqu'à la fin de la conversation (puis 30 minutes avant de réessayer Claude).
+- **Claude** ou **Local** : toujours l'un ou l'autre.
+
+Le modèle se choisit et se télécharge dans **Atelier › Réglages › IA locale** (Ollama s'y installe
+en un clic). En local : lire, chercher et modifier les fichiers du projet, la mémoire du projet et
+les actions de l'outil ; pas de web ni de commandes. Au-delà de 24 actions (Tafl), le modèle reçoit
+un catalogue court et passe par `voir_action` / `faire_action` : un petit modèle s'y retrouve mieux.
+Il est arrêté après 25 actions dans une même réponse (« continue » pour la suite).
+
+La carte graphique est partagée avec ComfyUI : Tafl décharge les modèles d'Ollama avant de générer
+des images, et libère ComfyUI avant une réponse locale (`avantLocal` de `register`).
