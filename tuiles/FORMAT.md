@@ -1009,8 +1009,8 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 
 Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jour :
 
-1. les habitants mangent (`repas`, dans le stock du coucher) ; ceux qui n'ont pas pu manger ne travaillent pas cette nuit (personne ne part) ;
-2. les habitants nourris vont aux bâtiments finis qui demandent des `ouvriers`, dans l'ordre de construction ; un bâtiment qui ne les a pas tous ne produit pas (le rapport le dit) ;
+1. les habitants mangent (`repas`, dans le stock du coucher) ; s'il en manque, ils travaillent quand même (Saga 1.6.1 : sinon un bâtiment qui produit la nourriture s'arrêterait pour toujours), personne ne part, mais personne n'arrive cette nuit-là ;
+2. les habitants vont aux bâtiments finis qui demandent des `ouvriers`, dans l'ordre de construction ; un bâtiment qui ne les a pas tous ne produit pas (le rapport le dit) ;
 3. les bâtiments finis produisent, chacun avec ce qu'il y avait dans le stock au coucher (ce qui est produit cette nuit ne sert que la nuit suivante ; si plusieurs bâtiments veulent la même ressource, le premier construit passe d'abord) ;
 4. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira à partir de la suivante) ;
 5. si tout le monde a mangé et qu'il reste un logement, jusqu'à `arrivees` habitants s'installent (ils travaillent à partir de la nuit suivante ; moment `gestion_arrivee` pour les scripts) ;

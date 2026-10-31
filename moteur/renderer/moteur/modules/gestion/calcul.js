@@ -195,8 +195,9 @@ const GestionCalcul = (() => {
   }
 
   // La fin du jour `jour`, dans un ordre fixe :
-  //   1. les habitants mangent (repas, dans le stock du coucher) ; ceux qui n'ont pas mangé ne travaillent pas ;
-  //   2. les habitants nourris vont aux bâtiments finis qui demandent des ouvriers, dans l'ordre de
+  //   1. les habitants mangent (repas, dans le stock du coucher). Ceux qui n'ont pas mangé travaillent quand
+  //      même (Saga 1.6.1) : sinon une ferme sans blé n'aurait plus d'ouvriers pour en produire, pour toujours ;
+  //   2. les habitants vont aux bâtiments finis qui demandent des ouvriers, dans l'ordre de
   //      construction ; un bâtiment qui n'a pas tous ses ouvriers ne produit pas ;
   //   3. les bâtiments finis produisent, s'ils ont ce qu'ils consomment dans le stock du coucher (s'ils sont
   //      plusieurs à vouloir la même ressource, le premier bâti passe d'abord) ;
@@ -219,11 +220,11 @@ const GestionCalcul = (() => {
       nourris = Math.min(etat.habitants, ...Object.entries(repas).map(([r, k]) => Math.floor((etat.stock[r] || 0) / k)));
       const mange = Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * nourris]).filter(([, k]) => k > 0));
       retirer(mange);
-      if (nourris < etat.habitants) lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}. Ils ne travaillent pas.`);
+      if (nourris < etat.habitants) lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}. Personne ne s'installera tant que tout le monde n'a pas mangé.`);
     }
     // 2 et 3. Le travail et la production. Ce qui est produit cette nuit n'arrive au stock qu'à la fin : un
     // bâtiment ne consomme que ce qu'il y avait au coucher, quel que soit l'ordre des bâtiments.
-    let libres = nourris;
+    let libres = etat.habitants;
     const sansOuvriers = [];
     const produit = {};
     for (const b of etat.batiments) {

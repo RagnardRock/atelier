@@ -184,7 +184,7 @@ const DonneesGestion = (() => {
         champ('Arrivées par nuit', nombreIn(g, 'arrivees', 0, 99), 'au plus, s\'il reste un logement (0 = seulement par la commande)'),
       ]),
       tableQuantites(ctx, g, 'repas', 'Repas d\'un habitant, chaque nuit', 'Les habitants ne mangent rien.'),
-      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; ceux qui n\'ont pas mangé ne travaillent pas, et personne n\'arrive cette nuit-là. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
+      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même, mais personne n\'arrive cette nuit-là. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
   }
