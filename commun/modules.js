@@ -18,10 +18,32 @@
 //     conditions: { type: { nom } },       les conditions de page qu'il ajoute
 //   }
 //
-// Le catalogue est vide tant qu'aucun module n'existe : le premier sera « gestion ».
+// Le premier module est « gestion » (Saga 1.5, Tafl 1.3).
 
 const ModulesJeu = (() => {
-  const CATALOGUE = {};
+  const CATALOGUE = {
+    // Saga 1.5, Tafl 1.3 : moteur/renderer/moteur/modules/gestion/.
+    gestion: {
+      nom: 'Gestion',
+      description: 'Un stock commun et des bâtiments à construire, qui produisent chaque nuit (quand le joueur dort). Les ressources et les bâtiments sont des données du jeu.',
+      donnees: ['ressources', 'batiments'],
+      moments: {
+        gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } },
+      },
+      commandes: {
+        gestion_construire: { nom: 'Construire un bâtiment' },
+        gestion_placer: { nom: 'Placer un bâtiment (le joueur choisit où)' },
+        gestion_stock: { nom: 'Ajouter ou retirer une ressource du stock' },
+        gestion_deposer: { nom: 'Déposer le sac au stock' },
+        gestion_domaine: { nom: 'Ouvrir l\'écran du domaine' },
+      },
+      conditions: {
+        gestion_batiment: { nom: 'Un bâtiment est construit' },
+        gestion_chantier: { nom: 'Un chantier est en cours' },
+        gestion_stock: { nom: 'Le stock a assez d\'une ressource' },
+      },
+    },
+  };
 
   // Un id de module : minuscules, chiffres et tirets, qui commence par une lettre.
   const ID = /^[a-z][a-z0-9-]{0,39}$/;

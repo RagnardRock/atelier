@@ -34,7 +34,7 @@ const Verificateur = (() => {
       fn(c);
       if (c.type === 'choix') for (const o of c.options || []) parcourir(o?.commandes, fn);
       if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
-      if (['test', 'sauvegarde', 'test_oppose'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
+      if (['test', 'sauvegarde', 'test_oppose', 'gestion_construire', 'gestion_placer'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
     }
   }
   // Les conditions d'un événement : celles de ses pages, et celles des « si » de ses scripts.
@@ -62,6 +62,7 @@ const Verificateur = (() => {
       dresseurs: ids('dresseurs'), boutiques: ids('boutiques'), groupes: ids('groupes'),
       monstres_jdr: ids('monstres_jdr'), classes_jdr: ids('classes_jdr'), origines: ids('origines'),
       badges: new Set((reglages.badges || []).map((b) => b.id)),
+      ressources: ids('ressources'), batiments: ids('batiments'), // Tafl 1.3 : le module gestion
     };
     // Tafl 1.2 : un module activé que ce Tafl ne connaît pas (écrit à la main, ou par un Tafl plus récent).
     // Dit avant tout le reste : même un jeu sans carte doit l'apprendre.
@@ -80,7 +81,7 @@ const Verificateur = (() => {
 
     // --- Ce que le jeu peut donner : objets, interrupteurs, quêtes, badges, membres du groupe ---
     // (n'importe où, même dans un événement inaccessible : l'accès est vérifié à part)
-    const donne = { objets: new Set(), interrupteurs: new Set(), eteints: new Set(), commencees: new Set(), etapes: new Map(), finies: new Set(), badges: new Set(), membres: new Set(), dresseurs: new Set() };
+    const donne = { objets: new Set(), interrupteurs: new Set(), eteints: new Set(), commencees: new Set(), etapes: new Map(), finies: new Set(), badges: new Set(), membres: new Set(), dresseurs: new Set(), construits: new Set() };
     const scriptsDe = []; // [{ carte, ev }] pour la suite
     for (const c of cartes.values()) {
       for (const ev of c.evenements || []) {
@@ -98,6 +99,9 @@ const Verificateur = (() => {
             if (cmd.action === 'finir') donne.finies.add(cmd.quete);
           }
           if (cmd.type === 'badge' && cmd.badge) donne.badges.add(cmd.badge);
+          if (cmd.type === 'gestion_construire' && cmd.batiment) donne.construits.add(cmd.batiment);
+          if (cmd.type === 'gestion_placer') donne.places = true;
+          if (cmd.type === 'gestion_placer' && cmd.batiment) donne.construits.add(cmd.batiment);
           if (cmd.type === 'groupe' && cmd.action !== 'quitter' && cmd.personnage) donne.membres.add(cmd.personnage);
           if (cmd.type === 'combat_dresseur' && cmd.dresseur) donne.dresseurs.add(cmd.dresseur);
         });
@@ -330,6 +334,11 @@ const Verificateur = (() => {
       if (q.suivante && !connus.quetes.has(q.suivante)) ajouter('erreur', 'references', `${nom} a pour suivante une quête qui n'existe pas (${q.suivante}).`);
     }
     // Les conditions qui ne peuvent jamais être vraies : la page (ou le « si ») ne se jouera jamais.
+    // Tafl 1.3 : le joueur peut poser n'importe quel bâtiment s'il a « Placer un bâtiment » au choix, ou
+    // « Construire » dans le menu de pause (et une zone Constructible quelque part).
+    const gestionActif = typeof ModulesJeu !== 'undefined' ? ModulesJeu.actifs(reglages).includes('gestion') : (reglages.modules || []).includes('gestion');
+    const zoneConstructible = [...cartes.values()].some((c) => (c.zones || []).some((z) => z.type === 'constructible'));
+    const placeLibre = zoneConstructible && (donne.places || reglages.modules_reglages?.gestion?.construire_menu !== false);
     const impossible = (cond) => {
       switch (cond?.type) {
         case 'interrupteur':
@@ -342,6 +351,7 @@ const Verificateur = (() => {
           return null;
         case 'badge': return cond.badge && !donne.badges.has(cond.badge) ? `le badge « ${cond.badge} », que personne ne donne` : null;
         case 'membre': return jrpg && cond.personnage && !donne.membres.has(cond.personnage) ? `« ${cond.personnage} » dans le groupe, mais rien ne l'y fait entrer` : null;
+        case 'gestion_batiment': case 'gestion_chantier': return cond.batiment && connus.batiments.has(cond.batiment) && !donne.construits.has(cond.batiment) && !placeLibre ? `le bâtiment « ${cond.batiment} », mais aucune commande « Construire un bâtiment » ne le construit` : null;
         default: return null;
       }
     };
@@ -365,7 +375,7 @@ const Verificateur = (() => {
     // --- 4. Les ids qui n'existent pas ---
     const verifierId = (sorte, id, quoi, ou = {}) => {
       if (!id || connus[sorte].has(id)) return;
-      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine' };
+      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment' };
       ajouter('erreur', 'references', `${quoi} : pas ${noms[sorte]} « ${id} » dans les données du jeu.`, ou);
     };
     for (const { carte, ev } of scriptsDe) {
@@ -384,6 +394,9 @@ const Verificateur = (() => {
         if (cmd.type === 'groupe') verifierId('personnages', cmd.personnage, quoi, ou);
         if (cmd.type === 'combat_groupe') verifierId('groupes', cmd.groupe, quoi, ou);
         if (cmd.type === 'test_oppose' && cmd.monstre) verifierId('monstres_jdr', cmd.monstre, quoi, ou);
+        if (cmd.type === 'gestion_construire') verifierId('batiments', cmd.batiment, quoi, ou);
+        if (cmd.type === 'gestion_placer' && cmd.batiment) verifierId('batiments', cmd.batiment, quoi, ou);
+        if (cmd.type === 'gestion_stock') verifierId('ressources', cmd.ressource, quoi, ou);
       });
       conditions(ev, (cond) => {
         if (cond.type === 'objet') verifierId('objets', cond.objet, quoi, ou);
@@ -392,6 +405,8 @@ const Verificateur = (() => {
         if (cond.type === 'membre') verifierId('personnages', cond.personnage, quoi, ou);
         if (cond.type === 'jdr_classe') verifierId('classes_jdr', cond.classe, quoi, ou);
         if (cond.type === 'jdr_origine') verifierId('origines', cond.origine, quoi, ou);
+        if (cond.type === 'gestion_batiment' || cond.type === 'gestion_chantier') verifierId('batiments', cond.batiment, quoi, ou);
+        if (cond.type === 'gestion_stock') verifierId('ressources', cond.ressource, quoi, ou);
       });
     }
     for (const c of cartes.values()) {
@@ -424,6 +439,22 @@ const Verificateur = (() => {
       }
     }
     for (const q of liste('quetes')) for (const p of q.personnages || []) verifierId('personnages', p, `La quête « ${q.titre || q.id} »`);
+    // Tafl 1.3 : les ressources citées par les bâtiments et le stock de départ du module gestion.
+    for (const b of liste('batiments')) {
+      for (const q of [...(b.cout || []), ...(b.production || []), ...(b.consommation || [])]) verifierId('ressources', q.ressource, `Le bâtiment « ${b.nom || b.id} »`);
+    }
+    // Tafl 1.3 : les tampons des bâtiments (par leur nom), et une zone où les poser.
+    if (Array.isArray(jeu.tampons)) {
+      const tampons = new Set(jeu.tampons);
+      for (const b of liste('batiments')) {
+        for (const cle of ['tampon', 'tampon_chantier']) {
+          if (b[cle] && !tampons.has(b[cle])) ajouter('erreur', 'references', `Le bâtiment « ${b.nom || b.id} » a pour ${cle === 'tampon' ? 'tampon' : 'tampon de chantier'} « ${b[cle]} », qui n'existe pas (les tampons se créent dans l'éditeur de cartes).`);
+        }
+      }
+    }
+    if (gestionActif && donne.places && !zoneConstructible) ajouter('attention', 'quetes', 'La commande « Placer un bâtiment » ne réussira jamais : aucune carte n\'a de zone de type « Constructible ».');
+    for (const q of reglages.modules_reglages?.gestion?.stock_depart || []) verifierId('ressources', q.ressource, 'Le stock de départ (Réglages › Modules)');
+    for (const r of liste('ressources')) verifierId('objets', r.objet, `La ressource « ${r.nom || r.id} »`);
 
     // --- 5. Scripts JS et variables (Tafl 0.31) ---
     // jeu.scripts : ce que Tafl sait des scripts (ScriptsTafl.etat). Sans lui (ou pas encore calculé),

@@ -140,7 +140,48 @@ const Moteur = (() => {
       rafraichir: () => { if (jeu && carte) presents = Monde.evenementsPresents(jeu, carte, partie, presents); },
       message: (t) => rappels.message?.(String(t)),
       get ui() { return scripts?.ui || null; },
+      // Saga 1.5 : la carte du joueur et sa case, et si une case est libre pour y poser quelque chose
+      // (dans la carte, pas bloquée ni rebord, sans événement visible ni joueur).
+      get carte() { return carte; },
+      get joueur() { return joueur ? { x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
+      libre: (x, y) => Boolean(carte && Monde.dansCarte(carte, x, y) && Monde.code(carte, x, y) !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[Monde.code(carte, x, y)]
+        && !presents.some((p) => p.x === x && p.y === y && (p.visible || p.bloque)) && !(joueur && joueur.x === x && joueur.y === y)),
+      // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
+      // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
+      viser: (o = {}) => viser(o),
     };
+    // La visée en cours (hoteModules.viser) : { x, y, largeur, hauteur, valide, resoudre }.
+    let visee = null;
+    function viser({ largeur = 1, hauteur = 1, x, y, valide = () => true } = {}) {
+      if (!carte || !joueur) return Promise.resolve(null);
+      if (visee) visee.resoudre(null);
+      const [dx, dy] = Jeu.DIRECTIONS[joueur.dir] || [0, 1];
+      const l = Math.max(1, Math.round(largeur)), h = Math.max(1, Math.round(hauteur));
+      return new Promise((resoudre) => {
+        visee = {
+          x: Number.isFinite(x) ? x : joueur.x + (dx > 0 ? 1 : dx < 0 ? -l : -Math.floor(l / 2)),
+          y: Number.isFinite(y) ? y : joueur.y + (dy > 0 ? 1 : dy < 0 ? -h : -Math.floor(h / 2)),
+          largeur: l, hauteur: h, valide,
+          resoudre: (v) => { visee = null; resoudre(v); },
+        };
+        borner();
+      });
+      function borner() {
+        visee.x = Math.max(0, Math.min(carte.largeur - visee.largeur, visee.x));
+        visee.y = Math.max(0, Math.min(carte.hauteur - visee.hauteur, visee.y));
+      }
+    }
+    const viseeValide = () => { try { return Boolean(visee && visee.valide(visee.x, visee.y)); } catch { return false; } };
+    function toucheVisee(a) {
+      const d = { haut: [0, -1], bas: [0, 1], gauche: [-1, 0], droite: [1, 0] }[a];
+      if (d) {
+        visee.x = Math.max(0, Math.min(carte.largeur - visee.largeur, visee.x + d[0]));
+        visee.y = Math.max(0, Math.min(carte.hauteur - visee.hauteur, visee.y + d[1]));
+        bruit('curseur');
+      } else if (a === 'action') {
+        if (viseeValide()) { bruit('valider'); visee.resoudre({ x: visee.x, y: visee.y }); } else bruit('retour');
+      } else if (a === 'retour' || a === 'echap') { bruit('retour'); visee.resoudre(null); }
+    }
     Modules.brancher({ message: (t) => rappels.message?.(t) });
     let attentes = []; // [{ reste, resoudre }] : la commande « attendre »
     let actionDemandee = false;
@@ -261,6 +302,7 @@ const Moteur = (() => {
     // perdre ce que le joueur a fait). depart : où commencer, à la place de la position de la partie.
     // test : l'état de départ d'un test rapide de Tafl (Saga 0.10), posé sur une partie neuve.
     function demarrer(nouveauJeu, depart, partieGardee = null, test = null) {
+      if (visee) visee.resoudre(null);
       jeu = nouveauJeu;
       partie = partieGardee ? { ...Monde.nouvellePartie(jeu), ...partieGardee } : Monde.nouvellePartie(jeu, depart || jeu.depart);
       if (partieGardee && depart) partie.position = { ...depart };
@@ -296,6 +338,8 @@ const Moteur = (() => {
       // L'horloge du jeu (Saga 0.11) : une partie d'avant Saga 0.11 part de l'heure de départ du jeu.
       Temps.utiliser(jeu);
       Temps.preparer(jeu, partie);
+      // Saga 1.5 : le numéro du jour (une partie d'avant Saga 1.5 est au jour 1).
+      if (!Number.isInteger(partie.jour) || partie.jour < 1) partie.jour = 1;
       if (nouveauJeu !== jeuSons) { audio.vider(); jeuSons = nouveauJeu; }
       for (const k of ['musique_combat', 'musique_dresseur', 'musique_victoire']) audio.precharger(reglagesAudio()[k]);
       // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
@@ -328,6 +372,24 @@ const Moteur = (() => {
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique : chemin),
         son: (chemin) => audio.fichier(chemin),
         heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
+        // Saga 1.5 : dormir (commande dormir). Tout le calcul de la nuit se fait d'un coup, sans attendre :
+        // une sauvegarde ne peut jamais tomber au milieu. Puis le fondu au noir, sur place.
+        dormir: async ({ soigner = true, heure = null } = {}) => {
+          const fini = Number.isInteger(partie.jour) && partie.jour > 0 ? partie.jour : 1;
+          if (soigner) {
+            for (const x of partie.equipe) Regles.soigner(jeu, x);
+            partie.dernierSoin = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+          }
+          const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
+          partie.jour = fini + 1;
+          const h = heure !== null && heure !== '' && Number.isFinite(Number(heure)) ? Number(heure) : Temps.reglages(jeu).heure_depart;
+          Temps.regler(jeu, partie, { heures: h });
+          momentsAvant = '';
+          await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }, resoudre }; });
+          reagir('fin_de_journee', { jour: fini });
+          reagir('matin', { jour: partie.jour });
+          return { lignes, jour: partie.jour };
+        },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
         scriptsJs: () => scriptsJs,
         // Saga 0.13 : le plateau de dés (pack JDR).
@@ -765,7 +827,9 @@ const Moteur = (() => {
       if (!joueur) return;
       const t = jeu.taille, p = pixelsJoueur();
       const lw = carte.largeur * t, lh = carte.hauteur * t;
-      const cx = p.x + Math.floor(t / 2) - Math.floor(W / 2), cy = p.y + Math.floor(t / 2) - Math.floor(H / 2);
+      // Saga 1.5 : pendant une visée, la caméra suit le rectangle visé.
+      const centre = visee ? { x: (visee.x + visee.largeur / 2) * t - t / 2, y: (visee.y + visee.hauteur / 2) * t - t / 2 } : p;
+      const cx = Math.round(centre.x) + Math.floor(t / 2) - Math.floor(W / 2), cy = Math.round(centre.y) + Math.floor(t / 2) - Math.floor(H / 2);
       cam.x = Math.round(lw <= W ? (lw - W) / 2 : Math.min(lw - W, Math.max(0, cx)));
       cam.y = Math.round(lh <= H ? (lh - H) / 2 : Math.min(lh - H, Math.max(0, cy)));
     }
@@ -953,9 +1017,22 @@ const Moteur = (() => {
       Modules.dessiner(jeu, partie, {
         ctx, carte, profondeur, maintenant, taille: jeu.taille, cam: { x: cam.x, y: cam.y }, largeur: W, hauteur: H,
         tuile: (n, cx, cy) => dessinerTuile(Number(n), Math.round(cx * jeu.taille - cam.x), Math.round(cy * jeu.taille - cam.y), maintenant),
+        // Saga 1.5 : la visée en cours (hote.viser) : { x, y, largeur, hauteur, ok }, ou null.
+        visee: visee ? { x: visee.x, y: visee.y, largeur: visee.largeur, hauteur: visee.hauteur, ok: viseeValide() } : null,
       });
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
+      // Le rectangle visé, vert s'il convient, rouge sinon, par-dessus tout.
+      if (visee && profondeur === 'dessus') {
+        const t = jeu.taille, ok = viseeValide();
+        const x = visee.x * t - cam.x, y = visee.y * t - cam.y, l = visee.largeur * t, h = visee.hauteur * t;
+        const clignote = 0.18 + 0.1 * Math.sin(maintenant / 160);
+        ctx.fillStyle = ok ? `rgba(80, 220, 120, ${clignote})` : `rgba(240, 70, 70, ${clignote + 0.08})`;
+        ctx.fillRect(x, y, l, h);
+        ctx.strokeStyle = ok ? 'rgba(120, 255, 150, 0.95)' : 'rgba(255, 110, 110, 0.95)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, l - 1, h - 1);
+      }
     }
 
     function dessiner(maintenant) {
@@ -1019,7 +1096,8 @@ const Moteur = (() => {
         // Dans un menu ou un combat, chaque appui a son petit son (Saga 0.11).
         const sonMenu = (a) => bruit(DIRS.includes(a) ? 'curseur' : a === 'action' ? 'valider' : 'retour');
         for (const a of entrees.appuis()) {
-          if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
+          if (visee && !menus.ouvert) toucheVisee(a);
+          else if (menus.ouvert) { sonMenu(a); menus.touche(a === 'echap' ? 'retour' : a); }
           else if (table.actif && enCombat && table.touche(a)) sonMenu(a === 'echap' ? 'retour' : a);
           else if (table.actif && !enScript && (a === 'echap' || a === 'retour')) table.touche(a);
           else if (a === 'echap') { if (enCombat) { sonMenu('retour'); ecranDuJeu().touche('retour'); } }
@@ -1126,7 +1204,7 @@ const Moteur = (() => {
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
       // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
       // Saga 1.4 : puis ceux des modules du jeu (leur id commence par « module: »).
-      actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie)] : []),
+      actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie, hoteModules)] : []),
       agirPause: (id) => horsScript(() => (Modules.estActionPause(id)
         ? Modules.agirPause(jeu, partie, hoteModules, id)
         : Regles.agirPause({ jeu, partie, ui: scripts.ui, id })), 'Erreur dans ce menu'),
@@ -1146,6 +1224,8 @@ const Moteur = (() => {
         return { carte: carte.id, nom: carte.nom, x: joueur.x, y: joueur.y, direction: joueur.dir, fps, zoom, W, H, meteo: carte.ambiance.meteo, heure: Temps.texte(Temps.heure(jeu, partie)), musique: audio.morceau };
       },
       position() { return joueur ? { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
+      // Saga 1.5 : la case visée en ce moment (un module demande où poser quelque chose), ou null.
+      visee: () => (visee ? { x: visee.x, y: visee.y, largeur: visee.largeur, hauteur: visee.hauteur, ok: viseeValide() } : null),
       // --- Saga 1.0 : le multijoueur (reseau/monde.js) ---
       get jeuOuvert() { return jeu; },
       get multi() { return multi; },

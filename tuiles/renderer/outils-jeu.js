@@ -7,7 +7,7 @@
 const OutilsJeu = (() => {
   // Le jeu au format des fichiers (celui que lit Saga), sans rien écrire sur le disque.
   // Tafl 0.31 : avec ce que déclarent les scripts JS (ScriptsTafl.etat), pour le vérificateur.
-  const jeuDe = (doc) => ({ cartes: doc.maps.map((m) => IO.mapToJSON(doc, m)), depart: doc.depart, donnees: doc.data, scripts: ScriptsTafl.etat(doc) });
+  const jeuDe = (doc) => ({ cartes: doc.maps.map((m) => IO.mapToJSON(doc, m)), depart: doc.depart, donnees: doc.data, scripts: ScriptsTafl.etat(doc), tampons: (doc.stamps || []).map((st) => st.name) });
 
   // --- Vérifier le jeu ---
   // Montrer un problème : sa carte (espace Cartes) et sa case. Tafl 0.30 : « Revoir la liste » ouvre
