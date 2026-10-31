@@ -74,7 +74,7 @@ const App = (() => {
       buttons: [
         { label: 'IA locale…', run: () => IaLocale.ouvrir() },
         { label: 'Dossier des notes', run: () => window.atelier.montrerNotes() },
-        { label: 'Dossier partagé avec les outils', run: () => window.atelier.ouvrirCommun() },
+        { label: 'Dossier partagé', title: 'Ouvrir le dossier partagé avec les outils (mémoire des projets, notes, projet en cours)', run: () => window.atelier.ouvrirCommun() },
       ],
       onInput(values, f) {
         parcourir.firstChild.onclick = async () => {
