@@ -17,7 +17,9 @@ const Donnees = (() => {
   const J = typeof DonneesJdr !== 'undefined' ? DonneesJdr : null;
   // Tafl 1.3 : les sortes du module gestion viennent de donnees-gestion.js (DonneesGestion), lu avant aussi.
   const G = typeof DonneesGestion !== 'undefined' ? DonneesGestion : null;
-  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), ...(G ? G.SORTES : []), 'reglages'];
+  // Tafl 1.10 : les ennemis du pack action (le temps réel de Saga 1.12) viennent de donnees-action.js.
+  const A = typeof DonneesAction !== 'undefined' ? DonneesAction : null;
+  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(A ? A.SORTES : []), 'reglages'];
   const STATS = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Attaque Spé.'], ['def_spe', 'Défense Spé.'], ['vitesse', 'Vitesse']];
   const STATS_COMBAT = [...STATS.slice(1), ['precision', 'Précision'], ['esquive', 'Esquive']];
   // Les 25 natures officielles : [identifiant, nom, stat augmentée de 10 %, stat baissée de 10 %].
@@ -302,6 +304,7 @@ const Donnees = (() => {
     }),
     ...(J ? J.NORMES : {}),
     ...(G ? G.NORMES : {}),
+    ...(A ? A.NORMES : {}),
   };
   const reglagesVides = () => ({
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
@@ -317,6 +320,7 @@ const Donnees = (() => {
     multijoueur: { echanges: true, duels: true, pv_autres: 'exacts' },
     scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
     ...(J ? { jdr: J.normRegles({}) } : {}), // Tafl 0.32 : les règles maison du pack JDR
+    ...(A ? { action: A.normRegles({}) } : {}), // Tafl 1.10 : le héros du temps réel (pack action)
   });
   // Tafl 0.29 (Saga 0.11) : l'horloge du jeu, la musique des combats et les bruitages, la sauvegarde auto.
   const HORLOGES = [['aucune', 'Aucune : il fait toujours jour'], ['jeu', 'Horloge du jeu (elle avance quand on joue)'], ['reelle', 'Heure réelle du PC (comme Pokémon Or et Argent)']];
@@ -344,9 +348,10 @@ const Donnees = (() => {
     ['pokemon', 'Pokémon : types, créatures, captures, natures, EV et IV, badges'],
     ['jrpg', 'JRPG classique : un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres'],
     ['jdr', 'JDR (D&D 5e et règles maison) : création de personnages, tests au d20, sorts, combats à l\'initiative'],
+    ['action', 'Action en temps réel : le héros bouge librement et frappe, les ennemis le poursuivent sur la carte (façon Zelda)'],
   ];
   // La monnaie par défaut de chaque pack (Tafl 0.32.1) : elle suit le pack tant qu'on ne l'a pas renommée.
-  const MONNAIES_PACK = { pokemon: 'Pokédollars', jrpg: 'Or', jdr: 'po' };
+  const MONNAIES_PACK = { pokemon: 'Pokédollars', jrpg: 'Or', jdr: 'po', action: 'Pièces' };
   // La forme des menus que chaque pack donne par défaut dans Saga 0.6 (regles.js › menus) : Tafl la
   // montre en gris ; ce que le jeu règle dans Interface › Menus passe par-dessus (vide = celle du pack).
   const FORMES_MENUS = {
@@ -361,6 +366,10 @@ const Donnees = (() => {
     jdr: {
       equipe: 'Groupe', dex: 'Bestiaire', pc: 'Réserve', boite: 'Réserve', places: 12, colonnes: 4, forme_boites: 'liste',
       pages: [['infos', 'Infos'], ['caracteristiques', 'Caractéristiques'], ['competences', 'Compétences'], ['combat', 'Combat'], ['sorts', 'Sorts'], ['inventaire', 'Inventaire'], ['traits', 'Aptitudes et traits']],
+    },
+    action: {
+      equipe: 'Héros', dex: 'Bestiaire', pc: 'Réserve', boite: 'Réserve', places: 12, colonnes: 4, forme_boites: 'liste',
+      pages: [['infos', 'Infos'], ['stats', 'Statistiques']],
     },
   };
   const FORMES_BOITES = [['', 'Celle du pack de règles'], ['grille', 'Grille (des cases, comme les PC Pokémon)'], ['liste', 'Liste (une ligne par créature, avec son nom)']];
@@ -423,6 +432,7 @@ const Donnees = (() => {
       audio: normAudio(r.audio),
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
       ...(J ? { jdr: { ...J.normRegles(r.jdr), monnaie: 'unique' } } : {}),
+      ...(A ? { action: A.normRegles(r.action) } : {}),
       scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
       badges: (() => {
         const out = [];
@@ -435,7 +445,7 @@ const Donnees = (() => {
       })(),
     };
   }
-  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries([...(J ? J.SORTES : []), ...(G ? G.SORTES : [])].map((k) => [k, []])), reglages: reglagesVides() });
+  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries([...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(A ? A.SORTES : [])].map((k) => [k, []])), reglages: reglagesVides() });
   // Normalise toutes les sortes de Tafl 0.8 (les identifiants deviennent uniques dans leur sorte).
   function normer(d) {
     const out = {};
@@ -513,6 +523,7 @@ const Donnees = (() => {
     if (sorte === 'classe') for (const o of d.objets) if (o.equipement?.classes.includes(id)) out.add(`Objet ${o.nom}`);
     J?.utilisations(doc, sorte, id, out);
     G?.utilisations(doc, sorte, id, out);
+    A?.utilisations(doc, sorte, id, out);
     return [...out];
   }
 
@@ -630,6 +641,7 @@ const Donnees = (() => {
   function tableRencontres(doc, rencontres) {
     listes(doc.data);
     if (['jrpg', 'jdr'].includes(packDe(doc))) return tableGroupes(doc, rencontres);
+    if (packDe(doc) === 'action' && A) return A.tableRencontres(doc, rencontres);
     const total = el('p', { className: 'modal-info' });
     const majTotal = () => {
       const t = rencontres.reduce((n, r) => n + (r.chance || 0), 0);
@@ -663,7 +675,9 @@ const Donnees = (() => {
   // Les monstres d'un groupe : ceux du pack JDR (monstres_jdr), sinon ceux du pack JRPG.
   const monstresDe = (d) => (packDe(d) === 'jdr' ? d.monstres_jdr || [] : d.monstres || []);
   const resumeGroupe = (d, g) => g.monstres.map((x) => `${monstresDe(d).find((m) => m.id === x.monstre)?.nom || x.monstre}${x.nombre > 1 ? ` ×${x.nombre}` : ''}`).join(', ') || 'vide';
-  const normRencontres = (list) => arr(list).filter((r) => r?.creature || r?.groupe).slice(0, 20).map((r) => {
+  const normRencontres = (list) => arr(list).filter((r) => r?.creature || r?.groupe || r?.ennemi).slice(0, 20).map((r) => {
+    // Tafl 1.10 (pack action) : un ennemi et combien en font apparaître la zone.
+    if (r.ennemi) return { ennemi: Doc.slug(r.ennemi, ''), nombre: int(r.nombre, 1, 1, 30) };
     if (!r.creature) return { groupe: Doc.slug(r.groupe, ''), chance: int(r.chance, 10, 1, 100) };
     const min = int(r.niveau_min, 2, 1, 100);
     return { creature: Doc.slug(r.creature, ''), niveau_min: min, niveau_max: Math.max(min, int(r.niveau_max, min, 1, 100)), chance: int(r.chance, 10, 1, 100) };
@@ -712,6 +726,7 @@ const Donnees = (() => {
     datalist('tafl-groupes', (data.groupes || []).map((a) => [a.id, a.nom]));
     J?.listes(data);
     G?.listes(data);
+    A?.listes(data);
   }
   const choixTypes = (work, vide = 'Aucun') => [['', vide], ...work.types.map((t) => [t.id, t.nom])];
   const COURT = { attaque: 'Att', defense: 'Déf', att_spe: 'Att.Spé', def_spe: 'Déf.Spé', vitesse: 'Vit' };
@@ -1491,7 +1506,7 @@ const Donnees = (() => {
   // Tafl 0.32.1 : les Réglages en 4 onglets, et seulement ce que le pack de règles du jeu utilise.
   // Les valeurs cachées ne sont pas effacées : revenir au pack les retrouve.
   const ONGLETS_REGLAGES = [['regles', 'Règles du jeu', 'law'], ['partie', 'Partie', 'play'], ['interface', 'Interface', 'symbol-color'], ['ambiance', 'Ambiance', 'color-mode']];
-  const PACKS_COURTS = { pokemon: ['Pokémon', 'Créatures à capturer, types, natures, badges, dresseurs.'], jrpg: ['JRPG classique', 'Un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres.'], jdr: ['JDR (D&D 5e)', 'Création de personnages, tests au d20, sorts, combats à l\'initiative.'] };
+  const PACKS_COURTS = { pokemon: ['Pokémon', 'Créatures à capturer, types, natures, badges, dresseurs.'], jrpg: ['JRPG classique', 'Un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres.'], jdr: ['JDR (D&D 5e)', 'Création de personnages, tests au d20, sorts, combats à l\'initiative.'], action: ['Action (temps réel)', 'Façon Zelda : on bouge librement, on frappe à l\'épée, des ennemis sur la carte.'] };
   const nomPack = (k) => PACKS_COURTS[k]?.[0] || k;
   let ongletReglages = (() => { try { return localStorage.getItem('tafl.reglagesOnglet') || 'regles'; } catch { return 'regles'; } })();
   function formReglages(r, ctx) {
@@ -1539,7 +1554,7 @@ const Donnees = (() => {
     ];
   }
   function ongletRegles(r, ctx) {
-    const groupe = r.regles !== 'pokemon';
+    const groupe = r.regles !== 'pokemon' && r.regles !== 'action';
     const out = [...choixPack(r, ctx)];
     if (r.regles === 'pokemon') out.push(...reglesPokemon(r, ctx));
     if (groupe && PACKS_COURTS[r.regles]) {
@@ -1559,6 +1574,7 @@ const Donnees = (() => {
       );
     }
     if (r.regles === 'jdr' && J) out.push(...J.formRegles(r, ctx));
+    if (r.regles === 'action' && A) out.push(...A.formRegles(r, ctx));
     out.push(...formModules(r, ctx));
     out.push(...formReglesMaison(r, ctx));
     return out;
@@ -1885,7 +1901,7 @@ const Donnees = (() => {
   // Une ligne de texte par élément (pour Claude).
   function resumer(doc, sorte, o) {
     const d = doc.data;
-    const jdr = J?.resumer(doc, sorte, o) || G?.resumer(doc, sorte, o);
+    const jdr = J?.resumer(doc, sorte, o) || G?.resumer(doc, sorte, o) || A?.resumer(doc, sorte, o);
     if (jdr) return jdr;
     if (sorte === 'types') return `${o.id} « ${o.nom} » ×2 contre [${o.efficace.join(', ')}], ×½ [${o.peu_efficace.join(', ')}], ×0 [${o.sans_effet.join(', ')}]`;
     if (sorte === 'talents') return `${o.id} « ${o.nom} » : ${o.description}`;
@@ -1910,6 +1926,7 @@ const Donnees = (() => {
     ONGLETS.unshift(...J.ONGLETS.filter((o) => o.groupe !== 'Combat'));
   }
   if (G) ONGLETS.push(...G.ONGLETS); // le groupe Gestion, en bas
+  if (A) ONGLETS.splice(ONGLETS.findIndex((o) => o.key === 'groupes'), 0, ...A.ONGLETS); // Tafl 1.10 : les ennemis du temps réel
   ONGLETS.find((o) => o.key === 'groupes').packs = ['jrpg', 'jdr'];
   ONGLETS.find((o) => o.key === 'groupes').labels = { jdr: 'Rencontres' };
   for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);

@@ -123,6 +123,14 @@ const ScriptsJs = (() => {
           dire(err, `quand('${moment}')`);
         }
       },
+      // Saga 1.12 (temps réel) : la décision d'un ennemi au comportement « script » (comportement() du script).
+      // → une promesse de la décision, ou null si aucun script ne déclare ce comportement.
+      comportement(nom, etat) {
+        if (!h.pret || !bac.a('comportement', nom)) return null;
+        return bac.appeler('comportement', nom, etat, { ev: null })
+          .then((r) => (r?.valeur && !r.valeur.absente ? r.valeur : null))
+          .catch((err) => { dire(err, `comportement('${nom}')`); return null; });
+      },
       // Un script écoute-t-il ce moment ? (pour ne rien faire du tout à chaque pas sinon)
       ecoute: (moment) => h.pret && bac.a('quand', moment),
       regraine: (n) => bac.regraine(n),

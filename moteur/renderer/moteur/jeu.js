@@ -248,6 +248,15 @@ const Jeu = (() => {
     const personnages = new Map((donnees.personnages?.personnages || []).map((p) => [p.id, p]));
     for (const p of personnages.values()) {
       try { p.sprite = await chargerSprite(p.sprite); } catch (err) { p.sprite = null; problemes.push(`le sprite de ${p.nom || p.id} : ${err.message}`); }
+      // Saga 1.12 (temps réel) : ses animations (attaque, coup, mort, repos), au format du sprite plus `duree`.
+      const anims = p.animations && typeof p.animations === 'object' ? p.animations : {};
+      p.animations = {};
+      for (const nom of ['repos', 'attaque', 'coup', 'mort']) {
+        try {
+          const a = await chargerSprite(anims[nom]);
+          if (a) p.animations[nom] = { ...a, duree: Math.max(16, Math.min(2000, nombre(anims[nom].duree, 80))) };
+        } catch (err) { problemes.push(`l'animation « ${nom} » de ${p.nom || p.id} : ${err.message}`); }
+      }
       // Les tenues du héros (Tafl 0.16) : chacune son sprite, au même format.
       p.tenues = Array.isArray(p.tenues) ? p.tenues.filter((t) => t && typeof t.id === 'string' && t.id) : [];
       for (const t of p.tenues) {

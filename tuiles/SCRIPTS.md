@@ -106,6 +106,12 @@ formule('test', (v) => (v.naturel === 1 ? 5 + v.bonus : v.normal));
 formule('degats', (v) => (v.critique ? v.normal + Math.round(v.des / 2) : v.normal));
 ```
 
+### Pack action (`reglages.regles = "action"`, Saga 1.12)
+
+| Formule | Rend | Valeurs |
+|---|---|---|
+| `degats` | PV perdus par un coup (épée, coup d'un ennemi ou contact ; au moins 0) | `A` (attaque de celui qui frappe), `D` (défense de celui qui est touché), `puissance` (1 pour l'épée et le contact) |
+
 ### Pack JRPG (`reglages.regles = "jrpg"`)
 
 | Formule | Rend | Valeurs |
@@ -151,6 +157,9 @@ quand('apres_combat', async (saga, infos) => {
 | `pas` | le joueur fait un pas (reste court !) | `x`, `y` |
 | `fin_de_journee` | (Saga 1.5) le joueur a dormi : le jour est fini (après le calcul des modules) | `jour` (celui qui vient de finir) |
 | `matin` | (Saga 1.5) le joueur se réveille au jour suivant | `jour` (le nouveau) |
+| `ennemi_vaincu` | (Saga 1.12, temps réel) un ennemi est vaincu | `ennemi` (son id), `x`, `y` |
+| `heros_touche` | (Saga 1.12, temps réel) le héros perd des PV | `degats`, `pv` (ce qui reste) |
+| `defaite` | (Saga 1.12, temps réel) le héros n'a plus de vie, avant son réveil | |
 
 Les réactions se jouent quand le joueur est libre (pas pendant un dialogue), dans l'ordre des
 fichiers. Plusieurs scripts peuvent écouter le même moment.
@@ -167,6 +176,36 @@ quand('matin', async (saga, infos) => {
   if (decide && infos.jour === decide + 2) await saga.dire('Un messager t\'attend à la porte.');
 });
 ```
+
+## 4. `comportement(nom, fn)` : les ennemis du temps réel
+
+Avec le pack action (Saga 1.12), un ennemi au comportement **Script** (Tafl › Données › Ennemis) suit
+la fonction déclarée sous le nom choisi. Saga l'appelle quelques fois par seconde ; elle reçoit ce que
+voit l'ennemi et rend sa décision. Elle ne bouge rien elle-même : Saga va vers `but` par le plus court
+chemin (A*, en 8 directions), recule, ou lance le coup.
+
+```js
+// Une chauve-souris qui arrive de biais au lieu de foncer droit.
+comportement('papillonner', (e, des) => {
+  if (e.distance > e.vue) return { etat: 'vol', but: { x: e.depart.x + des.d(5) - 3, y: e.depart.y } };
+  return { etat: 'chasse', but: { x: Math.round(e.joueur.x) + 1, y: Math.round(e.joueur.y) - 1 } };
+});
+```
+
+| `e.` | Sens |
+|---|---|
+| `comportement`, `etat` | `"script"`, et ce qu'il faisait (le dernier `etat` rendu) |
+| `x`, `y`, `depart` | où il est (en cases, à virgule) et `{ x, y }` où il est apparu |
+| `joueur`, `distance` | `{ x, y }` du joueur, et la distance jusqu'à lui (en cases) |
+| `vue`, `portee`, `pret` | sa vue, sa portée, et `true` quand il peut frapper (recharge finie) |
+| `pv`, `pvMax`, `hasard` | sa vie, et un nombre entre 0 et 1 tiré pour cet appel |
+| `but` | le but qu'il suivait |
+
+Elle rend `{ etat, but, fuir, frapper }` : `etat` un mot libre (montré par F3), `but` une case
+`{ x, y }` ou `null` pour rester, `fuir: true` pour s'éloigner du joueur, `frapper: true` pour lancer
+son coup (si `portee` > 0 et `pret`). Elle peut être `async`. Tant qu'elle n'a pas répondu, l'ennemi
+garde sa décision d'avant ; si elle plante ou si le nom n'existe pas, il patrouille. Comme les
+formules, elle doit rester pure : elle lit `e` et rend une décision, sans rien changer d'autre.
 
 ## L'objet `saga`
 

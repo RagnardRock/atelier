@@ -56,6 +56,7 @@ const Verificateur = (() => {
     const jrpg = reglages.regles === 'jrpg';
     const jdr = reglages.regles === 'jdr';
     const enGroupe = jrpg || jdr; // un groupe de héros contre des groupes de monstres (pas de créatures)
+    const action = reglages.regles === 'action'; // Tafl 1.10 : le temps réel (des ennemis sur la carte)
     const ids = (sorte) => new Set(liste(sorte).map((x) => x.id));
     const connus = {
       personnages: ids('personnages'), quetes: ids('quetes'), objets: ids('objets'), creatures: ids('creatures'),
@@ -63,6 +64,7 @@ const Verificateur = (() => {
       monstres_jdr: ids('monstres_jdr'), classes_jdr: ids('classes_jdr'), origines: ids('origines'),
       badges: new Set((reglages.badges || []).map((b) => b.id)),
       ressources: ids('ressources'), batiments: ids('batiments'), // Tafl 1.3 : le module gestion
+      ennemis: ids('ennemis'), // Tafl 1.10 : le pack action
     };
     // Tafl 1.2 : un module activé que ce Tafl ne connaît pas (écrit à la main, ou par un Tafl plus récent).
     // Dit avant tout le reste : même un jeu sans carte doit l'apprendre.
@@ -111,6 +113,7 @@ const Verificateur = (() => {
     for (const b of liste('boutiques')) for (const a of b.articles || []) if (a.sorte === 'objet' && a.id) donne.objets.add(a.id);
     // Le butin des monstres (packs JRPG et JDR) compte aussi.
     if (enGroupe) for (const m of liste(jdr ? 'monstres_jdr' : 'monstres')) for (const b of m.butin || []) if (b.objet) donne.objets.add(b.objet);
+    if (action) for (const m of liste('ennemis')) for (const b of m.butin || []) if (b.objet) donne.objets.add(b.objet);
     // Le héros qui a une classe est dans le groupe dès le début.
     for (const p of liste('personnages')) if (p.heros && p.classe) donne.membres.add(p.id);
     const aObjet = (id) => !id || donne.objets.has(id);
@@ -380,7 +383,7 @@ const Verificateur = (() => {
     // --- 4. Les ids qui n'existent pas ---
     const verifierId = (sorte, id, quoi, ou = {}) => {
       if (!id || connus[sorte].has(id)) return;
-      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment' };
+      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment', ennemis: 'd\'ennemi' };
       ajouter('erreur', 'references', `${quoi} : pas ${noms[sorte]} « ${id} » dans les données du jeu.`, ou);
     };
     for (const { carte, ev } of scriptsDe) {
@@ -420,7 +423,8 @@ const Verificateur = (() => {
         const quoi = `La zone « ${z.nom || z.id} » de « ${c.nom} »`;
         verifierId('objets', z.objetRequis, quoi, ou);
         for (const r of z.rencontres || []) {
-          if (enGroupe) verifierId('groupes', r.groupe, quoi, ou);
+          if (action) verifierId('ennemis', r.ennemi, quoi, ou);
+          else if (enGroupe) verifierId('groupes', r.groupe, quoi, ou);
           else verifierId('creatures', r.creature, quoi, ou);
         }
         if (z.objetRequis && connus.objets.has(z.objetRequis) && !donne.objets.has(z.objetRequis)) ajouter('attention', 'quetes', `${quoi} demande l'objet « ${z.objetRequis} », que personne ne donne ni ne vend : on n'y entrera jamais.`, ou);
@@ -437,7 +441,12 @@ const Verificateur = (() => {
         if (a.sorte === 'creature' && !enGroupe) verifierId('creatures', a.id, quoi);
       }
     }
-    if (!enGroupe) {
+    // Tafl 1.10 : l'apparence et le butin des ennemis du temps réel.
+    for (const e of action ? liste('ennemis') : []) {
+      verifierId('personnages', e.personnage, `L'ennemi « ${e.nom || e.id} »`);
+      for (const b of e.butin || []) verifierId('objets', b.objet, `L'ennemi « ${e.nom || e.id} »`);
+    }
+    if (!enGroupe && !action) {
       for (const t of liste('dresseurs')) {
         for (const m of t.equipe || []) verifierId('creatures', m.creature, `Le dresseur « ${t.nom || t.id} »`);
         verifierId('personnages', t.personnage, `Le dresseur « ${t.nom || t.id} »`);

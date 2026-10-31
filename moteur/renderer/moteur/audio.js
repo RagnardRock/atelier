@@ -11,7 +11,9 @@
 
 const Son = (() => {
   // Les sons intégrés. Chacun : une petite fonction qui joue des notes sur la sortie des bruitages.
-  const INTEGRES = ['curseur', 'valider', 'retour', 'texte', 'porte', 'sauvegarde', 'choc'];
+  // Saga 1.12 : et ceux du temps réel (pack action) : le coup d'épée, un ennemi touché ou vaincu, le héros
+  // blessé, un butin ramassé, un niveau gagné.
+  const INTEGRES = ['curseur', 'valider', 'retour', 'texte', 'porte', 'sauvegarde', 'choc', 'epee', 'touche', 'vaincu', 'blesse', 'ramasser', 'niveau'];
 
   function creer({ charger = async () => { throw new Error('pas de fichiers'); } } = {}) {
     let ctx = null, maitre = null, busMusique = null, busSons = null, busFond = null;
@@ -218,6 +220,12 @@ const Son = (() => {
       porte: () => { souffle(0, 0.28, 0.35, [1800, 300]); note('triangle', [180, 90], 0.02, 0.14, 0.12); },
       sauvegarde: () => [523, 659, 784, 1046].forEach((f, i) => note('triangle', f, i * 0.07, 0.16, 0.12)),
       choc: () => note('square', [130, 70], 0, 0.07, 0.09),
+      epee: () => souffle(0, 0.12, 0.22, [3200, 900]),
+      touche: () => { note('square', [520, 260], 0, 0.06, 0.09); souffle(0, 0.06, 0.18, [2400, 1200]); },
+      vaincu: () => { note('square', [700, 120], 0, 0.22, 0.08); souffle(0.02, 0.25, 0.25, [1600, 200]); },
+      blesse: () => { note('sawtooth', [300, 110], 0, 0.16, 0.1); note('square', [220, 90], 0.03, 0.12, 0.06); },
+      ramasser: () => { note('square', 988, 0, 0.05, 0.06); note('square', 1319, 0.05, 0.08, 0.06); },
+      niveau: () => [523, 659, 784, 1046, 1319].forEach((f, i) => note('square', f, i * 0.06, 0.12, 0.07)),
     };
 
     // nom : un son intégré (curseur, valider…). reglage : ce que le jeu a choisi pour lui dans Tafl

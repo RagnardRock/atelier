@@ -266,6 +266,10 @@ quand('apres_combat', async (saga, infos) => {
       'declare function formule<N extends keyof Formules>(nom: N, fn: (valeurs: Formules[N] & { readonly normal: number }, des: Des) => number): void;',
       `${doc1('Une réaction à un moment du jeu (une nouvelle partie, une carte, après un combat…).')}`,
       'declare function quand<M extends keyof Moments>(moment: M, fn: (saga: Saga, infos: Moments[M]) => any): void;',
+      // Tafl 1.10 (Saga 1.12, pack action) : ce que décide un ennemi au comportement « script ».
+      'interface EtatEnnemi { readonly comportement: string; readonly etat: string; readonly x: number; readonly y: number; readonly depart: { readonly x: number; readonly y: number }; readonly joueur: { readonly x: number; readonly y: number }; readonly distance: number; readonly vue: number; readonly portee: number; readonly pret: boolean; readonly pv: number; readonly pvMax: number; readonly hasard: number; readonly but: { readonly x: number; readonly y: number } | null; }',
+      'interface DecisionEnnemi { etat?: string; but?: { x: number; y: number } | null; fuir?: boolean; frapper?: boolean; }',
+      `${doc1('Le comportement d\'un ennemi du temps réel (pack action ; Tafl › Ennemis › Comportement : Script). Saga l\'appelle quelques fois par seconde : rends sa décision, sans attendre (pas de saga ici). x, y et but sont en cases.')}\ndeclare function comportement(nom: string, fn: (etat: EtatEnnemi, des: Des) => DecisionEnnemi): void;`,
       `${doc1('Les dés et le hasard.')}\ndeclare const des: Des;`,
       `${doc1('Les données du jeu (personnages, objets, quêtes…), en lecture seule et sans les images.')}\ndeclare const donnees: { readonly [sorte: string]: any };`,
       `${doc1('Écrire dans la console de Tafl (Essayer) ou de Saga.')}\ndeclare const console: { log(...x: any[]): void; warn(...x: any[]): void; error(...x: any[]): void };`,
@@ -440,7 +444,7 @@ quand('apres_combat', async (saga, infos) => {
       const f = fichier(s() || { nom });
       const formules = BacASable.formulesDuPack(packDe(doc));
       const coupees = new Set(doc.data.reglages?.scripts?.formules_coupees || []);
-      const mes = { commandes: inv.commandes.filter((x) => x.fichier === f), formules: inv.formules.filter((x) => x.fichier === f), quand: inv.quand.filter((x) => x.fichier === f), erreurs: inv.erreurs.filter((x) => x.fichier === f) };
+      const mes = { commandes: inv.commandes.filter((x) => x.fichier === f), formules: inv.formules.filter((x) => x.fichier === f), quand: inv.quand.filter((x) => x.fichier === f), comportements: (inv.comportements || []).filter((x) => x.fichier === f), erreurs: inv.erreurs.filter((x) => x.fichier === f) };
       const bloc = (titreBloc, items) => (items.length ? [el('div', { className: 'editor-section' }, [el('span', { textContent: titreBloc })]), ...items] : []);
       const ligne = (ic, texte, detail, quoi, classe = '') => {
         const b = el('button', { className: `script-item ${classe}`, title: quoi ? 'Essayer' : '' }, [icon(ic), el('span', { className: 'script-item-nom', textContent: texte }), detail ? el('span', { className: 'script-item-detail', textContent: detail }) : null, quoi ? icon('play') : null]);
@@ -465,8 +469,12 @@ quand('apres_combat', async (saga, infos) => {
             const def = BacASable.MOMENTS[x.moment];
             return ligne(def ? 'symbol-event' : 'warning', x.moment, def ? def.nom : 'moment inconnu : Saga ne l\'appellera jamais', def ? { sorte: 'quand', nom: x.moment } : null, def ? '' : 'attention');
           })),
-          ...(!mes.erreurs.length && !mes.commandes.length && !mes.formules.length && !mes.quand.length ? [el('p', { className: 'modal-info', textContent: 'Ce fichier ne déclare encore rien. commande(), formule() et quand() s\'affichent ici au fur et à mesure.' })] : []),
-          el('div', { className: 'editor-section' }, [el('span', { textContent: `Formules du pack ${{ jrpg: 'JRPG', jdr: 'JDR' }[packDe(doc)] || 'Pokémon'}` })]),
+          ...bloc('Comportements d\'ennemis (temps réel)', mes.comportements.map((x) => {
+            const qui = (doc.data.ennemis || []).filter((e) => e.comportement === 'script' && e.script === x.nom).map((e) => e.nom);
+            return ligne('symbol-event', x.nom, qui.length ? `suivi par ${qui.join(', ')}` : 'aucun ennemi ne le suit encore (Ennemis › Comportement : Script)', null);
+          })),
+          ...(!mes.erreurs.length && !mes.commandes.length && !mes.formules.length && !mes.quand.length && !mes.comportements.length ? [el('p', { className: 'modal-info', textContent: 'Ce fichier ne déclare encore rien. commande(), formule() et quand() s\'affichent ici au fur et à mesure.' })] : []),
+          el('div', { className: 'editor-section' }, [el('span', { textContent: `Formules du pack ${{ jrpg: 'JRPG', jdr: 'JDR', action: 'action' }[packDe(doc)] || 'Pokémon'}` })]),
           el('p', { className: 'script-formules modal-info', textContent: Object.entries(formules).map(([k, f]) => `${k} (${f.nom.toLowerCase()})`).join(' · ') }),
         ]),
         el('div', { className: 'editor-section' }, [el('span', { textContent: 'Console' })]),

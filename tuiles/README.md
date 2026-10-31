@@ -460,6 +460,15 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Tafl 1.8 : la journée des habitants** (Réglages › Règles du jeu › Modules › Gestion) : « Ils suivent l'heure », avec les heures du lever, du travail et du coucher. Il faut une horloge (Réglages › Ambiance). Le petit domaine en a une, et une journée y dure 16 minutes.
 - **Tafl 1.9 : le domaine et les combats** (pour Saga 1.11). Dans la fiche d'un bâtiment, la section **Repos** : « Lieu de repos » (quand on vient s'y reposer, ou chaque matin), soigne ou non, un bonus en % sur des statistiques de combat du groupe (selon le pack : Force, Défense…), pendant combien de combats, et le coût d'une visite. La commande « Se reposer » (groupe Gestion) va sur un bassin, un lit, un comptoir de l'intérieur. Dans les réglages du module : « Le butin va au stock » et « Défaite : le stock perd N % ». Pour tous les jeux : la commande « Donner un bonus au groupe » et la condition « Le groupe a un bonus ». Le petit domaine a maintenant un **sous-bois** au sud (trois monstres qui laissent des herbes des bois), des **bains chauds** (soin, Défense et Esprit +15 % pour 3 combats, une herbe par bain) et un **potager** (Force +10 % chaque matin).
 
+## Le pack action : le temps réel (Tafl 1.10, pour Saga 1.12)
+
+- **Réglages › Règles du jeu › Pack « Action (temps réel) »** : un jeu façon Zelda. Le héros se déplace librement et frappe à l'épée ; les ennemis se battent sur la carte, sans écran de combat. Ses réglages : cœurs, PV par cœur, attaque, défense, vitesse, invincibilité, recul, ce que donne un niveau.
+- **Données › Ennemis** : la vie, l'attaque, la vitesse, la vue, le **comportement** (patrouiller, suivre, garder, fuir, immobile, ou un script JS), la portée et la recharge de son coup, le contact, le poids (le recul), l'XP, l'argent, la chance de laisser un cœur, le butin, « boss » (il ne revient pas).
+- **Les zones** : leurs rencontres deviennent « tel ennemi × combien ».
+- **Dans un personnage** : ses animations (repos, attaque, coup reçu, mort ; « Partir du sprite de marche » pour commencer), son corps et la zone de son coup, dessinés sur un aperçu.
+- **Scripts** : `comportement('nom', (e) => ({ but, fuir, frapper }))` pour un ennemi au comportement Script, et les moments `ennemi_vaincu`, `heros_touche`, `defaite` (SCRIPTS.md).
+- **Le modèle « Le petit donjon »** (Fichier › Nouveau jeu › Partir de) : une forêt avec des slimes et des chauves-souris (au comportement écrit en JS), la cabane d'Arne qui donne des potions, et une crypte avec des squelettes et leur gardien.
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils
