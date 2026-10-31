@@ -324,9 +324,15 @@ const Scripts = (() => {
           // Saga 0.13 : une commande du pack de règles du jeu (test, sauvegarde, repos… pour le pack JDR).
           // Elle rend un résultat simple, que reçoit un script JS (saga.test…).
           const f = Regles.commande(jeu, c.type);
-          if (!f) break; // commande inconnue : on la saute
+          if (f) {
+            dialogue.fermer();
+            return await f({ jeu, partie, ui, c, jouer: (l) => jouer(l, ev), narrer, ranger: (m) => Collection.ranger(jeu, partie, m) });
+          }
+          // Saga 1.4 : une commande d'un module du jeu (modules/MODULES.md › commandes).
+          const g = typeof Modules !== 'undefined' ? Modules.commande(jeu, c.type) : null;
+          if (!g) break; // commande inconnue : on la saute
           dialogue.fermer();
-          return await f({ jeu, partie, ui, c, jouer: (l) => jouer(l, ev), narrer, ranger: (m) => Collection.ranger(jeu, partie, m) });
+          return await g(partie, moteur.hoteModules, { c, ev, ui, jouer: (l) => jouer(l, ev), narrer });
         }
       }
     }

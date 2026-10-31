@@ -256,6 +256,8 @@ const Donnees = (() => {
     ajustement: 'badges', ecart: 0, ajustement_sauvages: 'aucun', ecart_sauvages: -2, evolution_dresseurs: false, evolution_sauvages: false, seuil_amitie: 220, chance_chromatique: 4096,
     interface: { theme: 'verre', accent: '', menus: menusVides() },
     regles: 'pokemon', badges: [],
+    // Tafl 1.2 : les modules du jeu (commun/modules.js), et leurs réglages par id de module.
+    modules: [], modules_reglages: {},
     niveau_max: 99, courbe_xp: 'normale',
     temps: tempsVide(), audio: audioVide(), sauvegarde_auto: { active: false, carte: true, minutes: 5 },
     // Tafl 1.0 (Saga 1.0) : le multijoueur (jouer à plusieurs sur le réseau de la maison).
@@ -357,6 +359,11 @@ const Donnees = (() => {
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
       regles,
+      // Tafl 1.2 : les modules activés (un module que ce Tafl ne connaît pas est gardé : Saga le dira), et
+      // les réglages de chacun, gardés tels quels (c'est le module qui les lit et les borne).
+      modules: typeof ModulesJeu !== 'undefined' ? ModulesJeu.actifs(r) : [],
+      modules_reglages: Object.fromEntries(Object.entries(r.modules_reglages && typeof r.modules_reglages === 'object' && !Array.isArray(r.modules_reglages) ? r.modules_reglages : {})
+        .filter(([k, v]) => /^[a-z][a-z0-9-]{0,39}$/.test(k) && v && typeof v === 'object' && !Array.isArray(v)).map(([k, v]) => [k, JSON.parse(JSON.stringify(v))])),
       niveau_max: int(r.niveau_max, 99, 1, 999),
       courbe_xp: pick(r.courbe_xp, COURBES_XP, 'normale'),
       temps: normTemps(r.temps),
@@ -1456,7 +1463,32 @@ const Donnees = (() => {
       );
     }
     if (r.regles === 'jdr' && J) out.push(...J.formRegles(r, ctx));
+    out.push(...formModules(r, ctx));
     out.push(...formReglesMaison(r, ctx));
+    return out;
+  }
+  // Tafl 1.2 : les modules du jeu (commun/modules.js). Le pack décide des combats ; un module ajoute au
+  // monde une chose que le jeu sait faire en plus, quel que soit le pack. On peut en cocher plusieurs.
+  function formModules(r, ctx) {
+    const cat = typeof ModulesJeu !== 'undefined' ? ModulesJeu.CATALOGUE : {};
+    const ids = Object.keys(cat);
+    if (!Array.isArray(r.modules)) r.modules = [];
+    const inconnus = r.modules.filter((id) => !cat[id]);
+    const out = [
+      section('Modules'),
+      info('Le pack de règles décide des combats et de la progression. Un module ajoute au jeu une chose qu\'il sait faire en plus (gérer un domaine…), quel que soit le pack. Un jeu peut en activer plusieurs.'),
+    ];
+    if (!ids.length) out.push(info('Aucun module n\'est encore disponible dans cette version de Tafl.'));
+    for (const id of ids) {
+      const c = el('input', { type: 'checkbox', checked: r.modules.includes(id) });
+      c.onchange = () => {
+        r.modules = c.checked ? [...new Set([...r.modules, id])] : r.modules.filter((x) => x !== id);
+        ctx.render?.();
+      };
+      out.push(champ(cat[id].nom || id, c));
+      if (cat[id].description) out.push(info(cat[id].description));
+    }
+    if (inconnus.length) out.push(info(`Aussi activé, mais inconnu de ce Tafl (gardé tel quel) : ${inconnus.join(', ')}.`));
     return out;
   }
   // Le JDR s'arrête au niveau 20 (Saga borne niveau_max) : on montre ce que Saga utilisera, sans toucher au 99 des autres packs.

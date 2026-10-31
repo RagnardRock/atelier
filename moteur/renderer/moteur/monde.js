@@ -31,6 +31,7 @@ const Monde = (() => {
       musique: null,       // la musique en cours (Saga 0.11), pour la retrouver en chargeant la partie
       variables: variablesDeDepart(jeu), // id → nombre ou texte (Saga 0.12)
       graine: Math.floor(Math.random() * 2147483647), // le hasard des scripts JS (Saga 0.12)
+      modules: {},         // l'état de chaque module du jeu, par id (Saga 1.4, modules/MODULES.md)
       position: { ...depart },
     };
   }
@@ -98,9 +99,13 @@ const Monde = (() => {
       }
     }
   }
-  // Le moteur branche ici les conditions du pack du jeu en cours (Regles.condition).
+  // Le moteur branche ici les conditions du pack du jeu en cours (Regles.condition), puis des modules.
   let conditionPack = null;
   const brancherConditions = (f) => { conditionPack = f; };
+  // Saga 1.4 : les cases qu'un module bloque (un bâtiment posé en jeu), en plus de collisions.
+  let blocage = null;
+  const brancherBlocage = (f) => { blocage = f; };
+  const bloqueParModule = (carte, x, y) => Boolean(blocage && blocage(carte, x, y));
 
   // Une condition dite au joueur (Saga 0.7) : le déblocage d'un article de boutique montré grisé.
   // Un interrupteur ne se raconte pas (ce serait dévoiler l'histoire).
@@ -199,10 +204,11 @@ const Monde = (() => {
       if (REBORDS[c] !== dir) return null;
       const lx = tx + dx, ly = ty + dy;
       const cl = code(carte, lx, ly);
-      if (!dansCarte(carte, lx, ly) || cl === PASSAGE.bloque || REBORDS[cl] || occupe(lx, ly)) return null;
+      if (!dansCarte(carte, lx, ly) || cl === PASSAGE.bloque || REBORDS[cl] || occupe(lx, ly) || bloqueParModule(carte, lx, ly)) return null;
       return { x: lx, y: ly, saut: true };
     }
     if (occupe(tx, ty)) return null;
+    if (bloqueParModule(carte, tx, ty)) return null;
     if (c === PASSAGE.bloque) {
       const ouverte = zonesEn(carte, tx, ty).some((z) => z.objetRequis && (partie.sac[z.objetRequis] || 0) > 0);
       if (!ouverte) return null;
@@ -219,5 +225,5 @@ const Monde = (() => {
     return y2 > y1 ? 'bas' : 'haut';
   }
 
-  return { brancherConditions, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

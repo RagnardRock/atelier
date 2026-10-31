@@ -153,6 +153,10 @@ quand('apres_combat', async (saga, infos) => {
 Les réactions se jouent quand le joueur est libre (pas pendant un dialogue), dans l'ordre des
 fichiers. Plusieurs scripts peuvent écouter le même moment.
 
+Les **modules** du jeu (Réglages › Règles du jeu › Modules, Saga 1.4) peuvent annoncer leurs propres
+moments (par exemple `fin_de_journee` pour un module de gestion) : ils sont listés dans la
+documentation de chaque module, et le vérificateur de Tafl les connaît quand le module est actif.
+
 ## L'objet `saga`
 
 Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse (`await`).
@@ -173,6 +177,7 @@ Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse
 | `saga.etatQuete(id)` | `pas_commencee`, `en_cours` ou `finie` |
 | `saga.fiche(i)` | (pack JDR) la fiche du membre `i` du groupe (0 = le premier), ou `null` : `nom`, `personnage`, `joueur`, `origine`, `classe`, `niveau`, `xp`, `pv`, `pvMax`, `pv_temp`, `ca`, `maitrise`, `vitesse`, `caracteristiques`, `modificateurs`, `sauvegardes` et `competences` (les bonus, par id), `maitrises`, `perception_passive`, `etats`, `sorts`, `dd_sorts`, `mort` |
 | `saga.fiches` | (pack JDR) toutes les fiches du groupe |
+| `saga.modules` | (Saga 1.4) ce que les **modules** du jeu donnent à lire, par id de module : `saga.modules.gestion`… (voir la documentation de chaque module). `{}` sans module. |
 
 ### Parler au joueur
 

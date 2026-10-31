@@ -10,6 +10,8 @@ Trois packs existent (Saga 0.13) :
 | `jrpg` | `regles/jrpg/` | `groupe` (`ecran-groupe.js`) | Un groupe de héros avec des classes, des PV et des PM, des compétences et de l'équipement, contre des groupes de monstres au tour par tour. |
 | `jdr` | `regles/jdr/` | `groupe` (`ecran-groupe.js`) | Un jeu de rôle sur table façon D&D 5e (SRD 5.1) : création de personnage, tests au d20 contre un DD, sauvegardes, sorts et emplacements, jets contre la mort, règles maison. |
 
+Un pack n'est pas un **module** : un jeu a exactement un pack (les combats, la progression), et zéro, un ou plusieurs modules qui ajoutent au monde une chose qu'il sait faire en plus (gérer un domaine…), quel que soit le pack. Les modules ont leur propre contrat : `modules/MODULES.md` (Saga 1.4).
+
 Le jeu choisit son pack dans Tafl (Données du jeu › Réglages › Règles), c'est-à-dire `donnees/reglages.json` › `reglages.regles`. Un pack que Saga ne connaît pas retombe sur `pokemon`. Les fichiers de données de chaque pack sont décrits dans `tuiles/FORMAT.md` (« Le pack JRPG » pour `jrpg`, « Le pack JDR » pour `jdr`).
 
 Ce document décrit :

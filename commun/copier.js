@@ -13,7 +13,8 @@ const path = require('node:path');
 // son propre Claude, ne prend que github.js).
 // ollama.js, loki-local.js : l'IA locale de Loki (Ollama), quand Claude n'est pas là.
 // bac-a-sable.js : le bac à sable des scripts JS des jeux (Tafl et Saga, Tafl 0.31).
-const TOUS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css', 'github.js', 'bac-a-sable.js', 'ollama.js', 'loki-local.js'];
+// modules.js : le catalogue des modules de jeu (Tafl 1.2, Saga 1.4).
+const TOUS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css', 'github.js', 'bac-a-sable.js', 'modules.js', 'ollama.js', 'loki-local.js'];
 const FICHIERS = process.argv.length > 2 ? process.argv.slice(2).filter((f) => TOUS.includes(f)) : TOUS;
 const cible = path.join(process.cwd(), 'commun');
 fs.mkdirSync(cible, { recursive: true });

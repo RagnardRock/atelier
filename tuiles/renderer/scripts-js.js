@@ -568,7 +568,9 @@ quand('apres_combat', async (saga, infos) => {
     for (const e of inv.erreurs) out.push({ gravite: 'erreur', message: `${BacASable.lieuTexte(e.ligne ? e : null) || e.fichier} : ${e.message}`, script: e.fichier.replace(/^scripts\/|\.js$/g, ''), ligne: e.ligne || 0 });
     const formules = BacASable.formulesDuPack(packDe(doc));
     for (const f of inv.formules) if (!formules[f.nom]) out.push({ gravite: 'attention', message: `${f.fichier.replace(/^scripts\//, '')} : formule('${f.nom}') n'existe pas dans le pack ${packDe(doc)} (possibles : ${Object.keys(formules).join(', ')}) : Saga ne l'appellera jamais.`, script: f.fichier.replace(/^scripts\/|\.js$/g, '') });
-    for (const q of inv.quand) if (!BacASable.MOMENTS[q.moment]) out.push({ gravite: 'attention', message: `${q.fichier.replace(/^scripts\//, '')} : quand('${q.moment}') : ce moment n'existe pas (possibles : ${Object.keys(BacASable.MOMENTS).join(', ')}).`, script: q.fichier.replace(/^scripts\/|\.js$/g, '') });
+    // Tafl 1.2 : les moments annoncés par les modules actifs du jeu comptent aussi.
+    const moments = { ...BacASable.MOMENTS, ...(typeof ModulesJeu !== 'undefined' ? ModulesJeu.moments(doc?.data?.reglages) : {}) };
+    for (const q of inv.quand) if (!moments[q.moment]) out.push({ gravite: 'attention', message: `${q.fichier.replace(/^scripts\//, '')} : quand('${q.moment}') : ce moment n'existe pas (possibles : ${Object.keys(moments).join(', ')}).`, script: q.fichier.replace(/^scripts\/|\.js$/g, '') });
     return out;
   }
 
