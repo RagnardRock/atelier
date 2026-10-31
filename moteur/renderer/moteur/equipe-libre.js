@@ -8,7 +8,7 @@
 // niveau, apprentissage et CT) et l'objet qu'elle tient. Sans rien toucher, elle a les attaques
 // qu'elle connaîtrait à ce niveau et aucun objet.
 //
-//   EquipeLibre.creer(conteneur) → { ouvrir({ jeu, nombre, niveau, titre }), fermer, get ouvert }
+//   EquipeLibre.creer(conteneur) → { ouvrir({ jeu, nombre, niveau, titre, bouton }), fermer, get ouvert }
 // ouvrir() rend la liste des membres choisis — [{ id, attaques: [id], objet }] — ou null si le joueur
 // ferme l'écran sans rien valider quand il en a le droit ; le jeu, lui, remplace l'équipe (scripts.js).
 
@@ -28,7 +28,7 @@ const EquipeLibre = (() => {
       if (!e.target.closest?.('input')) e.stopImmediatePropagation();
     }, true);
 
-    function ouvrir({ jeu, nombre = 6, niveau = 50, titre = 'Compose ton équipe', annulable = false } = {}) {
+    function ouvrir({ jeu, nombre = 6, niveau = 50, titre = 'Compose ton équipe', bouton = '', annulable = false } = {}) {
       const especes = (jeu.donnees.creatures?.creatures || []).filter((c) => c && c.id);
       const objets = Regles.objetsTenables(jeu);
       return new Promise((resoudre) => {
@@ -40,7 +40,7 @@ const EquipeLibre = (() => {
         const recherche = el('input', { className: 'libre-recherche', type: 'search', placeholder: 'Chercher une créature…', spellcheck: false });
         const liste = el('div', { className: 'libre-liste' });
         const choix = el('div', { className: 'libre-choix' });
-        const ok = el('button', { className: 'libre-ok', type: 'button', textContent: 'C\'est mon équipe !' });
+        const ok = el('button', { className: 'libre-ok', type: 'button', textContent: bouton || 'C\'est mon équipe !' });
         const aide = el('p', { className: 'libre-aide', textContent: especes.length ? `Clique jusqu'à ${nombre} créature${nombre > 1 ? 's' : ''} (niveau ${niveau}), deux fois la même si tu veux. En bas, clique une vignette pour choisir ses attaques et son objet, ou sa croix pour l'enlever.` : 'Ce jeu n\'a encore aucune créature : importe les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »), puis reviens ici.' });
         const reglage = el('div', { className: 'libre-reglage', hidden: true });
         carte.append(tete, recherche, liste, el('div', { className: 'libre-bas' }, choix, ok), aide, reglage);

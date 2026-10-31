@@ -428,16 +428,22 @@ const Events = (() => {
     // Tafl 1.0 (Saga 1.0) : le joueur compose son équipe lui-même (les jeux « arène », un tournoi…).
     composer_equipe: {
       nom: 'Composer son équipe', icone: 'organization', groupe: 'Objets et créatures', packs: ['pokemon'],
-      nouveau: () => ({ type: 'composer_equipe', nombre: 6, niveau: 50, titre: '', garder: true }),
+      nouveau: () => ({ type: 'composer_equipe', nombre: 6, niveau: 50, titre: '', garder: true, pour: 'soi' }),
       champs: (doc, c) => [
+        { key: 'pour', label: 'Qui compose quoi', type: 'select', value: c.pour === 'adversaire' ? 'adversaire' : 'soi',
+          choices: [['soi', 'Chacun compose sa propre équipe'], ['adversaire', 'Chacun compose l\'équipe de l\'autre joueur']] },
         { key: 'nombre', label: 'Combien de créatures', type: 'number', value: c.nombre, min: 1, max: 6 },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
         { key: 'titre', label: 'Titre de l\'écran', type: 'text', value: c.titre, placeholder: 'Compose ton équipe' },
         { key: 'garder', label: 'Mettre l\'équipe d\'avant au PC', type: 'checkbox', value: c.garder !== false },
-        { type: 'info', text: 'Saga montre toutes les créatures du jeu : le joueur en choisit jusqu\'à ce nombre, au niveau écrit ici, et elles deviennent son équipe. Pour les duels entre amis (multijoueur) : chacun prend son équipe, puis vous vous affrontez.' },
+        { type: 'info', text: c.pour === 'adversaire'
+          ? 'Saga 1.8 : les deux joueurs choisissent en même temps, chacun pour l\'autre ; quand les deux ont fini, chacun reçoit l\'équipe que l\'autre lui a faite. Il faut jouer à plusieurs (sinon Saga le dit et ne fait rien).'
+          : 'Saga montre toutes les créatures du jeu : le joueur en choisit jusqu\'à ce nombre, au niveau écrit ici, et elles deviennent son équipe. Pour les duels entre amis (multijoueur) : chacun prend son équipe, puis vous vous affrontez.' },
       ],
-      depuis: (v) => ({ type: 'composer_equipe', nombre: clamp(Math.round(v.nombre) || 6, 1, 6), niveau: clamp(Math.round(v.niveau) || 50, 1, 100), titre: String(v.titre || '').slice(0, 60), garder: Boolean(v.garder) }),
-      resume: (doc, c) => `Le joueur choisit ${c.nombre} créature${c.nombre > 1 ? 's' : ''} au niveau ${c.niveau}`,
+      depuis: (v) => ({ type: 'composer_equipe', nombre: clamp(Math.round(v.nombre) || 6, 1, 6), niveau: clamp(Math.round(v.niveau) || 50, 1, 100), titre: String(v.titre || '').slice(0, 60), garder: Boolean(v.garder), pour: v.pour === 'adversaire' ? 'adversaire' : 'soi' }),
+      resume: (doc, c) => (c.pour === 'adversaire'
+        ? `Chacun compose l'équipe de l'autre : ${c.nombre} créature${c.nombre > 1 ? 's' : ''} au niveau ${c.niveau}`
+        : `Le joueur choisit ${c.nombre} créature${c.nombre > 1 ? 's' : ''} au niveau ${c.niveau}`),
     },
     soigner: {
       nom: 'Soigner l\'équipe', icone: 'heart-filled', groupe: 'Services',
@@ -1057,7 +1063,7 @@ const Events = (() => {
       case 'combat_dresseur': return { type: 'combat_dresseur', dresseur: str(c.dresseur) };
       case 'teleporter': return { type: 'teleporter', carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)), direction: pick(c.direction, Doc.DIRECTIONS, 'bas') };
       case 'quete': return { type: 'quete', quete: str(c.quete), action: pick(c.action, [['commencer'], ['etape'], ['finir']], 'commencer'), etape: Math.max(1, int(c.etape, 1)) };
-      case 'composer_equipe': return { type: 'composer_equipe', nombre: clamp(int(c.nombre, 6), 1, 6), niveau: clamp(int(c.niveau, 50), 1, 100), titre: str(c.titre).slice(0, 60), garder: c.garder !== false };
+      case 'composer_equipe': return { type: 'composer_equipe', nombre: clamp(int(c.nombre, 6), 1, 6), niveau: clamp(int(c.niveau, 50), 1, 100), titre: str(c.titre).slice(0, 60), garder: c.garder !== false, pour: c.pour === 'adversaire' ? 'adversaire' : 'soi' };
       case 'boutique': return { type: 'boutique', boutique: str(c.boutique) };
       case 'argent': return { type: 'argent', action: c.action === 'retirer' ? 'retirer' : 'donner', montant: clamp(int(c.montant, 1), 1, 9999999) };
       case 'badge': return { type: 'badge', badge: str(c.badge) };

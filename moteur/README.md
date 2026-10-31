@@ -222,6 +222,12 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Les capacités œufs** comptent dans les attaques qu'on peut choisir dans l'arène (Tafl 1.5 les importe depuis PokeAPI, champ `oeufs` de chaque espèce).
 - Côté règles : `Regles` gagne `detailsPossibles` (facultatif) et l'écran de combat `etats(cote, liste)`.
 
+## Ce que fait Saga 1.8 : les effets de combat, et le défi inversé
+
+- **Les effets qui manquaient au combat** (pack Pokémon) : **vent arrière** (vitesse ×2 pour son équipe, 4 tours), **Mur Lumière** et **Protection** (attaques spéciales ou physiques ÷2 pour son équipe, 5 tours), **provoc** (plus d'attaque de statut, 3 tours), **vampigraine** (elle perd des PV, rendus à l'autre), **piège** (elle perd des PV et ne peut ni changer ni fuir), **bâillement** (elle s'endort au tour suivant), **attraction** (elle rate la moitié de ses tours), **abri** (rien ne la touche ce tour-ci) et les quatre **météos** (pluie, soleil, tempête de sable, grêle). Chacun se voit sur une pastille, avec ses tours restants.
+- Les attaques officielles correspondantes sont **reconnues à l'import** (Vent Arrière, Provoc, Vampigraine, Danse Pluie, Abri, Ligotage…) ; pour une attaque à soi, Tafl a un champ « Effet de combat ».
+- **Le défi inversé** : la commande `composer_equipe` de Tafl peut être « pour l'adversaire ». Les deux joueurs choisissent en même temps, chacun pour l'autre ; quand les deux ont fini, chacun reçoit l'équipe que l'autre lui a composée. Le modèle « Arène de duel » a une borne du milieu qui le lance à trois créatures. Le menu devant un autre joueur a aussi « Composer vos équipes ».
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
