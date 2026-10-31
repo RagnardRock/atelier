@@ -86,7 +86,16 @@ const GestionCalcul = (() => {
       // Saga 1.6.1 : ce que fait la faim (choisi par le jeu). 'arrivees' : personne n'arrive tant que
       // quelqu'un a faim ; 'rien' : seulement le rapport ; 'departs' : de plus, après faim_nuits nuits de
       // faim de suite, un habitant part chaque nuit tant qu'elle dure. Dans tous les cas, ils travaillent.
-      faim: ['arrivees', 'rien', 'departs'].includes(g.faim) ? g.faim : 'arrivees', faim_nuits: entier(g.faim_nuits, 3, 1, 99) };
+      faim: ['arrivees', 'rien', 'departs'].includes(g.faim) ? g.faim : 'arrivees', faim_nuits: entier(g.faim_nuits, 3, 1, 99),
+      // Saga 1.9 : les habitants qu'on voit aller et venir (promeneurs, false : on ne les voit pas), avec
+      // l'apparence d'un personnage du jeu (vide : un petit bonhomme), au plus promeneurs_max à la fois.
+      promeneurs: g.promeneurs !== false, promeneur_perso: texte(g.promeneur_perso, 64), promeneurs_max: entier(g.promeneurs_max, 12, 1, 40),
+      // Saga 1.9 : les sentiers qui se creusent (usure, false : rien). Chaque pas d'un habitant use la case ;
+      // à seuil_usee pas, elle prend la tuile_usee (de l'herbe tassée), à seuil_sentier, la tuile_sentier
+      // (-1 : un sentier dessiné par Saga). Chaque nuit, une case perd usure_repousse pas (l'herbe repousse).
+      usure: g.usure !== false, tuile_usee: entier(g.tuile_usee, -1, -1, 99999), tuile_sentier: entier(g.tuile_sentier, -1, -1, 99999),
+      seuil_usee: entier(g.seuil_usee, 6, 1, 9999), seuil_sentier: entier(g.seuil_sentier, 20, 1, 9999), usure_repousse: entier(g.usure_repousse, 2, 0, 9999) };
+    reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
   }
 
@@ -117,7 +126,42 @@ const GestionCalcul = (() => {
     return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
       // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
       ...(etat.retour && typeof etat.retour === 'object' && typeof etat.retour.carte === 'string' ? { retour: { carte: etat.retour.carte, x: entier(etat.retour.x, 0, 0, 9999), y: entier(etat.retour.y, 0, 0, 9999), direction: typeof etat.retour.direction === 'string' ? etat.retour.direction : 'bas' } } : {}),
-      prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0) };
+      prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0),
+      // Saga 1.9 : l'usure des cases, par carte : { carte: { « indice de la case » : pas } }.
+      ...(etat.usure && typeof etat.usure === 'object' ? { usure: normUsure(etat.usure) } : {}) };
+  }
+  function normUsure(u) {
+    const out = {};
+    for (const [c, cases] of Object.entries(u)) {
+      if (typeof c !== 'string' || !c || !cases || typeof cases !== 'object') continue;
+      const m = {};
+      for (const [i, n] of Object.entries(cases)) if (/^\d{1,6}$/.test(i) && entier(n) > 0) m[i] = entier(n, 0, 0, 99999);
+      if (Object.keys(m).length) out[c] = m;
+    }
+    return out;
+  }
+
+  // Saga 1.9 : un pas de plus sur la case i de la carte (sur place, appelé à chaque pas : rapide). Le compte
+  // s'arrête un peu au-dessus du seuil du sentier, pour qu'un sentier délaissé repousse en quelques nuits.
+  function user(d, e, carte, i) {
+    if (!d.reglages.usure) return 0;
+    const u = (e.usure ??= {});
+    const m = (u[carte] ??= {});
+    const n = Math.min((m[i] || 0) + 1, d.reglages.seuil_sentier + Math.max(1, d.reglages.usure_repousse) * 3);
+    m[i] = n;
+    return n;
+  }
+  // Ce que montre une case : 0 rien, 1 usée, 2 sentier.
+  const niveauUsure = (d, n) => (n >= d.reglages.seuil_sentier ? 2 : n >= d.reglages.seuil_usee ? 1 : 0);
+  // La nuit, l'herbe repousse un peu partout.
+  function repousserUsure(d, etat) {
+    if (!etat.usure) return;
+    const k = d.reglages.usure_repousse;
+    if (!k) return;
+    for (const [c, m] of Object.entries(etat.usure)) {
+      for (const [i, n] of Object.entries(m)) { if (n - k > 0) m[i] = n - k; else delete m[i]; }
+      if (!Object.keys(m).length) delete etat.usure[c];
+    }
   }
 
   // La place pour chaque ressource (0 = sans limite).
@@ -296,6 +340,8 @@ const GestionCalcul = (() => {
       for (const [r, q] of Object.entries(etat.stock)) if (q > cap) { perdu[r] = q - cap; etat.stock[r] = cap; }
       if (Object.keys(perdu).length) lignes.push(`Le stock est plein : ${dire(d, perdu)} perdus.`);
     }
+    // 7. (Saga 1.9) Les sentiers délaissés repoussent un peu.
+    repousserUsure(d, etat);
     etat.resolu = n;
     return { etat, lignes, termines, arrives, partis };
   }
@@ -314,7 +360,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { definitions, etatNeuf, normaliser, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
+  return { definitions, etatNeuf, normaliser, user, niveauUsure, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

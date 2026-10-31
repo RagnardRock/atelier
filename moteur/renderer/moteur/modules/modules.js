@@ -21,6 +21,11 @@
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
 //                                         emmène (Saga 1.6.1 : la porte d'un bâtiment posé), sinon null
 //   dessiner(o)                         dessine sur la carte, à la profondeur o.profondeur ('sol' | 'dessus')
+//   avancer(o)                          (Saga 1.9) à chaque image, sur la carte du joueur (o.carte), o.dt secondes
+//                                         plus tard : faire marcher ses figurants. Pas pendant un combat ni en pause.
+//   figurants(o)                        (Saga 1.9) → [{ x, y, direction, pas, personnage, couleur }] : des passants
+//                                         que le moteur dessine parmi les personnages (x, y en pixels de la carte,
+//                                         pas : 0 debout, sinon le n° du pas). Ils ne bloquent personne.
 //   commandes                           { type: async (o) → résultat } : ses commandes d'événement
 //   condition(o, cond)                  → vrai, faux, ou undefined (une condition qu'il ne connaît pas)
 //   actionsPause(o)                     → [[id, nom, icône]] : des choix en plus dans le menu de pause
@@ -31,6 +36,8 @@
 //   etat   = partie.modules[id] : le seul endroit de la partie qui appartient au module (sauvegardé tel quel)
 //   hote   = ce que le moteur prête : reagir(moment, infos), rafraichir(), message(texte), ui (les menus) ;
 //            Saga 1.5 : carte, joueur, libre(x, y), viser({ largeur, hauteur, valide }) → { x, y } ou null
+//            Saga 1.9 : chemin(depart, arrivee, { cout(x, y), coutMin }) → [{ x, y }…] ou null (moteur/chemins.js,
+//            sur les cases où l'on peut marcher de la carte du joueur)
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module
@@ -138,6 +145,15 @@ const Modules = (() => {
         } catch (err) { dire(m.id, 'teleporteur', err); }
       }
       return null;
+    },
+    // Saga 1.9 : les figurants des modules marchent (o.dt : les secondes depuis l'image d'avant).
+    avancer(jeu, partie, hote, carte, dt) {
+      chacun(jeu, 'avancer', (m) => m.avancer(objet(m, jeu, partie, hote, { carte, dt })));
+    },
+    // Saga 1.9 : les passants des modules, à dessiner parmi les personnages.
+    figurants(jeu, partie, carte) {
+      return chacun(jeu, 'figurants', (m) => m.figurants(objet(m, jeu, partie, null, { carte })))
+        .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((f) => f && Number.isFinite(f.x) && Number.isFinite(f.y)));
     },
     // Dessiner sur la carte. o : { ctx, carte, cam, taille, maintenant, profondeur, tuile(n, cx, cy) }.
     dessiner(jeu, partie, o) {

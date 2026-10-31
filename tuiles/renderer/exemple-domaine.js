@@ -1,4 +1,4 @@
-// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1) : le petit jeu modèle pour essayer le module gestion.
+// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.7 : habitants visibles et sentiers) : le petit jeu modèle pour essayer le module gestion.
 //
 // Une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp pour dormir, du bois
 // et du blé à ramasser (ils repoussent après quelques nuits). Trois bâtiments : la maison (2 habitants,
@@ -37,6 +37,7 @@ const ExempleDomaine = (() => {
     herbe,
     fleurs: (x, y) => (dans(x, y, 4, 4, 1) || dans(x, y, 11, 10, 1) ? 'f' : dans(x, y, 11, 3, 1) || dans(x, y, 4, 12, 1) ? 'g' : herbe(x, y)),
     chemin: (x, y) => (bruit(x, y) < 14 ? 'e' : 'd'),
+    herbe_tassee: (x, y) => (bruit(x, y, 3) < 38 ? (bruit(x, y, 4) < 50 ? 'd' : 'e') : herbe(x, y)),
     eau: (x, y) => ((y % 6 === 2 && (x + y) % 8 < 4) ? 'i' : 'h'),
     arbre_haut: (x, y) => (dans(x, y, 7.5, 12, 8) ? (bruit(x, y) < 25 ? 'j' : 'k') : '.'),
     arbre_bas: (x, y) => (y < 7 && dans(x, y, 7.5, -1, 8) ? (bruit(x, y, 2) < 25 ? 'j' : 'k') : x >= 6 && x <= 9 ? (x === 6 ? 'm' : 'l') : herbe(x, y)),
@@ -143,6 +144,7 @@ const ExempleDomaine = (() => {
           dire('Ouvre ton carnet (Tab) : le bouton Domaine montre le stock, et Construire te laisse poser un bâtiment dans le pré, avec les flèches.', 'brune'),
           dire('Une maison coûte 6 bois et loge deux habitants. Une ferme coûte 4 bois : avec un ouvrier, elle donne 3 blé chaque nuit.', 'brune'),
           dire('Les habitants mangent un blé par nuit. Après trois nuits de faim, ils s\'en vont. Le bois et les gerbes repoussent : ramasse-les !', 'brune'),
+          dire('Regarde-les aller et venir entre leur maison et la ferme : à force, leurs pas tracent des sentiers dans l\'herbe.', 'brune'),
           dire('Pour que la nuit passe, va dormir au lit de camp, à droite du chemin. Bonne chance !', 'brune'),
           { type: 'local', valeur: true },
         ]),
@@ -190,6 +192,8 @@ const ExempleDomaine = (() => {
         nom: 'Domaine de la Clairière', capacite: 0, menu: true, construire_menu: true,
         stock_depart: [{ ressource: 'bois', nombre: 12 }, { ressource: 'ble', nombre: 4 }],
         habitants_depart: 0, repas: [{ ressource: 'ble', nombre: 1 }], arrivees: 1, faim: 'departs', faim_nuits: 3,
+        // Tafl 1.7 : on voit les habitants, et leurs pas creusent des sentiers (herbe tassée, puis chemin).
+        promeneurs: true, usure: true, tuile_usee: T.herbe_tassee, tuile_sentier: T.chemin, seuil_usee: 6, seuil_sentier: 18, usure_repousse: 2,
       }),
     };
     const N = DonneesGestion.NORMES;
