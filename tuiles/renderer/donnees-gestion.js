@@ -240,7 +240,7 @@ const DonneesGestion = (() => {
       tailleBox,
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Passage : choisis un pinceau, puis clique sur les cases' }), pinceaux, grille]),
       vers,
-      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (touche B › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
+      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (carnet › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
     ];
   }
 
@@ -272,8 +272,8 @@ const DonneesGestion = (() => {
         champ('Nom du domaine', texteIn(g, 'nom', 'Domaine')),
         champ('Capacité du stock', nombreIn(g, 'capacite', 0, 99999), 'par ressource (0 = sans limite)'),
       ]),
-      champ('Dans le menu de pause', menu, 'l\'écran du domaine'),
-      champ('Construire depuis le menu de pause', construire, 'sur une carte qui a une zone Constructible'),
+      champ('Dans le carnet (Tab)', menu, 'l\'écran du domaine'),
+      champ('Construire depuis le carnet (Tab)', construire, 'sur une carte qui a une zone Constructible'),
       tableQuantites(ctx, g, 'stock_depart', 'Stock de départ', 'Le stock commence vide.'),
       el('div', { className: 'field-grid' }, [
         champ('Habitants au départ', nombreIn(g, 'habitants_depart', 0, 9999)),

@@ -8,7 +8,7 @@
 const Commandes = (() => {
   const NOMS = {
     haut: 'Haut', bas: 'Bas', gauche: 'Gauche', droite: 'Droite',
-    action: 'Action (parler, valider)', retour: 'Retour', courir: 'Courir (tenir)', pause: 'Pause', carnet: 'Carnet', actions: 'Actions du jeu (domaine, construire…)',
+    action: 'Action (parler, valider)', retour: 'Retour', courir: 'Courir (tenir)', pause: 'Pause', carnet: 'Carnet',
   };
   // Les boutons d'une manette « standard » (Xbox ; PlayStation : A = ✕, B = ○, X = □, Y = △).
   const BOUTONS = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', 'Haut', 'Bas', 'Gauche', 'Droite', 'Home'];
