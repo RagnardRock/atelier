@@ -180,6 +180,24 @@
           else if (sol) dessinerTampon(o, def, def.tampon, b.x, b.y, 'tout', 0.45);
         } else dessinerTampon(o, def, def.tampon, b.x, b.y, sol ? 'bas' : 'haut', 1);
       }
+      // Saga 1.6.2 : pendant la visée, le reste de la carte s'assombrit et les zones constructibles ressortent,
+      // avec un bord en pointillés qui bouge (on voit d'un coup d'œil où l'on peut bâtir).
+      if (apercu && o.visee && !sol) {
+        const ctx = o.ctx, s = o.taille, W = ctx.canvas.width, H = ctx.canvas.height;
+        const zones = constructible(o.carte).map((z) => [z.x * s - o.cam.x, z.y * s - o.cam.y, z.largeur * s, z.hauteur * s]);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, W, H);
+        for (const [x, y, l, h] of zones) ctx.rect(x, y, l, h);
+        ctx.fillStyle = 'rgba(10, 14, 30, 0.42)';
+        ctx.fill('evenodd');
+        ctx.setLineDash([4, 3]);
+        ctx.lineDashOffset = -((o.maintenant || 0) / 80) % 7;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(255, 236, 150, 0.95)';
+        for (const [x, y, l, h] of zones) ctx.strokeRect(x + 1, y + 1, l - 2, h - 2);
+        ctx.restore();
+      }
       // Le bâtiment qu'on est en train de placer, en transparence sous le rectangle visé.
       if (apercu && o.visee && !sol) {
         const def = d.batiments.get(apercu);

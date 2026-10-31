@@ -181,6 +181,8 @@ const ExempleDomaine = (() => {
     // --- Les données : le module gestion, ses ressources et ses bâtiments ---
     const data = doc.data;
     data.reglages.regles = 'jrpg';
+    data.reglages.monnaie = 'écus';
+    data.reglages.argent_depart = 0;
     data.reglages.modules = ['gestion'];
     data.reglages.modules_reglages = {
       ...(data.reglages.modules_reglages || {}),
