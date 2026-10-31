@@ -25,7 +25,7 @@ const ModulesJeu = (() => {
     // Saga 1.5, Tafl 1.3 : moteur/renderer/moteur/modules/gestion/.
     gestion: {
       nom: 'Gestion',
-      description: 'Un stock commun, des bâtiments à construire qui produisent chaque nuit (quand le joueur dort), et des habitants qui y logent, mangent et y travaillent. Les ressources et les bâtiments sont des données du jeu.',
+      description: 'Un stock commun, des bâtiments à construire qui produisent chaque nuit (quand le joueur dort), et des habitants qui y logent, mangent et y travaillent. Des bâtiments de repos soignent le groupe et lui donnent un bonus pour les combats ; le butin peut aller au stock. Les ressources et les bâtiments sont des données du jeu.',
       donnees: ['ressources', 'batiments'],
       moments: {
         gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } },
@@ -40,6 +40,7 @@ const ModulesJeu = (() => {
         gestion_habitants: { nom: 'Des habitants arrivent ou partent' },
         gestion_sortir: { nom: 'Ressortir du bâtiment (devant sa porte)' },
         gestion_domaine: { nom: 'Ouvrir l\'écran du domaine' },
+        gestion_repos: { nom: 'Se reposer dans un bâtiment de repos (soin et bonus)' },
       },
       conditions: {
         gestion_batiment: { nom: 'Un bâtiment est construit' },

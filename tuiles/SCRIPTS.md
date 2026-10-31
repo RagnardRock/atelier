@@ -176,7 +176,7 @@ Ce qui **lit** rend tout de suite une valeur ; ce qui **agit** rend une promesse
 
 | | |
 |---|---|
-| `saga.partie` | une copie de la partie (lecture seule) : `nom`, `argent`, `sac`, `interrupteurs`, `variables`, `quetes`, `badges`… (FORMAT.md › Sauvegardes). Elle se met à jour après chaque action. |
+| `saga.partie` | une copie de la partie (lecture seule) : `nom`, `argent`, `sac`, `interrupteurs`, `variables`, `quetes`, `badges`… (FORMAT.md › Sauvegardes). Elle se met à jour après chaque action. Saga 1.11 : `saga.partie.bonus`, les bonus du groupe en cours (`[{ id, nom, stats: { defense: 15 }, combats, nuit }]`) ; pour en donner un : `await saga.commande({ type: 'bonus', nom: 'Thé à la menthe', stats: [{ stat: 'esprit', pourcent: 10 }], combats: 2 })`. |
 | `saga.carte` | `{ id, nom }` de la carte du joueur |
 | `saga.evenement` | `{ id, nom, x, y }` de l'événement qui a lancé la commande (`null` pour une réaction) |
 | `saga.joueur` | `{ nom, x, y, direction }` |

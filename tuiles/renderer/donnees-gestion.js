@@ -22,6 +22,16 @@ const DonneesGestion = (() => {
   // Ce que fait la faim des habitants (Saga 1.6.1). Dans tous les cas, ils travaillent quand même.
   const FAIMS = [['arrivees', 'Personne n\'arrive tant que quelqu\'un a faim'], ['rien', 'Rien (seulement le rapport du matin)'], ['departs', 'Personne n\'arrive, et après plusieurs nuits de faim, des habitants partent']];
 
+  // Tafl 1.9 (Saga 1.11) : le repos d'un bâtiment. quand : 'visite' (on vient s'y reposer, commande « Se
+  // reposer ») ou 'matin' (chaque matin, tant qu'il est debout) ; soigner, un bonus (stats en %) pour
+  // `combats` combats (0 : toute la journée), et le coût d'une visite.
+  const QUANDS = [['', 'Pas un lieu de repos'], ['visite', 'Quand on vient s\'y reposer (commande « Se reposer »)'], ['matin', 'Chaque matin, tant qu\'il est debout']];
+  const normRepos = (r) => (r && typeof r === 'object' && ['visite', 'matin'].includes(r.quand) ? {
+    ...propre(r), quand: r.quand, nom: str(r.nom).slice(0, 60), soigner: r.soigner !== false,
+    stats: arr(r.stats).filter((q) => q && q.stat).slice(0, 6).map((q) => ({ stat: str(q.stat).slice(0, 32), pourcent: int(q.pourcent, 10, -90, 200) })),
+    combats: int(r.combats, 0, 0, 99), cout: normQuantites(r.cout),
+  } : null);
+
   const NORMES = {
     ressources: (r, i) => ({
       ...propre(r),
@@ -54,6 +64,8 @@ const DonneesGestion = (() => {
       // Tafl 1.4 (Saga 1.6) : les habitants qu'il loge, et les ouvriers qu'il lui faut pour produire.
       logement: int(b?.logement, 0, 0, 999),
       ouvriers: int(b?.ouvriers, 0, 0, 999),
+      // Tafl 1.9 (Saga 1.11) : un bâtiment de repos (spa, bains, cuisine), ou null.
+      repos: normRepos(b?.repos),
     }),
   };
   // Les réglages du module : reglages.modules_reglages.gestion.
@@ -87,6 +99,9 @@ const DonneesGestion = (() => {
     seuil_usee: int(g?.seuil_usee, 6, 1, 9999),
     seuil_sentier: int(g?.seuil_sentier, 20, 1, 9999),
     usure_repousse: int(g?.usure_repousse, 2, 0, 9999),
+    // Tafl 1.9 (Saga 1.11) : le lien avec les sorties.
+    butin_au_stock: g?.butin_au_stock === true,
+    perte_defaite: int(g?.perte_defaite, 0, 0, 100),
   });
 
   const U = () => Donnees.ui;
@@ -139,10 +154,49 @@ const DonneesGestion = (() => {
       tableQuantites(ctx, b, 'cout', 'Coût (pris dans le stock)', 'Gratuit.'),
       tableQuantites(ctx, b, 'production', 'Produit chaque nuit', 'Ne produit rien (un entrepôt, une maison…).'),
       tableQuantites(ctx, b, 'consommation', 'Consomme chaque nuit pour produire', 'Ne consomme rien.'),
+      section('Repos'), ...reposChamps(b, ctx),
       section('Sur la carte'), ...placeChamps(b, ctx),
       info('Chaque nuit (commande Dormir), les bâtiments finis produisent s\'il y a dans le stock ce qu\'ils consomment, puis les chantiers avancent d\'une nuit : un bâtiment fini cette nuit produit à partir de la suivante. La commande « Construire un bâtiment » le paie et lance son chantier ; une page avec la condition « Un bâtiment est construit » le montre sur la carte.'),
       section('Utilisation'), ctx.usages('batiment', b.id),
     );
+  }
+
+  // Tafl 1.9 (Saga 1.11) : le repos (un spa : soin et Défense +10 % pour 3 combats).
+  function reposChamps(b, ctx) {
+    const { champ, info, nombreIn, sel, texteIn, table } = U();
+    const stats = typeof Events !== 'undefined' ? Events.statsBonus({ data: ctx.work }) : [];
+    const box = el('div');
+    const maj = () => {
+      const r = b.repos;
+      if (!r) { box.replaceChildren(); return; }
+      if (!Array.isArray(r.stats)) r.stats = [];
+      if (!Array.isArray(r.cout)) r.cout = [];
+      const soin = el('input', { type: 'checkbox', checked: r.soigner !== false });
+      soin.onchange = () => { r.soigner = soin.checked; };
+      const choix = (q) => [...stats, ...(q.stat && !stats.some(([k]) => k === q.stat) ? [[q.stat, `${q.stat} (pas dans ce pack)`]] : [])];
+      const tStats = table(r.stats, [
+        ['Statistique', (q) => sel(choix(q), q.stat, (v) => { q.stat = v; }), true],
+        ['En %', (q) => nombreIn(q, 'pourcent', -90, 200)],
+      ], () => ({ stat: stats[0]?.[0] || '', pourcent: 10 }), { ajouter: '+ Statistique', max: 6, vide: 'Pas de bonus (seulement le soin).' });
+      box.replaceChildren(
+        el('div', { className: 'field-grid' }, [
+          champ('Nom du repos', texteIn(r, 'nom', b.nom || 'Les bains')),
+          champ('Soigne le groupe', soin, 'PV et PM au maximum'),
+        ]),
+        el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Bonus pour tout le groupe, en combat' }), tStats]),
+        champ('Pendant', nombreIn(r, 'combats', 0, 99), 'combats (0 = toute la journée), et au plus jusqu\'à la nuit'),
+        ...(r.quand === 'visite' ? [tableQuantites(ctx, r, 'cout', 'Coût d\'une visite (pris dans le stock)', 'Gratuit.')] : []),
+        info(r.quand === 'visite'
+          ? 'Dans l\'intérieur du bâtiment (ou devant lui), mets un événement avec la commande « Se reposer » : un bassin, un lit, un comptoir. Le joueur y est soigné et son groupe reçoit le bonus, jusqu\'à la nuit ou pour le nombre de combats choisi.'
+          : 'Chaque matin, tant que ce bâtiment est fini, le groupe reçoit son bonus pour la journée (le rapport du matin le dit). Deux bâtiments du même type ne le donnent qu\'une fois.'),
+      );
+    };
+    const quand = sel(QUANDS, b.repos?.quand || '', (v) => {
+      b.repos = v ? { ...(b.repos || { nom: '', soigner: true, stats: [{ stat: stats[0]?.[0] || 'defense', pourcent: 10 }], combats: 3, cout: [] }), quand: v } : null;
+      maj();
+    });
+    maj();
+    return [champ('Lieu de repos', quand), box];
   }
 
   // Où et comment le bâtiment se pose (placement libre, dans une zone « Constructible ») : son tampon (sa
@@ -300,9 +354,22 @@ const DonneesGestion = (() => {
         champ('Quand ils ont faim', U().sel(FAIMS, g.faim, (v) => { g.faim = v; majNuits(); })),
         nuits,
       ]),
+      ...champsSorties(g),
       ...champsPromeneurs(g, ctx, r),
       info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
+    ];
+  }
+
+  // Tafl 1.9 (Saga 1.11) : ce que les sorties (les combats) rapportent au domaine, ou lui coûtent.
+  function champsSorties(g) {
+    const { champ, info, nombreIn } = U();
+    const butin = el('input', { type: 'checkbox', checked: g.butin_au_stock });
+    butin.onchange = () => { g.butin_au_stock = butin.checked; };
+    return [
+      champ('Le butin va au stock', butin, 'après un combat gagné, les objets des ressources (leur « objet du sac ») vont tout seuls au stock'),
+      champ('Défaite : le stock perd', nombreIn(g, 'perte_defaite', 0, 100), '% de chaque ressource (0 = rien)'),
+      info('Sans « le butin va au stock », le joueur dépose son sac lui-même (commande « Déposer le sac au stock », sur un coffre ou un entrepôt). Les bâtiments de repos (Données › Bâtiments › Repos) donnent, eux, un soin et un bonus au groupe pour ses combats.'),
     ];
   }
 
@@ -361,7 +428,7 @@ const DonneesGestion = (() => {
 
   function resumer(doc, sorte, o) {
     if (sorte === 'ressources') return `${o.id} « ${o.nom} »${o.objet ? `, objet du sac ${o.objet}` : ''}${o.description ? ` : ${o.description}` : ''}`;
-    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}${o.logement ? `, loge ${o.logement}` : ''}${o.ouvriers ? `, ${o.ouvriers} ouvrier(s)` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
+    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}${o.logement ? `, loge ${o.logement}` : ''}${o.ouvriers ? `, ${o.ouvriers} ouvrier(s)` : ''}${o.repos ? `, repos ${o.repos.quand === 'matin' ? 'chaque matin' : 'en visite'} (${o.repos.soigner ? 'soigne, ' : ''}${o.repos.stats.map((q) => `${q.stat} ${q.pourcent > 0 ? '+' : ''}${q.pourcent} %`).join(', ') || 'sans bonus'}${o.repos.combats ? `, ${o.repos.combats} combat(s)` : ''})` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
     return null;
   }
   // Où une ressource ou un bâtiment est utilisé (Donnees.utilisations).
@@ -371,10 +438,10 @@ const DonneesGestion = (() => {
       const c = commande || condition;
       const ici = `${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`;
       if (sorte === 'ressource' && c.type === 'gestion_stock' && c.ressource === id) out.add(ici);
-      if (sorte === 'batiment' && ['gestion_construire', 'gestion_placer', 'gestion_batiment', 'gestion_chantier'].includes(c.type) && c.batiment === id) out.add(ici);
+      if (sorte === 'batiment' && ['gestion_construire', 'gestion_placer', 'gestion_batiment', 'gestion_chantier', 'gestion_repos'].includes(c.type) && c.batiment === id) out.add(ici);
     });
     if (sorte === 'ressource') {
-      for (const b of doc.data.batiments || []) if ([...b.cout, ...b.production, ...b.consommation].some((q) => q.ressource === id)) out.add(`Bâtiment ${b.nom}`);
+      for (const b of doc.data.batiments || []) if ([...b.cout, ...b.production, ...b.consommation, ...(b.repos?.cout || [])].some((q) => q.ressource === id)) out.add(`Bâtiment ${b.nom}`);
       if ((doc.data.reglages?.modules_reglages?.gestion?.stock_depart || []).some((q) => q.ressource === id)) out.add('Réglages (stock de départ)');
     }
   }

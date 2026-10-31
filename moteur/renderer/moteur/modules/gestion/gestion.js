@@ -53,10 +53,17 @@
       if (em.demandes) items.push({ texte: 'Au travail', detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes} demandés` });
       if (Object.keys(d.reglages.repas).length) items.push({ texte: 'Repas de la nuit', detail: C.dire(d, Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]))) || 'rien' });
     }
+    // Saga 1.11 : les bonus du groupe en cours (des bains, d'un repas).
+    const bonus = Array.isArray(o.partie.bonus) ? o.partie.bonus : [];
+    if (bonus.length) {
+      items.push(titre('Le groupe'));
+      for (const b of bonus) items.push({ texte: b.nom, detail: `${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${Bonus.duree(b) ? ` · ${Bonus.duree(b)}` : ''}` });
+    }
     items.push(titre('Bâtiments'));
     if (!e.batiments.length) items.push({ texte: 'Aucun pour l\'instant', desactive: true });
     for (const b of e.batiments) {
-      items.push({ texte: C.nomBatiment(d, b.type), detail: b.etat === 'fini' ? 'Terminé' : `Chantier : encore ${b.reste} nuit${b.reste > 1 ? 's' : ''}` });
+      const rep = d.batiments.get(b.type)?.repos;
+      items.push({ texte: C.nomBatiment(d, b.type), detail: b.etat === 'fini' ? (rep ? (rep.quand === 'matin' ? 'Terminé · repos chaque matin' : 'Terminé · lieu de repos') : 'Terminé') : `Chantier : encore ${b.reste} nuit${b.reste > 1 ? 's' : ''}` });
     }
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true });
   }
@@ -231,6 +238,27 @@
     // Pas de chemin : il réessaie un peu plus tard (sans horloge, en rentrant).
     h.attente = hasard(1.5, 4);
     if (per === null) h.ensuite = h.ensuite === 'maison' ? 'flaner' : 'maison';
+  }
+
+  // --- Saga 1.11 : les bâtiments de repos ---
+  // Soigner le groupe et lui donner le bonus du bâtiment (par ce que le moteur prête). → le bonus, ou null.
+  function appliquerRepos(o, def) {
+    const r = def?.repos;
+    if (!r) return null;
+    if (r.soigner) o.hote?.soigner?.();
+    if (!Object.keys(r.stats).length) return null;
+    return o.hote?.bonus?.({ id: `gestion:${def.id}`, nom: r.nom, stats: r.stats, combats: r.combats, nuit: true }) || null;
+  }
+  // Le bâtiment de repos où se trouve le joueur : la copie de son intérieur (« carte@id du bâtiment »),
+  // sinon un bâtiment de repos fini dont la porte mène à cette carte (intérieur partagé).
+  function batimentDuLieu(o, d) {
+    const id = o.hote?.carte?.id || '';
+    const e = etatDe(o);
+    const [base, bid] = id.split('@');
+    const ici = bid ? e.batiments.find((b) => b.id === bid) : null;
+    if (ici && d.batiments.get(ici.type)?.repos) return ici.type;
+    const b = e.batiments.find((x) => x.etat === 'fini' && d.batiments.get(x.type)?.repos?.quand === 'visite' && Jeu.baseDe(d.batiments.get(x.type).porte_vers?.carte || '') === base);
+    return b ? b.type : '';
   }
 
   // --- Le placement libre (Saga 1.5) ---
@@ -417,13 +445,42 @@
     },
 
     finDeJournee(o) {
-      const r = C.finDeJournee(defs(o.jeu), etatDe(o), o.jour);
+      const d = defs(o.jeu), avant = etatDe(o);
+      const r = C.finDeJournee(d, avant, o.jour);
+      const neuve = (Number(o.jour) || 0) > avant.resolu;
       poser(o, r.etat);
+      // Saga 1.11 : les bâtiments de repos « chaque matin » (une cuisine, un temple) : leur bonus pour la
+      // journée qui commence (le moteur vient d'effacer ceux de la veille).
+      if (neuve) for (const { def } of C.reposFinis(d, r.etat, 'matin')) {
+        const b = appliquerRepos(o, def);
+        if (b) r.lignes.push(`${def.repos.nom} : ${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${b.combats ? ` pour ${b.combats} combat${b.combats > 1 ? 's' : ''}` : ''} aujourd'hui.`);
+      }
       for (const type of r.termines) o.hote.reagir?.('gestion_termine', { batiment: type });
       if (r.arrives) o.hote.reagir?.('gestion_arrivee', { nombre: r.arrives, habitants: r.etat.habitants });
       if (r.partis) o.hote.reagir?.('gestion_depart', { nombre: r.partis, habitants: r.etat.habitants });
       if (r.termines.length) o.hote.rafraichir?.();
       return r.lignes;
+    },
+
+    // Saga 1.11 : après un combat, le butin va au stock (butin_au_stock), et une défaite coûte au domaine
+    // (perte_defaite, 0 par défaut).
+    apresCombat(o) {
+      const d = defs(o.jeu), lignes = [];
+      if ((o.issue === 'victoire' || o.issue === 'capture') && d.reglages.butin_au_stock && o.partie.sac) {
+        const r = C.deposer(d, etatDe(o), o.partie.sac);
+        if (Object.keys(r.depose).length) {
+          poser(o, r.etat);
+          for (const k of Object.keys(o.partie.sac)) delete o.partie.sac[k];
+          Object.assign(o.partie.sac, r.sac);
+          lignes.push(`Au stock du domaine : ${C.dire(d, r.depose)}.`);
+        }
+      }
+      if (o.issue === 'defaite' && d.reglages.perte_defaite) {
+        const r = C.perdre(d, etatDe(o), d.reglages.perte_defaite);
+        if (Object.keys(r.perdu).length) { poser(o, r.etat); lignes.push(`${d.reglages.nom} a perdu : ${C.dire(d, r.perdu)}.`); }
+      }
+      if (lignes.length) o.hote?.rafraichir?.();
+      return lignes;
     },
 
     commandes: {
@@ -491,6 +548,26 @@
       },
       // Ouvrir l'écran du domaine.
       async gestion_domaine(o) { await ecran(o); return null; },
+      // Saga 1.11 : se reposer dans un bâtiment de repos (« visite ») : le groupe est soigné et reçoit son
+      // bonus. Sans batiment : celui dont le joueur est à l'intérieur. Branches réussi / raté.
+      async gestion_repos(o) {
+        const d = defs(o.jeu);
+        const type = String(o.c.batiment || '') || batimentDuLieu(o, d);
+        const r = type ? C.sereposer(d, etatDe(o), type) : { ok: false, raison: 'Il n\'y a pas de lieu de repos ici.' };
+        const dire = async (t) => { if (o.c.annoncer !== false && t) await o.narrer(t); };
+        if (!r.ok) { await dire(r.raison); await o.jouer(o.c.rate); return { ok: false }; }
+        poser(o, r.etat);
+        o.hote.rafraichir?.();
+        const def = d.batiments.get(type);
+        const b = appliquerRepos(o, def);
+        const phrases = [`Tu te reposes : ${def.repos.nom}.`];
+        if (def.repos.soigner && o.partie.equipe?.length) phrases.push('Le groupe est en pleine forme !');
+        if (b) { const du = Bonus.duree(b); phrases.push(`${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${du ? ` ${du}` : ''}.`); }
+        if (Object.keys(def.repos.cout).length) phrases.push(`(${C.dire(d, def.repos.cout)} pris dans le stock.)`);
+        await dire(phrases.join(' '));
+        await o.jouer(o.c.reussi);
+        return { ok: true, batiment: type };
+      },
       // Saga 1.5 : poser un bâtiment où le joueur veut, dans une zone constructible de la carte. Sans
       // batiment, le joueur le choisit dans la liste. Branches réussi / raté (raté : annulé, ou impossible).
       async gestion_placer(o) {

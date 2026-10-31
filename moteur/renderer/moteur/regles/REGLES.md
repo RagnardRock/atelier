@@ -179,7 +179,10 @@ La partie en cours, sauvegardée telle quelle (un pack la change sur place) :
 | `compteurs` | `{ captures, dresseurs_battus, sauvages_battus, evolutions, pas, badges, monstres_vaincus, … }`. Un pack peut en ajouter ; les conditions `compteur` de Tafl les lisent. |
 | `dex` | `{ vus: { id: true }, pris: { id: true } }` : l'encyclopédie. Pokémon : vues et attrapées ; JRPG : vus et vaincus. |
 | `partis` | JRPG : les héros partis du groupe, par id de personnage (pour qu'ils reviennent tels quels). |
+| `bonus` | Saga 1.11 : les bonus du groupe, `[{ id, nom, stats: { stat: % }, combats, nuit }]` (`moteur/bonus.js`). Un pack ne les change pas ; s'il a `statsBonus`, il les applique en combat (voir ci-dessous). |
 | `badges`, `quetes`, `interrupteurs`, `faits`… | Le monde : un pack n'y touche pas. |
+
+**Les bonus du groupe (Saga 1.11).** Un bain chaud, un bon repas, une bénédiction : un effet en % sur les statistiques de combat de tout le groupe du joueur, donné par la commande `bonus` ou par un module (`hote.bonus`, voir MODULES.md). Le moteur les tient à jour : un combat de moins après chaque combat, effacés au coucher pour ceux « jusqu'à la nuit ». Un pack qui veut s'en servir déclare `statsBonus: { stat: nom }` (les statistiques qu'il sait toucher, pour Tafl et les phrases du jeu) et, dans son combat, multiplie la statistique d'un membre du joueur par `Bonus.mult(partie, stat)` (1,1 pour +10 % ; les bonus s'additionnent). JRPG : `force`, `magie`, `defense`, `esprit`, `agilite`, `chance` (pas les PV ni les PM). Pokémon : `attaque`, `defense`, `att_spe`, `def_spe`, `vitesse`. JDR : pas encore.
 
 Le moteur fournit aussi `Collection` (`collection.js`) pour ranger les membres : `Collection.toutes(partie)`, `Collection.ranger(jeu, partie, c)` (équipe, sinon boîte), `Collection.enlever(partie, c)`, `Collection.voir(partie, id)` et `Collection.prendre(partie, id)` (encyclopédie).
 

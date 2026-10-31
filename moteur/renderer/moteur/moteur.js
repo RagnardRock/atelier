@@ -153,6 +153,11 @@ const Moteur = (() => {
       heure: () => (jeu && partie ? Temps.heure(jeu, partie) : null),
       // Saga 1.9 : un chemin entre deux cases de la carte du joueur (moteur/chemins.js), sur les cases où l'on
       // marche (ni bloquées, ni rebords, ni sous un bâtiment ou un événement qui bloque).
+      // Saga 1.11 : soigner tout le groupe (comme la commande soigner, sans rien dire), donner un bonus au
+      // groupe (moteur/bonus.js : un bain chaud, un bon repas) et les stats que le pack sait toucher.
+      soigner: () => { if (jeu && partie) for (const x of partie.equipe) Regles.soigner(jeu, x); },
+      bonus: (b) => (partie ? Bonus.donner(partie, b) : null),
+      nomsStats: () => (jeu ? Regles.statsBonus(jeu) : {}),
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
         largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
         libre: (x, y) => { const c = Monde.code(carte, x, y); return c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c] && !Monde.bloqueParModule(carte, x, y) && !presents.some((p) => p.x === x && p.y === y && p.bloque); },
@@ -387,11 +392,13 @@ const Moteur = (() => {
         // une sauvegarde ne peut jamais tomber au milieu. Puis le fondu au noir, sur place.
         dormir: async ({ soigner = true, heure = null } = {}) => {
           const fini = Number.isInteger(partie.jour) && partie.jour > 0 ? partie.jour : 1;
+          // Saga 1.11 : les bonus « jusqu'à la nuit » s'effacent, avant que les modules donnent ceux du matin.
+          Bonus.nuit(partie);
+          const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
           if (soigner) {
             for (const x of partie.equipe) Regles.soigner(jeu, x);
             partie.dernierSoin = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
           }
-          const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
           // Saga 1.6 : les récoltes repoussent (événements avec repousse_nuits).
           if (Monde.repousser(jeu, partie)) hoteModules.rafraichir?.();
           partie.jour = fini + 1;
@@ -625,7 +632,12 @@ const Moteur = (() => {
         else audio.musique(avant, { fondu: 0.8 });
       }
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
-      if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte: dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage' });
+      const sorte = dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage';
+      // Saga 1.11 : un combat de moins pour les bonus du groupe, puis ce que les modules en font (le butin
+      // qui va au stock du domaine…). Dit au joueur une fois revenu sur la carte.
+      const dissipes = Bonus.apresCombat(partie);
+      const apres = [...Modules.apresCombat(jeu, partie, hoteModules, issue, sorte), ...dissipes.map((b) => `${b.nom} : l'effet s'est dissipé.`)];
+      if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte });
       if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
       if (issue === 'defaite' && table.actif) {
         // À la table, le MJ décide de la suite : le groupe reste là où il est tombé.
@@ -637,6 +649,7 @@ const Moteur = (() => {
         await new Promise((resoudre) => { fondu = { phase: 'sortie', t: DUREE_FONDU, vers: { ...d, direction: d.direction || 'bas' }, resoudre }; });
         dialogue.annoncer('Tu te réveilles…', 'Ton équipe est soignée.');
       }
+      for (const l of apres.slice(0, 4)) dialogue.annoncer(l);
       return issue;
     }
 

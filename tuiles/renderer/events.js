@@ -102,6 +102,12 @@ const Events = (() => {
   // Tafl 0.16 : les badges (Réglages), les tenues du héros, la monnaie.
   const badges = (doc) => doc.data.reglages?.badges || [];
   // Les badges servent au pack Pokémon (niveau maximum, dresseurs) ; un autre pack ne les montre que si le jeu en a déjà.
+  // Tafl 1.9 (Saga 1.11) : les statistiques qu'un bonus du groupe peut toucher, selon le pack du jeu.
+  const STATS_BONUS = {
+    jrpg: [['force', 'Force'], ['magie', 'Magie'], ['defense', 'Défense'], ['esprit', 'Esprit'], ['agilite', 'Agilité'], ['chance', 'Chance']],
+    pokemon: [['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Att. Spé.'], ['def_spe', 'Déf. Spé.'], ['vitesse', 'Vitesse']],
+  };
+  const statsBonus = (doc) => STATS_BONUS[doc?.data?.reglages?.regles || 'pokemon'] || [];
   const avecBadges = (doc) => (doc?.data?.reglages?.regles || 'pokemon') === 'pokemon' || badges(doc).length > 0;
   const compteursDu = (doc, garde = '') => COMPTEURS.filter(([k]) => k === garde || (k === 'badges' ? avecBadges(doc) : !COMPTEURS_PACK[k] || COMPTEURS_PACK[k].includes(doc?.data?.reglages?.regles || 'pokemon')));
   const nomBadge = (doc, id) => badges(doc).find((b) => b.id === id)?.nom || id || '…';
@@ -450,6 +456,35 @@ const Events = (() => {
       nouveau: () => ({ type: 'soigner' }),
       resume: () => 'Soigner toute l\'équipe',
     },
+    // Tafl 1.9 (Saga 1.11) : un bonus pour tout le groupe, en combat (un bain chaud, un bon repas).
+    bonus: {
+      nom: 'Donner un bonus au groupe (bain, repas, bénédiction)', icone: 'sparkle', groupe: 'Services',
+      nouveau: (doc) => ({ type: 'bonus', action: 'donner', id: '', nom: 'Bien reposé', stats: [{ stat: statsBonus(doc)[0]?.[0] || 'defense', pourcent: 10 }], combats: 3, nuit: true, annoncer: true }),
+      champs: (doc, c) => {
+        const choix = [['', '(aucune)'], ...statsBonus(doc)];
+        const st = Array.isArray(c.stats) ? c.stats : [];
+        return [
+          { key: 'action', label: 'Action', type: 'select', value: c.action === 'retirer' ? 'retirer' : 'donner', choices: [['donner', 'Donner le bonus'], ['retirer', 'Retirer le bonus']] },
+          { key: 'nom', label: 'Nom', type: 'text', value: c.nom, placeholder: 'Bains chauds, Bon repas…' },
+          { key: 'id', label: 'Identifiant', type: 'text', value: c.id, placeholder: 'facultatif : bains (le même remplace l\'ancien ; à retirer : vide = tous)' },
+          { key: 'stat1', label: 'Statistique', type: 'select', value: st[0]?.stat || '', choices: choix },
+          { key: 'pct1', label: 'En %', type: 'number', value: st[0]?.pourcent ?? 10, min: -90, max: 200 },
+          { key: 'stat2', label: 'Et', type: 'select', value: st[1]?.stat || '', choices: choix },
+          { key: 'pct2', label: 'En %', type: 'number', value: st[1]?.pourcent ?? 10, min: -90, max: 200 },
+          { key: 'combats', label: 'Pendant (combats, 0 = sans limite)', type: 'number', value: c.combats ?? 3, min: 0, max: 99 },
+          { key: 'nuit', label: 'Jusqu\'à la nuit (il s\'efface quand le joueur dort)', type: 'checkbox', value: c.nuit !== false },
+          { ...{ key: 'annoncer', label: 'Le dire au joueur', type: 'checkbox' }, value: c.annoncer !== false },
+          { type: 'info', text: 'Les statistiques de combat de tout le groupe sont multipliées (+10 % : ×1,1) tant que le bonus dure : il perd un combat à chaque combat (gagné, perdu ou fui). Un bonus du même identifiant remplace l\'ancien ; plusieurs bonus différents s\'additionnent. Les PV et PM ne changent pas : pour un soin, ajoute « Soigner l\'équipe ».' },
+        ];
+      },
+      onInput: (v, f) => { for (const k of ['nom', 'stat1', 'pct1', 'stat2', 'pct2', 'combats', 'nuit']) if (f.inputs[k]) f.inputs[k].row.hidden = v.action === 'retirer'; },
+      depuis: (v) => ({ type: 'bonus', action: v.action === 'retirer' ? 'retirer' : 'donner', id: Doc.slug(v.id, ''), nom: String(v.nom || '').trim().slice(0, 60),
+        stats: [[v.stat1, v.pct1], [v.stat2, v.pct2]].filter(([k, n]) => k && Math.round(Number(n))).map(([k, n]) => ({ stat: k, pourcent: clamp(Math.round(Number(n)), -90, 200) })),
+        combats: clamp(Math.round(v.combats) || 0, 0, 99), nuit: Boolean(v.nuit), annoncer: Boolean(v.annoncer) }),
+      valide: (c) => (c.action === 'retirer' || c.stats?.length ? null : 'Choisis au moins une statistique, avec un % qui n\'est pas 0.'),
+      resume: (doc, c) => (c.action === 'retirer' ? `Retirer le bonus ${c.id ? `« ${c.id} »` : '(tous)'}`
+        : `Bonus « ${c.nom || 'Bonus'} » : ${(c.stats || []).map((q) => `${libelle(statsBonus(doc), q.stat)} ${q.pourcent > 0 ? '+' : ''}${q.pourcent} %`).join(', ')}${c.combats ? `, ${c.combats} combat(s)` : ''}${c.nuit !== false ? ', jusqu\'à la nuit' : ''}`),
+    },
     boutique: {
       nom: 'Ouvrir une boutique', icone: 'tag', groupe: 'Services',
       nouveau: () => ({ type: 'boutique', boutique: '' }),
@@ -735,6 +770,16 @@ const Events = (() => {
       depuis: (v) => ({ type: 'objet', objet: Doc.slug(v.objet, ''), min: clamp(Math.round(v.min) || 1, 1, 999) }),
       valide: (c) => (c.objet ? null : 'Quel objet ?'),
     },
+    // Tafl 1.9 (Saga 1.11) : le groupe a un bonus (des bains, un repas).
+    bonus: {
+      nom: 'Le groupe a un bonus (bain, repas…)',
+      nouveau: () => ({ type: 'bonus', id: '' }),
+      champs: (doc, c) => [
+        { key: 'id', label: 'Identifiant', type: 'text', value: c.id, placeholder: 'vide : un bonus, quel qu\'il soit' },
+        { type: 'info', text: 'L\'identifiant donné par la commande « Donner un bonus au groupe ». Ceux des bâtiments de repos (gestion) : gestion:<id du bâtiment>.' },
+      ],
+      depuis: (v) => ({ type: 'bonus', id: String(v.id || '').trim().slice(0, 80) }),
+    },
     quete: {
       nom: 'L\'état d\'une quête',
       nouveau: () => ({ type: 'quete', quete: '', etat: 'en_cours', etape: 0 }),
@@ -882,7 +927,7 @@ const Events = (() => {
   const choixRessources = (doc, actuel) => choixDe(doc, 'ressources', actuel, 'Aucune ressource : crée-les dans Données › Ressources');
   const choixBatiments = (doc, actuel) => choixDe(doc, 'batiments', actuel, 'Aucun bâtiment : crée-les dans Données › Bâtiments');
   const ANNONCER = { key: 'annoncer', label: 'Le dire au joueur', type: 'checkbox' };
-  A_BRANCHES.push('gestion_construire', 'gestion_placer');
+  A_BRANCHES.push('gestion_construire', 'gestion_placer', 'gestion_repos');
   Object.assign(COMMANDES, {
     gestion_construire: {
       nom: 'Construire un bâtiment', icone: 'tools', groupe: 'Gestion', modules: MODULE_GESTION,
@@ -953,6 +998,18 @@ const Events = (() => {
       nouveau: () => ({ type: 'gestion_domaine' }),
       resume: () => 'Montrer le domaine (le stock et les bâtiments)',
     },
+    // Tafl 1.9 (Saga 1.11) : se reposer dans un bâtiment de repos (un spa, des bains).
+    gestion_repos: {
+      nom: 'Se reposer (bâtiment de repos : soin et bonus)', icone: 'coffee', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_repos', batiment: '', annoncer: true, reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: [['', 'Celui où est le joueur (son intérieur)'], ...choixDe(doc, 'batiments', c.batiment, '').filter(([k]) => k && (doc.data.batiments || []).find((b) => b.id === k)?.repos?.quand)] },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Le bâtiment doit être fini, avec un repos « quand on vient s'y reposer » (Données › Bâtiments › Repos) : le groupe est soigné et reçoit son bonus, et le coût d'une visite est pris dans le stock. Mets-la sur un bassin, un lit, un comptoir de l'intérieur. Raté : pas encore construit, ou pas assez dans le stock. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'gestion_repos', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      resume: (doc, c) => (c.batiment ? `Se reposer à « ${nomData(doc, 'batiments', c.batiment)} »` : 'Se reposer (le bâtiment où l\'on est)'),
+    },
   });
   Object.assign(CONDITIONS, {
     gestion_batiment: {
@@ -995,6 +1052,7 @@ const Events = (() => {
     if (!c) return '…';
     if (c.type === 'interrupteur') return `« ${nomInterrupteur(doc, c.id)} » ${c.valeur ? 'allumé' : 'éteint'}`;
     if (c.type === 'local') return c.valeur ? 'déjà fait' : 'pas encore fait';
+    if (c.type === 'bonus') return c.id ? `le groupe a le bonus « ${c.id} »` : 'le groupe a un bonus';
     if (c.type === 'objet') return `a ${c.min > 1 ? `au moins ${c.min} × ` : ''}${c.objet}`;
     if (c.type === 'quete') return `quête « ${quete(doc, c.quete)?.titre || c.quete} » ${libelle(ETATS_QUETE, c.etat).toLowerCase()}${c.etat === 'en_cours' && c.etape ? `, étape ${c.etape} ou plus` : ''}`;
     if (c.type === 'compteur') return `${libelle(COMPTEURS, c.compteur).toLowerCase()} ≥ ${c.min}`;
@@ -1025,6 +1083,7 @@ const Events = (() => {
       case 'interrupteur': return { type: 'interrupteur', id: str(c.id), valeur: vrai(c.valeur) };
       case 'local': return { type: 'local', valeur: vrai(c.valeur) };
       case 'objet': return { type: 'objet', objet: str(c.objet), min: Math.max(1, int(c.min, 1)) };
+      case 'bonus': return { type: 'bonus', id: str(c.id).slice(0, 80) };
       case 'quete': return { type: 'quete', quete: str(c.quete), etat: pick(c.etat, ETATS_QUETE, 'en_cours'), etape: Math.max(0, int(c.etape, 0)) };
       case 'compteur': return { type: 'compteur', compteur: pick(c.compteur, COMPTEURS, 'captures'), min: Math.max(0, int(c.min, 1)) };
       case 'argent': return { type: 'argent', min: clamp(int(c.min, 0), 0, 9999999) };
@@ -1091,6 +1150,10 @@ const Events = (() => {
       case 'gestion_sortir': return { type: 'gestion_sortir' };
       case 'gestion_habitants': return { type: 'gestion_habitants', action: c.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(int(c.nombre, 1), 1, 999), forcer: Boolean(c.forcer), annoncer: vrai(c.annoncer) };
       case 'gestion_domaine': return { type: 'gestion_domaine' };
+      case 'gestion_repos': return { type: 'gestion_repos', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'bonus': return { type: 'bonus', action: c.action === 'retirer' ? 'retirer' : 'donner', id: str(c.id).slice(0, 80), nom: str(c.nom).slice(0, 60),
+        stats: (Array.isArray(c.stats) ? c.stats : []).filter((q) => q && q.stat).slice(0, 4).map((q) => ({ stat: str(q.stat), pourcent: clamp(int(q.pourcent, 10), -90, 200) })),
+        combats: clamp(int(c.combats, 0), 0, 99), nuit: c.nuit !== false, annoncer: vrai(c.annoncer) };
       case 'variable': {
         const action = pick(c.action, ACTIONS_VARIABLE, 'regler');
         return { type: 'variable', id: str(c.id), action, valeur: action === 'regler' ? valeurVariable(c.valeur ?? 0) : Number(c.valeur) || 0 };
@@ -2251,7 +2314,7 @@ const Events = (() => {
   return {
     TYPES, TYPE_ICONS, DEPLACEMENTS, DECLENCHEMENTS, EXPRESSIONS, COMPTEURS, ETATS_QUETE, COMMANDES, CONDITIONS,
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants, valeurVariable,
-    texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
+    STATS_BONUS, statsBonus, texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
     editEvent, editData, isOpen, pageOuverte, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
     formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, branches, nomQui, quiReel, suivi,
   };

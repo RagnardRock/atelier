@@ -77,6 +77,11 @@ const GestionCalcul = (() => {
       // Saga 1.6.1 : 'propre' (défaut) : chaque bâtiment posé a sa copie de l'intérieur (la carte
       // « porte_vers.carte@id du bâtiment ») ; 'partage' : tous ceux de ce type mènent à la même carte.
       def.interieur = b.interieur === 'partage' ? 'partage' : 'propre';
+      // Saga 1.11 : un bâtiment de repos (un spa, des bains, une cuisine). quand : 'visite' (le joueur vient
+      // s'y reposer, commande gestion_repos) ou 'matin' (chaque matin, tant qu'il est fini). Il soigne le
+      // groupe (soigner) et lui donne un bonus (stats en %, voir moteur/bonus.js) pour `combats` combats
+      // (0 : sans limite), jusqu'à la nuit. Une visite peut coûter des ressources du stock (cout).
+      def.repos = repos(b.repos, def.nom);
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
     const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
@@ -99,9 +104,24 @@ const GestionCalcul = (() => {
       // viennent sans regarder l'heure, comme sans horloge). Ils se lèvent à heure_lever, travaillent de
       // heure_travail à heure_fin, flânent avant et après, et dorment chez eux de heure_coucher au lever.
       horaires: g.horaires !== false, heure_lever: entier(g.heure_lever, 7, 0, 23), heure_travail: entier(g.heure_travail, 8, 0, 23),
-      heure_fin: entier(g.heure_fin, 17, 0, 23), heure_coucher: entier(g.heure_coucher, 21, 0, 23) };
+      heure_fin: entier(g.heure_fin, 17, 0, 23), heure_coucher: entier(g.heure_coucher, 21, 0, 23),
+      // Saga 1.11 : le lien avec les sorties. butin_au_stock : après un combat gagné, les objets du sac qui
+      // représentent une ressource (ressource.objet) vont tout seuls au stock ; perte_defaite : le % de
+      // chaque ressource du stock perdu quand le groupe est vaincu (0 : rien, le défaut).
+      butin_au_stock: g.butin_au_stock === true, perte_defaite: entier(g.perte_defaite, 0, 0, 100) };
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
+  }
+
+  function repos(r, nom) {
+    if (!r || typeof r !== 'object' || !['visite', 'matin'].includes(r.quand)) return null;
+    const stats = {};
+    for (const q of tableau(r.stats)) {
+      if (!q || typeof q.stat !== 'string' || !/^[a-z_]{1,32}$/.test(q.stat)) continue;
+      const n = entier(q.pourcent, 0, -90, 200);
+      if (n) stats[q.stat] = n;
+    }
+    return { quand: r.quand, soigner: r.soigner !== false, stats, combats: entier(r.combats, 0, 0, 99), cout: quantites(r.cout), nom: texte(r.nom, 60) || nom };
   }
 
   const nomRessource = (d, id) => d.ressources.get(id)?.nom || id;
@@ -278,6 +298,49 @@ const GestionCalcul = (() => {
     return { etat, sac, depose };
   }
 
+  // Saga 1.11 : perdre `pourcent` % de chaque ressource du stock (arrondi au-dessous ; au moins 1 d'une
+  // ressource qu'on a, si le % n'est pas nul). Rend { etat, perdu }.
+  function perdre(d, e, pourcent) {
+    const etat = copie(e);
+    const perdu = {};
+    const p = entier(pourcent, 0, 0, 100);
+    if (!p) return { etat, perdu };
+    for (const [r, q] of Object.entries(etat.stock)) {
+      const n = Math.min(q, Math.max(1, Math.floor((q * p) / 100)));
+      if (n <= 0) continue;
+      perdu[r] = n;
+      etat.stock[r] = q - n;
+      if (!etat.stock[r]) delete etat.stock[r];
+    }
+    return { etat, perdu };
+  }
+
+  // Saga 1.11 : les bâtiments de repos finis, d'une sorte ('visite' ou 'matin'), un par type (deux bains
+  // ne donnent pas deux fois le même bonus). → [{ batiment, def }]
+  function reposFinis(d, e, quand) {
+    const vus = new Set(), out = [];
+    for (const b of e.batiments) {
+      const def = d.batiments.get(b.type);
+      if (b.etat !== 'fini' || def?.repos?.quand !== quand || vus.has(b.type)) continue;
+      vus.add(b.type);
+      out.push({ batiment: b, def });
+    }
+    return out;
+  }
+
+  // Saga 1.11 : se reposer dans un bâtiment de type `type` : il faut qu'il y en ait un de fini, et payer le
+  // coût d'une visite. Rend { ok, raison, etat, repos } (repos : ce qu'il donne, à appliquer par le moteur).
+  function sereposer(d, e, type) {
+    const def = d.batiments.get(type);
+    if (!def?.repos) return { ok: false, raison: `${def?.nom || type} n'est pas un lieu de repos.`, etat: e };
+    if (!e.batiments.some((b) => b.type === type && b.etat === 'fini')) return { ok: false, raison: `${def.nom} n'est pas encore construit.`, etat: e };
+    const m = manque(e.stock, def.repos.cout);
+    if (m.length) return { ok: false, raison: `Pour se reposer à ${def.nom}, il manque ${dire(d, Object.fromEntries(m))}.`, etat: e };
+    const etat = copie(e);
+    for (const [r, k] of Object.entries(def.repos.cout)) { etat.stock[r] -= k; if (!etat.stock[r]) delete etat.stock[r]; }
+    return { ok: true, raison: '', etat, repos: def.repos };
+  }
+
   // La fin du jour `jour`, dans un ordre fixe :
   //   1. les habitants mangent (repas, dans le stock du coucher). Ceux qui n'ont pas mangé travaillent quand
   //      même (Saga 1.6.1) : sinon une ferme sans blé n'aurait plus d'ouvriers pour en produire, pour toujours.
@@ -377,7 +440,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { definitions, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
+  return { definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

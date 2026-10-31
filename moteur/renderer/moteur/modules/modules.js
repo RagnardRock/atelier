@@ -17,6 +17,7 @@
 //   preparer(o)                         remet à jour son état dans une partie chargée (ou neuve)
 //   entrerCarte(o)                      le joueur arrive sur une carte (o.carte, o.depuis)
 //   finDeJournee(o)                     le joueur dort : le jour o.jour se termine (Saga 1.5) ; → [lignes du rapport]
+//   apresCombat(o)                      (Saga 1.11) un combat vient de finir (o.issue, o.sorte) ; → [lignes à dire]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
 //                                         emmène (Saga 1.6.1 : la porte d'un bâtiment posé), sinon null
@@ -39,6 +40,8 @@
 //            Saga 1.9 : chemin(depart, arrivee, { cout(x, y), coutMin }) → [{ x, y }…] ou null (moteur/chemins.js,
 //            sur les cases où l'on peut marcher de la carte du joueur)
 //            Saga 1.10 : heure() → l'heure du jeu, de 0 à 24, ou null sans horloge
+//            Saga 1.11 : soigner() (soin complet du groupe), bonus(b) → le bonus donné ou null (moteur/bonus.js),
+//            nomsStats() → { stat: nom } (celles que le pack du jeu sait toucher)
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module
@@ -125,6 +128,12 @@ const Modules = (() => {
     // par jour : c'est à lui de s'en souvenir dans son état) et rend les lignes du rapport du matin.
     finDeJournee(jeu, partie, hote, jour) {
       return chacun(jeu, 'finDeJournee', (m) => m.finDeJournee(objet(m, jeu, partie, hote, { jour })))
+        .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.slice(0, 200)));
+    },
+    // Saga 1.11 : un combat vient de finir (o.issue : 'victoire', 'defaite', 'fuite' ou 'capture' ; o.sorte :
+    // 'sauvage', 'dresseur' ou 'groupe'). Sans await. Rend les lignes à dire au joueur.
+    apresCombat(jeu, partie, hote, issue, sorte) {
+      return chacun(jeu, 'apresCombat', (m) => m.apresCombat(objet(m, jeu, partie, hote, { issue, sorte })))
         .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.slice(0, 200)));
     },
     // Une case bloquée par un module (un bâtiment posé en jeu). Appelé souvent : doit rester rapide.

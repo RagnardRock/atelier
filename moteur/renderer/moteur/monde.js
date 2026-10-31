@@ -34,6 +34,7 @@ const Monde = (() => {
       graine: Math.floor(Math.random() * 2147483647), // le hasard des scripts JS (Saga 0.12)
       modules: {},         // l'état de chaque module du jeu, par id (Saga 1.4, modules/MODULES.md)
       jour: 1,             // le numéro du jour (Saga 1.5) : la commande « dormir » passe au suivant
+      bonus: [],           // les bonus du groupe (Saga 1.11, moteur/bonus.js) : un bain chaud, un bon repas
       position: { ...depart },
     };
   }
@@ -77,6 +78,8 @@ const Monde = (() => {
       case 'interrupteur': return Boolean(partie.interrupteurs[cond.id]) === Boolean(cond.valeur);
       case 'local': return Boolean(partie.locaux[`${carte.id}/${ev?.id}`]) === Boolean(cond.valeur);
       case 'objet': return (partie.sac[cond.objet] || 0) >= (Number(cond.min) || 1);
+      // Saga 1.11 : le groupe a ce bonus (par son id ; vide : un bonus, quel qu'il soit).
+      case 'bonus': return Array.isArray(partie.bonus) && partie.bonus.some((b) => b && (!cond.id || b.id === cond.id));
       case 'compteur': return compteur(partie, cond.compteur) >= (Number(cond.min) || 0);
       case 'argent': return (partie.argent || 0) >= (Number(cond.min) || 0);
       case 'badge': return (partie.badges || []).includes(cond.badge);

@@ -246,6 +246,8 @@ const Combat = (() => {
     function stat(k, s) {
       const c = actif(k);
       let v = C.stats(jeu, c)[s] * multEtage(s, k.etages[s] || 0);
+      // Saga 1.11 : les bonus du groupe du joueur (moteur/bonus.js), pas dans un duel entre joueurs.
+      if (k === nous && !duel && s !== 'pv' && typeof Bonus !== 'undefined') v *= Bonus.mult(partie, s);
       if (s === 'vitesse' && c.statut === 'paralysie') v *= 0.5;
       const t = tenu(c);
       if (t?.type === 'stat' && t.stat === s) v *= Number(t.valeur) || 1;

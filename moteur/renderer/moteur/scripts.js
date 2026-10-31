@@ -209,6 +209,20 @@ const Scripts = (() => {
           partie.dernierSoin = moteur.position();
           await narrer(partie.equipe.length ? 'Ton équipe est en pleine forme !' : 'Tu te reposes un instant.');
           break;
+        // Saga 1.11 : un bonus pour tout le groupe (un bain chaud, un bon repas), voir moteur/bonus.js.
+        case 'bonus': {
+          if (c.action === 'retirer') {
+            const partis = Bonus.retirer(partie, String(c.id || ''));
+            if (c.annoncer !== false && partis.length) await narrer(partis.length > 1 ? 'Les effets se dissipent.' : `${partis[0].nom} : l'effet se dissipe.`);
+            return { retires: partis.length };
+          }
+          const b = Bonus.donner(partie, { id: c.id || `bonus-${ev?.id || 'commande'}`, nom: c.nom, stats: c.stats, combats: c.combats, nuit: c.nuit });
+          if (b && c.annoncer !== false) {
+            const d = Bonus.duree(b);
+            await narrer(`${b.nom} : ${Bonus.dire(b, Regles.statsBonus(jeu))}${d ? ` ${d}` : ''}.`);
+          }
+          return b ? { id: b.id } : null;
+        }
         // Tafl 0.16 : l'argent, les badges, le nom et la tenue du héros.
         case 'argent': {
           const montant = Math.max(0, Math.round(Number(c.montant) || 0));
