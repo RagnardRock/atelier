@@ -94,7 +94,12 @@ const GestionCalcul = (() => {
       // à seuil_usee pas, elle prend la tuile_usee (de l'herbe tassée), à seuil_sentier, la tuile_sentier
       // (-1 : un sentier dessiné par Saga). Chaque nuit, une case perd usure_repousse pas (l'herbe repousse).
       usure: g.usure !== false, tuile_usee: entier(g.tuile_usee, -1, -1, 99999), tuile_sentier: entier(g.tuile_sentier, -1, -1, 99999),
-      seuil_usee: entier(g.seuil_usee, 6, 1, 9999), seuil_sentier: entier(g.seuil_sentier, 20, 1, 9999), usure_repousse: entier(g.usure_repousse, 2, 0, 9999) };
+      seuil_usee: entier(g.seuil_usee, 6, 1, 9999), seuil_sentier: entier(g.seuil_sentier, 20, 1, 9999), usure_repousse: entier(g.usure_repousse, 2, 0, 9999),
+      // Saga 1.10 : l'emploi du temps des habitants, quand le jeu a une horloge (horaires, false : ils vont et
+      // viennent sans regarder l'heure, comme sans horloge). Ils se lèvent à heure_lever, travaillent de
+      // heure_travail à heure_fin, flânent avant et après, et dorment chez eux de heure_coucher au lever.
+      horaires: g.horaires !== false, heure_lever: entier(g.heure_lever, 7, 0, 23), heure_travail: entier(g.heure_travail, 8, 0, 23),
+      heure_fin: entier(g.heure_fin, 17, 0, 23), heure_coucher: entier(g.heure_coucher, 21, 0, 23) };
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
   }
@@ -152,6 +157,18 @@ const GestionCalcul = (() => {
     return n;
   }
   // Ce que montre une case : 0 rien, 1 usée, 2 sentier.
+  // Saga 1.10 : ce que font les habitants à l'heure h (de 0 à 24) : 'nuit' (chez eux), 'travail' ou 'libre'
+  // (ils flânent). null : pas d'emploi du temps (le jeu n'a pas d'horloge, ou horaires est coupé). Les plages
+  // peuvent passer minuit (coucher à 1 h, travail de nuit de 22 h à 6 h).
+  const dans = (h, a, b) => (a === b ? false : a < b ? h >= a && h < b : h >= a || h < b);
+  function periode(d, h) {
+    const r = d.reglages;
+    if (!r.horaires || h === null || h === undefined || !Number.isFinite(Number(h))) return null;
+    const x = ((Number(h) % 24) + 24) % 24;
+    if (dans(x, r.heure_travail, r.heure_fin)) return 'travail';
+    if (dans(x, r.heure_coucher, r.heure_lever)) return 'nuit';
+    return 'libre';
+  }
   const niveauUsure = (d, n) => (n >= d.reglages.seuil_sentier ? 2 : n >= d.reglages.seuil_usee ? 1 : 0);
   // La nuit, l'herbe repousse un peu partout.
   function repousserUsure(d, etat) {
@@ -360,7 +377,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { definitions, etatNeuf, normaliser, user, niveauUsure, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
+  return { definitions, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

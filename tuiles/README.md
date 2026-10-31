@@ -457,6 +457,7 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - Le vérificateur signale une ressource de repas qui n'existe pas, et un bâtiment qui demande des ouvriers alors qu'aucun habitant ne peut venir.
 - **Tafl 1.4.2 : le modèle « Le petit domaine »** (Fichier › Nouveau jeu › Partir de) : une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp, du bois et du blé qui repoussent, et trois bâtiments (la maison et son intérieur, un par maison ; la ferme, qui a besoin d'un ouvrier ; le grenier, au même intérieur pour tous). Pour essayer tout le module gestion en quelques minutes. Le vérificateur compte maintenant les intérieurs des bâtiments comme accessibles. (Tafl 1.4.3 : sa monnaie est l'écu, et l'on commence sans argent.)
 - **Tafl 1.7 : les habitants qu'on voit marcher et leurs sentiers** (Réglages › Modules › Gestion) : « On voit les habitants » (leur apparence : un personnage du jeu, ou un petit bonhomme), et « Leurs pas creusent des sentiers » : la tuile d'herbe tassée et celle du sentier (ou une terre battue dessinée par Saga), après combien de passages, et combien l'herbe repousse chaque nuit. Le petit domaine s'en sert.
+- **Tafl 1.8 : la journée des habitants** (Réglages › Règles du jeu › Modules › Gestion) : « Ils suivent l'heure », avec les heures du lever, du travail et du coucher. Il faut une horloge (Réglages › Ambiance). Le petit domaine en a une, et une journée y dure 16 minutes.
 
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 

@@ -38,6 +38,7 @@
 //            Saga 1.5 : carte, joueur, libre(x, y), viser({ largeur, hauteur, valide }) → { x, y } ou null
 //            Saga 1.9 : chemin(depart, arrivee, { cout(x, y), coutMin }) → [{ x, y }…] ou null (moteur/chemins.js,
 //            sur les cases où l'on peut marcher de la carte du joueur)
+//            Saga 1.10 : heure() → l'heure du jeu, de 0 à 24, ou null sans horloge
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module

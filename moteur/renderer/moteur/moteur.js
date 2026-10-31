@@ -149,6 +149,8 @@ const Moteur = (() => {
       // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
       // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
       viser: (o = {}) => viser(o),
+      // Saga 1.10 : l'heure du jeu, de 0 à 24 (avec les minutes), ou null si le jeu n'a pas d'horloge.
+      heure: () => (jeu && partie ? Temps.heure(jeu, partie) : null),
       // Saga 1.9 : un chemin entre deux cases de la carte du joueur (moteur/chemins.js), sur les cases où l'on
       // marche (ni bloquées, ni rebords, ni sous un bâtiment ou un événement qui bloque).
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({

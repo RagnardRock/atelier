@@ -1,4 +1,4 @@
-// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.7 : habitants visibles et sentiers) : le petit jeu modèle pour essayer le module gestion.
+// Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.7 : habitants visibles et sentiers ; Tafl 1.8 : leur journée à l'horloge) : le petit jeu modèle pour essayer le module gestion.
 //
 // Une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp pour dormir, du bois
 // et du blé à ramasser (ils repoussent après quelques nuits). Trois bâtiments : la maison (2 habitants,
@@ -145,6 +145,7 @@ const ExempleDomaine = (() => {
           dire('Une maison coûte 6 bois et loge deux habitants. Une ferme coûte 4 bois : avec un ouvrier, elle donne 3 blé chaque nuit.', 'brune'),
           dire('Les habitants mangent un blé par nuit. Après trois nuits de faim, ils s\'en vont. Le bois et les gerbes repoussent : ramasse-les !', 'brune'),
           dire('Regarde-les aller et venir entre leur maison et la ferme : à force, leurs pas tracent des sentiers dans l\'herbe.', 'brune'),
+          dire('Ils ont leurs habitudes : au travail de 8 h à 17 h, une promenade le soir, et au lit à 21 h.', 'brune'),
           dire('Pour que la nuit passe, va dormir au lit de camp, à droite du chemin. Bonne chance !', 'brune'),
           { type: 'local', valeur: true },
         ]),
@@ -186,6 +187,8 @@ const ExempleDomaine = (() => {
     data.reglages.monnaie = 'écus';
     data.reglages.argent_depart = 0;
     data.reglages.modules = ['gestion'];
+    // Tafl 1.8 : une horloge, pour la journée des habitants (une journée dure 16 minutes ; on se réveille à 7 h).
+    data.reglages.temps = { horloge: 'jeu', duree_jour: 16, heure_depart: 7 };
     data.reglages.modules_reglages = {
       ...(data.reglages.modules_reglages || {}),
       gestion: DonneesGestion.normReglages({
@@ -194,6 +197,8 @@ const ExempleDomaine = (() => {
         habitants_depart: 0, repas: [{ ressource: 'ble', nombre: 1 }], arrivees: 1, faim: 'departs', faim_nuits: 3,
         // Tafl 1.7 : on voit les habitants, et leurs pas creusent des sentiers (herbe tassée, puis chemin).
         promeneurs: true, usure: true, tuile_usee: T.herbe_tassee, tuile_sentier: T.chemin, seuil_usee: 6, seuil_sentier: 18, usure_repousse: 2,
+        // Tafl 1.8 : leur journée suit l'horloge du jeu.
+        horaires: true, heure_lever: 7, heure_travail: 8, heure_fin: 17, heure_coucher: 21,
       }),
     };
     const N = DonneesGestion.NORMES;
