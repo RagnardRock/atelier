@@ -38,6 +38,12 @@ const DonneesGestion = (() => {
       production: normQuantites(b?.production),
       consommation: normQuantites(b?.consommation),
       maximum: int(b?.maximum, 0, 0, 999),
+      // Tafl 1.3 (placement libre) : l'apparence (un tampon, par son nom), la taille sans tampon, la porte.
+      tampon: str(b?.tampon).slice(0, 80),
+      tampon_chantier: str(b?.tampon_chantier).slice(0, 80),
+      largeur: int(b?.largeur, 1, 1, 32),
+      hauteur: int(b?.hauteur, 1, 1, 32),
+      porte: b?.porte && typeof b.porte === 'object' ? { x: int(b.porte.x, 0, 0, 31), y: int(b.porte.y, 0, 0, 31) } : null,
     }),
   };
   // Les réglages du module : reglages.modules_reglages.gestion.
@@ -47,6 +53,7 @@ const DonneesGestion = (() => {
     stock_depart: normQuantites(g?.stock_depart),
     capacite: int(g?.capacite, 0, 0, 99999),
     menu: g?.menu !== false,
+    construire_menu: g?.construire_menu !== false,
   });
 
   const U = () => Donnees.ui;
@@ -95,9 +102,43 @@ const DonneesGestion = (() => {
       tableQuantites(ctx, b, 'cout', 'Coût (pris dans le stock)', 'Gratuit.'),
       tableQuantites(ctx, b, 'production', 'Produit chaque nuit', 'Ne produit rien (un entrepôt, une maison…).'),
       tableQuantites(ctx, b, 'consommation', 'Consomme chaque nuit pour produire', 'Ne consomme rien.'),
+      section('Sur la carte'), ...placeChamps(b, ctx),
       info('Chaque nuit (commande Dormir), les bâtiments finis produisent s\'il y a dans le stock ce qu\'ils consomment, puis les chantiers avancent d\'une nuit : un bâtiment fini cette nuit produit à partir de la suivante. La commande « Construire un bâtiment » le paie et lance son chantier ; une page avec la condition « Un bâtiment est construit » le montre sur la carte.'),
       section('Utilisation'), ctx.usages('batiment', b.id),
     );
+  }
+
+  // Où et comment le bâtiment se pose (placement libre, dans une zone « Constructible ») : son tampon (sa
+  // taille vient de lui), celui du chantier, sa taille sans tampon, et la case de la porte qu'on traverse.
+  function placeChamps(b, ctx) {
+    const { champ, info, nombreIn, sel } = U();
+    const noms = arr(ctx.doc?.stamps).map((st) => st.name);
+    const choix = (vide) => [['', vide], ...noms.map((n) => [n, n]), ...[b.tampon, b.tampon_chantier].filter((n) => n && !noms.includes(n)).map((n) => [n, `${n} (inconnu)`])];
+    const taille = el('div', { className: 'field-grid' });
+    const majTaille = () => {
+      const st = arr(ctx.doc?.stamps).find((x) => x.name === b.tampon);
+      taille.replaceChildren(...(st
+        ? [info(`Taille : ${st.w} × ${st.h} cases (celle du tampon).`)]
+        : [champ('Largeur', nombreIn(b, 'largeur', 1, 32), 'cases'), champ('Hauteur', nombreIn(b, 'hauteur', 1, 32), 'cases')]));
+    };
+    majTaille();
+    const porte = el('input', { type: 'checkbox', checked: Boolean(b.porte) });
+    const casePorte = el('div', { className: 'field-grid' });
+    const majPorte = () => {
+      casePorte.replaceChildren(...(b.porte ? [champ('Porte : colonne', nombreIn(b.porte, 'x', 0, 31), 'depuis la gauche, 0 = la première'), champ('Porte : rangée', nombreIn(b.porte, 'y', 0, 31), 'depuis le haut')] : []));
+    };
+    porte.onchange = () => { b.porte = porte.checked ? { x: 0, y: 0 } : null; majPorte(); };
+    majPorte();
+    return [
+      el('div', { className: 'field-grid' }, [
+        champ('Tampon', sel(choix('Aucun (un rectangle)'), b.tampon, (v) => { b.tampon = v; majTaille(); })),
+        champ('Tampon du chantier', sel(choix('Le bâtiment, en transparence'), b.tampon_chantier, (v) => { b.tampon_chantier = v; })),
+      ]),
+      taille,
+      champ('Une porte', porte, 'une case de l\'emprise qu\'on traverse'),
+      casePorte,
+      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (menu de pause › Construire, ou la commande « Placer un bâtiment »). Son emprise bloque le passage, sauf la porte. Les tampons se créent dans l\'éditeur de cartes.'),
+    ];
   }
 
   const leadImage = (src) => el('img', { className: 'row-portrait pixel', src, alt: '' });
@@ -117,12 +158,15 @@ const DonneesGestion = (() => {
     const g = r.modules_reglages.gestion = normReglages(r.modules_reglages.gestion);
     const menu = el('input', { type: 'checkbox', checked: g.menu });
     menu.onchange = () => { g.menu = menu.checked; };
+    const construire = el('input', { type: 'checkbox', checked: g.construire_menu });
+    construire.onchange = () => { g.construire_menu = construire.checked; };
     return [
       el('div', { className: 'field-grid' }, [
         champ('Nom du domaine', texteIn(g, 'nom', 'Domaine')),
         champ('Capacité du stock', nombreIn(g, 'capacite', 0, 99999), 'par ressource (0 = sans limite)'),
       ]),
       champ('Dans le menu de pause', menu, 'l\'écran du domaine'),
+      champ('Construire depuis le menu de pause', construire, 'sur une carte qui a une zone Constructible'),
       tableQuantites(ctx, g, 'stock_depart', 'Stock de départ', 'Le stock commence vide.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
@@ -130,7 +174,7 @@ const DonneesGestion = (() => {
 
   function resumer(doc, sorte, o) {
     if (sorte === 'ressources') return `${o.id} « ${o.nom} »${o.objet ? `, objet du sac ${o.objet}` : ''}${o.description ? ` : ${o.description}` : ''}`;
-    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
+    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
     return null;
   }
   // Où une ressource ou un bâtiment est utilisé (Donnees.utilisations).
@@ -140,7 +184,7 @@ const DonneesGestion = (() => {
       const c = commande || condition;
       const ici = `${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`;
       if (sorte === 'ressource' && c.type === 'gestion_stock' && c.ressource === id) out.add(ici);
-      if (sorte === 'batiment' && ['gestion_construire', 'gestion_batiment', 'gestion_chantier'].includes(c.type) && c.batiment === id) out.add(ici);
+      if (sorte === 'batiment' && ['gestion_construire', 'gestion_placer', 'gestion_batiment', 'gestion_chantier'].includes(c.type) && c.batiment === id) out.add(ici);
     });
     if (sorte === 'ressource') {
       for (const b of doc.data.batiments || []) if ([...b.cout, ...b.production, ...b.consommation].some((q) => q.ressource === id)) out.add(`Bâtiment ${b.nom}`);

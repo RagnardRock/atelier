@@ -32,6 +32,7 @@ const ModulesJeu = (() => {
       },
       commandes: {
         gestion_construire: { nom: 'Construire un bâtiment' },
+        gestion_placer: { nom: 'Placer un bâtiment (le joueur choisit où)' },
         gestion_stock: { nom: 'Ajouter ou retirer une ressource du stock' },
         gestion_deposer: { nom: 'Déposer le sac au stock' },
         gestion_domaine: { nom: 'Ouvrir l\'écran du domaine' },

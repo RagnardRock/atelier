@@ -27,7 +27,8 @@
 //
 // Chaque appel reçoit un objet o : { jeu, partie, etat, hote } (plus ce qui est propre à l'appel).
 //   etat   = partie.modules[id] : le seul endroit de la partie qui appartient au module (sauvegardé tel quel)
-//   hote   = ce que le moteur prête : reagir(moment, infos), rafraichir(), message(texte), ui (les menus)
+//   hote   = ce que le moteur prête : reagir(moment, infos), rafraichir(), message(texte), ui (les menus) ;
+//            Saga 1.5 : carte, joueur, libre(x, y), viser({ largeur, hauteur, valide }) → { x, y } ou null
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module
@@ -151,8 +152,8 @@ const Modules = (() => {
       return undefined;
     },
     // Les choix des modules dans le menu de pause. Leur id devient « module:<id du module>:<id du choix> ».
-    actionsPause(jeu, partie) {
-      return chacun(jeu, 'actionsPause', (m) => m.actionsPause(objet(m, jeu, partie, null)))
+    actionsPause(jeu, partie, hote = null) {
+      return chacun(jeu, 'actionsPause', (m) => m.actionsPause(objet(m, jeu, partie, hote)))
         .flatMap(([m, l]) => (Array.isArray(l) ? l : []).filter((a) => Array.isArray(a) && a[0]).map(([id, nom, icone]) => [`module:${m.id}:${id}`, String(nom || id), icone || '']));
     },
     estActionPause: (id) => typeof id === 'string' && id.startsWith('module:'),

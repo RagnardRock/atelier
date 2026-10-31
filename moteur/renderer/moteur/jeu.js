@@ -258,6 +258,12 @@ const Jeu = (() => {
       titre: jeu.titre || 'Mon jeu',
       taille,
       planche, tuiles,
+      // Saga 1.5 : les tampons de Tafl (objets de plusieurs tuiles), par nom. Les cartes n'en ont pas
+      // besoin (ils y sont déjà des tuiles) ; un module s'en sert pour dessiner ce qu'il pose en jeu.
+      tampons: new Map((Array.isArray(tuilesData.tampons) ? tuilesData.tampons : []).filter((t) => t && typeof t.nom === 'string' && Array.isArray(t.cases)).map((t) => {
+        const largeur = Math.max(1, Math.round(nombre(t.largeur, 1))), hauteur = Math.max(1, Math.round(nombre(t.hauteur, 1)));
+        return [t.nom, { nom: t.nom, largeur, hauteur, dessus: Math.min(hauteur, Math.max(0, Math.round(nombre(t.dessus, 0)))), cases: Array.from({ length: largeur * hauteur }, (_, i) => Math.round(nombre(t.cases[i], -1))) }];
+      })),
       cartes,
       donnees,
       personnages,

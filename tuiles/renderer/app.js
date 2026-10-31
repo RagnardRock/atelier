@@ -1015,7 +1015,7 @@ const App = (() => {
       { key: 'y', label: 'Rangée (y)', type: 'number', value: z.y, min: 0, max: map.height - 1 },
       { key: 'w', label: 'Largeur', type: 'number', value: z.w, min: 1, max: map.width, unit: 'cases' },
       { key: 'h', label: 'Hauteur', type: 'number', value: z.h, min: 1, max: map.height, unit: 'cases' },
-      { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS).' },
+      { type: 'info', text: 'Herbes hautes, eau, grotte : des créatures sauvages peuvent surgir (la table ci-dessous). Objet requis : l\'objet qu\'il faut avoir pour y entrer (par exemple « planche-de-surf » pour l\'eau, à la place des CS). Constructible : là où le joueur peut poser ses bâtiments (module gestion).' },
       { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
       { key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' },
       // Tafl 0.33 (pack JDR) : une pièce pour le mode table de Saga, sous le brouillard jusqu'à ce que le MJ la révèle.

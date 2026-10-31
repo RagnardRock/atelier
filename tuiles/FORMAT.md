@@ -959,7 +959,16 @@ Pour un jeu JDR, Tafl met aussi `equipe_max` à 4 et `argent_depart` à 0 au cha
 
 Activé par `reglages.modules: ["gestion"]`, avec n'importe quel pack. Un **stock** commun (celui du domaine, pas le sac du joueur) et des **bâtiments** qu'on paie sur ce stock, dont le chantier avance d'une nuit chaque fois que le joueur dort, puis qui produisent chaque nuit. Rien n'est propre à un jeu : les ressources et les bâtiments sont des données. Le code est dans `moteur/renderer/moteur/modules/gestion/` (les calculs, purs, dans `calcul.js`).
 
-Cette version ne place pas les bâtiments sur la carte : un jeu montre un bâtiment fini par un événement dont une page a la condition `gestion_batiment` (un emplacement fixe). Le placement libre, les habitants et leurs emplois viendront ensuite.
+Deux façons de mettre un bâtiment sur la carte :
+
+- **le placement libre** : le joueur choisit où le poser, dans une zone de type `"constructible"` de la carte (menu de pause › Construire, ou la commande `gestion_placer`). Il déplace le bâtiment avec les flèches (vert : il tient, rouge : non) et le pose avec la touche d'action ; retour annule. Saga le dessine avec son tampon et bloque son emprise, sauf la porte ;
+- **un emplacement fixe** : la commande `gestion_construire` (sans place) et un événement dont une page a la condition `gestion_batiment`.
+
+Les habitants et leurs emplois viendront ensuite.
+
+#### La zone `constructible`
+
+Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut poser ses bâtiments. Un bâtiment y tient si toutes ses cases sont dans une zone constructible, ni bloquées ni sur un rebord, sans événement visible ou bloquant, sans le joueur, et sans un autre bâtiment.
 
 #### `donnees/ressources.json`
 
@@ -984,10 +993,14 @@ Cette version ne place pas les bâtiments sur la carte : un jeu montre un bâtim
 - `jours` : les nuits de chantier (0 : construit tout de suite).
 - `production` et `consommation` : chaque nuit, un bâtiment fini prend sa `consommation` dans le stock et donne sa `production`. S'il manque quelque chose, il ne produit rien cette nuit-là (le rapport du matin le dit).
 - `maximum` : combien de bâtiments de ce type au plus (chantiers compris) ; 0 : sans limite.
+- `tampon` (facultatif) : le nom d'un tampon de `tuiles.tafl` (un objet de plusieurs tuiles fait dans l'éditeur de cartes) : l'apparence du bâtiment posé, et sa taille. Ses rangées `dessus` passent devant le joueur.
+- `tampon_chantier` (facultatif) : le tampon pendant le chantier ; sans lui, le bâtiment en transparence.
+- `largeur`, `hauteur` (1 par défaut) : la taille en cases d'un bâtiment sans tampon (dessiné comme un simple bloc).
+- `porte` (facultatif, `{ "x", "y" }`, depuis le coin haut gauche du bâtiment) : la case de l'emprise qu'on peut traverser ; toutes les autres bloquent.
 
 #### Dans `reglages.json` : `modules_reglages.gestion`
 
-`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son choix dans le menu de pause), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le menu de pause), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve).
+`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son choix dans le menu de pause), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le menu de pause), `construire_menu` (`true` par défaut : « Construire » dans le menu de pause, sur une carte qui a une zone constructible), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve).
 
 #### La nuit
 
@@ -1002,6 +1015,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 | `type` | Champs | Ce qu'elle fait |
 |---|---|---|
 | `gestion_construire` | `batiment`, `annoncer`, `reussi`, `rate` | Paie le bâtiment sur le stock et lance son chantier (ou le construit tout de suite). Joue `reussi`, ou `rate` s'il manque des ressources ou si son `maximum` est atteint. `annoncer` (`true` par défaut) : le dire au joueur. Pour un script : `{ ok, batiment }` (l'id du bâtiment construit). |
+| `gestion_placer` | `batiment` (`""` : le joueur le choisit dans la liste), `annoncer`, `reussi`, `rate` | Le joueur choisit où poser le bâtiment (placement libre, ci-dessus) ; il est payé quand il est posé. Joue `reussi`, ou `rate` s'il annule, s'il manque des ressources, si le `maximum` est atteint ou si la carte n'a pas de zone constructible. Pour un script : `{ ok, batiment }`. |
 | `gestion_stock` | `action` (`"ajouter"` ou `"retirer"`), `ressource`, `nombre`, `annoncer` | Ajoute ou retire une ressource du stock, sans passer sous 0 ni au-dessus de la capacité. Pour un script : `{ stock, change }`. |
 | `gestion_deposer` | `annoncer` | Change les objets du sac qui représentent une ressource (`ressource.objet`) en ressources du stock ; ce qui ne tient pas reste dans le sac. Pour un script : `{ depose: { ressource: nombre } }`. |
 | `gestion_domaine` | | Ouvre l'écran du domaine : le jour, le stock et les bâtiments. |
@@ -1016,7 +1030,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 
 #### Ce que le moteur garde dans une sauvegarde
 
-`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste }]` : `reste` = les nuits de chantier qu'il faut encore), `prochain` (le numéro du prochain id de bâtiment) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
+`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
 
 ## Test rapide
 

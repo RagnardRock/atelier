@@ -7,15 +7,16 @@
 // moteur par le contrat des modules (../MODULES.md) : la fin de journée (commande « dormir »), les
 // commandes et conditions des événements, l'écran du domaine (menu de pause), saga.modules.gestion.
 //
-// Cette première version ne place pas les bâtiments sur la carte : un jeu montre un bâtiment fini avec un
-// événement dont une page a la condition « gestion_batiment » (un emplacement fixe). Le placement libre,
-// les habitants et leurs emplois viendront ensuite.
+// Les bâtiments se posent librement (Saga 1.5) : le joueur choisit où, dans une zone « constructible » de
+// la carte, et le bâtiment est dessiné avec son tampon de Tafl et bloque ses cases (sauf sa porte). Un jeu
+// peut aussi construire sans place (commande gestion_construire) et montrer le bâtiment par un événement.
+// Les habitants et leurs emplois viendront ensuite.
 
 (() => {
   const C = GestionCalcul;
   // Les définitions, lues une fois par jeu.
   const cache = new WeakMap();
-  const defs = (jeu) => { if (!cache.has(jeu)) cache.set(jeu, C.definitions(jeu.donnees)); return cache.get(jeu); };
+  const defs = (jeu) => { if (!cache.has(jeu)) cache.set(jeu, C.definitions(jeu.donnees, jeu.tampons)); return cache.get(jeu); };
   // Remplacer l'état du module par un état neuf (o.etat est l'objet de la partie : on garde le même).
   const poser = (o, neuf) => { for (const k of Object.keys(o.etat)) delete o.etat[k]; Object.assign(o.etat, neuf); };
   const etatDe = (o) => C.normaliser(defs(o.jeu), o.etat);
@@ -40,10 +41,113 @@
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true });
   }
 
+  // --- Le placement libre (Saga 1.5) ---
+  const constructible = (carte) => (carte?.zones || []).filter((z) => z.type === 'constructible');
+  const lieuDe = (o) => {
+    const carte = o.hote?.carte;
+    const zones = constructible(carte);
+    return {
+      carte: carte?.id || '',
+      constructible: (x, y) => zones.some((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur),
+      libre: (x, y) => Boolean(o.hote?.libre?.(x, y)),
+    };
+  };
+  const coutTexte = (d, def) => C.dire(d, def.cout) || 'gratuit';
+  let apercu = null; // le type de bâtiment visé en ce moment (dessiné en transparence)
+
+  // Choisir un bâtiment dans la liste (ceux qu'on ne peut pas payer sont grisés). → type, ou null.
+  async function choisirBatiment(o) {
+    const d = defs(o.jeu), e = etatDe(o), ui = o.hote?.ui;
+    const types = [...d.batiments.values()];
+    if (!ui || !types.length) return null;
+    const items = types.map((def) => {
+      const r = C.construire(d, e, def.id);
+      return { texte: def.nom, detail: r.ok ? `${coutTexte(d, def)}${def.jours ? ` · ${def.jours} nuit${def.jours > 1 ? 's' : ''}` : ''}` : r.raison.replace(`${def.nom} : `, '').replace(`Pour ${def.nom}, `, ''), desactive: !r.ok };
+    });
+    const i = await ui.liste({ titre: 'Construire', items, annulable: true, note: 'Le coût est pris dans le stock du domaine.' });
+    return i === null || i === undefined || i < 0 ? null : types[i].id;
+  }
+
+  // Poser un bâtiment : choisir sa place, le payer, lancer son chantier. → { ok, batiment }
+  async function placer(o, type, annoncer = true) {
+    const d = defs(o.jeu);
+    const dire = async (t) => { if (annoncer) await (o.narrer ? o.narrer(t) : o.hote?.ui?.dire(t)); };
+    const lieu = lieuDe(o);
+    if (!lieu.carte || !constructible(o.hote?.carte).length) { await dire('On ne peut rien construire ici.'); return { ok: false, batiment: '' }; }
+    const essai = C.construire(d, etatDe(o), type);
+    if (!essai.ok) { await dire(essai.raison); return { ok: false, batiment: '' }; }
+    const def = d.batiments.get(type);
+    apercu = type;
+    let place;
+    try {
+      place = await o.hote.viser({ largeur: def.largeur, hauteur: def.hauteur, valide: (x, y) => C.placement(d, etatDe(o), type, lieu, x, y).ok });
+    } finally { apercu = null; }
+    if (!place) return { ok: false, batiment: '' };
+    const r = C.construire(d, etatDe(o), type, { carte: lieu.carte, x: place.x, y: place.y });
+    if (!r.ok) { await dire(r.raison); return { ok: false, batiment: '' }; }
+    poser(o, r.etat);
+    o.hote.rafraichir?.();
+    await dire(r.batiment.etat === 'fini' ? `Construction terminée : ${def.nom} !` : `Le chantier commence : ${def.nom} (${def.jours} nuit${def.jours > 1 ? 's' : ''} de travail).`);
+    return { ok: true, batiment: r.batiment.id };
+  }
+
+  // Dessiner un tampon (ou un simple bloc sans tampon) sur la carte. rangees : 'bas' (sous le joueur),
+  // 'haut' (ses rangées « dessus », devant le joueur) ou 'tout'.
+  function dessinerTampon(o, def, nomTampon, x, y, rangees, alpha) {
+    const t = o.jeu.tampons?.get(nomTampon);
+    o.ctx.globalAlpha = alpha;
+    if (!t) {
+      if (rangees !== 'haut') {
+        const s = o.taille;
+        o.ctx.fillStyle = 'rgba(150, 105, 60, 0.9)';
+        o.ctx.fillRect(x * s - o.cam.x + 1, y * s - o.cam.y + 1, def.largeur * s - 2, def.hauteur * s - 2);
+      }
+    } else {
+      for (let j = 0; j < t.hauteur; j++) {
+        const haut = j < t.dessus;
+        if ((rangees === 'bas' && haut) || (rangees === 'haut' && !haut)) continue;
+        for (let i = 0; i < t.largeur; i++) { const n = t.cases[j * t.largeur + i]; if (n >= 0) o.tuile(n, x + i, y + j); }
+      }
+    }
+    o.ctx.globalAlpha = 1;
+  }
+
   Modules.enregistrer({
     id: 'gestion',
 
     nouvellePartie(o) { poser(o, C.etatNeuf(defs(o.jeu))); },
+
+    dessiner(o) {
+      const d = defs(o.jeu);
+      const sol = o.profondeur === 'sol';
+      for (const b of Array.isArray(o.etat.batiments) ? o.etat.batiments : []) {
+        if (b.carte !== o.carte.id) continue;
+        const def = d.batiments.get(b.type);
+        if (!def) continue;
+        if (b.etat === 'chantier') {
+          // Un chantier : son propre tampon s'il en a un, sinon le bâtiment en transparence.
+          if (def.tampon_chantier) dessinerTampon(o, def, def.tampon_chantier, b.x, b.y, sol ? 'bas' : 'haut', 1);
+          else if (sol) dessinerTampon(o, def, def.tampon, b.x, b.y, 'tout', 0.45);
+        } else dessinerTampon(o, def, def.tampon, b.x, b.y, sol ? 'bas' : 'haut', 1);
+      }
+      // Le bâtiment qu'on est en train de placer, en transparence sous le rectangle visé.
+      if (apercu && o.visee && !sol) {
+        const def = d.batiments.get(apercu);
+        if (def) dessinerTampon(o, def, def.tampon, o.visee.x, o.visee.y, 'tout', o.visee.ok ? 0.75 : 0.4);
+      }
+    },
+
+    bloque(o, x, y) {
+      const d = defs(o.jeu);
+      for (const b of Array.isArray(o.etat.batiments) ? o.etat.batiments : []) {
+        if (b.carte !== o.carte.id) continue;
+        const def = d.batiments.get(b.type);
+        if (!def || x < b.x || y < b.y || x >= b.x + def.largeur || y >= b.y + def.hauteur) continue;
+        if (def.porte && x === b.x + def.porte.x && y === b.y + def.porte.y) continue;
+        return true;
+      }
+      return false;
+    },
     preparer(o) { poser(o, etatDe(o)); },
 
     finDeJournee(o) {
@@ -95,6 +199,14 @@
       },
       // Ouvrir l'écran du domaine.
       async gestion_domaine(o) { await ecran(o); return null; },
+      // Saga 1.5 : poser un bâtiment où le joueur veut, dans une zone constructible de la carte. Sans
+      // batiment, le joueur le choisit dans la liste. Branches réussi / raté (raté : annulé, ou impossible).
+      async gestion_placer(o) {
+        const type = String(o.c.batiment || '') || await choisirBatiment(o);
+        const r = type ? await placer(o, type, o.c.annoncer !== false) : { ok: false, batiment: '' };
+        await o.jouer(r.ok ? o.c.reussi : o.c.rate);
+        return r;
+      },
     },
 
     condition(o, cond) {
@@ -105,8 +217,17 @@
       return undefined;
     },
 
-    actionsPause(o) { const d = defs(o.jeu); return d.reglages.menu ? [['domaine', d.reglages.nom, 'home']] : []; },
-    async agirPause(o, choix) { if (choix === 'domaine') await ecran(o); },
+    actionsPause(o) {
+      const d = defs(o.jeu);
+      const out = d.reglages.menu ? [['domaine', d.reglages.nom, 'home']] : [];
+      // Construire depuis le menu de pause : seulement sur une carte qui a une zone constructible.
+      if (d.reglages.construire_menu && d.batiments.size && constructible(o.hote?.carte).length) out.push(['construire', 'Construire', 'tools']);
+      return out;
+    },
+    async agirPause(o, choix) {
+      if (choix === 'domaine') await ecran(o);
+      if (choix === 'construire') { const type = await choisirBatiment(o); if (type) await placer(o, type); }
+    },
 
     pourScript(o) {
       const e = etatDe(o);

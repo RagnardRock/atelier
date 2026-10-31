@@ -876,7 +876,7 @@ const Events = (() => {
   const choixRessources = (doc, actuel) => choixDe(doc, 'ressources', actuel, 'Aucune ressource : crée-les dans Données › Ressources');
   const choixBatiments = (doc, actuel) => choixDe(doc, 'batiments', actuel, 'Aucun bâtiment : crée-les dans Données › Bâtiments');
   const ANNONCER = { key: 'annoncer', label: 'Le dire au joueur', type: 'checkbox' };
-  A_BRANCHES.push('gestion_construire');
+  A_BRANCHES.push('gestion_construire', 'gestion_placer');
   Object.assign(COMMANDES, {
     gestion_construire: {
       nom: 'Construire un bâtiment', icone: 'tools', groupe: 'Gestion', modules: MODULE_GESTION,
@@ -889,6 +889,18 @@ const Events = (() => {
       depuis: (v, c) => ({ type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
       valide: (c) => (c.batiment ? null : 'Crée d\'abord un bâtiment (Données › Bâtiments).'),
       resume: (doc, c) => `Construire « ${nomData(doc, 'batiments', c.batiment)} »`,
+    },
+    // Tafl 1.3 : le joueur pose le bâtiment où il veut, dans une zone Constructible de la carte.
+    gestion_placer: {
+      nom: 'Placer un bâtiment (le joueur choisit où)', icone: 'tools', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_placer', batiment: '', annoncer: true, reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: [['', 'Le joueur le choisit dans la liste'], ...choixBatiments(doc, c.batiment).filter(([k]) => k)] },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Le joueur déplace le bâtiment avec les flèches et le pose avec la touche d'action, dans une zone de type « Constructible » de la carte ; retour annule. Son coût est pris quand il le pose. Raté : annulé, pas assez de ressources, maximum atteint, ou pas de zone constructible ici. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'gestion_placer', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      resume: (doc, c) => (c.batiment ? `Placer « ${nomData(doc, 'batiments', c.batiment)} »` : 'Placer un bâtiment (au choix)'),
     },
     gestion_stock: {
       nom: 'Ajouter ou retirer une ressource du stock', icone: 'archive', groupe: 'Gestion', modules: MODULE_GESTION,
@@ -1038,6 +1050,7 @@ const Events = (() => {
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
       case 'dormir': return { type: 'dormir', texte: str(c.texte), soigner: vrai(c.soigner), heure: c.heure === '' || c.heure === null || c.heure === undefined ? '' : clamp(int(c.heure, 8), 0, 23) };
       case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'gestion_placer': return { type: 'gestion_placer', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
       case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
       case 'gestion_domaine': return { type: 'gestion_domaine' };

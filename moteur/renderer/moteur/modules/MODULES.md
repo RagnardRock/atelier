@@ -51,7 +51,7 @@ Chaque fonction reçoit un objet `o` :
 | `o.jeu` | Le jeu chargé (lecture seule), comme pour un pack (REGLES.md › 2.1). Ses données : `o.jeu.donnees.<sorte>`, ses réglages : `o.jeu.donnees.reglages.reglages.modules_reglages[id]`. |
 | `o.partie` | La partie en cours. **Un module ne change que `o.etat`** (voir 3). |
 | `o.etat` | `partie.modules[id]` : l'état du module, un objet JSON simple, sauvegardé tel quel. Il existe toujours (au moins `{}`). |
-| `o.hote` | Ce que le moteur prête : `reagir(moment, infos)` (annoncer un moment aux scripts, voir 4), `rafraichir()` (refaire la liste des événements présents et leurs pages, après un changement qui touche une condition), `message(texte)` (un message d'erreur ou d'info, comme ceux des scripts), `ui` (les menus hors combat : `liste`, `quantite`, `fiche`, `texte`, `repartir`, `dire`… REGLES.md › 3.1). |
+| `o.hote` | Ce que le moteur prête : `reagir(moment, infos)` (annoncer un moment aux scripts, voir 4), `rafraichir()` (refaire la liste des événements présents et leurs pages, après un changement qui touche une condition), `message(texte)` (un message d'erreur ou d'info, comme ceux des scripts), `ui` (les menus hors combat : `liste`, `quantite`, `fiche`, `texte`, `repartir`, `dire`… REGLES.md › 3.1). Saga 1.5 : `carte` (la carte affichée), `joueur` (`{ x, y, dir }`), `libre(x, y)` (la case est dans la carte, ni bloquée ni sur un rebord, sans événement visible ou bloquant ni le joueur) et `viser({ largeur, hauteur, valide(x, y) })` (le joueur choisit un rectangle sur la carte avec les flèches, vert si `valide` le dit, rouge sinon ; rend `{ x, y }`, ou `null` s'il annule). |
 
 Les appels qui en ont besoin ajoutent leurs propres champs (la carte, le canvas…), décrits ci-dessous.
 
@@ -80,8 +80,11 @@ Pour `dessiner`, `o` contient aussi :
 | `o.cam` | `{ x, y }` : le coin haut gauche de l'écran, en pixels de la carte. Une case `(cx, cy)` est à l'écran en `(cx × taille − cam.x, cy × taille − cam.y)`. |
 | `o.taille` | La taille d'une case en pixels (`jeu.taille`). |
 | `o.largeur`, `o.hauteur` | La taille de l'écran en pixels du jeu. |
+| `o.visee` | Saga 1.5 : le rectangle que le joueur vise en ce moment (`{ x, y, largeur, hauteur, ok }`), ou `null`. Le moteur dessine déjà son cadre ; un module y montre ce qu'il va poser. |
 | `o.maintenant` | L'heure de l'image (ms), pour animer. |
 | `o.tuile(n, cx, cy)` | Pose la tuile n° `n` de `tuiles.tafl` sur la case `(cx, cy)` de la carte (les tuiles animées s'animent). |
+
+Saga 1.5 : `o.jeu.tampons` est une `Map` nom → `{ nom, largeur, hauteur, dessus, cases }` des tampons de `tuiles.tafl` (FORMAT.md), pour dessiner un objet de plusieurs tuiles avec `o.tuile`.
 
 Après les modules, le moteur remet `globalAlpha` à 1 et `globalCompositeOperation` à `source-over`.
 
