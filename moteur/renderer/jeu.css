@@ -906,3 +906,15 @@ body.en-combat .multi-panneau:not(.replie) { opacity: 0.25; }
 body.en-combat .multi-panneau.replie, body.en-combat .multi-bulles { opacity: 1; }
 /* …et les petits messages du jeu remontent en haut, pour ne pas cacher la barre de PV */
 body.en-combat #notifications { bottom: auto; top: 48px; right: auto; left: 50%; transform: translateX(-50%); width: min(420px, calc(100% - 32px)); opacity: 0.92; }
+
+/* Le journal du combat (Saga 1.2) : tout ce qui a été dit, ouvert par J ou par le bouton */
+.combat-journal-bouton { position: absolute; top: 10px; right: 10px; z-index: 6; width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 9px; background: rgba(10, 10, 16, 0.6); color: #fff; cursor: pointer; opacity: 0.7; }
+.combat-journal-bouton:hover { opacity: 1; }
+.combat-journal { position: absolute; z-index: 7; top: 48px; right: 10px; width: min(360px, calc(100% - 20px)); max-height: 46%; display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 12px; background: rgba(12, 12, 18, 0.94); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5); }
+.combat-journal[hidden] { display: none; }
+.combat-journal-tete { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; opacity: 0.85; }
+.combat-journal-lignes { overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 4px; }
+.combat-journal-ligne { margin: 0; font-size: 13px; line-height: 1.35; }
+.combat-journal-ligne:last-child { color: var(--accent, #ffd36b); }

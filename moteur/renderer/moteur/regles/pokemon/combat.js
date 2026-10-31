@@ -72,6 +72,7 @@ const Combat = (() => {
         nom: C.nom(jeu, c), niveau: c.niveau, sexe: c.sexe, pv: c.pv, pvMax: C.pvMax(jeu, c), statut: NOMS_STATUTS[c.statut] || '',
         xp: c.niveau >= 100 ? 0 : Math.max(0, Math.min(1, (c.xp - xpMin) / Math.max(1, xpMax - xpMin))),
         image: (k.joueur ? e?.sprites?.dos || e?.sprites?.face : e?.sprites?.face) || '', chromatique: c.chromatique,
+        espece: c.creature, // en duel, l'autre joueur la voit de l'autre côté (reseau/duel.js)
         types: types(c).map((t) => ({ nom: typeDe(t)?.nom || t, couleur: typeDe(t)?.couleur || '#888' })),
       };
     }
@@ -126,6 +127,17 @@ const Combat = (() => {
         if (x) return { type: 'attaque', attaque: x };
       }
       return { type: 'attaque', attaque: possibles.length ? possibles[hasard(possibles.length)] : null };
+    }
+    // Sa créature est K.O. : il choisit celle qu'il envoie (Saga 1.2). S'il ne répond pas, la première.
+    async function choixDuelSuivant(defaut) {
+      const a = await duel.choisir({
+        force: true, // pas de menu : seulement la liste de son équipe
+        actif: { nom: C.nom(jeu, actif(eux)), pv: 0, pvMax: C.pvMax(jeu, actif(eux)) },
+        attaques: [],
+        equipe: eux.equipe.map((q, i) => ({ nom: C.nom(jeu, q), niveau: q.niveau, pv: q.pv, pvMax: C.pvMax(jeu, q), i, actif: false })),
+      });
+      const i = a?.type === 'changer' ? Math.round(Number(a.cible)) : -1;
+      return eux.equipe[i]?.pv > 0 ? i : defaut;
     }
     function choixAdverse() {
       const c = actif(eux);
@@ -591,7 +603,8 @@ const Combat = (() => {
           ui.fermer();
           return { issue: 'victoire' };
         }
-        await envoyer(eux, suivant);
+        // En duel, c'est l'autre joueur qui choisit qui il envoie (Saga 1.2) ; sinon, la première valide.
+        await envoyer(eux, duel ? await choixDuelSuivant(suivant) : suivant);
       }
       if (actif(nous).pv <= 0) {
         if (!duel) C.changerAmitie(actif(nous), -1); // tomber K.O. froisse un peu (Saga 0.7)

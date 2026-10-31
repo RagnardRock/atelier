@@ -236,7 +236,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/ecrans.js` | Le menu Équipe, le Pokédex et le PC. |
 | `renderer/moteur/boutique.js` | Les boutiques : acheter, revendre, vendre des créatures, articles débloqués par les succès. |
 | `renderer/moteur/personnaliser.js` | L'écran du nom et de la tenue du héros. |
-| `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus et animations. |
+| `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus, animations et le journal du combat (touche J, Saga 1.2). |
 | `renderer/moteur/sprites.js` | Les personnages sur la carte : leur sprite de Tafl, ou le petit bonhomme en pixel art. |
 
 **Des règles remplaçables.** Les règles de combat et de créatures (aujourd'hui celles de Pokémon) sont rangées à part, dans `renderer/moteur/regles/pokemon/`. Le moteur (cartes, déplacements, scripts, sauvegarde) ne les appelle jamais directement : il passe par `regles.js`, qui dit en tête de fichier la petite liste de fonctions qu'un jeu de règles doit fournir (créer une créature, la soigner, la résumer pour le carnet, lancer un combat…). Pour un jeu avec d'autres règles, on écrira un autre dossier à côté de `pokemon/`, sans toucher au moteur. L'écran de combat, lui, ne connaît aucune règle : il montre ce qu'on lui dit.

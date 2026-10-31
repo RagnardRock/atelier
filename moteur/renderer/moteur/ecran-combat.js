@@ -43,7 +43,21 @@ const EcranCombat = (() => {
     const bas = el('div', { className: 'combat-bas' }, el('div', { className: 'combat-boite' }, texte, suite), menu);
     const liste = el('div', { className: 'combat-liste', hidden: true });
     const flash = el('div', { className: 'combat-flash' });
-    racine.append(scene, bas, liste, flash);
+    // Le journal du combat (Saga 1.2) : tout ce qui a été dit, pour relire ce qu'on a raté.
+    const journalLignes = el('div', { className: 'combat-journal-lignes' });
+    const journal = el('div', { className: 'combat-journal', hidden: true },
+      el('div', { className: 'combat-journal-tete' }, el('b', { textContent: 'Journal du combat' }), el('span', { textContent: 'J : fermer' })),
+      journalLignes);
+    const boutonJournal = el('button', { className: 'combat-journal-bouton', type: 'button', title: 'Journal du combat (J)' },
+      el('i', { className: 'codicon codicon-list-unordered' }));
+    boutonJournal.onclick = () => basculerJournal();
+    // J ouvre et ferme le journal (et Échap le ferme), sans que la touche aille au combat.
+    window.addEventListener('keydown', (e) => {
+      if (racine.hidden) return;
+      if (e.key === 'j' || e.key === 'J') { e.preventDefault(); e.stopImmediatePropagation(); basculerJournal(); }
+      else if (e.key === 'Escape' && !journal.hidden) { e.preventDefault(); e.stopImmediatePropagation(); basculerJournal(false); }
+    }, true);
+    racine.append(scene, bas, liste, journal, boutonJournal, flash);
     // Clic droit : comme la touche Retour (revenir en arrière dans les menus).
     racine.addEventListener('contextmenu', (e) => { e.preventDefault(); touche('retour'); });
     conteneur.append(racine);
@@ -205,14 +219,29 @@ const EcranCombat = (() => {
       return true;
     }
 
+    // --- Le journal (Saga 1.2) ---
+    function noter(ligne) {
+      if (!ligne || journalLignes.lastChild?.textContent === ligne) return;
+      journalLignes.append(el('p', { className: 'combat-journal-ligne', textContent: ligne }));
+      while (journalLignes.children.length > 200) journalLignes.firstChild.remove();
+      journalLignes.scrollTop = journalLignes.scrollHeight;
+    }
+    function basculerJournal(ouvrir = journal.hidden) {
+      journal.hidden = !ouvrir;
+      if (ouvrir) journalLignes.scrollTop = journalLignes.scrollHeight;
+    }
+
     // --- Les messages ---
-    function message(t, { qui = '' } = {}) {
+    // o peut arriver à null (les appels renvoyés par le réseau en duel) : pas de décomposition directe.
+    function message(t, o) {
+      const { qui = '', discret = false } = o || {};
       menu.hidden = true;
       complet = qui ? `${qui} : « ${t} »` : String(t);
       ecrit = 0;
       chrono = 0;
       texte.textContent = '';
       suite.hidden = true;
+      if (!discret) noter(complet); // « Au tour de… » n'encombre pas le journal
       return new Promise((resoudre) => { attente = { type: 'texte', resoudre }; });
     }
     function avancer(dt) {
@@ -348,6 +377,8 @@ const EcranCombat = (() => {
       liste.hidden = true;
       menu.hidden = true;
       texte.textContent = '';
+      journalLignes.innerHTML = ''; // un nouveau combat, un journal neuf
+      journal.hidden = true;
       // Les créatures et leurs cartes restent cachées jusqu'à leur entrée (animer('…', 'entree')).
       for (const c of Object.values(cotes)) {
         c.balle.hidden = true;
@@ -371,7 +402,7 @@ const EcranCombat = (() => {
 
     return {
       ouvrir, fermer, creature, pv, xp, animer, evolution, message, avancer, touche,
-      menu: menuPrincipal, attaques, liste: choisir,
+      menu: menuPrincipal, attaques, liste: choisir, journal: basculerJournal, noter,
       get ouvert() { return !racine.hidden; },
     };
   }
