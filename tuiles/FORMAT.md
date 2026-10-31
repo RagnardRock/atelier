@@ -307,6 +307,7 @@ Ce qui vit sur une case : un personnage à qui parler, un panneau, un coffre, un
 | `direction` | Où il regarde au départ. |
 | `deplacement` | `"fixe"`, `"regarde"` (se tourne vers le joueur qui lui parle), `"aleatoire"` (marche au hasard autour de sa case), `"tourne"` (regarde autour de lui). |
 | `traversable` | `false` : il bloque sa case comme un mur. `true` : on passe à travers (un déclencheur). |
+| `repousse_nuits` | (facultatif, Tafl 1.4, Saga 1.6) Il repousse : une fois son interrupteur « déjà fait » allumé, celui-ci s'éteint tout seul après ce nombre de nuits (commande `dormir`), et l'événement revient à sa première page. Pour une récolte (un buisson de baies, un arbre fruitier), un arbre coupé, un coffre qui se remplit. Absent ou 0 : jamais. |
 | `declenchement` | `"parler"` : le joueur, devant lui et tourné vers lui, appuie sur A. `"toucher"` : le joueur marche sur sa case (ou se cogne contre lui s'il n'est pas traversable). `"auto"` : la page se joue toute seule dès que le joueur arrive sur la carte (une scène d'arrivée : pense à une condition pour qu'elle ne se rejoue pas). |
 | `pages` | Au moins une. **Le moteur prend la DERNIÈRE page dont toutes les conditions sont vraies** (une page sans condition est toujours vraie). Si aucune ne l'est, l'événement est absent. `cache: true` : sur cette page, l'événement est absent (invisible, on ne peut ni lui parler ni le toucher, il ne bloque pas). Le moteur refait ce choix après chaque script et à chaque changement de carte. |
 
@@ -349,7 +350,7 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `musique` | `fichier` | (Tafl 0.29) Change la musique : un fichier de `sons/`, `"aucune"` (le silence), ou `""` (la musique de la carte). Elle reste jusqu'à la carte suivante qui a sa propre musique. |
 | `son` | `fichier` | (Tafl 0.29) Joue un bruitage de `sons/` (une porte qui grince, une cloche). Le script continue sans attendre la fin du son. |
 | `heure` | `action` (`"avancer"` ou `"regler"`), `heures` | (Tafl 0.29) L'horloge du jeu (`reglages.temps.horloge = "jeu"`) avance de `heures` heures (une nuit à l'auberge), ou se met à `heures` heures (0 à 23). Sans effet avec l'heure réelle ou sans horloge. |
-| `dormir` | `texte`, `soigner`, `heure` | (Tafl 1.3, Saga 1.5) Le jour se termine : `texte` (s'il y en a) est dit, le groupe est soigné et on se réveillera ici après une défaite (`soigner`, `true` par défaut, comme `soigner`), les modules du jeu font leur calcul de la nuit, le jour passe au suivant (`partie.jour + 1`), l'horloge du jeu se met à `heure` (0 à 23 ; `""` : `temps.heure_depart`), fondu au noir sur place, puis le rapport du matin (ce que les modules disent de la nuit, s'ils disent quelque chose). Les scripts reçoivent ensuite les moments `fin_de_journee` et `matin`. |
+| `dormir` | `texte`, `soigner`, `heure` | (Tafl 1.3, Saga 1.5) Le jour se termine : `texte` (s'il y en a) est dit, le groupe est soigné et on se réveillera ici après une défaite (`soigner`, `true` par défaut, comme `soigner`), les modules du jeu font leur calcul de la nuit, le jour passe au suivant (`partie.jour + 1`), l'horloge du jeu se met à `heure` (0 à 23 ; `""` : `temps.heure_depart`), les événements avec `repousse_nuits` comptent une nuit (Saga 1.6), fondu au noir sur place, puis le rapport du matin (ce que les modules disent de la nuit, s'ils disent quelque chose). Les scripts reçoivent ensuite les moments `fin_de_journee` et `matin`. |
 | `quete` | `quete`, `action` (`"commencer"`, `"etape"`, `"finir"`), `etape` | Fait avancer une quête. `etape` : le numéro de l'étape (à partir de 1), pour `"etape"`. Commencer met la quête à l'étape 1. |
 | `soigner` | | Soigne toute l'équipe (le centre de soins). |
 | `boutique` | `boutique` | Ouvre une boutique de `boutiques.json`. |
@@ -410,7 +411,7 @@ Saga peut jouer un jeu JDR en **mode table** : le MJ fait avancer la partie sur 
 
 #### Ce que le moteur garde dans une sauvegarde
 
-Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus. Depuis Tafl 0.29 (Saga 0.11) : l'heure de l'horloge du jeu (`temps`, en minutes depuis minuit) et la musique en cours (`musique`). Depuis Tafl 0.31 (Saga 0.12) : les variables (`variables` : par id, leur valeur) et la graine du hasard des scripts (`graine`, un entier : recharger une partie rejoue les mêmes dés). Depuis Saga 1.4 : l'état de chaque module du jeu (`modules` : par id de module, un objet que seul ce module écrit). Depuis Saga 1.5 : le numéro du jour (`jour`, 1 au début, +1 à chaque commande `dormir`).
+Les interrupteurs du jeu (allumés), les interrupteurs « déjà fait » (par carte et id d'événement), l'état et l'étape de chaque quête, les compteurs, le sac, l'équipe, l'argent, la carte et la case du joueur. Depuis Tafl 0.16 : le nom choisi par le joueur, les badges reçus (leurs ids) et la tenue du héros (`""` = sa tenue de base). Depuis Tafl 0.21 (Saga 0.6) : les boîtes du PC (`boites` : `[{ nom, creatures: [une place par case, null = vide] }]`) et le Pokédex (`dex` : les ids des espèces vues et attrapées). Depuis Tafl 0.24 (Saga 0.7) : l'objet tenu de chaque créature (`objet`), les articles de boutique déjà vus (`boutiques_vues`, pour le « Nouveau ! ») et le compteur `sauvages_battus`. Depuis Tafl 0.25 (Saga 0.8, pack JRPG) : les héros partis du groupe (`partis` : par id de personnage, le héros tel qu'il était), et dans `dex` les monstres vus et vaincus. Depuis Tafl 0.29 (Saga 0.11) : l'heure de l'horloge du jeu (`temps`, en minutes depuis minuit) et la musique en cours (`musique`). Depuis Tafl 0.31 (Saga 0.12) : les variables (`variables` : par id, leur valeur) et la graine du hasard des scripts (`graine`, un entier : recharger une partie rejoue les mêmes dés). Depuis Saga 1.4 : l'état de chaque module du jeu (`modules` : par id de module, un objet que seul ce module écrit). Depuis Saga 1.5 : le numéro du jour (`jour`, 1 au début, +1 à chaque commande `dormir`). Depuis Saga 1.6 : les nuits passées par chaque récolte cueillie (`repousses` : `"carte/ev-1"` → nombre de nuits, pour les événements avec `repousse_nuits`).
 
 Saga 0.11 garde aussi une **sauvegarde auto** (`reglages.sauvegarde_auto`), à part : elle n'écrase jamais la sauvegarde du joueur.
 
@@ -964,7 +965,7 @@ Deux façons de mettre un bâtiment sur la carte :
 - **le placement libre** : le joueur choisit où le poser, dans une zone de type `"constructible"` de la carte (menu de pause › Construire, ou la commande `gestion_placer`). Il déplace le bâtiment avec les flèches (vert : il tient, rouge : non) et le pose avec la touche d'action ; retour annule. Saga le dessine avec son tampon et bloque son emprise, sauf la porte ;
 - **un emplacement fixe** : la commande `gestion_construire` (sans place) et un événement dont une page a la condition `gestion_batiment`.
 
-Les habitants et leurs emplois viendront ensuite.
+**Les habitants** (Tafl 1.4, Saga 1.6) logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas`) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent tout seuls, la nuit, quand il reste un logement et que personne n'a eu faim, ou par la commande `gestion_habitants`. Ils ne se promènent pas encore sur la carte.
 
 #### La zone `constructible`
 
@@ -996,19 +997,24 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `tampon` (facultatif) : le nom d'un tampon de `tuiles.tafl` (un objet de plusieurs tuiles fait dans l'éditeur de cartes) : l'apparence du bâtiment posé, et sa taille. Ses rangées `dessus` passent devant le joueur.
 - `tampon_chantier` (facultatif) : le tampon pendant le chantier ; sans lui, le bâtiment en transparence.
 - `largeur`, `hauteur` (1 par défaut) : la taille en cases d'un bâtiment sans tampon (dessiné comme un simple bloc).
+- `logement` (Saga 1.6, 0 par défaut) : combien d'habitants il loge, une fois fini.
+- `ouvriers` (Saga 1.6, 0 par défaut) : combien d'habitants il lui faut pour produire ; il ne produit pas s'il ne les a pas tous. 0 : il produit seul.
 - `porte` (facultatif, `{ "x", "y" }`, depuis le coin haut gauche du bâtiment) : la case de l'emprise qu'on peut traverser ; toutes les autres bloquent.
 
 #### Dans `reglages.json` : `modules_reglages.gestion`
 
-`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son choix dans le menu de pause), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le menu de pause), `construire_menu` (`true` par défaut : « Construire » dans le menu de pause, sur une carte qui a une zone constructible), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve).
+`nom` (le nom du domaine, `"Domaine"` par défaut : le titre de son écran et son choix dans le menu de pause), `capacite` (ce que le stock garde au plus de chaque ressource ; 0 : sans limite), `menu` (`true` : l'écran du domaine dans le menu de pause), `construire_menu` (`true` par défaut : « Construire » dans le menu de pause, sur une carte qui a une zone constructible), `stock_depart` (`[{ ressource, nombre }]` : le stock d'une partie neuve). Saga 1.6 : `habitants_depart` (les habitants d'une partie neuve, 0 par défaut), `repas` (`[{ ressource, nombre }]` : ce que mange un habitant chaque nuit ; vide : ils ne mangent rien), `arrivees` (combien d'habitants arrivent au plus par nuit s'il reste un logement, 1 par défaut ; 0 : seulement par la commande).
 
 #### La nuit
 
 Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jour :
 
-1. les bâtiments finis produisent, chacun avec ce qu'il y avait dans le stock au coucher (ce qui est produit cette nuit ne sert que la nuit suivante ; si plusieurs bâtiments veulent la même ressource, le premier construit passe d'abord) ;
-2. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira à partir de la suivante) ;
-3. le stock est ramené à sa capacité (ce qui dépasse est perdu, le rapport le dit).
+1. les habitants mangent (`repas`, dans le stock du coucher) ; ceux qui n'ont pas pu manger ne travaillent pas cette nuit (personne ne part) ;
+2. les habitants nourris vont aux bâtiments finis qui demandent des `ouvriers`, dans l'ordre de construction ; un bâtiment qui ne les a pas tous ne produit pas (le rapport le dit) ;
+3. les bâtiments finis produisent, chacun avec ce qu'il y avait dans le stock au coucher (ce qui est produit cette nuit ne sert que la nuit suivante ; si plusieurs bâtiments veulent la même ressource, le premier construit passe d'abord) ;
+4. les chantiers avancent d'une nuit (un bâtiment fini cette nuit produira à partir de la suivante) ;
+5. si tout le monde a mangé et qu'il reste un logement, jusqu'à `arrivees` habitants s'installent (ils travaillent à partir de la nuit suivante ; moment `gestion_arrivee` pour les scripts) ;
+6. le stock est ramené à sa capacité (ce qui dépasse est perdu, le rapport le dit).
 
 #### Commandes
 
@@ -1018,6 +1024,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 | `gestion_placer` | `batiment` (`""` : le joueur le choisit dans la liste), `annoncer`, `reussi`, `rate` | Le joueur choisit où poser le bâtiment (placement libre, ci-dessus) ; il est payé quand il est posé. Joue `reussi`, ou `rate` s'il annule, s'il manque des ressources, si le `maximum` est atteint ou si la carte n'a pas de zone constructible. Pour un script : `{ ok, batiment }`. |
 | `gestion_stock` | `action` (`"ajouter"` ou `"retirer"`), `ressource`, `nombre`, `annoncer` | Ajoute ou retire une ressource du stock, sans passer sous 0 ni au-dessus de la capacité. Pour un script : `{ stock, change }`. |
 | `gestion_deposer` | `annoncer` | Change les objets du sac qui représentent une ressource (`ressource.objet`) en ressources du stock ; ce qui ne tient pas reste dans le sac. Pour un script : `{ depose: { ressource: nombre } }`. |
+| `gestion_habitants` | `action` (`"ajouter"` ou `"retirer"`), `nombre`, `forcer`, `annoncer` | (Saga 1.6) Des habitants arrivent ou partent. Sans `forcer`, ils ne dépassent pas les logements des bâtiments finis. Pour un script : `{ habitants, change }`. |
 | `gestion_domaine` | | Ouvre l'écran du domaine : le jour, le stock et les bâtiments. |
 
 #### Conditions
@@ -1027,10 +1034,11 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 | `gestion_batiment` | `batiment`, `min` | au moins `min` bâtiments de ce type sont finis (pas les chantiers). |
 | `gestion_chantier` | `batiment` | un chantier de ce type est en cours. |
 | `gestion_stock` | `ressource`, `min` | le stock a au moins `min` de cette ressource. |
+| `gestion_habitants` | `min` | (Saga 1.6) le domaine a au moins `min` habitants. |
 
 #### Ce que le moteur garde dans une sauvegarde
 
-`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
+`partie.modules.gestion` : `stock` (`{ ressource: nombre }`), `batiments` (`[{ id, type, etat: "chantier" | "fini", reste, carte, x, y }]` : `reste` = les nuits de chantier qu'il faut encore ; `carte`, `x`, `y` : où il est posé, absents pour un bâtiment sans place), `prochain` (le numéro du prochain id de bâtiment), `habitants` (Saga 1.6 : combien vivent au domaine) et `resolu` (le dernier jour dont la nuit a été calculée : la recalculer ne fait rien). Un bâtiment dont le type n'existe plus dans le jeu est gardé mais ne produit rien.
 
 ## Test rapide
 
@@ -1092,5 +1100,6 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.32** : le pack de règles `"jdr"` : les fichiers `caracteristiques.json`, `competences.json`, `origines.json`, `classes_jdr.json`, `sorts.json`, `monstres_jdr.json` et `etats.json`, `jdr` dans les objets (arme, armure) et `effet.des`, `jdr` dans les personnages (pré-tirés), `reglages.jdr` (création et règles maison), les rencontres de groupes de ce pack, les commandes `test`, `sauvegarde`, `test_oppose`, `jet`, `repos`, `xp`, `etat` et `creer_personnage` (les trois premières ont deux branches, `reussi` et `rate`), les conditions `jdr_perception`, `jdr_maitrise`, `jdr_etat`, `jdr_classe`, `jdr_origine` et `jdr_niveau`, `jdr` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.0** : la commande `composer_equipe` et `reglages.multijoueur` (le multijoueur de Saga 1.0). Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.2** : `modules` et `modules_reglages` dans les réglages, `modules` dans la sauvegarde (Saga 1.4). Tafl garde aussi tel quel tout fichier de `donnees/` qu'il ne sait pas éditer (les données d'un module), et le réécrit à l'enregistrement. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.4** : `repousse_nuits` dans les événements et `repousses` dans la sauvegarde (Saga 1.6) ; pour le module gestion, `logement` et `ouvriers` des bâtiments, `habitants_depart`, `repas` et `arrivees` dans ses réglages, la commande et la condition `gestion_habitants`, `habitants` dans son état. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.3** : la commande `dormir`, la condition `jour`, `jour` dans la sauvegarde (Saga 1.5) ; le module gestion : `donnees/ressources.json`, `donnees/batiments.json`, `modules_reglages.gestion`, ses commandes et conditions `gestion_…`, `modules.gestion` dans la sauvegarde. Des champs et des fichiers en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.33** : le mode table du pack `"jdr"` : `case_m`, `diagonales` et `jets_mj_caches` dans `reglages.jdr`, `piece` et `visible_par` dans les zones, `visible_par` dans les événements et les rencontres, `portee_longue`, `allonge` et `rayon` dans les attaques. Des champs en plus, donc la version reste 1.
