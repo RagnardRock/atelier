@@ -1,7 +1,7 @@
 {
   "name": "atelier-tuiles",
   "productName": "Tafl",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "Tafl, mon outil de tuiles façon Pokémon (pixel art, jeux de tuiles, cartes), un des outils d'Atelier",
   "main": "main.js",
   "scripts": {

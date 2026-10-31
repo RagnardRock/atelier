@@ -56,6 +56,24 @@ const Donnees = (() => {
     ['stase', 'Empêche d\'évoluer, tenu (Pierre Stase)', []],
     ['amitie', 'Fait monter l\'amitié', ['valeur']],
   ];
+  // Tafl 1.6 : les effets de combat qu'une attaque déclenche, que Saga sait jouer.
+  const SPECIAUX_ATTAQUE = [
+    ['', 'Aucun'],
+    ['vent_arriere', 'Vent arrière (vitesse ×2 pour son équipe)'],
+    ['mur_lumiere', 'Mur Lumière (attaques spéciales ÷2 pour son équipe)'],
+    ['protection', 'Protection / Reflet (attaques physiques ÷2 pour son équipe)'],
+    ['provoc', 'Provoc (la cible ne peut plus lancer d\'attaque de statut)'],
+    ['vampigraine', 'Vampigraine (la cible perd des PV, rendus au lanceur)'],
+    ['piege', 'Piège (la cible perd des PV et ne peut ni changer ni fuir)'],
+    ['baillement', 'Bâillement (la cible s\'endort au tour suivant)'],
+    ['attraction', 'Attraction (la cible rate la moitié de ses tours)'],
+    ['abri', 'Abri (le lanceur est protégé pour ce tour)'],
+    ['pluie', 'Pluie (eau renforcée, feu affaibli)'],
+    ['soleil', 'Soleil (feu renforcé, eau affaiblie)'],
+    ['sable', 'Tempête de sable (dégâts à qui n\'est ni Roche, ni Sol, ni Acier)'],
+    ['grele', 'Grêle (dégâts à qui n\'est pas Glace)'],
+  ];
+
   // Tafl 1.5 : ce qu'un objet fait quand une créature le TIENT (Saga le joue en combat).
   const TENUS_OBJET = [
     ['', 'Rien de spécial en combat', []],
@@ -132,6 +150,8 @@ const Donnees = (() => {
       coups_min: int(a?.coups_min, 1, 1, 10),
       coups_max: Math.max(int(a?.coups_min, 1, 1, 10), int(a?.coups_max, 1, 1, 10)),
       effet: str(a?.effet),
+      // Tafl 1.6 : un effet de combat que Saga joue (vent arrière, provoc, météo…).
+      ...(SPECIAUX_ATTAQUE.some(([k]) => k && k === a?.special?.type) ? { special: { type: a.special.type, ...(int(a.special.tours, 0, 0, 20) ? { tours: int(a.special.tours, 0, 0, 20) } : {}) } } : {}),
       description: str(a?.description),
       // Pack JRPG : son coût en PM, ranimer un allié K.O., les statuts qu'elle guérit ('tous' : tous).
       cout_pm: int(a?.cout_pm, 0, 0, 999),
@@ -941,6 +961,12 @@ const Donnees = (() => {
           champ('Sur', sel([['adversaire', 'La cible'], ['soi', 'Le lanceur']], a.stats_cible, (v) => { a.stats_cible = v; })),
           champ('Chance', nombreIn(a, 'chance_stats', 0, 100), '% (0 = toujours)'),
         ]),
+        section('Effet de combat'),
+        el('div', { className: 'field-grid' }, [
+          champ('Effet', sel(SPECIAUX_ATTAQUE, a.special?.type || '', (v) => { if (v) a.special = { type: v, tours: a.special?.tours || 0 }; else delete a.special; majEffets(); })),
+          a.special ? champ('Durée', nombreIn(a.special, 'tours', 0, 20), 'tours (0 = la durée normale)') : null,
+        ]),
+        info('Saga joue ces effets en combat. Les attaques officielles correspondantes (Vent Arrière, Provoc, Vampigraine, Danse Pluie, Abri, Ligotage…) sont reconnues à l\'import, sans rien régler ici.'),
       );
     };
     majEffets();

@@ -1,4 +1,4 @@
-// Trouver son chemin sur une carte (Saga 1.8) : l'algorithme A*, en 4 directions, case par case.
+// Trouver son chemin sur une carte (Saga 1.9) : l'algorithme A*, en 4 directions, case par case.
 //
 // Générique : il ne connaît ni les cartes ni les modules. On lui dit quelles cases sont libres, et ce que
 // coûte chaque case (1 par défaut ; moins cher sur un sentier : les marcheurs le préfèrent). Le mode table

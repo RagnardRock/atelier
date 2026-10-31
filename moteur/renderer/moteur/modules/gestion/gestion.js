@@ -15,7 +15,7 @@
 // font tourner les bâtiments qui demandent des ouvriers. Ils arrivent seuls quand il reste de la place et
 // que tout le monde a mangé.
 //
-// Saga 1.8 : on les voit aller et venir (promeneurs) : ils sortent de chez eux, vont travailler, flânent et
+// Saga 1.9 : on les voit aller et venir (promeneurs) : ils sortent de chez eux, vont travailler, flânent et
 // rentrent, par le plus court chemin (moteur/chemins.js, prêté par hote.chemin). Chaque pas use la case
 // (usure, gardée dans la partie) : l'herbe se tasse, puis un sentier se dessine, et les habitants préfèrent
 // les cases déjà usées. Un sentier qu'on ne prend plus repousse, nuit après nuit.
@@ -96,7 +96,7 @@
     return null;
   }
 
-  // --- Saga 1.8 : les habitants qu'on voit aller et venir ---
+  // --- Saga 1.9 : les habitants qu'on voit aller et venir ---
   const SECONDES_PAR_CASE = 0.42;
   const COULEURS = ['#8fd18a', '#e0a35a', '#9ab8f0', '#e88fb0', '#d8d070', '#b0a0e8', '#80d0c8', '#f0b090'];
   const hasard = (a, b) => a + Math.random() * (b - a);
@@ -268,7 +268,7 @@
     dessiner(o) {
       const d = defs(o.jeu);
       const sol = o.profondeur === 'sol';
-      // Saga 1.8 : l'usure, sous tout le reste : l'herbe tassée, puis le sentier.
+      // Saga 1.9 : l'usure, sous tout le reste : l'herbe tassée, puis le sentier.
       const usure = sol && d.reglages.usure ? o.etat.usure?.[o.carte.id] : null;
       if (usure) {
         const s = o.taille, L = o.carte.largeur, ctx = o.ctx, deja = sentiersDeCarte(d, o.carte);
@@ -350,7 +350,7 @@
     preparer(o) { poser(o, etatDe(o)); foule = null; },
     entrerCarte() { foule = null; },
 
-    // Saga 1.8 : les habitants marchent (seulement sur la carte du joueur ; ailleurs, on ne les voit pas).
+    // Saga 1.9 : les habitants marchent (seulement sur la carte du joueur ; ailleurs, on ne les voit pas).
     avancer(o) {
       const d = defs(o.jeu);
       if (!d.reglages.promeneurs || !o.carte) return;

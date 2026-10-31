@@ -71,7 +71,7 @@ const DonneesGestion = (() => {
     // Tafl 1.4.1 : ce que fait la faim (voir FAIMS).
     faim: FAIMS.some(([k]) => k === g?.faim) ? g.faim : 'arrivees',
     faim_nuits: int(g?.faim_nuits, 3, 1, 99),
-    // Tafl 1.6 (Saga 1.8) : les habitants qu'on voit marcher, et les sentiers qu'ils creusent.
+    // Tafl 1.7 (Saga 1.9) : les habitants qu'on voit marcher, et les sentiers qu'ils creusent.
     promeneurs: g?.promeneurs !== false,
     promeneur_perso: str(g?.promeneur_perso).slice(0, 64),
     promeneurs_max: int(g?.promeneurs_max, 12, 1, 40),
@@ -300,7 +300,7 @@ const DonneesGestion = (() => {
     ];
   }
 
-  // Tafl 1.6 (Saga 1.8) : les habitants qu'on voit marcher, et les sentiers qui se creusent sous leurs pas.
+  // Tafl 1.7 (Saga 1.9) : les habitants qu'on voit marcher, et les sentiers qui se creusent sous leurs pas.
   function champsPromeneurs(g, ctx) {
     const { champ, info, nombreIn, sel } = U();
     const tuiles = [['-1', 'Dessinée par Saga'], ...arr(ctx.doc?.tiles).map((t, i) => [String(i), `${i}. ${t.name}`])];
