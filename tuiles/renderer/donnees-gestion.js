@@ -44,6 +44,9 @@ const DonneesGestion = (() => {
       largeur: int(b?.largeur, 1, 1, 32),
       hauteur: int(b?.hauteur, 1, 1, 32),
       porte: b?.porte && typeof b.porte === 'object' ? { x: int(b.porte.x, 0, 0, 31), y: int(b.porte.y, 0, 0, 31) } : null,
+      // Tafl 1.4 (Saga 1.6) : les habitants qu'il loge, et les ouvriers qu'il lui faut pour produire.
+      logement: int(b?.logement, 0, 0, 999),
+      ouvriers: int(b?.ouvriers, 0, 0, 999),
     }),
   };
   // Les réglages du module : reglages.modules_reglages.gestion.
@@ -54,6 +57,10 @@ const DonneesGestion = (() => {
     capacite: int(g?.capacite, 0, 0, 99999),
     menu: g?.menu !== false,
     construire_menu: g?.construire_menu !== false,
+    // Tafl 1.4 (Saga 1.6) : les habitants.
+    habitants_depart: int(g?.habitants_depart, 0, 0, 9999),
+    repas: normQuantites(g?.repas),
+    arrivees: int(g?.arrivees, 1, 0, 99),
   });
 
   const U = () => Donnees.ui;
@@ -98,6 +105,10 @@ const DonneesGestion = (() => {
       el('div', { className: 'field-grid' }, [
         champ('Chantier', nombreIn(b, 'jours', 0, 999), 'nuits (0 = construit tout de suite)'),
         champ('Au plus', nombreIn(b, 'maximum', 0, 999), 'bâtiments de ce type (0 = sans limite)'),
+      ]),
+      el('div', { className: 'field-grid' }, [
+        champ('Logement', nombreIn(b, 'logement', 0, 999), 'habitants qu\'il loge une fois fini'),
+        champ('Ouvriers', nombreIn(b, 'ouvriers', 0, 999), 'habitants qu\'il lui faut pour produire (0 = il produit seul)'),
       ]),
       tableQuantites(ctx, b, 'cout', 'Coût (pris dans le stock)', 'Gratuit.'),
       tableQuantites(ctx, b, 'production', 'Produit chaque nuit', 'Ne produit rien (un entrepôt, une maison…).'),
@@ -168,13 +179,19 @@ const DonneesGestion = (() => {
       champ('Dans le menu de pause', menu, 'l\'écran du domaine'),
       champ('Construire depuis le menu de pause', construire, 'sur une carte qui a une zone Constructible'),
       tableQuantites(ctx, g, 'stock_depart', 'Stock de départ', 'Le stock commence vide.'),
+      el('div', { className: 'field-grid' }, [
+        champ('Habitants au départ', nombreIn(g, 'habitants_depart', 0, 9999)),
+        champ('Arrivées par nuit', nombreIn(g, 'arrivees', 0, 99), 'au plus, s\'il reste un logement (0 = seulement par la commande)'),
+      ]),
+      tableQuantites(ctx, g, 'repas', 'Repas d\'un habitant, chaque nuit', 'Les habitants ne mangent rien.'),
+      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; ceux qui n\'ont pas mangé ne travaillent pas, et personne n\'arrive cette nuit-là. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
   }
 
   function resumer(doc, sorte, o) {
     if (sorte === 'ressources') return `${o.id} « ${o.nom} »${o.objet ? `, objet du sac ${o.objet}` : ''}${o.description ? ` : ${o.description}` : ''}`;
-    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
+    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}${o.logement ? `, loge ${o.logement}` : ''}${o.ouvriers ? `, ${o.ouvriers} ouvrier(s)` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
     return null;
   }
   // Où une ressource ou un bâtiment est utilisé (Donnees.utilisations).

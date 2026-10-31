@@ -101,6 +101,7 @@ const Verificateur = (() => {
           if (cmd.type === 'badge' && cmd.badge) donne.badges.add(cmd.badge);
           if (cmd.type === 'gestion_construire' && cmd.batiment) donne.construits.add(cmd.batiment);
           if (cmd.type === 'gestion_placer') donne.places = true;
+          if (cmd.type === 'gestion_habitants' && cmd.action !== 'retirer') donne.habitants = true;
           if (cmd.type === 'gestion_placer' && cmd.batiment) donne.construits.add(cmd.batiment);
           if (cmd.type === 'groupe' && cmd.action !== 'quitter' && cmd.personnage) donne.membres.add(cmd.personnage);
           if (cmd.type === 'combat_dresseur' && cmd.dresseur) donne.dresseurs.add(cmd.dresseur);
@@ -453,6 +454,13 @@ const Verificateur = (() => {
       }
     }
     if (gestionActif && donne.places && !zoneConstructible) ajouter('attention', 'quetes', 'La commande « Placer un bâtiment » ne réussira jamais : aucune carte n\'a de zone de type « Constructible ».');
+    // Tafl 1.4 : les habitants. Les ressources des repas, et un bâtiment qui demande des ouvriers alors
+    // qu'aucun habitant ne peut venir (ni logement, ni habitants au départ, ni commande qui en amène).
+    const gestionR = reglages.modules_reglages?.gestion || {};
+    for (const q of gestionR.repas || []) verifierId('ressources', q.ressource, 'Les repas des habitants (Réglages › Modules)');
+    if (gestionActif && !liste('batiments').some((b) => b.logement > 0) && !(gestionR.habitants_depart > 0) && !donne.habitants) {
+      for (const b of liste('batiments')) if (b.ouvriers > 0 && (b.production || []).length) ajouter('attention', 'quetes', `Le bâtiment « ${b.nom || b.id} » demande ${b.ouvriers} ouvrier(s), mais aucun habitant ne peut venir : aucun bâtiment n'a de logement, il n'y a pas d'habitants au départ, et aucune commande n'en amène. Il ne produira jamais.`);
+    }
     for (const q of reglages.modules_reglages?.gestion?.stock_depart || []) verifierId('ressources', q.ressource, 'Le stock de départ (Réglages › Modules)');
     for (const r of liste('ressources')) verifierId('objets', r.objet, `La ressource « ${r.nom || r.id} »`);
 

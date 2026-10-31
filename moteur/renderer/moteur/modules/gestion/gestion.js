@@ -10,7 +10,10 @@
 // Les bâtiments se posent librement (Saga 1.5) : le joueur choisit où, dans une zone « constructible » de
 // la carte, et le bâtiment est dessiné avec son tampon de Tafl et bloque ses cases (sauf sa porte). Un jeu
 // peut aussi construire sans place (commande gestion_construire) et montrer le bâtiment par un événement.
-// Les habitants et leurs emplois viendront ensuite.
+//
+// Les habitants (Saga 1.6) : ils logent dans les bâtiments finis (logement), mangent chaque nuit (repas) et
+// font tourner les bâtiments qui demandent des ouvriers. Ils arrivent seuls quand il reste de la place et
+// que tout le monde a mangé. Ils ne se promènent pas encore sur la carte.
 
 (() => {
   const C = GestionCalcul;
@@ -33,6 +36,14 @@
     const ressources = [...new Set([...d.ressources.keys(), ...Object.keys(e.stock)])].filter((r) => e.stock[r] || d.ressources.has(r));
     if (!ressources.length) items.push({ texte: 'Rien pour l\'instant', desactive: true });
     for (const r of ressources) items.push({ texte: C.nomRessource(d, r), detail: cap ? `${e.stock[r] || 0} / ${cap}` : String(e.stock[r] || 0), image: d.ressources.get(r)?.icone || '' });
+    // Les habitants : seulement si le jeu s'en sert (des logements, des ouvriers ou des habitants au départ).
+    const em = C.emplois(d, e);
+    if (em.habitants || em.logement || [...d.batiments.values()].some((b) => b.ouvriers)) {
+      items.push(titre('Habitants'));
+      items.push({ texte: 'Habitants', detail: `${em.habitants} / ${em.logement} logés` });
+      if (em.demandes) items.push({ texte: 'Au travail', detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes} demandés` });
+      if (Object.keys(d.reglages.repas).length) items.push({ texte: 'Repas de la nuit', detail: C.dire(d, Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]))) || 'rien' });
+    }
     items.push(titre('Bâtiments'));
     if (!e.batiments.length) items.push({ texte: 'Aucun pour l\'instant', desactive: true });
     for (const b of e.batiments) {
@@ -154,6 +165,7 @@
       const r = C.finDeJournee(defs(o.jeu), etatDe(o), o.jour);
       poser(o, r.etat);
       for (const type of r.termines) o.hote.reagir?.('gestion_termine', { batiment: type });
+      if (r.arrives) o.hote.reagir?.('gestion_arrivee', { nombre: r.arrives, habitants: r.etat.habitants });
       if (r.termines.length) o.hote.rafraichir?.();
       return r.lignes;
     },
@@ -186,6 +198,22 @@
         if (o.c.annoncer !== false && r.change) await o.narrer(r.change > 0 ? `${r.change} ${C.nomRessource(d, ressource)} au stock.` : `${-r.change} ${C.nomRessource(d, ressource)} pris dans le stock.`);
         return { stock: r.etat.stock[ressource] || 0, change: r.change };
       },
+      // Saga 1.6 : des habitants arrivent ou partent (une histoire, une famille qui s'installe). Sans
+      // forcer, ils ne dépassent pas les logements.
+      async gestion_habitants(o) {
+        const d = defs(o.jeu);
+        const n = Math.max(1, Math.round(Number(o.c.nombre) || 1));
+        const r = C.habitants(d, etatDe(o), o.c.action === 'retirer' ? -n : n, Boolean(o.c.forcer));
+        poser(o, r.etat);
+        o.hote.rafraichir?.();
+        if (o.c.annoncer !== false) {
+          const k = Math.abs(r.change);
+          if (r.change > 0) await o.narrer(k > 1 ? `${k} habitants s'installent au domaine.` : 'Un habitant s\'installe au domaine.');
+          else if (r.change < 0) await o.narrer(k > 1 ? `${k} habitants quittent le domaine.` : 'Un habitant quitte le domaine.');
+          else if (o.c.action !== 'retirer') await o.narrer('Il n\'y a plus de place pour loger quelqu\'un.');
+        }
+        return { habitants: r.etat.habitants, change: r.change };
+      },
       // Déposer au stock ce que le joueur rapporte dans son sac.
       async gestion_deposer(o) {
         const d = defs(o.jeu);
@@ -213,6 +241,7 @@
       const e = etatDe(o);
       if (cond.type === 'gestion_batiment') return C.combien(e, String(cond.batiment || ''), true) >= Math.max(1, Number(cond.min) || 1);
       if (cond.type === 'gestion_chantier') return C.combien(e, String(cond.batiment || '')) > C.combien(e, String(cond.batiment || ''), true);
+      if (cond.type === 'gestion_habitants') return (Number(e.habitants) || 0) >= Math.max(0, Number(cond.min) || 0);
       if (cond.type === 'gestion_stock') return (e.stock[String(cond.ressource || '')] || 0) >= Math.max(0, Number(cond.min) || 0);
       return undefined;
     },
@@ -231,7 +260,8 @@
 
     pourScript(o) {
       const e = etatDe(o);
-      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste })) };
+      const em = C.emplois(defs(o.jeu), e);
+      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste })) };
     },
   });
 })();

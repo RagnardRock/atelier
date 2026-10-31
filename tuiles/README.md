@@ -449,6 +449,12 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Le placement libre** : le type de zone **Constructible** (là où le joueur peut poser ses bâtiments), et pour chaque bâtiment une section **Sur la carte** : son tampon (son apparence et sa taille), celui du chantier, sa taille sans tampon, et sa porte. La commande « Placer un bâtiment (le joueur choisit où) », avec ses branches réussi / raté, et la case « Construire depuis le menu de pause » dans les réglages du module.
 - Le vérificateur signale une ressource, un bâtiment ou un tampon qui n'existe pas, une page qui attend un bâtiment que rien ne construit (un bâtiment que le joueur peut poser librement compte comme construit), et « Placer un bâtiment » sans aucune zone constructible.
 
+## Les habitants et les récoltes (Tafl 1.4, pour Saga 1.6)
+
+- **Repousse après N nuits** (fenêtre d'un événement, pour tous les jeux) : son « déjà fait » s'éteint tout seul après ce nombre de nuits, et il revient à sa page 1. Pour une récolte : page 1 « donner l'objet + déjà fait », page 2 avec la condition « déjà fait » et la case « absent ».
+- **Les habitants** (module gestion) : dans un bâtiment, **Logement** (combien il loge) et **Ouvriers** (combien il lui faut pour produire) ; dans les réglages du module, les habitants au départ, les arrivées par nuit et le repas d'un habitant. La commande « Des habitants arrivent ou partent » et la condition « Le domaine a assez d'habitants ».
+- Le vérificateur signale une ressource de repas qui n'existe pas, et un bâtiment qui demande des ouvriers alors qu'aucun habitant ne peut venir.
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils

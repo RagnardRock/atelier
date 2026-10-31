@@ -381,6 +381,8 @@ const Moteur = (() => {
             partie.dernierSoin = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
           }
           const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
+          // Saga 1.6 : les récoltes repoussent (événements avec repousse_nuits).
+          if (Monde.repousser(jeu, partie)) hoteModules.rafraichir?.();
           partie.jour = fini + 1;
           const h = heure !== null && heure !== '' && Number.isFinite(Number(heure)) ? Number(heure) : Temps.reglages(jeu).heure_depart;
           Temps.regler(jeu, partie, { heures: h });

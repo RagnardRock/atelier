@@ -921,6 +921,20 @@ const Events = (() => {
       nouveau: () => ({ type: 'gestion_deposer', annoncer: true }),
       resume: () => 'Déposer au stock ce que le joueur rapporte (les objets des ressources)',
     },
+    // Tafl 1.4 (Saga 1.6) : les habitants.
+    gestion_habitants: {
+      nom: 'Des habitants arrivent ou partent', icone: 'organization', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_habitants', action: 'ajouter', nombre: 1, forcer: false, annoncer: true }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ajouter', 'Ils arrivent'], ['retirer', 'Ils partent']] },
+        { key: 'nombre', label: 'Combien', type: 'number', value: c.nombre, min: 1, max: 999 },
+        { key: 'forcer', label: 'Même sans logement libre', type: 'checkbox', value: Boolean(c.forcer) },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: 'Une famille qui s\'installe, un ami qui rejoint le domaine. Sans « même sans logement », ils ne dépassent pas la place des bâtiments finis (leur champ Logement). Chaque nuit, des habitants arrivent aussi tout seuls s\'il reste de la place (Réglages › Modules › Gestion).' },
+      ],
+      depuis: (v) => ({ type: 'gestion_habitants', action: v.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(Math.round(v.nombre) || 1, 1, 999), forcer: Boolean(v.forcer), annoncer: Boolean(v.annoncer) }),
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Des habitants partent' : 'Des habitants arrivent'} : ${c.nombre}${c.forcer && c.action !== 'retirer' ? ' (même sans logement)' : ''}`,
+    },
     gestion_domaine: {
       nom: 'Ouvrir l\'écran du domaine', icone: 'home', groupe: 'Gestion', modules: MODULE_GESTION,
       nouveau: () => ({ type: 'gestion_domaine' }),
@@ -956,6 +970,12 @@ const Events = (() => {
       depuis: (v) => ({ type: 'gestion_stock', ressource: v.ressource, min: clamp(Math.round(v.min) || 0, 0, 99999) }),
       valide: (c) => (c.ressource ? null : 'Quelle ressource ?'),
     },
+    gestion_habitants: {
+      nom: 'Le domaine a assez d\'habitants (gestion)', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_habitants', min: 1 }),
+      champs: (doc, c) => [{ key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 9999, unit: 'habitants' }],
+      depuis: (v) => ({ type: 'gestion_habitants', min: clamp(Math.round(v.min) || 0, 0, 9999) }),
+    },
   });
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
@@ -980,6 +1000,7 @@ const Events = (() => {
     if (c.type === 'gestion_batiment') return `${c.min > 1 ? `au moins ${c.min} × ` : ''}« ${nomData(doc, 'batiments', c.batiment)} » construit`;
     if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
     if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
+    if (c.type === 'gestion_habitants') return `au moins ${c.min} habitant${c.min > 1 ? 's' : ''} au domaine`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -1008,6 +1029,7 @@ const Events = (() => {
       case 'gestion_batiment': return { type: 'gestion_batiment', batiment: str(c.batiment), min: clamp(int(c.min, 1), 1, 999) };
       case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment) };
       case 'gestion_stock': return { type: 'gestion_stock', ressource: str(c.ressource), min: clamp(int(c.min, 0), 0, 99999) };
+      case 'gestion_habitants': return { type: 'gestion_habitants', min: clamp(int(c.min, 0), 0, 9999) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -1053,6 +1075,7 @@ const Events = (() => {
       case 'gestion_placer': return { type: 'gestion_placer', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
       case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
+      case 'gestion_habitants': return { type: 'gestion_habitants', action: c.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(int(c.nombre, 1), 1, 999), forcer: Boolean(c.forcer), annoncer: vrai(c.annoncer) };
       case 'gestion_domaine': return { type: 'gestion_domaine' };
       case 'variable': {
         const action = pick(c.action, ACTIONS_VARIABLE, 'regler');
@@ -1087,6 +1110,8 @@ const Events = (() => {
       declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
       pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map(normPage),
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
+      // Tafl 1.4 (Saga 1.6) : il repousse. Son « déjà fait » s'éteint après ce nombre de nuits (une récolte).
+      ...(int(e?.repousse_nuits) > 0 ? { repousse_nuits: clamp(int(e.repousse_nuits), 1, 999) } : {}),
       // Tafl 0.29 : l'événement éclaire (un feu de camp, un PNJ avec une lanterne), quelle que soit sa page.
       ...(e?.lumiere && typeof Donnees !== 'undefined' ? { lumiere: Donnees.normLumiere(e.lumiere) } : {}),
       // Tafl 0.33 (pack JDR) : qui le voit dans le mode table de Saga ('tous' n'est pas écrit).
@@ -1266,7 +1291,7 @@ const Events = (() => {
     });
     return lignes.join('\n');
   }
-  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.obstacle ? ` [${ev.obstacle.sorte}, objet ${ev.obstacle.objet || 'aucun'}${ev.obstacle.repousse ? ', repousse' : ''}]` : ''}${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}, ${ev.pages.length} page(s)`;
+  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.obstacle ? ` [${ev.obstacle.sorte}, objet ${ev.obstacle.objet || 'aucun'}${ev.obstacle.repousse ? ', repousse' : ''}]` : ''}${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}${ev.repousse_nuits ? `, repousse après ${ev.repousse_nuits} nuit(s)` : ''}, ${ev.pages.length} page(s)`;
 
   // --- Un événement neuf, selon son type ---
   function create(doc, type, x, y, id) {
@@ -1546,6 +1571,9 @@ const Events = (() => {
           if (t) g.drawImage(Doc.tileCanvas(t, doc.tileSize), 0, 0);
           apercuTuile.hidden = !t;
         };
+        // Tafl 1.4 (Saga 1.6) : une récolte qui repousse (son « déjà fait » s'éteint après N nuits).
+        const repousse = el('input', { type: 'number', min: 0, max: 999, value: work.repousse_nuits || 0 });
+        repousse.onchange = () => { const n = Math.max(0, Math.min(999, Math.round(Number(repousse.value) || 0))); repousse.value = n; if (n) work.repousse_nuits = n; else delete work.repousse_nuits; };
         const traversable = el('input', { type: 'checkbox', checked: work.traversable });
         traversable.onchange = () => { work.traversable = traversable.checked; };
         const aide = el('p', { className: 'modal-info' });
@@ -1614,6 +1642,7 @@ const Events = (() => {
           section('Déclenchement'),
           champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
           champ('Le joueur peut passer à travers', traversable),
+          champ('Repousse après', repousse, 'nuits (0 = jamais) : son « déjà fait » s\'éteint, il revient à sa page 1. Pour une récolte, un buisson, un coffre qui se remplit'),
           ...(typeof Espaces !== 'undefined' && Espaces.packDe(doc) === 'jdr' && typeof DonneesJdr !== 'undefined'
             ? [champ('Visible par', selectEl(DonneesJdr.visibilites(doc.data), work.visible_par || 'tous', (v) => { if (v === 'tous') delete work.visible_par; else work.visible_par = v; }), 'Mode table de Saga : un PNJ, un piège, un coffre que seul le MJ (ou un joueur) voit')]
             : []),
