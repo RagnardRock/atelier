@@ -251,6 +251,11 @@ const Scripts = (() => {
           const nombre = Math.max(1, Math.min(6, Math.round(Number(c.nombre) || 6)));
           const niveau = Math.max(1, Math.min(100, Math.round(Number(c.niveau) || 50)));
           dialogue.fermer();
+          // Tafl 1.6 : « pour l'adversaire » = chacun compose l'équipe de l'autre (multijoueur).
+          if (c.pour === 'adversaire') {
+            await moteur.composerPourAdversaire({ nombre, niveau, titre: c.titre || '', garder: c.garder !== false });
+            break;
+          }
           const membres = await moteur.composerEquipe({ nombre, niveau, titre: c.titre || 'Compose ton équipe' });
           if (!membres?.length) break;
           // L'équipe d'avant est mise de côté (au PC) : on ne perd jamais ses créatures.

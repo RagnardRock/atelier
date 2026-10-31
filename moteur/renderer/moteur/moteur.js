@@ -365,6 +365,8 @@ const Moteur = (() => {
         personnaliser: (o) => ecranPerso.ouvrir(o),
         // L'écran où le joueur compose son équipe (commande composer_equipe, Tafl 1.0).
         composerEquipe: (o) => ecranEquipe.ouvrir({ ...o, jeu }),
+        // Saga 1.8 : le même écran, mais chacun compose l'équipe de l'autre joueur (monde partagé).
+        composerPourAdversaire: (o) => (monde ? monde.composerPour(null, o) : Promise.resolve(false)),
         menus,
         ecrans,
         position: () => ({ carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }),
@@ -1259,6 +1261,8 @@ const Moteur = (() => {
       },
       // L'écran du nom et de l'apparence, prêté au multijoueur (le même qu'en jeu : personnaliser.js).
       choisirApparence(o) { return ecranPerso.ouvrir(o); },
+      // L'écran « compose une équipe », prêté au multijoueur (Saga 1.8 : composer celle de l'autre).
+      composerEquipe(o) { return jeu ? ecranEquipe.ouvrir({ ...o, jeu }) : Promise.resolve(null); },
       // Un combat qui ne vient pas du jeu (un duel entre joueurs) : faire({ jeu, partie, ui }) sur l'écran
       // de combat du jeu, avec la musique des dresseurs. Rend false si ce n'est pas le moment.
       async duel(faire) {

@@ -99,12 +99,14 @@ const MondePartage = (() => {
       const choix = await Dialogs.ask(j.nom, 'Que veux-tu faire ?', [
         ...(peutEchanger ? [{ label: 'Échanger', value: 'echange', primary: true }] : []),
         ...(peutDefier ? [{ label: 'Défier', value: 'duel', primary: !peutEchanger }] : []),
+        ...(peutDefier ? [{ label: 'Composer vos équipes', value: 'equipes' }] : []),
         { label: 'Parler', value: 'parler', primary: !peutEchanger && !peutDefier },
         { label: 'Rien', value: null },
       ]);
       if (choix === 'parler') { multi.ouvrirPanneau(); return; }
       if (choix === 'echange') proposer(j, 'echange');
       if (choix === 'duel') proposer(j, 'duel');
+      if (choix === 'equipes') composerPour(j.id, {});
     }
 
     // --- Proposer, accepter ---
@@ -115,6 +117,8 @@ const MondePartage = (() => {
     }
     async function repondreA(de, d) {
       if (!d || typeof d !== 'object') return;
+      // Saga 1.8 : « equipes » = chacun compose l'équipe de l'autre, avant de se battre.
+      if (d.quoi === 'equipes') { equipesRecoit(de, d); return; }
       const quoi = d.quoi === 'duel' ? 'duel' : 'echange';
       if (d.etape === 'proposer') {
         if (occupe) { pair(de, { quoi, etape: 'non', raison: 'occupe' }); return; }
@@ -251,8 +255,102 @@ const MondePartage = (() => {
       fin();
     }
 
+    // --- Saga 1.8 : chacun compose l'équipe de l'autre ---
+    // Les deux joueurs choisissent en même temps, chacun pour son adversaire ; quand les deux équipes
+    // sont arrivées, chacun reçoit celle que l'autre lui a faite. L'équipe d'avant part au PC.
+    let equipes = null; // { avec, nombre, niveau, garder, envoyee, recue }
+
+    // Qui ? S'il n'y a qu'un autre joueur, c'est lui ; sinon on le choisit dans une liste.
+    async function choisirAdversaire() {
+      const l = (multi.joueurs || []).filter((j) => j.connecte && j.id !== multi.moi?.id);
+      if (!l.length) return null;
+      if (l.length === 1) return l[0].id;
+      const v = await Dialogs.ask('Contre qui ?', 'Chacun composera l\'équipe de l\'autre.', [
+        ...l.slice(0, 5).map((j) => ({ label: j.nom, value: j.id })), { label: 'Annuler', value: null },
+      ]);
+      return v || null;
+    }
+
+    // Appelé par la commande « composer_equipe » de Tafl quand elle est « pour l'adversaire ».
+    async function composerPour(avec, { nombre = 3, niveau = 50, titre = '', garder = true } = {}) {
+      if (!multi.actif) { message('Il faut jouer à plusieurs pour composer l\'équipe d\'un autre joueur.'); return false; }
+      if (occupe || equipes) { message('Attends la fin de ce qui est en cours.'); return false; }
+      const cible = avec || await choisirAdversaire();
+      if (!cible) { message('Il n\'y a personne d\'autre dans la partie.'); return false; }
+      occupe = { avec: cible, quoi: 'equipes', role: 'demandeur', etat: 'attend' };
+      equipes = { avec: cible, nombre, niveau, garder, titre, envoyee: false, recue: null };
+      pair(cible, { quoi: 'equipes', etape: 'proposer', nombre, niveau, garder });
+      message(`Proposition envoyée à ${nomDe(cible)}…`);
+      return true;
+    }
+
+    async function equipesRecoit(de, d) {
+      if (d.etape === 'proposer') {
+        if (occupe || equipes) { pair(de, { quoi: 'equipes', etape: 'non', raison: 'occupe' }); return; }
+        if (!permis().duels) { pair(de, { quoi: 'equipes', etape: 'non' }); return; }
+        const nombre = Math.max(1, Math.min(6, Math.round(Number(d.nombre) || 3)));
+        const niveau = Math.max(1, Math.min(100, Math.round(Number(d.niveau) || 50)));
+        const oui = await Dialogs.ask(nomDe(de), `${nomDe(de)} te propose un duel où chacun compose l'équipe de l'autre : ${nombre} créature${nombre > 1 ? 's' : ''} au niveau ${niveau}.`, [
+          { label: 'Accepter', value: true, primary: true }, { label: 'Refuser', value: false },
+        ]);
+        if (!oui) { pair(de, { quoi: 'equipes', etape: 'non' }); return; }
+        occupe = { avec: de, quoi: 'equipes', role: 'invite', etat: 'en cours' };
+        equipes = { avec: de, nombre, niveau, garder: d.garder !== false, titre: '', envoyee: false, recue: null };
+        pair(de, { quoi: 'equipes', etape: 'oui' });
+        choisirPourLautre();
+        return;
+      }
+      if (!equipes || equipes.avec !== de) { if (d.etape !== 'annuler') pair(de, { quoi: 'equipes', etape: 'annuler' }); return; }
+      if (d.etape === 'non') { message(d.raison === 'occupe' ? `${nomDe(de)} est déjà occupé.` : `${nomDe(de)} a refusé.`); finEquipes(); return; }
+      if (d.etape === 'annuler') { message(`${nomDe(de)} a tout annulé.`); finEquipes(); return; }
+      if (d.etape === 'oui') { occupe.etat = 'en cours'; choisirPourLautre(); return; }
+      if (d.etape === 'equipe') { equipes.recue = Array.isArray(d.membres) ? d.membres : []; appliquerEquipe(); }
+    }
+
+    // Mon écran : je choisis les créatures de l'autre.
+    async function choisirPourLautre() {
+      const e = equipes;
+      if (!e) return;
+      const membres = await moteur.composerEquipe({
+        nombre: e.nombre, niveau: e.niveau,
+        titre: e.titre || `Compose l'équipe de ${nomDe(e.avec)}`,
+        bouton: `C'est l'équipe de ${nomDe(e.avec)} !`,
+      });
+      if (!equipes) return; // annulé entre-temps
+      if (!membres?.length) { pair(e.avec, { quoi: 'equipes', etape: 'annuler' }); message('Tu as annulé.'); finEquipes(); return; }
+      e.envoyee = true;
+      pair(e.avec, { quoi: 'equipes', etape: 'equipe', membres });
+      message(e.recue ? 'Équipes échangées !' : `En attente de l'équipe que ${nomDe(e.avec)} te compose…`);
+      appliquerEquipe();
+    }
+
+    // Les deux équipes sont là : je prends celle que l'autre m'a faite.
+    function appliquerEquipe() {
+      const e = equipes;
+      if (!e || !e.envoyee || !e.recue) return;
+      const jeu = moteur.jeuOuvert, partie = moteur.partieVive;
+      if (!jeu || !partie) { finEquipes(); return; }
+      const nouvelle = e.recue.slice(0, e.nombre).map((m) => {
+        const x = Regles.creer(jeu, m.id, e.niveau, { attaques: m.attaques, nature: m.nature, talent: m.talent, ivs: m.ivs, evs: m.evs });
+        if (x && m.objet) x.objet = m.objet;
+        return x;
+      }).filter(Boolean);
+      if (!nouvelle.length) { message(`${nomDe(e.avec)} ne t'a composé aucune créature.`); finEquipes(); return; }
+      if (e.garder) for (const x of [...partie.equipe]) Collection.deposer(jeu, partie, x);
+      partie.equipe = nouvelle;
+      Collection.noterTout(partie);
+      const noms = nouvelle.map((x) => Regles.resume(jeu, x).nom).join(', ');
+      moteur.annoncer(`${nomDe(e.avec)} t'a composé une équipe`, noms);
+      multi.noter(`${multi.moi?.nom || 'moi'} et ${nomDe(e.avec)} se sont composé leurs équipes.`);
+      finEquipes();
+    }
+    function finEquipes() {
+      equipes = null;
+      if (occupe?.quoi === 'equipes') occupe = null;
+    }
+
     multi.sur(recevoir);
-    return { demarrer, arreter, dessiner, devant, recevoir, get actif() { return actif; }, get autres() { return autres; } };
+    return { demarrer, arreter, dessiner, devant, recevoir, composerPour, get actif() { return actif; }, get autres() { return autres; } };
   }
   return { creer };
 })();

@@ -34,7 +34,7 @@ const Combat = (() => {
     const tag = (o, k) => o?.officiel || o?.id || k;
 
     // --- Les deux camps ---
-    const camp = (equipe, joueur) => ({ equipe, joueur, actif: equipe.findIndex((c) => c.pv > 0), etages: {}, confusion: 0, toxique: 0, peur: false, participants: new Set() });
+    const camp = (equipe, joueur) => ({ equipe, joueur, actif: equipe.findIndex((c) => c.pv > 0), etages: {}, confusion: 0, toxique: 0, peur: false, ecrans: {}, effets: {}, participants: new Set() });
     const nous = camp(partie.equipe, true);
     let adverses;
     if (duel) {
@@ -91,6 +91,16 @@ const Combat = (() => {
       if (k.peur) l.push({ texte: 'Apeuré', sens: -1, detail: 'Elle ne bouge pas ce tour-ci.' });
       if (k.verrou) l.push({ texte: 'Choix', sens: -1, detail: `Elle ne peut plus lancer que ${trouver('attaques', k.verrou)?.nom || k.verrou}.` });
       if (tenu(c)) l.push({ texte: nomObjet(c), sens: 0, detail: `Elle tient ${nomObjet(c)}.` });
+      for (const [cle, n] of Object.entries(k.effets)) {
+        if (!n || !SPECIAUX[cle]) continue;
+        l.push({ texte: SPECIAUX[cle].court, sens: SPECIAUX[cle].bon ? 1 : -1, detail: SPECIAUX[cle].nom });
+      }
+      for (const [cle, n] of Object.entries(k.ecrans)) {
+        if (!n || !SPECIAUX[cle]) continue;
+        l.push({ texte: `${SPECIAUX[cle].court} ${n}`, sens: 1, detail: `${SPECIAUX[cle].nom} : encore ${n} tour${n > 1 ? 's' : ''}.` });
+      }
+      // La météo est sur les deux côtés : en duel, l'écran de l'autre joueur est inversé.
+      if (meteo.type) l.push({ texte: METEOS[meteo.type].nom, sens: 0, detail: `${METEOS[meteo.type].nom} : encore ${meteo.tours} tour${meteo.tours > 1 ? 's' : ''}.` });
       ui.etats(k.joueur ? 'joueur' : 'adversaire', l);
     }
     // Les PV changent : la barre glisse.
@@ -157,6 +167,80 @@ const Combat = (() => {
       await ui.message(`${nomDe(k)} mange ${n} et récupère des PV !`);
     }
 
+    // --- Les effets de combat (Saga 1.8) : vent arrière, provoc, météo, murs, vampigraine… ---
+    // Une attaque les porte dans son champ « special » (Tafl 1.6) ; les attaques officielles
+    // importées sont reconnues par leur nom PokeAPI, pour que rien ne soit à régler à la main.
+    const SPECIAUX_OFFICIELS = {
+      tailwind: 'vent_arriere', 'light-screen': 'mur_lumiere', reflect: 'protection', taunt: 'provoc',
+      'leech-seed': 'vampigraine', yawn: 'baillement', attract: 'attraction',
+      protect: 'abri', detect: 'abri', 'spiky-shield': 'abri', 'kings-shield': 'abri', 'baneful-bunker': 'abri',
+      'rain-dance': 'pluie', 'sunny-day': 'soleil', sandstorm: 'sable', hail: 'grele', snowscape: 'grele',
+      wrap: 'piege', bind: 'piege', clamp: 'piege', 'fire-spin': 'piege', whirlpool: 'piege',
+      'sand-tomb': 'piege', infestation: 'piege', 'magma-storm': 'piege',
+    };
+    // Combien de tours chacun dure, et ce qu'on en dit.
+    const SPECIAUX = {
+      vent_arriere: { tours: 4, camp: true, nom: 'Vent arrière', court: 'Vent arrière', bon: true, texte: (k) => `Le vent souffle dans le dos de ${equipeDe(k)} !` },
+      mur_lumiere: { tours: 5, camp: true, nom: 'Mur Lumière', court: 'Mur Lumière', bon: true, texte: (k) => `Un mur de lumière protège ${equipeDe(k)} des attaques spéciales !` },
+      protection: { tours: 5, camp: true, nom: 'Protection', court: 'Protection', bon: true, texte: (k) => `Un reflet protège ${equipeDe(k)} des attaques physiques !` },
+      provoc: { tours: 3, nom: 'Provoc', court: 'Provoqué', texte: (k) => `${nomDe(k)} est provoqué${fe(actif(k))} !` },
+      vampigraine: { tours: 0, nom: 'Vampigraine', court: 'Graine', texte: (k) => `Une graine est plantée sur ${nomDe(k)} !` },
+      piege: { tours: 4, nom: 'Piège', court: 'Piégé', texte: (k) => `${nomDe(k)} ne peut plus s'échapper !` },
+      baillement: { tours: 2, nom: 'Bâillement', court: 'Endormi bientôt', texte: (k) => `${nomDe(k)} commence à somnoler…` },
+      attraction: { tours: 0, nom: 'Attraction', court: 'Amoureux', texte: (k) => `${nomDe(k)} est amoureu${fe(actif(k)) ? 'se' : 'x'} !` },
+      abri: { tours: 1, nom: 'Abri', court: 'À l\'abri', bon: true, texte: (k) => `${nomDe(k)} se protège !` },
+    };
+    const METEOS = {
+      pluie: { nom: 'Pluie', texte: 'Il commence à pleuvoir !', fin: 'La pluie s\'arrête.' },
+      soleil: { nom: 'Soleil', texte: 'Le soleil tape fort !', fin: 'Le soleil redevient normal.' },
+      sable: { nom: 'Tempête de sable', texte: 'Une tempête de sable se lève !', fin: 'La tempête de sable se calme.' },
+      grele: { nom: 'Grêle', texte: 'Il commence à grêler !', fin: 'La grêle s\'arrête.' },
+    };
+    let meteo = { type: '', tours: 0 };
+    // « Ton équipe » / « l'équipe adverse », pour les textes des murs et du vent.
+    const equipeDe = (k) => (k.joueur ? 'ton équipe' : 'l\'équipe adverse');
+    // Ce qu'une attaque déclenche, écrit dans Tafl ou reconnu parmi les attaques officielles.
+    function specialDe(att) {
+      const direct = att?.special?.type || att?.special;
+      if (typeof direct === 'string' && (SPECIAUX[direct] || METEOS[direct])) return { type: direct, tours: Number(att?.special?.tours) || 0 };
+      const connu = SPECIAUX_OFFICIELS[att?.officiel || att?.id];
+      return connu ? { type: connu, tours: 0 } : null;
+    }
+    // Poser l'effet : sur un camp (vent, murs), sur la créature visée, ou sur le terrain (météo).
+    async function poserSpecial(k, cible, sp) {
+      if (METEOS[sp.type]) {
+        if (meteo.type === sp.type) { await ui.message('Mais rien ne se passe…'); return; }
+        meteo = { type: sp.type, tours: sp.tours || 5 };
+        await ui.message(METEOS[sp.type].texte);
+        montrerEtats(nous); montrerEtats(eux);
+        return;
+      }
+      const regle = SPECIAUX[sp.type];
+      if (!regle) return;
+      const sur = regle.camp || regle.bon ? k : cible; // ce qui aide va au lanceur, le reste à la cible
+      const duree = sp.tours || regle.tours || 0;
+      if (regle.camp) {
+        if (sur.ecrans[sp.type] > 0) { await ui.message('Mais rien ne se passe…'); return; }
+        sur.ecrans[sp.type] = duree;
+      } else {
+        if (actif(sur).pv <= 0) return;
+        if (sur.effets[sp.type]) { await ui.message('Mais rien ne se passe…'); return; }
+        if (sp.type === 'attraction' && !sexesOpposes(actif(k), actif(sur))) { await ui.message('Mais rien ne se passe…'); return; }
+        if (sp.type === 'baillement' && actif(sur).statut) { await ui.message('Mais rien ne se passe…'); return; }
+        sur.effets[sp.type] = duree || 1;
+      }
+      montrerEtats(sur);
+      await ui.message(regle.texte(sur));
+    }
+    const sexesOpposes = (a, b) => Boolean(a?.sexe) && Boolean(b?.sexe) && a.sexe !== b.sexe;
+    // Les compteurs descendent d'un cran à la fin du tour.
+    function baisserCompteurs(k) {
+      for (const cle of Object.keys(k.ecrans)) if (k.ecrans[cle] > 0) k.ecrans[cle]--;
+      if (k.effets.provoc > 0) k.effets.provoc--;
+      if (k.effets.abri) k.effets.abri = 0;
+      if (k.effets.piege > 0) k.effets.piege--;
+    }
+
     // --- Les statistiques en combat (avec les étages, de −6 à +6) ---
     const multEtage = (s, e) => (s === 'precision' || s === 'esquive' ? (e >= 0 ? (3 + e) / 3 : 3 / (3 - e)) : (e >= 0 ? (2 + e) / 2 : 2 / (2 - e)));
     function stat(k, s) {
@@ -165,6 +249,7 @@ const Combat = (() => {
       if (s === 'vitesse' && c.statut === 'paralysie') v *= 0.5;
       const t = tenu(c);
       if (t?.type === 'stat' && t.stat === s) v *= Number(t.valeur) || 1;
+      if (s === 'vitesse' && k.ecrans.vent_arriere > 0) v *= 2;
       return Math.max(1, Math.floor(v));
     }
 
@@ -270,13 +355,21 @@ const Combat = (() => {
         }
       }
       if (c.statut === 'paralysie' && chance(25)) { await ui.message(`${nom} est paralysé${fe(c)} ! ${il(c)} ne peut pas attaquer !`); return; }
+      if (k.effets.attraction && chance(50)) { await ui.message(`${nom} est trop amoureu${fe(c) ? 'se' : 'x'} pour attaquer !`); return; }
 
       // Bandeau / Lunettes / Mouchoir Choix : la première attaque est la seule, jusqu'au changement.
       if (slot && tenu(c)?.verrou && k.verrou !== slot.id) { k.verrou = slot.id; montrerEtats(k); }
       const a = slot ? trouver('attaques', slot.id) : null;
       const att = a || LUTTE;
+      // Provoc : plus que des attaques qui font mal.
+      if (k.effets.provoc > 0 && att.categorie === 'statut') {
+        await ui.message(`${nom} est provoqué${fe(c)} : ${il(c).toLowerCase()} ne peut pas utiliser ${att.nom} !`);
+        return;
+      }
       if (slot) slot.pp = Math.max(0, slot.pp - 1);
       await ui.message(`${nom} utilise ${att.nom} !`);
+      // L'autre s'est mis à l'abri ce tour-ci.
+      if (cible !== k && cible.effets.abri) { await ui.message(`${nomDe(cible)} se protège !`); return; }
 
       // La précision.
       const vise = att.cible === 'soi' || att.cible === 'equipe' || att.cible === 'terrain' ? k : cible;
@@ -304,6 +397,9 @@ const Combat = (() => {
           const to = tenu(c);
           if (to?.type === 'degats' && (!to.categorie || to.categorie === (physique ? 'physique' : 'speciale'))) mult *= Number(to.valeur) || 1;
           if (to?.type === 'type' && memeType(att.type, to.element)) mult *= Number(to.valeur) || 1;
+          // Les murs du camp d'en face, et la météo.
+          if (!crit && cible.ecrans[physique ? 'protection' : 'mur_lumiere'] > 0) mult *= 0.5;
+          mult *= multMeteo(att.type);
           let deg = await degats(c, A, D, puissance, mult, crit);
           // Ceinture Force : à PV pleins, elle survit à un coup fatal.
           const td = tenu(d);
@@ -363,7 +459,20 @@ const Combat = (() => {
         const qui = att.stats_cible === 'soi' ? k : cible;
         if (actif(qui).pv > 0) for (const s of att.stats) await changerEtage(qui, s.stat, Number(s.etages) || 0);
       }
+      // L'effet de combat de l'attaque (vent arrière, provoc, météo, murs…).
+      const sp = specialDe(att);
+      if (sp) { await poserSpecial(k, cible, sp); return; }
       if (att.categorie === 'statut' && !att.statut && !att.stats?.length && !att.soin) await ui.message('Mais rien ne se passe…');
+    }
+
+    // La pluie renforce l'eau et calme le feu ; le soleil fait l'inverse.
+    function multMeteo(type) {
+      if (!meteo.type || !type) return 1;
+      const eau = memeType(type, 'water') || memeType(type, 'eau');
+      const feu = memeType(type, 'fire') || memeType(type, 'feu');
+      if (meteo.type === 'pluie') return eau ? 1.5 : feu ? 0.5 : 1;
+      if (meteo.type === 'soleil') return feu ? 1.5 : eau ? 0.5 : 1;
+      return 1;
     }
 
     // La formule des dégâts (une règle maison peut la remplacer, Saga 0.12).
@@ -449,7 +558,44 @@ const Combat = (() => {
       if (c.statut === 'brulure') { await ui.message(`${nomDe(k)} souffre de sa brûlure !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max / 16))); }
       else if (c.statut === 'poison') { await ui.message(`${nomDe(k)} souffre du poison !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max / 8))); }
       else if (c.statut === 'poison_grave') { await ui.message(`${nomDe(k)} souffre du poison !`); await pv(k, c, c.pv - Math.max(1, Math.floor(max * k.toxique / 16))); k.toxique = Math.min(15, k.toxique + 1); }
+      // Les effets en cours (Saga 1.8).
+      if (c.pv > 0 && k.effets.vampigraine) {
+        const perte = Math.max(1, Math.floor(max / 8));
+        await ui.message(`${nomDe(k)} est vidé${fe(c)} de son énergie !`);
+        await pv(k, c, c.pv - perte);
+        const autre = k === nous ? eux : nous, ca = actif(autre);
+        if (ca.pv > 0 && ca.pv < C.pvMax(jeu, ca)) await pv(autre, ca, ca.pv + perte);
+      }
+      if (c.pv > 0 && k.effets.piege > 0) {
+        await ui.message(`${nomDe(k)} est pris${fe(c)} au piège !`);
+        await pv(k, c, c.pv - Math.max(1, Math.floor(max / 16)));
+        if (!k.effets.piege) await ui.message(`${nomDe(k)} se libère !`);
+      }
+      if (c.pv > 0 && k.effets.baillement) {
+        k.effets.baillement--;
+        if (!k.effets.baillement) { montrerEtats(k); await infliger(k, 'sommeil', false); }
+      }
       await baie(k);
+    }
+
+    // La météo fait ses dégâts à la fin du tour, puis s'épuise.
+    async function finMeteo() {
+      if (!meteo.type) return;
+      for (const k of [nous, eux]) {
+        const c = actif(k);
+        if (c.pv <= 0) continue;
+        const abri = meteo.type === 'sable' ? ['rock', 'roche', 'ground', 'sol', 'steel', 'acier'] : meteo.type === 'grele' ? ['ice', 'glace'] : null;
+        if (!abri || aLeType(c, ...abri)) continue;
+        await ui.message(`${nomDe(k)} est malmené${fe(c)} par ${meteo.type === 'sable' ? 'la tempête' : 'la grêle'} !`);
+        await pv(k, c, c.pv - Math.max(1, Math.floor(C.pvMax(jeu, c) / 16)));
+        await baie(k);
+      }
+      if (--meteo.tours <= 0) {
+        const fin = METEOS[meteo.type].fin;
+        meteo = { type: '', tours: 0 };
+        montrerEtats(nous); montrerEtats(eux);
+        await ui.message(fin);
+      }
     }
 
     // Changer de créature : les étages et la confusion s'effacent.
@@ -460,6 +606,7 @@ const Combat = (() => {
       k.toxique = actif(k).statut === 'poison_grave' ? 1 : 0;
       k.peur = false;
       k.verrou = '';
+      k.effets = {}; // la graine, la provoc, le piège… restent sur celle qui part
       if (k.joueur) nous.participants.add(actif(nous));
       else Collection.voir(partie, actif(k).creature); // le Pokédex : vue (Saga 0.6)
       montrer(k);
@@ -679,10 +826,12 @@ const Combat = (() => {
         } else if (choix === 'sac') {
           action = await utiliserObjet();
         } else if (choix === 'equipe') {
+          if (nous.effets.piege > 0) { await ui.message(`${C.nom(jeu, actif(nous))} est pris${fe(actif(nous))} au piège : ${il(actif(nous)).toLowerCase()} ne peut pas revenir !`); continue; }
           const i = await choisirCreature('Équipe : qui envoyer ?', false);
           if (i != null) action = { type: 'changer', cible: i };
         } else if (choix === 'fuite') {
           if (dresseur) { await ui.message('Impossible de fuir un combat de dresseur !'); continue; }
+          if (nous.effets.piege > 0) { await ui.message(`${C.nom(jeu, actif(nous))} est pris${fe(actif(nous))} au piège : impossible de fuir !`); continue; }
           if (await fuiteReussie()) { await ui.message('Tu prends la fuite !'); ui.fermer(); return { issue: 'fuite' }; }
           await ui.message('Impossible de fuir !');
           action = { type: 'rien' };
@@ -727,6 +876,8 @@ const Combat = (() => {
         if (actif(nous).pv <= 0 || actif(eux).pv <= 0) break;
       }
       for (const k of [nous, eux]) { k.peur = false; montrerEtats(k); await finDeTour(k); }
+      await finMeteo();
+      for (const k of [nous, eux]) { baisserCompteurs(k); montrerEtats(k); }
 
       // 3. Les K.O.
       if (actif(eux).pv <= 0) {

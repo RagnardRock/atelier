@@ -85,9 +85,10 @@ const ExempleArene = (() => {
     // Les deux camps : un tapis bleu à gauche, un rouge à droite.
     rect(3, 8, 2, 3, T.camp_bleu);
     rect(16, 8, 2, 3, T.camp_rouge);
-    // Les deux bornes « Compose ton équipe », une par camp.
+    // Les deux bornes « Compose ton équipe », une par camp, et la borne du mode inversé au milieu.
     poser(3, 6, T.borne, 1);
     poser(17, 6, T.borne, 1);
+    poser(10, 6, T.borne, 1);
 
     const borne = (id, x, y) => ev(id, 'Borne d\'équipe', 'pnj', x, y, [
       page([
@@ -97,13 +98,24 @@ const ExempleArene = (() => {
       ]),
     ], { apparence: { personnage: '', tuile: T.borne }, obstacle: null });
 
+    // Saga 1.8 : la borne du mode inversé, où chacun compose l'équipe de l'autre (trois créatures).
+    const borneInversee = ev('borne-inversee', 'Borne du défi inversé', 'pnj', 10, 7, [
+      page([
+        dire('Défi inversé : chacun compose l\'équipe de l\'autre, trois créatures au niveau 50. À toi de lui préparer quelque chose…'),
+        { type: 'composer_equipe', nombre: 3, niveau: 50, titre: '', garder: true, pour: 'adversaire' },
+        dire('Quand vous avez fini tous les deux, mettez-vous face à face et appuyez sur Action : Défier.'),
+      ]),
+    ], { apparence: { personnage: '', tuile: T.borne }, obstacle: null });
+
     m.events = [
       borne('borne-bleue', 3, 7),
       borne('borne-rouge', 17, 7),
+      borneInversee,
       ev('panneau', 'Panneau de l\'arène', 'panneau', 10, 15, [
         page([
           dire('Arène de duel. À deux (ou plus) : l\'un ouvre la partie dans Saga (menu de pause › Jouer à plusieurs), les autres ouvrent l\'adresse affichée dans leur navigateur et entrent le code.'),
           dire('Chacun prend son équipe à une borne, puis vous vous mettez face à face et vous appuyez sur Action : Défier. Rien n\'est perdu ni gagné, les équipes reviennent comme avant.'),
+          dire('La borne du milieu lance le défi inversé : chacun compose l\'équipe de l\'autre, trois créatures chacun.'),
           dire('S\'il n\'y a aucune créature à choisir, importe d\'abord les données officielles dans Tafl (Loki › « Importe les données officielles Pokémon »).'),
         ]),
       ]),
