@@ -21,11 +21,11 @@ const Moteur = (() => {
   const TOUCHES_DEFAUT = {
     haut: ['ArrowUp', 'KeyW'], bas: ['ArrowDown', 'KeyS'], gauche: ['ArrowLeft', 'KeyA'], droite: ['ArrowRight', 'KeyD'],
     action: ['Space', 'Enter', 'NumpadEnter', 'KeyE'], retour: ['Backspace', 'KeyX'], courir: ['ShiftLeft', 'ShiftRight'],
-    pause: ['Escape'], carnet: ['Tab'],
+    pause: ['Escape'], carnet: ['Tab'], actions: ['KeyB'],
   };
   // Les boutons de la manette (numéros de la « manette standard » : 0 A, 1 B, 2 X, 3 Y, 8 Select, 9 Start).
   // La croix et le stick gauche déplacent toujours.
-  const MANETTE_DEFAUT = { action: [0], retour: [1], courir: [1, 2], pause: [9], carnet: [8] };
+  const MANETTE_DEFAUT = { action: [0], retour: [1], courir: [1, 2], pause: [9], carnet: [8], actions: [3] };
   const COMMANDES = ['haut', 'bas', 'gauche', 'droite', 'action', 'retour', 'courir', 'pause', 'carnet'];
   const DIRS = ['haut', 'bas', 'gauche', 'droite'];
   const liste = (v, def) => (Array.isArray(v) ? v : def);

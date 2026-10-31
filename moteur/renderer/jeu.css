@@ -113,6 +113,7 @@ body.plein-ecran #scene { cursor: none; }
   outline: none;
 }
 .pause-choix kbd { margin-left: auto; }
+.pause-choix.hors-vue { display: none !important; } /* Saga 1.6.1 : une autre page du menu */
 .pause-choix:hover, .pause-choix:focus-visible, .pause-choix:focus { background: var(--hover); color: var(--text-strong); }
 .pause-choix:focus { box-shadow: inset 2px 0 0 var(--accent); }
 .pause-choix .codicon { color: var(--accent); }

@@ -32,7 +32,8 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
 | Tab | Le **carnet** : équipe, badges, sac (avec « Utiliser »), argent, quêtes. |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
-| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, recharger, recommencer, réglages, dossier du jeu, changer de jeu. |
+| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, options, changer de jeu ; « Outils du créateur… » regroupe recharger, recommencer, dossier du jeu et exporter (Saga 1.6.1). |
+| B | **Actions du jeu** (Saga 1.6.1) : ce qu'ajoutent le pack de règles et les modules (le domaine, construire, les jets de dés). Aussi « Actions du jeu… » dans la pause, et Y à la manette. Se change dans Options. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
@@ -211,7 +212,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 
 - **Ce qui repousse** (pour tous les jeux) : un événement avec `repousse_nuits` (un buisson de baies, un arbre fruitier, un arbre coupé, un coffre qui se remplit) revient à sa première page après ce nombre de nuits : son « déjà fait » s'éteint tout seul quand le joueur dort.
 - **Les habitants** (module gestion) : ils logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas` dans les réglages du module) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent la nuit quand il reste un logement et que personne n'a eu faim ; s'il manque à manger, ils travaillent quand même (Saga 1.6.1 : avant, une ferme sans blé restait sans ouvriers pour toujours), et chaque jeu choisit ce que fait la faim : rien, bloquer les arrivées (par défaut), ou en plus des départs après quelques nuits. La commande `gestion_habitants` en amène ou en fait partir (une histoire), la condition `gestion_habitants` compte, le moment `gestion_arrivee` prévient les scripts, et l'écran du domaine montre les habitants et le travail. Ils ne se promènent pas encore sur la carte.
-- **Saga 1.6.1** : un bâtiment posé ne bloque plus tout son rectangle. Son passage se règle case par case (une ombre ou le toit laissent passer), et sa porte peut mener à un intérieur ; la commande `gestion_sortir` en ressort. Le contrat des modules gagne `teleporteur(o, x, y)`.
+- **Saga 1.6.1** : un bâtiment posé ne bloque plus tout son rectangle. Son passage se règle case par case (une ombre ou le toit laissent passer), et sa porte peut mener à un intérieur ; la commande `gestion_sortir` en ressort. Le contrat des modules gagne `teleporteur(o, x, y)`. Chaque bâtiment posé a sa propre copie de son intérieur (la carte `intérieur@b3` : mêmes calques, mais ce qu'on y fait ne vaut que pour elle), sauf si son type le partage (`interieur: "partage"`). Les copies de carte (`base@copie`) sont dans le cœur de Saga, pour tout module. Le menu de pause s'allège : les actions du jeu passent sur la touche B, les outils du créateur dans leur page.
 
 ## La suite
 

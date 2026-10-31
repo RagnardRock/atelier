@@ -203,7 +203,9 @@
       const [dx, dy] = { haut: [0, -1], bas: [0, 1], gauche: [-1, 0], droite: [1, 0] }[dir] || [0, -1];
       const inverse = { haut: 'bas', bas: 'haut', gauche: 'droite', droite: 'gauche' }[dir] || 'bas';
       o.etat.retour = { carte: o.carte.id, x: x - dx, y: y - dy, direction: inverse };
-      return b.def.porte_vers;
+      // Saga 1.6.1 : sa propre copie de l'intérieur, sauf si le type le partage.
+      const v = b.def.porte_vers;
+      return b.def.interieur === 'partage' ? v : { ...v, carte: `${Jeu.baseDe(v.carte)}@${b.id}` };
     },
     preparer(o) { poser(o, etatDe(o)); },
 

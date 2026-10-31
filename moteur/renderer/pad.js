@@ -7,8 +7,8 @@
 
 const Pad = (() => {
   const FOCUSABLES = 'button, input, select, textarea, [tabindex]:not([tabindex="-1"])';
-  let reglages = { cibles: () => [], start: () => {}, select: () => {}, boutons: () => ({}) };
-  let avant = { dir: null, a: false, b: false, start: false, select: false };
+  let reglages = { cibles: () => [], start: () => {}, select: () => {}, actions: () => {}, boutons: () => ({}) };
+  let avant = { dir: null, a: false, b: false, start: false, select: false, y: false };
   let prochain = 0; // quand la direction tenue se répète
   const ignores = new Set(); // des boutons à ignorer jusqu'à ce qu'ils soient relâchés
 
@@ -64,7 +64,7 @@ const Pad = (() => {
     const [ax, ay] = [pad.axes[0] || 0, pad.axes[1] || 0];
     const dir = pad.buttons[12]?.pressed || ay < -0.5 ? 'haut' : pad.buttons[13]?.pressed || ay > 0.5 ? 'bas'
       : pad.buttons[14]?.pressed || ax < -0.5 ? 'gauche' : pad.buttons[15]?.pressed || ax > 0.5 ? 'droite' : null;
-    const etat = { dir, a: presse(b.action, [0]), b: presse(b.retour, [1]), start: presse(b.pause, [9]), select: presse(b.carnet, [8]) };
+    const etat = { dir, a: presse(b.action, [0]), b: presse(b.retour, [1]), start: presse(b.pause, [9]), select: presse(b.carnet, [8]), y: presse(b.actions, [3]) };
     const prec = avant;
     const nouveau = (k) => etat[k] && !prec[k];
     const maintenant = performance.now();
@@ -76,6 +76,7 @@ const Pad = (() => {
     if (document.querySelector('.pastille.ecoute')) return;
     if (nouveau('start')) { reglages.start(); return; }
     if (nouveau('select')) { reglages.select(); return; }
+    if (nouveau('y')) { reglages.actions(); return; } // Saga 1.6.1 : les actions du jeu (Y)
     const c = reglages.cibles().find((x) => x && x.racine && visible(x.racine));
     if (!c) return;
     if (!c.racine.contains(document.activeElement) && (pas || etat.a)) { deplacer(c.racine, 0); if (!etat.a) return; }

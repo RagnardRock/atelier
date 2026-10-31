@@ -1000,7 +1000,8 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `logement` (Saga 1.6, 0 par défaut) : combien d'habitants il loge, une fois fini.
 - `ouvriers` (Saga 1.6, 0 par défaut) : combien d'habitants il lui faut pour produire ; il ne produit pas s'il ne les a pas tous. 0 : il produit seul.
 - `passage` (facultatif, Tafl 1.4.1, Saga 1.6.1) : le passage case par case, rangée par rangée (`largeur × hauteur` valeurs) : `"bloque"`, `"libre"` (une ombre, le toit), `"porte"` (on la traverse, et elle mène à `porte_vers`) ou `"auto"`. Tafl le règle à la souris sur l'image du tampon. Absent, ou `"auto"` : les rangées `dessus` du tampon et ses cases vides sont libres, sinon la tuile décide (une tuile au passage `"libre"` laisse passer, les autres bloquent) ; sans tampon, tout bloque.
-- `porte_vers` (facultatif, Saga 1.6.1, `{ "carte", "x", "y", "direction" }`) : où mène la porte d'un bâtiment fini (son intérieur). Tous les bâtiments du même type mènent au même endroit. Pour ressortir, la commande `gestion_sortir` ramène le joueur devant la porte par laquelle il est entré.
+- `porte_vers` (facultatif, Saga 1.6.1, `{ "carte", "x", "y", "direction" }`) : où mène la porte d'un bâtiment fini (son intérieur). Chaque bâtiment posé a sa propre copie de cette carte (Saga la nomme `carte@id du bâtiment`), sauf avec `interieur`. Pour ressortir, la commande `gestion_sortir` ramène le joueur devant la porte par laquelle il est entré.
+- `interieur` (facultatif, Tafl 1.4.1, Saga 1.6.1) : `"propre"` (par défaut : un intérieur à chaque bâtiment posé) ou `"partage"` (tous ceux de ce type mènent à la même carte : une boutique, une grange commune).
 - `porte` (facultatif, `{ "x", "y" }`, depuis le coin haut gauche du bâtiment) : la case de l'emprise qu'on peut traverser ; toutes les autres bloquent.
 
 #### Dans `reglages.json` : `modules_reglages.gestion`

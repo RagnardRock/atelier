@@ -50,6 +50,7 @@ const DonneesGestion = (() => {
       // Tafl 1.4.1 : le passage case par case ('bloque', 'libre', 'porte', 'auto') et où mène la porte.
       passage: Array.isArray(b?.passage) ? b.passage.slice(0, 1024).map((v) => (['bloque', 'libre', 'porte', 'auto'].includes(v) ? v : 'auto')) : null,
       porte_vers: b?.porte_vers && typeof b.porte_vers === 'object' && b.porte_vers.carte ? { carte: str(b.porte_vers.carte), x: int(b.porte_vers.x, 0, 0, 9999), y: int(b.porte_vers.y, 0, 0, 9999), direction: ['haut', 'bas', 'gauche', 'droite'].includes(b.porte_vers.direction) ? b.porte_vers.direction : 'haut' } : null,
+      interieur: b?.interieur === 'partage' ? 'partage' : 'propre',
       // Tafl 1.4 (Saga 1.6) : les habitants qu'il loge, et les ouvriers qu'il lui faut pour produire.
       logement: int(b?.logement, 0, 0, 999),
       ouvriers: int(b?.ouvriers, 0, 0, 999),
@@ -219,7 +220,8 @@ const DonneesGestion = (() => {
           champ('Rangée (y)', nombreIn(b.porte_vers, 'y', 0, 9999)),
           champ('Regarde', sel([['haut', 'Vers le haut'], ['bas', 'Vers le bas'], ['gauche', 'Vers la gauche'], ['droite', 'Vers la droite']], b.porte_vers.direction, (v) => { b.porte_vers.direction = v; })),
         ]),
-        info('Toutes les maisons de ce type mènent au même intérieur. Pour en ressortir : dans l\'intérieur, un déclencheur avec la commande « Ressortir du bâtiment » ramène le joueur devant la porte par laquelle il est entré.'),
+        champ('Intérieur', sel([['propre', 'Un intérieur à chaque bâtiment posé'], ['partage', 'Le même pour tous (une boutique, une grange commune)']], b.interieur === 'partage' ? 'partage' : 'propre', (v) => { b.interieur = v; })),
+        info('« Un intérieur à chaque bâtiment » : chaque maison posée a sa propre copie de cette carte (ce qu\'on y ramasse ou y fait ne vaut que pour elle). Pour en ressortir : dans l\'intérieur, un déclencheur avec la commande « Ressortir du bâtiment » ramène le joueur devant la porte par laquelle il est entré.'),
       ];
     }
     const tailleBox = el('div', { className: 'field-grid' });
@@ -238,7 +240,7 @@ const DonneesGestion = (() => {
       tailleBox,
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Passage : choisis un pinceau, puis clique sur les cases' }), pinceaux, grille]),
       vers,
-      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (menu de pause › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
+      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (touche B › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
     ];
   }
 

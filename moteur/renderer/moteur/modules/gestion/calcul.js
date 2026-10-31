@@ -74,6 +74,9 @@ const GestionCalcul = (() => {
       if (kp >= 0) def.porte = { x: kp % def.largeur, y: Math.floor(kp / def.largeur) };
       const v = b.porte_vers;
       def.porte_vers = v && typeof v === 'object' && typeof v.carte === 'string' && v.carte ? { carte: v.carte, x: entier(v.x, 0, 0, 9999), y: entier(v.y, 0, 0, 9999), direction: ['haut', 'bas', 'gauche', 'droite'].includes(v.direction) ? v.direction : 'haut' } : null;
+      // Saga 1.6.1 : 'propre' (défaut) : chaque bâtiment posé a sa copie de l'intérieur (la carte
+      // « porte_vers.carte@id du bâtiment ») ; 'partage' : tous ceux de ce type mènent à la même carte.
+      def.interieur = b.interieur === 'partage' ? 'partage' : 'propre';
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
     const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
