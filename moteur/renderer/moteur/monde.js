@@ -32,6 +32,7 @@ const Monde = (() => {
       variables: variablesDeDepart(jeu), // id → nombre ou texte (Saga 0.12)
       graine: Math.floor(Math.random() * 2147483647), // le hasard des scripts JS (Saga 0.12)
       modules: {},         // l'état de chaque module du jeu, par id (Saga 1.4, modules/MODULES.md)
+      jour: 1,             // le numéro du jour (Saga 1.5) : la commande « dormir » passe au suivant
       position: { ...depart },
     };
   }
@@ -82,6 +83,8 @@ const Monde = (() => {
       case 'variable': return comparer(partie.variables?.[cond.id] ?? 0, cond.comparaison || '>=', cond.valeur ?? 0);
       // Le moment de la journée (Saga 0.11) : matin, jour, soir ou nuit, selon l'horloge du jeu.
       case 'moment': return typeof Temps === 'undefined' || Temps.moment(null, partie, cond.moment);
+      // Le numéro du jour (Saga 1.5), comparé à une valeur.
+      case 'jour': return comparer(Number(partie.jour) || 1, cond.comparaison || '>=', Number(cond.valeur) || 1);
       // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
       case 'membre': return [...(partie.equipe || []), ...(partie.boites || []).flatMap((b) => b.creatures || [])]
         .some((c) => c && c.heros && c.creature === cond.personnage);
@@ -129,6 +132,7 @@ const Monde = (() => {
         const titre = q?.titre || cond.quete;
         return cond.etat === 'finie' ? `Après la quête « ${titre} »` : cond.etat === 'en_cours' ? `Pendant la quête « ${titre} »` : 'Bientôt';
       }
+      case 'jour': return `À partir du jour ${Number(cond.valeur) || 1}`;
       case 'moment': return { matin: 'Le matin', jour: 'Le jour', soir: 'Le soir', nuit: 'La nuit' }[cond.moment] || 'À un autre moment';
       default: return 'Plus tard dans l\'aventure';
     }

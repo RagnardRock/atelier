@@ -16,6 +16,7 @@
 //   nouvellePartie(o)                   prépare son état dans une partie toute neuve
 //   preparer(o)                         remet à jour son état dans une partie chargée (ou neuve)
 //   entrerCarte(o)                      le joueur arrive sur une carte (o.carte, o.depuis)
+//   finDeJournee(o)                     le joueur dort : le jour o.jour se termine (Saga 1.5) ; → [lignes du rapport]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
 //   dessiner(o)                         dessine sur la carte, à la profondeur o.profondeur ('sol' | 'dessus')
 //   commandes                           { type: async (o) → résultat } : ses commandes d'événement
@@ -108,6 +109,12 @@ const Modules = (() => {
     },
     entrerCarte(jeu, partie, hote, carte, depuis) {
       chacun(jeu, 'entrerCarte', (m) => m.entrerCarte(objet(m, jeu, partie, hote, { carte, depuis })));
+    },
+    // Saga 1.5 : le joueur dort, le jour `jour` se termine. Chaque module fait son calcul (une seule fois
+    // par jour : c'est à lui de s'en souvenir dans son état) et rend les lignes du rapport du matin.
+    finDeJournee(jeu, partie, hote, jour) {
+      return chacun(jeu, 'finDeJournee', (m) => m.finDeJournee(objet(m, jeu, partie, hote, { jour })))
+        .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.slice(0, 200)));
     },
     // Une case bloquée par un module (un bâtiment posé en jeu). Appelé souvent : doit rester rapide.
     bloque(jeu, partie, carte, x, y) {

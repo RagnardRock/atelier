@@ -507,6 +507,19 @@ const Events = (() => {
       depuis: (v) => ({ type: 'heure', action: v.action === 'regler' ? 'regler' : 'avancer', heures: clamp(Math.round(v.heures) || 0, 0, 23) }),
       resume: (doc, c) => (c.action === 'regler' ? `Mettre l'heure à ${c.heures} h` : `Avancer l'heure de ${c.heures} h`),
     },
+    // Tafl 1.3 (Saga 1.5) : dormir, passer au jour suivant.
+    dormir: {
+      nom: 'Dormir (passer au jour suivant)', icone: 'eye-closed', groupe: 'Ambiance',
+      nouveau: () => ({ type: 'dormir', texte: '', soigner: true, heure: '' }),
+      champs: (doc, c) => [
+        { key: 'texte', label: 'Avant de dormir', type: 'text', value: c.texte, placeholder: 'facultatif : Tu te glisses sous la couverture…' },
+        { key: 'heure', label: 'Réveil à', type: 'select', value: String(c.heure ?? ''), choices: HEURES_REVEIL },
+        { key: 'soigner', label: 'Soigner le groupe (on se réveillera ici après une défaite)', type: 'checkbox', value: c.soigner !== false },
+        { type: 'info', text: 'Le jour se termine : les modules du jeu font leur calcul de la nuit (la gestion produit, les chantiers avancent), fondu au noir, et le joueur se réveille le lendemain avec le rapport du matin. Le numéro du jour se teste avec la condition « Le numéro du jour ».' },
+      ],
+      depuis: (v) => ({ type: 'dormir', texte: v.texte.trim(), soigner: Boolean(v.soigner), heure: v.heure === '' ? '' : clamp(Math.round(Number(v.heure)) || 0, 0, 23) }),
+      resume: (doc, c) => `Dormir${c.heure !== '' && c.heure !== undefined ? ` (réveil à ${c.heure} h)` : ''}${c.soigner === false ? ', sans soigner' : ''}`,
+    },
     // Tafl 0.31 (Saga 0.12) : une commande écrite en JavaScript (Événements › Scripts, commande()).
     script: {
       nom: 'Script JS (une commande de tes scripts)', icone: 'code', groupe: 'Scripts', largeur: 540,
@@ -838,6 +851,100 @@ const Events = (() => {
       depuis: (v) => ({ type: 'jdr_niveau', min: clamp(Math.round(v.min) || 1, 1, 20) }),
     },
   });
+
+  // --- Tafl 1.3 (Saga 1.5) : dormir et le numéro du jour, pour tous les jeux ---
+  const HEURES_REVEIL = [['', 'L\'heure de départ du jeu (Réglages › Jour et nuit)'], ...Array.from({ length: 24 }, (_, h) => [String(h), `${h} h`])];
+  CONDITIONS.jour = {
+    nom: 'Le numéro du jour (après avoir dormi)',
+    nouveau: () => ({ type: 'jour', comparaison: '>=', valeur: 2 }),
+    champs: (doc, c) => [
+      { key: 'comparaison', label: 'Le jour est', type: 'select', value: c.comparaison, choices: COMPARAISONS },
+      { key: 'valeur', label: 'Jour', type: 'number', value: c.valeur, min: 1, max: 99999 },
+      { type: 'info', text: 'Le jeu commence au jour 1 ; la commande « Dormir » passe au jour suivant. Pour un marchand qui arrive le jour 3, une réponse qui vient deux jours après une lettre.' },
+    ],
+    depuis: (v) => ({ type: 'jour', comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: clamp(Math.round(v.valeur) || 1, 1, 99999) }),
+  };
+
+  // --- Tafl 1.3 (Saga 1.5) : le module « gestion » (Réglages › Règles du jeu › Modules) ---
+  // Ses commandes et conditions ne sont proposées que si le jeu l'active (modules : comme packs).
+  const MODULE_GESTION = ['gestion'];
+  const choixDe = (doc, sorte, actuel, vide) => {
+    const list = (doc.data[sorte] || []).map((o) => [o.id, o.nom || o.id]);
+    if (actuel && !list.some(([k]) => k === actuel)) list.unshift([actuel, `${actuel} (n'existe plus)`]);
+    return list.length ? list : [['', vide]];
+  };
+  const choixRessources = (doc, actuel) => choixDe(doc, 'ressources', actuel, 'Aucune ressource : crée-les dans Données › Ressources');
+  const choixBatiments = (doc, actuel) => choixDe(doc, 'batiments', actuel, 'Aucun bâtiment : crée-les dans Données › Bâtiments');
+  const ANNONCER = { key: 'annoncer', label: 'Le dire au joueur', type: 'checkbox' };
+  A_BRANCHES.push('gestion_construire');
+  Object.assign(COMMANDES, {
+    gestion_construire: {
+      nom: 'Construire un bâtiment', icone: 'tools', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_construire', batiment: doc.data.batiments?.[0]?.id || '', annoncer: true, reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Son coût est pris tout de suite dans le stock ; le chantier avance d'une nuit chaque fois que le joueur dort. Raté : pas assez de ressources, ou son maximum est atteint. ${AIDE_BRANCHES} Pour le montrer une fois fini : une page avec la condition « Un bâtiment est construit ».` },
+      ],
+      depuis: (v, c) => ({ type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      valide: (c) => (c.batiment ? null : 'Crée d\'abord un bâtiment (Données › Bâtiments).'),
+      resume: (doc, c) => `Construire « ${nomData(doc, 'batiments', c.batiment)} »`,
+    },
+    gestion_stock: {
+      nom: 'Ajouter ou retirer une ressource du stock', icone: 'archive', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_stock', action: 'ajouter', ressource: doc.data.ressources?.[0]?.id || '', nombre: 1, annoncer: true }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ajouter', 'Ajouter au stock'], ['retirer', 'Retirer du stock']] },
+        { key: 'ressource', label: 'Ressource', type: 'select', value: c.ressource, choices: choixRessources(doc, c.ressource) },
+        { key: 'nombre', label: 'Nombre', type: 'number', value: c.nombre, min: 1, max: 99999 },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: 'Le stock est celui du domaine, pas le sac du joueur. Il ne passe jamais sous 0, ni au-dessus de sa capacité (Réglages › Règles du jeu › Modules).' },
+      ],
+      depuis: (v) => ({ type: 'gestion_stock', action: v.action === 'retirer' ? 'retirer' : 'ajouter', ressource: v.ressource, nombre: clamp(Math.round(v.nombre) || 1, 1, 99999), annoncer: Boolean(v.annoncer) }),
+      valide: (c) => (c.ressource ? null : 'Crée d\'abord une ressource (Données › Ressources).'),
+      resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer du stock' : 'Ajouter au stock'} : ${c.nombre} ${nomData(doc, 'ressources', c.ressource)}`,
+    },
+    gestion_deposer: {
+      nom: 'Déposer le sac au stock', icone: 'inbox', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_deposer', annoncer: true }),
+      resume: () => 'Déposer au stock ce que le joueur rapporte (les objets des ressources)',
+    },
+    gestion_domaine: {
+      nom: 'Ouvrir l\'écran du domaine', icone: 'home', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_domaine' }),
+      resume: () => 'Montrer le domaine (le stock et les bâtiments)',
+    },
+  });
+  Object.assign(CONDITIONS, {
+    gestion_batiment: {
+      nom: 'Un bâtiment est construit (gestion)', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_batiment', batiment: doc.data.batiments?.[0]?.id || '', min: 1 }),
+      champs: (doc, c) => [
+        { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) },
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 1, max: 999 },
+        { type: 'info', text: 'Seulement les bâtiments finis (pas les chantiers). Une page avec cette condition montre le bâtiment à son emplacement.' },
+      ],
+      depuis: (v) => ({ type: 'gestion_batiment', batiment: v.batiment, min: clamp(Math.round(v.min) || 1, 1, 999) }),
+      valide: (c) => (c.batiment ? null : 'Quel bâtiment ?'),
+    },
+    gestion_chantier: {
+      nom: 'Un chantier est en cours (gestion)', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_chantier', batiment: doc.data.batiments?.[0]?.id || '' }),
+      champs: (doc, c) => [{ key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) }],
+      depuis: (v) => ({ type: 'gestion_chantier', batiment: v.batiment }),
+      valide: (c) => (c.batiment ? null : 'Quel bâtiment ?'),
+    },
+    gestion_stock: {
+      nom: 'Le stock a assez d\'une ressource (gestion)', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_stock', ressource: doc.data.ressources?.[0]?.id || '', min: 10 }),
+      champs: (doc, c) => [
+        { key: 'ressource', label: 'Ressource', type: 'select', value: c.ressource, choices: choixRessources(doc, c.ressource) },
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 99999 },
+      ],
+      depuis: (v) => ({ type: 'gestion_stock', ressource: v.ressource, min: clamp(Math.round(v.min) || 0, 0, 99999) }),
+      valide: (c) => (c.ressource ? null : 'Quelle ressource ?'),
+    },
+  });
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -857,6 +964,10 @@ const Events = (() => {
     if (c.type === 'jdr_classe') return `un héros est ${nomData(doc, 'classes_jdr', c.classe)}`;
     if (c.type === 'jdr_origine') return `un héros est ${nomData(doc, 'origines', c.origine)}`;
     if (c.type === 'jdr_niveau') return `un héros est au moins niveau ${c.min}`;
+    if (c.type === 'jour') return `le jour ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
+    if (c.type === 'gestion_batiment') return `${c.min > 1 ? `au moins ${c.min} × ` : ''}« ${nomData(doc, 'batiments', c.batiment)} » construit`;
+    if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
+    if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -881,6 +992,10 @@ const Events = (() => {
       case 'jdr_classe': return { type: 'jdr_classe', classe: str(c.classe) };
       case 'jdr_origine': return { type: 'jdr_origine', origine: str(c.origine) };
       case 'jdr_niveau': return { type: 'jdr_niveau', min: clamp(int(c.min, 1), 1, 20) };
+      case 'jour': return { type: 'jour', comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 1), 1, 99999) };
+      case 'gestion_batiment': return { type: 'gestion_batiment', batiment: str(c.batiment), min: clamp(int(c.min, 1), 1, 999) };
+      case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment) };
+      case 'gestion_stock': return { type: 'gestion_stock', ressource: str(c.ressource), min: clamp(int(c.min, 0), 0, 99999) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -921,6 +1036,11 @@ const Events = (() => {
       case 'musique': return { type: 'musique', fichier: Donnees.son(c.fichier, ['aucune']) };
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
+      case 'dormir': return { type: 'dormir', texte: str(c.texte), soigner: vrai(c.soigner), heure: c.heure === '' || c.heure === null || c.heure === undefined ? '' : clamp(int(c.heure, 8), 0, 23) };
+      case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
+      case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
+      case 'gestion_domaine': return { type: 'gestion_domaine' };
       case 'variable': {
         const action = pick(c.action, ACTIONS_VARIABLE, 'regler');
         return { type: 'variable', id: str(c.id), action, valeur: action === 'regler' ? valeurVariable(c.valeur ?? 0) : Number(c.valeur) || 0 };
@@ -1202,7 +1322,9 @@ const Events = (() => {
   const choisir = (items, x, y) => new Promise((resolve) => Menus.open(items.map((it) => it && { ...it, run: () => resolve(it.value) }), x, y));
   // Les commandes et conditions d'un autre pack de règles ne sont pas proposées (packs : sinon toutes).
   // aussiSi(doc) : une commande d'un autre pack que le jeu utilise quand même (des badges déjà créés).
-  const duPack = (doc, d) => !d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon') || Boolean(d.aussiSi?.(doc));
+  // Tafl 1.3 : celles d'un module (modules : ['gestion']) seulement si le jeu active ce module.
+  const duModule = (doc, d) => !d.modules || d.modules.some((m) => (doc?.data?.reglages?.modules || []).includes(m));
+  const duPack = (doc, d) => (!d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon') || Boolean(d.aussiSi?.(doc))) && duModule(doc, d);
   const menuConditions = (doc) => Object.entries(CONDITIONS).filter(([, d]) => duPack(doc, d)).map(([k, d]) => ({ label: d.nom, value: k }));
   function menuCommandes(doc) {
     const items = [];
@@ -1678,7 +1800,8 @@ const Events = (() => {
       // Les onglets du pack de règles du jeu (Donnees.ONGLETS › packs), avec leurs noms dans ce pack.
       const tous = onglets();
       const pack = () => work.reglages?.regles || 'pokemon';
-      const defs = () => tous.filter((d) => !d.packs || d.packs.includes(pack()));
+      // Tafl 1.3 : les onglets d'un module (modules : ['gestion']) seulement si le jeu l'active.
+      const defs = () => tous.filter((d) => (!d.packs || d.packs.includes(pack())) && (!d.modules || d.modules.some((m) => (work.reglages?.modules || []).includes(m))));
       const libelleDe = (d) => d.labels?.[pack()] || d.label;
       const choisis = Object.fromEntries(tous.map((d) => [d.key, 0]));
       const recherches = Object.fromEntries(tous.map((d) => [d.key, '']));

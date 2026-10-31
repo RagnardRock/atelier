@@ -1,4 +1,4 @@
-# Les modules de jeu de Saga (Saga 1.4, Tafl 1.2)
+# Les modules de jeu de Saga (Saga 1.4, Tafl 1.2 ; `finDeJournee` et le module « gestion » : Saga 1.5, Tafl 1.3)
 
 Tafl et Saga servent à beaucoup de jeux différents. Pour qu'un jeu puisse faire plus qu'un autre sans que Saga se remplisse de cas particuliers, il y a deux sortes d'extensions :
 
@@ -8,7 +8,7 @@ Tafl et Saga servent à beaucoup de jeux différents. Pour qu'un jeu puisse fair
 | Répond à | « Que se passe-t-il quand j'attaque, je capture, je monte de niveau ? » | « Qu'est-ce que ce jeu sait faire en plus dans le monde ? » |
 | Touche à | L'équipe, le sac, l'or, l'expérience, l'encyclopédie | Son propre état (`partie.modules[id]`), et le monde : dessiner sur la carte, bloquer des cases, ajouter des commandes, des conditions, des choix au menu de pause |
 | Voit la carte et l'écran | Non (pas de DOM, pas de carte) | Oui, par ce que le moteur lui prête |
-| Exemples | `pokemon`, `jrpg`, `jdr` | `gestion` (le premier prévu : un domaine à bâtir et faire tourner) |
+| Exemples | `pokemon`, `jrpg`, `jdr` | `gestion` (Saga 1.5 : un stock et des bâtiments qui produisent chaque nuit, voir `gestion/`) |
 
 Un pack et des modules se combinent librement : « JRPG + gestion », « Pokémon + gestion » (une pension de créatures), plus tard « action en temps réel + gestion ». Un module ne doit donc **jamais** supposer quel pack tourne avec lui.
 
@@ -62,6 +62,7 @@ Les appels qui en ont besoin ajoutent leurs propres champs (la carte, le canvas�
 | `nouvellePartie(o)` | Une partie toute neuve, juste après le pack. | rien |
 | `preparer(o)` | Toute partie qui démarre, neuve ou chargée d'une sauvegarde (après `nouvellePartie` pour une neuve). Remettre `o.etat` d'aplomb : ajouter ce qui manque, ramener les valeurs folles dans leurs bornes, oublier ce qui n'existe plus dans le jeu. | rien |
 | `entrerCarte(o)` | Le joueur arrive sur une carte (aussi au chargement). `o.carte` : la carte, `o.depuis` : l'id de la carte d'avant (`''` au début). | rien |
+| `finDeJournee(o)` | Saga 1.5 : le joueur dort (commande `dormir`), le jour `o.jour` se termine. Tout le calcul de la nuit, **d'un coup et sans `await`** (aucune sauvegarde ne peut tomber au milieu). Le module retient dans `o.etat` le dernier jour calculé et ne refait rien pour un jour déjà calculé. Ensuite le moteur passe au jour suivant, fait le fondu au noir, et annonce `fin_de_journee` puis `matin` aux scripts. | `[lignes]` : ce que le joueur lit au réveil, dans le rapport du matin (des phrases courtes) |
 | `bloque(o, x, y)` | Chaque fois que quelqu'un (le joueur, un PNJ qui marche) veut entrer sur la case `(x, y)` de `o.carte`. **Appelée très souvent : doit rester très rapide** (une table de cases préparée dans `entrerCarte`, pas une boucle sur tout l'état). | `true` : la case est bloquée. Toute autre valeur : le module ne bloque pas (il ne peut pas débloquer une case bloquée par la carte). |
 | `dessiner(o)` | À chaque image, deux fois : `o.profondeur = 'sol'` (après les calques `dessous` et `joueur`, sous les personnages) et `o.profondeur = 'dessus'` (après les calques `dessus`, devant les personnages : un toit). | rien |
 | `commandes` | Un objet `{ type: async (o) → résultat }` : les commandes d'événement du module. Le moteur les cherche après celles du pack. `o.c` : la commande telle que Tafl l'a écrite ; `o.ev` : l'événement qui joue ; `o.jouer(liste)` : jouer une liste de commandes (une branche) ; `o.narrer(texte)` : une phrase sans nom ; `o.ui` : les menus. | un résultat simple (nombre, texte, objet JSON), qu'un script JS reçoit s'il a lancé la commande |
@@ -88,6 +89,8 @@ Après les modules, le moteur remet `globalAlpha` à 1 et `globalCompositeOperat
 
 Au démarrage d'une partie : pack `nouvellePartie` (partie neuve) → modules `nouvellePartie` (partie neuve) → modules `preparer` → entrée sur la carte de départ (`entrerCarte`) → les réactions des scripts (`nouvelle_partie`, `carte`). Les modules sont appelés dans l'ordre de `reglages.modules`.
 
+Quand le joueur dort (commande `dormir`, Saga 1.5) : soin du groupe (si demandé) → modules `finDeJournee` (le jour qui finit) → `partie.jour + 1`, l'horloge à l'heure du réveil → fondu au noir sur place (`entrerCarte` de la même carte) → rapport du matin (les lignes de tous les modules) → réactions des scripts `fin_de_journee`, `matin`, et les moments que les modules ont annoncés pendant la nuit.
+
 ## 3. Ce qu'un module a le droit de faire
 
 Ces règles gardent les modules indépendants entre eux et du pack, et la partie prête pour le multijoueur.
@@ -97,14 +100,14 @@ Ces règles gardent les modules indépendants entre eux et du pack, et la partie
 3. **Rien de propre à un pack.** Un module ne lit pas l'équipe ou les statistiques d'un pack, et ne suppose pas que les combats sont au tour par tour. S'il a besoin d'un combat, il joue la commande `combat_groupe`, `combat_sauvage`… que le pack du jeu sait faire.
 4. **Un état JSON simple.** Pas de fonctions, de `Map` ou de dates dans `o.etat` : il est sauvegardé avec `JSON.stringify` et copié pour les scripts. Ce qui se calcule (le nom d'un bâtiment, sa taille) est relu dans `o.jeu`, pas gardé.
 5. **Des calculs purs à part.** Ce qui calcule (une production, un coût, la fin d'une journée) est écrit en fonctions pures (une partie en entrée, un résultat en sortie), testables sans écran. Une règle qu'un jeu voudrait changer passe par `Maison.formule` (REGLES.md › 7.1), comme les formules des packs.
-6. **Le monde s'arrête pendant ses écrans.** Une commande ou un choix de pause se joue comme un script : le joueur ne bouge pas et les PNJ s'arrêtent de marcher (l'horloge du jeu, elle, continue). Un module qui fait « passer le temps » (dormir) le fait dans une commande, d'un coup, jamais pendant que le joueur marche. C'est aussi ce qui le rendra compatible avec un futur pack en temps réel.
+6. **Le monde s'arrête pendant ses écrans.** Une commande ou un choix de pause se joue comme un script : le joueur ne bouge pas et les PNJ s'arrêtent de marcher (l'horloge du jeu, elle, continue). Le temps qui passe d'un jour à l'autre passe par `finDeJournee`, que le moteur appelle quand le joueur dort, jamais pendant qu'il marche. C'est aussi ce qui le rendra compatible avec un futur pack en temps réel.
 7. **Une erreur ne casse pas le jeu.** La façade attrape les erreurs de chaque module et les dit une fois (par module et par fonction) ; le jeu continue sans ce que le module voulait faire.
 
 ## 4. Les scripts JS et les modules
 
 - **Lire** : `saga.modules.<id>` rend ce que le module donne par `pourScript` (`saga.modules.gestion.stock.bois`). La partie entière reste lisible dans `saga.partie` (avec `saga.partie.modules`).
-- **Agir** : un script lance une commande de module comme n'importe quelle commande : `await saga.commande({ type: 'construire', … })`. Il ne change jamais l'état d'un module directement.
-- **Réagir** : un module annonce ses moments avec `o.hote.reagir('fin_de_journee', { jour: 4 })` ; un script les écoute avec `quand('fin_de_journee', async (saga, infos) => …)`. Les moments d'un module sont listés dans le catalogue (`commun/modules.js`), pour que Tafl les connaisse (complétion, vérificateur).
+- **Agir** : un script lance une commande de module comme n'importe quelle commande : `await saga.commande({ type: 'gestion_construire', batiment: 'ferme' })`. Il ne change jamais l'état d'un module directement.
+- **Réagir** : un module annonce ses moments avec `o.hote.reagir('gestion_termine', { batiment: 'ferme' })` ; un script les écoute avec `quand('gestion_termine', async (saga, infos) => …)`. Les moments d'un module sont listés dans le catalogue (`commun/modules.js`), pour que Tafl les connaisse (complétion, vérificateur). Les moments de la journée (`fin_de_journee`, `matin`) sont ceux de Saga, pour tous les jeux.
 
 ## 5. Tafl et les modules
 
@@ -113,16 +116,17 @@ Tafl ne fait pas tourner les modules, mais il doit les connaître. Tout ce qu'il
 ```js
 gestion: {
   nom: 'Gestion',
-  description: 'Un domaine à bâtir : stock, bâtiments, habitants et journées.',
-  donnees: ['ressources', 'batiments', 'habitants'],
-  moments: { fin_de_journee: { nom: 'Une journée se termine', infos: { jour: 'Le jour qui vient de finir' } } },
-  commandes: { dormir: { nom: 'Dormir' } },
-  conditions: { batiment: { nom: 'Un bâtiment est construit' } },
+  description: 'Un stock commun et des bâtiments à construire, qui produisent chaque nuit…',
+  donnees: ['ressources', 'batiments'],
+  moments: { gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } } },
+  commandes: { gestion_construire: { nom: 'Construire un bâtiment' }, … },
+  conditions: { gestion_batiment: { nom: 'Un bâtiment est construit' }, … },
 }
 ```
 
 - Réglages › Règles du jeu › **Modules** : une case par entrée du catalogue.
-- Les **données** d'un module (`donnees/batiments.json`…) : Tafl 1.2 garde tel quel tout fichier de `donnees/` qu'il ne sait pas éditer, et le réécrit à l'enregistrement. Un module qui veut son éditeur dans Tafl l'ajoute dans l'espace Données, comme un pack (`tuiles/renderer/donnees.js`).
+- Les **données** d'un module (`donnees/batiments.json`…) : Tafl 1.2 garde tel quel tout fichier de `donnees/` qu'il ne sait pas éditer, et le réécrit à l'enregistrement. Un module qui veut son éditeur dans Tafl l'ajoute dans l'espace Données, comme un pack : un fichier `tuiles/renderer/donnees-<module>.js` (pour gestion : `donnees-gestion.js`) dont les onglets portent `modules: ['<id>']` et ne se montrent que si le jeu active le module. Ses réglages vont sous sa case, dans Réglages › Règles du jeu › Modules.
+- Ses **commandes et conditions** sont dans `tuiles/renderer/events.js`, avec `modules: ['<id>']` : Tafl ne les propose que si le jeu active le module.
 - Le **vérificateur** signale un module activé qu'il ne connaît pas, et accepte les moments des modules actifs dans `quand()`.
 
 ## 6. Écrire un module : un exemple minimal
@@ -165,5 +169,6 @@ Puis :
 ## 7. Pas encore
 
 - **Le mode table et le multijoueur.** Les modules ne sont pas dessinés sur le plateau de la table (`table/plateau.js`), et le monde partagé du multijoueur n'envoie pas leur état aux amis. Un module reste d'abord un module solo.
-- **La table comme module.** Le mode table (`table/`) est branché à la main dans `moteur.js`. Il pourra passer sur ce contrat plus tard ; on n'agrandira le contrat que quand un deuxième module en aura vraiment besoin.
+- **La table comme module.** Le mode table (`table/`) est branché à la main dans `moteur.js`. Il pourra passer sur ce contrat plus tard ; on n'agrandira le contrat que quand un module en aura vraiment besoin (`finDeJournee` est arrivé ainsi, avec gestion).
+- **Gestion, la suite.** Le placement libre des bâtiments sur la carte (aperçu, collisions, dessin par tampon), les habitants et leurs emplois, les points de récolte qui reviennent le lendemain, l'agenda des événements différés.
 - **Des personnages créés en jeu** (des habitants qui marchent, des ennemis en temps réel) : ce sera une base du moteur, prévue avec l'étape « temps réel » de la feuille de route, que les modules pourront utiliser.

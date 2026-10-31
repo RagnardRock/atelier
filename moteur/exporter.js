@@ -224,7 +224,7 @@ async function exporterExe({ textes, titre, sortie, moteur, version, runtime, ex
   }
   // commun/ manque dans le clone si npm install n'a pas tourné : on prend celui d'atelier/.
   if (!(await fs.stat(path.join(app, 'commun')).catch(() => null))) {
-    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => r === 'github.js' || r === 'bac-a-sable.js');
+    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js'].includes(r));
   }
   const pkg = JSON.parse(await fs.readFile(path.join(moteur, 'package.json'), 'utf8'));
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({

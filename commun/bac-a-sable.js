@@ -141,6 +141,9 @@ const BacASable = (() => {
     apres_combat: { nom: 'Après un combat', infos: { issue: '\'victoire\', \'defaite\', \'fuite\' ou \'capture\'', sorte: '\'sauvage\', \'dresseur\' ou \'groupe\'' } },
     moment: { nom: 'Le moment de la journée change', infos: { moment: '\'matin\', \'jour\', \'soir\' ou \'nuit\'' } },
     pas: { nom: 'Le joueur fait un pas (souvent : reste court)', infos: { x: 'Sa case', y: 'Sa case' } },
+    // Saga 1.5 : la commande « dormir ».
+    fin_de_journee: { nom: 'Le joueur s\'est couché : le jour est fini (après le calcul des modules)', infos: { jour: 'Le numéro du jour qui vient de finir' } },
+    matin: { nom: 'Le joueur se réveille, un nouveau jour commence', infos: { jour: 'Le numéro du nouveau jour' } },
   };
 
   // Les réglages qu'une commande de script peut demander dans Tafl (bloc Script).
@@ -278,6 +281,7 @@ const BacASable = (() => {
         get carte() { return courant.carte || null; },
         get evenement() { return courant.evenement || null; },
         get joueur() { return courant.joueur || null; },
+        get jour() { return Number(p().jour) || 1; }, // Saga 1.5 : le numéro du jour
         // Parler au joueur.
         dire: (texte, qui = '', expression = 'normal') => cmd({ type: 'dire', texte: String(texte ?? ''), qui: String(qui ?? ''), expression: String(expression || 'normal') }),
         choisir: (options) => demander('choisir', { options: (Array.isArray(options) ? options : []).map(String).slice(0, 4) }),

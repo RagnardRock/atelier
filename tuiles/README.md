@@ -442,6 +442,12 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - Le vérificateur signale un module activé que Tafl ne connaît pas, et accepte dans `quand()` les moments des modules actifs.
 - Le contrat des modules : `moteur/renderer/moteur/modules/MODULES.md` ; leur description commune à Tafl et Saga : `commun/modules.js`.
 
+## Les journées et le module gestion (Tafl 1.3, pour Saga 1.5)
+
+- **Dormir** : la commande « Dormir (passer au jour suivant) » (groupe Ambiance), avec l'heure du réveil et le soin du groupe ; la condition « Le numéro du jour ». Pour tous les jeux.
+- **Le module gestion** (Réglages › Règles du jeu › Modules › Gestion) : ses réglages juste sous sa case (nom du domaine, capacité du stock, stock de départ, écran dans le menu de pause), et un groupe **Gestion** dans les Données : **Ressources** (nom, icône, l'objet du sac qui la représente) et **Bâtiments** (coût, nuits de chantier, production et consommation par nuit, nombre maximum). Ces onglets, ses commandes et ses conditions n'apparaissent que si le jeu active le module.
+- Le vérificateur signale une ressource ou un bâtiment qui n'existe pas, et une page qui attend un bâtiment que rien ne construit.
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils

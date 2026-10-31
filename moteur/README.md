@@ -199,7 +199,13 @@ Un jeu a toujours **un pack de règles** (Pokémon, JRPG ou JDR : comment on se 
 - Un module garde son état dans la partie (`partie.modules`), sauvegardé avec elle. Il peut dessiner sur la carte, bloquer des cases (un bâtiment posé en jeu), ajouter des commandes d'événement, des conditions de page, des choix au menu de pause, et annoncer ses moments aux scripts JS (`quand(...)`), qui le lisent dans `saga.modules`.
 - Le contrat complet, ce qu'un module a le droit de faire et un exemple : `renderer/moteur/modules/MODULES.md`. La description des modules pour Tafl : `commun/modules.js`.
 
-Saga 1.4 pose les fondations : aucun module n'est encore livré. Le premier prévu est « gestion » (un domaine à bâtir : stock, bâtiments, habitants, journées).
+Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
+
+## Ce que fait Saga 1.5 : les journées et le module « gestion »
+
+- **Dormir** (pour tous les jeux) : la commande `dormir` termine le jour. Les modules font leur calcul de la nuit, le jour passe au suivant (`partie.jour`), fondu au noir, réveil à l'heure dite et rapport du matin. La condition `jour` et `saga.jour` lisent le numéro du jour ; les scripts reçoivent les moments `fin_de_journee` et `matin`. Les modules ont une fonction de plus dans leur contrat, `finDeJournee` (MODULES.md).
+- **Le module gestion** (`renderer/moteur/modules/gestion/`) : un stock commun et des bâtiments définis par les données du jeu (coût, nuits de chantier, production et consommation par nuit). La nuit se calcule une seule fois par jour, en fonctions pures (`calcul.js`, testé sans écran). Ses commandes : construire (branches réussi / raté), ajouter ou retirer du stock, déposer le sac au stock, ouvrir l'écran du domaine ; ses conditions : un bâtiment construit, un chantier en cours, assez d'une ressource ; l'écran du domaine dans le menu de pause ; `saga.modules.gestion` pour les scripts.
+- Cette première version ne place pas les bâtiments sur la carte : un événement avec la condition « Un bâtiment est construit » les montre. Le placement libre, les habitants et les récoltes qui reviennent viendront ensuite.
 
 ## La suite
 

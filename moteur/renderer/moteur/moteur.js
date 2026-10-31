@@ -296,6 +296,8 @@ const Moteur = (() => {
       // L'horloge du jeu (Saga 0.11) : une partie d'avant Saga 0.11 part de l'heure de départ du jeu.
       Temps.utiliser(jeu);
       Temps.preparer(jeu, partie);
+      // Saga 1.5 : le numéro du jour (une partie d'avant Saga 1.5 est au jour 1).
+      if (!Number.isInteger(partie.jour) || partie.jour < 1) partie.jour = 1;
       if (nouveauJeu !== jeuSons) { audio.vider(); jeuSons = nouveauJeu; }
       for (const k of ['musique_combat', 'musique_dresseur', 'musique_victoire']) audio.precharger(reglagesAudio()[k]);
       // Les badges (Tafl 0.16) : le compteur vaut toujours le nombre de badges différents reçus.
@@ -328,6 +330,24 @@ const Moteur = (() => {
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique : chemin),
         son: (chemin) => audio.fichier(chemin),
         heure: (o) => { const ok = Temps.regler(jeu, partie, o); momentsAvant = ''; return ok; },
+        // Saga 1.5 : dormir (commande dormir). Tout le calcul de la nuit se fait d'un coup, sans attendre :
+        // une sauvegarde ne peut jamais tomber au milieu. Puis le fondu au noir, sur place.
+        dormir: async ({ soigner = true, heure = null } = {}) => {
+          const fini = Number.isInteger(partie.jour) && partie.jour > 0 ? partie.jour : 1;
+          if (soigner) {
+            for (const x of partie.equipe) Regles.soigner(jeu, x);
+            partie.dernierSoin = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+          }
+          const lignes = Modules.finDeJournee(jeu, partie, hoteModules, fini);
+          partie.jour = fini + 1;
+          const h = heure !== null && heure !== '' && Number.isFinite(Number(heure)) ? Number(heure) : Temps.reglages(jeu).heure_depart;
+          Temps.regler(jeu, partie, { heures: h });
+          momentsAvant = '';
+          await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }, resoudre }; });
+          reagir('fin_de_journee', { jour: fini });
+          reagir('matin', { jour: partie.jour });
+          return { lignes, jour: partie.jour };
+        },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
         scriptsJs: () => scriptsJs,
         // Saga 0.13 : le plateau de dés (pack JDR).
