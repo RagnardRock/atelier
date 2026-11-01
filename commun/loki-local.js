@@ -198,8 +198,9 @@ function creerCatalogue(actionsOutil, essentielles = []) {
       return n;
     };
     const parScore = actionsOutil.map((a) => [a.name, score(a.name)]).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([n]) => n);
-    const ordre = [...parScore.slice(0, 4), ...essentielles.filter((n) => parNom.has(n)), ...[...utilisees].reverse(), ...parScore.slice(4)];
-    return [...new Set(ordre)];
+    const ordre = [...parScore.slice(0, 4), ...essentielles, ...[...utilisees].reverse(), ...parScore.slice(4)];
+    // (seulement des actions de l'outil : une conversation reprise peut avoir appelé d'autres outils)
+    return [...new Set(ordre)].filter((n) => parNom.has(n));
   }
   function definition(a) {
     const d = String(a.description || '');
@@ -308,7 +309,9 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
   // parameters, action? (une action de l'outil), affiche?, famille?, lecture?, entree?(args),
   // faire(args) → { texte, image } | { erreur } }]. essentielles : les noms des actions de l'outil
   // à toujours donner en outils quand il y en a trop (les plus utiles).
-  async function envoyer(texte, { consignes, outils: outilsDonnes, essentielles = [] }) {
+  // avantEtape (facultatif) : appelé avant chaque nouvelle étape après une action (Tafl y libère la
+  // carte graphique de ComfyUI, qu'une action generer_tuiles vient peut-être d'occuper).
+  async function envoyer(texte, { consignes, outils: outilsDonnes, essentielles = [], avantEtape }) {
     if (enCours) return;
     enCours = true;
     controleur = new AbortController();
@@ -356,6 +359,7 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
       for (let etape = 0; ; etape++) {
         alleger(limite);
         emit({ kind: 'status', text: 'Loki réfléchit…' });
+        if (etape > 0 && avantEtape) { try { await avantEtape(); } catch { /* rien à libérer */ } }
         const definitions = [...defFixes, ...actives()];
         // Un texte qui commence comme un appel d'action écrit à la main (« <tool_call> », « [TOOL_CALLS] »,
         // « ``` » ou « { ») : on le garde pour soi tant qu'on ne sait pas ce que c'est.
