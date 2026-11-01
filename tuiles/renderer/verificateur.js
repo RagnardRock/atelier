@@ -403,7 +403,7 @@ const Verificateur = (() => {
       const ou = { carte: carte.id, x: ev.x, y: ev.y, evenement: ev.id };
       const quoi = `${nomEv(ev)} sur « ${carte.nom} »`;
       verifierId('personnages', ev.apparence?.personnage, quoi, ou);
-      // Tafl 1.14 : une page peut avoir sa propre apparence.
+      // Tafl 1.16 : une page peut avoir sa propre apparence.
       (ev.pages || []).forEach((pg, k) => { if (pg?.apparence?.personnage) verifierId('personnages', pg.apparence.personnage, `${quoi} (page ${k + 1})`, ou); });
       if (obstacle(ev)) verifierId('objets', ev.obstacle.objet, quoi, ou);
       commandes(ev, (cmd) => {

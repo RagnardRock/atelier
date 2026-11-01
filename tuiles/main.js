@@ -581,6 +581,10 @@ const CLAUDE_CONSIGNES = [
   '',
   'Ragna tient à la qualité : du détail, de la profondeur, un vrai pixel art 16 bits vu de dessus, sombre et',
   'feutré (verts éteints, ardoises sombres, bois, pluie). Ne livre pas une tuile plate ou bruitée au hasard.',
+  '- Pour aller vite : recette_tuile donne en un appel un sol, un mur, un toit, des hautes herbes, de l\'eau animée,',
+  '  un petit objet, tout un jeu de bords (herbe → chemin, eau ou sable, 13 tuiles), une maison, une boutique ou un arbre',
+  '  (ses tuiles et son tampon) ; pars de là et retouche avec',
+  '  peindre_tuile plutôt que de tout refaire.',
   '- Méthode : 1) choisis 2 ou 3 rampes (palette « brume », ou action rampe autour d\'une couleur) ; 2) peindre_tuile',
   '  pour la base : aplat, taches douces, quelques marques ; 3) les formes, puis ombrage, contour, ombre_portee ;',
   '  4) les détails à la main (opération pixels ou dessiner_tuile) ; 5) regarde l\'aperçu et le regard critique',
@@ -615,11 +619,15 @@ const CLAUDE_CONSIGNES_LOCALES = [
   '- Commence par infos quand tu ne sais pas ce qui est ouvert. S\'il n\'y a pas de jeu : nouveau_jeu.',
   '- Construire une carte : un plan, puis plan_carte en un appel (pas de poser_tuiles case par case).',
   '- Pour enregistrer : enregistrer_jeu. Après une grosse modification : verifier.',
-  '- Images : generer_tuiles (ComfyUI, sur la carte graphique de Ragna) pour les sols et les objets détaillés.',
+  '- Tuiles : recette_tuile d\'abord (sols, murs, toits, hautes herbes, eau animée, petits objets, et les bords',
+  '  herbe → chemin, eau ou sable en 13 tuiles ; plusieurs variantes, une catégorie) : propre en un appel.',
+  '  peindre_tuile seulement pour retoucher. Maison, boutique, sapin, arbre : recette_tuile maison, boutique, sapin ou arbre',
+  '  (tuiles + tampon à poser avec l\'action tampon).',
+  '- Autres bâtiments, objets détaillés : generer_tuiles (ComfyUI, sur la carte graphique de Ragna).',
   '- Tu ne vois pas les images : fie-toi au texte (catalogue, voir_carte sans image).',
 ].join('\n');
 // Les actions toujours données au modèle local comme vrais outils (les autres sont dans son catalogue).
-const LOKI_ESSENTIELLES = ['infos', 'catalogue', 'voir_carte', 'plan_carte', 'poser_tuiles', 'enregistrer_jeu', 'annuler'];
+const LOKI_ESSENTIELLES = ['infos', 'catalogue', 'recette_tuile', 'voir_carte', 'plan_carte', 'poser_tuiles', 'enregistrer_jeu', 'annuler'];
 
 claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES, consignesLocales: CLAUDE_CONSIGNES_LOCALES, essentielles: LOKI_ESSENTIELLES } });
 

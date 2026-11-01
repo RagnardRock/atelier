@@ -269,7 +269,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - Cosy par défaut : un cadeau qu'il n'aime pas ne coûte rien, et l'amitié ne se perd pas (l'oubli est coupé, et ne redescend jamais sous le niveau atteint).
 - Contrat des modules : les figurants peuvent avoir un `id` et un personnage à qui parler (`qui`), le nouveau `parler(o)` rend les commandes à jouer quand le joueur leur parle, et les figurants s'arrêtent pendant un script, comme les PNJ.
 
-## Ce que fait Saga 1.16 : le temps qui passe et l'apparence des PNJ (avec Tafl 1.14)
+## Ce que fait Saga 1.16 : le temps qui passe et l'apparence des PNJ (avec Tafl 1.16)
 
 - **« N jours après »** : la commande `variable` peut y noter le jour en cours (action `jour`), et la condition `jours_depuis` compte les jours passés depuis (deux jours après le duel, une semaine après l'arrivée). Fausse tant que rien n'est noté.
 - **L'heure précise** : la condition `heure` (de telle heure à telle heure, minuit possible), en plus des quatre moments de la journée. Les pages sont refaites à chaque heure pleine.

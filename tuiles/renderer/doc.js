@@ -355,7 +355,7 @@ const Doc = (() => {
       });
       // L'apparence des événements montre aussi une tuile.
       if (map.events.some((e) => e.apparence.tuile >= 0)) map.events = map.events.map((e) => (e.apparence.tuile >= 0 ? { ...e, apparence: { ...e.apparence, tuile: fn(e.apparence.tuile) } } : e));
-      // Tafl 1.14 : l'apparence propre à une page.
+      // Tafl 1.16 : l'apparence propre à une page.
       if (map.events.some((e) => e.pages.some((pg) => pg.apparence?.tuile >= 0))) {
         map.events = map.events.map((e) => (e.pages.some((pg) => pg.apparence?.tuile >= 0)
           ? { ...e, pages: e.pages.map((pg) => (pg.apparence?.tuile >= 0 ? { ...pg, apparence: { ...pg.apparence, tuile: fn(pg.apparence.tuile) } } : pg)) } : e));

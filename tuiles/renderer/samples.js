@@ -1,90 +1,109 @@
-// Tuiles d'exemple proposées à la création d'un jeu de tuiles : herbe, hautes herbes, chemin, eau
-// (animée) et fleur, avec une petite carte qui les utilise. De quoi voir tout de suite comment Tafl marche,
-// puis les retoucher ou les effacer.
-// Chaque tuile est dessinée ici en 16 × 16, une lettre par pixel (« . » = transparent) ;
-// pour une autre taille de tuile, elle est agrandie ou réduite pixel par pixel.
+// Tuiles d'exemple proposées à la création d'un jeu de tuiles (Tafl 1.14, arbres et style « val » en 1.15) : toutes les recettes de
+// recettes.js (sols, eau animée, murs, falaises, toits, intérieurs, petits objets, hautes herbes), leurs
+// jeux de bords (chemin, eau, sable), une maison, une boutique, un sapin et un arbre (avec leurs tampons), rangées par
+// catégorie, avec une petite carte de village qui les utilise. De quoi voir tout de suite comment Tafl
+// marche, puis les retoucher ou les effacer. Elles se fabriquent à la taille des tuiles du jeu.
 
 const Samples = (() => {
-  const COLORS = {
-    a: '#38a048', b: '#70c858', c: '#285828', d: '#183018',
-    e: '#c8a060', f: '#e8d098', g: '#906838',
-    h: '#3060b0', i: '#58a0f0', j: '#98d0f8',
-    r: '#e05848', y: '#f8c838', w: '#ffffff',
-  };
-  const TILES = [
-    ['herbe', [
-      'aaaaaaaaaaaaaaaa', 'aaabaaaaaaaaaaaa', 'aabcbaaaaaaaaaaa', 'aaaaaaaaaabaaaaa',
-      'aaaaaaaaabcbaaaa', 'aaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaa', 'abaaaaaaaaaaaaaa',
-      'bcbaaaaaaaaaabaa', 'aaaaaaaaaaaabcba', 'aaaaaabaaaaaaaaa', 'aaaaabcbaaaaaaaa',
-      'aaaaaaaaaaaaaaaa', 'aaaaaaaaaaaaaaaa', 'aaaaaaaaaabaaaaa', 'aaaaaaaaabcbaaaa',
-    ]],
-    ['hautes-herbes', [
-      'aaaaaaaaaaaaaaaa', 'aaabaaaaabaaaaab', 'abcbabaabcbabaab', 'bcacbcbbcacbcbbc',
-      'cacdcacdcacdcacd', 'cdccdccdccdccdcc', 'ddcddcddcddcddcd', 'cdddcdddcdddcddd',
-      'aaaaaaaaaaaaaaaa', 'aaaaabaaaaabaaab', 'abaabcbabaababcb', 'bcbbcacbcbbcbcac',
-      'cacdcacdcacdcacd', 'dccdccdccdcccdcc', 'dcddcddcddcdddcd', 'cdddcdddcdddcddd',
-    ]],
-    ['chemin', [
-      'eeeeeeeeeeeeeeee', 'eeeeefeeeeeeeeee', 'eeeeegeeeeeeeefe', 'eeeeeeeeeeeeeege',
-      'eefeeeeeeeeeeeee', 'eegeeeeeeefeeeee', 'eeeeeeeeeegeeeee', 'eeeeeeeeeeeeeeee',
-      'eeeeeeefeeeeeeee', 'eeeeeeegeeeeefee', 'efeeeeeeeeeeegee', 'egeeeeeeeeeeeeee',
-      'eeeeeeeeeefeeeee', 'eeeefeeeeegeeeee', 'eeeegeeeeeeeeeee', 'eeeeeeeeeeeeeeee',
-    ]],
-    ['eau', [
-      'iiiiiiiiiiiiiiii', 'iiiiiiiiiiiiiiii', 'iijjjiiiiiiiiiii', 'ijiiijiiiiiiiiii',
-      'iiiiiiiiiijjjiii', 'iiiiiiiiijiiijii', 'iiiiiiiiiiiiiiii', 'iiiihiiiiiiiiiii',
-      'iiiiiiiiiiiiiiii', 'iiiiiiiiiiiiiiii', 'iiiiijjjiiiiiiii', 'iiiijiiijiiiiiii',
-      'iiiiiiiiiiiiijjj', 'jiiiiiiiiiiiijii', 'iiiiiiiiiihiiiii', 'iiiiiiiiiiiiiiii',
-    ]],
-    ['fleur', [
-      '................', '................', '................', '.....r..........',
-      '....ryr.........', '.....r..........', '.....c....w.....', '.....c...wyw....',
-      '..........w.....', '..........c.....', '..........c.....', '................',
-      '..r.............', '.ryr............', '..r.............', '..c.............',
-    ]],
+  // [recette, nom, catégorie, passage, graine]
+  const LISTE = [
+    ['herbe', 'herbe', 'Sols', 'auto', 1], ['herbe', 'herbe 2', 'Sols', 'auto', 102], ['fleurs', 'fleurs', 'Sols', 'auto', 1],
+    ['terre', 'terre', 'Sols', 'auto', 1], ['chemin', 'chemin', 'Sols', 'auto', 1], ['paves', 'pavés', 'Sols', 'auto', 1],
+    ['sable', 'sable', 'Sols', 'auto', 1], ['roche', 'roche', 'Sols', 'auto', 1], ['neige', 'neige', 'Sols', 'auto', 1],
+    ['glace', 'glace', 'Sols', 'auto', 1], ['boue', 'boue', 'Sols', 'auto', 1],
+    ['hautes_herbes', 'hautes herbes', 'Herbes et eau', 'auto', 1], ['eau_animee', 'eau', 'Herbes et eau', 'bloque', 1], ['eau', 'eau calme', 'Herbes et eau', 'bloque', 1],
+    ['mur_pierre', 'mur de pierre', 'Murs et falaises', 'bloque', 1], ['mur_bois', 'mur de bois', 'Murs et falaises', 'bloque', 1],
+    ['falaise', 'falaise', 'Murs et falaises', 'bloque', 1], ['falaise_haut', 'haut de falaise', 'Murs et falaises', 'bloque', 1], ['toit', 'toit', 'Murs et falaises', 'bloque', 1],
+    ['parquet', 'parquet', 'Intérieurs', 'auto', 1], ['carrelage', 'carrelage', 'Intérieurs', 'auto', 1], ['tapis', 'tapis', 'Intérieurs', 'auto', 1], ['grotte', 'sol de grotte', 'Intérieurs', 'auto', 1],
+    ['rocher', 'rocher', 'Objets', 'bloque', 1], ['buisson', 'buisson', 'Objets', 'bloque', 1], ['souche', 'souche', 'Objets', 'bloque', 1],
+    ['cloture', 'clôture', 'Objets', 'bloque', 1], ['panneau', 'panneau', 'Objets', 'bloque', 1], ['pot_fleurs', 'pot de fleurs', 'Objets', 'bloque', 1],
+    ['transition_chemin', 'chemin', 'Bords du chemin', 'auto', 1],
+    ['transition_eau', 'rive', 'Bords de l\'eau', 'bloque', 1],
+    ['transition_sable', 'sable', 'Bords du sable', 'auto', 1],
+    ['maison', 'maison', 'Bâtiments', null, 1],
+    ['boutique', 'boutique', 'Bâtiments', null, 1],
+    ['sapin', 'sapin', 'Arbres', null, 1],
+    ['arbre', 'arbre', 'Arbres', null, 1],
   ];
 
-  function tileData(rows, size) {
-    const data = new Uint8ClampedArray(size * size * 4);
-    for (let y = 0; y < size; y++) {
-      for (let x = 0; x < size; x++) {
-        const ch = rows[Math.floor((y * 16) / size)][Math.floor((x * 16) / size)];
-        if (ch === '.') continue;
-        const [r, g, b] = hexToRgba(COLORS[ch]);
-        data.set([r, g, b, 255], (y * size + x) * 4);
-      }
-    }
-    return data;
-  }
-
-  // Remplit un jeu de tuiles neuf avec les exemples et une petite carte (route, mare, hautes herbes).
+  // Remplit un jeu de tuiles neuf avec les tuiles d'exemple et une petite carte de village.
   function fill(doc) {
-    doc.tiles = TILES.map(([name, rows]) => ({ id: Doc.newId(), name, frames: [tileData(rows, doc.tileSize)], duration: Doc.DEFAULT_DURATION }));
-    // L'eau est animée : 4 images où les vagues glissent vers la droite, en boucle (la tuile reste raccordable).
-    const water = doc.tiles.find((t) => t.name === 'eau');
-    const waterRows = TILES.find(([name]) => name === 'eau')[1];
-    water.frames = [0, 4, 8, 12].map((dx) => tileData(waterRows.map((r) => r.slice(16 - dx) + r.slice(0, 16 - dx)), doc.tileSize));
-    water.duration = 300;
+    const s = doc.tileSize, lire = (c) => PixelArt.lireCouleur(doc, c, '', new Set());
+    const tiles = [], idx = {}, stamps = [];
+    for (const [recette, nom, categorie, passage, graine] of LISTE) {
+      const pieces = Recettes.fabriquer(recette, { taille: s, graine, lire });
+      const bat = Recettes.batiment(recette), jeu = Recettes.jeu(recette);
+      const indices = [];
+      for (const p of pieces) {
+        const name = jeu ? `${nom} ${p.suffixe.replace(/_/g, ' ')}` : bat ? `${nom} ${p.suffixe}` : nom;
+        idx[jeu && !bat ? `${recette}:${p.suffixe}` : bat ? `${recette}:${p.suffixe}` : nom] = tiles.length;
+        indices.push(tiles.length);
+        tiles.push({ id: Doc.newId(), name, frames: p.frames, duration: p.duree || Doc.DEFAULT_DURATION, passage: p.passage || passage || 'auto', categorie });
+      }
+      if (bat) stamps.push(Doc.newStamp({ stamps }, { name: nom, w: bat.l, h: bat.h, cells: indices, dessus: bat.dessus }));
+    }
+    doc.tiles = tiles;
+    doc.stamps = stamps;
+
     const { width: W, height: H } = doc.map;
     const [sol, decor] = doc.map.layers;
-    const set = (cells, x, y, v) => { if (x >= 0 && y >= 0 && x < W && y < H) cells[y * W + x] = v; };
-    sol.cells.fill(0);
+    const dans = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+    const set = (cells, x, y, v) => { if (dans(x, y)) cells[y * W + x] = v; };
+    // L'herbe, avec sa variante semée un peu partout, et quelques touffes de fleurs.
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const h = ((x * 374761393 + y * 668265263) >>> 0) % 100;
+      set(sol.cells, x, y, h < 12 ? idx.fleurs : h < 45 ? idx['herbe 2'] : idx.herbe);
+    }
+    // Une plaque (chemin, eau…) dessinée avec son jeu de bords : chaque case choisit sa pièce d'après
+    // ses voisines (le bord de la carte compte comme la plaque, pour que la route continue au-delà).
+    const plaque = (recette, dedans, centre) => {
+      const P = (x, y) => !dans(x, y) || dedans(x, y);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (!dedans(x, y)) continue;
+        const h = !P(x, y - 1), b = !P(x, y + 1), g = !P(x - 1, y), d = !P(x + 1, y);
+        let p = 'centre';
+        if (h && g) p = 'coin_haut_gauche'; else if (h && d) p = 'coin_haut_droite';
+        else if (b && g) p = 'coin_bas_gauche'; else if (b && d) p = 'coin_bas_droite';
+        else if (h) p = 'haut'; else if (b) p = 'bas'; else if (g) p = 'gauche'; else if (d) p = 'droite';
+        else if (!P(x - 1, y - 1)) p = 'interieur_haut_gauche'; else if (!P(x + 1, y - 1)) p = 'interieur_haut_droite';
+        else if (!P(x - 1, y + 1)) p = 'interieur_bas_gauche'; else if (!P(x + 1, y + 1)) p = 'interieur_bas_droite';
+        set(sol.cells, x, y, p === 'centre' && centre !== undefined ? centre : idx[`${recette}:${p}`]);
+      }
+    };
+    // La grand-route (2 cases de large) et la rue qui monte vers le nord entre les deux bâtiments.
     const midY = Math.floor(H / 2), midX = Math.floor(W / 2) - 1;
-    for (let x = 0; x < W; x++) set(sol.cells, x, midY, 2);
-    for (let y = 0; y < midY; y++) set(sol.cells, midX, y, 2);
-    for (let y = midY + 2; y < midY + 6; y++) for (let x = 2; x < 7; x++) set(sol.cells, x, y, 1);
-    for (let y = midY + 2; y < midY + 6; y++) for (let x = W - 7; x < W - 2; x++) set(sol.cells, x, y, 3);
-    for (const [x, y] of [[3, 2], [5, 4], [14, 2], [16, 4], [12, 5], [2, 5], [17, 1]]) set(decor.cells, x, y, 4);
-    // Pour essayer l'éditeur de jeu : l'eau bloque le joueur, les hautes herbes et la mare sont des
-    // zones, et le joueur part du croisement des chemins.
-    water.passage = 'bloque';
-    const zone = (id, name, type, x, w, objet = '') => ({ id, name, type, x: clamp(x, 0, W - 1), y: clamp(midY + 2, 0, H - 1), w: Math.max(1, Math.min(w, W - x)), h: Math.max(1, Math.min(4, H - midY - 2)), objet });
-    if (midY + 2 < H && W >= 9) doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', 2, 5), zone('zone-2', 'Mare', 'eau', W - 7, 5, 'planche-de-surf')];
+    plaque('transition_chemin', (x, y) => (y >= midY && y <= midY + 1) || (x >= midX && x <= midX + 1 && y < midY));
+    // La mare au sud-est (l'intérieur est animé) et les hautes herbes au sud-ouest.
+    const mare = { x: W - 7, y: midY + 3, w: 5, h: 4 };
+    plaque('transition_eau', (x, y) => x >= mare.x && x < mare.x + mare.w && y >= mare.y && y < mare.y + mare.h, idx.eau);
+    const herbes = { x: 2, y: midY + 4, w: 5, h: 3 };
+    for (let y = herbes.y; y < herbes.y + herbes.h; y++) for (let x = herbes.x; x < herbes.x + herbes.w; x++) set(sol.cells, x, y, idx['hautes herbes']);
+    // Les bâtiments posés juste au-dessus de la route (leur porte donne dessus), avec leurs tampons.
+    const li = doc.map.layers.indexOf(decor);
+    const poser = (nom, x, y) => { const st = stamps.find((t) => t.name === nom); if (st && x >= 0 && y >= 0 && x + st.w <= W && y + st.h <= H) Doc.placeStamp(doc, st, x, y, li); };
+    poser('maison', midX - 6, midY - 5);
+    poser('boutique', midX + 3, midY - 5);
+    poser('sapin', 0, 0);
+    poser('arbre', W - 2, 0);
+    poser('sapin', W - 2, midY + 5);
+    poser('arbre', 0, midY + 5);
+    // Le décor : une clôture devant les hautes herbes, des buissons, un rocher, une souche, des pots
+    // de fleurs devant la boutique, le panneau au croisement.
+    for (let x = herbes.x; x < herbes.x + herbes.w; x++) set(decor.cells, x, herbes.y - 1, idx['clôture']);
+    for (const [x, y] of [[2, 1], [W - 3, 2], [1, midY - 2], [W - 2, midY + 3]]) set(decor.cells, x, y, idx.buisson);
+    set(decor.cells, 8, H - 2, idx.rocher);
+    set(decor.cells, W - 9, H - 2, idx.souche);
+    set(decor.cells, midX + 8, midY - 1, idx['pot de fleurs']);
+    set(decor.cells, midX + 2, midY - 1, idx.panneau);
+    // Pour essayer l'éditeur de jeu : l'eau et les murs bloquent le joueur, les hautes herbes et la mare
+    // sont des zones, et le joueur part du croisement des chemins.
+    const zone = (id, name, type, z, objet = '') => ({ id, name, type, x: clamp(z.x, 0, W - 1), y: clamp(z.y, 0, H - 1), w: Math.max(1, Math.min(z.w, W - z.x)), h: Math.max(1, Math.min(z.h, H - z.y)), objet });
+    if (herbes.y + herbes.h <= H && mare.x >= 0 && W >= 9) doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', herbes), zone('zone-2', 'Mare', 'eau', mare, 'planche-de-surf')];
     doc.depart = { carte: doc.map.id, x: clamp(midX, 0, W - 1), y: clamp(midY, 0, H - 1), direction: 'bas' };
-    // Deux événements pour essayer les scripts (Tafl 0.7) : un panneau au croisement, et un habitant.
+    // Deux événements pour essayer les scripts (Tafl 0.7) : le panneau au croisement, et un habitant.
     if (W >= 6 && midY >= 1) {
-      const sign = Events.create(doc, 'panneau', clamp(midX + 1, 0, W - 1), midY - 1, 'ev-1');
-      const pnj = Events.create(doc, 'pnj', clamp(midX - 3, 0, W - 1), clamp(midY - 2, 0, H - 1), 'ev-2');
+      const sign = Events.create(doc, 'panneau', clamp(midX + 2, 0, W - 1), midY - 1, 'ev-1');
+      const pnj = Events.create(doc, 'pnj', clamp(midX - 3, 0, W - 1), clamp(midY + 2, 0, H - 1), 'ev-2');
       doc.map.events = [sign, { ...pnj, pages: [{ conditions: [], cache: false, commandes: [
         { type: 'dire', qui: '@evenement', expression: 'normal', texte: 'Bonjour ! Les hautes herbes, au sud, sont pleines de créatures sauvages.' },
         { type: 'choix', options: [
@@ -93,8 +112,7 @@ const Samples = (() => {
         ] },
       ] }] }];
     }
-    // Les nouvelles couleurs rejoignent la palette, pour pouvoir retoucher les exemples.
-    for (const hex of Object.values(COLORS)) if (!doc.palette.includes(hex)) doc.palette.push(hex);
+    doc.current = 0;
   }
 
   return { fill };

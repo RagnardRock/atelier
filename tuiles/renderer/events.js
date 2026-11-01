@@ -41,7 +41,7 @@ const Events = (() => {
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
   // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
-  // Tafl 1.14 (Saga 1.16) : « jour » y note le numéro du jour en cours (pour la condition « Jours écoulés depuis »).
+  // Tafl 1.16 (Saga 1.16) : « jour » y note le numéro du jour en cours (pour la condition « Jours écoulés depuis »).
   const ACTIONS_VARIABLE = [['regler', 'La mettre à'], ['ajouter', 'Lui ajouter'], ['retirer', 'Lui retirer'], ['jour', 'Y noter le jour en cours']];
   const COMPARAISONS = [['>=', 'au moins (≥)'], ['<=', 'au plus (≤)'], ['==', 'égale à (=)'], ['!=', 'différente de (≠)'], ['>', 'plus que (>)'], ['<', 'moins que (<)']];
   // « 12 » → 12, « Bourg » → 'Bourg' (un texte court).
@@ -922,7 +922,7 @@ const Events = (() => {
     depuis: (v) => ({ type: 'jour', comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: clamp(Math.round(v.valeur) || 1, 1, 99999) }),
   };
 
-  // --- Tafl 1.14 (Saga 1.16) : les jours écoulés depuis un fait, et l'heure précise ---
+  // --- Tafl 1.16 (Saga 1.16) : les jours écoulés depuis un fait, et l'heure précise ---
   CONDITIONS.jours_depuis = {
     nom: 'Jours écoulés depuis un jour noté',
     nouveau: () => ({ type: 'jours_depuis', variable: '', comparaison: '>=', valeur: 2 }),
@@ -1403,7 +1403,7 @@ const Events = (() => {
       default: return { ...c };
     }
   }
-  // Tafl 1.14 (Saga 1.16) : une page peut avoir sa propre apparence (absente : celle de l'événement).
+  // Tafl 1.16 (Saga 1.16) : une page peut avoir sa propre apparence (absente : celle de l'événement).
   const normPage = (p, tileCount = Infinity) => {
     const out = { conditions: (Array.isArray(p?.conditions) ? p.conditions : []).map(normCondition).filter(Boolean), cache: Boolean(p?.cache), commandes: normListe(p?.commandes) };
     if (p?.apparence && typeof p.apparence === 'object') {
@@ -1426,7 +1426,7 @@ const Events = (() => {
       traversable: Boolean(e?.traversable),
       declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
       pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map((p) => normPage(p, tileCount)),
-      // Tafl 1.14 (Saga 1.16) : un événement « auto » qui se lance aussi au réveil (commande dormir), sur la même carte.
+      // Tafl 1.16 (Saga 1.16) : un événement « auto » qui se lance aussi au réveil (commande dormir), sur la même carte.
       ...(e?.reveil ? { reveil: true } : {}),
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
       // Tafl 1.4 (Saga 1.6) : il repousse. Son « déjà fait » s'éteint après ce nombre de nuits (une récolte).
@@ -1897,7 +1897,7 @@ const Events = (() => {
         repousse.onchange = () => { const n = Math.max(0, Math.min(999, Math.round(Number(repousse.value) || 0))); repousse.value = n; if (n) work.repousse_nuits = n; else delete work.repousse_nuits; };
         const traversable = el('input', { type: 'checkbox', checked: work.traversable });
         traversable.onchange = () => { work.traversable = traversable.checked; };
-        // Tafl 1.14 (Saga 1.16) : une scène « auto » qui se lance aussi au réveil, sans changer de carte.
+        // Tafl 1.16 (Saga 1.16) : une scène « auto » qui se lance aussi au réveil, sans changer de carte.
         const reveil = el('input', { type: 'checkbox', checked: Boolean(work.reveil) });
         reveil.onchange = () => { if (reveil.checked) work.reveil = true; else delete work.reveil; };
         const aide = el('p', { className: 'modal-info' });
@@ -1981,7 +1981,7 @@ const Events = (() => {
       }
       renderSide();
 
-      // L'événement tel que la page ouverte le montre (Tafl 1.14 : son apparence à elle, si elle en a une).
+      // L'événement tel que la page ouverte le montre (Tafl 1.16 : son apparence à elle, si elle en a une).
       const evPage = () => { const pg = work.pages[page]; return pg?.apparence ? { ...work, apparence: pg.apparence } : work; };
       // Colonne de droite : les pages, leurs conditions et leur script.
       function renderPage() {
@@ -2029,7 +2029,7 @@ const Events = (() => {
         cache.onchange = () => { p.cache = cache.checked; };
         main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Sur cette page, l\'événement est absent (invisible : on ne peut ni lui parler ni le toucher)' }), cache]));
 
-        // Tafl 1.14 (Saga 1.16) : une autre apparence sur cette page (le PNJ change de tenue, un chantier devient une maison).
+        // Tafl 1.16 (Saga 1.16) : une autre apparence sur cette page (le PNJ change de tenue, un chantier devient une maison).
         // Les dialogues « @evenement » de la page parlent alors avec ce personnage (evPage).
         const autre = el('input', { type: 'checkbox', checked: Boolean(p.apparence) });
         const blocAp = el('div', { className: 'page-apparence' });

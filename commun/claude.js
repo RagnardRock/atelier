@@ -566,7 +566,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
       .replace("(dans l'Atelier,\nl'assistant s'appelle Loki ; il est propulsé par Claude)", "(ici, tu tournes sur un modèle local)")
       .replace(/mcp__atelier__/g, '')
       .replace('tu as Read, Glob, Grep, Edit et Write', 'tu as lire_fichier, lister_fichiers, chercher_texte, modifier_fichier et ecrire_fichier');
-    await session.envoyer(texte, { consignes, essentielles: outil.essentielles || [], outils: [...lokiLocal.outilsFichiers(cwd), ...memoire, ...deLOutil] });
+    await session.envoyer(texte, { consignes, essentielles: outil.essentielles || [], avantEtape: avantLocal, outils: [...lokiLocal.outilsFichiers(cwd), ...memoire, ...deLOutil] });
   }
 
   // En « auto » : Claude ne peut pas répondre, on passe en local avec le même message.
