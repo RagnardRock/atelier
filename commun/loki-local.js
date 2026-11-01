@@ -23,7 +23,7 @@ const ollama = require('./ollama');
 
 const MAX_ETAPES = 25;          // actions dans une même réponse, au plus
 const MAX_RESULTAT = 6000;      // caractères d'un résultat d'action donnés au modèle
-const MAX_ACTIONS_DIRECTES = 24; // au-delà, les actions de l'outil passent par un catalogue
+const MAX_ACTIONS_DIRECTES = 24; // au-delà, les actions de l'outil passent par un catalogue (creerCatalogue)
 
 // Ce qu'on dit au modèle en plus des consignes de l'outil.
 const CONSIGNES_LOCALES = [
@@ -155,48 +155,118 @@ function outilsFichiers(cwd) {
   ];
 }
 
-// Beaucoup d'actions (Tafl en a plus de 70) : un petit modèle s'y perd, et leur description remplit
-// sa mémoire. On lui donne alors un catalogue court (nom + première phrase) et deux outils :
-// voir_action (le mode d'emploi d'une action) et faire_action (l'appeler).
-function regrouperActions(actionsOutil) {
-  if (actionsOutil.length <= MAX_ACTIONS_DIRECTES) return { outils: actionsOutil, catalogue: '' };
+// Beaucoup d'actions (Tafl en a plus de 60) : leurs descriptions complètes ne tiennent pas dans la
+// mémoire d'un petit modèle. On lui donne donc :
+// - un catalogue court dans ses consignes (nom + première phrase de chaque action) ;
+// - les actions les plus utiles pour la demande en cours comme de vrais outils (avec leurs paramètres) :
+//   celles que l'outil juge essentielles, celles dont les mots ressemblent à la demande, et celles déjà
+//   utilisées ou regardées dans la conversation ;
+// - voir_action (le mode d'emploi d'une action, qui la rend appelable directement) et faire_action
+//   (appeler n'importe quelle action du catalogue, au cas où).
+// Un modèle local ne sait appeler que ce qui est dans sa liste d'outils : avec seulement voir_action et
+// faire_action, il répondait souvent qu'il « n'avait pas accès » aux actions que ses consignes nommaient.
+const MAX_DESCRIPTION_OUTIL = 600; // caractères de description pour une action donnée en outil
+const MAX_ACTIONS_ACTIVES = 12;
+
+const sansAccents = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const VIDES = new Set(['les', 'des', 'une', 'pour', 'dans', 'avec', 'sur', 'par', 'est', 'que', 'qui', 'pas', 'tout', 'tous', 'fais', 'faire', 'peux', 'veux', 'moi', 'toi', 'mon', 'mes', 'ton', 'tes', 'son', 'ses', 'cette', 'ces', 'aux', 'du', 'de', 'la', 'le', 'un', 'et', 'ou', 'en', 'au', 'a', 'stp', 'merci', 'loki', 'peut', 'plus', 'comme', 'aussi', 'bien']);
+// Les mots d'un texte, réduits à leur début (« cartes » et « carte », « posé » et « poser » se rejoignent).
+function racines(texte) {
+  return new Set(sansAccents(texte).split(/[^a-z0-9]+/).filter((m) => m.length >= 3 && !VIDES.has(m)).map((m) => m.slice(0, 5)));
+}
+
+function creerCatalogue(actionsOutil, essentielles = []) {
   const parNom = new Map(actionsOutil.map((a) => [a.name, a]));
   const courte = (d) => String(d || '').split(/(?<=[.!?])\s|\n/)[0].slice(0, 140);
-  const catalogue = [
+  const texte = [
     '', '## Actions de l\'outil', '',
-    'Pour agir dans l\'outil : voir_action (une fois, pour connaître ses paramètres), puis faire_action.',
+    'Toutes les actions ci-dessous s\'appellent directement par leur nom, comme tes autres outils, même celles',
+    'qui ne sont pas (encore) dans ta liste d\'outils. Si tu ne connais pas ses paramètres, appelle d\'abord',
+    'voir_action avec son nom : elle devient alors un outil à part entière.',
+    'N\'écris jamais que tu n\'as pas accès à une action de cette liste : appelle-la.',
     ...actionsOutil.map((a) => `- ${a.name} : ${courte(a.description)}`),
   ].join('\n');
+  const mots = new Map(actionsOutil.map((a) => [a.name, { nom: racines(a.name.replace(/_/g, ' ')), desc: racines(String(a.description || '').slice(0, 400)) }]));
+  // L'ordre de préférence des actions pour une demande : essentielles, déjà utilisées, puis par ressemblance.
+  function choisir(demande, utilisees) {
+    const d = racines(demande);
+    const score = (nom) => {
+      const m = mots.get(nom);
+      let n = 0;
+      for (const r of d) { if (m.nom.has(r)) n += 3; else if (m.desc.has(r)) n += 1; }
+      if (sansAccents(demande).includes(nom)) n += 10; // l'action nommée telle quelle
+      return n;
+    };
+    const parScore = actionsOutil.map((a) => [a.name, score(a.name)]).filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([n]) => n);
+    const ordre = [...parScore.slice(0, 4), ...essentielles.filter((n) => parNom.has(n)), ...[...utilisees].reverse(), ...parScore.slice(4)];
+    return [...new Set(ordre)];
+  }
+  function definition(a) {
+    const d = String(a.description || '');
+    return {
+      type: 'function',
+      function: {
+        name: a.name,
+        description: d.length > MAX_DESCRIPTION_OUTIL ? `${d.slice(0, MAX_DESCRIPTION_OUTIL)}… (la suite : voir_action)` : d,
+        parameters: a.parameters || { type: 'object', properties: {} },
+      },
+    };
+  }
   const outils = [
     {
       name: 'voir_action', interne: true,
-      description: 'Donne le mode d\'emploi (description et paramètres) d\'une action de l\'outil.',
-      parameters: { type: 'object', properties: { nom: { type: 'string' } }, required: ['nom'] },
-      async faire(a) {
-        const x = parNom.get(String(a.nom));
-        if (!x) throw new Error(`Action inconnue : ${a.nom}. Elles sont listées dans tes consignes.`);
-        return { texte: `${x.name} : ${x.description}\nParamètres (JSON Schema) : ${JSON.stringify(x.parameters)}` };
-      },
+      description: 'Donne le mode d\'emploi complet (description et paramètres) d\'une action de l\'outil, et la rend appelable directement.',
+      parameters: { type: 'object', properties: { nom: { type: 'string', description: 'le nom de l\'action, tel qu\'il est dans le catalogue' } }, required: ['nom'] },
     },
     {
       name: 'faire_action', relai: true,
-      description: 'Fait une action de l\'outil. args : ses paramètres, en objet.',
-      parameters: { type: 'object', properties: { nom: { type: 'string' }, args: { type: 'object' } }, required: ['nom'] },
+      description: 'Fait une action de l\'outil par son nom. args : ses paramètres, en objet JSON (ex. { "nom": "infos", "args": {} }).',
+      parameters: { type: 'object', properties: { nom: { type: 'string' }, args: { type: 'object', description: 'les paramètres de l\'action' } }, required: ['nom'] },
     },
   ];
-  return { outils, catalogue, parNom };
+  return { outils, texte, parNom, choisir, definition };
 }
 
-// Un modèle qui écrit son appel d'action dans le texte au lieu de l'envoyer à part (ça arrive).
+// Les paramètres d'un appel, tels qu'un petit modèle les écrit : parfois en texte JSON, parfois emballés
+// dans { args } ou { arguments }, parfois à plat à côté du nom (faire_action).
+function objetArgs(v) {
+  if (typeof v === 'string') { try { v = JSON.parse(v); } catch { return {}; } }
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+}
+const CLE_NOM = (a) => ['nom', 'name', 'action'].find((k) => typeof a[k] === 'string' && a[k]);
+function argsDeRelai(a) {
+  const brut = a.args ?? a.arguments ?? a.parametres ?? a.parameters ?? a.params;
+  if (brut !== undefined) return objetArgs(brut);
+  const reste = { ...a };
+  delete reste[CLE_NOM(a)];
+  return reste;
+}
+function deballer(outil, args) {
+  const props = outil.parameters?.properties || {};
+  const cles = Object.keys(args);
+  if (cles.length === 1 && ['args', 'arguments', 'parametres', 'parameters'].includes(cles[0]) && !props[cles[0]]) return objetArgs(args[cles[0]]);
+  return args;
+}
+
+// Un modèle qui écrit son appel d'action dans le texte au lieu de l'envoyer à part (ça arrive, surtout
+// pour une action qui n'est pas dans sa liste d'outils) : <tool_call>{…}</tool_call>, [TOOL_CALLS][…],
+// un bloc ```json, ou toute la réponse en JSON.
 function appelsDansLeTexte(contenu, noms) {
-  const morceaux = [...String(contenu).matchAll(/<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g)].map((m) => m[1]);
-  if (!morceaux.length && /^\s*\{[\s\S]*\}\s*$/.test(contenu)) morceaux.push(contenu.trim());
+  const t = String(contenu || '');
+  const morceaux = [...t.matchAll(/<tool_call>\s*([\s\S]*?)\s*(?:<\/tool_call>|$)/g)].map((m) => m[1]);
+  const tc = t.indexOf('[TOOL_CALLS]');
+  if (tc >= 0) morceaux.push(t.slice(tc + 12).trim());
+  for (const m of t.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)) morceaux.push(m[1]);
+  if (!morceaux.length && /^\s*[[{][\s\S]*[\]}]\s*$/.test(t)) morceaux.push(t.trim());
   const appels = [];
   for (const m of morceaux) {
-    try {
-      const o = JSON.parse(m);
-      if (o && noms.has(o.name)) appels.push({ name: o.name, arguments: o.arguments || o.parameters || {} });
-    } catch { /* pas un appel */ }
+    let o;
+    try { o = JSON.parse(m); } catch { continue; }
+    for (const x of Array.isArray(o) ? o : [o]) {
+      const f = x?.function && typeof x.function === 'object' ? x.function : x;
+      const nom = f?.name ?? f?.nom;
+      if (noms.has(nom)) appels.push({ name: nom, arguments: objetArgs(f.arguments ?? f.parameters ?? f.args ?? {}) });
+    }
   }
   return appels;
 }
@@ -212,12 +282,15 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
   let controleur = null;
   let enCours = false;
 
-  function reinitialiser() { messages = []; id = null; arreter(); }
+  let utilisees = new Set(); // actions du catalogue appelées ou regardées dans cette conversation
+
+  function reinitialiser() { messages = []; id = null; utilisees = new Set(); arreter(); }
   function arreter() { controleur?.abort(); }
   const exporter = () => ({ id, messages });
   function charger(sauvegarde) {
     messages = Array.isArray(sauvegarde?.messages) ? sauvegarde.messages : [];
     id = sauvegarde?.id || null;
+    utilisees = new Set(messages.flatMap((m) => (m.tool_calls || []).map((c) => c.function?.name)).filter(Boolean));
   }
 
   // Quand la conversation dépasse la mémoire du modèle, on vide d'abord les vieux résultats d'actions.
@@ -227,12 +300,15 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
       if (m.role === 'tool' && m.content.length > 200) m.content = '(ancien résultat, retiré pour faire de la place)';
     }
     while (messages.length > 8 && tailleTexte(messages) > limiteCaracteres) messages.splice(0, 2);
+    // (la conversation doit commencer par un message de Ragna, pas par la fin d'une action)
+    while (messages.length > 1 && messages[0].role !== 'user') messages.shift();
   }
 
   // texte : le message de Ragna. consignes : le message « system ». outils : [{ name, description,
   // parameters, action? (une action de l'outil), affiche?, famille?, lecture?, entree?(args),
-// faire(args) → { texte, image } | { erreur } }].
-  async function envoyer(texte, { consignes, outils: outilsDonnes }) {
+  // faire(args) → { texte, image } | { erreur } }]. essentielles : les noms des actions de l'outil
+  // à toujours donner en outils quand il y en a trop (les plus utiles).
+  async function envoyer(texte, { consignes, outils: outilsDonnes, essentielles = [] }) {
     if (enCours) return;
     enCours = true;
     controleur = new AbortController();
@@ -247,13 +323,32 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
       if (!id) id = `local:${crypto.randomUUID()}`;
       emit({ kind: 'init', model: `${modele} (local)`, sessionId: id, local: true });
 
-      const { outils: groupes, catalogue, parNom } = regrouperActions(outilsDonnes.filter((o) => o.action));
-      const tous = [...outilsDonnes.filter((o) => !o.action), ...groupes];
-      const parNomTous = new Map(tous.map((o) => [o.name, o]));
-      const definitions = tous.map((o) => ({ type: 'function', function: { name: o.name, description: o.description, parameters: o.parameters } }));
-      const systeme = { role: 'system', content: `${consignes}${catalogue}${CONSIGNES_LOCALES}` };
-      // ~3,5 caractères par jeton, en gardant de la place pour la réponse.
-      const limite = Math.max(8000, (r.contexte * 3.5) - systeme.content.length - JSON.stringify(definitions).length - 6000);
+      const actionsOutil = outilsDonnes.filter((o) => o.action);
+      const base = outilsDonnes.filter((o) => !o.action);
+      const cat = actionsOutil.length > MAX_ACTIONS_DIRECTES ? creerCatalogue(actionsOutil, essentielles) : null;
+      const fixes = cat ? [...base, ...cat.outils] : outilsDonnes;
+      const parNom = new Map([...outilsDonnes, ...fixes].map((o) => [o.name, o]));
+      const defFixes = fixes.map((o) => ({ type: 'function', function: { name: o.name, description: o.description, parameters: o.parameters } }));
+      const systeme = { role: 'system', content: `${consignes}${cat ? cat.texte : ''}${CONSIGNES_LOCALES}` };
+      // ~3,5 caractères par jeton. La place des actions données en outils : un cinquième de la mémoire.
+      const memoire = r.contexte * 3.5;
+      const placeActions = Math.max(3000, memoire * 0.2);
+      const limite = Math.max(8000, memoire - systeme.content.length - JSON.stringify(defFixes).length - placeActions - 6000);
+      // Les actions du catalogue données en vrais outils pour cette étape.
+      const actives = () => {
+        if (!cat) return [];
+        const defs = [];
+        let place = placeActions;
+        for (const nom of cat.choisir(texte, utilisees)) {
+          if (defs.length >= MAX_ACTIONS_ACTIVES) break;
+          const d = cat.definition(cat.parNom.get(nom));
+          const taille = JSON.stringify(d).length;
+          if (taille > place) continue;
+          place -= taille;
+          defs.push(d);
+        }
+        return defs;
+      };
 
       messages.push({ role: 'user', content: String(texte) });
       const total = { lus: 0, ecrits: 0, appels: 0 };
@@ -261,8 +356,9 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
       for (let etape = 0; ; etape++) {
         alleger(limite);
         emit({ kind: 'status', text: 'Loki réfléchit…' });
-        // Un texte qui commence comme un appel d'action écrit à la main (« <tool_call> » ou « { ») :
-        // on le garde pour soi tant qu'on ne sait pas ce que c'est.
+        const definitions = [...defFixes, ...actives()];
+        // Un texte qui commence comme un appel d'action écrit à la main (« <tool_call> », « [TOOL_CALLS] »,
+        // « ``` » ou « { ») : on le garde pour soi tant qu'on ne sait pas ce que c'est.
         let ecrit = false;
         let retenu = '';
         const reponse = await ollama.discuter({
@@ -271,7 +367,7 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
             if (!ecrit) {
               retenu += t;
               const debut = retenu.trimStart();
-              if (!debut || '<tool_call>'.startsWith(debut.slice(0, 11)) || debut.startsWith('{')) return;
+              if (!debut || ['<tool_call>', '[TOOL_CALLS]', '```'].some((m) => m.startsWith(debut.slice(0, m.length)) || debut.startsWith(m)) || /^[[{]/.test(debut)) return;
               t = retenu;
             }
             ecrit = true;
@@ -283,10 +379,11 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
         total.ecrits += reponse.jetons.ecrits;
         total.appels++;
         let appels = reponse.appels;
-        if (!appels.length) appels = appelsDansLeTexte(reponse.contenu, new Set([...parNomTous.keys(), ...(parNom?.keys() || [])]));
+        if (!appels.length) appels = appelsDansLeTexte(reponse.contenu, new Set(parNom.keys()));
         if (!appels.length && !ecrit && retenu) emit({ kind: 'text', text: retenu }); // ce n'était pas un appel
-        messages.push({ role: 'assistant', content: reponse.contenu, ...(appels.length ? { tool_calls: appels.map((a) => ({ function: a })) } : {}) });
-        if (reponse.contenu.trim()) dernierTexte = reponse.contenu;
+        const contenu = appels.length && !ecrit ? '' : reponse.contenu; // (un appel écrit en texte n'est pas une réponse)
+        messages.push({ role: 'assistant', content: contenu, ...(appels.length ? { tool_calls: appels.map((a) => ({ function: { name: a.name, arguments: a.arguments } })) } : {}) });
+        if (contenu.trim()) dernierTexte = contenu;
         if (!appels.length) break;
         if (etape >= MAX_ETAPES) {
           emit({ kind: 'text', text: `\n\n_(Arrêté après ${MAX_ETAPES} actions : en local, mieux vaut découper la demande. Dis « continue » pour la suite.)_` });
@@ -294,7 +391,7 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
         }
         for (const appel of appels) {
           if (signal.aborted) break;
-          messages.push({ role: 'tool', tool_name: appel.name, content: await faireAppel(appel, parNomTous, parNom) });
+          messages.push({ role: 'tool', tool_name: appel.name, content: await faireAppel(appel, parNom, cat) });
         }
         if (signal.aborted) break;
       }
@@ -305,7 +402,15 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
       } else {
         log('ERREUR', `Loki local : ${err.message}`);
         const absent = /not found|introuvable/i.test(err.message) && /model|modèle/i.test(err.message);
-        emit({ kind: 'result', isError: true, text: absent ? `Le modèle ${modele} n'est pas téléchargé : télécharge-le dans Atelier › Réglages › IA locale.` : err.message, modeleAbsent: absent });
+        const sansOutils = /does not support tools/i.test(err.message);
+        emit({
+          kind: 'result',
+          isError: true,
+          text: absent ? `Le modèle ${modele} n'est pas téléchargé : télécharge-le dans Atelier › Réglages › IA locale.`
+            : sansOutils ? `Le modèle ${modele} ne sait pas appeler d'actions : choisis-en un autre dans Atelier › Réglages › IA locale (Qwen3 conseillé).`
+              : err.message,
+          modeleAbsent: absent,
+        });
       }
     } finally {
       enCours = false;
@@ -316,19 +421,25 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
 
   // Une action demandée par le modèle : le panneau la montre, on demande la permission si besoin,
   // on la fait, et on renvoie le texte pour le modèle.
-  async function faireAppel(appel, parNomTous, parNom) {
-    // (une action du catalogue appelée directement par son nom : on la fait quand même)
-    let outil = parNomTous.get(appel.name) || parNom?.get(appel.name);
-    let args = appel.arguments || {};
+  async function faireAppel(appel, parNom, cat) {
+    let outil = parNom.get(appel.name);
+    let args = objetArgs(appel.arguments);
     if (outil?.relai) {
-      outil = parNom?.get(String(args.nom));
-      args = args.args && typeof args.args === 'object' ? args.args : {};
-      if (!outil) return `Action inconnue : ${appel.arguments?.nom}. Regarde la liste dans tes consignes.`;
+      const nom = String(args[CLE_NOM(args)] ?? '');
+      outil = cat?.parNom.get(nom);
+      if (!outil) return `Action inconnue : ${nom || '(sans nom)'}. Regarde la liste dans tes consignes.`;
+      args = argsDeRelai(args);
     }
-    if (!outil) return `Outil inconnu : ${appel.name}.`;
-    if (outil.interne) {
-      try { return (await outil.faire(args)).texte; } catch (err) { return `Erreur : ${err.message}`; }
+    if (!outil) return `Outil inconnu : ${appel.name}. ${cat ? 'Les actions de l\'outil sont listées dans tes consignes.' : ''}`.trim();
+    if (outil.interne) { // voir_action
+      const x = cat?.parNom.get(String(args.nom ?? args.name ?? ''));
+      if (!x) return `Action inconnue : ${args.nom ?? args.name}. Elles sont listées dans tes consignes.`;
+      utilisees.delete(x.name);
+      utilisees.add(x.name);
+      return `${x.name} : ${x.description}\nParamètres (JSON Schema) : ${JSON.stringify(x.parameters)}\n(Tu peux maintenant appeler ${x.name} directement.)`;
     }
+    if (outil.action && cat) { utilisees.delete(outil.name); utilisees.add(outil.name); }
+    args = deballer(outil, args);
     const idAppel = `l${crypto.randomBytes(6).toString('hex')}`;
     let entree = args;
     try { entree = outil.entree ? outil.entree(args) : args; } catch (err) { return `Erreur : ${err.message}`; }

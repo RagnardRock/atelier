@@ -424,7 +424,9 @@ async function writeHistory(list) {
 }
 
 // outil : { nom: 'Skald', role: "l'éditeur d'images de Ragna (retouche, logos, PSD)", consignes: '…' }
-// (consignes : ce que Claude doit savoir en plus dans cet outil, en Markdown ; facultatif)
+// (consignes : ce que Claude doit savoir en plus dans cet outil, en Markdown ; facultatif.
+//  consignesLocales : une version courte pour le modèle local, qui a peu de mémoire ; facultatif.
+//  essentielles : les actions à toujours donner au modèle local, quand l'outil en a trop ; facultatif.)
 // writeConfig (facultatif) : (changements) => enregistre ces réglages ; permet « ne plus demander » pour de bon.
 // avantLocal (facultatif) : appelé avant chaque réponse locale (Tafl y libère la carte graphique de ComfyUI).
 function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantLocal }) {
@@ -481,7 +483,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
     }
   }
 
-  async function texteConsignes(nom, cwd, commandes) {
+  async function texteConsignes(nom, cwd, commandes, local = false) {
     const memoire = await memoireProjet(nom);
     const texte = [
       `# Tu es dans ${outil.nom}`,
@@ -515,7 +517,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
       '- lire_notes lit les notes de Ragna (quand la question s\'y rapporte) ; retenir_projet / oublier_projet',
       '  gardent une info courte et utile plus tard, quand Ragna te la demande ou te l\'apprend (visible dans',
       '  Atelier et les autres outils).',
-      ...(outil.consignes ? ['', `## Dans ${outil.nom}`, '', outil.consignes] : []),
+      ...((local && outil.consignesLocales) || outil.consignes ? ['', `## Dans ${outil.nom}`, '', (local && outil.consignesLocales) || outil.consignes] : []),
       '',
     ].join('\n');
     return texte;
@@ -557,14 +559,14 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
       faire: async (args) => ({ texte: await outilsCommuns.appeler(o.name, args) }),
     }));
     const deLOutil = actions.map((a) => ({
-      name: a.name, description: a.description, parameters: a.inputSchema, action: true, lecture: a.lecture, affiche: `mcp__atelier__${a.name}`,
+      name: a.name, description: a.description, parameters: a.inputSchema, action: true, lecture: a.lecture, famille: a.famille, affiche: `mcp__atelier__${a.name}`,
       faire: (args) => executerAction(a.name, args, log),
     }));
-    const consignes = (await texteConsignes(nom, cwd, false))
+    const consignes = (await texteConsignes(nom, cwd, false, true))
       .replace("(dans l'Atelier,\nl'assistant s'appelle Loki ; il est propulsé par Claude)", "(ici, tu tournes sur un modèle local)")
       .replace(/mcp__atelier__/g, '')
       .replace('tu as Read, Glob, Grep, Edit et Write', 'tu as lire_fichier, lister_fichiers, chercher_texte, modifier_fichier et ecrire_fichier');
-    await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(cwd), ...memoire, ...deLOutil] });
+    await session.envoyer(texte, { consignes, essentielles: outil.essentielles || [], outils: [...lokiLocal.outilsFichiers(cwd), ...memoire, ...deLOutil] });
   }
 
   // En « auto » : Claude ne peut pas répondre, on passe en local avec le même message.
