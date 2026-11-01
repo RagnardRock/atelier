@@ -29,6 +29,8 @@ const Recettes = (() => {
     carreau: ['#3a3640', '#5a5563', '#8a8494', '#b3adbb', '#d8d2dd'],
     tapis: ['#3a1a24', '#5a2632', '#7a2f3a', '#9c4a48', '#c27a62'],
     terre_cuite: ['#3e2228', '#64352f', '#8e5038', '#b27448', '#d29c6a'],
+    toit_bleu: ['#181d33', '#223155', '#2f4a7e', '#4a6fa6', '#7e9fca'],
+    crepi: ['#6e6464', '#a39686', '#cfc1a8', '#e3d8c2', '#f2ebdc'],
   };
   const FLEURS = ['#d8d0c0', '#e6b45a', '#c8503e', '#7fb3e0'];
 
@@ -208,12 +210,26 @@ const Recettes = (() => {
       ops: (r, s, g) => pierres(r, s, g, { l: 8 * s / 16, h: 4 * s / 16, decalage: 4 * s / 16, coins: false }),
     },
     eau: {
-      rampe: 'eau', libelle: 'Eau calme, quelques rides et reflets',
-      ops: (r, s, g) => [
-        ...fond(r, s, g, { sombre: 0.38, clair: 0.1, taille: 8 }),
-        { type: 'bruit', couleurs: [r[3]], forme: 'trait', taille: 3 * s / 16, densite: 0.035, espace: 5 * s / 16, graine: g + 5 },
-        { type: 'bruit', couleurs: [r[4]], forme: 'point', densite: 0.008, espace: 6, graine: g + 7, seulement: [r[3]] },
-      ],
+      rampe: 'eau', libelle: 'Eau calme : petites vagues en arc, reflets',
+      ops: (r, s, g) => {
+        const rnd = hasard(g + 3);
+        const ops = [
+          { type: 'remplir', couleur: r[2] },
+          // De larges nuances à peine plus sombres (la profondeur), sans contour net.
+          { type: 'taches', couleurs: [melange(r[2], r[1], 0.45)], densite: 0.35, taille: 10 * s / 16, graine: g },
+        ];
+        // Des vagues en arc (⌒) en quinconce : la crête claire, un pixel plus clair au sommet, et
+        // l'ombre du creux juste dessous. Une rangée sur deux est décalée de moitié.
+        const pasX = 8 * s / 16, pasY = 4 * s / 16;
+        for (let y = 1, j = 0; y < s; y += pasY, j++) {
+          for (let x = (j % 2) * (pasX / 2) + Math.floor(rnd() * 2); x < s + pasX; x += pasX) {
+            const X = (k) => ((Math.round(x + k) % s) + s) % s, Y = (k) => ((y + k) % s + s) % s;
+            ops.push(point(X(0), Y(1), r[3]), point(X(1), Y(0), r[3]), point(X(2), Y(0), r[4]), point(X(3), Y(1), r[3]));
+            ops.push(point(X(1), Y(1), melange(r[2], r[1], 0.6)), point(X(2), Y(1), melange(r[2], r[1], 0.6)));
+          }
+        }
+        return ops;
+      },
     },
     sable: {
       rampe: 'sable', libelle: 'Sable clair, quelques ondulations',
@@ -509,9 +525,9 @@ const Recettes = (() => {
       animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: r[2], amplitude: 1, images: 4, duree: 260 }),
     },
     eau_animee: {
-      rampe: 'eau', libelle: 'Eau calme dont les rides et les reflets ondulent (animée)',
+      rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
       ops: (r, s, g) => RECETTES.eau.ops(r, s, g),
-      animation: (r) => ({ mode: 'cycle', couleurs: [r[3], melange(r[2], r[3], 0.6)], images: 2, duree: 420 }),
+      animation: (r, s) => ({ mode: 'defilement', dx: 2 * s / 16, dy: 0, images: 8, duree: 180 }),
     },
   };
   // --- Bords et transitions (Tafl 1.14) ---
@@ -583,7 +599,143 @@ const Recettes = (() => {
     });
   }
 
-  const NOMS = [...Object.keys(RECETTES), ...Object.keys(BORDS)];
+  // --- Bâtiments (Tafl 1.14) ---
+  // Une maison ou une boutique d'un seul tenant, dessinée en 16 px par tuile puis découpée en tuiles
+  // (et agrandie ou réduite pixel par pixel pour une autre taille). La lumière vient d'en haut à gauche ;
+  // les rangées du haut (le toit) passent devant le joueur ; la tuile du bas de la porte laisse passer.
+  const BATIMENTS = {
+    maison: { libelle: 'Une maison (4 × 4 tuiles) : toit de tuiles rouges, murs crépis à colombages, porte, une fenêtre et sa jardinière, cheminée ; donne aussi un tampon', l: 4, h: 4, dessus: 1, toit: 'terre_cuite', mur: 'crepi', style: 'maison' },
+    boutique: { libelle: 'Une boutique (5 × 4 tuiles) : toit bleu, murs de pierre claire, auvent rayé, vitrine et enseigne ; donne aussi un tampon', l: 5, h: 4, dessus: 1, toit: 'toit_bleu', mur: 'carreau', style: 'boutique' },
+  };
+  function batiment(nom, s, g) {
+    const B = BATIMENTS[nom];
+    const W = B.l * 16, H = B.h * 16, px = new Array(W * H).fill(null);
+    const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.eau, P = RAMPES.pierre, F = RAMPES.feuillage;
+    const rnd = hasard(g + 211);
+    const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) px[y * W + x] = c; };
+    const rect = (x, y, l, h, c) => { for (let j = y; j < y + h; j++) for (let i = x; i < x + l; i++) set(i, j, c); };
+    const get = (x, y) => (x >= 0 && y >= 0 && x < W && y < H ? px[y * W + x] : null);
+    const eave = 31, murG = 4, murD = W - 5, sol = H - 2;
+    // Les murs.
+    if (B.style === 'maison') {
+      rect(murG, eave, murD - murG + 1, sol - eave, M[3]);
+      for (let k = 0; k < 40; k++) { const x = murG + Math.floor(rnd() * (murD - murG)), y = eave + 3 + Math.floor(rnd() * (sol - eave - 6)); set(x, y, M[2]); }
+      // Les colombages : poteaux aux coins et au milieu, une poutre en haut.
+      for (const x of [murG, murD - 2, Math.round((murG + murD) / 2) - 1]) { rect(x, eave, 3, sol - eave, Bo[2]); rect(x, eave, 1, sol - eave, Bo[3]); rect(x + 2, eave, 1, sol - eave, Bo[1]); }
+      rect(murG, eave + 2, murD - murG + 1, 2, Bo[2]); rect(murG, eave + 2, murD - murG + 1, 1, Bo[3]);
+    } else {
+      rect(murG, eave, murD - murG + 1, sol - eave, M[1]);
+      for (let y = eave, j = 0; y < sol; y += 5, j++) for (let x = murG - (j % 2) * 4; x <= murD; x += 8) {
+        const x0 = Math.max(murG, x), x1 = Math.min(murD, x + 6), c = rnd() < 0.3 ? melange(M[3], M[2], 0.4) : M[3];
+        rect(x0, y, x1 - x0 + 1, 4, c); rect(x0, y, x1 - x0 + 1, 1, M[4]); rect(x1, y + 1, 1, 3, M[2]);
+      }
+    }
+    // Le soubassement de pierre.
+    rect(murG, sol - 3, murD - murG + 1, 3, P[2]); rect(murG, sol - 3, murD - murG + 1, 1, P[3]);
+    for (let x = murG + 2; x < murD; x += 5) rect(x, sol - 2, 1, 2, P[1]);
+    // L'ombre du toit sur le haut du mur.
+    for (let x = murG; x <= murD; x++) for (const [dy, t] of [[0, 0.55], [1, 0.3]]) { const c = get(x, eave + dy); if (c) set(x, eave + dy, melange(c, '#1a1424', t)); }
+    // Une fenêtre (l × h) : cadre de bois, vitre et reflet, croisillon, appui.
+    const fenetre = (x, y, l, h, croix = true) => {
+      rect(x - 1, y - 1, l + 2, h + 2, Bo[1]);
+      rect(x, y, l, h, V[2]);
+      rect(x, y, l, 2, V[3]);
+      for (let k = 0; k < Math.min(l, h) - 2; k++) set(x + 1 + k, y + h - 2 - k, V[3]);
+      set(x + 1, y + 1, V[4]); set(x + 2, y + 1, V[4]); set(x + 1, y + 2, V[4]);
+      if (croix) { rect(x + Math.floor(l / 2), y, 1, h, Bo[1]); rect(x, y + Math.floor(h / 2), l, 1, Bo[1]); }
+      rect(x - 2, y + h + 1, l + 4, 1, Bo[3]); rect(x - 2, y + h + 2, l + 4, 1, Bo[1]);
+    };
+    const porte = (x, y, l) => {
+      const h = sol - y;
+      rect(x - 1, y - 1, l + 2, h + 1, Bo[0]);
+      rect(x, y, l, h, Bo[2]);
+      for (let i = x + 2; i < x + l - 1; i += 3) rect(i, y + 1, 1, h - 1, Bo[1]);
+      rect(x, y, l, 1, Bo[3]); rect(x, y, 1, h, Bo[3]);
+      rect(x + l - 3, y + Math.floor(h / 2), 2, 2, FLEURS[1]);
+      // La marche devant la porte.
+      rect(x - 2, sol, l + 4, 2, P[3]); rect(x - 2, sol + 1, l + 4, 1, P[2]);
+    };
+    let porteX;
+    if (B.style === 'maison') {
+      porteX = Math.round(W / 2) + 2;
+      porte(porteX, 42, 10);
+      fenetre(10, 39, 10, 9);
+      // La jardinière sous la fenêtre.
+      rect(9, 50, 12, 3, Bo[2]); rect(9, 50, 12, 1, Bo[3]);
+      for (let i = 9; i < 21; i++) set(i, 49, rnd() < 0.6 ? F[3] : F[2]);
+      for (let i = 10; i < 21; i += 3) { set(i, 48, FLEURS[2]); set(i, 49, FLEURS[(i >> 1) % 2 ? 1 : 2]); }
+    } else {
+      porteX = 12;
+      porte(porteX, 42, 12);
+      // L'auvent rayé au-dessus de la porte, au bord festonné.
+      const ax = porteX - 3, al = 18;
+      for (let i = 0; i < al; i++) { const c = Math.floor(i / 3) % 2 ? '#e8e0d0' : '#b84a44'; rect(ax + i, 36, 1, 4, c); if (i % 3 !== 1) set(ax + i, 40, c); }
+      rect(ax, 36, al, 1, melange('#b84a44', '#f0e0c8', 0.5));
+      for (let i = 0; i < al; i++) set(ax + i, 41, get(ax + i, 41) ? melange(get(ax + i, 41), '#1a1424', 0.35) : null);
+      // La vitrine : une grande fenêtre avec des objets posés derrière.
+      const vx = 36, vy = 39, vl = W - 47, vh = 12;
+      fenetre(vx, vy, vl, vh, false);
+      rect(vx, vy + vh - 3, vl, 3, Bo[2]); rect(vx, vy + vh - 3, vl, 1, Bo[3]);
+      for (let i = vx + 3; i < vx + vl - 3; i += 6) { rect(i, vy + vh - 6, 3, 3, i % 4 ? '#c8503e' : '#7fb3e0'); set(i, vy + vh - 6, '#f0e8d8'); }
+      rect(vx + Math.floor(vl / 2), vy, 1, vh - 3, Bo[1]);
+      // L'enseigne au-dessus de la vitrine : un panneau avec une pièce.
+      const ex = vx + Math.floor(vl / 2) - 7;
+      rect(ex, 33, 14, 4, Bo[1]); rect(ex + 1, 33, 12, 3, Bo[3]); rect(ex + 1, 33, 12, 1, Bo[4]);
+      rect(ex + 5, 34, 4, 1, FLEURS[1]); set(ex + 6, 33, FLEURS[1]); set(ex + 7, 35, melange(FLEURS[1], '#3a2c40', 0.4));
+    }
+    // Le toit : en croupe vu de face (il s'élargit vers le bas), rangées de tuiles décalées, faîtage
+    // clair, côté droit dans l'ombre, bord du bas (l'égout) qui déborde des murs.
+    const haut = 5, gauche = 1, droite = W - 2;
+    for (let y = haut; y < eave; y++) {
+      const t = (y - haut) / (eave - 1 - haut), retrait = Math.round(8 * (1 - t));
+      const x0 = gauche + retrait, x1 = droite - retrait, j = Math.floor((y - haut - 2) / 4), ry = (y - haut - 2) % 4;
+      for (let x = x0; x <= x1; x++) {
+        let c = T[2];
+        if (y < haut + 2) c = y === haut ? T[4] : T[3];
+        else if (ry === 3) c = T[0];
+        else if (ry === 0) c = T[3];
+        else if ((x + (j % 2) * 3) % 6 === 0) c = T[1];
+        // Les pans de côté (les croupes), plus sombres à droite, plus clairs à gauche.
+        if (x < x0 + 3 && y >= haut + 2) c = ry === 3 ? T[1] : T[3];
+        if (x > x1 - 4 && y >= haut + 2) c = ry === 3 ? T[0] : T[1];
+        set(x, y, c);
+      }
+    }
+    rect(gauche, eave - 2, droite - gauche + 1, 1, T[1]); rect(gauche, eave - 1, droite - gauche + 1, 1, T[0]);
+    for (let k = 0; k < 8; k++) { const x = gauche + 6 + Math.floor(rnd() * (droite - gauche - 12)), y = haut + 3 + Math.floor(rnd() * (eave - haut - 8)); if (get(x, y) === T[2]) set(x, y, T[4]); }
+    // La cheminée.
+    if (B.style === 'maison') {
+      const cx = W - 20;
+      rect(cx, 1, 6, 12, P[2]); rect(cx, 1, 1, 12, P[3]); rect(cx + 5, 1, 1, 12, P[1]);
+      for (let y = 4; y < 13; y += 3) rect(cx + 1, y, 4, 1, P[1]);
+      rect(cx - 1, 0, 8, 2, P[3]); rect(cx - 1, 1, 8, 1, P[1]);
+    }
+    // Le contour : sombre en bas et à droite, plus doux en haut et à gauche.
+    const plein = px.map((c) => c !== null);
+    const dans = (x, y) => x >= 0 && y >= 0 && x < W && y < H && plein[y * W + x];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (dans(x, y)) continue;
+      if (dans(x, y - 1) || dans(x - 1, y)) set(x, y, '#120c1e');
+      else if (dans(x, y + 1) || dans(x + 1, y)) set(x, y, melange('#120c1e', T[1], 0.5));
+    }
+    return { W, H, px, porte: Math.floor((porteX + 3) / 16) };
+  }
+  function fabriquerBatiment(nom, s, g, lire) {
+    const B = BATIMENTS[nom], { W, px, porte } = batiment(nom, s, g);
+    const cache = new Map(), couleur = (c) => { if (!cache.has(c)) cache.set(c, Array.from(lire(c))); return cache.get(c); };
+    const pieces = [];
+    for (let j = 0; j < B.h; j++) for (let i = 0; i < B.l; i++) {
+      const data = new Uint8ClampedArray(s * s * 4);
+      for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+        const c = px[(j * 16 + Math.floor((y * 16) / s)) * W + i * 16 + Math.floor((x * 16) / s)];
+        if (c) data.set(couleur(c), (y * s + x) * 4);
+      }
+      pieces.push({ suffixe: `${j + 1}-${i + 1}`, frames: [data], col: i, ligne: j, passage: j < B.dessus ? 'auto' : j === B.h - 1 && i === porte ? 'libre' : 'bloque' });
+    }
+    return pieces;
+  }
+
+  const NOMS = [...Object.keys(RECETTES), ...Object.keys(BORDS), ...Object.keys(BATIMENTS)];
 
   // Les opérations d'une recette simple. couleur : une couleur de base (#rrggbb) pour une autre teinte.
   function operations(nom, { taille = 16, graine = 1, couleur = null } = {}) {
@@ -598,6 +750,7 @@ const Recettes = (() => {
   function fabriquer(nom, { taille = 16, graine = 1, couleur = null, lire }) {
     const s = Math.max(8, Math.round(taille)), g = Math.max(1, Math.round(graine));
     if (BORDS[nom]) return bords(nom, s, g, lire);
+    if (BATIMENTS[nom]) return fabriquerBatiment(nom, s, g, lire);
     const rec = RECETTES[nom];
     if (!rec) throw new Error(`Recette inconnue : ${nom}. Possibles : ${NOMS.join(', ')}.`);
     const r = couleur ? PixelArt.rampe(couleur, 5) : RAMPES[rec.rampe];
@@ -605,15 +758,17 @@ const Recettes = (() => {
     const t = PixelArt.Toile(data, s, s);
     for (const op of rec.ops(r, s, g)) PixelArt.operation(t, op, lire);
     if (!rec.animation) return [{ suffixe: '', frames: [data] }];
-    const a = rec.animation(r);
+    const a = rec.animation(r, s);
     return [{ suffixe: '', frames: PixelArt.animer(data, s, s, a.mode, a, lire), duree: a.duree }];
   }
 
-  const libelle = (n) => (RECETTES[n] || BORDS[n]).libelle;
+  const libelle = (n) => (RECETTES[n] || BORDS[n] || BATIMENTS[n]).libelle;
   return {
     operations, fabriquer, NOMS,
     liste: () => NOMS.map((n) => `${n} (${libelle(n)})`),
     objet: (n) => Boolean(RECETTES[n]?.objet),
     jeu: (n) => Boolean(BORDS[n]),
+    // Un bâtiment : { l, h, dessus } (en tuiles), sinon null.
+    batiment: (n) => (BATIMENTS[n] ? { l: BATIMENTS[n].l, h: BATIMENTS[n].h, dessus: BATIMENTS[n].dessus } : null),
   };
 })();
