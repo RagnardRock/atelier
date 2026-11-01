@@ -673,40 +673,68 @@ const Recettes = (() => {
     return base;
   }
 
-  // Une maison à toit en pignon vue de 3/4 : le toit pointu (pan gauche éclairé, pan droit à l'ombre,
-  // faîtage au milieu), le pignon de face à colombages, puis les murs (crépi en haut, planches en bas),
-  // la porte, les fenêtres et le soubassement.
+  // Un point (centre du pixel x, y) est-il dans le polygone pts ?
+  function dansPoly(pts, x, y) {
+    const px = x + 0.5, py = y + 0.5;
+    let dedans = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) dedans = !dedans;
+    }
+    return dedans;
+  }
+  // Les coordonnées (s, t) d'un point dans le parallélogramme o + s·a + t·b.
+  function local(o, a, b, x, y) {
+    const px = x + 0.5 - o[0], py = y + 0.5 - o[1], det = a[0] * b[1] - a[1] * b[0];
+    return [(px * b[1] - py * b[0]) / det, (a[0] * py - a[1] * px) / det];
+  }
+
+  // Une maison à toit en pignon, vue de 3/4 d'en haut : la profondeur monte vers le haut et un peu
+  // vers la droite (on voit le dessus du toit et le mur de droite). Le pan gauche du toit, tourné vers
+  // la lumière, est clair ; le pan droit et le mur de droite sont dans l'ombre. Les rangées d'ardoises
+  // suivent le toit, les planches de rive et l'égout ont une épaisseur, et le toit déborde du pignon
+  // et des murs en y jetant son ombre.
   function maisonPignon(B, g) {
     const W = B.l * 16, H = B.h * 16, f = feuille(W, H);
-    const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.vitre, P = RAMPES.pierre, Fe = RAMPES.feuillage;
+    const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.vitre, P = RAMPES.pierre, Fe = RAMPES.feuillage, A = RAMPES.ardoise;
     const rnd = hasard(g + 307);
-    const xl = 1, xr = W - 8, cx = Math.floor((xl + xr) / 2);
-    const haut = 1, epaule = 18, egout = 46, base = H - 4;
-    const demi = (y) => (y < epaule ? Math.round(((y - haut) / (epaule - haut)) * (cx - xl)) + 1 : cx - xl + 1);
-    // Le pignon de face : un triangle sous le faîtage.
-    const ga = 24, gl = Math.min(20, cx - xl - 6);
-    const dansPignon = (x, y) => y >= ga && y <= egout && Math.abs(x + 0.5 - (cx + 0.5)) <= ((y - ga) / (egout - ga)) * gl;
-    // Les murs (d'abord, le toit déborde par-dessus).
-    const ml = xl + 2, mr = xr - 2, mh = egout + 1, mid = egout + 12;
-    f.rect(ml, mh, mr - ml + 1, mid - mh, M[3]);
-    for (let k = 0; k < 30; k++) f.set(ml + Math.floor(rnd() * (mr - ml)), mh + 2 + Math.floor(rnd() * (mid - mh - 3)), M[2]);
-    for (let y = mid; y < base - 2; y++) for (let x = ml; x <= mr; x++) f.set(x, y, (x - ml) % 4 === 0 ? Bo[1] : (x - ml) % 4 === 1 ? Bo[3] : Bo[2]);
-    f.rect(ml, mid, mr - ml + 1, 2, Bo[1]); f.rect(ml, mid, mr - ml + 1, 1, Bo[3]);
-    for (const x of [ml, mr - 2]) { f.rect(x, mh, 3, base - mh, Bo[2]); f.rect(x, mh, 1, base - mh, Bo[3]); f.rect(x + 2, mh, 1, base - mh, Bo[0]); }
-    // Soubassement de pierre sombre.
-    f.rect(ml, base - 2, mr - ml + 1, 3, RAMPES.ardoise[2]); f.rect(ml, base - 2, mr - ml + 1, 1, RAMPES.ardoise[3]);
-    for (let x = ml + 3; x < mr; x += 6) f.set(x, base - 1, RAMPES.ardoise[1]);
-    // L'ombre du toit sur le haut des murs.
-    for (let x = ml; x <= mr; x++) for (const [dy, t] of [[0, 0.55], [1, 0.35], [2, 0.15]]) { const c = f.get(x, mh + dy); if (c) f.set(x, mh + dy, melange(c, '#1a1424', t)); }
-    // Une fenêtre : cadre blanc, vitre bleue avec reflet, croisillon, et une jardinière fleurie dessous.
+    const S = 6, D = 24;                          // la profondeur : 6 px à droite, 24 px vers le haut
+    const F0 = 3, F1 = W - 14, cx = (F0 + F1) / 2; // la façade
+    const ga = 28, egout = 48, base = H - 5, mid = egout + 13;
+    const sombre = (c, t) => melange(c, '#141024', t);
+    // --- Le mur de droite (dans l'ombre), vu en biais.
+    for (let x = F1 + 1; x <= F1 + S; x++) {
+      const k = x - F1;
+      for (let y = egout - (D / S) * k; y <= base - (D / S) * k; y++) {
+        const y0 = y + (D / S) * k;
+        let c = y0 < mid ? M[1] : (x % 2 ? Bo[1] : Bo[0]);
+        if (y0 >= base - 2) c = A[1];
+        if (k === 1) c = sombre(c, 0.3);
+        f.set(x, Math.round(y), c);
+      }
+    }
+    // --- La façade : crépi en haut, planches en bas, colombages, soubassement.
+    for (let y = egout + 1; y <= base; y++) for (let x = F0; x <= F1; x++) {
+      let c;
+      if (y >= base - 2) c = y === base - 2 ? A[3] : (x % 6 === 0 ? A[1] : A[2]);
+      else if (y < mid) c = M[3];
+      else c = (x - F0) % 4 === 0 ? Bo[1] : (x - F0) % 4 === 1 ? Bo[3] : Bo[2];
+      f.set(x, y, c);
+    }
+    for (let k = 0; k < 30; k++) f.set(F0 + 3 + Math.floor(rnd() * (F1 - F0 - 6)), egout + 4 + Math.floor(rnd() * (mid - egout - 6)), M[2]);
+    f.rect(F0, mid, F1 - F0 + 1, 2, Bo[1]); f.rect(F0, mid, F1 - F0 + 1, 1, Bo[3]);
+    for (const x of [F0, F1 - 2]) { f.rect(x, egout + 1, 3, base - egout - 3, Bo[2]); f.rect(x, egout + 1, 1, base - egout - 3, Bo[3]); f.rect(x + 2, egout + 1, 1, base - egout - 3, Bo[0]); }
+    // Une fenêtre enfoncée : cadre blanc, l'ombre du linteau sur la vitre, reflet, appui.
     const blanc = M[4];
     const fenetre = (x, y, l, h, { jardiniere = false, croix = true } = {}) => {
       f.rect(x - 1, y - 1, l + 2, h + 2, blanc);
-      f.rect(x, y, l, h, V[2]); f.rect(x, y, l, 1, V[1]); f.rect(x, y, 1, h, V[1]);
-      for (let k = 0; k < Math.min(l, h) - 2; k++) f.set(x + l - 2 - k, y + 1 + k, V[3]);
-      f.set(x + 1, y + 1, V[4]); f.set(x + 2, y + 1, V[4]); f.set(x + 1, y + 2, V[4]);
-      if (croix) { f.rect(x + Math.floor(l / 2), y, 1, h, blanc); }
-      f.rect(x - 1, y + h + 1, l + 2, 1, melange(blanc, M[1], 0.5));
+      f.rect(x + l + 1, y, 1, h + 1, M[1]);
+      f.rect(x, y, l, h, V[2]);
+      f.rect(x, y, l, 2, V[0]); f.rect(x, y, 1, h, V[1]);
+      for (let k = 0; k < Math.min(l, h) - 3; k++) f.set(x + l - 2 - k, y + 2 + k, V[3]);
+      f.set(x + 1, y + 2, V[4]); f.set(x + 2, y + 2, V[4]);
+      if (croix) f.rect(x + Math.floor(l / 2), y, 1, h, blanc);
+      f.rect(x - 2, y + h + 1, l + 4, 1, blanc); f.rect(x - 2, y + h + 2, l + 4, 1, M[1]);
       if (jardiniere) {
         f.rect(x - 1, y + h + 2, l + 2, 3, Bo[2]); f.rect(x - 1, y + h + 2, l + 2, 1, Bo[3]); f.rect(x - 1, y + h + 4, l + 2, 1, Bo[0]);
         for (let i = x - 1; i < x + l + 1; i++) f.set(i, y + h + 1, rnd() < 0.5 ? Fe[3] : Fe[2]);
@@ -714,142 +742,170 @@ const Recettes = (() => {
       }
     };
     const porte = (x, l) => {
-      const y = mid - 4, h = base - y;
-      f.rect(x - 1, y - 1, l + 2, h + 1, Bo[0]);
+      const y = mid - 5, h = base - y;
+      f.rect(x - 2, y - 2, l + 4, h + 2, blanc); f.rect(x - 1, y - 1, l + 2, h + 1, Bo[0]);
       for (let i = x; i < x + l; i++) for (let j = y; j < base; j++) f.set(i, j, (i - x) % 3 === 2 ? Bo[1] : Bo[2]);
-      f.rect(x, y, l, 1, Bo[3]); f.rect(x, y, 1, h, Bo[3]);
-      f.rect(x + 1, y + 2, l - 2, 3, V[2]); f.rect(x + 1, y + 2, l - 2, 1, V[3]);
-      f.rect(x + l - 3, y + Math.floor(h / 2) + 1, 2, 2, FLEURS[1]);
-      f.rect(x - 2, base, l + 4, 2, P[3]); f.rect(x - 2, base + 1, l + 4, 1, P[2]);
+      f.rect(x, y, l, 2, Bo[0]); f.rect(x, y, 1, h, Bo[1]);
+      f.rect(x + 2, y + 3, l - 4, 3, V[2]); f.rect(x + 2, y + 3, l - 4, 1, V[1]);
+      f.rect(x + l - 3, y + Math.floor(h / 2) + 1, 2, 1, FLEURS[1]);
+      f.rect(x - 3, base + 1, l + 6, 2, P[3]); f.rect(x - 3, base + 2, l + 6, 1, P[1]);
     };
     const porteX = B.porte * 16 + 3;
     porte(porteX, 10);
     if (B.vitrine) {
-      // La vitrine, l'auvent rayé au-dessus, et l'enseigne.
-      const vx = porteX + 15, vl = mr - 4 - vx;
-      fenetre(vx, mh + 6, vl, 11, { croix: false });
-      f.rect(vx, mh + 14, vl, 3, Bo[2]); f.rect(vx, mh + 14, vl, 1, Bo[3]);
-      for (let i = vx + 2; i < vx + vl - 3; i += 5) { f.rect(i, mh + 11, 3, 3, i % 2 ? '#d84a3a' : '#f0c040'); f.set(i, mh + 11, '#fff4e0'); }
-      const ax = vx - 2, al = vl + 4;
-      for (let i = 0; i < al; i++) { const c = Math.floor(i / 3) % 2 ? '#f4efe6' : B.auvent; f.rect(ax + i, mh + 1, 1, 4, c); if (i % 3 !== 1) f.set(ax + i, mh + 5, c); }
-      f.rect(ax, mh + 1, al, 1, melange(B.auvent, '#ffffff', 0.4));
-      for (let i = 0; i < al; i++) { const c = f.get(ax + i, mh + 6); if (c) f.set(ax + i, mh + 6, melange(c, '#1a1424', 0.3)); }
-      f.rect(ml + 3, mh + 4, porteX - ml - 6, 6, Bo[1]); f.rect(ml + 4, mh + 5, porteX - ml - 8, 4, Bo[3]);
-      f.rect(ml + 4 + Math.floor((porteX - ml - 8) / 2) - 1, mh + 6, 3, 2, FLEURS[1]);
+      const vx = porteX + 16, vl = F1 - 5 - vx;
+      fenetre(vx, egout + 9, vl, 11, { croix: false });
+      f.rect(vx, egout + 17, vl, 3, Bo[2]); f.rect(vx, egout + 17, vl, 1, Bo[3]);
+      for (let i = vx + 2; i < vx + vl - 3; i += 5) { f.rect(i, egout + 14, 3, 3, i % 2 ? '#d84a3a' : '#f0c040'); f.set(i, egout + 14, '#fff4e0'); }
+      // L'auvent : une bande rayée en pente, qui avance et jette son ombre.
+      const ax = vx - 3, al = vl + 6, ay = egout + 3;
+      for (let i = 0; i < al; i++) {
+        const c = Math.floor(i / 3) % 2 ? '#f4efe6' : B.auvent;
+        f.rect(ax + i, ay, 1, 4, c); f.set(ax + i, ay, melange(c, '#ffffff', 0.35));
+        if (i % 3 !== 1) f.set(ax + i, ay + 4, sombre(c, 0.2));
+        for (const dy of [5, 6]) { const o = f.get(ax + i, ay + dy); if (o) f.set(ax + i, ay + dy, sombre(o, dy === 5 ? 0.45 : 0.25)); }
+      }
+      // L'enseigne qui pend à gauche de la porte.
+      f.rect(F0 + 4, egout + 6, porteX - F0 - 8, 7, Bo[0]); f.rect(F0 + 5, egout + 7, porteX - F0 - 10, 5, Bo[3]); f.rect(F0 + 5, egout + 7, porteX - F0 - 10, 1, Bo[4]);
+      f.rect(F0 + 4 + Math.floor((porteX - F0 - 8) / 2) - 1, egout + 8, 3, 3, FLEURS[1]);
     } else {
-      fenetre(ml + 4, mh + 4, 6, 6);
-      const fx = porteX + 15;
-      for (let x = fx; x + 8 <= mr - 3; x += 12) fenetre(x, mh + 3, 8, 6, { jardiniere: true });
+      fenetre(F0 + 5, egout + 6, 6, 6);
+      for (let x = porteX + 16; x + 8 <= F1 - 4; x += 12) fenetre(x, egout + 5, 8, 6, { jardiniere: true });
     }
-    // Le toit.
-    for (let y = haut; y <= egout; y++) {
-      const d = demi(y);
-      for (let x = cx - d + 1; x <= cx + d; x++) {
-        if (dansPignon(x, y)) continue;
-        const cote = x <= cx ? -1 : 1;
-        f.set(x, y, ecaille(T, x, y, haut, cote));
+    // L'ombre du toit qui déborde, sur le haut de la façade.
+    for (let x = F0; x <= F1; x++) for (const [dy, t] of [[1, 0.6], [2, 0.45], [3, 0.25]]) { const c = f.get(x, egout + dy); if (c) f.set(x, egout + dy, sombre(c, t)); }
+    // --- Le toit : deux pans (parallélogrammes) qui partent de l'avant et montent vers l'arrière.
+    const ap = [cx, ga - 3];                       // la pointe avant du faîtage
+    const pg = [F0 - 3, egout + 1], pd = [F1 + 3, egout + 1]; // les coins avant de l'égout
+    const prof = [S, -D];
+    const pans = [
+      { o: pg, a: [ap[0] - pg[0], ap[1] - pg[1]], cote: -1 },
+      { o: pd, a: [ap[0] - pd[0], ap[1] - pd[1]], cote: 1 },
+    ];
+    for (const pan of pans) {
+      const pts = [pan.o, [pan.o[0] + pan.a[0], pan.o[1] + pan.a[1]], [pan.o[0] + pan.a[0] + prof[0], pan.o[1] + pan.a[1] + prof[1]], [pan.o[0] + prof[0], pan.o[1] + prof[1]]];
+      const longueur = Math.hypot(pan.a[0], pan.a[1]);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        if (!dansPoly(pts, x, y)) continue;
+        const [s, t] = local(pan.o, pan.a, prof, x, y);
+        // Les rangées d'ardoises sont parallèles à l'égout ; les écailles s'alignent le long de la pente.
+        const u = s * longueur, v = t * D;
+        const rang = Math.floor(u / 4), w = (v + (rang % 2) * 3) % 6, dans = u % 4;
+        // La lumière : le pan gauche éclairé (plus encore près du faîtage), le droit dans l'ombre.
+        let n = pan.cote < 0 ? 3 - (s < 0.25 ? 1 : 0) + (s > 0.8 ? 1 : 0) : 1 + (s > 0.75 ? 1 : 0) - (s < 0.2 ? 1 : 0);
+        n = clamp(n, 0, 4);
+        let c = T[n];
+        if (dans < 1) c = T[Math.max(0, n - 2)];                  // le bas d'une rangée, dans l'ombre de la suivante
+        else if (w < 1) c = T[Math.max(0, n - 1)];                // la fente entre deux ardoises
+        else if (dans >= 3 && w < 3) c = T[Math.min(4, n + 1)];   // le haut éclairé d'une ardoise
+        f.set(x, y, c);
       }
     }
-    // Le faîtage, de la pointe au pignon.
-    for (let y = haut; y < ga; y++) { f.set(cx, y, T[4]); f.set(cx + 1, y, T[0]); }
-    // Le pignon : crépi, colombages en croix, une petite fenêtre, et les planches de rive.
-    for (let y = ga; y <= egout; y++) for (let x = cx - gl; x <= cx + gl + 1; x++) if (dansPignon(x, y)) f.set(x, y, M[3]);
-    for (let y = ga + 4; y < egout - 1; y++) { f.set(cx, y, Bo[2]); f.set(cx + 1, y, Bo[1]); }
-    fenetre(cx - 2, ga + 9, 6, 5, { croix: false });
-    for (let y = egout - 5; y <= egout - 4; y++) for (let x = cx - gl; x <= cx + gl + 1; x++) if (dansPignon(x, y)) f.set(x, y, y === egout - 5 ? Bo[3] : Bo[1]);
-    for (let y = ga; y <= egout; y++) {
-      const d = Math.round(((y - ga) / (egout - ga)) * gl);
-      for (const [x, c] of [[cx - d, Bo[3]], [cx - d - 1, Bo[1]], [cx + 1 + d, Bo[1]], [cx + 2 + d, Bo[0]]]) f.set(x, y, c);
+    // Le faîtage : une arête claire du côté du pan éclairé.
+    for (let k = 0; k <= D; k++) { const x = Math.round(ap[0] + (S * k) / D), y = Math.round(ap[1] - k); f.set(x, y, T[4]); f.set(x + 1, y, T[1]); }
+    // L'égout de droite : l'épaisseur du toit au-dessus du mur dans l'ombre.
+    for (let k = 0; k <= D; k++) { const x = Math.round(pd[0] + (S * k) / D), y = Math.round(pd[1] - k); f.set(x, y + 1, A[0]); f.set(x - 1, y + 1, T[0]); }
+    // --- Le pignon : un triangle de crépi en retrait, sous les planches de rive.
+    const tri = [[F0, egout + 1], [cx, ga], [F1 + 1, egout + 1]];
+    for (let y = ga; y <= egout; y++) for (let x = F0; x <= F1; x++) {
+      if (!dansPoly(tri, x, y)) continue;
+      f.set(x, y, M[3]);
     }
-    // L'égout : le bas du toit, plus sombre, de part et d'autre du pignon.
-    for (let x = xl; x <= xr; x++) for (const [y, c] of [[egout - 1, x <= cx ? T[1] : T[0]], [egout, T[0]]]) if (!dansPignon(x, y)) f.set(x, y, c);
-    for (let x = cx - gl - 1; x <= cx + gl + 2; x++) { f.set(x, egout, Bo[0]); f.set(x, egout - 1, Bo[2]); }
-    // La cheminée de pierre claire, sur le pan droit.
+    // Colombages : un poteau au milieu, deux écharpes, une poutre en bas.
+    for (let y = ga + 5; y <= egout; y++) { f.set(cx - 0.5, y, Bo[2]); f.set(cx + 0.5, y, Bo[1]); }
+    for (let k = 0; k < 12; k++) for (const [sx, c] of [[-1, Bo[2]], [1, Bo[1]]]) { const x = cx + sx * (3 + k), y = egout - 1 - Math.round(k * 0.7); if (dansPoly(tri, x, y)) f.set(x, y, c); }
+    f.rect(F0, egout - 1, F1 - F0 + 1, 2, Bo[1]); f.rect(F0, egout - 1, F1 - F0 + 1, 1, Bo[3]);
+    fenetre(Math.round(cx) - 3, ga + 9, 6, 5, { croix: false });
+    // L'ombre des planches de rive sur le pignon.
+    for (let y = ga; y <= egout; y++) for (let x = F0; x <= F1; x++) {
+      if (!dansPoly(tri, x, y)) continue;
+      const bordG = !dansPoly(tri, x - 2, y - 1) || !dansPoly(tri, x - 1, y - 2), bordD = !dansPoly(tri, x + 3, y - 1) || !dansPoly(tri, x + 1, y - 3);
+      if (bordG || bordD) f.set(x, y, sombre(f.get(x, y), bordD ? 0.5 : 0.35));
+    }
+    // Les planches de rive : épaisses, éclairées à gauche, sombres à droite.
+    for (let y = ga - 3; y <= egout + 1; y++) {
+      const k = (y - (ga - 3)) / (egout + 1 - (ga - 3));
+      const xg = Math.round(ap[0] - k * (ap[0] - pg[0])), xd = Math.round(ap[0] + k * (pd[0] - ap[0]));
+      f.set(xg, y, Bo[3]); f.set(xg + 1, y, Bo[2]); f.set(xg - 1, y, Bo[4]);
+      f.set(xd, y, Bo[1]); f.set(xd + 1, y, Bo[0]); f.set(xd - 1, y, Bo[2]);
+    }
+    // --- La cheminée : un petit volume (face avant claire, côté droit sombre, dessus).
     if (B.cheminee) {
-      const kx = cx + Math.round((xr - cx) * 0.45), ky = 6;
-      f.rect(kx, ky, 6, 11, P[3]); f.rect(kx, ky, 1, 11, P[4]); f.rect(kx + 5, ky, 1, 11, P[1]);
-      for (let y = ky + 3; y < ky + 11; y += 3) f.rect(kx + 1, y, 4, 1, P[2]);
-      f.rect(kx - 1, ky - 2, 8, 2, P[4]); f.rect(kx - 1, ky - 1, 8, 1, P[2]);
-      for (let y = ky + 2; y < ky + 12; y++) { const c = f.get(kx + 6, y); if (c && c !== P[1]) f.set(kx + 6, y, T[0]); }
+      const kx = Math.round(cx + 9), ky = ga - 18;
+      f.rect(kx, ky, 5, 10, P[3]); f.rect(kx, ky, 1, 10, P[4]);
+      for (let y = ky + 3; y < ky + 10; y += 3) f.rect(kx + 1, y, 4, 1, P[2]);
+      for (let k = 1; k <= 2; k++) for (let y = ky - k * 2; y < ky + 10 - k * 2; y++) f.set(kx + 4 + k, y, P[1]);
+      f.rect(kx - 1, ky - 2, 7, 2, P[4]); f.rect(kx + 1, ky - 3, 5, 1, P[2]); f.set(kx + 2, ky - 2, A[0]); f.set(kx + 3, ky - 2, A[0]);
+      for (let y = ky + 1; y < ky + 12; y++) for (const dx of [7, 8]) { const c = f.get(kx + dx, y); if (c && T.includes(c)) f.set(kx + dx, y, sombre(c, 0.35)); }
     }
     f.finir({ dx: 5, dy: 3 });
     return f;
   }
 
-  // Un sapin : des étages de branches (le plus haut devant), éclairés à gauche, à l'ombre sous chaque
-  // étage, une bordure en dents de scie, le tronc et ses racines, l'ombre au pied.
-  function sapin(B, g) {
-    const W = B.l * 16, H = B.h * 16, f = feuille(W, H), Fe = RAMPES.feuillage, Bo = RAMPES.bois;
-    const rnd = hasard(g + 401), cx = W / 2 - 0.5;
-    const pied = H - 6;
-    // Le tronc et les racines.
-    f.rect(cx - 2.5, pied - 9, 6, 9, Bo[2]); f.rect(cx - 2.5, pied - 9, 2, 9, Bo[3]); f.rect(cx + 2.5, pied - 9, 1, 9, Bo[0]);
-    f.set(cx - 3.5, pied - 1, Bo[2]); f.set(cx + 3.5, pied - 1, Bo[1]); f.set(cx - 4.5, pied - 1, Bo[1]);
-    const n = 4, etages = [];
-    const bas = pied - 7;
-    for (let k = 0; k < n; k++) {
-      const yb = Math.round(bas - (n - 1 - k) * (bas - 14) / n), yt = Math.max(1, yb - Math.round(14 + k * 2));
-      etages.push({ yt: k === 0 ? 1 : yt, yb, w: Math.min(W / 2 - 1, [8.5, 11.5, 13.5, 15][k] ?? 15) });
-    }
-    const etage = new Int8Array(W * H).fill(-1);
-    for (let k = n - 1; k >= 0; k--) {
-      const { yt, yb, w } = etages[k];
-      for (let y = yt; y <= yb + 1; y++) for (let x = 0; x < W; x++) {
-        const t = (y - yt) / (yb - yt), larg = Math.max(0.6, w * Math.pow(Math.min(1, t), 0.42));
-        const dx = (x - cx) / larg;
-        const dent = y > yb - 1 ? ((x + k) % 4 < 2 ? 1 : 0) : 0;
-        if (Math.abs(dx) > 1 || (y > yb && !dent)) continue;
-        etage[y * W + x] = k;
-        let l = -dx * 0.75 + (1 - t) * 0.45 + (rnd() - 0.5) * 0.25;
-        f.set(x, y, l > 0.7 ? Fe[4] : l > 0.25 ? Fe[3] : l > -0.25 ? Fe[2] : Fe[1]);
-      }
-    }
-    // L'ombre de chaque étage sur celui de dessous, et des aiguilles claires sur le côté éclairé.
-    for (let y = 1; y < H; y++) for (let x = 0; x < W; x++) {
-      const k = etage[y * W + x];
-      if (k < 0) continue;
-      const au = (dy) => (y - dy >= 0 ? etage[(y - dy) * W + x] : -1);
-      if ((au(1) >= 0 && au(1) < k) || (au(2) >= 0 && au(2) < k)) f.set(x, y, x < cx ? Fe[1] : Fe[0]);
-      else if (au(3) >= 0 && au(3) < k) f.set(x, y, x < cx ? Fe[2] : Fe[1]);
-    }
-    for (let k = 0; k < 14; k++) {
-      const x = Math.floor(cx - 8 + rnd() * 10), y = Math.floor(6 + rnd() * (bas - 10));
-      if (etage[y * W + x] >= 0 && f.get(x, y) === Fe[3]) { f.set(x, y, Fe[4]); f.set(x - 1, y + 1, Fe[4]); }
-    }
-    f.finir({ contour: melange(Fe[0], '#000000', 0.45), sol: { cx: cx + 3, cy: pied, rx: W * 0.36, ry: 4 } });
-    return f;
-  }
-
-  // Un arbre feuillu : des touffes rondes serrées, chacune éclairée en haut à gauche, celles de devant
-  // avec un liseré sombre qui les détache, le tronc et l'ombre au pied.
-  function feuillu(B, g) {
-    const W = B.l * 16, H = B.h * 16, f = feuille(W, H), Fe = RAMPES.feuillage, Bo = RAMPES.bois;
-    const rnd = hasard(g + 503), cx = W / 2 - 0.5, pied = H - 6;
-    f.rect(cx - 2.5, pied - 9, 6, 9, Bo[2]); f.rect(cx - 2.5, pied - 9, 2, 9, Bo[3]); f.rect(cx + 2.5, pied - 9, 1, 9, Bo[0]);
-    f.set(cx - 3.5, pied - 1, Bo[2]); f.set(cx + 3.5, pied - 1, Bo[1]);
-    const cy0 = (pied - 6) / 2 + 1, R = W * 0.31;
-    const touffes = [[0, -0.9, 0.75], [-0.7, -0.4, 0.7], [0.7, -0.4, 0.7], [0, -0.1, 0.8], [-0.8, 0.35, 0.65], [0.8, 0.35, 0.65], [-0.35, 0.6, 0.7], [0.35, 0.6, 0.7]]
-      .map(([dx, dy, r]) => ({ x: cx + dx * R + (rnd() - 0.5) * 2, y: cy0 + dy * R + (rnd() - 0.5) * 2, r: r * R }))
-      .sort((a, b) => b.y - a.y);
-    for (const t of touffes) {
+  // Le feuillage d'un arbre, touffe par touffe : chaque touffe est éclairée à la fois comme une petite
+  // boule (sa propre lumière en haut à gauche) et comme une partie de la grosse boule de l'arbre (tout
+  // le côté droit plus sombre) ; un liseré sombre la détache de celles qu'elle recouvre.
+  function touffes(f, Fe, liste, globe, rnd) {
+    for (const t of liste) {
       for (let y = Math.floor(t.y - t.r - 1); y <= t.y + t.r + 1; y++) for (let x = Math.floor(t.x - t.r - 1); x <= t.x + t.r + 1; x++) {
         const dx = (x + 0.5 - t.x) / t.r, dy = (y + 0.5 - t.y) / t.r, d = Math.hypot(dx, dy);
-        const bord = 1 + 0.08 * Math.sin(Math.atan2(dy, dx) * 5 + t.x);
+        const bord = 1 + 0.12 * Math.sin(Math.atan2(dy, dx) * (t.festons || 5) + t.x * 1.7);
         if (d > bord) continue;
-        const nz = Math.sqrt(Math.max(0, 1 - Math.min(1, d) ** 2));
-        const l = -dx * 0.55 - dy * 0.75 + nz * 0.6;
-        let c = l > 0.95 ? Fe[4] : l > 0.45 ? Fe[3] : l > -0.1 ? Fe[2] : Fe[1];
-        if (d > bord - 0.2 && dx + dy > 0.1) c = Fe[0];
-        else if (d > bord - 0.36 && dx + dy > 0.3) c = Fe[1];
+        const nz = Math.sqrt(Math.max(0, 1 - Math.min(1, d / bord) ** 2));
+        const gx = (x + 0.5 - globe.x) / globe.r, gy = (y + 0.5 - globe.y) / globe.r;
+        const l = 0.55 * (-dx * 0.6 - dy * 0.8 + nz * 0.5) + 0.65 * (-gx * 0.7 - gy * 0.6) + (rnd() - 0.5) * 0.12;
+        let c = l > 0.62 ? Fe[4] : l > 0.22 ? Fe[3] : l > -0.2 ? Fe[2] : l > -0.6 ? Fe[1] : Fe[0];
+        // Le liseré du bas : la touffe fait de l'ombre sur ce qu'il y a dessous.
+        if (d > bord - 0.22 && dy > 0.05 && dx > -0.6) c = d > bord - 0.11 ? Fe[0] : (c === Fe[4] || c === Fe[3] ? Fe[2] : Fe[1]);
         f.set(x, y, c);
       }
     }
-    for (let k = 0; k < 18; k++) {
-      const x = Math.floor(rnd() * W), y = Math.floor(rnd() * pied);
-      if (f.get(x, y) === Fe[3] && f.get(x + 1, y) === Fe[3]) f.set(x, y, Fe[4]);
-      if (f.get(x, y) === Fe[2] && f.get(x, y + 1) === Fe[2]) f.set(x, y, Fe[1]);
+    // Quelques feuilles : un éclat clair sur le clair, un creux sombre dans l'ombre.
+    for (let k = 0; k < 40; k++) {
+      const x = Math.floor(globe.x - globe.r + rnd() * 2 * globe.r), y = Math.floor(globe.y - globe.r + rnd() * 2 * globe.r);
+      const c = f.get(x, y);
+      if (c === Fe[3] && f.get(x + 1, y) === Fe[3]) { f.set(x, y, Fe[4]); }
+      else if (c === Fe[2] && f.get(x, y + 1) === Fe[2]) { f.set(x, y, Fe[1]); f.set(x + 1, y + 1, Fe[1]); }
     }
-    f.finir({ contour: melange(Fe[0], '#000000', 0.45), sol: { cx: cx + 3, cy: pied, rx: W * 0.38, ry: 4 } });
+  }
+  function tronc(f, Bo, cx, pied, h) {
+    f.rect(cx - 2.5, pied - h, 6, h, Bo[2]); f.rect(cx - 2.5, pied - h, 2, h, Bo[3]); f.rect(cx + 1.5, pied - h, 2, h, Bo[1]); f.rect(cx + 2.5, pied - h, 1, h, Bo[0]);
+    f.set(cx - 0.5, pied - h + 3, Bo[1]); f.set(cx + 0.5, pied - 3, Bo[1]);
+    f.set(cx - 3.5, pied - 1, Bo[2]); f.set(cx - 4.5, pied - 1, Bo[1]); f.set(cx + 3.5, pied - 1, Bo[1]); f.set(cx + 4.5, pied - 1, Bo[0]);
+    // L'ombre du feuillage sur le haut du tronc.
+    f.rect(cx - 2.5, pied - h, 6, 2, Bo[0]);
+  }
+
+  // Un sapin : une colonne de touffes en étages, de plus en plus larges vers le bas, chaque étage
+  // posé sur le précédent avec un bord festonné, l'ombre au pied.
+  function sapin(B, g) {
+    const W = B.l * 16, H = B.h * 16, f = feuille(W, H), Fe = RAMPES.feuillage, Bo = RAMPES.bois;
+    const rnd = hasard(g + 401), cx = W / 2 - 0.5, pied = H - 6;
+    tronc(f, Bo, cx, pied, 8);
+    const liste = [];
+    const etages = [[5, 3.6, 1], [10, 5.2, 1], [15.5, 6.8, 2], [21, 8.4, 2], [26.5, 10, 3], [32, 11.4, 3]];
+    // Du bas vers le haut : l'étage du dessus recouvre celui du dessous.
+    for (let k = etages.length - 1; k >= 0; k--) {
+      const [y, larg, n] = etages[k];
+      if (n === 1) liste.push({ x: cx + (rnd() - 0.5), y, r: larg, festons: 7 });
+      else for (let i = 0; i < n; i++) liste.push({ x: cx + (i - (n - 1) / 2) * (larg * 1.25 / n) + (rnd() - 0.5), y: y + (i === 0 || i === n - 1 ? 1 : 0), r: larg * (n === 2 ? 0.72 : 0.62), festons: 7 });
+    }
+    touffes(f, Fe, liste, { x: cx - 1, y: 20, r: 16 }, rnd);
+    f.set(cx, 1, Fe[4]); f.set(cx, 2, Fe[3]);
+    f.finir({ contour: melange(Fe[0], '#000000', 0.5), sol: { cx: cx + 3, cy: pied, rx: W * 0.36, ry: 4 } });
+    return f;
+  }
+
+  // Un arbre feuillu : une grosse boule faite de touffes rondes, le tronc, l'ombre au pied.
+  function feuillu(B, g) {
+    const W = B.l * 16, H = B.h * 16, f = feuille(W, H), Fe = RAMPES.feuillage, Bo = RAMPES.bois;
+    const rnd = hasard(g + 503), cx = W / 2 - 0.5, pied = H - 6;
+    tronc(f, Bo, cx, pied, 10);
+    const cy0 = 17, R = 12.5;
+    const liste = [[-0.55, 0.55, 0.5], [0.55, 0.55, 0.5], [0, 0.65, 0.5], [-0.7, 0, 0.5], [0.7, 0.05, 0.5], [0, 0.1, 0.55], [-0.35, -0.5, 0.5], [0.4, -0.45, 0.5], [0, -0.75, 0.45]]
+      .map(([dx, dy, r]) => ({ x: cx + dx * R + (rnd() - 0.5) * 1.5, y: cy0 + dy * R + (rnd() - 0.5) * 1.5, r: r * R, festons: 6 }));
+    touffes(f, Fe, liste, { x: cx - 1, y: cy0 - 1, r: R + 2 }, rnd);
+    f.finir({ contour: melange(Fe[0], '#000000', 0.5), sol: { cx: cx + 3, cy: pied, rx: W * 0.4, ry: 4 } });
     return f;
   }
 
