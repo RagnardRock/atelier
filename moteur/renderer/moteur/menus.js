@@ -36,48 +36,81 @@ const Menus = (() => {
     const tete = (titre, entete) => el('div', { className: 'combat-liste-titre menu-tete' },
       el('span', { textContent: titre }), entete ? el('span', { className: 'menu-entete', textContent: entete }) : null);
     const aide = (texte) => el('div', { className: 'combat-liste-aide', textContent: texte });
+    // Saga 1.13 : la teinte d'une pastille, tirée de son texte (la même chaque fois pour « Bois »).
+    const teinte = (t) => { let h = 0; for (const c of String(t || '')) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
 
     // --- Une liste : items [{ texte, detail, image, pv (0 à 1), desactive, etiquette }] ---
     // etiquette (Saga 0.7) : un petit mot à côté du texte, à la couleur du jeu (« Nouveau ! »).
     // depart : la ligne choisie au début ; saut : gauche/droite avancent de tant de lignes (le Pokédex).
-    function liste({ titre, items, annulable = true, entete = '', note = '', depart = -1, saut = 0, large = false }) {
+    // Saga 1.13 : section (true : la ligne est un titre de section, pas un choix), sous (une petite ligne
+    // sous le texte), ton ('plus', 'moins', 'alerte' ou 'doux' : la couleur du détail), pastille (sans image :
+    // un rond de couleur avec cette lettre). lecture (true) : un écran à lire, sans choix (le domaine, le
+    // rapport du matin) : aucune ligne n'est surlignée, haut/bas font défiler, Action ou Retour ferme.
+    // Les colonnes d'image et de PV ne prennent de la place que si une ligne s'en sert.
+    function liste({ titre, items, annulable = true, entete = '', note = '', depart = -1, saut = 0, large = false, lecture = false }) {
       return new Promise((resoudre) => {
         boite.replaceChildren(tete(titre, entete));
         if (note) boite.append(el('div', { className: 'menu-note', textContent: note }));
+        const choix = (it) => it && !it.desactive && !it.section;
+        const avecImage = items.some((it) => !it.section && (it.image || it.pastille));
+        const avecPv = items.some((it) => !it.section && it.pv != null);
+        const colonnes = [avecImage ? 'var(--menu-img, 44px)' : '', 'minmax(0, 1fr)', avecPv ? '120px' : '', 'auto'].filter(Boolean).join(' ');
         const lignes = items.map((it, i) => {
-          const l = el('button', { className: `combat-liste-ligne${it.desactive ? ' desactive' : ''}` },
-            it.image ? el('img', { src: it.image, alt: '' }) : el('span', { className: 'combat-liste-img' }),
-            el('span', { className: 'combat-liste-texte' }, it.texte, it.etiquette ? el('span', { className: 'menu-etiquette', textContent: it.etiquette }) : null),
-            it.pv != null ? el('span', { className: 'combat-liste-pv' }, el('span', { style: `width: ${Math.round(it.pv * 100)}%`, className: `niveau-${it.pv > 0.5 ? 'haut' : it.pv > 0.2 ? 'moyen' : 'bas'}` })) : el('span'),
+          if (it.section) {
+            const s = el('div', { className: 'menu-section' }, el('span', { textContent: it.texte }), it.detail ? el('span', { className: 'menu-section-detail', textContent: it.detail }) : null);
+            boite.append(s);
+            return s;
+          }
+          const image = it.image ? el('img', { src: it.image, alt: '' })
+            : it.pastille ? el('span', { className: 'menu-pastille', textContent: String(it.pastille).slice(0, 1).toUpperCase(), style: `--teinte: ${teinte(it.texte)}` })
+              : el('span', { className: 'combat-liste-img' });
+          const l = el(lecture ? 'div' : 'button', { className: `combat-liste-ligne${it.desactive ? ' desactive' : ''}${lecture ? ' lecture' : ''}${it.ton ? ` ton-${it.ton}` : ''}`, style: `grid-template-columns: ${colonnes}` },
+            // À lire, une ligne sans image ne garde pas de trou : son texte prend la place.
+            avecImage && !(lecture && !it.image && !it.pastille) ? image : null,
+            el('span', { className: 'combat-liste-texte', style: avecImage && lecture && !it.image && !it.pastille ? 'grid-column: span 2' : '' }, it.texte, it.etiquette ? el('span', { className: 'menu-etiquette', textContent: it.etiquette }) : null,
+              it.sous ? el('span', { className: 'menu-sous', textContent: it.sous }) : null),
+            avecPv ? (it.pv != null ? el('span', { className: 'combat-liste-pv' }, el('span', { style: `width: ${Math.round(it.pv * 100)}%`, className: `niveau-${it.pv > 0.5 ? 'haut' : it.pv > 0.2 ? 'moyen' : 'bas'}` })) : el('span')) : null,
             el('span', { className: 'combat-liste-detail', textContent: it.detail || '' }));
-          l.onclick = () => { if (attente === a && !it.desactive) { a.i = i; valider(); } };
-          l.onmousedown = (e) => e.preventDefault();
-          l.onmousemove = () => { if (aBouge() && attente === a && !it.desactive && a.i !== i) { a.i = i; surligner(); } };
+          if (!lecture) {
+            l.onclick = () => { if (attente === a && choix(it)) { a.i = i; valider(); } };
+            l.onmousedown = (e) => e.preventDefault();
+            l.onmousemove = () => { if (aBouge() && attente === a && choix(it) && a.i !== i) { a.i = i; surligner(); } };
+          }
           boite.append(l);
           return l;
         });
         if (!items.length) boite.append(el('div', { className: 'menu-vide', textContent: 'Rien ici.' }));
-        if (annulable) boite.append(aide('Échap, Retour arrière, X ou clic droit : revenir'));
-        const surligner = () => { lignes.forEach((l, i) => l.classList.toggle('actif', i === a.i)); lignes[a.i]?.scrollIntoView({ block: 'nearest' }); };
-        const pas = (d) => { const n = items.length; for (let k = 1; k <= n; k++) { const j = (a.i + d * k + n * k) % n; if (!items[j].desactive) { a.i = j; return; } } };
-        const valider = () => { if (items[a.i] && !items[a.i].desactive) fermer(a.i); };
+        if (lecture) boite.append(aide('Action, Échap ou clic droit : fermer'));
+        else if (annulable) boite.append(aide('Échap, Retour arrière, X ou clic droit : revenir'));
+        const surligner = () => { if (lecture) return; lignes.forEach((l, i) => l.classList.toggle('actif', i === a.i)); lignes[a.i]?.scrollIntoView({ block: 'nearest' }); };
+        const pas = (d) => { const n = items.length; for (let k = 1; k <= n; k++) { const j = (a.i + d * k + n * k) % n; if (choix(items[j])) { a.i = j; return; } } };
+        const valider = () => { if (choix(items[a.i])) fermer(a.i); };
         const sauter = (d) => {
           let j = Math.max(0, Math.min(items.length - 1, a.i + d * saut));
-          while (items[j]?.desactive && j !== a.i) j += d > 0 ? -1 : 1; // la plus proche qu'on peut choisir
+          while (items[j] && !choix(items[j]) && j !== a.i) j += d > 0 ? -1 : 1; // la plus proche qu'on peut choisir
           a.i = j;
         };
         const a = {
-          i: items[depart] && !items[depart].desactive ? depart : Math.max(0, items.findIndex((it) => !it.desactive)), resoudre,
+          i: lecture ? -1 : choix(items[depart]) ? depart : Math.max(0, items.findIndex(choix)), resoudre,
           touche(t) {
+            if (lecture) {
+              if (t === 'bas' || t === 'haut') boite.scrollBy({ top: t === 'bas' ? 60 : -60 });
+              else if (t === 'action' || t === 'retour') return fermer(null);
+              return undefined;
+            }
             if (t === 'bas') pas(1);
             else if (t === 'haut') pas(-1);
             else if (saut && (t === 'gauche' || t === 'droite')) sauter(t === 'droite' ? 1 : -1);
             else if (t === 'action') return valider();
             else if (t === 'retour' && annulable) return fermer(null);
             surligner();
+            return undefined;
           },
         };
+        if (lecture) boite.onclick = (e) => { if (attente === a && e.target.closest('.combat-liste-ligne, .menu-section, .menu-note')) fermer(null); };
+        else boite.onclick = null;
         ouvrir(a, large);
+        boite.scrollTop = 0;
         surligner();
       });
     }

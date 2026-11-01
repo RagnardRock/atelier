@@ -17,6 +17,9 @@
 //   preparer(o)                         remet à jour son état dans une partie chargée (ou neuve)
 //   entrerCarte(o)                      le joueur arrive sur une carte (o.carte, o.depuis)
 //   finDeJournee(o)                     le joueur dort : le jour o.jour se termine (Saga 1.5) ; → [lignes du rapport]
+//                                         (Saga 1.13 : un texte, ou { texte, detail, sous, image, pastille, ton, section })
+//   carnet(o)                           (Saga 1.13) → [{ titre, detail, lignes: [{ texte, detail }], jetons: [{ texte,
+//                                         nombre, image, pastille }] }] : ses sections dans le carnet (touche Tab)
 //   apresCombat(o)                      (Saga 1.11) un combat vient de finir (o.issue, o.sorte) ; → [lignes à dire]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
@@ -53,6 +56,20 @@ const Modules = (() => {
     return m;
   }
   const inscrits = () => [...INSCRITS.keys()];
+
+  // Saga 1.13 : une ligne du rapport du matin, propre : un texte, ou un objet de menu dont on ne garde que
+  // les champs connus. null si elle est vide.
+  const TONS = ['plus', 'moins', 'alerte', 'doux'];
+  function ligneMenu(x) {
+    if (typeof x === 'string') return x.trim() ? { texte: x.slice(0, 200) } : null;
+    if (!x || typeof x !== 'object' || typeof x.texte !== 'string' || !x.texte.trim()) return null;
+    const l = { texte: x.texte.slice(0, 200) };
+    for (const k of ['detail', 'sous', 'pastille']) if (typeof x[k] === 'string' && x[k]) l[k] = x[k].slice(0, 120);
+    if (typeof x.image === 'string' && x.image) l.image = x.image;
+    if (TONS.includes(x.ton)) l.ton = x.ton;
+    if (x.section === true) l.section = true;
+    return l;
+  }
 
   // Les erreurs d'un module ne cassent jamais le jeu : elles sont dites une fois par module et par appel
   // (dessiner est appelé à chaque image : une erreur répétée ne doit pas inonder le joueur).
@@ -126,9 +143,29 @@ const Modules = (() => {
     },
     // Saga 1.5 : le joueur dort, le jour `jour` se termine. Chaque module fait son calcul (une seule fois
     // par jour : c'est à lui de s'en souvenir dans son état) et rend les lignes du rapport du matin.
+    // Saga 1.13 : une ligne peut aussi être un objet de menu { texte, detail, sous, image, pastille, ton,
+    // section } (voir Menus.liste) : un bilan avec des icônes, des titres de section. Rend toujours des objets
+    // { texte, … } ; deux lignes de texte identiques n'en font qu'une (« … ×2 »).
     finDeJournee(jeu, partie, hote, jour) {
-      return chacun(jeu, 'finDeJournee', (m) => m.finDeJournee(objet(m, jeu, partie, hote, { jour })))
-        .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.slice(0, 200)));
+      const lignes = chacun(jeu, 'finDeJournee', (m) => m.finDeJournee(objet(m, jeu, partie, hote, { jour })))
+        .flatMap(([, l]) => (Array.isArray(l) ? l : []).map(ligneMenu).filter(Boolean));
+      const out = [];
+      for (const l of lignes) {
+        const meme = !l.section && out.find((x) => x.simple && x.base === l.texte);
+        if (meme) { meme.n += 1; meme.texte = `${meme.base} ×${meme.n}`; } else out.push(Object.keys(l).length === 1 ? { ...l, simple: true, base: l.texte, n: 1 } : l);
+      }
+      return out.map(({ simple, base, n, ...x }) => x);
+    },
+    // Saga 1.13 : ce que les modules montrent dans le carnet (touche Tab) : des sections
+    // [{ titre, detail, lignes: [{ texte, detail }], jetons: [{ texte, nombre, image, pastille }] }].
+    carnet(jeu, partie, hote) {
+      const court = (x, n) => (typeof x === 'string' ? x.slice(0, n) : typeof x === 'number' && Number.isFinite(x) ? String(x) : '');
+      return chacun(jeu, 'carnet', (m) => m.carnet(objet(m, jeu, partie, hote)))
+        .flatMap(([, l]) => (Array.isArray(l) ? l : []))
+        .filter((x) => x && typeof x === 'object' && typeof x.titre === 'string' && x.titre.trim())
+        .map((x) => ({ titre: x.titre.slice(0, 60), detail: court(x.detail, 60),
+          lignes: (Array.isArray(x.lignes) ? x.lignes : []).filter((l) => l && court(l.texte, 200).trim()).map((l) => ({ texte: court(l.texte, 200), detail: court(l.detail, 80) })),
+          jetons: (Array.isArray(x.jetons) ? x.jetons : []).filter((j) => j && court(j.texte, 60)).map((j) => ({ texte: court(j.texte, 60), nombre: court(j.nombre, 20), image: typeof j.image === 'string' ? j.image : '', pastille: court(j.pastille, 60) })) }));
     },
     // Saga 1.11 : un combat vient de finir (o.issue : 'victoire', 'defaite', 'fuite' ou 'capture' ; o.sorte :
     // 'sauvage', 'dresseur' ou 'groupe'). Sans await. Rend les lignes à dire au joueur.

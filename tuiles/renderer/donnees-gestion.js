@@ -76,6 +76,10 @@ const DonneesGestion = (() => {
     capacite: int(g?.capacite, 0, 0, 99999),
     menu: g?.menu !== false,
     construire_menu: g?.construire_menu !== false,
+    // Tafl 1.11 (Saga 1.13) : les écrans du domaine.
+    rapport_bilan: g?.rapport_bilan !== false,
+    prevision: g?.prevision !== false,
+    carnet_resume: g?.carnet_resume !== false,
     // Tafl 1.4 (Saga 1.6) : les habitants.
     habitants_depart: int(g?.habitants_depart, 0, 0, 9999),
     repas: normQuantites(g?.repas),
@@ -337,6 +341,8 @@ const DonneesGestion = (() => {
     const majNuits = () => nuits.replaceChildren(...(g.faim === 'departs' ? [champ('Départ après', nombreIn(g, 'faim_nuits', 1, 99), 'nuits de faim de suite (un habitant par nuit ensuite)')] : []));
     majNuits();
     construire.onchange = () => { g.construire_menu = construire.checked; };
+    // Tafl 1.11 : les écrans (le résumé dans le carnet, la prévision de la nuit, le bilan du matin).
+    const caseA = (cle) => { const c = el('input', { type: 'checkbox', checked: g[cle] }); c.onchange = () => { g[cle] = c.checked; }; return c; };
     return [
       el('div', { className: 'field-grid' }, [
         champ('Nom du domaine', texteIn(g, 'nom', 'Domaine')),
@@ -344,6 +350,9 @@ const DonneesGestion = (() => {
       ]),
       champ('Dans le carnet (Tab)', menu, 'l\'écran du domaine'),
       champ('Construire depuis le carnet (Tab)', construire, 'sur une carte qui a une zone Constructible'),
+      champ('Résumé dans le carnet (Tab)', caseA('carnet_resume'), 'le stock en petites icônes, les habitants et les chantiers'),
+      champ('Prévoir la nuit', caseA('prevision'), 'l\'écran du domaine dit ce que la nuit va changer au stock'),
+      champ('Bilan du matin', caseA('rapport_bilan'), 'le rapport du matin commence par ce qui a bougé dans le stock, et pourquoi'),
       tableQuantites(ctx, g, 'stock_depart', 'Stock de départ', 'Le stock commence vide.'),
       el('div', { className: 'field-grid' }, [
         champ('Habitants au départ', nombreIn(g, 'habitants_depart', 0, 9999)),

@@ -401,6 +401,8 @@ function creerSaga() {
   $('#pause').addEventListener('focusin', (e) => { if (e.target.closest('.pause-choix') && !$('#pause').hidden) moteur.bruit('curseur'); });
 
   // --- Le carnet (Tab) : l'équipe, le sac, l'argent et les quêtes ---
+  // La teinte d'une pastille (la même que dans les menus, moteur/menus.js).
+  const teinte = (t) => { let h = 0; for (const c of String(t || '')) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
   function ouvrirCarnet() {
     if (!ouvert) return;
     const { jeu } = ouvert;
@@ -418,8 +420,10 @@ function creerSaga() {
     };
     $('#carnet-titre').textContent = p.nom;
     // L'heure du jeu (Saga 0.11), s'il a une horloge.
-    $('#carnet-heure').textContent = moteur.heure();
-    $('#carnet-heure').hidden = !moteur.heure();
+    // Saga 1.13 : et le jour, si le jeu a un module (le domaine compte en jours).
+    const quand = [moteur.jourVisible() ? `Jour ${Number(p.jour) || 1}` : '', moteur.heure()].filter(Boolean).join(' · ');
+    $('#carnet-heure').textContent = quand;
+    $('#carnet-heure').hidden = !quand;
     const dex = p.dex || { vus: {}, pris: {} }, forme = moteur.formeMenus();
     $('#carnet-dex').textContent = `${forme.dex} · ${Regles.dex(jeu).especes.filter((e) => dex.pris[e.id]).length}`;
     $('#carnet-equipe').textContent = forme.equipe;
@@ -455,9 +459,21 @@ function creerSaga() {
           b.icone ? el('img', { src: b.icone, alt: '' }) : el('span', { className: 'carnet-badge-vide', textContent: '★' }));
       })));
     }
+    // Saga 1.13 : les sections des modules (le résumé du domaine : le stock en jetons, une ligne de résumé).
+    for (const m of moteur.sectionsCarnet()) {
+      corps.append(el('h3', {}, el('span', { textContent: m.titre }), m.detail ? el('span', { className: 'carnet-h3-detail', textContent: m.detail }) : null));
+      if (m.jetons.length) {
+        corps.append(el('div', { className: 'carnet-jetons' }, ...m.jetons.map((j) => el('span', { className: 'carnet-jeton', title: j.texte },
+          j.image ? el('img', { src: j.image, alt: '' }) : el('span', { className: 'menu-pastille', textContent: (j.pastille || j.texte).slice(0, 1).toUpperCase(), style: `--teinte: ${teinte(j.pastille || j.texte)}` }),
+          el('span', { className: 'carnet-jeton-nom', textContent: j.texte }),
+          el('b', { textContent: j.nombre })))));
+      }
+      if (m.lignes.length) corps.append(el('ul', {}, ...m.lignes.map((l) => el('li', { className: 'carnet-resume' }, el('span', { textContent: l.texte }), el('span', { className: 'discret', textContent: l.detail })))));
+    }
     // Le sac : un objet qui sert hors combat (soin, vitamine, menthe, capsule, pierre…) a son bouton « Utiliser ».
+    // Saga 1.13 : avec l'icône de l'objet, s'il en a une.
     section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {},
-      el('span', { textContent: nom('objets', id) }),
+      el('span', { className: 'carnet-objet' }, liste('objets').find((x) => x.id === id)?.icone ? el('img', { src: liste('objets').find((x) => x.id === id).icone, alt: '' }) : null, nom('objets', id)),
       el('span', { className: 'carnet-sac-droite' },
         moteur.objetUtilisable(id) ? el('button', { className: 'carnet-utiliser', type: 'button', textContent: 'Utiliser', onclick: () => { fermerCarnet(); moteur.utiliserObjet(id); } }) : null,
         el('span', { className: 'discret', textContent: `×${n}` })))), 'Le sac est vide.');

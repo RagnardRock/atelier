@@ -1325,6 +1325,9 @@ const Moteur = (() => {
       // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
       // Saga 1.4 : puis ceux des modules du jeu (leur id commence par « module: »).
       actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie, hoteModules)] : []),
+      // Saga 1.13 : les sections des modules dans le carnet (le résumé du domaine), et s'il faut y dire le jour.
+      sectionsCarnet: () => (jeu ? Modules.carnet(jeu, partie, hoteModules) : []),
+      jourVisible: () => Boolean(jeu && Modules.actifs?.(jeu)?.length),
       agirPause: (id) => horsScript(() => (Modules.estActionPause(id)
         ? Modules.agirPause(jeu, partie, hoteModules, id)
         : Regles.agirPause({ jeu, partie, ui: scripts.ui, id })), 'Erreur dans ce menu'),

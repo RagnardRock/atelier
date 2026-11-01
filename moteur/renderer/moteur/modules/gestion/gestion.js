@@ -33,39 +33,110 @@
   const poser = (o, neuf) => { for (const k of Object.keys(o.etat)) delete o.etat[k]; Object.assign(o.etat, neuf); };
   const etatDe = (o) => C.normaliser(defs(o.jeu), o.etat);
 
-  // L'écran du domaine : le jour, le stock et les bâtiments (lecture seule).
+  // Saga 1.13 : l'apparence d'une ressource dans les menus : son icône, sinon celle de l'objet qui la
+  // représente (ressource.objet), sinon une pastille de couleur avec son initiale.
+  function apparence(o, d, r) {
+    const def = d.ressources.get(r);
+    const objet = def?.objet ? (o.jeu.donnees?.objets?.objets || []).find((x) => x.id === def.objet) : null;
+    const image = def?.icone || objet?.icone || '';
+    return image ? { image } : { pastille: C.nomRessource(d, r) };
+  }
+  const signe = (k) => (k > 0 ? `+${k}` : k < 0 ? `−${-k}` : '±0');
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+  // Ce qui a bougé pour une ressource, en mots : « 6 produits · 3 mangés ».
+  const raisons = (b) => [b.produit ? `${b.produit} produit${b.produit > 1 ? 's' : ''}` : '', b.mange ? `${b.mange} mangé${b.mange > 1 ? 's' : ''}` : '',
+    b.consomme ? `${b.consomme} utilisé${b.consomme > 1 ? 's' : ''}` : '', b.perdu ? `${b.perdu} perdu${b.perdu > 1 ? 's' : ''} (stock plein)` : ''].filter(Boolean).join(' · ');
+
+  // Ce que font n bâtiments d'un type, en mots : « loge 2 · produit 3 Blé par nuit (1 ouvrier) ».
+  function role(d, def, n = 1) {
+    if (!def) return '';
+    const prod = Object.keys(def.production).length ? `produit ${C.dire(d, Object.fromEntries(Object.entries(def.production).map(([r, q]) => [r, q * n])))} par nuit` : '';
+    const conso = Object.keys(def.consommation).length ? `avec ${C.dire(d, Object.fromEntries(Object.entries(def.consommation).map(([r, q]) => [r, q * n])))}` : '';
+    return [def.logement ? `loge ${def.logement * n}` : '', [prod, conso].filter(Boolean).join(' '), prod && def.ouvriers ? `${def.ouvriers * n} ouvrier${def.ouvriers * n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+  }
+
+  // Les bâtiments, regroupés : ceux qui sont finis par type (« Maison ×2 »), puis chaque chantier.
+  function lignesBatiments(d, e) {
+    const finis = new Map();
+    for (const b of e.batiments) if (b.etat === 'fini') finis.set(b.type, (finis.get(b.type) || 0) + 1);
+    const out = [];
+    for (const [type, n] of finis) {
+      const def = d.batiments.get(type);
+      const rep = def?.repos;
+      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: role(d, def, n), detail: rep ? (rep.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : 'Terminé' });
+    }
+    // Les chantiers : regroupés eux aussi, par type et par nuits qui restent.
+    const chantiers = new Map();
+    for (const b of e.batiments) if (b.etat !== 'fini') { const k = `${b.type}:${b.reste}`; chantiers.set(k, { type: b.type, reste: b.reste, n: (chantiers.get(k)?.n || 0) + 1 }); }
+    for (const { type, reste, n } of chantiers.values()) {
+      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: 'en chantier', detail: reste > 1 ? `encore ${reste} nuits` : 'fini demain matin', ton: 'doux' });
+    }
+    return out;
+  }
+
+  // L'écran du domaine : le jour, le stock, les habitants et les bâtiments (un écran à lire).
+  // Saga 1.13 : de vrais titres de section, les icônes du stock, et (prevision) ce que la nuit va changer.
   async function ecran(o) {
     const ui = o.hote?.ui;
     if (!ui) return;
     const d = defs(o.jeu);
     const e = etatDe(o);
     const cap = C.capacite(d);
-    const titre = (texte) => ({ texte, desactive: true, etiquette: '' });
-    const items = [titre('Stock')];
+    const section = (texte, detail = '') => ({ texte, detail, section: true });
+    // La nuit qui vient, calculée sur une copie (rien ne change pour de vrai).
+    const nuit = d.reglages.prevision ? C.finDeJournee(d, e, e.resolu + 1) : null;
+    const items = [section('Stock', cap ? `${cap} au plus de chaque` : '')];
     const ressources = [...new Set([...d.ressources.keys(), ...Object.keys(e.stock)])].filter((r) => e.stock[r] || d.ressources.has(r));
-    if (!ressources.length) items.push({ texte: 'Rien pour l\'instant', desactive: true });
-    for (const r of ressources) items.push({ texte: C.nomRessource(d, r), detail: cap ? `${e.stock[r] || 0} / ${cap}` : String(e.stock[r] || 0), image: d.ressources.get(r)?.icone || '' });
+    if (!ressources.length) items.push({ texte: 'Rien pour l\'instant', ton: 'doux' });
+    for (const r of ressources) {
+      const b = nuit?.bilan[r];
+      const k = b ? b.apres - b.avant : 0;
+      items.push({ texte: C.nomRessource(d, r), ...apparence(o, d, r), detail: cap ? `${e.stock[r] || 0} / ${cap}` : String(e.stock[r] || 0),
+        sous: b && (k || raisons(b)) ? `cette nuit : ${signe(k)}${raisons(b) ? ` (${raisons(b)})` : ''}` : '' });
+    }
     // Les habitants : seulement si le jeu s'en sert (des logements, des ouvriers ou des habitants au départ).
     const em = C.emplois(d, e);
     if (em.habitants || em.logement || [...d.batiments.values()].some((b) => b.ouvriers)) {
-      items.push(titre('Habitants'));
-      items.push({ texte: 'Habitants', detail: `${em.habitants} / ${em.logement} logés` });
-      if (em.demandes) items.push({ texte: 'Au travail', detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes} demandés` });
-      if (Object.keys(d.reglages.repas).length) items.push({ texte: 'Repas de la nuit', detail: C.dire(d, Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]))) || 'rien' });
+      items.push(section('Habitants'));
+      const place = em.logement - em.habitants;
+      items.push({ texte: 'Logés', detail: `${em.habitants} / ${em.logement}`, sous: place > 0 ? `${pluriel(place, 'place')} pour de nouveaux venus` : em.logement ? 'tout est occupé : un nouveau logement en attirerait d\'autres' : 'aucun logement pour l\'instant' });
+      if (em.demandes) items.push({ texte: 'Au travail', detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes}`, sous: em.libres ? `${pluriel(em.libres, 'habitant')} sans travail` : '' });
+      if (Object.keys(d.reglages.repas).length && em.habitants) {
+        const faut = Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]));
+        const manque = Object.fromEntries(Object.entries(faut).map(([r, k]) => [r, k - (e.stock[r] || 0)]).filter(([, k]) => k > 0));
+        items.push({ texte: 'Repas de ce soir', detail: C.dire(d, faut) || 'rien', ...(Object.keys(manque).length ? { ton: 'alerte', sous: `il manque ${C.dire(d, manque)}` } : {}) });
+      }
     }
     // Saga 1.11 : les bonus du groupe en cours (des bains, d'un repas).
     const bonus = Array.isArray(o.partie.bonus) ? o.partie.bonus : [];
     if (bonus.length) {
-      items.push(titre('Le groupe'));
+      items.push(section('Le groupe'));
       for (const b of bonus) items.push({ texte: b.nom, detail: `${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${Bonus.duree(b) ? ` · ${Bonus.duree(b)}` : ''}` });
     }
-    items.push(titre('Bâtiments'));
-    if (!e.batiments.length) items.push({ texte: 'Aucun pour l\'instant', desactive: true });
-    for (const b of e.batiments) {
-      const rep = d.batiments.get(b.type)?.repos;
-      items.push({ texte: C.nomBatiment(d, b.type), detail: b.etat === 'fini' ? (rep ? (rep.quand === 'matin' ? 'Terminé · repos chaque matin' : 'Terminé · lieu de repos') : 'Terminé') : `Chantier : encore ${b.reste} nuit${b.reste > 1 ? 's' : ''}` });
+    items.push(section('Bâtiments', e.batiments.length ? String(e.batiments.length) : ''));
+    const bat = lignesBatiments(d, e);
+    if (!bat.length) items.push({ texte: 'Aucun pour l\'instant', ton: 'doux' });
+    items.push(...bat);
+    await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true, lecture: true });
+  }
+
+  // Saga 1.13 : le rapport du matin, en lignes de menu : le bilan du stock (rapport_bilan), puis le reste.
+  function rapport(o, d, r) {
+    const out = [];
+    const bilan = Object.entries(r.bilan).filter(([, b]) => b.apres !== b.avant || raisons(b));
+    if (d.reglages.rapport_bilan && bilan.length) {
+      out.push({ texte: 'Le stock', section: true });
+      for (const [res, b] of bilan) {
+        const k = b.apres - b.avant;
+        out.push({ texte: C.nomRessource(d, res), ...apparence(o, d, res), detail: signe(k), ton: k > 0 ? 'plus' : k < 0 ? 'moins' : '', sous: `${raisons(b)} · il y en a ${b.apres}` });
+      }
+      if (r.evenements.length) out.push({ texte: d.reglages.nom, section: true });
+      for (const x of r.evenements) out.push({ texte: x.texte, ton: x.ton });
+      return out;
     }
-    await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true });
+    // Sans bilan : la ligne de production, puis le reste (comme avant Saga 1.13).
+    const production = r.lignes.length > r.evenements.length ? [{ texte: r.lignes[0] }] : [];
+    return [...production, ...r.evenements.map((x) => ({ texte: x.texte, ton: x.ton }))];
   }
 
   // --- Le passage d'un bâtiment posé (Saga 1.6.1) ---
@@ -282,7 +353,9 @@
     if (!ui || !types.length) return null;
     const items = types.map((def) => {
       const r = C.construire(d, e, def.id);
-      return { texte: def.nom, detail: r.ok ? `${coutTexte(d, def)}${def.jours ? ` · ${def.jours} nuit${def.jours > 1 ? 's' : ''}` : ''}` : r.raison.replace(`${def.nom} : `, '').replace(`Pour ${def.nom}, `, ''), desactive: !r.ok };
+      // Saga 1.13 : le coût toujours à droite, et dessous ce qu'il apporte (ou ce qui manque).
+      const pourquoi = r.ok ? '' : r.raison.replace(`${def.nom} : `, '').replace(`Pour ${def.nom}, `, '');
+      return { texte: def.nom, detail: `${coutTexte(d, def)}${def.jours ? ` · ${def.jours} nuit${def.jours > 1 ? 's' : ''}` : ''}`, sous: pourquoi || role(d, def) || (def.repos ? (def.repos.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : '') || def.description.slice(0, 80), desactive: !r.ok };
     });
     const i = await ui.liste({ titre: 'Construire', items, annulable: true, note: 'Le coût est pris dans le stock du domaine.' });
     return i === null || i === undefined || i < 0 ? null : types[i].id;
@@ -449,17 +522,32 @@
       const r = C.finDeJournee(d, avant, o.jour);
       const neuve = (Number(o.jour) || 0) > avant.resolu;
       poser(o, r.etat);
+      const lignes = rapport(o, d, r);
       // Saga 1.11 : les bâtiments de repos « chaque matin » (une cuisine, un temple) : leur bonus pour la
       // journée qui commence (le moteur vient d'effacer ceux de la veille).
       if (neuve) for (const { def } of C.reposFinis(d, r.etat, 'matin')) {
         const b = appliquerRepos(o, def);
-        if (b) r.lignes.push(`${def.repos.nom} : ${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${b.combats ? ` pour ${b.combats} combat${b.combats > 1 ? 's' : ''}` : ''} aujourd'hui.`);
+        if (b) lignes.push(`${def.repos.nom} : ${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${b.combats ? ` pour ${b.combats} combat${b.combats > 1 ? 's' : ''}` : ''} aujourd'hui.`);
       }
       for (const type of r.termines) o.hote.reagir?.('gestion_termine', { batiment: type });
       if (r.arrives) o.hote.reagir?.('gestion_arrivee', { nombre: r.arrives, habitants: r.etat.habitants });
       if (r.partis) o.hote.reagir?.('gestion_depart', { nombre: r.partis, habitants: r.etat.habitants });
       if (r.termines.length) o.hote.rafraichir?.();
-      return r.lignes;
+      return lignes;
+    },
+
+    // Saga 1.13 : le résumé du domaine dans le carnet (touche Tab) : le stock en jetons, et une ligne sur
+    // les habitants et les chantiers (carnet_resume, false : rien).
+    carnet(o) {
+      const d = defs(o.jeu);
+      if (!d.reglages.carnet_resume) return [];
+      const e = etatDe(o);
+      const ressources = [...new Set([...d.ressources.keys(), ...Object.keys(e.stock)])].filter((r) => e.stock[r] || d.ressources.has(r));
+      const em = C.emplois(d, e);
+      const chantiers = e.batiments.filter((b) => b.etat !== 'fini').length;
+      const ligne = [em.habitants || em.logement ? `${pluriel(em.habitants, 'habitant')} (${pluriel(em.logement, 'place')})` : '', `${pluriel(e.batiments.length - chantiers, 'bâtiment')}`,
+        chantiers ? `${pluriel(chantiers, 'chantier')} en cours` : ''].filter(Boolean).join(' · ');
+      return [{ titre: d.reglages.nom, jetons: ressources.map((r) => ({ texte: C.nomRessource(d, r), nombre: e.stock[r] || 0, ...apparence(o, d, r) })), lignes: [{ texte: ligne }] }];
     },
 
     // Saga 1.11 : après un combat, le butin va au stock (butin_au_stock), et une défaite coûte au domaine
