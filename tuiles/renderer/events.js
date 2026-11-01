@@ -1156,6 +1156,81 @@ const Events = (() => {
       valide: (c) => (c.perk ? null : 'Quel perk ?'),
     },
   });
+  // --- Tafl 1.13 (Saga 1.15) : le module « relations » (l'affinité avec les personnages) ---
+  const MODULE_RELATIONS = ['relations'];
+  // Les personnages qui ont une relation (Données › Relations), et « l'événement lui-même ».
+  const choixLiens = (doc, actuel, avecEvenement = true) => {
+    const list = (doc.data.relations || []).map((r) => [r.id, nomData(doc, 'personnages', r.id)]);
+    if (actuel && actuel !== '@evenement' && !list.some(([k]) => k === actuel)) list.unshift([actuel, `${nomData(doc, 'personnages', actuel)} (pas dans Données › Relations)`]);
+    return [...(avecEvenement ? [['@evenement', 'L\'événement lui-même (son personnage)']] : []), ...(list.length ? list : avecEvenement ? [] : [['', 'Personne : ajoute-les dans Données › Relations']])];
+  };
+  const niveauxRelations = (doc) => (typeof DonneesRelations !== 'undefined' ? DonneesRelations.niveaux(doc.data.reglages) : []).map((n, i) => [String(i), `${n.nom} (${n.points} points)`]);
+  const nomNiveauRelation = (doc, i) => niveauxRelations(doc)[i]?.[1]?.replace(/ \(.*\)$/, '') || `niveau ${i}`;
+  const nomLien = (doc, qui) => (qui === '@evenement' ? 'l\'événement' : nomData(doc, 'personnages', qui));
+  A_BRANCHES.push('relation_offrir');
+  Object.assign(COMMANDES, {
+    relation_parler: {
+      nom: 'Parler à un personnage (affinité et paroles)', icone: 'comment-discussion', groupe: 'Relations', modules: MODULE_RELATIONS,
+      nouveau: () => ({ type: 'relation_parler', qui: '@evenement', dire: true }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Personnage', type: 'select', value: c.qui, choices: choixLiens(doc, c.qui) },
+        { key: 'dire', label: 'Il dit ses paroles du jour', type: 'checkbox', value: c.dire !== false },
+        { type: 'info', text: 'La première conversation du jour fait monter l\'affinité (Réglages › Modules › Relations). Le personnage dit l\'une de ses paroles (Données › Relations) : d\'abord, une fois, celles d\'un niveau qu\'il vient d\'atteindre, puis une parole qui change chaque jour. Décoche « Il dit ses paroles » pour écrire toi-même ce qu\'il dit (des commandes Dire après celle-ci).' },
+      ],
+      depuis: (v) => ({ type: 'relation_parler', qui: v.qui || '@evenement', dire: Boolean(v.dire) }),
+      resume: (doc, c) => `Parler à ${nomLien(doc, c.qui)}${c.dire === false ? ' (seulement l\'affinité)' : ''}`,
+    },
+    relation_offrir: {
+      nom: 'Offrir un objet à un personnage', icone: 'gift', groupe: 'Relations', modules: MODULE_RELATIONS,
+      nouveau: () => ({ type: 'relation_offrir', qui: '@evenement', objet: '', reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Personnage', type: 'select', value: c.qui, choices: choixLiens(doc, c.qui) },
+        { key: 'objet', label: 'Objet', type: 'text', value: c.objet, list: 'tafl-objets', placeholder: 'vide : le joueur le choisit dans son sac' },
+        { type: 'info', text: `L'objet quitte le sac, et l'affinité monte selon ce que le personnage en pense (il l'adore, l'aime, ou ne l'aime pas : Données › Relations). Les objets clés ne s'offrent pas. Raté : annulé, rien à offrir, ou déjà un cadeau aujourd'hui. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'relation_offrir', qui: v.qui || '@evenement', objet: Doc.slug(v.objet || '', ''), reussi: c.reussi || [], rate: c.rate || [] }),
+      resume: (doc, c) => `Offrir ${c.objet ? nomData(doc, 'objets', c.objet) : 'un objet (au choix)'} à ${nomLien(doc, c.qui)}`,
+    },
+    relation_points: {
+      nom: 'Changer l\'affinité avec un personnage', icone: 'heart', groupe: 'Relations', modules: MODULE_RELATIONS,
+      nouveau: () => ({ type: 'relation_points', qui: '@evenement', action: 'ajouter', nombre: 10, annoncer: true }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Personnage', type: 'select', value: c.qui, choices: choixLiens(doc, c.qui) },
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ajouter', 'Ajouter des points'], ['retirer', 'Retirer des points'], ['regler', 'Mettre à']] },
+        { key: 'nombre', label: 'Points', type: 'number', value: c.nombre, min: 0, max: 99999 },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: 'Pour une scène de l\'histoire : un service rendu, une promesse tenue. Les paliers des niveaux sont dans Réglages › Modules › Relations.' },
+      ],
+      depuis: (v) => ({ type: 'relation_points', qui: v.qui || '@evenement', action: ['retirer', 'regler'].includes(v.action) ? v.action : 'ajouter', nombre: clamp(Math.round(v.nombre) || 0, 0, 99999), annoncer: Boolean(v.annoncer) }),
+      resume: (doc, c) => `Affinité avec ${nomLien(doc, c.qui)} : ${c.action === 'regler' ? `mettre à ${c.nombre}` : `${c.action === 'retirer' ? '−' : '+'}${c.nombre}`}`,
+    },
+    relation_ecran: {
+      nom: 'Ouvrir l\'écran des relations', icone: 'heart', groupe: 'Relations', modules: MODULE_RELATIONS,
+      nouveau: () => ({ type: 'relation_ecran' }),
+      resume: () => 'Montrer les relations (chaque personnage et son affinité)',
+    },
+  });
+  Object.assign(CONDITIONS, {
+    relation_niveau: {
+      nom: 'L\'affinité avec un personnage (relations)', modules: MODULE_RELATIONS,
+      nouveau: (doc) => ({ type: 'relation_niveau', personnage: doc.data.relations?.[0]?.id || '', min: 1 }),
+      champs: (doc, c) => [
+        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: choixLiens(doc, c.personnage, false) },
+        { key: 'min', label: 'Au moins', type: 'select', value: String(c.min), choices: niveauxRelations(doc) },
+        { type: 'info', text: 'Pour une scène qui ne se débloque qu\'avec un ami : mets cette condition sur une page de l\'événement (au-dessus des autres pages).' },
+      ],
+      depuis: (v) => ({ type: 'relation_niveau', personnage: v.personnage, min: clamp(Math.round(Number(v.min)) || 0, 0, 99) }),
+      valide: (c) => (c.personnage ? null : 'Quel personnage ?'),
+    },
+    relation_parle: {
+      nom: 'Le joueur lui a déjà parlé aujourd\'hui (relations)', modules: MODULE_RELATIONS,
+      nouveau: (doc) => ({ type: 'relation_parle', personnage: doc.data.relations?.[0]?.id || '' }),
+      champs: (doc, c) => [{ key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: choixLiens(doc, c.personnage, false) }],
+      depuis: (v) => ({ type: 'relation_parle', personnage: v.personnage }),
+      valide: (c) => (c.personnage ? null : 'Quel personnage ?'),
+    },
+  });
+
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -1187,6 +1262,8 @@ const Events = (() => {
     if (c.type === 'roguelite_amelioration') return `« ${nomData(doc, 'ameliorations', c.amelioration)} » niveau ${c.min} ou plus`;
     if (c.type === 'roguelite_monnaie') return `au moins ${c.min} ${doc.data.reglages?.modules_reglages?.roguelite?.monnaie || 'Éclats'}`;
     if (c.type === 'roguelite_perk') return `a le perk « ${nomData(doc, 'perks', c.perk)} »`;
+    if (c.type === 'relation_niveau') return `${nomData(doc, 'personnages', c.personnage)} : au moins ${nomNiveauRelation(doc, c.min)}`;
+    if (c.type === 'relation_parle') return `déjà parlé à ${nomData(doc, 'personnages', c.personnage)} aujourd'hui`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);
@@ -1217,6 +1294,8 @@ const Events = (() => {
       case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment) };
       case 'gestion_stock': return { type: 'gestion_stock', ressource: str(c.ressource), min: clamp(int(c.min, 0), 0, 99999) };
       case 'gestion_habitants': return { type: 'gestion_habitants', min: clamp(int(c.min, 0), 0, 9999) };
+      case 'relation_niveau': return { type: 'relation_niveau', personnage: str(c.personnage), min: clamp(int(c.min, 1), 0, 99), ...(c.max !== undefined && c.max !== '' && c.max !== null ? { max: clamp(int(c.max, 99), 0, 99) } : {}) };
+      case 'relation_parle': return { type: 'relation_parle', personnage: str(c.personnage) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -1266,6 +1345,10 @@ const Events = (() => {
       case 'gestion_habitants': return { type: 'gestion_habitants', action: c.action === 'retirer' ? 'retirer' : 'ajouter', nombre: clamp(int(c.nombre, 1), 1, 999), forcer: Boolean(c.forcer), annoncer: vrai(c.annoncer) };
       case 'gestion_domaine': return { type: 'gestion_domaine' };
       case 'gestion_repos': return { type: 'gestion_repos', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'relation_parler': return { type: 'relation_parler', qui: str(c.qui) || '@evenement', dire: c.dire !== false };
+      case 'relation_offrir': return { type: 'relation_offrir', qui: str(c.qui) || '@evenement', objet: str(c.objet), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'relation_points': return { type: 'relation_points', qui: str(c.qui) || '@evenement', action: ['retirer', 'regler'].includes(c.action) ? c.action : 'ajouter', nombre: clamp(int(c.nombre, 0), 0, 99999), annoncer: vrai(c.annoncer) };
+      case 'relation_ecran': return { type: 'relation_ecran' };
       case 'bonus': return { type: 'bonus', action: c.action === 'retirer' ? 'retirer' : 'donner', id: str(c.id).slice(0, 80), nom: str(c.nom).slice(0, 60),
         stats: (Array.isArray(c.stats) ? c.stats : []).filter((q) => q && q.stat).slice(0, 4).map((q) => ({ stat: str(q.stat), pourcent: clamp(int(q.pourcent, 10), -90, 200) })),
         combats: clamp(int(c.combats, 0), 0, 99), nuit: c.nuit !== false, annoncer: vrai(c.annoncer) };

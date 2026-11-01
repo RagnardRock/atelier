@@ -87,6 +87,8 @@ const DonneesGestion = (() => {
     habitants_depart: int(g?.habitants_depart, 0, 0, 9999),
     repas: normQuantites(g?.repas),
     arrivees: int(g?.arrivees, 1, 0, 99),
+    // Tafl 1.13 (Saga 1.15) : les habitants nommés, dans l'ordre d'arrivée (des ids de personnages).
+    habitants_noms: [...new Set(arr(g?.habitants_noms).map((x) => str(x)).filter(Boolean))].slice(0, 200),
     // Tafl 1.4.1 : ce que fait la faim (voir FAIMS).
     faim: FAIMS.some(([k]) => k === g?.faim) ? g.faim : 'arrivees',
     faim_nuits: int(g?.faim_nuits, 3, 1, 99),
@@ -377,6 +379,7 @@ const DonneesGestion = (() => {
         champ('Habitants au départ', nombreIn(g, 'habitants_depart', 0, 9999)),
         champ('Arrivées par nuit', nombreIn(g, 'arrivees', 0, 99), 'au plus, s\'il reste un logement (0 = seulement par la commande)'),
       ]),
+      habitantsNommes(g, ctx, r),
       tableQuantites(ctx, g, 'repas', 'Repas d\'un habitant, chaque nuit', 'Les habitants ne mangent rien.'),
       el('div', { className: 'field-grid' }, [
         champ('Quand ils ont faim', U().sel(FAIMS, g.faim, (v) => { g.faim = v; majNuits(); })),
@@ -387,6 +390,33 @@ const DonneesGestion = (() => {
       info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
+  }
+
+  // Tafl 1.13 (Saga 1.15) : les habitants nommés. Le premier arrivé est le premier de la liste, et ainsi de
+  // suite ; au-delà, des habitants sans nom. Une pastille par personnage, dans l'ordre, et un choix pour en
+  // ajouter.
+  function habitantsNommes(g, ctx, r = {}) {
+    const { info, petitBouton } = U();
+    const persos = arr(ctx.work?.personnages).filter((p) => !p.heros);
+    const nom = (id) => persos.find((p) => p.id === id)?.nom || `${id} (inconnu)`;
+    const box = el('div', { className: 'chips' });
+    const rendre = () => {
+      const libres = persos.filter((p) => !g.habitants_noms.includes(p.id));
+      const ajout = el('select');
+      ajout.add(new Option(libres.length ? '+ un personnage' : 'Tous les personnages sont déjà là', ''));
+      for (const p of libres) ajout.add(new Option(p.nom || p.id, p.id));
+      ajout.onchange = () => { if (ajout.value) g.habitants_noms.push(ajout.value); rendre(); };
+      box.replaceChildren(...g.habitants_noms.map((id, k) => el('span', { className: 'chip' }, [
+        el('span', { textContent: `${k + 1}. ${nom(id)}` }),
+        petitBouton('close', 'Retirer', () => { g.habitants_noms.splice(k, 1); rendre(); }),
+      ])), ajout);
+    };
+    rendre();
+    const relations = (r.modules || []).includes('relations');
+    return el('div', { className: 'field field-block' }, [
+      el('span', { className: 'field-label', textContent: 'Habitants nommés, dans l\'ordre d\'arrivée' }), box,
+      info(`Le premier habitant qui arrive est le premier de la liste, avec son nom et son apparence ; au-delà, des habitants sans nom. ${relations ? 'Le joueur leur parle quand ils se promènent (module Relations : ajoute-les dans Données › Relations).' : 'Active aussi le module Relations pour que le joueur puisse leur parler quand ils se promènent.'}`),
+    ]);
   }
 
   // Tafl 1.9 (Saga 1.11) : ce que les sorties (les combats) rapportent au domaine, ou lui coûtent.

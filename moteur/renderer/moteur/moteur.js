@@ -307,6 +307,9 @@ const Moteur = (() => {
         const p = Monde.presentEn(presents, x, y) || Monde.presentEn(presents, joueur.x, joueur.y);
         if (p && Monde.obstacle(p.ev)) { franchir(p); return true; }
         if (p && p.ev.declenchement === 'parler' && p.page?.commandes?.length) { lancer(p); return true; }
+        const [dx, dy] = DIRECTIONS[dir] || [0, 1];
+        const f = figurantEn(x + dx, y + dy) || figurantEn(x, y);
+        if (f) { parlerFigurant(f); return true; }
         return false;
       },
       corps: (o, maintenant) => dessinerCorps(o, maintenant),
@@ -780,6 +783,9 @@ const Moteur = (() => {
         const p = Monde.presentEn(presents, joueur.x + dx, joueur.y + dy) || Monde.presentEn(presents, joueur.x, joueur.y);
         if (p && Monde.obstacle(p.ev)) { franchir(p); return; }
         if (p && p.ev.declenchement === 'parler') { lancer(p); return; }
+        // Saga 1.15 : un habitant qui se promène (un figurant de module avec un personnage).
+        const f = figurantEn(joueur.x + dx, joueur.y + dy) || figurantEn(joueur.x, joueur.y);
+        if (f) { parlerFigurant(f); return; }
       }
       if (!dir) { joueur.attente = 0; return; }
       if (dir !== joueur.dir && joueur.attente === 0) {
@@ -811,6 +817,40 @@ const Moteur = (() => {
       origineCombat = null;
       Collection.noterTout(partie);
       // Le script a pu changer des interrupteurs : chaque événement reprend sa bonne page.
+      presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      enScript = false;
+      entrees.oublier();
+    }
+
+    // --- Saga 1.15 : parler aux figurants des modules (les habitants nommés qui se promènent) ---
+    // Celui à qui l'on parle : { module, id, direction } (il se tourne vers le joueur et ne bouge plus).
+    let figurantParle = null;
+    // Le figurant à qui l'on peut parler sur la case (x, y) : il a un personnage (qui), et il est sur cette
+    // case ou presque (il marche : on prend la case la plus proche de lui).
+    function figurantEn(x, y) {
+      if (!jeu || !carte) return null;
+      const t = jeu.taille;
+      return Modules.figurants(jeu, partie, carte).find((f) => f.qui && Math.round(f.x / t) === x && Math.round(f.y / t) === y) || null;
+    }
+    // Les modules disent quoi faire (Modules.parler) ; le moteur le joue comme la page d'un événement dont
+    // le personnage est celui du figurant (« @evenement » dans une commande Dire, c'est lui).
+    async function parlerFigurant(f) {
+      if (enScript) return;
+      const commandes = Modules.parler(jeu, partie, hoteModules, carte, f);
+      if (!commandes?.length) return;
+      enScript = true;
+      entrees.oublier();
+      const t = jeu.taille;
+      figurantParle = { module: f.module, id: f.id, direction: Monde.directionVers(Math.round(f.x / t), Math.round(f.y / t), joueur.x, joueur.y) };
+      const perso = jeu.personnages.get(f.qui);
+      const ev = { id: `${f.module}:${f.id ?? f.qui}`, nom: perso?.nom || f.qui, type: 'pnj', declenchement: 'parler', apparence: { personnage: f.qui, tuile: -1 } };
+      try {
+        await scripts.executer(commandes, ev);
+      } catch (err) {
+        rappels.message?.(`Erreur en parlant à « ${ev.nom} » : ${err.message}`);
+      }
+      figurantParle = null;
+      Collection.noterTout(partie);
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
       enScript = false;
       entrees.oublier();
@@ -1045,7 +1085,9 @@ const Moteur = (() => {
       // Saga 1.9 : les passants des modules (les habitants du domaine).
       for (const f of Modules.figurants(jeu, partie, carte)) {
         const perso = f.personnage ? jeu.personnages.get(f.personnage) : null;
-        liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: f.direction || 'bas', pas: f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y }, maintenant) });
+        // Saga 1.15 : celui à qui l'on parle regarde le joueur, debout.
+        const parle = figurantParle && figurantParle.module === f.module && f.id !== undefined && figurantParle.id === f.id;
+        liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: parle ? figurantParle.direction : f.direction || 'bas', pas: parle ? 0 : f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y }, maintenant) });
       }
       // Les autres joueurs (multijoueur) : ils glissent vers leur case, au pas.
       const vus = new Set();
@@ -1259,7 +1301,8 @@ const Moteur = (() => {
         actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
         avancerPNJ(dt);
         // Saga 1.9 : les figurants des modules (les habitants qui vont et viennent).
-        if (!enCombat && !table.actif) Modules.avancer(jeu, partie, hoteModules, carte, dt);
+        // Saga 1.15 : comme les PNJ, ils s'arrêtent pendant un script (une conversation, un écran).
+        if (!enCombat && !table.actif && !enScript) Modules.avancer(jeu, partie, hoteModules, carte, dt);
         avancerFondu(dt);
         dialogue.avancer(dt);
         ecranCombat.avancer(dt);

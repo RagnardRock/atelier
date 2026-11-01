@@ -1,5 +1,6 @@
 // Le petit domaine (Tafl 1.4.2, joué par Saga 1.6.1 ; Tafl 1.7 : habitants visibles et sentiers ; Tafl 1.8 : leur journée à l'horloge ;
-// Tafl 1.9 : le sous-bois et ses combats, les bains et le potager) : le petit jeu modèle pour essayer le module gestion.
+// Tafl 1.9 : le sous-bois et ses combats, les bains et le potager ; Tafl 1.13 : des habitants nommés et le module relations) :
+// le petit jeu modèle pour essayer le module gestion.
 //
 // Une clairière avec un pré constructible, une bâtisseuse qui explique, un lit de camp pour dormir, du bois
 // et du blé à ramasser (ils repoussent après quelques nuits). Trois bâtiments : la maison (2 habitants,
@@ -7,6 +8,9 @@
 // (le même intérieur pour tous). Les habitants mangent du blé et partent après 3 nuits de faim.
 // Tafl 1.9 : au sud, le sous-bois et ses monstres (pack JRPG), qui laissent des herbes des bois (au stock tout
 // seuls) ; les bains chauds (on s'y repose : soin et bonus pour 3 combats) et le potager (Force chaque matin).
+// Tafl 1.13 : les habitants ont un nom (Aldo, Mila, Pépin, Rosa), on leur parle quand ils se promènent, et on
+// peut leur offrir des fleurs, des baies ou des galets ramassés en chemin ; Brune aussi. L'amitié débloque
+// leurs confidences, et une scène chez Brune.
 //
 // Proposé dans Fichier › Nouveau jeu. Les tuiles sont dessinées ici en 16 × 16, comme pour l'arène.
 
@@ -30,6 +34,7 @@ const ExempleDomaine = (() => {
     P: '#9a5ab8', Q: '#f4ead8', R: '#1e1e24',            // champignon : chapeau, pied, yeux
     S: '#b89a7a', T: '#e8d8c8', U: '#6a4a3a',            // lapin, sanglier
     V: '#e0782a', W: '#3a7a2a', X: '#6aa04a',            // carottes, fanes, hautes herbes
+    Z: '#7a2e8a', 0: '#b85ac8', 1: '#c8c8d0', 2: '#9a9aa6', // baies, galet
   };
   const bruit = (x, y, n = 0) => { let h = (x * 374761393 + y * 668265263 + n * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) % 100; };
   const herbe = (x, y) => (bruit(x, y) < 10 ? 'b' : bruit(x, y, 1) < 8 ? 'c' : 'a');
@@ -73,6 +78,10 @@ const ExempleDomaine = (() => {
     bassin: (x, y) => (x < 1 || x > 14 || y < 1 || y > 14 ? 'O' : (bruit(x, y, 5) < 12 ? 'N' : 'M')),
     potager: (x, y) => (y % 5 === 4 ? 'D' : y % 5 === 0 ? (x % 3 === 1 ? 'W' : 'C') : y % 5 === 1 ? (x % 3 === 1 ? 'V' : 'C') : 'C'),
     hautes_herbes: (x, y) => ((x + (y % 2) * 2) % 4 === 0 && y % 3 !== 2 ? (y % 3 === 0 ? 'X' : 'k') : herbe(x, y)),
+    // Tafl 1.13 : de petits cadeaux à ramasser : un bouquet de fleurs, un buisson de baies, un joli galet.
+    bouquet: (x, y) => (dans(x, y, 5, 6, 1.6) || dans(x, y, 10, 5, 1.6) ? 'g' : dans(x, y, 7.5, 3.5, 1.6) ? 'f' : x >= 7 && x <= 8 && y >= 7 && y <= 13 ? 'W' : '.'),
+    buisson_baies: (x, y) => (dans(x, y, 7.5, 9, 6.5) ? ([[5, 7], [9, 6], [11, 10], [6, 11], [8, 9]].some(([cx, cy]) => dans(x, y, cx, cy, 1)) ? (bruit(x, y, 7) < 50 ? 'Z' : '0') : (bruit(x, y, 8) < 30 ? 'j' : 'k')) : '.'),
+    galet: (x, y) => (dans(x, y, 7.5, 10, 4) && y >= 7 ? (dans(x, y, 6.5, 9, 1.4) ? '1' : y > 11 ? 'O' : '2') : '.'),
   };
   // Les monstres du sous-bois (des dessins 16 × 16, tournés vers la droite).
   const MONSTRES = {
@@ -114,6 +123,11 @@ const ExempleDomaine = (() => {
     page([{ type: 'gestion_stock', action: 'ajouter', ressource, nombre, annoncer: true }, { type: 'local', valeur: true }]),
     page([], [fait], true),
   ], { apparence: { personnage: '', tuile }, ...(nuits ? { repousse_nuits: nuits } : {}) });
+  // Tafl 1.13 : un petit cadeau à cueillir : il va dans le sac (pas au stock), puis repousse.
+  const cueillette = (id, nom, x, y, tuile, objet, nuits) => ev(id, nom, 'objet', x, y, [
+    page([{ type: 'objet', action: 'donner', objet, nombre: 1 }, { type: 'local', valeur: true }]),
+    page([], [fait], true),
+  ], { apparence: { personnage: '', tuile }, repousse_nuits: nuits, traversable: false });
   const lit = (id, x, y, T) => ev(id, 'Lit', 'pnj', x, y, [
     page([dire('Une bonne nuit de sommeil : le domaine travaille pendant que tu dors.'), { type: 'dormir', texte: '', soigner: true, heure: '' }]),
   ], { apparence: { personnage: '', tuile: T.lit } });
@@ -180,11 +194,26 @@ const ExempleDomaine = (() => {
           dire('Au sud, le chemin mène au sous-bois. Des bestioles grincheuses y rôdent, mais elles laissent des herbes des bois : elles vont tout droit au stock.', 'brune'),
           dire('Avec du bois et des herbes, tu pourras bâtir des bains chauds pour te reposer avant d\'y retourner, et un potager qui donne des forces chaque matin.', 'brune'),
           dire('Pour que la nuit passe, va dormir au lit de camp, à droite du chemin. Bonne chance !', 'brune'),
+          dire('Et passe me dire bonjour de temps en temps. Les habitants aussi aiment bien qu\'on vienne leur parler !', 'brune'),
+          { type: 'relation_parler', qui: 'brune', dire: false },
           { type: 'local', valeur: true },
         ]),
+        // Tafl 1.13 : ensuite, une conversation par jour (ses paroles changent avec l'amitié), et un cadeau.
         page([
-          dire('Le carnet (Tab) › Construire, puis va dormir : le chantier avance la nuit. Entre dans une maison finie par sa porte !', 'brune'),
+          { type: 'relation_parler', qui: '@evenement', dire: true },
+          { type: 'choix', options: [
+            { texte: 'Lui offrir quelque chose', commandes: [{ type: 'relation_offrir', qui: '@evenement', objet: '', reussi: [], rate: [] }] },
+            { texte: 'Comment ça marche, déjà ?', commandes: [dire('Le carnet (Tab) › Construire, puis va dormir : le chantier avance la nuit. Entre dans une maison finie par sa porte !', 'brune')] },
+            { texte: 'À plus tard', commandes: [] },
+          ] },
         ], [fait]),
+        // Tafl 1.13 : une scène qui ne se débloque qu'avec son amitié (niveau Ami), une seule fois.
+        page([
+          dire('{joueur}… Tu passes me voir tous les jours. Ça me fait plus plaisir que tu ne crois.', 'brune'),
+          dire('Tiens : du bois de mon ancienne réserve. Entre amis, on s\'entraide.', 'brune'),
+          { type: 'gestion_stock', action: 'ajouter', ressource: 'bois', nombre: 8, annoncer: true },
+          { type: 'interrupteur', id: 'cadeau-brune', valeur: true },
+        ], [fait, { type: 'relation_niveau', personnage: 'brune', min: 2 }, { type: 'interrupteur', id: 'cadeau-brune', valeur: false }]),
       ], { apparence: { personnage: 'brune', tuile: -1 }, deplacement: 'regarde', direction: 'bas' }),
       lit('lit-de-camp', 16, 15, T),
       ev('panneau', 'Panneau', 'panneau', 13, 13, [
@@ -196,6 +225,10 @@ const ExempleDomaine = (() => {
       ramassage('bois-4', 'Tas de bois', 4, 15, T.tas_bois, 'bois', 3, 2),
       ramassage('gerbe-1', 'Gerbe sauvage', 22, 13, T.gerbe, 'ble', 2, 3),
       ramassage('gerbe-2', 'Gerbe sauvage', 7, 15, T.gerbe, 'ble', 2, 3),
+      // Tafl 1.13 : de petits cadeaux à ramasser (ils vont dans le sac, et repoussent).
+      cueillette('fleurs-1', 'Fleurs des prés', 2, 6, T.bouquet, 'fleur', 1),
+      cueillette('fleurs-2', 'Fleurs des prés', 17, 4, T.bouquet, 'fleur', 1),
+      cueillette('galet-1', 'Joli galet', 21, 6, T.galet, 'galet', 2),
       // Tafl 1.9 : la sortie vers le sous-bois.
       ev('vers-sous-bois', 'Vers le sous-bois', 'declencheur', 12, 17, [page([{ type: 'teleporter', carte: 'sous-bois', x: 9, y: 1, direction: 'bas' }])], { traversable: true, declenchement: 'toucher' }),
     ];
@@ -236,6 +269,9 @@ const ExempleDomaine = (() => {
     sb.events = [
       ev('vers-clairiere', 'Vers la clairière', 'declencheur', 9, 0, [page([{ type: 'teleporter', carte: 'clairiere', x: 12, y: 16, direction: 'haut' }])], { traversable: true, declenchement: 'toucher' }),
       ev('panneau-sb', 'Panneau', 'panneau', 10, 1, [page([dire('Le sous-bois. Attention aux herbes hautes ! La clairière est au nord.')])]),
+      // Tafl 1.13 : des baies, loin des herbes hautes.
+      cueillette('baies-1', 'Buisson de baies', 2, 2, T.buisson_baies, 'baies', 1),
+      cueillette('baies-2', 'Buisson de baies', 15, 10, T.buisson_baies, 'baies', 1),
     ];
 
     for (const c of [m, maison, grenier, bains, sb]) c.events = Events.normEvents(c.events, c.width, c.height, doc.tiles.length);
@@ -249,7 +285,7 @@ const ExempleDomaine = (() => {
     data.reglages.regles = 'jrpg';
     data.reglages.monnaie = 'écus';
     data.reglages.argent_depart = 0;
-    data.reglages.modules = ['gestion'];
+    data.reglages.modules = ['gestion', 'relations'];
     // Tafl 1.8 : une horloge, pour la journée des habitants (une journée dure 16 minutes ; on se réveille à 7 h).
     data.reglages.temps = { horloge: 'jeu', duree_jour: 16, heure_depart: 7 };
     data.reglages.modules_reglages = {
@@ -264,6 +300,13 @@ const ExempleDomaine = (() => {
         horaires: true, heure_lever: 7, heure_travail: 8, heure_fin: 17, heure_coucher: 21,
         // Tafl 1.9 : le butin des combats va tout seul au stock ; perdre un combat ne coûte rien (c'est cosy).
         butin_au_stock: true, perte_defaite: 0,
+        // Tafl 1.13 : les quatre premiers habitants ont un nom (dans l'ordre d'arrivée).
+        habitants_noms: ['aldo', 'mila', 'pepin', 'rosa'],
+      }),
+      // Tafl 1.13 : les relations. Des paliers rapides, pour voir l'amitié monter en quelques jours de jeu.
+      relations: DonneesRelations.normReglages({
+        nom: 'Relations', parler: 10, cadeaux: { adore: 30, aime: 15, neutre: 5, deteste: 0 }, cadeaux_jour: 1, oubli: 0,
+        niveaux: [{ nom: 'Inconnu', points: 0 }, { nom: 'Connaissance', points: 10 }, { nom: 'Ami', points: 40 }, { nom: 'Bon ami', points: 90 }, { nom: 'Proche', points: 160 }, { nom: 'Inséparable', points: 250 }],
       }),
     };
     const N = DonneesGestion.NORMES;
@@ -289,7 +332,11 @@ const ExempleDomaine = (() => {
         tampon: 'potager', maximum: 1, repos: { quand: 'matin', nom: 'Les légumes du potager', soigner: false, stats: [{ stat: 'force', pourcent: 10 }], combats: 0, cout: [] } }, 4),
     ];
     // Tafl 1.9 : de quoi se battre (pack JRPG) : une classe pour le héros, trois monstres, trois groupes.
-    data.objets = [{ id: 'herbes', nom: 'Herbes des bois', categorie: 'autre', prix: 2, description: 'Des herbes qui sentent bon. Elles vont au stock du domaine.', effet: { type: 'aucun' } }];
+    data.objets = [{ id: 'herbes', nom: 'Herbes des bois', categorie: 'autre', prix: 2, description: 'Des herbes qui sentent bon. Elles vont au stock du domaine.', effet: { type: 'aucun' } },
+      // Tafl 1.13 : de petits cadeaux (le module relations).
+      { id: 'fleur', nom: 'Fleurs des prés', categorie: 'autre', prix: 1, description: 'Un petit bouquet. Ça fait toujours plaisir… presque toujours.', effet: { type: 'aucun' } },
+      { id: 'baies', nom: 'Baies sauvages', categorie: 'autre', prix: 1, description: 'Sucrées et un peu acides. On les trouve dans le sous-bois.', effet: { type: 'aucun' } },
+      { id: 'galet', nom: 'Joli galet', categorie: 'autre', prix: 1, description: 'Tout lisse, trouvé au bord de la mare.', effet: { type: 'aucun' } }];
     const stats = (pv, force, defense, agilite, magie = 4, esprit = 4, chance = 4) => ({ pv, pm: 0, force, magie, defense, esprit, agilite, chance });
     data.classes = [{ id: 'jardinier', nom: 'Jardinier', description: 'Il bêche, il bâtit, et il sait se défendre.', couleur: '#5aa04a',
       stats: { pv: 36, pm: 6, force: 10, magie: 6, defense: 8, esprit: 7, agilite: 8, chance: 7 }, gains: { pv: 8, pm: 1, force: 2, magie: 1, defense: 1.6, esprit: 1.4, agilite: 1.4, chance: 1 }, competences: [] }];
@@ -307,6 +354,52 @@ const ExempleDomaine = (() => {
     ];
     data.personnages.unshift({ id: 'fermier', nom: 'Fermier', description: 'L\'apparence du joueur.', heros: true, couleur: '#4a9ae0', tuile: -1, portraits: [], sprite: null, tenues: [], classe: 'jardinier', niveau: 1, equipement: {} });
     data.personnages.push({ id: 'brune', nom: 'Brune', description: 'La bâtisseuse de la clairière.', heros: false, couleur: '#c07a3a', tuile: -1, portraits: [], sprite: null, tenues: [] });
+    // Tafl 1.13 : les habitants nommés (leur couleur est celle du petit bonhomme qui se promène).
+    const habitant = (id, nom, couleur, description) => data.personnages.push({ id, nom, description, heros: false, couleur, tuile: -1, portraits: [], sprite: null, tenues: [] });
+    habitant('aldo', 'Aldo', '#d8a040', 'Le premier habitant. Il collectionne les galets.');
+    habitant('mila', 'Mila', '#e07aa8', 'Elle s\'occupe de tout ce qui pousse.');
+    habitant('pepin', 'Pépin', '#7ab84a', 'Gourmand et blagueur.');
+    habitant('rosa', 'Rosa', '#8a7ad8', 'Discrète, elle connaît les herbes du sous-bois.');
+    data.interrupteurs.push({ id: 'cadeau-brune', nom: 'Brune a fait son cadeau d\'amitié', description: '' });
+    const lien = (id, adore, aime, deteste, paroles, merci = {}) => DonneesRelations.NORMES.relations({ id, nom: data.personnages.find((x) => x.id === id)?.nom || id, adore, aime, deteste, merci,
+      paroles: paroles.map(([niveau, texte]) => ({ niveau, texte, expression: '' })) }, 0);
+    data.relations = [
+      lien('brune', ['baies'], ['fleur'], [], [
+        [0, 'Le pré est plus beau chaque jour. Tu as l\'œil, {joueur}.'],
+        [0, 'Une maison, c\'est d\'abord une bonne charpente. Et des voisins qui se disent bonjour.'],
+        [1, 'Tu sais, je n\'ai pas toujours bâti des maisons. Avant, je réparais des ponts, très loin d\'ici.'],
+        [2, 'Ça faisait longtemps que je n\'avais pas eu d\'ami ici. Merci d\'être venu, {joueur}.'],
+        [3, 'Un jour, je te montrerai le pont que j\'ai bâti toute seule. Il tient encore, paraît-il.'],
+        [4, 'Quand le domaine sera grand, garde-moi une place près de la mare. J\'aime le bruit de l\'eau.'],
+      ], { adore: 'Des baies ! Comment tu as deviné ? Je les mange par poignées.' }),
+      lien('aldo', ['galet'], ['baies'], ['fleur'], [
+        [0, 'Bonjour ! Moi, c\'est Aldo. Je cherche encore où ranger mes affaires.'],
+        [0, 'Tu n\'aurais pas vu un joli galet, par hasard ? Je cherche toujours.'],
+        [1, 'Je collectionne les galets. Chacun a sa forme et son histoire. Ça te paraît bête ?'],
+        [2, 'Regarde celui-là : il a la forme du domaine. Je le garde pour toi, pour plus tard.'],
+        [3, 'Avant de venir ici, je n\'avais pas vraiment de chez-moi. Maintenant, si.'],
+      ], { adore: 'Oh ! Il est parfait. Il ira au milieu de ma collection.', deteste: 'Atchoum ! Désolé… les fleurs et moi, ça fait deux.' }),
+      lien('mila', ['fleur'], ['baies', 'herbes'], ['galet'], [
+        [0, 'Bonjour ! Mila. Je m\'occupe de tout ce qui pousse.'],
+        [0, 'Le blé a bonne mine aujourd\'hui. Il faut lui parler, tu sais.'],
+        [1, 'Je garde des graines de toutes les fleurs que je croise. Un jour, le pré sera un jardin.'],
+        [2, 'Tu viens me voir chaque jour… Ça me touche. Je te garderai les plus belles fleurs.'],
+        [3, 'Le soir, je compte les étoiles au bord de la mare. Viens, un de ces jours.'],
+      ], { adore: 'Des fleurs des prés ! Je vais les faire sécher pour en garder les graines.' }),
+      lien('pepin', ['baies'], ['fleur'], [], [
+        [0, 'Salut ! Pépin, pour te servir. Tu n\'aurais pas quelque chose à grignoter ?'],
+        [0, 'J\'ai rêvé d\'une tarte cette nuit. Une énorme tarte.'],
+        [1, 'Mon rêve ? Une grande table, et tout le domaine autour. Avec une tarte aux baies.'],
+        [2, 'Tu es le meilleur voisin du monde. Si, si. Je le dirai à tout le monde.'],
+        [3, 'Le jour de la fête du domaine, c\'est moi qui cuisine. Promis.'],
+      ], { adore: 'Des baies ! Tu es un ange. Je t\'en garde une part… peut-être.' }),
+      lien('rosa', ['galet', 'herbes'], ['fleur'], ['baies'], [
+        [0, 'Bonsoir. Rosa. Je ne parle pas beaucoup, mais j\'écoute.'],
+        [1, 'Les herbes du sous-bois soignent presque tout. Il suffit de savoir les reconnaître.'],
+        [2, 'Tu es patient avec moi. Peu de gens le sont. Merci.'],
+        [3, 'Ma grand-mère disait qu\'un autre peuple vivait dans ces bois, autrefois. Je n\'y croyais pas.'],
+      ], { deteste: 'Des baies… Je n\'en mange plus depuis que j\'en ai trop mangé, petite.' }),
+    ];
   }
 
   return { remplir };

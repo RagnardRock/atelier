@@ -259,6 +259,15 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **La monnaie du roguelite** (« Éclats » par défaut) se gagne par ennemi, par étage et à la victoire, et reste même après une défaite. Au camp, elle achète des **améliorations** permanentes (statistiques, objets ou argent au départ, perks débloqués).
 - Plus bas, plus d'ennemis (`renfort`) ; une rencontre peut être réservée à certains étages. Une défaite finit la partie : le joueur se réveille au camp.
 - Contrat des modules (MODULES.md) : `moment`, `rencontres` et `reveil`, et l'hôte prête `soigner(pv)`, `retirerBonus`, `ennemis`, `teleporter`, `oublierCopies` et `annoncer`.
+## Ce que fait Saga 1.15 : les relations avec les habitants (avec Tafl 1.13)
+
+- **Un nouveau module, « relations »** : une affinité avec chaque personnage choisi par le jeu. Elle monte quand le joueur lui parle (la première fois de la journée) ou lui offre un objet du sac, selon ce qu'il en pense (il l'adore, l'aime, ou n'aime pas). Des niveaux nommés par le jeu (Inconnu, Connaissance, Ami…) ; quand un niveau monte, le joueur le lit (« Brune et toi : Ami ! ♥♥♡♡♡ »).
+- **Des paroles qui se débloquent** : à chaque niveau, ses paroles. D'abord, une fois, la confidence du niveau tout juste atteint ; ensuite une parole par jour parmi celles des niveaux atteints. La condition `relation_niveau` débloque les scènes des événements (Brune fait un cadeau à son ami).
+- **L'écran des relations** (carnet › Relations) : chaque personnage rencontré, son portrait, ses cœurs, une jauge vers le niveau suivant, s'il a été vu aujourd'hui et ce qu'on a appris de ses goûts. Le carnet montre aussi chaque personnage et ses cœurs.
+- **Des habitants nommés** (module gestion, `habitants_noms`) : les premiers habitants ont un nom et l'apparence de leur personnage, le rapport du matin dit « Mila s'installe au domaine. », et l'écran du domaine dit qui vit ici.
+- **On parle aux habitants qui se promènent** : Action devant l'un d'eux, il s'arrête, se tourne vers le joueur et dit ses paroles du jour ; puis on peut lui offrir quelque chose.
+- Cosy par défaut : un cadeau qu'il n'aime pas ne coûte rien, et l'amitié ne se perd pas (l'oubli est coupé, et ne redescend jamais sous le niveau atteint).
+- Contrat des modules : les figurants peuvent avoir un `id` et un personnage à qui parler (`qui`), le nouveau `parler(o)` rend les commandes à jouer quand le joueur leur parle, et les figurants s'arrêtent pendant un script, comme les PNJ.
 
 ## La suite
 

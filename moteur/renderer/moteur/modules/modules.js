@@ -30,6 +30,10 @@
 //   figurants(o)                        (Saga 1.9) → [{ x, y, direction, pas, personnage, couleur }] : des passants
 //                                         que le moteur dessine parmi les personnages (x, y en pixels de la carte,
 //                                         pas : 0 debout, sinon le n° du pas). Ils ne bloquent personne.
+//                                         Saga 1.15 : id (le sien dans le module) et qui (un personnage à qui le
+//                                         joueur peut parler : le moteur demande alors parler aux modules)
+//   parler(o)                           (Saga 1.15) le joueur parle à un figurant qui a un personnage (o.personnage,
+//                                         o.figurant) ; → [commandes] à jouer, ou null (pas à moi)
 //   commandes                           { type: async (o) → résultat } : ses commandes d'événement
 //   condition(o, cond)                  → vrai, faux, ou undefined (une condition qu'il ne connaît pas)
 //   actionsPause(o)                     → [[id, nom, icône]] : des choix en plus dans le menu de pause
@@ -207,9 +211,24 @@ const Modules = (() => {
       chacun(jeu, 'avancer', (m) => m.avancer(objet(m, jeu, partie, hote, { carte, dt })));
     },
     // Saga 1.9 : les passants des modules, à dessiner parmi les personnages.
+    // Saga 1.15 : chaque figurant porte aussi l'id de son module (module), et peut avoir un id et un
+    // personnage à qui parler (qui).
     figurants(jeu, partie, carte) {
       return chacun(jeu, 'figurants', (m) => m.figurants(objet(m, jeu, partie, null, { carte })))
-        .flatMap(([, l]) => (Array.isArray(l) ? l : []).filter((f) => f && Number.isFinite(f.x) && Number.isFinite(f.y)));
+        .flatMap(([m, l]) => (Array.isArray(l) ? l : []).filter((f) => f && Number.isFinite(f.x) && Number.isFinite(f.y)).map((f) => ({ ...f, module: m.id })));
+    },
+    // Saga 1.15 : le joueur parle à un figurant qui a un personnage (f.qui). Le premier module qui rend une
+    // liste de commandes non vide décide de ce qui se passe (le moteur la joue comme la page d'un événement
+    // dont le personnage est f.qui). Rend [commandes] ou null (personne ne répond).
+    parler(jeu, partie, hote, carte, figurant) {
+      for (const m of actifs(jeu)) {
+        if (typeof m.parler !== 'function') continue;
+        try {
+          const l = m.parler(objet(m, jeu, partie, hote, { carte, personnage: String(figurant?.qui || ''), figurant }));
+          if (Array.isArray(l) && l.length) return l.filter((c) => c && typeof c === 'object' && typeof c.type === 'string');
+        } catch (err) { dire(m.id, 'parler', err); }
+      }
+      return null;
     },
     // Dessiner sur la carte. o : { ctx, carte, cam, taille, maintenant, profondeur, tuile(n, cx, cy) }.
     dessiner(jeu, partie, o) {
