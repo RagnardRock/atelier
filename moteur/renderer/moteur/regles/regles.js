@@ -196,6 +196,8 @@ const Regles = (() => {
     creer: (jeu, ...a) => pack(jeu).creer(jeu, ...a),
     completer: (jeu, ...a) => pack(jeu).completer(jeu, ...a),
     soigner: (jeu, ...a) => pack(jeu).soigner(jeu, ...a),
+    // Saga 1.14 : rendre seulement n PV au groupe (un vol de vie). Un pack qui ne le sait pas ne fait rien.
+    soignerPv: (jeu, partie, n) => Boolean(pack(jeu).soignerPv?.(jeu, partie, n)),
     // Un résumé sans image mais avec une apparence (un personnage) : le moteur dessine sa vignette.
     resume(jeu, c) {
       const r = pack(jeu).resume(jeu, c);

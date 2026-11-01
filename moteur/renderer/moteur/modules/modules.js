@@ -35,6 +35,11 @@
 //   actionsPause(o)                     → [[id, nom, icône]] : des choix en plus dans le menu de pause
 //   agirPause(o, id)                    fait l'un de ces choix
 //   pourScript(o)                       → ce qu'un script JS lit de lui (saga.modules[id]), des valeurs simples
+//   moment(o)                           (Saga 1.14) un moment du temps réel (o.nom, o.infos : 'ennemi_vaincu'…)
+//   reveil(o)                           (Saga 1.14) → { carte, x, y, direction } : où le joueur se réveille après une
+//                                         défaite, à la place du dernier soin (ou null)
+//   rencontres(o)                       (Saga 1.14) les ennemis du temps réel d'une zone (o.carte, o.zone, o.liste) :
+//                                         → la liste à faire apparaître (ou undefined : celle de la zone)
 //
 // Chaque appel reçoit un objet o : { jeu, partie, etat, hote } (plus ce qui est propre à l'appel).
 //   etat   = partie.modules[id] : le seul endroit de la partie qui appartient au module (sauvegardé tel quel)
@@ -45,6 +50,10 @@
 //            Saga 1.10 : heure() → l'heure du jeu, de 0 à 24, ou null sans horloge
 //            Saga 1.11 : soigner() (soin complet du groupe), bonus(b) → le bonus donné ou null (moteur/bonus.js),
 //            nomsStats() → { stat: nom } (celles que le pack du jeu sait toucher)
+//            Saga 1.14 : soigner(pv) (seulement pv PV, si le pack le sait), retirerBonus(id), ennemis() → combien
+//            d'ennemis du temps réel restent sur la carte, teleporter(carte, x, y, direction) → promesse (après le
+//            fondu), oublierCopies(prefixe) (oublier ce que la partie retient des copies « base@prefixe… »),
+//            annoncer(titre, texte)
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module
@@ -245,6 +254,23 @@ const Modules = (() => {
       const out = {};
       for (const [m, v] of chacun(jeu, 'pourScript', (x) => x.pourScript(objet(x, jeu, partie, null)))) out[m.id] = v ?? null;
       return out;
+    },
+    // Saga 1.14 : un moment du temps réel (un ennemi vaincu, le héros touché), pour les modules qui l'écoutent.
+    moment(jeu, partie, hote, nom, infos) {
+      chacun(jeu, 'moment', (m) => m.moment(objet(m, jeu, partie, hote, { nom, infos: infos || {} })));
+    },
+    // Saga 1.14 : où se réveiller après une défaite (le premier module qui répond), ou null.
+    reveil(jeu, partie, hote) {
+      for (const [, r] of chacun(jeu, 'reveil', (m) => m.reveil(objet(m, jeu, partie, hote)))) {
+        if (r && typeof r.carte === 'string' && jeu.cartes.has(r.carte)) return { carte: r.carte, x: Math.round(Number(r.x) || 0), y: Math.round(Number(r.y) || 0), direction: typeof r.direction === 'string' ? r.direction : 'bas' };
+      }
+      return null;
+    },
+    // Saga 1.14 : les ennemis d'une zone du temps réel, que les modules peuvent filtrer ou renforcer.
+    rencontres(jeu, partie, hote, carte, zone, liste) {
+      let l = liste;
+      chacun(jeu, 'rencontres', (m) => { const r = m.rencontres(objet(m, jeu, partie, hote, { carte, zone, liste: l })); if (Array.isArray(r)) l = r; });
+      return l;
     },
     // Pour les tests : oublier les erreurs déjà dites.
     _oublier() { dites.clear(); },

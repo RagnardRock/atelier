@@ -164,6 +164,8 @@ const Jeu = (() => {
       nom: data.nom || entree.nom || entree.id,
       largeur, hauteur, taille,
       interieur: Boolean(data.interieur), // Tafl 0.11 : une maison, une grotte… (le décor des combats)
+      // Tafl 1.12 (module roguelite) : une salle de donjon modèle : { type, poids, etage_min, etage_max }.
+      salle: data.salle && typeof data.salle === 'object' && typeof data.salle.type === 'string' ? { type: data.salle.type, poids: nombre(data.salle.poids, 10), etage_min: nombre(data.salle.etage_min, 1), etage_max: nombre(data.salle.etage_max, 0) } : null,
       calques,
       passage: grille(data.passage, n, 0),
       zones: (Array.isArray(data.zones) ? data.zones : []).map((z) => ({

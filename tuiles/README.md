@@ -470,6 +470,16 @@ Quand les blocs ne suffisent pas (des dés, des calculs, une règle du pack à c
 - **Scripts** : `comportement('nom', (e) => ({ but, fuir, frapper }))` pour un ennemi au comportement Script, et les moments `ennemi_vaincu`, `heros_touche`, `defaite` (SCRIPTS.md).
 - **Le modèle « Le petit donjon »** (Fichier › Nouveau jeu › Partir de) : une forêt avec des slimes et des chauves-souris (au comportement écrit en JS), la cabane d'Arne qui donne des potions, et une crypte avec des squelettes et leur gardien.
 
+## Le module roguelite (Tafl 1.12, pour Saga 1.14)
+
+- **Réglages › Règles du jeu › Modules › Roguelite** : le nombre d'étages et de salles, les trésors, boutiques et salles de repos par étage, la graine, le renfort par étage, le nom de la monnaie et ce qu'elle rapporte, le prix d'un perk, la mini-carte et la tuile des portes murées. Dessous, le compte des salles modèles par type.
+- **Une salle de donjon** : menu ⋯ d'une carte › « Salle de donjon (roguelite)… » : son type, son poids et ses étages. Ses portes sont les ouvertures de son mur, au milieu des bords ; la fenêtre dit lesquelles Tafl trouve.
+- **Données › Perks** (groupe Roguelite) : nom, icône, rareté, combien de fois au plus, verrouillé ou non, et jusqu'à 4 effets (statistique, soin, vol de vie, monnaie en plus, script). **Données › Améliorations** : coût, coût par niveau, niveau max, effets (statistique, objet ou argent au départ, débloquer un perk, monnaie en plus).
+- **Les événements** : les commandes « Partir dans le donjon », « Descendre à l'étage suivant », « Donner un perk », « Boutique de perks », « Améliorations », « Se reposer », « Abandonner », et six conditions (en partie, salle vidée, étage, amélioration, monnaie, perk).
+- **Les ennemis** du pack action : « Dès l'étage » et « Jusqu'à » dans les rencontres d'une zone.
+- **Le vérificateur** signale un jeu sans salle de départ, de combat ou de boss, une salle sans porte, et un camp sans « Partir » ni « Améliorations ».
+- **Le modèle « Petit roguelite »** (Fichier › Nouveau jeu › Partir de) : un camp avec le portail et Arne qui vend les améliorations, neuf salles (départ, quatre combats, trésor, marchand, fontaine, le Gardien), huit perks et cinq améliorations. Il se joue tout de suite et sert d'exemple à copier.
+
 ## Jouer à plusieurs (Tafl 1.0, pour Saga 1.0)
 
 Saga sait ouvrir une partie aux amis sur le réseau de la maison (menu de pause › **Jouer à plusieurs**) ; ils

@@ -224,6 +224,8 @@ const ActionRegles = (() => {
     // Une partie neuve : le héros, seul, avec tous ses cœurs.
     nouvellePartie(jeu, partie) { if (!partie.equipe.length) partie.equipe.push(creerHeros(jeu, 1)); },
     plafond: (jeu) => reglages(jeu).niveau_max,
+    // Saga 1.14 : un soin de quelques PV (le vol de vie du roguelite).
+    soignerPv: (jeu, partie, n) => { if (!partie.equipe[0]) return false; soignerPv(jeu, partie, n); return true; },
     pourScript: (jeu, partie) => partie.equipe.slice(0, 1).map((c) => ({ nom: nomHeros(jeu, c), niveau: c.niveau, pv: c.pv, pvMax: pvMax(jeu, c), ...stats(jeu, c) })),
   };
 

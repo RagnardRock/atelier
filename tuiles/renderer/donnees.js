@@ -17,9 +17,11 @@ const Donnees = (() => {
   const J = typeof DonneesJdr !== 'undefined' ? DonneesJdr : null;
   // Tafl 1.3 : les sortes du module gestion viennent de donnees-gestion.js (DonneesGestion), lu avant aussi.
   const G = typeof DonneesGestion !== 'undefined' ? DonneesGestion : null;
+  // Tafl 1.12 : celles du module roguelite (donnees-roguelite.js, DonneesRoguelite), lu avant aussi.
+  const RG = typeof DonneesRoguelite !== 'undefined' ? DonneesRoguelite : null;
   // Tafl 1.10 : les ennemis du pack action (le temps réel de Saga 1.12) viennent de donnees-action.js.
   const A = typeof DonneesAction !== 'undefined' ? DonneesAction : null;
-  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(A ? A.SORTES : []), 'reglages'];
+  const SORTES = ['types', 'talents', 'attaques', 'creatures', 'objets', 'dresseurs', 'boutiques', 'classes', 'monstres', 'groupes', ...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(RG ? RG.SORTES : []), ...(A ? A.SORTES : []), 'reglages'];
   const STATS = [['pv', 'PV'], ['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Attaque Spé.'], ['def_spe', 'Défense Spé.'], ['vitesse', 'Vitesse']];
   const STATS_COMBAT = [...STATS.slice(1), ['precision', 'Précision'], ['esquive', 'Esquive']];
   // Les 25 natures officielles : [identifiant, nom, stat augmentée de 10 %, stat baissée de 10 %].
@@ -304,6 +306,7 @@ const Donnees = (() => {
     }),
     ...(J ? J.NORMES : {}),
     ...(G ? G.NORMES : {}),
+    ...(RG ? RG.NORMES : {}),
     ...(A ? A.NORMES : {}),
   };
   const reglagesVides = () => ({
@@ -449,7 +452,7 @@ const Donnees = (() => {
       })(),
     };
   }
-  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries([...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(A ? A.SORTES : [])].map((k) => [k, []])), reglages: reglagesVides() });
+  const vides = () => ({ types: [], talents: [], attaques: [], creatures: [], objets: [], dresseurs: [], boutiques: [], classes: [], monstres: [], groupes: [], ...Object.fromEntries([...(J ? J.SORTES : []), ...(G ? G.SORTES : []), ...(RG ? RG.SORTES : []), ...(A ? A.SORTES : [])].map((k) => [k, []])), reglages: reglagesVides() });
   // Normalise toutes les sortes de Tafl 0.8 (les identifiants deviennent uniques dans leur sorte).
   function normer(d) {
     const out = {};
@@ -527,6 +530,7 @@ const Donnees = (() => {
     if (sorte === 'classe') for (const o of d.objets) if (o.equipement?.classes.includes(id)) out.add(`Objet ${o.nom}`);
     J?.utilisations(doc, sorte, id, out);
     G?.utilisations(doc, sorte, id, out);
+    RG?.utilisations(doc, sorte, id, out);
     A?.utilisations(doc, sorte, id, out);
     return [...out];
   }
@@ -681,7 +685,8 @@ const Donnees = (() => {
   const resumeGroupe = (d, g) => g.monstres.map((x) => `${monstresDe(d).find((m) => m.id === x.monstre)?.nom || x.monstre}${x.nombre > 1 ? ` ×${x.nombre}` : ''}`).join(', ') || 'vide';
   const normRencontres = (list) => arr(list).filter((r) => r?.creature || r?.groupe || r?.ennemi).slice(0, 20).map((r) => {
     // Tafl 1.10 (pack action) : un ennemi et combien en font apparaître la zone.
-    if (r.ennemi) return { ennemi: Doc.slug(r.ennemi, ''), nombre: int(r.nombre, 1, 1, 30) };
+    // Tafl 1.12 (module roguelite) : etage_min, etage_max (0 : tous) : les étages où il apparaît.
+    if (r.ennemi) return { ennemi: Doc.slug(r.ennemi, ''), nombre: int(r.nombre, 1, 1, 30), ...(int(r.etage_min, 1, 1, 99) > 1 ? { etage_min: int(r.etage_min, 1, 1, 99) } : {}), ...(int(r.etage_max, 0, 0, 99) > 0 ? { etage_max: int(r.etage_max, 0, 0, 99) } : {}) };
     if (!r.creature) return { groupe: Doc.slug(r.groupe, ''), chance: int(r.chance, 10, 1, 100) };
     const min = int(r.niveau_min, 2, 1, 100);
     return { creature: Doc.slug(r.creature, ''), niveau_min: min, niveau_max: Math.max(min, int(r.niveau_max, min, 1, 100)), chance: int(r.chance, 10, 1, 100) };
@@ -730,6 +735,7 @@ const Donnees = (() => {
     datalist('tafl-groupes', (data.groupes || []).map((a) => [a.id, a.nom]));
     J?.listes(data);
     G?.listes(data);
+    RG?.listes(data);
     A?.listes(data);
   }
   const choixTypes = (work, vide = 'Aucun') => [['', vide], ...work.types.map((t) => [t.id, t.nom])];
@@ -1605,6 +1611,7 @@ const Donnees = (() => {
       if (cat[id].description) out.push(info(cat[id].description));
       // Tafl 1.3 : les réglages d'un module activé, juste sous sa case.
       if (id === 'gestion' && G && r.modules.includes(id)) out.push(...G.formReglages(r, ctx));
+      if (id === 'roguelite' && RG && r.modules.includes(id)) out.push(...RG.formReglages(r, ctx));
     }
     if (inconnus.length) out.push(info(`Aussi activé, mais inconnu de ce Tafl (gardé tel quel) : ${inconnus.join(', ')}.`));
     return out;
@@ -1914,7 +1921,7 @@ const Donnees = (() => {
   // Une ligne de texte par élément (pour Claude).
   function resumer(doc, sorte, o) {
     const d = doc.data;
-    const jdr = J?.resumer(doc, sorte, o) || G?.resumer(doc, sorte, o) || A?.resumer(doc, sorte, o);
+    const jdr = J?.resumer(doc, sorte, o) || G?.resumer(doc, sorte, o) || RG?.resumer(doc, sorte, o) || A?.resumer(doc, sorte, o);
     if (jdr) return jdr;
     if (sorte === 'types') return `${o.id} « ${o.nom} » ×2 contre [${o.efficace.join(', ')}], ×½ [${o.peu_efficace.join(', ')}], ×0 [${o.sans_effet.join(', ')}]`;
     if (sorte === 'talents') return `${o.id} « ${o.nom} » : ${o.description}`;
@@ -1939,6 +1946,7 @@ const Donnees = (() => {
     ONGLETS.unshift(...J.ONGLETS.filter((o) => o.groupe !== 'Combat'));
   }
   if (G) ONGLETS.push(...G.ONGLETS); // le groupe Gestion, en bas
+  if (RG) ONGLETS.push(...RG.ONGLETS); // le groupe Roguelite
   if (A) ONGLETS.splice(ONGLETS.findIndex((o) => o.key === 'groupes'), 0, ...A.ONGLETS); // Tafl 1.10 : les ennemis du temps réel
   ONGLETS.find((o) => o.key === 'groupes').packs = ['jrpg', 'jdr'];
   ONGLETS.find((o) => o.key === 'groupes').labels = { jdr: 'Rencontres' };
