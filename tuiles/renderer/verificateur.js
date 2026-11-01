@@ -34,7 +34,7 @@ const Verificateur = (() => {
       fn(c);
       if (c.type === 'choix') for (const o of c.options || []) parcourir(o?.commandes, fn);
       if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
-      if (['test', 'sauvegarde', 'test_oppose', 'gestion_construire', 'gestion_placer'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
+      if (['test', 'sauvegarde', 'test_oppose', 'gestion_construire', 'gestion_placer', 'gestion_repos', 'relation_offrir'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
     }
   }
   // Les conditions d'un événement : celles de ses pages, et celles des « si » de ses scripts.
@@ -418,6 +418,9 @@ const Verificateur = (() => {
         if (cmd.type === 'gestion_construire') verifierId('batiments', cmd.batiment, quoi, ou);
         if (cmd.type === 'gestion_placer' && cmd.batiment) verifierId('batiments', cmd.batiment, quoi, ou);
         if (cmd.type === 'gestion_stock') verifierId('ressources', cmd.ressource, quoi, ou);
+        // Tafl 1.13 : le module relations.
+        if (['relation_parler', 'relation_offrir', 'relation_points'].includes(cmd.type) && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);
+        if (cmd.type === 'relation_offrir' && cmd.objet) verifierId('objets', cmd.objet, quoi, ou);
       });
       conditions(ev, (cond) => {
         if (cond.type === 'objet') verifierId('objets', cond.objet, quoi, ou);
@@ -430,6 +433,7 @@ const Verificateur = (() => {
         if (cond.type === 'gestion_stock') verifierId('ressources', cond.ressource, quoi, ou);
         if (cond.type === 'roguelite_perk') verifierId('perks', cond.perk, quoi, ou);
         if (cond.type === 'roguelite_amelioration') verifierId('ameliorations', cond.amelioration, quoi, ou);
+        if (cond.type === 'relation_niveau' || cond.type === 'relation_parle') verifierId('personnages', cond.personnage, quoi, ou);
       });
     }
     for (const c of cartes.values()) {
@@ -521,6 +525,12 @@ const Verificateur = (() => {
         if (e.type === 'objet') verifierId('objets', e.objet, `L'amélioration « ${a.nom || a.id} »`);
         if (e.type === 'perk') verifierId('perks', e.perk, `L'amélioration « ${a.nom || a.id} »`);
       }
+    }
+    // Tafl 1.13 : les habitants nommés et les relations parlent de personnages et d'objets du jeu.
+    if (gestionActif) for (const id of gestionR.habitants_noms || []) verifierId('personnages', id, 'Les habitants nommés (Réglages › Modules › Gestion)');
+    for (const r of liste('relations')) {
+      verifierId('personnages', r.id, `La relation « ${r.id} » (Données › Relations)`);
+      for (const o of [...(r.adore || []), ...(r.aime || []), ...(r.deteste || [])]) verifierId('objets', o, `Les goûts de « ${r.id} » (Données › Relations)`);
     }
 
     // --- 5. Scripts JS et variables (Tafl 0.31) ---

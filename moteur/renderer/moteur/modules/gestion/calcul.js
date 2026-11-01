@@ -115,7 +115,13 @@ const GestionCalcul = (() => {
       rapport_bilan: g.rapport_bilan !== false, prevision: g.prevision !== false, carnet_resume: g.carnet_resume !== false,
       // pastilles (true) : une ressource sans icône a une pastille de couleur avec son initiale ; textes : les
       // mots des écrans (le catalogue commun/modules.js donne les clés et les défauts ; vide : le défaut).
-      pastilles: g.pastilles !== false, textes: lesTextes(g.textes) };
+      pastilles: g.pastilles !== false, textes: lesTextes(g.textes),
+      // Saga 1.15 : les habitants nommés : le n-ième habitant (dans l'ordre d'arrivée) est le n-ième
+      // personnage de la liste (son nom, son apparence ; on peut lui parler). Au-delà, des anonymes.
+      habitants_noms: [...new Set((Array.isArray(g.habitants_noms) ? g.habitants_noms : []).filter((x) => typeof x === 'string' && x))].slice(0, 200) };
+    // Les noms des personnages, pour les phrases (« Brune s'installe au domaine »).
+    const persos = new Map((donnees?.personnages?.personnages || []).filter((p) => p && p.id).map((p) => [p.id, texte(p.nom, 60) || p.id]));
+    reglages.noms = reglages.habitants_noms.map((id) => persos.get(id) || id);
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
   }
@@ -431,12 +437,13 @@ const GestionCalcul = (() => {
     if (faim && d.reglages.faim === 'departs' && etat.faim >= d.reglages.faim_nuits && etat.habitants > 0) {
       partis = 1;
       etat.habitants -= 1;
-      raconter(`Un habitant a eu faim ${etat.faim} nuits de suite : il quitte le domaine.`, 'alerte');
+      const qui = nommes(d, etat.habitants, etat.habitants + 1);
+      raconter(qui.length ? `${qui[0]} a eu faim ${etat.faim} nuits de suite et quitte le domaine.` : `Un habitant a eu faim ${etat.faim} nuits de suite : il quitte le domaine.`, 'alerte');
     }
     let arrives = 0;
     if ((!faim || d.reglages.faim === 'rien') && d.reglages.arrivees > 0) {
       arrives = Math.max(0, Math.min(d.reglages.arrivees, logement(d, etat) - etat.habitants));
-      if (arrives) { etat.habitants += arrives; raconter(arrives > 1 ? `${arrives} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.'); }
+      if (arrives) { raconter(arrivee(d, etat.habitants, etat.habitants + arrives)); etat.habitants += arrives; }
     }
     // 6. La capacité du stock.
     const cap = capacite(d);
@@ -452,6 +459,17 @@ const GestionCalcul = (() => {
     for (const [r, b] of Object.entries(bilan)) { b.avant = avant[r] || 0; b.apres = etat.stock[r] || 0; }
     const lignes = [...(Object.keys(produit).length ? [`Production : ${dire(d, produit)}.`] : []), ...evenements.map((x) => x.texte)];
     return { etat, lignes, termines, arrives, partis, bilan, evenements };
+  }
+
+  // Saga 1.15 : les noms des habitants de rang a à b - 1 (ceux qui ont un nom).
+  const nommes = (d, a, b) => (d.reglages.noms || []).slice(Math.max(0, a), Math.max(0, b));
+  const etListe = (l) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} et ${l[l.length - 1]}` : l[0] || '');
+  // L'arrivée des habitants de rang a à b - 1 : par leur nom s'ils en ont, sinon comptés.
+  function arrivee(d, a, b) {
+    const noms = nommes(d, a, b), autres = b - a - noms.length;
+    if (!noms.length) return autres > 1 ? `${autres} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.';
+    const qui = etListe([...noms, ...(autres ? [autres > 1 ? `${autres} autres habitants` : 'un autre habitant'] : [])]);
+    return `${qui} ${b - a > 1 ? 's\'installent' : 's\'installe'} au domaine.`;
   }
 
   // Saga 1.13 : des noms regroupés : ['Maison', 'Maison', 'Ferme'] → « Maison ×2, Ferme ».
@@ -475,7 +493,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
+  return { nommes, arrivee, etListe, definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

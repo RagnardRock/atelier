@@ -23,6 +23,10 @@
 // Saga 1.10 : quand le jeu a une horloge, ils suivent un emploi du temps (horaires) : au travail de
 // heure_travail à heure_fin (avec quelques pas dehors de temps en temps), libres avant et après (ils
 // flânent, rendent visite à un voisin, rentrent), et chez eux de heure_coucher à heure_lever.
+//
+// Saga 1.15 : les premiers habitants peuvent avoir un nom (habitants_noms : des personnages du jeu, dans
+// l'ordre d'arrivée). Ils en ont l'apparence, le rapport les nomme, et ce sont des figurants à qui l'on parle
+// (qui) : le moteur demande alors aux modules ce qu'ils disent (le module relations répond).
 
 (() => {
   const C = GestionCalcul;
@@ -101,6 +105,9 @@
       items.push(section(T.habitants));
       const place = em.logement - em.habitants;
       items.push({ texte: T.loges, detail: `${em.habitants} / ${em.logement}`, sous: place > 0 ? `${pluriel(place, 'place')} pour de nouveaux venus` : em.logement ? 'tout est occupé : un nouveau logement en attirerait d\'autres' : 'aucun logement pour l\'instant' });
+      // Saga 1.15 : les habitants nommés, par leur nom.
+      const noms = C.nommes(d, 0, em.habitants);
+      if (noms.length) items.push({ texte: T.qui_vit_ici, sous: C.etListe([...noms, ...(em.habitants > noms.length ? [pluriel(em.habitants - noms.length, 'autre')] : [])]) });
       if (em.demandes) items.push({ texte: T.travail, detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes}`, sous: em.libres ? `${pluriel(em.libres, 'habitant')} sans travail` : '' });
       if (Object.keys(d.reglages.repas).length && em.habitants) {
         const faut = Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]));
@@ -206,7 +213,7 @@
       // Saga 1.10 : en arrivant sur la carte, chacun est où l'heure le veut : au travail pendant le travail,
       // sinon chez lui (la nuit, il y reste).
       const p = per === 'travail' && w ? w : m;
-      gens.push({ maison: m, travail: w, x: p.x, y: p.y, de: null, t: 0, chemin: [], dedans: true, attente: hasard(0.3, 6), ensuite: w ? 'travail' : 'flaner',
+      gens.push({ rang: i, maison: m, travail: w, x: p.x, y: p.y, de: null, t: 0, chemin: [], dedans: true, attente: hasard(0.3, 6), ensuite: w ? 'travail' : 'flaner',
         periode: per, direction: 'bas', pas: 0, couleur: COULEURS[i % COULEURS.length] });
     }
     // Les portes de tous les bâtiments finis : on y rend visite le soir.
@@ -513,8 +520,10 @@
       return foule.gens.filter((h) => !h.dedans).map((h) => {
         const p = h.chemin[0];
         const k = p ? Math.min(1, h.t / SECONDES_PAR_CASE) : 0;
-        return { x: (h.x + (p ? (p.x - h.x) * k : 0)) * s, y: (h.y + (p ? (p.y - h.y) * k : 0)) * s, direction: h.direction,
-          pas: p && k < 0.5 ? h.pas : 0, personnage: d.reglages.promeneur_perso, couleur: h.couleur };
+        // Saga 1.15 : un habitant nommé a l'apparence de son personnage, et on peut lui parler (qui).
+        const nom = d.reglages.habitants_noms[h.rang] || '';
+        return { id: h.rang, x: (h.x + (p ? (p.x - h.x) * k : 0)) * s, y: (h.y + (p ? (p.y - h.y) * k : 0)) * s, direction: h.direction,
+          pas: p && k < 0.5 ? h.pas : 0, personnage: nom || d.reglages.promeneur_perso, qui: nom, couleur: (nom && o.jeu.personnages?.get?.(nom)?.couleur) || h.couleur };
       });
     },
 
@@ -610,8 +619,12 @@
         o.hote.rafraichir?.();
         if (o.c.annoncer !== false) {
           const k = Math.abs(r.change);
-          if (r.change > 0) await o.narrer(k > 1 ? `${k} habitants s'installent au domaine.` : 'Un habitant s\'installe au domaine.');
-          else if (r.change < 0) await o.narrer(k > 1 ? `${k} habitants quittent le domaine.` : 'Un habitant quitte le domaine.');
+          const avant = r.etat.habitants - r.change;
+          if (r.change > 0) await o.narrer(C.nommes(d, avant, r.etat.habitants).length ? C.arrivee(d, avant, r.etat.habitants) : k > 1 ? `${k} habitants s'installent au domaine.` : 'Un habitant s\'installe au domaine.');
+          else if (r.change < 0) {
+            const partis = C.nommes(d, r.etat.habitants, avant);
+            await o.narrer(partis.length ? `${C.etListe(partis)} ${partis.length > 1 || k > 1 ? 'quittent' : 'quitte'} le domaine.` : k > 1 ? `${k} habitants quittent le domaine.` : 'Un habitant quitte le domaine.');
+          }
           else if (o.c.action !== 'retirer') await o.narrer('Il n\'y a plus de place pour loger quelqu\'un.');
         }
         return { habitants: r.etat.habitants, change: r.change };
@@ -691,7 +704,7 @@
     pourScript(o) {
       const e = etatDe(o);
       const em = C.emplois(defs(o.jeu), e);
-      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste })) };
+      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, noms: defs(o.jeu).reglages.habitants_noms.slice(0, em.habitants), logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste })) };
     },
   });
 })();

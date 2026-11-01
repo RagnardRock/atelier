@@ -20,7 +20,7 @@
 //                                          (Tafl les montre ; vide dans le jeu : le défaut)
 //   }
 //
-// Le premier module est « gestion » (Saga 1.5, Tafl 1.3) ; puis « roguelite » (Saga 1.14, Tafl 1.12).
+// Le premier module est « gestion » (Saga 1.5, Tafl 1.3) ; puis « roguelite » (Saga 1.14, Tafl 1.12) et « relations » (Saga 1.15, Tafl 1.13).
 
 const ModulesJeu = (() => {
   const CATALOGUE = {
@@ -71,6 +71,48 @@ const ModulesJeu = (() => {
         mange: ['mangé', 'Bilan : ce qui a été mangé'],
         utilise: ['utilisé', 'Bilan : ce que les bâtiments ont utilisé'],
         perdu: ['perdu', 'Bilan : ce qui a été perdu (stock plein)'],
+        // Saga 1.15 : les habitants nommés.
+        qui_vit_ici: ['Qui vit ici', 'Écran du domaine : la ligne des habitants nommés'],
+      },
+    },
+    // Saga 1.15, Tafl 1.13 : moteur/renderer/moteur/modules/relations/.
+    relations: {
+      nom: 'Relations',
+      description: 'Des liens avec les personnages du jeu : une affinité qui monte quand on leur parle (une fois par jour) ou qu\'on leur offre un objet, selon leurs goûts. Chaque niveau d\'affinité débloque leurs paroles, et les événements peuvent tester le niveau pour débloquer leurs propres scènes. Avec le module Gestion, on parle aussi aux habitants nommés qui se promènent.',
+      donnees: ['relations'],
+      moments: {
+        relation_niveau: { nom: 'L\'affinité avec un personnage passe un niveau', infos: { personnage: 'L\'id du personnage', niveau: 'Le numéro du nouveau niveau (0 = le premier)', nom: 'Le nom du niveau (Ami…)', avant: 'Le numéro du niveau d\'avant' } },
+      },
+      commandes: {
+        relation_parler: { nom: 'Parler à un personnage (affinité du jour et ses paroles)' },
+        relation_offrir: { nom: 'Offrir un objet à un personnage' },
+        relation_points: { nom: 'Changer l\'affinité avec un personnage' },
+        relation_ecran: { nom: 'Ouvrir l\'écran des relations' },
+      },
+      conditions: {
+        relation_niveau: { nom: 'L\'affinité avec un personnage atteint un niveau' },
+        relation_parle: { nom: 'Le joueur a déjà parlé à ce personnage aujourd\'hui' },
+      },
+      // Les mots des écrans et des réactions (modules_reglages.relations.textes). {nom} : le nom du
+      // personnage ; {niveau} : le nom du niveau ; {joueur} : le nom du joueur.
+      textes: {
+        bonjour: ['Bonjour, {joueur} !', 'Ce que dit un personnage sans paroles écrites'],
+        niveau_monte: ['{nom} et toi : {niveau} !', 'Quand l\'affinité passe un niveau'],
+        merci_adore: ['Oh ! J\'adore ça, merci !', 'Un cadeau qu\'il adore (sans texte écrit pour lui)'],
+        merci_aime: ['Merci, c\'est gentil !', 'Un cadeau qu\'il aime'],
+        merci_neutre: ['Merci.', 'Un cadeau qui ne lui fait ni chaud ni froid'],
+        merci_deteste: ['Euh… merci quand même.', 'Un cadeau qu\'il n\'aime pas'],
+        deja_cadeau: ['Tu lui as déjà offert quelque chose aujourd\'hui.', 'Plus de cadeau possible aujourd\'hui'],
+        rien_a_offrir: ['Tu n\'as rien à offrir.', 'Le sac est vide'],
+        offrir: ['Offrir', 'Le titre de la liste des cadeaux'],
+        choix_offrir: ['Offrir quelque chose', 'Après avoir parlé à un habitant qui se promène : offrir'],
+        choix_rien: ['Au revoir', 'Après avoir parlé à un habitant qui se promène : partir'],
+        parle: ['parlé aujourd\'hui', 'Écran : déjà vu aujourd\'hui'],
+        pas_parle: ['pas encore vu aujourd\'hui', 'Écran : pas encore vu aujourd\'hui'],
+        adore: ['adore', 'Écran : ce qu\'il adore'],
+        aime: ['aime', 'Écran : ce qu\'il aime'],
+        deteste: ['n\'aime pas', 'Écran : ce qu\'il n\'aime pas'],
+        vide: ['Tu ne connais encore personne.', 'Écran : personne à montrer'],
       },
     },
     // Saga 1.14, Tafl 1.12 : moteur/renderer/moteur/modules/roguelite/.
