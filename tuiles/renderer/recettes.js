@@ -689,51 +689,43 @@ const Recettes = (() => {
     return [(px * b[1] - py * b[0]) / det, (a[0] * py - a[1] * px) / det];
   }
 
-  // Une maison à toit en pignon, vue de 3/4 d'en haut : la profondeur monte vers le haut et un peu
-  // vers la droite (on voit le dessus du toit et le mur de droite). Le pan gauche du toit, tourné vers
-  // la lumière, est clair ; le pan droit et le mur de droite sont dans l'ombre. Les rangées d'ardoises
-  // suivent le toit, les planches de rive et l'égout ont une épaisseur, et le toit déborde du pignon
-  // et des murs en y jetant son ombre.
+  // Une maison à toit en pignon vue de 3/4 : le toit pointu (pan gauche éclairé, pan droit à l'ombre,
+  // faîtage au milieu), le pignon de face à colombages, puis les murs (crépi en haut, planches en bas),
+  // la porte, les fenêtres et le soubassement.
   function maisonPignon(B, g) {
     const W = B.l * 16, H = B.h * 16, f = feuille(W, H);
-    const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.vitre, P = RAMPES.pierre, Fe = RAMPES.feuillage, A = RAMPES.ardoise;
+    const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.vitre, P = RAMPES.pierre, Fe = RAMPES.feuillage;
     const rnd = hasard(g + 307);
-    const S = 2, D = 24;                          // la profondeur : 2 px à droite, 24 px vers le haut
-    const F0 = 4, F1 = W - 11, cx = (F0 + F1) / 2; // la façade
-    const ga = 28, egout = 48, base = H - 5, mid = egout + 13;
-    const sombre = (c, t) => melange(c, '#141024', t);
-    // --- Le mur de droite (dans l'ombre), vu en biais.
-    for (let x = F1 + 1; x <= F1 + S; x++) {
-      const k = x - F1;
-      for (let y = egout - (D / S) * k; y <= base - (D / S) * k; y++) {
-        const y0 = y + (D / S) * k;
-        let c = y0 < mid ? M[1] : (x % 2 ? Bo[1] : Bo[0]);
-        if (y0 >= base - 2) c = A[1];
-        if (k === 1) c = sombre(c, 0.3);
-        f.set(x, Math.round(y), c);
-      }
-    }
-    // --- La façade : crépi en haut, planches en bas, colombages, soubassement.
-    for (let y = egout + 1; y <= base; y++) for (let x = F0; x <= F1; x++) {
-      let c;
-      if (y >= base - 2) c = y === base - 2 ? A[3] : (x % 6 === 0 ? A[1] : A[2]);
-      else if (y < mid) c = M[3];
-      else c = (x - F0) % 4 === 0 ? Bo[1] : (x - F0) % 4 === 1 ? Bo[3] : Bo[2];
-      f.set(x, y, c);
-    }
-    for (let k = 0; k < 30; k++) f.set(F0 + 3 + Math.floor(rnd() * (F1 - F0 - 6)), egout + 4 + Math.floor(rnd() * (mid - egout - 6)), M[2]);
-    f.rect(F0, mid, F1 - F0 + 1, 2, Bo[1]); f.rect(F0, mid, F1 - F0 + 1, 1, Bo[3]);
-    for (const x of [F0, F1 - 2]) { f.rect(x, egout + 1, 3, base - egout - 3, Bo[2]); f.rect(x, egout + 1, 1, base - egout - 3, Bo[3]); f.rect(x + 2, egout + 1, 1, base - egout - 3, Bo[0]); }
-    // Une fenêtre enfoncée : cadre blanc, l'ombre du linteau sur la vitre, reflet, appui.
+    const sombre = (c, t) => melange(c, '#141024', t), clairci = (c, t) => melange(c, '#fff8e8', t);
+    const xl = 1, xr = W - 8, cx = Math.floor((xl + xr) / 2);
+    const haut = 1, epaule = 18, egout = 46, base = H - 4;
+    const demi = (y) => (y < epaule ? Math.round(((y - haut) / (epaule - haut)) * (cx - xl)) + 1 : cx - xl + 1);
+    // Le pignon de face : un triangle sous le faîtage.
+    const ga = 24, gl = Math.min(20, cx - xl - 6);
+    const dansPignon = (x, y) => y >= ga && y <= egout && Math.abs(x + 0.5 - (cx + 0.5)) <= ((y - ga) / (egout - ga)) * gl;
+    // Les murs (d'abord, le toit déborde par-dessus).
+    const ml = xl + 2, mr = xr - 2, mh = egout + 1, mid = egout + 12;
+    f.rect(ml, mh, mr - ml + 1, mid - mh, M[3]);
+    for (let k = 0; k < 30; k++) f.set(ml + Math.floor(rnd() * (mr - ml)), mh + 2 + Math.floor(rnd() * (mid - mh - 3)), M[2]);
+    for (let y = mid; y < base - 2; y++) for (let x = ml; x <= mr; x++) f.set(x, y, (x - ml) % 4 === 0 ? Bo[1] : (x - ml) % 4 === 1 ? Bo[3] : Bo[2]);
+    f.rect(ml, mid, mr - ml + 1, 2, Bo[1]); f.rect(ml, mid, mr - ml + 1, 1, Bo[3]);
+    for (const x of [ml, mr - 2]) { f.rect(x, mh, 3, base - mh, Bo[2]); f.rect(x, mh, 1, base - mh, Bo[3]); f.rect(x + 2, mh, 1, base - mh, Bo[0]); }
+    // Soubassement de pierre sombre.
+    f.rect(ml, base - 2, mr - ml + 1, 3, RAMPES.ardoise[2]); f.rect(ml, base - 2, mr - ml + 1, 1, RAMPES.ardoise[3]);
+    for (let x = ml + 3; x < mr; x += 6) f.set(x, base - 1, RAMPES.ardoise[1]);
+    // L'ombre du toit sur le haut des murs.
+    for (let x = ml; x <= mr; x++) for (const [dy, t] of [[0, 0.6], [1, 0.45], [2, 0.3], [3, 0.12]]) { const c = f.get(x, mh + dy); if (c) f.set(x, mh + dy, melange(c, '#1a1424', t)); }
+    // Une fenêtre : cadre blanc, vitre bleue avec reflet, croisillon, et une jardinière fleurie dessous.
     const blanc = M[4];
     const fenetre = (x, y, l, h, { jardiniere = false, croix = true } = {}) => {
+      // Enfoncée : l'ombre du linteau et du côté gauche sur la vitre, un appui qui dépasse.
       f.rect(x - 1, y - 1, l + 2, h + 2, blanc);
       f.rect(x + l + 1, y, 1, h + 1, M[1]);
       f.rect(x, y, l, h, V[2]);
       f.rect(x, y, l, 2, V[0]); f.rect(x, y, 1, h, V[1]);
       for (let k = 0; k < Math.min(l, h) - 3; k++) f.set(x + l - 2 - k, y + 2 + k, V[3]);
       f.set(x + 1, y + 2, V[4]); f.set(x + 2, y + 2, V[4]);
-      if (croix) f.rect(x + Math.floor(l / 2), y, 1, h, blanc);
+      if (croix) { f.rect(x + Math.floor(l / 2), y, 1, h, blanc); }
       f.rect(x - 2, y + h + 1, l + 4, 1, blanc); f.rect(x - 2, y + h + 2, l + 4, 1, M[1]);
       if (jardiniere) {
         f.rect(x - 1, y + h + 2, l + 2, 3, Bo[2]); f.rect(x - 1, y + h + 2, l + 2, 1, Bo[3]); f.rect(x - 1, y + h + 4, l + 2, 1, Bo[0]);
@@ -742,102 +734,80 @@ const Recettes = (() => {
       }
     };
     const porte = (x, l) => {
-      const y = mid - 5, h = base - y;
+      const y = mid - 4, h = base - y;
       f.rect(x - 2, y - 2, l + 4, h + 2, blanc); f.rect(x - 1, y - 1, l + 2, h + 1, Bo[0]);
       for (let i = x; i < x + l; i++) for (let j = y; j < base; j++) f.set(i, j, (i - x) % 3 === 2 ? Bo[1] : Bo[2]);
-      f.rect(x, y, l, 2, Bo[0]); f.rect(x, y, 1, h, Bo[1]);
-      f.rect(x + 2, y + 3, l - 4, 3, V[2]); f.rect(x + 2, y + 3, l - 4, 1, V[1]);
-      f.rect(x + l - 3, y + Math.floor(h / 2) + 1, 2, 1, FLEURS[1]);
-      f.rect(x - 3, base + 1, l + 6, 2, P[3]); f.rect(x - 3, base + 2, l + 6, 1, P[1]);
+      f.rect(x, y, l, 2, Bo[0]); f.rect(x, y, 1, h, Bo[1]); f.rect(x + l - 1, y + 2, 1, h - 2, Bo[3]);
+      f.rect(x + 1, y + 2, l - 2, 3, V[2]); f.rect(x + 1, y + 2, l - 2, 1, V[3]);
+      f.rect(x + l - 3, y + Math.floor(h / 2) + 1, 2, 2, FLEURS[1]);
+      f.rect(x - 2, base, l + 4, 2, P[3]); f.rect(x - 2, base + 1, l + 4, 1, P[2]);
     };
     const porteX = B.porte * 16 + 3;
     porte(porteX, 10);
     if (B.vitrine) {
-      const vx = porteX + 16, vl = F1 - 5 - vx;
-      fenetre(vx, egout + 9, vl, 11, { croix: false });
-      f.rect(vx, egout + 17, vl, 3, Bo[2]); f.rect(vx, egout + 17, vl, 1, Bo[3]);
-      for (let i = vx + 2; i < vx + vl - 3; i += 5) { f.rect(i, egout + 14, 3, 3, i % 2 ? '#d84a3a' : '#f0c040'); f.set(i, egout + 14, '#fff4e0'); }
-      // L'auvent : une bande rayée en pente, qui avance et jette son ombre.
-      const ax = vx - 3, al = vl + 6, ay = egout + 3;
-      for (let i = 0; i < al; i++) {
-        const c = Math.floor(i / 3) % 2 ? '#f4efe6' : B.auvent;
-        f.rect(ax + i, ay, 1, 4, c); f.set(ax + i, ay, melange(c, '#ffffff', 0.35));
-        if (i % 3 !== 1) f.set(ax + i, ay + 4, sombre(c, 0.2));
-        for (const dy of [5, 6]) { const o = f.get(ax + i, ay + dy); if (o) f.set(ax + i, ay + dy, sombre(o, dy === 5 ? 0.45 : 0.25)); }
-      }
-      // L'enseigne qui pend à gauche de la porte.
-      f.rect(F0 + 4, egout + 6, porteX - F0 - 8, 7, Bo[0]); f.rect(F0 + 5, egout + 7, porteX - F0 - 10, 5, Bo[3]); f.rect(F0 + 5, egout + 7, porteX - F0 - 10, 1, Bo[4]);
-      f.rect(F0 + 4 + Math.floor((porteX - F0 - 8) / 2) - 1, egout + 8, 3, 3, FLEURS[1]);
+      // La vitrine, l'auvent rayé au-dessus, et l'enseigne.
+      const vx = porteX + 15, vl = mr - 4 - vx;
+      fenetre(vx, mh + 6, vl, 11, { croix: false });
+      f.rect(vx, mh + 14, vl, 3, Bo[2]); f.rect(vx, mh + 14, vl, 1, Bo[3]);
+      for (let i = vx + 2; i < vx + vl - 3; i += 5) { f.rect(i, mh + 11, 3, 3, i % 2 ? '#d84a3a' : '#f0c040'); f.set(i, mh + 11, '#fff4e0'); }
+      const ax = vx - 2, al = vl + 4;
+      for (let i = 0; i < al; i++) { const c = Math.floor(i / 3) % 2 ? '#f4efe6' : B.auvent; f.rect(ax + i, mh + 1, 1, 4, c); if (i % 3 !== 1) f.set(ax + i, mh + 5, c); }
+      f.rect(ax, mh + 1, al, 1, melange(B.auvent, '#ffffff', 0.4));
+      for (let i = 0; i < al; i++) { const c = f.get(ax + i, mh + 6); if (c) f.set(ax + i, mh + 6, melange(c, '#1a1424', 0.3)); }
+      f.rect(ml + 3, mh + 4, porteX - ml - 6, 6, Bo[1]); f.rect(ml + 4, mh + 5, porteX - ml - 8, 4, Bo[3]);
+      f.rect(ml + 4 + Math.floor((porteX - ml - 8) / 2) - 1, mh + 6, 3, 2, FLEURS[1]);
     } else {
-      fenetre(F0 + 5, egout + 6, 6, 6);
-      for (let x = porteX + 16; x + 8 <= F1 - 4; x += 12) fenetre(x, egout + 5, 8, 6, { jardiniere: true });
+      fenetre(ml + 4, mh + 4, 6, 6);
+      const fx = porteX + 15;
+      for (let x = fx; x + 8 <= mr - 3; x += 12) fenetre(x, mh + 3, 8, 6, { jardiniere: true });
     }
-    // L'ombre du toit qui déborde, sur le haut de la façade.
-    for (let x = F0; x <= F1; x++) for (const [dy, t] of [[1, 0.6], [2, 0.45], [3, 0.25]]) { const c = f.get(x, egout + dy); if (c) f.set(x, egout + dy, sombre(c, t)); }
-    // --- Le toit : deux pans (parallélogrammes) qui partent de l'avant et montent vers l'arrière.
-    const ap = [cx, ga - 3];                       // la pointe avant du faîtage
-    const pg = [F0 - 3, egout + 1], pd = [F1 + 3, egout + 1]; // les coins avant de l'égout
-    const prof = [S, -D];
-    const pans = [
-      { o: pg, a: [ap[0] - pg[0], ap[1] - pg[1]], cote: -1 },
-      { o: pd, a: [ap[0] - pd[0], ap[1] - pd[1]], cote: 1 },
-    ];
-    for (const pan of pans) {
-      const pts = [pan.o, [pan.o[0] + pan.a[0], pan.o[1] + pan.a[1]], [pan.o[0] + pan.a[0] + prof[0], pan.o[1] + pan.a[1] + prof[1]], [pan.o[0] + prof[0], pan.o[1] + prof[1]]];
-      const longueur = Math.hypot(pan.a[0], pan.a[1]);
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        if (!dansPoly(pts, x, y)) continue;
-        const [s, t] = local(pan.o, pan.a, prof, x, y);
-        // Les rangées d'ardoises sont parallèles à l'égout ; les écailles s'alignent le long de la pente.
-        const u = s * longueur, v = t * D;
-        const rang = Math.floor(u / 4), w = (v + (rang % 2) * 3) % 6, dans = u % 4;
-        // La lumière : le pan gauche éclairé (plus encore près du faîtage), le droit dans l'ombre.
-        let n = pan.cote < 0 ? 3 - (s < 0.25 ? 1 : 0) + (s > 0.8 ? 1 : 0) : 1 + (s > 0.75 ? 1 : 0) - (s < 0.2 ? 1 : 0);
-        n = clamp(n, 0, 4);
-        let c = T[n];
-        if (dans < 1) c = T[Math.max(0, n - 2)];                  // le bas d'une rangée, dans l'ombre de la suivante
-        else if (w < 1) c = T[Math.max(0, n - 1)];                // la fente entre deux ardoises
-        else if (dans >= 3 && w < 3) c = T[Math.min(4, n + 1)];   // le haut éclairé d'une ardoise
+    // Le toit.
+    for (let y = haut; y <= egout; y++) {
+      const d = demi(y);
+      for (let x = cx - d + 1; x <= cx + d; x++) {
+        if (dansPignon(x, y)) continue;
+        const cote = x <= cx ? -1 : 1;
+        let c = ecaille(T, x, y, haut, cote);
+        // Le modelé : le pan gauche plus clair près du faîtage et plus sombre vers son bord, le pan
+        // droit de plus en plus sombre en s'éloignant du faîtage ; le bas du toit un peu plus sombre.
+        const t = Math.abs(x + 0.5 - (cx + 1)) / (cx - xl + 1), bas = Math.max(0, (y - (egout - 8)) / 8);
+        c = cote < 0 ? (t < 0.35 ? clairci(c, 0.18 * (1 - t / 0.35)) : sombre(c, 0.25 * (t - 0.35))) : sombre(c, 0.12 + 0.3 * t);
+        if (bas > 0) c = sombre(c, 0.2 * bas);
         f.set(x, y, c);
       }
     }
-    // Le faîtage : une arête claire du côté du pan éclairé.
-    for (let k = 0; k <= D; k++) { const x = Math.round(ap[0] + (S * k) / D), y = Math.round(ap[1] - k); f.set(x, y, T[4]); f.set(x + 1, y, T[1]); }
-    // L'égout de droite : l'épaisseur du toit au-dessus du mur dans l'ombre.
-    for (let k = 0; k <= D; k++) { const x = Math.round(pd[0] + (S * k) / D), y = Math.round(pd[1] - k); f.set(x, y + 1, A[0]); f.set(x - 1, y + 1, T[0]); }
-    // --- Le pignon : un triangle de crépi en retrait, sous les planches de rive.
-    const tri = [[F0, egout + 1], [cx, ga], [F1 + 1, egout + 1]];
-    for (let y = ga; y <= egout; y++) for (let x = F0; x <= F1; x++) {
-      if (!dansPoly(tri, x, y)) continue;
-      f.set(x, y, M[3]);
+    // Le faîtage, de la pointe au pignon.
+    for (let y = haut; y < ga; y++) { f.set(cx, y, T[4]); f.set(cx + 1, y, T[0]); }
+    // Le pignon : crépi, colombages en croix, une petite fenêtre, et les planches de rive.
+    for (let y = ga; y <= egout; y++) for (let x = cx - gl; x <= cx + gl + 1; x++) if (dansPignon(x, y)) f.set(x, y, M[3]);
+    for (let y = ga + 4; y < egout - 1; y++) { f.set(cx, y, Bo[2]); f.set(cx + 1, y, Bo[1]); }
+    fenetre(cx - 2, ga + 9, 6, 5, { croix: false });
+    for (let y = egout - 5; y <= egout - 4; y++) for (let x = cx - gl; x <= cx + gl + 1; x++) if (dansPignon(x, y)) f.set(x, y, y === egout - 5 ? Bo[3] : Bo[1]);
+    for (let y = ga; y <= egout; y++) {
+      const d = Math.round(((y - ga) / (egout - ga)) * gl);
+      for (const [x, c] of [[cx - d, Bo[3]], [cx - d - 1, Bo[1]], [cx + 1 + d, Bo[1]], [cx + 2 + d, Bo[0]]]) f.set(x, y, c);
     }
-    // Colombages : un poteau au milieu, deux écharpes, une poutre en bas.
-    for (let y = ga + 5; y <= egout; y++) { f.set(cx - 0.5, y, Bo[2]); f.set(cx + 0.5, y, Bo[1]); }
-    for (let k = 0; k < 12; k++) for (const [sx, c] of [[-1, Bo[2]], [1, Bo[1]]]) { const x = cx + sx * (3 + k), y = egout - 1 - Math.round(k * 0.7); if (dansPoly(tri, x, y)) f.set(x, y, c); }
-    f.rect(F0, egout - 1, F1 - F0 + 1, 2, Bo[1]); f.rect(F0, egout - 1, F1 - F0 + 1, 1, Bo[3]);
-    fenetre(Math.round(cx) - 3, ga + 9, 6, 5, { croix: false });
-    // L'ombre des planches de rive sur le pignon.
-    for (let y = ga; y <= egout; y++) for (let x = F0; x <= F1; x++) {
-      if (!dansPoly(tri, x, y)) continue;
-      const bordG = !dansPoly(tri, x - 2, y - 1) || !dansPoly(tri, x - 1, y - 2), bordD = !dansPoly(tri, x + 3, y - 1) || !dansPoly(tri, x + 1, y - 3);
-      if (bordG || bordD) f.set(x, y, sombre(f.get(x, y), bordD ? 0.5 : 0.35));
+    // L'ombre des planches de rive sur le pignon (plus forte à droite).
+    for (let y = ga; y <= egout - 6; y++) for (let x = cx - gl; x <= cx + gl + 1; x++) {
+      if (!dansPignon(x, y)) continue;
+      const g1 = !dansPignon(x - 2, y - 1) || !dansPignon(x - 1, y - 2), d1 = !dansPignon(x + 3, y - 1) || !dansPignon(x + 1, y - 3);
+      if (g1 || d1) f.set(x, y, sombre(f.get(x, y), d1 ? 0.45 : 0.3));
     }
-    // Les planches de rive : épaisses, éclairées à gauche, sombres à droite.
-    for (let y = ga - 3; y <= egout + 1; y++) {
-      const k = (y - (ga - 3)) / (egout + 1 - (ga - 3));
-      const xg = Math.round(ap[0] - k * (ap[0] - pg[0])), xd = Math.round(ap[0] + k * (pd[0] - ap[0]));
-      f.set(xg, y, Bo[3]); f.set(xg + 1, y, Bo[2]); f.set(xg - 1, y, Bo[4]);
-      f.set(xd, y, Bo[1]); f.set(xd + 1, y, Bo[0]); f.set(xd - 1, y, Bo[2]);
-    }
-    // --- La cheminée : un petit volume (face avant claire, côté droit sombre, dessus).
+    // L'égout : le bas du toit, plus sombre, de part et d'autre du pignon.
+    for (let x = xl; x <= xr; x++) for (const [y, c] of [[egout - 1, x <= cx ? T[1] : T[0]], [egout, T[0]]]) if (!dansPignon(x, y)) f.set(x, y, c);
+    for (let x = cx - gl - 1; x <= cx + gl + 2; x++) { f.set(x, egout, Bo[0]); f.set(x, egout - 1, Bo[2]); }
+    // La cheminée de pierre claire, sur le pan droit.
     if (B.cheminee) {
-      const kx = Math.round(cx + 9), ky = ga - 18;
-      f.rect(kx, ky, 5, 10, P[3]); f.rect(kx, ky, 1, 10, P[4]);
-      for (let y = ky + 3; y < ky + 10; y += 3) f.rect(kx + 1, y, 4, 1, P[2]);
-      for (let k = 1; k <= 2; k++) for (let y = ky - k * 2; y < ky + 10 - k * 2; y++) f.set(kx + 4 + k, y, P[1]);
-      f.rect(kx - 1, ky - 2, 7, 2, P[4]); f.rect(kx + 1, ky - 3, 5, 1, P[2]); f.set(kx + 2, ky - 2, A[0]); f.set(kx + 3, ky - 2, A[0]);
-      for (let y = ky + 1; y < ky + 12; y++) for (const dx of [7, 8]) { const c = f.get(kx + dx, y); if (c && T.includes(c)) f.set(kx + dx, y, sombre(c, 0.35)); }
+      const kx = cx + Math.round((xr - cx) * 0.45), ky = 6;
+      f.rect(kx, ky, 6, 11, P[3]); f.rect(kx, ky, 1, 11, P[4]); f.rect(kx + 5, ky, 1, 11, P[1]);
+      for (let y = ky + 3; y < ky + 11; y += 3) f.rect(kx + 1, y, 4, 1, P[2]);
+      f.rect(kx - 1, ky - 2, 8, 2, P[4]); f.rect(kx - 1, ky - 1, 8, 1, P[2]);
+      for (let y = ky + 2; y < ky + 13; y++) for (const dx of [6, 7]) { const c = f.get(kx + dx, y); if (c && c !== P[1]) f.set(kx + dx, y, sombre(c, dx === 6 ? 0.5 : 0.3)); }
     }
+    // Le volume des murs : le bord droit de la façade dans l'ombre, le pied plus sombre (le sol).
+    for (let y = mh; y < base + 1; y++) for (let k = 0; k < 4; k++) { const x = mr - k, c = f.get(x, y); if (c) f.set(x, y, sombre(c, 0.3 - k * 0.07)); }
+    for (let y = mh; y < base + 1; y++) { const c = f.get(ml, y); if (c) f.set(ml, y, clairci(c, 0.15)); }
+    for (let x = ml; x <= mr; x++) { const c = f.get(x, base - 3); if (c) f.set(x, base - 3, sombre(c, 0.25)); }
     f.finir({ dx: 5, dy: 3 });
     return f;
   }
