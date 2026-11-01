@@ -36,6 +36,12 @@ const Temps = (() => {
       horloge: ['jeu', 'reelle'].includes(t.horloge) ? t.horloge : 'aucune',
       duree_jour: n(t.duree_jour, 24, 1, 1440),
       heure_depart: n(t.heure_depart, 8, 0, 23),
+      // Saga 1.13 : l'écran du réveil (commande dormir) : son titre ({jour} : le numéro du jour), son en-tête
+      // et sa note ; et le jour dans le carnet : 'auto' (si le jeu a un module), 'oui' ou 'non'.
+      matin_titre: typeof t.matin_titre === 'string' && t.matin_titre.trim() ? t.matin_titre.slice(0, 60) : 'Jour {jour}',
+      matin_entete: typeof t.matin_entete === 'string' ? t.matin_entete.slice(0, 40) : 'Bonjour !',
+      matin_note: typeof t.matin_note === 'string' ? t.matin_note.slice(0, 120) : 'Pendant la nuit…',
+      carnet_jour: ['oui', 'non'].includes(t.carnet_jour) ? t.carnet_jour : 'auto',
     };
   };
 

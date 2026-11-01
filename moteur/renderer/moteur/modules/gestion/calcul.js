@@ -5,7 +5,7 @@
 // Les définitions viennent du dossier du jeu (FORMAT.md › Le module gestion) :
 //   donnees/ressources.json  { ressources: [{ id, nom, description, icone, objet }] }
 //   donnees/batiments.json   { batiments: [{ id, nom, description, cout, jours, production, consommation, maximum }] }
-//   reglages.modules_reglages.gestion  { nom, stock_depart, capacite, menu, construire_menu,
+//   reglages.modules_reglages.gestion  { nom, stock_depart, capacite, menu, construire_menu, rapport_bilan, prevision, carnet_resume,
 //                                        habitants_depart, repas, arrivees }
 // cout, production, consommation et stock_depart sont des listes [{ ressource, nombre }].
 //
@@ -108,9 +108,24 @@ const GestionCalcul = (() => {
       // Saga 1.11 : le lien avec les sorties. butin_au_stock : après un combat gagné, les objets du sac qui
       // représentent une ressource (ressource.objet) vont tout seuls au stock ; perte_defaite : le % de
       // chaque ressource du stock perdu quand le groupe est vaincu (0 : rien, le défaut).
-      butin_au_stock: g.butin_au_stock === true, perte_defaite: entier(g.perte_defaite, 0, 0, 100) };
+      butin_au_stock: g.butin_au_stock === true, perte_defaite: entier(g.perte_defaite, 0, 0, 100),
+      // Saga 1.13 : les écrans. rapport_bilan : le rapport du matin commence par ce qui a bougé dans le stock
+      // (et pourquoi) ; prevision : l'écran du domaine dit ce que la nuit va changer ; carnet_resume : le
+      // stock et les habitants en résumé dans le carnet (Tab). Tous à true par défaut.
+      rapport_bilan: g.rapport_bilan !== false, prevision: g.prevision !== false, carnet_resume: g.carnet_resume !== false,
+      // pastilles (true) : une ressource sans icône a une pastille de couleur avec son initiale ; textes : les
+      // mots des écrans (le catalogue commun/modules.js donne les clés et les défauts ; vide : le défaut).
+      pastilles: g.pastilles !== false, textes: lesTextes(g.textes) };
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
+  }
+
+  // Saga 1.13 : les mots des écrans, ceux du jeu par-dessus les défauts du catalogue.
+  function lesTextes(t) {
+    let cat = typeof ModulesJeu !== 'undefined' ? ModulesJeu : null;
+    if (!cat && typeof require === 'function') try { cat = require('../../../../../commun/modules.js'); } catch { /* hors du dépôt */ }
+    const defauts = cat?.CATALOGUE?.gestion?.textes || {};
+    return Object.fromEntries(Object.entries(defauts).map(([k, [defaut]]) => [k, texte(t?.[k], 60).trim() || defaut]));
   }
 
   function repos(r, nom) {
@@ -354,13 +369,20 @@ const GestionCalcul = (() => {
   //      place pour loger et que tous ont mangé (ou faim 'rien'), des habitants arrivent (ils travaillent à
   //      partir de la nuit suivante) ;
   //   6. le stock est ramené à sa capacité.
-  // Rend { etat, lignes, termines, arrives } (lignes : le rapport du matin). Le même jour une deuxième fois : rien.
+  // Rend { etat, lignes, termines, arrives, partis, bilan, evenements } (lignes : le rapport du matin, en texte).
+  // Saga 1.13 : bilan = { ressource: { avant, apres, produit, mange, consomme, perdu } } (ce qui a bougé dans
+  // le stock, et pourquoi) ; evenements = [{ texte, ton }] : le reste du rapport (ton 'alerte' : un souci).
+  // Le même jour une deuxième fois : rien.
   function finDeJournee(d, e, jour) {
     const n = entier(jour, 0);
-    if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0, partis: 0 };
+    if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0, partis: 0, bilan: {}, evenements: [] };
     const etat = copie(e);
     etat.habitants = entier(etat.habitants, 0, 0, 9999);
-    const lignes = [];
+    const avant = { ...etat.stock };
+    const bilan = {};
+    const noter = (sorte, q) => { for (const [r, k] of Object.entries(q)) { if (!k) continue; bilan[r] = bilan[r] || { produit: 0, mange: 0, consomme: 0, perdu: 0 }; bilan[r][sorte] += k; } };
+    const evenements = [];
+    const raconter = (texte, ton = '') => evenements.push({ texte, ton });
     const retirer = (q) => { for (const [r, k] of Object.entries(q)) { etat.stock[r] -= k; if (!etat.stock[r]) delete etat.stock[r]; } };
     // 1. Les repas : autant d'habitants que le stock peut en nourrir.
     let nourris = etat.habitants;
@@ -369,9 +391,10 @@ const GestionCalcul = (() => {
       nourris = Math.min(etat.habitants, ...Object.entries(repas).map(([r, k]) => Math.floor((etat.stock[r] || 0) / k)));
       const mange = Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * nourris]).filter(([, k]) => k > 0));
       retirer(mange);
+      noter('mange', mange);
       if (nourris < etat.habitants) {
         const suite = { arrivees: ' Personne ne s\'installera tant que tout le monde n\'a pas mangé.', rien: '', departs: ' Personne ne s\'installera tant que tout le monde n\'a pas mangé, et au bout de quelques nuits, des habitants partiront.' }[d.reglages.faim];
-        lignes.push(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}.${suite}`);
+        raconter(`${etat.habitants - nourris} habitant${etat.habitants - nourris > 1 ? 's' : ''} sur ${etat.habitants} n'${etat.habitants - nourris > 1 ? 'ont' : 'a'} pas mangé : il manque ${dire(d, Object.fromEntries(Object.entries(repas).map(([r, k]) => [r, k * etat.habitants - (mange[r] || 0)]).filter(([, k]) => k > 0)))}.${suite}`, 'alerte');
       }
     }
     const faim = nourris < etat.habitants;
@@ -386,44 +409,56 @@ const GestionCalcul = (() => {
       if (b.etat !== 'fini' || !def || !Object.keys(def.production).length) continue;
       if (def.ouvriers > libres) { sansOuvriers.push(def.nom); continue; }
       const m = manque(etat.stock, def.consommation);
-      if (m.length) { lignes.push(`${def.nom} n'a rien produit : il manque ${dire(d, Object.fromEntries(m))}.`); continue; }
+      if (m.length) { raconter(`${def.nom} n'a rien produit : il manque ${dire(d, Object.fromEntries(m))}.`, 'alerte'); continue; }
       libres -= def.ouvriers;
       retirer(def.consommation);
+      noter('consomme', def.consommation);
       for (const [r, q] of Object.entries(def.production)) produit[r] = (produit[r] || 0) + q;
     }
-    if (sansOuvriers.length) lignes.push(`Pas assez d'habitants pour faire tourner : ${sansOuvriers.join(', ')}.`);
+    if (sansOuvriers.length) raconter(`Pas assez d'habitants pour faire tourner : ${grouper(sansOuvriers)}.`, 'alerte');
     for (const [r, q] of Object.entries(produit)) etat.stock[r] = (etat.stock[r] || 0) + q;
-    if (Object.keys(produit).length) lignes.unshift(`Production : ${dire(d, produit)}.`);
-    // 4. Les chantiers.
+    noter('produit', produit);
+    // 4. Les chantiers. Saga 1.13 : une ligne pour tous ceux du même jour (« Maison ×2 »).
     const termines = [];
     for (const b of etat.batiments) {
       if (b.etat !== 'chantier') continue;
       b.reste = Math.max(0, b.reste - 1);
-      if (b.reste === 0) { b.etat = 'fini'; termines.push(b.type); lignes.push(`Chantier terminé : ${nomBatiment(d, b.type)}.`); }
+      if (b.reste === 0) { b.etat = 'fini'; termines.push(b.type); }
     }
+    if (termines.length) raconter(`${termines.length > 1 ? 'Chantiers terminés' : 'Chantier terminé'} : ${grouper(termines.map((t) => nomBatiment(d, t)))}.`);
     // 5. Les départs (faim 'departs') puis les arrivées (pas de faim, ou faim 'rien').
     let partis = 0;
     if (faim && d.reglages.faim === 'departs' && etat.faim >= d.reglages.faim_nuits && etat.habitants > 0) {
       partis = 1;
       etat.habitants -= 1;
-      lignes.push(`Un habitant a eu faim ${etat.faim} nuits de suite : il quitte le domaine.`);
+      raconter(`Un habitant a eu faim ${etat.faim} nuits de suite : il quitte le domaine.`, 'alerte');
     }
     let arrives = 0;
     if ((!faim || d.reglages.faim === 'rien') && d.reglages.arrivees > 0) {
       arrives = Math.max(0, Math.min(d.reglages.arrivees, logement(d, etat) - etat.habitants));
-      if (arrives) { etat.habitants += arrives; lignes.push(arrives > 1 ? `${arrives} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.'); }
+      if (arrives) { etat.habitants += arrives; raconter(arrives > 1 ? `${arrives} nouveaux habitants s'installent.` : 'Un nouvel habitant s\'installe.'); }
     }
     // 6. La capacité du stock.
     const cap = capacite(d);
     if (cap > 0) {
       const perdu = {};
       for (const [r, q] of Object.entries(etat.stock)) if (q > cap) { perdu[r] = q - cap; etat.stock[r] = cap; }
-      if (Object.keys(perdu).length) lignes.push(`Le stock est plein : ${dire(d, perdu)} perdus.`);
+      if (Object.keys(perdu).length) raconter(`Le stock est plein : ${dire(d, perdu)} perdu${Object.values(perdu).reduce((x, y) => x + y, 0) > 1 ? 's' : ''}.`, 'alerte');
+      noter('perdu', perdu);
     }
     // 7. (Saga 1.9) Les sentiers délaissés repoussent un peu.
     repousserUsure(d, etat);
     etat.resolu = n;
-    return { etat, lignes, termines, arrives, partis };
+    for (const [r, b] of Object.entries(bilan)) { b.avant = avant[r] || 0; b.apres = etat.stock[r] || 0; }
+    const lignes = [...(Object.keys(produit).length ? [`Production : ${dire(d, produit)}.`] : []), ...evenements.map((x) => x.texte)];
+    return { etat, lignes, termines, arrives, partis, bilan, evenements };
+  }
+
+  // Saga 1.13 : des noms regroupés : ['Maison', 'Maison', 'Ferme'] → « Maison ×2, Ferme ».
+  function grouper(noms) {
+    const n = new Map();
+    for (const x of noms) n.set(x, (n.get(x) || 0) + 1);
+    return [...n].map(([x, k]) => (k > 1 ? `${x} ×${k}` : x)).join(', ');
   }
 
   // Saga 1.6 : qui travaille où, ce soir (pour l'écran du domaine et les scripts) : les ouvriers que
@@ -440,7 +475,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, nomRessource, nomBatiment, dire, quantites };
+  return { definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

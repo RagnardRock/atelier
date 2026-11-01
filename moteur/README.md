@@ -241,6 +241,16 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **F3** montre les boîtes, les chemins des ennemis et ce qu'ils font.
 - Pour l'instant en solo : le temps réel à plusieurs viendra ensuite (le mode table reste au tour par tour).
 
+## Ce que fait Saga 1.13 : des écrans du domaine plus lisibles (avec Tafl 1.11)
+
+- **Le rapport du matin** se lit sans rien choisir : les chantiers du même type sont regroupés (« Chantiers terminés : Maison ×2, Ferme ×3 »), il commence par **le bilan du stock** (chaque ressource qui a bougé, avec son icône, +3 ou −2, et pourquoi : produit, mangé, utilisé, perdu), et les soucis (la faim, un bâtiment sans ouvriers, le stock plein) ressortent en couleur.
+- **L'écran du domaine** a de vrais titres de section (plus des lignes grisées qu'on croyait choisir), les icônes du stock (celle de la ressource, sinon celle de son objet, sinon une pastille de couleur avec son initiale), ce que **la nuit va changer** (« cette nuit : +1 (3 produits · 2 mangés) »), les places libres, le repas du soir (en orange s'il manque de quoi manger), et les bâtiments regroupés avec ce qu'ils font (« Ferme ×2 · produit 6 Blé par nuit »).
+- **Tout se règle dans Tafl** : les mots des écrans du domaine (`textes`), les pastilles, le résumé, la prévision et le bilan (module gestion), et l'écran du réveil (`temps.matin_titre`, `matin_entete`, `matin_note`, `carnet_jour`).
+- **Construire** : le coût toujours à droite, et dessous ce que le bâtiment apporte, ou ce qui manque.
+- **Le carnet (Tab)** dit le jour à côté de l'heure, montre le stock du domaine en petits jetons avec une ligne sur les habitants et les chantiers, et les icônes des objets du sac.
+- Pour tous les menus (`Menus.liste`) : `section`, `sous`, `ton`, `pastille`, et `lecture: true` (un écran à lire : rien n'est surligné, Action ou Échap ferme). Les colonnes d'image et de PV ne prennent de la place que si une ligne s'en sert.
+- Contrat des modules : `finDeJournee` peut rendre des lignes de menu (`{ texte, detail, sous, image, pastille, ton, section }`), deux lignes de texte identiques n'en font plus qu'une (« ×2 »), et le nouveau `carnet(o)` ajoute des sections au carnet.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

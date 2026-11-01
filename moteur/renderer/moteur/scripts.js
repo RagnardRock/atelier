@@ -318,7 +318,10 @@ const Scripts = (() => {
           if (c.texte) await narrer(c.texte);
           dialogue.fermer();
           const { lignes, jour } = await moteur.dormir({ soigner: c.soigner !== false, heure: c.heure });
-          if (lignes.length) await ui.liste({ titre: `Jour ${jour}`, items: lignes.map((texte) => ({ texte })), annulable: true, note: 'Ce qui s\'est passé pendant la nuit.' });
+          // Saga 1.13 : un écran à lire (rien n'y est à choisir), avec les sections et les icônes des modules.
+          // Ses mots se règlent dans Tafl (Réglages › Ambiance › Le réveil).
+          const r = Temps.reglages(jeu);
+          if (lignes.length) await ui.liste({ titre: r.matin_titre.replace(/\{jour\}/g, String(jour)), entete: r.matin_entete, items: lignes, annulable: true, lecture: true, note: r.matin_note });
           return { jour };
         }
         case 'heure':
