@@ -606,7 +606,22 @@ const CLAUDE_CONSIGNES = [
   '- Animation : animer_tuile plutôt qu\'image par image : cycle de couleurs pour l\'eau, balancement d\'1 pixel pour',
   '  les herbes, scintillement pour les reflets ; 3 à 6 images de 150 à 300 ms, des mouvements petits et doux.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES } });
+// La version courte pour Loki en local (un modèle de 8 à 14 milliards de paramètres a peu de mémoire :
+// le catalogue des actions y prend déjà beaucoup de place). Les mêmes règles, sans les conseils de style.
+const CLAUDE_CONSIGNES_LOCALES = [
+  '- Le jeu ouvert vit dans la fenêtre de Tafl. Pour le lire : infos, catalogue, voir_carte, donnees, voir_donnees.',
+  '  Pour le changer : les actions (plan_carte, poser_tuiles, cartes, evenement, donnee…). Ne modifie jamais les',
+  '  fichiers JSON du dossier de jeu toi-même : passe par les actions.',
+  '- Commence par infos quand tu ne sais pas ce qui est ouvert. S\'il n\'y a pas de jeu : nouveau_jeu.',
+  '- Construire une carte : un plan, puis plan_carte en un appel (pas de poser_tuiles case par case).',
+  '- Pour enregistrer : enregistrer_jeu. Après une grosse modification : verifier.',
+  '- Images : generer_tuiles (ComfyUI, sur la carte graphique de Ragna) pour les sols et les objets détaillés.',
+  '- Tu ne vois pas les images : fie-toi au texte (catalogue, voir_carte sans image).',
+].join('\n');
+// Les actions toujours données au modèle local comme vrais outils (les autres sont dans son catalogue).
+const LOKI_ESSENTIELLES = ['infos', 'catalogue', 'voir_carte', 'plan_carte', 'poser_tuiles', 'enregistrer_jeu', 'annuler'];
+
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES, consignesLocales: CLAUDE_CONSIGNES_LOCALES, essentielles: LOKI_ESSENTIELLES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
