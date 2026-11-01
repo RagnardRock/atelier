@@ -93,7 +93,15 @@ const Temps = (() => {
     return p[0] < p[1] ? h >= p[0] && h < p[1] : h >= p[0] || h < p[1];
   }
 
+  // Saga 1.16 : l'heure est-elle dans la plage [de, a[ ? Elle peut passer minuit (22 → 6) ; de = a : toute la journée.
+  function entre(jeu, partie, de, a) {
+    const h = heure(jeu, partie) ?? 12;
+    const d = ((Math.round(Number(de)) || 0) % 24 + 24) % 24, f = ((Math.round(Number(a)) || 0) % 24 + 24) % 24;
+    if (d === f) return true;
+    return d < f ? h >= d && h < f : h >= d || h < f;
+  }
+
   const texte = (h) => (h === null ? '' : `${Math.floor(h)} h ${String(Math.floor((h % 1) * 60)).padStart(2, '0')}`);
 
-  return { utiliser, reglages, heure, preparer, avancer, regler, lumiere, moment, texte, MOMENTS };
+  return { utiliser, reglages, heure, preparer, avancer, regler, lumiere, moment, entre, texte, MOMENTS };
 })();

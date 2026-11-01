@@ -41,7 +41,8 @@ const Events = (() => {
   const ETATS_QUETE = [['pas_commencee', 'Pas commencée'], ['en_cours', 'En cours'], ['finie', 'Finie']];
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
   // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
-  const ACTIONS_VARIABLE = [['regler', 'La mettre à'], ['ajouter', 'Lui ajouter'], ['retirer', 'Lui retirer']];
+  // Tafl 1.14 (Saga 1.16) : « jour » y note le numéro du jour en cours (pour la condition « Jours écoulés depuis »).
+  const ACTIONS_VARIABLE = [['regler', 'La mettre à'], ['ajouter', 'Lui ajouter'], ['retirer', 'Lui retirer'], ['jour', 'Y noter le jour en cours']];
   const COMPARAISONS = [['>=', 'au moins (≥)'], ['<=', 'au plus (≤)'], ['==', 'égale à (=)'], ['!=', 'différente de (≠)'], ['>', 'plus que (>)'], ['<', 'moins que (<)']];
   // « 12 » → 12, « Bourg » → 'Bourg' (un texte court).
   const valeurVariable = (v) => {
@@ -153,6 +154,7 @@ const Events = (() => {
     const out = new Set();
     const at = ({ ev, map, page }) => out.add(`${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`);
     for (const map of doc.maps) for (const ev of map.events) if (kind === 'personnage' && ev.apparence.personnage === id) out.add(`${map.name} › ${ev.nom || ev.id} (apparence)`);
+    for (const map of doc.maps) for (const ev of map.events) ev.pages.forEach((pg, k) => { if (kind === 'personnage' && pg.apparence?.personnage === id) out.add(`${map.name} › ${ev.nom || ev.id} (apparence, page ${k + 1})`); });
     parcourirJeu(doc, (u) => {
       const c = u.commande || u.condition;
       if (kind === 'personnage' && u.commande?.type === 'dire' && quiReel(c.qui, u.ev) === id) at(u);
@@ -259,14 +261,16 @@ const Events = (() => {
         { key: 'id', label: 'Variable', type: 'text', value: c.id, list: 'tafl-variables', placeholder: 'pieces-trouvees' },
         { key: 'action', label: 'Action', type: 'select', value: c.action, choices: ACTIONS_VARIABLE },
         { key: 'valeur', label: 'Valeur', type: 'text', value: String(c.valeur ?? 0), placeholder: '1' },
-        { type: 'info', text: 'Une variable retient un nombre (pièces trouvées, réputation, nombre de victoires) ou un texte, pour tout le jeu. Elle vaut sa valeur de départ (Données › Variables), sinon 0. Les pages et les « si » la testent (condition « Une variable »), les scripts JS la lisent avec saga.variable().' },
+        { type: 'info', text: 'Une variable retient un nombre (pièces trouvées, réputation, nombre de victoires) ou un texte, pour tout le jeu. Elle vaut sa valeur de départ (Données › Variables), sinon 0. Les pages et les « si » la testent (condition « Une variable »), les scripts JS la lisent avec saga.variable(). « Y noter le jour en cours » (la valeur ne sert pas) : pour la condition « Jours écoulés depuis », deux jours après le duel, une semaine après l\'arrivée.' },
       ],
       depuis: (v) => {
         const action = pick(v.action, ACTIONS_VARIABLE, 'regler');
+        if (action === 'jour') return { type: 'variable', id: Doc.slug(v.id, ''), action, valeur: 0 };
         return { type: 'variable', id: Doc.slug(v.id, ''), action, valeur: action === 'regler' ? valeurVariable(v.valeur) : Number(String(v.valeur).replace(',', '.')) || 0 };
       },
       valide: (c) => (c.id ? null : 'Donne un nom à la variable.'),
-      resume: (doc, c) => (c.action === 'regler' ? `Variable « ${nomVariable(doc, c.id)} » = ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur}`
+      resume: (doc, c) => (c.action === 'jour' ? `Variable « ${nomVariable(doc, c.id)} » = le jour en cours`
+        : c.action === 'regler' ? `Variable « ${nomVariable(doc, c.id)} » = ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur}`
         : `Variable « ${nomVariable(doc, c.id)} » ${c.action === 'retirer' ? '−' : '+'} ${c.valeur}`),
     },
     attendre: {
@@ -918,6 +922,31 @@ const Events = (() => {
     depuis: (v) => ({ type: 'jour', comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: clamp(Math.round(v.valeur) || 1, 1, 99999) }),
   };
 
+  // --- Tafl 1.14 (Saga 1.16) : les jours écoulés depuis un fait, et l'heure précise ---
+  CONDITIONS.jours_depuis = {
+    nom: 'Jours écoulés depuis un jour noté',
+    nouveau: () => ({ type: 'jours_depuis', variable: '', comparaison: '>=', valeur: 2 }),
+    champs: (doc, c) => [
+      { key: 'variable', label: 'Le jour noté dans la variable', type: 'text', value: c.variable, list: 'tafl-variables', placeholder: 'jour-duel' },
+      { key: 'comparaison', label: 'Les jours passés depuis sont', type: 'select', value: c.comparaison, choices: COMPARAISONS },
+      { key: 'valeur', label: 'Jours', type: 'number', value: c.valeur, min: 0, max: 99999 },
+      { type: 'info', text: 'Note d\'abord le jour avec le bloc Variable › « Y noter le jour en cours » (à la fin du duel, à l\'arrivée d\'une lettre). Ensuite, « au moins 2 » est vrai deux jours plus tard (après deux nuits). Tant que rien n\'est noté (la variable vaut 0), la condition est fausse.' },
+    ],
+    depuis: (v) => ({ type: 'jours_depuis', variable: Doc.slug(v.variable, ''), comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: clamp(Math.round(v.valeur) || 0, 0, 99999) }),
+    valide: (c) => (c.variable ? null : 'Quelle variable garde le jour noté ?'),
+  };
+  const HEURES = Array.from({ length: 24 }, (_, h) => [String(h), `${h} h`]);
+  CONDITIONS.heure = {
+    nom: 'L\'heure (de telle heure à telle heure)',
+    nouveau: () => ({ type: 'heure', de: 8, a: 12 }),
+    champs: (doc, c) => [
+      { key: 'de', label: 'À partir de', type: 'select', value: String(c.de), choices: HEURES },
+      { key: 'a', label: 'Jusqu\'à (non comprise)', type: 'select', value: String(c.a), choices: HEURES },
+      { type: 'info', text: 'Selon l\'horloge du jeu (Réglages › Jour et nuit). La plage peut passer minuit (de 22 h à 6 h). Les mêmes heures des deux côtés : toute la journée. Sans horloge, il est toujours midi.' },
+    ],
+    depuis: (v) => ({ type: 'heure', de: clamp(Math.round(v.de) || 0, 0, 23), a: clamp(Math.round(v.a) || 0, 0, 23) }),
+  };
+
   // --- Tafl 1.3 (Saga 1.5) : le module « gestion » (Réglages › Règles du jeu › Modules) ---
   // Ses commandes et conditions ne sont proposées que si le jeu l'active (modules : comme packs).
   const MODULE_GESTION = ['gestion'];
@@ -1252,6 +1281,8 @@ const Events = (() => {
     if (c.type === 'jdr_origine') return `un héros est ${nomData(doc, 'origines', c.origine)}`;
     if (c.type === 'jdr_niveau') return `un héros est au moins niveau ${c.min}`;
     if (c.type === 'jour') return `le jour ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
+    if (c.type === 'jours_depuis') return `jours depuis « ${nomVariable(doc, c.variable)} » ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
+    if (c.type === 'heure') return `de ${c.de} h à ${c.a} h`;
     if (c.type === 'gestion_batiment') return `${c.min > 1 ? `au moins ${c.min} × ` : ''}« ${nomData(doc, 'batiments', c.batiment)} » construit`;
     if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
     if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
@@ -1290,6 +1321,8 @@ const Events = (() => {
       case 'jdr_origine': return { type: 'jdr_origine', origine: str(c.origine) };
       case 'jdr_niveau': return { type: 'jdr_niveau', min: clamp(int(c.min, 1), 1, 20) };
       case 'jour': return { type: 'jour', comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 1), 1, 99999) };
+      case 'jours_depuis': return { type: 'jours_depuis', variable: str(c.variable), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 0), 0, 99999) };
+      case 'heure': return { type: 'heure', de: clamp(int(c.de, 0), 0, 23), a: clamp(int(c.a, 0), 0, 23) };
       case 'gestion_batiment': return { type: 'gestion_batiment', batiment: str(c.batiment), min: clamp(int(c.min, 1), 1, 999) };
       case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment) };
       case 'gestion_stock': return { type: 'gestion_stock', ressource: str(c.ressource), min: clamp(int(c.min, 0), 0, 99999) };
@@ -1354,6 +1387,7 @@ const Events = (() => {
         combats: clamp(int(c.combats, 0), 0, 99), nuit: c.nuit !== false, annoncer: vrai(c.annoncer) };
       case 'variable': {
         const action = pick(c.action, ACTIONS_VARIABLE, 'regler');
+        if (action === 'jour') return { type: 'variable', id: str(c.id), action, valeur: 0 };
         return { type: 'variable', id: str(c.id), action, valeur: action === 'regler' ? valeurVariable(c.valeur ?? 0) : Number(c.valeur) || 0 };
       }
       case 'script': {
@@ -1369,7 +1403,15 @@ const Events = (() => {
       default: return { ...c };
     }
   }
-  const normPage = (p) => ({ conditions: (Array.isArray(p?.conditions) ? p.conditions : []).map(normCondition).filter(Boolean), cache: Boolean(p?.cache), commandes: normListe(p?.commandes) });
+  // Tafl 1.14 (Saga 1.16) : une page peut avoir sa propre apparence (absente : celle de l'événement).
+  const normPage = (p, tileCount = Infinity) => {
+    const out = { conditions: (Array.isArray(p?.conditions) ? p.conditions : []).map(normCondition).filter(Boolean), cache: Boolean(p?.cache), commandes: normListe(p?.commandes) };
+    if (p?.apparence && typeof p.apparence === 'object') {
+      const t = int(p.apparence.tuile, -1);
+      out.apparence = { personnage: str(p.apparence.personnage), tuile: t >= 0 && t < tileCount ? t : -1 };
+    }
+    return out;
+  };
   function normEvent(e, fallbackId, width, height, tileCount = Infinity) {
     const tuile = int(e?.apparence?.tuile, -1);
     return {
@@ -1383,7 +1425,9 @@ const Events = (() => {
       deplacement: pick(e?.deplacement, DEPLACEMENTS, 'fixe'),
       traversable: Boolean(e?.traversable),
       declenchement: pick(e?.declenchement, DECLENCHEMENTS, 'parler'),
-      pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map(normPage),
+      pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map((p) => normPage(p, tileCount)),
+      // Tafl 1.14 (Saga 1.16) : un événement « auto » qui se lance aussi au réveil (commande dormir), sur la même carte.
+      ...(e?.reveil ? { reveil: true } : {}),
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
       // Tafl 1.4 (Saga 1.6) : il repousse. Son « déjà fait » s'éteint après ce nombre de nuits (une récolte).
       ...(int(e?.repousse_nuits) > 0 ? { repousse_nuits: clamp(int(e.repousse_nuits), 1, 999) } : {}),
@@ -1548,7 +1592,7 @@ const Events = (() => {
       verifListe(p.commandes ?? [], `page ${k + 1}`);
       return null;
     });
-    return { erreurs, pages: pages.map(normPage) };
+    return { erreurs, pages: pages.map((p) => normPage(p)) };
   }
 
   // Le script d'un événement en texte (pour Claude, et pour s'y retrouver).
@@ -1853,6 +1897,9 @@ const Events = (() => {
         repousse.onchange = () => { const n = Math.max(0, Math.min(999, Math.round(Number(repousse.value) || 0))); repousse.value = n; if (n) work.repousse_nuits = n; else delete work.repousse_nuits; };
         const traversable = el('input', { type: 'checkbox', checked: work.traversable });
         traversable.onchange = () => { work.traversable = traversable.checked; };
+        // Tafl 1.14 (Saga 1.16) : une scène « auto » qui se lance aussi au réveil, sans changer de carte.
+        const reveil = el('input', { type: 'checkbox', checked: Boolean(work.reveil) });
+        reveil.onchange = () => { if (reveil.checked) work.reveil = true; else delete work.reveil; };
         const aide = el('p', { className: 'modal-info' });
         const majAide = () => {
           aide.textContent = {
@@ -1918,6 +1965,7 @@ const Events = (() => {
           champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
           section('Déclenchement'),
           champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
+          champ('Aussi au réveil', reveil, '« Tout seul » seulement : la scène se lance aussi quand le joueur se réveille (commande Dormir) sur cette carte, pas seulement quand il y arrive'),
           champ('Le joueur peut passer à travers', traversable),
           champ('Repousse après', repousse, 'nuits (0 = jamais) : son « déjà fait » s\'éteint, il revient à sa page 1. Pour une récolte, un buisson, un coffre qui se remplit'),
           ...(typeof Espaces !== 'undefined' && Espaces.packDe(doc) === 'jdr' && typeof DonneesJdr !== 'undefined'
@@ -1933,6 +1981,8 @@ const Events = (() => {
       }
       renderSide();
 
+      // L'événement tel que la page ouverte le montre (Tafl 1.14 : son apparence à elle, si elle en a une).
+      const evPage = () => { const pg = work.pages[page]; return pg?.apparence ? { ...work, apparence: pg.apparence } : work; };
       // Colonne de droite : les pages, leurs conditions et leur script.
       function renderPage() {
         page = clamp(page, 0, work.pages.length - 1);
@@ -1979,6 +2029,26 @@ const Events = (() => {
         cache.onchange = () => { p.cache = cache.checked; };
         main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Sur cette page, l\'événement est absent (invisible : on ne peut ni lui parler ni le toucher)' }), cache]));
 
+        // Tafl 1.14 (Saga 1.16) : une autre apparence sur cette page (le PNJ change de tenue, un chantier devient une maison).
+        // Les dialogues « @evenement » de la page parlent alors avec ce personnage (evPage).
+        const autre = el('input', { type: 'checkbox', checked: Boolean(p.apparence) });
+        const blocAp = el('div', { className: 'page-apparence' });
+        const majAp = () => {
+          blocAp.replaceChildren();
+          if (!p.apparence) return;
+          blocAp.append(
+            champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((x) => [x.id, x.nom])], p.apparence.personnage, (v) => { p.apparence = { ...p.apparence, personnage: v }; renderPage(); }), 'Sur cette page : son sprite, et c\'est lui qui parle pour « @evenement »'),
+            champ('Tuile', selectEl(choixTuiles(doc), p.apparence.tuile, (v) => { p.apparence = { ...p.apparence, tuile: Number(v) }; }), 'Passe avant le sprite du personnage'),
+          );
+        };
+        autre.onchange = () => {
+          if (autre.checked) p.apparence = { ...work.apparence };
+          else delete p.apparence;
+          renderPage();
+        };
+        main.append(el('label', { className: 'field checkbox-row page-cache' }, [el('span', { className: 'field-label', textContent: 'Une autre apparence sur cette page (sinon, celle de l\'événement)' }), autre]), blocAp);
+        majAp();
+
         // Le script : en blocs reliés (Tafl 0.28) ou en liste, au choix (gardé pour la prochaine fois).
         const vues = el('span', { className: 'vue-choix' });
         for (const [v, label, ic] of [['blocs', 'Blocs', 'type-hierarchy-sub'], ['liste', 'Liste', 'list-flat']]) {
@@ -1990,7 +2060,7 @@ const Events = (() => {
         if (vue === 'blocs') {
           const box = el('div', { className: 'flow-box' });
           main.append(box);
-          Blocs.dessiner(box, { doc, ev: work, page: p, etat: etatBlocs, redessiner: renderPage });
+          Blocs.dessiner(box, { doc, ev: evPage(), page: p, etat: etatBlocs, redessiner: renderPage });
           return;
         }
         const tree = el('div', { className: 'cmd-tree' });
@@ -2004,13 +2074,13 @@ const Events = (() => {
           const def = COMMANDES[c.type];
           const row = el('div', { className: `cmd${c.type === 'commentaire' ? ' comment' : ''}${def ? '' : ' unknown'}`, style: { paddingLeft: `${8 + n * 22}px` }, title: def?.champs || c.type === 'si' ? 'Double-clic : modifier' : '' }, [
             icon(def?.icone || 'question'),
-            el('span', { className: 'cmd-text', textContent: resumeCommande(doc, c, work) }),
+            el('span', { className: 'cmd-text', textContent: resumeCommande(doc, c, evPage()) }),
           ]);
           row.firstChild.classList.add('lead');
           const edit = async () => {
             if (c.type === 'si') { const cond = await formCondition(doc, c.condition); if (cond) { liste[i] = { ...c, condition: cond }; renderPage(); } return; }
             if (!def?.champs) return;
-            const out = await formCommande(doc, c, work);
+            const out = await formCommande(doc, c, evPage());
             if (out) { liste[i] = out; renderPage(); }
           };
           const actions = el('span', { className: 'cmd-actions' }, [

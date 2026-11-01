@@ -355,6 +355,11 @@ const Doc = (() => {
       });
       // L'apparence des événements montre aussi une tuile.
       if (map.events.some((e) => e.apparence.tuile >= 0)) map.events = map.events.map((e) => (e.apparence.tuile >= 0 ? { ...e, apparence: { ...e.apparence, tuile: fn(e.apparence.tuile) } } : e));
+      // Tafl 1.14 : l'apparence propre à une page.
+      if (map.events.some((e) => e.pages.some((pg) => pg.apparence?.tuile >= 0))) {
+        map.events = map.events.map((e) => (e.pages.some((pg) => pg.apparence?.tuile >= 0)
+          ? { ...e, pages: e.pages.map((pg) => (pg.apparence?.tuile >= 0 ? { ...pg, apparence: { ...pg.apparence, tuile: fn(pg.apparence.tuile) } } : pg)) } : e));
+      }
     }
     if (doc.data.personnages.some((p) => p.tuile >= 0)) doc.data = { ...doc.data, personnages: doc.data.personnages.map((p) => (p.tuile >= 0 ? { ...p, tuile: fn(p.tuile) } : p)) };
     // Les tampons aussi ; un tampon dont toutes les tuiles ont disparu est retiré.
@@ -389,7 +394,10 @@ const Doc = (() => {
     const used = new Set();
     for (const map of doc.maps) {
       for (const l of map.layers) for (const c of l.cells) if (c >= 0) used.add(c);
-      for (const e of map.events) if (e.apparence.tuile >= 0) used.add(e.apparence.tuile);
+      for (const e of map.events) {
+        if (e.apparence.tuile >= 0) used.add(e.apparence.tuile);
+        for (const pg of e.pages) if (pg.apparence?.tuile >= 0) used.add(pg.apparence.tuile);
+      }
     }
     for (const p of doc.data.personnages) if (p.tuile >= 0) used.add(p.tuile);
     for (const st of doc.stamps) for (const c of st.cells) if (c >= 0) used.add(c);
