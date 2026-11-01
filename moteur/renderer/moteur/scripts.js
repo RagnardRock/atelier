@@ -18,6 +18,8 @@ const Scripts = (() => {
   // moteur : ce que le moteur prête aux scripts (voir moteur.js › executer).
   function creer(moteur) {
     const { jeu, dialogue } = moteur;
+    // La page de l'événement qui se joue (Saga 1.16 : son apparence dit qui est « @evenement »).
+    let pageEnCours = null;
     const liste = (sorte) => jeu.donnees[sorte]?.[sorte] || [];
     const trouver = (sorte, id) => liste(sorte).find((x) => x.id === id) || null;
     const nomDe = (sorte, id) => trouver(sorte, id)?.nom || id;
@@ -27,7 +29,8 @@ const Scripts = (() => {
 
     // Qui parle : son nom, sa couleur, son portrait pour cette expression.
     function orateur(qui, expression, ev) {
-      const id = qui === '@evenement' ? ev?.apparence?.personnage : qui;
+      // Saga 1.16 : « @evenement », c'est le personnage de la page qui se joue (sa propre apparence, sinon celle de l'événement).
+      const id = qui === '@evenement' ? Monde.apparence(ev, pageEnCours).personnage : qui;
       const p = id ? jeu.personnages.get(id) : null;
       if (!p) return {};
       const portraits = Array.isArray(p.portraits) ? p.portraits : [];
@@ -336,7 +339,9 @@ const Scripts = (() => {
           if (c.action === 'ajouter' || c.action === 'retirer') {
             const n = Number(c.valeur) || 0;
             partie.variables[id] = (Number(avant) || 0) + (c.action === 'retirer' ? -n : n);
-          } else partie.variables[id] = valeurVariable(c.valeur);
+          // Saga 1.16 : noter le jour en cours (pour la condition « jours écoulés depuis »).
+          } else if (c.action === 'jour') partie.variables[id] = Number.isInteger(partie.jour) && partie.jour > 0 ? partie.jour : 1;
+          else partie.variables[id] = valeurVariable(c.valeur);
           break;
         }
         // Saga 0.12 : une commande écrite en JavaScript par le jeu (scripts/*.js, commande()).
@@ -370,7 +375,8 @@ const Scripts = (() => {
     }
 
     // Joue une page entière. La commande « fin » arrête tout le script, pas seulement le bloc en cours.
-    async function executer(commandes, ev) {
+    async function executer(commandes, ev, page = null) {
+      pageEnCours = page;
       try {
         await jouer(commandes, ev);
       } catch (err) {

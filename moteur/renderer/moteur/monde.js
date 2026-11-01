@@ -89,6 +89,16 @@ const Monde = (() => {
       case 'moment': return typeof Temps === 'undefined' || Temps.moment(null, partie, cond.moment);
       // Le numéro du jour (Saga 1.5), comparé à une valeur.
       case 'jour': return comparer(Number(partie.jour) || 1, cond.comparaison || '>=', Number(cond.valeur) || 1);
+      // Saga 1.16 : les jours passés depuis le jour noté dans une variable (commande variable, action « jour »).
+      // Une variable jamais notée (0, vide) : faux, rien n'est encore arrivé.
+      case 'jours_depuis': {
+        const note = Number(partie.variables?.[cond.variable]);
+        if (!(note >= 1)) return false;
+        return comparer((Number(partie.jour) || 1) - note, cond.comparaison || '>=', Number(cond.valeur) || 0);
+      }
+      // Saga 1.16 : l'heure de l'horloge du jeu, de `de` heures (comprise) à `a` heures (non comprise) ; la plage
+      // peut passer minuit (22 → 6). Sans horloge, il est toujours midi.
+      case 'heure': return typeof Temps === 'undefined' || Temps.entre(null, partie, cond.de, cond.a);
       // Un héros dans le groupe ou la réserve (pack JRPG, Saga 0.8).
       case 'membre': return [...(partie.equipe || []), ...(partie.boites || []).flatMap((b) => b.creatures || [])]
         .some((c) => c && c.heros && c.creature === cond.personnage);
@@ -138,6 +148,8 @@ const Monde = (() => {
       }
       case 'jour': return `À partir du jour ${Number(cond.valeur) || 1}`;
       case 'moment': return { matin: 'Le matin', jour: 'Le jour', soir: 'Le soir', nuit: 'La nuit' }[cond.moment] || 'À un autre moment';
+      case 'heure': return `De ${Number(cond.de) || 0} h à ${Number(cond.a) || 0} h`;
+      case 'jours_depuis': return 'Dans quelques jours';
       default: return 'Plus tard dans l\'aventure';
     }
   }
@@ -159,6 +171,12 @@ const Monde = (() => {
   const obstacle = (ev) => (ev?.type === 'obstacle' && ev.obstacle && SORTES_OBSTACLE.includes(ev.obstacle.sorte) ? ev.obstacle : null);
   const obstacleFranchi = (ev, partie, carte) => obstacle(ev)?.sorte !== 'pousser' && Boolean(obstacle(ev)) && Boolean(partie.locaux[`${carte.id}/${ev.id}`]);
 
+  // L'apparence d'un événement sur une page (Saga 1.16) : celle de la page si elle en a une, sinon la sienne.
+  function apparence(ev, page) {
+    const a = page?.apparence && typeof page.apparence === 'object' ? page.apparence : ev?.apparence;
+    return { personnage: String(a?.personnage || ''), tuile: Number.isFinite(Number(a?.tuile)) ? Number(a.tuile) : -1 };
+  }
+
   // Les événements présents sur la carte, avec leur apparence. À refaire après chaque script
   // et à chaque changement de carte. avant : la liste précédente de la même carte, pour garder
   // la place et la direction de ceux qui se sont déplacés (un PNJ qui marche au hasard).
@@ -169,10 +187,12 @@ const Monde = (() => {
       if (obstacleFranchi(ev, partie, carte)) continue;
       const page = pageActive(ev, partie, carte);
       if (!page || page.cache) continue;
-      const perso = jeu.personnages.get(ev.apparence?.personnage || '') || null;
+      // Saga 1.16 : une page peut avoir sa propre apparence (sinon, celle de l'événement).
+      const ap = apparence(ev, page);
+      const perso = jeu.personnages.get(ap.personnage || '') || null;
       // Ce qu'on montre (FORMAT.md, apparence) : la tuile de l'événement, sinon le sprite du
       // personnage (Tafl 0.12), sinon sa tuile, sinon le petit bonhomme de Saga.
-      let tuile = Number(ev.apparence?.tuile);
+      let tuile = Number(ap.tuile);
       if (!(tuile >= 0) && perso && !perso.sprite && perso.tuile >= 0) tuile = perso.tuile;
       const ancien = avant.find((p) => p.ev === ev);
       out.push({
@@ -256,5 +276,5 @@ const Monde = (() => {
     return n;
   }
 
-  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, apparence, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();

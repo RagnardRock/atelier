@@ -403,6 +403,8 @@ const Verificateur = (() => {
       const ou = { carte: carte.id, x: ev.x, y: ev.y, evenement: ev.id };
       const quoi = `${nomEv(ev)} sur « ${carte.nom} »`;
       verifierId('personnages', ev.apparence?.personnage, quoi, ou);
+      // Tafl 1.16 : une page peut avoir sa propre apparence.
+      (ev.pages || []).forEach((pg, k) => { if (pg?.apparence?.personnage) verifierId('personnages', pg.apparence.personnage, `${quoi} (page ${k + 1})`, ou); });
       if (obstacle(ev)) verifierId('objets', ev.obstacle.objet, quoi, ou);
       commandes(ev, (cmd) => {
         if (cmd.type === 'dire' && cmd.qui && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);
@@ -560,6 +562,7 @@ const Verificateur = (() => {
         }
       });
       conditions(ev, (cond) => {
+        if (cond.type === 'jours_depuis' && (!cond.variable || !variables.has(cond.variable))) ajouter('erreur', 'scripts', cond.variable ? `${quoi} : une condition « Jours écoulés depuis » parle de la variable « ${cond.variable} », qui n'existe pas (Données › Variables).` : `${quoi} : une condition « Jours écoulés depuis » n'a pas de variable choisie.`, ou);
         if (cond.type === 'variable' && (!cond.id || !variables.has(cond.id))) ajouter('erreur', 'scripts', cond.id ? `${quoi} : une condition parle de la variable « ${cond.id} », qui n'existe pas (Données › Variables).` : `${quoi} : une condition Variable n'a pas de variable choisie.`, ou);
       });
     }

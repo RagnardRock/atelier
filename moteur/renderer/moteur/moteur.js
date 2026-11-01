@@ -136,7 +136,7 @@ const Moteur = (() => {
     let fps = 0, images = 0, chrono = 0;
     // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
     const dialogue = Dialogue.creer(canvas.parentElement, { sons: bruit });
-    let scripts = null, enScript = false, autoAFaire = false;
+    let scripts = null, enScript = false, autoAFaire = false, reveilAFaire = false;
     // Les scripts JS du jeu (Saga 0.12, scripts-js.js) et les moments qu'ils attendent de voir passer
     // (une carte, un combat fini…), joués dès que le joueur est libre.
     let scriptsJs = ScriptsJs.AUCUN, reactions = [];
@@ -500,6 +500,8 @@ const Moteur = (() => {
           await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir }, resoudre }; });
           reagir('fin_de_journee', { jour: fini });
           reagir('matin', { jour: partie.jour });
+          // Saga 1.16 : les scènes auto « aussi au réveil » de cette carte se joueront après le script.
+          reveilAFaire = true;
           return { lignes, jour: partie.jour };
         },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
@@ -810,7 +812,7 @@ const Moteur = (() => {
       if (p.ev.deplacement !== 'fixe' && p.ev.declenchement === 'parler') p.direction = Monde.directionVers(p.x, p.y, joueur.x, joueur.y);
       origineCombat = { x: p.x, y: p.y }; // un combat lancé par ce script : ses monstres arrivent ici (mode table)
       try {
-        await scripts.executer(p.page.commandes, p.ev);
+        await scripts.executer(p.page.commandes, p.ev, p.page);
       } catch (err) {
         rappels.message?.(`Erreur dans le script de « ${p.ev.nom || p.ev.id} » : ${err.message}`);
       }
@@ -880,7 +882,7 @@ const Moteur = (() => {
           await dire(o.sorte === 'couper' ? `Tu utilises ${nom} : l'arbre est coupé !` : `Tu utilises ${nom} : le rocher vole en éclats !`);
           partie.locaux[`${carte.id}/${p.ev.id}`] = true;
           dialogue.fermer();
-          if (p.page?.commandes?.length) await scripts.executer(p.page.commandes, p.ev);
+          if (p.page?.commandes?.length) await scripts.executer(p.page.commandes, p.ev, p.page);
         }
       } catch (err) {
         rappels.message?.(`Erreur sur l'obstacle « ${p.ev.nom || p.ev.id} » : ${err.message}`);
@@ -951,9 +953,11 @@ const Moteur = (() => {
     }
 
     // Les événements « auto » de la carte, l'un après l'autre (une scène d'arrivée).
-    async function lancerAuto() {
-      autoAFaire = false;
-      for (const p of presents.filter((q) => q.ev.declenchement === 'auto')) {
+    // Saga 1.16 : reveil = true, seulement ceux qui se lancent aussi au réveil (ev.reveil), sur la même carte.
+    async function lancerAuto(reveil = false) {
+      if (!reveil) autoAFaire = false;
+      reveilAFaire = false;
+      for (const p of presents.filter((q) => q.ev.declenchement === 'auto' && (!reveil || q.ev.reveil))) {
         const actuel = presents.find((q) => q.ev === p.ev);
         if (actuel) await lancer(actuel);
         if (autoAFaire) return; // un script a changé de carte : la nouvelle carte a ses propres scènes
@@ -1313,6 +1317,7 @@ const Moteur = (() => {
         if (debutAFaire && !fondu && !enScript && !enCombat) lancerDebut();
         else if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
         else if (autoAFaire && !fondu && !enScript) lancerAuto();
+        else if (reveilAFaire && !fondu && !enScript && !enCombat) lancerAuto(true);
       } else entrees.appuis();
       if (table.actif) { table.dessiner(maintenant, dt); return; }
       placerCamera();
@@ -1329,9 +1334,12 @@ const Moteur = (() => {
     let momentsAvant = '', momentPrincipal = '';
     function verifierMoments() {
       const m = Object.keys(Temps.MOMENTS).filter((k) => Temps.moment(jeu, partie, k)).join();
-      if (m === momentsAvant) return;
+      // Saga 1.16 : l'heure pleine aussi (la condition « heure »).
+      const h = Temps.heure(jeu, partie);
+      const cle = `${m}|${h === null ? '' : Math.floor(h)}`;
+      if (cle === momentsAvant) return;
       const premier = !momentsAvant;
-      momentsAvant = m;
+      momentsAvant = cle;
       // Saga 0.12 : les scripts qui écoutent quand('moment') voient le moment principal changer.
       const principal = ['nuit', 'soir', 'matin'].find((k) => m.split(',').includes(k)) || 'jour';
       if (principal !== momentPrincipal) {
