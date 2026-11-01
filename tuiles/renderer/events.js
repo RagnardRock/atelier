@@ -106,6 +106,8 @@ const Events = (() => {
   const STATS_BONUS = {
     jrpg: [['force', 'Force'], ['magie', 'Magie'], ['defense', 'Défense'], ['esprit', 'Esprit'], ['agilite', 'Agilité'], ['chance', 'Chance']],
     pokemon: [['attaque', 'Attaque'], ['defense', 'Défense'], ['att_spe', 'Att. Spé.'], ['def_spe', 'Déf. Spé.'], ['vitesse', 'Vitesse']],
+    // Tafl 1.10 (Saga 1.12) : le héros du pack action.
+    action: [['attaque', 'Attaque'], ['defense', 'Défense'], ['vitesse', 'Vitesse']],
   };
   const statsBonus = (doc) => STATS_BONUS[doc?.data?.reglages?.regles || 'pokemon'] || [];
   const avecBadges = (doc) => (doc?.data?.reglages?.regles || 'pokemon') === 'pokemon' || badges(doc).length > 0;
@@ -1047,6 +1049,113 @@ const Events = (() => {
       depuis: (v) => ({ type: 'gestion_habitants', min: clamp(Math.round(v.min) || 0, 0, 9999) }),
     },
   });
+  // --- Tafl 1.12 (Saga 1.14) : le module « roguelite » (Réglages › Règles du jeu › Modules) ---
+  const MODULE_ROGUELITE = ['roguelite'];
+  Object.assign(COMMANDES, {
+    roguelite_partir: {
+      nom: 'Partir dans le donjon (nouvelle partie)', icone: 'rocket', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_partir', graine: 0 }),
+      champs: (doc, c) => [
+        { key: 'graine', label: 'Graine', type: 'number', value: c.graine || 0, min: 0, max: 2147483647 },
+        { type: 'info', text: 'Saga bâtit le premier étage avec tes salles de donjon, soigne le joueur, lui donne ce que ses améliorations offrent au départ, puis l\'emmène dans la salle de départ. Graine 0 : celle des réglages du module, sinon une nouvelle à chaque partie. À la fin de la partie (victoire, défaite, abandon), il revient ici.' },
+      ],
+      depuis: (v) => ({ type: 'roguelite_partir', graine: clamp(Math.round(v.graine) || 0, 0, 2147483647) }),
+      resume: (doc, c) => `Partir dans le donjon${c.graine ? ` (graine ${c.graine})` : ''}`,
+    },
+    roguelite_suivant: {
+      nom: 'Descendre à l\'étage suivant', icone: 'arrow-down', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_suivant' }),
+      champs: () => [{ type: 'info', text: 'Pour l\'escalier de la salle du boss (avec la condition « La salle est vidée »). Au dernier étage, c\'est la victoire : le joueur revient au camp avec sa récompense.' }],
+      resume: () => 'Descendre à l\'étage suivant (ou gagner au dernier)',
+    },
+    roguelite_perk: {
+      nom: 'Donner un perk (au hasard ou un parmi trois)', icone: 'gift', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_perk', mode: 'hasard', annoncer: true }),
+      champs: (doc, c) => [
+        { key: 'mode', label: 'Comment', type: 'select', value: c.mode, choices: [['hasard', 'Un perk au hasard (un coffre)'], ['choix', 'Le joueur en choisit un parmi trois (après un boss)']] },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: 'Tiré parmi les perks du jeu (Données › Perks), selon leur rareté, sans ceux déjà au maximum ni ceux encore verrouillés. Seulement pendant une partie. Pour qu\'un coffre ne serve qu\'une fois : la commande « déjà fait » et une page avec cette condition (chaque salle a sa propre mémoire).' },
+      ],
+      depuis: (v) => ({ type: 'roguelite_perk', mode: v.mode === 'choix' ? 'choix' : 'hasard', annoncer: Boolean(v.annoncer) }),
+      resume: (doc, c) => (c.mode === 'choix' ? 'Choisir un perk parmi trois' : 'Donner un perk au hasard'),
+    },
+    roguelite_boutique: {
+      nom: 'Ouvrir la boutique de perks', icone: 'tag', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_boutique' }),
+      champs: () => [{ type: 'info', text: 'Trois perks tirés pour cette salle, payés avec l\'argent du jeu (prix dans Réglages › Modules › Roguelite, selon la rareté). Le même choix reste si on revient.' }],
+      resume: () => 'Ouvrir la boutique de perks',
+    },
+    roguelite_ameliorations: {
+      nom: 'Ouvrir les améliorations (le camp)', icone: 'arrow-up', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_ameliorations' }),
+      champs: () => [{ type: 'info', text: 'La liste des améliorations (Données › Améliorations), à acheter avec la monnaie du roguelite. Elles restent d\'une partie à l\'autre.' }],
+      resume: () => 'Ouvrir les améliorations',
+    },
+    roguelite_repos: {
+      nom: 'Se reposer (soin, sans changer le point de réveil)', icone: 'heart', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_repos', annoncer: true }),
+      champs: (doc, c) => [
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: 'Pour la fontaine d\'une salle de repos : soigne le joueur. Contrairement à « Soigner », le joueur ne se réveillera pas ici après une défaite (la salle disparaît à la fin de la partie).' },
+      ],
+      depuis: (v) => ({ type: 'roguelite_repos', annoncer: Boolean(v.annoncer) }),
+      resume: () => 'Se reposer (soin complet)',
+    },
+    roguelite_abandonner: {
+      nom: 'Abandonner la partie', icone: 'close', groupe: 'Roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_abandonner' }),
+      champs: () => [{ type: 'info', text: 'La partie se termine : le joueur garde la monnaie gagnée, perd ses perks, et revient là où il est parti. Le menu de pause (Tab) le propose aussi pendant une partie.' }],
+      resume: () => 'Abandonner la partie',
+    },
+  });
+  const choixAmeliorations = (doc, actuel) => choixDe(doc, 'ameliorations', actuel, 'Aucune amélioration : crée-les dans Données › Améliorations');
+  const choixPerks = (doc, actuel) => choixDe(doc, 'perks', actuel, 'Aucun perk : crée-les dans Données › Perks');
+  Object.assign(CONDITIONS, {
+    roguelite_en_partie: {
+      nom: 'Une partie de roguelite est en cours', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_en_partie', valeur: true }),
+      champs: (doc, c) => [{ key: 'valeur', label: 'Quand', type: 'select', value: c.valeur === false ? 'non' : 'oui', choices: [['oui', 'Pendant une partie'], ['non', 'Hors partie (au camp)']] }],
+      depuis: (v) => ({ type: 'roguelite_en_partie', valeur: v.valeur !== 'non' }),
+    },
+    roguelite_salle_vide: {
+      nom: 'La salle est vidée de ses ennemis (roguelite)', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_salle_vide', valeur: true }),
+      champs: (doc, c) => [
+        { key: 'valeur', label: 'Quand', type: 'select', value: c.valeur === false ? 'non' : 'oui', choices: [['oui', 'La salle est vidée'], ['non', 'Il reste des ennemis']] },
+        { type: 'info', text: 'Pour un escalier ou un coffre qui n\'apparaît qu\'une fois les ennemis vaincus. Avec un pack au tour par tour, une salle est vidée dès qu\'on y entre.' },
+      ],
+      depuis: (v) => ({ type: 'roguelite_salle_vide', valeur: v.valeur !== 'non' }),
+    },
+    roguelite_etage: {
+      nom: 'L\'étage atteint (roguelite)', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_etage', min: 2 }),
+      champs: (doc, c) => [{ key: 'min', label: 'Au moins l\'étage', type: 'number', value: c.min, min: 1, max: 99 }],
+      depuis: (v) => ({ type: 'roguelite_etage', min: clamp(Math.round(v.min) || 1, 1, 99) }),
+    },
+    roguelite_amelioration: {
+      nom: 'Une amélioration est achetée (roguelite)', modules: MODULE_ROGUELITE,
+      nouveau: (doc) => ({ type: 'roguelite_amelioration', amelioration: doc.data.ameliorations?.[0]?.id || '', min: 1 }),
+      champs: (doc, c) => [
+        { key: 'amelioration', label: 'Amélioration', type: 'select', value: c.amelioration, choices: choixAmeliorations(doc, c.amelioration) },
+        { key: 'min', label: 'Au moins le niveau', type: 'number', value: c.min, min: 1, max: 99 },
+      ],
+      depuis: (v) => ({ type: 'roguelite_amelioration', amelioration: v.amelioration, min: clamp(Math.round(v.min) || 1, 1, 99) }),
+      valide: (c) => (c.amelioration ? null : 'Quelle amélioration ?'),
+    },
+    roguelite_monnaie: {
+      nom: 'Assez de monnaie du roguelite', modules: MODULE_ROGUELITE,
+      nouveau: () => ({ type: 'roguelite_monnaie', min: 10 }),
+      champs: (doc, c) => [{ key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 0, max: 999999 }],
+      depuis: (v) => ({ type: 'roguelite_monnaie', min: clamp(Math.round(v.min) || 0, 0, 999999) }),
+    },
+    roguelite_perk: {
+      nom: 'Le joueur a un perk (roguelite)', modules: MODULE_ROGUELITE,
+      nouveau: (doc) => ({ type: 'roguelite_perk', perk: doc.data.perks?.[0]?.id || '' }),
+      champs: (doc, c) => [{ key: 'perk', label: 'Perk', type: 'select', value: c.perk, choices: choixPerks(doc, c.perk) }],
+      depuis: (v) => ({ type: 'roguelite_perk', perk: v.perk }),
+      valide: (c) => (c.perk ? null : 'Quel perk ?'),
+    },
+  });
   const nomInterrupteur = (doc, id) => doc.data.interrupteurs.find((i) => i.id === id)?.nom || id;
   function resumeCondition(doc, c) {
     if (!c) return '…';
@@ -1072,6 +1181,12 @@ const Events = (() => {
     if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
     if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
     if (c.type === 'gestion_habitants') return `au moins ${c.min} habitant${c.min > 1 ? 's' : ''} au domaine`;
+    if (c.type === 'roguelite_en_partie') return c.valeur === false ? 'hors partie de roguelite' : 'pendant une partie de roguelite';
+    if (c.type === 'roguelite_salle_vide') return c.valeur === false ? 'il reste des ennemis dans la salle' : 'la salle est vidée';
+    if (c.type === 'roguelite_etage') return `au moins l'étage ${c.min}`;
+    if (c.type === 'roguelite_amelioration') return `« ${nomData(doc, 'ameliorations', c.amelioration)} » niveau ${c.min} ou plus`;
+    if (c.type === 'roguelite_monnaie') return `au moins ${c.min} ${doc.data.reglages?.modules_reglages?.roguelite?.monnaie || 'Éclats'}`;
+    if (c.type === 'roguelite_perk') return `a le perk « ${nomData(doc, 'perks', c.perk)} »`;
     return `condition inconnue (${c.type})`;
   }
   const resumeCommande = (doc, c, ev) => (COMMANDES[c.type] ? COMMANDES[c.type].resume(doc, c, ev) : `Commande inconnue (${c.type}) : gardée telle quelle`);

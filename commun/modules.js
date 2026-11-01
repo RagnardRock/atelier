@@ -20,7 +20,7 @@
 //                                          (Tafl les montre ; vide dans le jeu : le défaut)
 //   }
 //
-// Le premier module est « gestion » (Saga 1.5, Tafl 1.3).
+// Le premier module est « gestion » (Saga 1.5, Tafl 1.3) ; puis « roguelite » (Saga 1.14, Tafl 1.12).
 
 const ModulesJeu = (() => {
   const CATALOGUE = {
@@ -71,6 +71,37 @@ const ModulesJeu = (() => {
         mange: ['mangé', 'Bilan : ce qui a été mangé'],
         utilise: ['utilisé', 'Bilan : ce que les bâtiments ont utilisé'],
         perdu: ['perdu', 'Bilan : ce qui a été perdu (stock plein)'],
+      },
+    },
+    // Saga 1.14, Tafl 1.12 : moteur/renderer/moteur/modules/roguelite/.
+    roguelite: {
+      nom: 'Roguelite',
+      description: 'Des parties courtes dans un donjon bâti au hasard (une graine) à partir de tes salles modèles : des cartes cochées « Salle de donjon », reliées par leurs portes. Des perks pendant la partie (perdus à la fin), une monnaie gardée même après une défaite, et des améliorations à acheter au camp. Les perks et les améliorations sont des données du jeu.',
+      donnees: ['perks', 'ameliorations'],
+      moments: {
+        roguelite_debut: { nom: 'Une partie de roguelite commence', infos: { graine: 'La graine de la partie' } },
+        roguelite_etage: { nom: 'Le joueur arrive à l\'étage suivant', infos: { etage: 'Le numéro du nouvel étage' } },
+        roguelite_salle: { nom: 'Une salle est vidée de ses ennemis', infos: { type: 'Le type de la salle (combat, boss…)', etage: 'L\'étage' } },
+        roguelite_perk: { nom: 'Le joueur obtient un perk', infos: { perk: 'L\'id du perk', niveau: 'Combien il en a maintenant' } },
+        roguelite_amelioration: { nom: 'Le joueur achète une amélioration', infos: { amelioration: 'L\'id de l\'amélioration', niveau: 'Son nouveau niveau' } },
+        roguelite_fin: { nom: 'La partie de roguelite se termine', infos: { issue: '« victoire », « defaite » ou « abandon »', etage: 'L\'étage atteint', monnaie: 'La monnaie gagnée pendant la partie' } },
+      },
+      commandes: {
+        roguelite_partir: { nom: 'Partir dans le donjon (nouvelle partie)' },
+        roguelite_suivant: { nom: 'Descendre à l\'étage suivant' },
+        roguelite_perk: { nom: 'Donner un perk (au hasard ou un parmi trois)' },
+        roguelite_boutique: { nom: 'Ouvrir la boutique de perks' },
+        roguelite_ameliorations: { nom: 'Ouvrir les améliorations (le camp)' },
+        roguelite_abandonner: { nom: 'Abandonner la partie' },
+        roguelite_repos: { nom: 'Se reposer (soin, sans changer le point de réveil)' },
+      },
+      conditions: {
+        roguelite_en_partie: { nom: 'Une partie est en cours' },
+        roguelite_salle_vide: { nom: 'La salle est vidée de ses ennemis' },
+        roguelite_etage: { nom: 'L\'étage atteint' },
+        roguelite_amelioration: { nom: 'Une amélioration est achetée' },
+        roguelite_monnaie: { nom: 'Assez de monnaie du roguelite' },
+        roguelite_perk: { nom: 'Le joueur a un perk' },
       },
     },
   };

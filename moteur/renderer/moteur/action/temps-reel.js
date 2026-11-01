@@ -45,6 +45,7 @@ const TempsReel = (() => {
   //   defaite()                        le héros n'a plus de vie
   //   annoncer(titre, texte)           une annonce en haut de l'écran (niveau gagné)
   //   reagir(moment, infos)            un moment pour les scripts JS (ennemi_vaincu, heros_touche)
+  //   rencontres(zone, liste)          (facultatif) → les ennemis à faire apparaître dans la zone
   //   comportement(nom, etat)          → promesse de la décision d'un script JS (ou null s'il n'y en a pas)
   //   signaler(texte)                  une erreur à montrer au créateur
   // }
@@ -138,7 +139,9 @@ const TempsReel = (() => {
     function apparaitre() {
       const p = partie();
       for (const z of carte.zones) {
-        (z.rencontres || []).forEach((r, k) => {
+        const liste = Array.isArray(z.rencontres) ? z.rencontres : [];
+        // Saga 1.14 : un module peut changer la liste (le roguelite : aucun ennemi dans une salle vidée).
+        (hote.rencontres ? hote.rencontres(z, liste) || liste : liste).forEach((r, k) => {
           if (!r || !r.ennemi) return;
           const def = R().ennemi(jeu(), r.ennemi);
           if (!def) return;

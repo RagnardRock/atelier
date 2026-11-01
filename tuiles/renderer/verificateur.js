@@ -65,6 +65,7 @@ const Verificateur = (() => {
       badges: new Set((reglages.badges || []).map((b) => b.id)),
       ressources: ids('ressources'), batiments: ids('batiments'), // Tafl 1.3 : le module gestion
       ennemis: ids('ennemis'), // Tafl 1.10 : le pack action
+      perks: ids('perks'), ameliorations: ids('ameliorations'), // Tafl 1.12 : le module roguelite
     };
     // Tafl 1.2 : un module activé que ce Tafl ne connaît pas (écrit à la main, ou par un Tafl plus récent).
     // Dit avant tout le reste : même un jeu sans carte doit l'apprendre.
@@ -241,7 +242,19 @@ const Verificateur = (() => {
     // dès qu'il en pose un : ces intérieurs comptent comme atteints (un départ de plus).
     const gestionPortes = (Array.isArray(reglages.modules) && reglages.modules.includes('gestion') ? liste('batiments') : [])
       .map((b) => b.porte_vers).filter((v) => v?.carte && cartes.has(v.carte)).map((v) => ({ carte: v.carte, x: Number(v.x), y: Number(v.y) }));
-    const monde = marcher([{ carte: depart.carte, x: depart.x, y: depart.y }, ...gestionPortes]);
+    // Tafl 1.12 : les salles de donjon du roguelite sont tirées par Saga pendant une partie : elles comptent
+    // comme atteintes (posé près de leur centre).
+    const rogueliteActif = typeof ModulesJeu !== 'undefined' ? ModulesJeu.actifs(reglages).includes('roguelite') : (reglages.modules || []).includes('roguelite');
+    const centreLibre = (c) => {
+      let best = null, bd = Infinity;
+      for (let y = 1; y < c.hauteur - 1; y++) for (let x = 1; x < c.largeur - 1; x++) {
+        const d = Math.abs(x - c.largeur / 2) + Math.abs(y - c.hauteur / 2);
+        if (d < bd && code(c, x, y) !== BLOQUE) { bd = d; best = { carte: c.id, x, y }; }
+      }
+      return best;
+    };
+    const salles = rogueliteActif ? [...cartes.values()].filter((c) => c.salle) : [];
+    const monde = marcher([{ carte: depart.carte, x: depart.x, y: depart.y }, ...gestionPortes, ...salles.map(centreLibre).filter(Boolean)]);
 
     // --- 1. Téléporteurs ---
     // L'arrivée d'un téléporteur ou d'une commande « téléporter » : la carte existe, la case aussi, on peut s'y tenir.
@@ -383,7 +396,7 @@ const Verificateur = (() => {
     // --- 4. Les ids qui n'existent pas ---
     const verifierId = (sorte, id, quoi, ou = {}) => {
       if (!id || connus[sorte].has(id)) return;
-      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment', ennemis: 'd\'ennemi' };
+      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment', ennemis: 'd\'ennemi', perks: 'de perk', ameliorations: 'd\'amélioration' };
       ajouter('erreur', 'references', `${quoi} : pas ${noms[sorte]} « ${id} » dans les données du jeu.`, ou);
     };
     for (const { carte, ev } of scriptsDe) {
@@ -415,6 +428,8 @@ const Verificateur = (() => {
         if (cond.type === 'jdr_origine') verifierId('origines', cond.origine, quoi, ou);
         if (cond.type === 'gestion_batiment' || cond.type === 'gestion_chantier') verifierId('batiments', cond.batiment, quoi, ou);
         if (cond.type === 'gestion_stock') verifierId('ressources', cond.ressource, quoi, ou);
+        if (cond.type === 'roguelite_perk') verifierId('perks', cond.perk, quoi, ou);
+        if (cond.type === 'roguelite_amelioration') verifierId('ameliorations', cond.amelioration, quoi, ou);
       });
     }
     for (const c of cartes.values()) {
@@ -486,6 +501,27 @@ const Verificateur = (() => {
     }
     for (const q of reglages.modules_reglages?.gestion?.stock_depart || []) verifierId('ressources', q.ressource, 'Le stock de départ (Réglages › Modules)');
     for (const r of liste('ressources')) verifierId('objets', r.objet, `La ressource « ${r.nom || r.id} »`);
+    // Tafl 1.12 : le module roguelite. Au moins un départ, un combat et un boss parmi les salles de donjon,
+    // chacune avec une porte ; une commande qui lance une partie ; les objets et les perks des améliorations.
+    if (rogueliteActif) {
+      const types = new Set(salles.map((c) => c.salle.type));
+      for (const [t, nom] of [['depart', 'départ'], ['combat', 'combat'], ['boss', 'boss']]) {
+        if (!types.has(t)) ajouter('erreur', 'quetes', `Le roguelite n'a aucune salle de donjon « ${nom} » : coche « Salle de donjon » dans le menu ⋯ d'une carte. Saga ne pourra pas bâtir d'étage.`);
+      }
+      for (const c of salles) {
+        const p = typeof DonneesRoguelite !== 'undefined' ? DonneesRoguelite.portes({ width: c.largeur, height: c.hauteur }, (x, y) => code(c, x, y) !== BLOQUE && code(c, x, y) < 3) : { n: 1 };
+        if (!Object.values(p).some(Boolean)) ajouter('erreur', 'acces', `La salle de donjon « ${c.nom || c.id} » n'a aucune porte : laisse une ouverture dans son mur, au bord de la carte.`, { carte: c.id });
+      }
+      const cmds = new Set();
+      for (const c of cartes.values()) for (const ev of c.evenements || []) commandes(ev, (cmd) => cmds.add(cmd.type));
+      if (!cmds.has('roguelite_partir')) ajouter('attention', 'quetes', 'Aucun événement n\'a la commande « Partir dans le donjon » : le joueur ne pourra jamais commencer une partie de roguelite.');
+      if (!cmds.has('roguelite_suivant') && salles.length) ajouter('attention', 'quetes', 'Aucune salle n\'a la commande « Descendre à l\'étage suivant » (un escalier dans la salle du boss) : une partie ne pourra pas se gagner.');
+      if (liste('ameliorations').length && !cmds.has('roguelite_ameliorations')) ajouter('attention', 'quetes', 'Aucun événement n\'a la commande « Ouvrir les améliorations » : le joueur ne pourra pas les acheter.');
+      for (const a of liste('ameliorations')) for (const e of a.effets || []) {
+        if (e.type === 'objet') verifierId('objets', e.objet, `L'amélioration « ${a.nom || a.id} »`);
+        if (e.type === 'perk') verifierId('perks', e.perk, `L'amélioration « ${a.nom || a.id} »`);
+      }
+    }
 
     // --- 5. Scripts JS et variables (Tafl 0.31) ---
     // jeu.scripts : ce que Tafl sait des scripts (ScriptsTafl.etat). Sans lui (ou pas encore calculé),

@@ -165,8 +165,27 @@ const Moteur = (() => {
       // marche (ni bloquées, ni rebords, ni sous un bâtiment ou un événement qui bloque).
       // Saga 1.11 : soigner tout le groupe (comme la commande soigner, sans rien dire), donner un bonus au
       // groupe (moteur/bonus.js : un bain chaud, un bon repas) et les stats que le pack sait toucher.
-      soigner: () => { if (jeu && partie) for (const x of partie.equipe) Regles.soigner(jeu, x); },
+      // Saga 1.14 : soigner(pv) ne rend que pv PV (si le pack le sait : le pack action), sinon soin complet.
+      soigner: (pv) => {
+        if (!jeu || !partie) return;
+        if (Number(pv) > 0) { Regles.soignerPv(jeu, partie, Math.round(Number(pv))); return; }
+        for (const x of partie.equipe) Regles.soigner(jeu, x);
+      },
       bonus: (b) => (partie ? Bonus.donner(partie, b) : null),
+      // Saga 1.14 (le module roguelite) : retirer un bonus, compter les ennemis du temps réel, emmener le joueur
+      // ailleurs (après le fondu), oublier ce que la partie retient des copies de carte « base@prefixe… »
+      // (les salles d'une ancienne partie), et annoncer une ligne en haut de l'écran.
+      retirerBonus: (id) => (partie ? Bonus.retirer(partie, String(id || '')).length : 0),
+      ennemis: () => (tempsReel ? rt.ennemis.length : 0),
+      teleporter: (c, x, y, d) => new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: String(c), x: Math.round(Number(x) || 0), y: Math.round(Number(y) || 0), direction: d || 'bas' }, resoudre }; }),
+      oublierCopies: (prefixe) => {
+        if (!partie || !/^[A-Za-z0-9_-]{1,20}$/.test(String(prefixe || ''))) return 0;
+        let n = 0;
+        for (const k of Object.keys(partie.locaux || {})) if (k.includes(`@${prefixe}`)) { delete partie.locaux[k]; n++; }
+        for (const k of Object.keys(partie.repousses || {})) if (k.includes(`@${prefixe}`)) delete partie.repousses[k];
+        return n;
+      },
+      annoncer: (titre, texte = '') => dialogue?.annoncer(String(titre), String(texte || '')),
       nomsStats: () => (jeu ? Regles.statsBonus(jeu) : {}),
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
         largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
@@ -294,10 +313,17 @@ const Moteur = (() => {
       bruit,
       defaite: () => defaiteTempsReel(),
       annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
-      reagir: (moment, infos) => { if (scriptsJs.ecoute(moment)) reagir(moment, infos); },
+      reagir: (moment, infos) => { Modules.moment(jeu, partie, hoteModules, moment, infos); if (scriptsJs.ecoute(moment)) reagir(moment, infos); },
+      // Saga 1.14 : les modules choisissent les ennemis d'une zone (le roguelite : aucun dans une salle vidée).
+      rencontres: (zone, liste) => Modules.rencontres(jeu, partie, hoteModules, carte, zone, liste),
       comportement: (nom, etat) => scriptsJs.comportement?.(nom, etat) || null,
       signaler,
     });
+    // Où se réveiller après une défaite : là où un module le dit (Saga 1.14 : le camp du roguelite), sinon au
+    // dernier soin, sinon au départ du jeu.
+    function pointDeReveil() {
+      return Modules.reveil(jeu, partie, hoteModules) || (partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart);
+    }
     // Le héros n'a plus de vie : fondu au noir, il se réveille au dernier soin (ou au départ), tous ses cœurs.
     let reveil = false, rtRecommencer = false;
     async function defaiteTempsReel() {
@@ -306,11 +332,14 @@ const Moteur = (() => {
       enScript = true;
       try {
         if (scriptsJs.ecoute('defaite')) reagir('defaite', {});
+        // Saga 1.14 : les modules l'apprennent comme une défaite en combat (le roguelite finit la partie).
+        const lignes = Modules.apresCombat(jeu, partie, hoteModules, 'defaite', 'temps_reel');
         for (const c of partie.equipe) Regles.soigner(jeu, c);
-        const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
+        const d = pointDeReveil();
         rtRecommencer = true; // les ennemis reviennent : on recommence la carte d'arrivée, même si c'est celle-ci
         await new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { ...d, direction: d.direction || 'bas' }, resoudre }; });
         dialogue.annoncer('Tu te réveilles…', 'Tous tes cœurs sont revenus.');
+        for (const l of lignes.slice(0, 4)) dialogue.annoncer(l);
       } finally { enScript = false; reveil = false; entrees.oublier(); }
     }
 
@@ -711,7 +740,7 @@ const Moteur = (() => {
         dialogue.annoncer('Le groupe est vaincu…', 'Le MJ décide de la suite.');
       } else if (issue === 'defaite') {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
-        const d = partie.dernierSoin && jeu.cartes.has(partie.dernierSoin.carte) ? partie.dernierSoin : jeu.depart;
+        const d = pointDeReveil();
         noir = 1;
         await new Promise((resoudre) => { fondu = { phase: 'sortie', t: DUREE_FONDU, vers: { ...d, direction: d.direction || 'bas' }, resoudre }; });
         dialogue.annoncer('Tu te réveilles…', 'Ton équipe est soignée.');

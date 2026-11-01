@@ -196,13 +196,16 @@ const DonneesAction = (() => {
   function tableRencontres(doc, rencontres) {
     const { table, refInfo, nombreIn } = U();
     listes(doc.data);
+    const roguelite = (doc.data.reglages?.modules || []).includes('roguelite');
     const box = table(rencontres, [
       ['Ennemi', (r) => refInfo(r, 'ennemi', 'tafl-ennemis', 'slime', (id) => { const e = arr(doc.data.ennemis).find((x) => x.id === id); return e ? el('span', { textContent: `${e.nom} · ${e.pv} PV${e.boss ? ' · boss' : ''}` }) : null; }), true],
       ['Nombre', (r) => nombreIn(r, 'nombre', 1, 30)],
+      // Tafl 1.12 : avec le module roguelite, les étages où il apparaît (un lot d'ennemis par étage).
+      ...(roguelite ? [['Dès l\'étage', (r) => { if (r.etage_min === undefined) r.etage_min = 1; return nombreIn(r, 'etage_min', 1, 99); }], ['Jusqu\'à', (r) => { if (r.etage_max === undefined) r.etage_max = 0; return nombreIn(r, 'etage_max', 0, 99); }]] : []),
     ], () => ({ ennemi: rencontres.at(-1)?.ennemi || '', nombre: 1 }), { ajouter: '+ Ennemi', max: 20 });
     return el('div', { className: 'field field-block' }, [
       el('span', { className: 'field-label', textContent: 'Ennemis (temps réel)' }), box,
-      el('p', { className: 'modal-info', textContent: 'Ils apparaissent au hasard dans la zone quand le joueur arrive sur la carte, loin de lui. Le taux de rencontre ne sert pas ici.' }),
+      el('p', { className: 'modal-info', textContent: `Ils apparaissent au hasard dans la zone quand le joueur arrive sur la carte, loin de lui. Le taux de rencontre ne sert pas ici.${roguelite ? ' Dans une salle de donjon : seulement aux étages choisis (Jusqu\'à 0 : tous), et plus nombreux plus bas (le renfort des réglages du module).' : ''}` }),
     ]);
   }
 

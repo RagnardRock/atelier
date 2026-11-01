@@ -739,6 +739,35 @@ const App = (() => {
       { label: 'Défaire le groupe (garder les cartes)', run: () => ungroup(nom) },
     ];
   }
+  // Tafl 1.12 (module roguelite) : la salle de donjon d'une carte : son type, son poids, ses étages. Ses
+  // portes sont les ouvertures de son bord (les cases franchissables), comme Saga les lit.
+  async function mapSalle(i = api.doc.mapIndex) {
+    const doc = api.doc;
+    const m = doc.maps[i];
+    const s = m.salle || { type: 'combat', poids: 10, etage_min: 1, etage_max: 0 };
+    const col = Doc.collisions(doc, m);
+    const libre = (x, y) => col[y * m.width + x] !== Doc.PASSAGE.bloque && col[y * m.width + x] < 3;
+    const portes = DonneesRoguelite.nomsPortes(DonneesRoguelite.portes(m, libre));
+    const v = await Dialogs.form({
+      title: `Salle de donjon : ${m.name}`,
+      okLabel: 'Appliquer',
+      width: 500,
+      fields: [
+        { key: 'salle', label: 'Salle de donjon', type: 'checkbox', value: Boolean(m.salle) },
+        { key: 'type', label: 'Type', type: 'select', value: s.type, choices: DonneesRoguelite.TYPES_SALLE },
+        { key: 'poids', label: 'Poids', type: 'number', value: s.poids, min: 1, max: 1000, unit: 'plus il est grand, plus elle sort souvent' },
+        { key: 'etage_min', label: 'Dès l\'étage', type: 'number', value: s.etage_min, min: 1, max: 99 },
+        { key: 'etage_max', label: 'Jusqu\'à l\'étage', type: 'number', value: s.etage_max, min: 0, max: 99, unit: '0 : tous' },
+        { type: 'info', text: `Portes trouvées : ${portes.length ? portes.join(', ') : 'aucune'}. Une porte, c'est une ouverture dans le mur au bord de la carte (des cases où l'on passe). Saga mure celles dont l'étage n'a pas besoin et ferme les autres tant qu'il reste des ennemis. Une salle avec quatre portes peut aller partout.` },
+        { type: 'info', text: 'Les ennemis : dessine une zone et mets-y des ennemis (pack action). Les événements de la salle (coffre, escalier, marchand) sont copiés dans chaque salle tirée, avec leur propre mémoire.' },
+      ],
+      onInput: (values, f) => { for (const k of ['type', 'poids', 'etage_min', 'etage_max']) f.inputs[k].row.hidden = !values.salle; },
+    });
+    if (!v) return;
+    const salle = v.salle ? DonneesRoguelite.normSalle({ type: v.type, poids: v.poids, etage_min: v.etage_min, etage_max: v.etage_max }) : null;
+    Doc.change(doc, salle ? 'Salle de donjon' : 'Plus une salle de donjon', () => { doc.maps[i] = { ...m, salle }; Doc.selectMap(doc, doc.mapIndex); });
+    if (salle && !portes.length) notify('Cette salle n\'a aucune porte : laisse une ouverture dans son mur, au bord de la carte.', 'info', 4000);
+  }
   function toggleInterior(i = api.doc.mapIndex) {
     const doc = api.doc;
     const m = doc.maps[i];
@@ -762,6 +791,8 @@ const App = (() => {
       null,
       { label: 'Mettre dans un groupe…', run: () => run(() => setMapGroup()) },
       { label: 'Carte intérieure (pas sur la carte monde)', checked: Boolean(doc.map.interieur), run: () => toggleInterior() },
+      // Tafl 1.12 : avec le module roguelite, une carte peut être une salle de donjon modèle.
+      ...(doc.game && (doc.data.reglages?.modules || []).includes('roguelite') ? [{ label: 'Salle de donjon (roguelite)…', checked: Boolean(doc.map.salle), run: () => run(() => mapSalle()) }] : []),
       { label: 'Carte monde…', keys: 'Ctrl+Maj+M', run: () => run(openWorld) },
       null,
       { label: 'Monter la carte dans la liste', disabled: doc.mapIndex === 0, run: () => moveMap(-1) },
@@ -1342,7 +1373,7 @@ const App = (() => {
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec des tuiles d\'exemple (herbe, hautes herbes, chemin, eau, fleur) et une petite carte', type: 'checkbox', value: true },
         // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
-        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien']] }] : []),
+        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien'], ['roguelite', 'Le petit roguelite (temps réel + module roguelite) : un camp, des salles tirées au hasard, des perks et des améliorations']] }] : []),
         ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
@@ -1353,6 +1384,7 @@ const App = (() => {
     else if (game && v.modele === 'arene') ExempleArene.remplir(doc);
     else if (game && v.modele === 'domaine') ExempleDomaine.remplir(doc);
     else if (game && v.modele === 'donjon') ExempleDonjon.remplir(doc);
+    else if (game && v.modele === 'roguelite') ExempleRoguelite.remplir(doc);
     else if (v.samples) Samples.fill(doc);
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut

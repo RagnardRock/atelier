@@ -1128,6 +1128,108 @@ soigné, et les ennemis de la carte reviennent.
 Dans Saga, F3 montre les boîtes, les chemins des ennemis et ce qu'ils font. Le chemin d'un ennemi est
 l'A* de `moteur/chemins.js`, en 8 directions.
 
+### Le module roguelite (Tafl 1.12, Saga 1.14)
+
+`"roguelite"` dans `reglages.modules` : des parties courtes dans un donjon que Saga bâtit au hasard
+(une graine) à partir des **salles modèles** du jeu. Pendant une partie, le joueur gagne des **perks**
+(perdus à la fin) ; il garde une **monnaie** même après une défaite, qui achète des **améliorations**
+permanentes au camp. Le module marche avec tous les packs ; il est pensé d'abord pour le pack action.
+
+#### Les salles modèles (`carte.salle`)
+
+Une carte devient une salle modèle avec `salle` (Tafl : menu ⋯ de la carte › « Salle de donjon ») :
+
+| Champ | Sens |
+|---|---|
+| `type` | `depart`, `combat`, `tresor`, `boutique`, `repos` ou `boss` |
+| `poids` | 1 à 1000 (10 par défaut) : plus il est grand, plus Saga la choisit souvent parmi celles du même type |
+| `etage_min`, `etage_max` | les étages où elle peut sortir (`etage_max` 0 : jusqu'au bout) |
+
+Les **portes** d'une salle sont les cases où l'on marche sur ses bords (sans les coins) : le côté nord,
+sud, est ou ouest. Saga mure les portes dont l'étage n'a pas besoin (avec la tuile `tuile_mur`, ou un mur
+qu'il dessine), et ferme les autres (une barre ambrée) tant qu'il reste des ennemis dans la salle. Le
+joueur arrive par la porte du milieu du côté d'où il vient, un pas vers l'intérieur. Une salle doit avoir
+une porte sur chaque côté dont l'étage a besoin ; avec des portes sur les quatre côtés, elle va partout.
+
+Chaque salle d'une partie est une copie de son modèle (`<modele>@rl-<étage>-<n>`, la mémoire des
+copies) : ses coffres et ses interrupteurs locaux sont neufs à chaque partie.
+
+**L'étage** : un chemin depuis le départ, `salles` combats (plus `salles_par_etage` à chaque étage), puis
+le boss ; les trésors, boutiques et salles de repos sont des culs-de-sac accrochés au chemin. Saga choisit
+pour chaque case une salle du bon type, avec les bonnes portes et permise à cet étage (à défaut d'un
+trésor, d'une boutique ou d'un repos, une salle de combat).
+
+**Les ennemis** : ceux des zones de la salle (pack action : `rencontres`). Une rencontre peut avoir
+`etage_min` et `etage_max` (0 : tous) ; `renfort` ajoute un pourcentage d'ennemis par étage (pas aux
+boss). Une salle vidée ne se remplit plus.
+
+#### `donnees/perks.json`
+
+```json
+{ "perks": [ { "id": "lame", "nom": "Lame affûtée", "description": "Attaque +15 %.", "icone": "",
+  "rarete": "commun", "max": 3, "verrouille": false,
+  "effets": [ { "type": "stat", "stat": "attaque", "valeur": 15 } ] } ] }
+```
+
+| Champ | Sens |
+|---|---|
+| `rarete` | `commun`, `rare`, `epique`, `legendaire` : tiré 60, 28, 10 ou 2 fois sur 100 ; en boutique, `prix_perk` × 1, 2, 4 ou 8 |
+| `max` | 1 à 99 : combien de fois on peut l'avoir dans une partie (ses effets s'additionnent) |
+| `verrouille` | `true` : jamais tiré tant qu'une amélioration à effet `perk` ne l'a pas débloqué |
+| `effets` | jusqu'à 4 : `stat` (`stat`, `valeur` en %, par les bonus du groupe), `soin` (tous les PV, tout de suite), `vol_de_vie` (`valeur` PV par ennemi vaincu), `monnaie` (`valeur` % de monnaie en plus), `script` (rien d'autre : un script écoute `roguelite_perk`) |
+
+#### `donnees/ameliorations.json`
+
+```json
+{ "ameliorations": [ { "id": "entrainement", "nom": "Entraînement", "description": "Attaque +10 % par niveau.",
+  "icone": "", "cout": 10, "cout_niveau": 10, "niveau_max": 5,
+  "effets": [ { "type": "stat", "stat": "attaque", "valeur": 10 } ] } ] }
+```
+
+Le niveau `n + 1` coûte `cout + cout_niveau × n` de la monnaie du roguelite. Les `effets` (jusqu'à 4,
+multipliés par le niveau, à chaque partie) : `stat` (`stat`, `valeur` en %), `objet` (`objet`, `nombre` :
+donnés au départ de chaque partie), `argent` (`valeur` : argent au départ), `perk` (`perk` : débloque un
+perk verrouillé), `monnaie` (`valeur` % de monnaie en plus).
+
+#### Dans `reglages.json` : `modules_reglages.roguelite`
+
+| Champ | Défaut | Sens |
+|---|---|---|
+| `etages` | 3 | le boss du dernier étage vaincu : victoire |
+| `salles`, `salles_par_etage` | 4, 1 | combats au premier étage, puis en plus à chaque étage |
+| `tresors`, `boutiques`, `repos` | 1, 1, 1 | par étage |
+| `graine` | 0 | 0 : une nouvelle à chaque partie ; un nombre : toujours le même donjon |
+| `renfort` | 25 | % d'ennemis en plus à chaque étage |
+| `monnaie` | `Éclats` | le nom de la monnaie gardée |
+| `monnaie_ennemi`, `monnaie_etage`, `monnaie_victoire` | 1, 5, 20 | ce qu'elle rapporte |
+| `prix_perk` | 30 | le prix d'un perk commun en boutique (dans l'argent du jeu) |
+| `carte_mini` | `true` | la mini-carte de l'étage, en haut à droite |
+| `tuile_mur` | -1 | la tuile des portes murées (-1 : un mur dessiné par Saga) |
+
+#### Commandes
+
+| `type` | Champs | Effet |
+|---|---|---|
+| `roguelite_partir` | `graine` (0 : réglage du jeu) | nouvelle partie : bâtit l'étage 1, soigne, donne ce que les améliorations donnent, emmène le joueur au départ. Le point de retour est l'endroit d'où il part. |
+| `roguelite_suivant` | | la salle doit être vidée ; étage suivant, ou victoire après le dernier (retour au point de départ) |
+| `roguelite_perk` | `mode` (`hasard` ou `choix` : un parmi trois), `annoncer` | donne un perk |
+| `roguelite_boutique` | | trois perks par boutique, payés avec l'argent du jeu |
+| `roguelite_ameliorations` | | la liste des améliorations à acheter |
+| `roguelite_repos` | `annoncer` | soin complet, sans changer le point de réveil |
+| `roguelite_abandonner` | | finit la partie (la monnaie gagnée est gardée) |
+
+#### Conditions
+
+`roguelite_en_partie` (`valeur`), `roguelite_salle_vide` (`valeur`), `roguelite_etage` (`min`),
+`roguelite_amelioration` (`amelioration`, `min` : niveau), `roguelite_monnaie` (`min`), `roguelite_perk`
+(`perk`).
+
+#### Ce que le moteur garde dans une sauvegarde
+
+`modules.roguelite` : `monnaie`, `ameliorations` (`{ id: niveau }`), `parties`, `victoires`, `record`, et
+`run` pendant une partie (`graine`, `etage`, `salles` avec leurs liens et ce qui est vu ou vidé, `salle`,
+`perks`, `retour`, `gains`). Une défaite finit la partie : le joueur se réveille au point de retour.
+
 ## Test rapide
 
 (Tafl 0.27, joué par Saga 0.10.) Jeu › Test rapide lance le moteur avec un **état de départ** : une partie neuve, puis cet état posé par-dessus. Tafl le passe en ligne de commande, dans un fichier : `Saga.exe <dossier> --test=<fichier.json>`. Les états enregistrés vont dans `jeu.json`, champ `tests` (une liste).
@@ -1193,3 +1295,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 1.3** : la commande `dormir`, la condition `jour`, `jour` dans la sauvegarde (Saga 1.5) ; le module gestion : `donnees/ressources.json`, `donnees/batiments.json`, `modules_reglages.gestion`, ses commandes et conditions `gestion_…`, `modules.gestion` dans la sauvegarde. Des champs et des fichiers en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.33** : le mode table du pack `"jdr"` : `case_m`, `diagonales` et `jets_mj_caches` dans `reglages.jdr`, `piece` et `visible_par` dans les zones, `visible_par` dans les événements et les rencontres, `portee_longue`, `allonge` et `rayon` dans les attaques. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.10** : le pack de règles `"action"` (le temps réel de Saga 1.12) : `donnees/ennemis.json`, `reglages.action`, les rencontres `{ ennemi, nombre }` dans les zones, `animations`, `hitbox` et `frappe` dans les personnages, le compteur `monstres_vaincus` pour ce pack. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.12** : le module `roguelite` (Saga 1.14) : `salle` dans les cartes, `donnees/perks.json`, `donnees/ameliorations.json`, `modules_reglages.roguelite`, `etage_min` et `etage_max` dans les rencontres du pack action, ses commandes et conditions `roguelite_…`, `modules.roguelite` dans la sauvegarde. Des champs en plus, donc la version reste 1.

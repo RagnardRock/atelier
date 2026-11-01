@@ -251,6 +251,15 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - Pour tous les menus (`Menus.liste`) : `section`, `sous`, `ton`, `pastille`, et `lecture: true` (un écran à lire : rien n'est surligné, Action ou Échap ferme). Les colonnes d'image et de PV ne prennent de la place que si une ligne s'en sert.
 - Contrat des modules : `finDeJournee` peut rendre des lignes de menu (`{ texte, detail, sous, image, pastille, ton, section }`), deux lignes de texte identiques n'en font plus qu'une (« ×2 »), et le nouveau `carnet(o)` ajoute des sections au carnet.
 
+## Ce que fait Saga 1.14 : le module roguelite (avec Tafl 1.12)
+
+- **Un donjon neuf à chaque partie** : Saga assemble chaque étage, à partir d'une graine, avec les salles modèles du jeu (des cartes « Salle de donjon » : départ, combat, trésor, boutique, repos, boss). Un chemin du départ au boss, des culs-de-sac pour les trésors, la boutique et la fontaine. Une graine fixe redonne toujours le même donjon.
+- **Les portes** sont les ouvertures du mur de chaque salle : celles dont l'étage n'a pas besoin sont murées, les autres restent fermées (une barre ambrée) tant qu'il reste des ennemis. Une **mini-carte** en haut à droite montre les salles vues, celles qu'on devine derrière leurs portes, et la monnaie.
+- **Les perks** de la partie : au hasard dans un coffre, un parmi trois après le boss, ou à la boutique (payés avec l'argent du jeu). Ils sont perdus à la fin. Carnet (Tab) › « Perks de la partie » et « Abandonner la partie ».
+- **La monnaie du roguelite** (« Éclats » par défaut) se gagne par ennemi, par étage et à la victoire, et reste même après une défaite. Au camp, elle achète des **améliorations** permanentes (statistiques, objets ou argent au départ, perks débloqués).
+- Plus bas, plus d'ennemis (`renfort`) ; une rencontre peut être réservée à certains étages. Une défaite finit la partie : le joueur se réveille au camp.
+- Contrat des modules (MODULES.md) : `moment`, `rencontres` et `reveil`, et l'hôte prête `soigner(pv)`, `retirerBonus`, `ennemis`, `teleporter`, `oublierCopies` et `annoncer`.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
