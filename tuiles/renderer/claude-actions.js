@@ -133,6 +133,29 @@
   };
   const nombre = { type: 'number' };
   const lignesSchema = { type: 'array', items: { type: 'string' } };
+  // Tafl 1.14 : les paramètres de chaque opération de peindre_tuile et dessiner_objet, écrits dans le
+  // schéma (un modèle local ne reçoit pas toujours toute la description : il les trouve ici).
+  const texte = (d) => ({ type: 'string', description: d });
+  const operationsSchema = {
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: PixelArt.OPERATIONS },
+        couleur: texte('code de la palette, #rrggbb ou « . »'), couleurs: { type: 'array', items: { type: 'string' } },
+        x: nombre, y: nombre, largeur: nombre, hauteur: nombre, vide: { type: 'boolean' },
+        points: { type: 'array', items: { type: 'array', items: nombre } }, x1: nombre, y1: nombre, x2: nombre, y2: nombre,
+        direction: { type: 'string', enum: ['bas', 'haut', 'droite', 'gauche', 'diagonale', 'radial'] }, trame: { type: 'boolean' },
+        densite: texte('0 à 1 (nombre)'), taille: nombre, graine: nombre, espace: nombre, raccord: { type: 'boolean' },
+        forme: texte('bruit : amas, brin, touffe, trait ou point ; contour, ombrage, ombre_portee : les couleurs de l\'objet'),
+        cotes: { type: 'string', enum: ['tout', 'bas', 'bas_droite', 'haut'] }, interieur: { type: 'boolean' },
+        clair: { type: 'string' }, sombre: { type: 'string' }, lumiere: { type: 'string', enum: ['haut_gauche', 'haut', 'haut_droite', 'gauche', 'droite'] }, epaisseur: nombre,
+        dx: nombre, dy: nombre, lignes: lignesSchema, positions: { type: 'array' }, axe: { type: 'string', enum: ['vertical', 'horizontal'] },
+        de: { type: 'string' }, vers: { type: 'string' }, garder: { type: 'string' }, seulement: texte('ne touche que ces couleurs'),
+      },
+      required: ['type'],
+    },
+  };
 
   // --- Tafl 0.19 : économiser les jetons ---
   // Chaque action de Claude relit toute la conversation : une réponse de 20 000 jetons (la liste
@@ -499,7 +522,7 @@
 - ombre_portee (couleur, forme, dx, dy : 1, 1 par défaut) : l'ombre de l'objet sur le sol ;
 - pixels (lignes : du texte comme dessiner_tuile, x, y ; « . » = laisser) ; repeter (lignes : un petit motif soigné, positions : [[x, y], …] ou [{ x, y, miroir }]) ; symetrie (axe vertical : gauche → droite, horizontal : haut → bas) ; remplacer (de, vers) ; decaler (dx, dy, en boucle).
 Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
-      schema: { type: 'object', properties: { operations: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: PixelArt.OPERATIONS } }, required: ['type'] } }, index: nombre, image: nombre, toutes_images: { type: 'boolean' }, nom: { type: 'string' } }, required: ['operations'] },
+      schema: { type: 'object', properties: { operations: operationsSchema, index: nombre, image: nombre, toutes_images: { type: 'boolean' }, nom: { type: 'string' } }, required: ['operations'] },
       faire: (a) => {
         const doc = besoinJeu();
         if (!Array.isArray(a.operations) || !a.operations.length) throw new Error('operations : au moins une.');
@@ -536,11 +559,48 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return resultatTuile(doc, i, `Tuile ${i} « ${doc.tiles[i].name} » peinte (${a.operations.length} opération(s)${nouvelles.size ? `, ${nouvelles.size} couleur(s) ajoutée(s) à la palette` : ''}).`, k);
       },
     },
+    recette_tuile: {
+      icone: 'symbol-color',
+      libelle: (a) => `Peint ${Math.max(1, Math.min(4, Math.round(a.variantes || 1)))} tuile(s) « ${a.recette} »${a.categorie ? ` dans « ${a.categorie} »` : ''}`,
+      description: `Peint des tuiles propres d'après une recette (Tafl 1.14), en un seul appel : le plus simple et le plus sûr pour les sols, chemins, murs et toits. recette : ${Recettes.liste().join(' ; ')}. couleur : une couleur de base #rrggbb pour une autre teinte (sinon les rampes de la palette Brume). variantes : 1 à 4 tuiles (même recette, autre tirage : pose-les ensemble avec poser_tuiles variantes, la répétition disparaît). nom (sinon celui de la recette), categorie (où les ranger), graine (une autre graine = d'autres variantes). Les sols se raccordent en mosaïque ; rocher a un fond transparent (à poser sur un calque de décor). Retouche ensuite avec peindre_tuile (index) si besoin.`,
+      schema: { type: 'object', properties: { recette: { type: 'string', enum: Recettes.NOMS }, couleur: { type: 'string', description: '#rrggbb, facultatif' }, variantes: nombre, nom: { type: 'string' }, categorie: { type: 'string' }, graine: nombre }, required: ['recette'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const recette = String(a.recette || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s-]+/g, '_');
+        const n = clamp(Math.round(Number(a.variantes) || 1), 1, 4);
+        const g0 = Math.max(1, Math.round(Number(a.graine) || 1));
+        const s = doc.tileSize;
+        const { nouvelles, lire } = lecteurCouleurs(doc);
+        const couleur = a.couleur ? normalizeHex(String(a.couleur)) : null;
+        if (a.couleur && !couleur) throw new Error(`couleur : #rrggbb attendu (reçu « ${a.couleur} »).`);
+        const images = [];
+        for (let k = 0; k < n; k++) {
+          const data = new Uint8ClampedArray(s * s * 4);
+          const toile = PixelArt.Toile(data, s, s);
+          for (const op of Recettes.operations(recette, { taille: s, graine: g0 + k * 101, couleur })) PixelArt.operation(toile, op, lire);
+          images.push(data);
+        }
+        const base = String(a.nom || recette.replace(/_/g, ' '));
+        const indices = [];
+        Doc.change(doc, `Recette « ${recette} » (Loki)`, () => {
+          ajouterCouleurs(doc, nouvelles);
+          images.forEach((data, k) => {
+            const nom = n > 1 ? `${base} ${k + 1}` : base;
+            const i = Doc.addTile(doc, data, doc.tiles.some((t) => t.name === nom) ? Doc.uniqueName(doc, nom) : nom);
+            if (a.categorie) doc.tiles[i].categorie = String(a.categorie);
+            indices.push(i);
+          });
+          doc.current = indices[0];
+        });
+        App.selectTile(indices[0]);
+        return resultatTuile(doc, indices[0], `Recette « ${recette} » : tuile(s) ${indices.map((i) => `${i} « ${doc.tiles[i].name} »`).join(', ')}${a.categorie ? ` dans la catégorie « ${a.categorie} »` : ''}.`);
+      },
+    },
     dessiner_objet: {
       icone: 'symbol-structure',
       libelle: (a) => (a.tampon !== undefined ? `Redessine l'objet ${a.tampon}` : `Dessine l'objet « ${a.nom || 'objet'} » (${a.largeur || 2} × ${a.hauteur || 2} tuiles)`),
       description: `Dessine un grand objet (arbre, maison, falaise, fontaine, statue…) d'un seul tenant, sur plusieurs tuiles : c'est là que se fait la finesse (un sapin de 3 × 4 tuiles a la place pour des branches étagées, une maison pour ses planches, ses tuiles de toit et ses fenêtres). Mêmes operations que peindre_tuile, sur toute l'image (largeur × taille des tuiles en pixels, fond transparent), plus repeter (un motif soigné posé à plusieurs positions). L'image est ensuite découpée en tuiles (les tuiles vides sont sautées) et devient un tampon prêt à poser. largeur, hauteur : en tuiles (1 à 8) ; nom ; dessus : les rangées du haut qui passent devant le joueur (la cime) ; tampon : un objet existant (numéro ou nom) à reprendre et retoucher, ses tuiles sont alors remplacées. Tu vois ensuite l'objet agrandi pixel par pixel.`,
-      schema: { type: 'object', properties: { operations: { type: 'array', items: { type: 'object', properties: { type: { type: 'string', enum: PixelArt.OPERATIONS } }, required: ['type'] } }, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, dessus: nombre, tampon: { type: ['string', 'number'] } }, required: ['operations'] },
+      schema: { type: 'object', properties: { operations: operationsSchema, nom: { type: 'string' }, largeur: nombre, hauteur: nombre, dessus: nombre, tampon: { type: ['string', 'number'] } }, required: ['operations'] },
       faire: (a) => {
         const doc = besoinJeu();
         const s = doc.tileSize;

@@ -167,6 +167,7 @@ function outilsFichiers(cwd) {
 // faire_action, il répondait souvent qu'il « n'avait pas accès » aux actions que ses consignes nommaient.
 const MAX_DESCRIPTION_OUTIL = 600; // caractères de description pour une action donnée en outil
 const MAX_ACTIONS_ACTIVES = 12;
+const MAX_DESCRIPTION_COMPLETE = 4000; // pour une action utilisée ou regardée
 
 const sansAccents = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const VIDES = new Set(['les', 'des', 'une', 'pour', 'dans', 'avec', 'sur', 'par', 'est', 'que', 'qui', 'pas', 'tout', 'tous', 'fais', 'faire', 'peux', 'veux', 'moi', 'toi', 'mon', 'mes', 'ton', 'tes', 'son', 'ses', 'cette', 'ces', 'aux', 'du', 'de', 'la', 'le', 'un', 'et', 'ou', 'en', 'au', 'a', 'stp', 'merci', 'loki', 'peut', 'plus', 'comme', 'aussi', 'bien']);
@@ -202,8 +203,11 @@ function creerCatalogue(actionsOutil, essentielles = []) {
     // (seulement des actions de l'outil : une conversation reprise peut avoir appelé d'autres outils)
     return [...new Set(ordre)].filter((n) => parNom.has(n));
   }
-  function definition(a) {
+  // complet : la description entière (une action que le modèle utilise ou a regardée : il lui faut tout
+  // son mode d'emploi, pas seulement le début).
+  function definition(a, complet = false) {
     const d = String(a.description || '');
+    if (complet) return { type: 'function', function: { name: a.name, description: d.slice(0, MAX_DESCRIPTION_COMPLETE), parameters: a.parameters || { type: 'object', properties: {} } } };
     return {
       type: 'function',
       function: {
@@ -342,9 +346,14 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
         if (!cat) return [];
         const defs = [];
         let place = placeActions;
-        for (const nom of cat.choisir(texte, utilisees)) {
+        // D'abord les actions déjà utilisées ou regardées (en entier, sinon en court), puis les autres.
+        const recentes = [...utilisees].reverse().filter((n) => cat.parNom.has(n)).slice(0, 4);
+        const ordre = [...recentes, ...cat.choisir(texte, utilisees).filter((n) => !recentes.includes(n))];
+        for (const nom of ordre) {
           if (defs.length >= MAX_ACTIONS_ACTIVES) break;
-          const d = cat.definition(cat.parNom.get(nom));
+          const a = cat.parNom.get(nom);
+          let d = cat.definition(a, recentes.includes(nom));
+          if (JSON.stringify(d).length > place) d = cat.definition(a);
           const taille = JSON.stringify(d).length;
           if (taille > place) continue;
           place -= taille;
