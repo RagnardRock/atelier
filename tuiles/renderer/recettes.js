@@ -698,8 +698,8 @@ const Recettes = (() => {
     const W = B.l * 16, H = B.h * 16, f = feuille(W, H);
     const T = RAMPES[B.toit], M = RAMPES[B.mur], Bo = RAMPES.bois, V = RAMPES.vitre, P = RAMPES.pierre, Fe = RAMPES.feuillage, A = RAMPES.ardoise;
     const rnd = hasard(g + 307);
-    const S = 6, D = 24;                          // la profondeur : 6 px à droite, 24 px vers le haut
-    const F0 = 3, F1 = W - 14, cx = (F0 + F1) / 2; // la façade
+    const S = 2, D = 24;                          // la profondeur : 2 px à droite, 24 px vers le haut
+    const F0 = 4, F1 = W - 11, cx = (F0 + F1) / 2; // la façade
     const ga = 28, egout = 48, base = H - 5, mid = egout + 13;
     const sombre = (c, t) => melange(c, '#141024', t);
     // --- Le mur de droite (dans l'ombre), vu en biais.
