@@ -39,13 +39,13 @@
     const def = d.ressources.get(r);
     const objet = def?.objet ? (o.jeu.donnees?.objets?.objets || []).find((x) => x.id === def.objet) : null;
     const image = def?.icone || objet?.icone || '';
-    return image ? { image } : { pastille: C.nomRessource(d, r) };
+    return image ? { image } : d.reglages.pastilles ? { pastille: C.nomRessource(d, r) } : {};
   }
   const signe = (k) => (k > 0 ? `+${k}` : k < 0 ? `−${-k}` : '±0');
-  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
-  // Ce qui a bougé pour une ressource, en mots : « 6 produits · 3 mangés ».
-  const raisons = (b) => [b.produit ? `${b.produit} produit${b.produit > 1 ? 's' : ''}` : '', b.mange ? `${b.mange} mangé${b.mange > 1 ? 's' : ''}` : '',
-    b.consomme ? `${b.consomme} utilisé${b.consomme > 1 ? 's' : ''}` : '', b.perdu ? `${b.perdu} perdu${b.perdu > 1 ? 's' : ''} (stock plein)` : ''].filter(Boolean).join(' · ');
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 && !/[sx]$/.test(mot) ? 's' : ''}`;
+  // Ce qui a bougé pour une ressource, en mots : « 6 produits · 3 mangés » (les mots : réglage textes).
+  const raisons = (d, b) => { const T = d.reglages.textes; return [b.produit ? pluriel(b.produit, T.produit) : '', b.mange ? pluriel(b.mange, T.mange) : '',
+    b.consomme ? pluriel(b.consomme, T.utilise) : '', b.perdu ? pluriel(b.perdu, T.perdu) : ''].filter(Boolean).join(' · '); };
 
   // Ce que font n bâtiments d'un type, en mots : « loge 2 · produit 3 Blé par nuit (1 ouvrier) ».
   function role(d, def, n = 1) {
@@ -63,13 +63,13 @@
     for (const [type, n] of finis) {
       const def = d.batiments.get(type);
       const rep = def?.repos;
-      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: role(d, def, n), detail: rep ? (rep.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : 'Terminé' });
+      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: role(d, def, n), detail: rep ? (rep.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : d.reglages.textes.termine });
     }
     // Les chantiers : regroupés eux aussi, par type et par nuits qui restent.
     const chantiers = new Map();
     for (const b of e.batiments) if (b.etat !== 'fini') { const k = `${b.type}:${b.reste}`; chantiers.set(k, { type: b.type, reste: b.reste, n: (chantiers.get(k)?.n || 0) + 1 }); }
     for (const { type, reste, n } of chantiers.values()) {
-      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: 'en chantier', detail: reste > 1 ? `encore ${reste} nuits` : 'fini demain matin', ton: 'doux' });
+      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: d.reglages.textes.chantier, detail: reste > 1 ? `encore ${reste} nuits` : d.reglages.textes.fini_demain, ton: 'doux' });
     }
     return out;
   }
@@ -85,37 +85,38 @@
     const section = (texte, detail = '') => ({ texte, detail, section: true });
     // La nuit qui vient, calculée sur une copie (rien ne change pour de vrai).
     const nuit = d.reglages.prevision ? C.finDeJournee(d, e, e.resolu + 1) : null;
-    const items = [section('Stock', cap ? `${cap} au plus de chaque` : '')];
+    const T = d.reglages.textes;
+    const items = [section(T.stock, cap ? `${cap} au plus de chaque` : '')];
     const ressources = [...new Set([...d.ressources.keys(), ...Object.keys(e.stock)])].filter((r) => e.stock[r] || d.ressources.has(r));
-    if (!ressources.length) items.push({ texte: 'Rien pour l\'instant', ton: 'doux' });
+    if (!ressources.length) items.push({ texte: T.vide, ton: 'doux' });
     for (const r of ressources) {
       const b = nuit?.bilan[r];
       const k = b ? b.apres - b.avant : 0;
       items.push({ texte: C.nomRessource(d, r), ...apparence(o, d, r), detail: cap ? `${e.stock[r] || 0} / ${cap}` : String(e.stock[r] || 0),
-        sous: b && (k || raisons(b)) ? `cette nuit : ${signe(k)}${raisons(b) ? ` (${raisons(b)})` : ''}` : '' });
+        sous: b && (k || raisons(d, b)) ? `${T.cette_nuit} : ${signe(k)}${raisons(d, b) ? ` (${raisons(d, b)})` : ''}` : '' });
     }
     // Les habitants : seulement si le jeu s'en sert (des logements, des ouvriers ou des habitants au départ).
     const em = C.emplois(d, e);
     if (em.habitants || em.logement || [...d.batiments.values()].some((b) => b.ouvriers)) {
-      items.push(section('Habitants'));
+      items.push(section(T.habitants));
       const place = em.logement - em.habitants;
-      items.push({ texte: 'Logés', detail: `${em.habitants} / ${em.logement}`, sous: place > 0 ? `${pluriel(place, 'place')} pour de nouveaux venus` : em.logement ? 'tout est occupé : un nouveau logement en attirerait d\'autres' : 'aucun logement pour l\'instant' });
-      if (em.demandes) items.push({ texte: 'Au travail', detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes}`, sous: em.libres ? `${pluriel(em.libres, 'habitant')} sans travail` : '' });
+      items.push({ texte: T.loges, detail: `${em.habitants} / ${em.logement}`, sous: place > 0 ? `${pluriel(place, 'place')} pour de nouveaux venus` : em.logement ? 'tout est occupé : un nouveau logement en attirerait d\'autres' : 'aucun logement pour l\'instant' });
+      if (em.demandes) items.push({ texte: T.travail, detail: `${Math.min(em.demandes, em.habitants - em.libres)} / ${em.demandes}`, sous: em.libres ? `${pluriel(em.libres, 'habitant')} sans travail` : '' });
       if (Object.keys(d.reglages.repas).length && em.habitants) {
         const faut = Object.fromEntries(Object.entries(d.reglages.repas).map(([r, k]) => [r, k * em.habitants]));
         const manque = Object.fromEntries(Object.entries(faut).map(([r, k]) => [r, k - (e.stock[r] || 0)]).filter(([, k]) => k > 0));
-        items.push({ texte: 'Repas de ce soir', detail: C.dire(d, faut) || 'rien', ...(Object.keys(manque).length ? { ton: 'alerte', sous: `il manque ${C.dire(d, manque)}` } : {}) });
+        items.push({ texte: T.repas, detail: C.dire(d, faut) || 'rien', ...(Object.keys(manque).length ? { ton: 'alerte', sous: `il manque ${C.dire(d, manque)}` } : {}) });
       }
     }
     // Saga 1.11 : les bonus du groupe en cours (des bains, d'un repas).
     const bonus = Array.isArray(o.partie.bonus) ? o.partie.bonus : [];
     if (bonus.length) {
-      items.push(section('Le groupe'));
+      items.push(section(T.groupe));
       for (const b of bonus) items.push({ texte: b.nom, detail: `${Bonus.dire(b, o.hote?.nomsStats?.() || {})}${Bonus.duree(b) ? ` · ${Bonus.duree(b)}` : ''}` });
     }
-    items.push(section('Bâtiments', e.batiments.length ? String(e.batiments.length) : ''));
+    items.push(section(T.batiments, e.batiments.length ? String(e.batiments.length) : ''));
     const bat = lignesBatiments(d, e);
-    if (!bat.length) items.push({ texte: 'Aucun pour l\'instant', ton: 'doux' });
+    if (!bat.length) items.push({ texte: T.vide, ton: 'doux' });
     items.push(...bat);
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true, lecture: true });
   }
@@ -123,14 +124,14 @@
   // Saga 1.13 : le rapport du matin, en lignes de menu : le bilan du stock (rapport_bilan), puis le reste.
   function rapport(o, d, r) {
     const out = [];
-    const bilan = Object.entries(r.bilan).filter(([, b]) => b.apres !== b.avant || raisons(b));
+    const bilan = Object.entries(r.bilan).filter(([, b]) => b.apres !== b.avant || raisons(d, b));
     if (d.reglages.rapport_bilan && bilan.length) {
-      out.push({ texte: 'Le stock', section: true });
+      out.push({ texte: d.reglages.textes.rapport_stock, section: true });
       for (const [res, b] of bilan) {
         const k = b.apres - b.avant;
-        out.push({ texte: C.nomRessource(d, res), ...apparence(o, d, res), detail: signe(k), ton: k > 0 ? 'plus' : k < 0 ? 'moins' : '', sous: `${raisons(b)} · il y en a ${b.apres}` });
+        out.push({ texte: C.nomRessource(d, res), ...apparence(o, d, res), detail: signe(k), ton: k > 0 ? 'plus' : k < 0 ? 'moins' : '', sous: `${raisons(d, b)} · il y en a ${b.apres}` });
       }
-      if (r.evenements.length) out.push({ texte: d.reglages.nom, section: true });
+      if (r.evenements.length) out.push({ texte: d.reglages.textes.rapport_domaine || d.reglages.nom, section: true });
       for (const x of r.evenements) out.push({ texte: x.texte, ton: x.ton });
       return out;
     }

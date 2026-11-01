@@ -325,7 +325,9 @@ const Donnees = (() => {
   // Tafl 0.29 (Saga 0.11) : l'horloge du jeu, la musique des combats et les bruitages, la sauvegarde auto.
   const HORLOGES = [['aucune', 'Aucune : il fait toujours jour'], ['jeu', 'Horloge du jeu (elle avance quand on joue)'], ['reelle', 'Heure réelle du PC (comme Pokémon Or et Argent)']];
   const SONS_INTEGRES = [['curseur', 'Curseur (changer de choix)'], ['valider', 'Valider'], ['retour', 'Retour, annuler'], ['texte', 'Texte qui s\'écrit'], ['porte', 'Porte, téléporteur'], ['sauvegarde', 'Partie sauvegardée'], ['choc', 'Se cogner à un mur']];
-  function tempsVide() { return { horloge: 'aucune', duree_jour: 24, heure_depart: 8 }; }
+  // Tafl 1.11 (Saga 1.13) : l'écran du réveil (titre, en-tête, note) et le jour dans le carnet.
+  const CARNET_JOUR = [['auto', 'Si le jeu a un module (le domaine)'], ['oui', 'Toujours'], ['non', 'Jamais']];
+  function tempsVide() { return { horloge: 'aucune', duree_jour: 24, heure_depart: 8, matin_titre: 'Jour {jour}', matin_entete: 'Bonjour !', matin_note: 'Pendant la nuit…', carnet_jour: 'auto' }; }
   function audioVide() { return { musique_combat: '', musique_dresseur: '', musique_victoire: '', sons: Object.fromEntries(SONS_INTEGRES.map(([k]) => [k, ''])) }; }
   // Un son du dossier sons/ du jeu, ou un des mots permis ; sinon ''.
   const son = (v, mots = []) => {
@@ -334,7 +336,9 @@ const Donnees = (() => {
     return /^sons\/[^/]+$/.test(t) && !t.includes('..') ? t : '';
   };
   function normTemps(t) {
-    return { horloge: pick(t?.horloge, HORLOGES, 'aucune'), duree_jour: int(t?.duree_jour, 24, 1, 1440), heure_depart: int(t?.heure_depart, 8, 0, 23) };
+    return { horloge: pick(t?.horloge, HORLOGES, 'aucune'), duree_jour: int(t?.duree_jour, 24, 1, 1440), heure_depart: int(t?.heure_depart, 8, 0, 23),
+      matin_titre: str(t?.matin_titre).slice(0, 60) || 'Jour {jour}', matin_entete: typeof t?.matin_entete === 'string' ? t.matin_entete.slice(0, 40) : 'Bonjour !',
+      matin_note: typeof t?.matin_note === 'string' ? t.matin_note.slice(0, 120) : 'Pendant la nuit…', carnet_jour: pick(t?.carnet_jour, CARNET_JOUR, 'auto') };
   }
   function normAudio(a) {
     return {
@@ -1726,6 +1730,15 @@ const Donnees = (() => {
       info('Saga assombrit les cartes extérieures la nuit (bleu nuit), les dore à l\'aube et au couchant. Les intérieurs ne changent pas ; une carte peut aussi ne pas suivre le jour et la nuit (Carte › Ambiance). Les tuiles et les événements qui ont une lumière brillent quand il fait sombre. Les pages et les « si » peuvent dépendre du moment (condition « Le moment de la journée »).'),
       champ('Horloge', sel(HORLOGES, t.horloge, (v) => { t.horloge = v; majTemps(); })),
       lignesTemps,
+      // Tafl 1.11 : l'écran qu'on lit au réveil (commande Dormir), quand un module a quelque chose à dire.
+      section('Le réveil'),
+      info('L\'écran du matin, après la commande « Dormir » : ce que les modules racontent de la nuit (le domaine : le bilan du stock, les chantiers finis…). {jour} devient le numéro du jour.'),
+      el('div', { className: 'field-grid' }, [
+        champ('Titre', texteIn(t, 'matin_titre', 'Jour {jour}')),
+        champ('En-tête', texteIn(t, 'matin_entete', ''), 'à droite du titre (vide : rien)'),
+        champ('Note', texteIn(t, 'matin_note', ''), 'sous le titre (vide : rien)'),
+      ]),
+      champ('Le jour dans le carnet (Tab)', sel(CARNET_JOUR, t.carnet_jour, (v) => { t.carnet_jour = v; }), 'à côté de l\'heure'),
       section('Musique et sons'),
       info('Les sons sont des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique de chaque carte se choisit dans Carte › Ambiance. Sans fichier, Saga joue ses propres bruitages (des petits « bips ») ; « Aucun » les fait taire.'),
       musique('musique_combat', 'Musique des combats', 'Aucune (la musique de la carte continue)'),

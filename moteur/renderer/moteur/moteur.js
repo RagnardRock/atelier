@@ -1327,7 +1327,7 @@ const Moteur = (() => {
       actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie, hoteModules)] : []),
       // Saga 1.13 : les sections des modules dans le carnet (le résumé du domaine), et s'il faut y dire le jour.
       sectionsCarnet: () => (jeu ? Modules.carnet(jeu, partie, hoteModules) : []),
-      jourVisible: () => Boolean(jeu && Modules.actifs?.(jeu)?.length),
+      jourVisible: () => { if (!jeu) return false; const c = Temps.reglages(jeu).carnet_jour; return c === 'auto' ? Boolean(Modules.actifs?.(jeu)?.length) : c === 'oui'; },
       agirPause: (id) => horsScript(() => (Modules.estActionPause(id)
         ? Modules.agirPause(jeu, partie, hoteModules, id)
         : Regles.agirPause({ jeu, partie, ui: scripts.ui, id })), 'Erreur dans ce menu'),

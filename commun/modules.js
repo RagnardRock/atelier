@@ -16,6 +16,8 @@
 //     moments: { nom: { nom, infos } },    les moments qu'il annonce aux scripts (quand(nom, fn))
 //     commandes: { type: { nom } },        les commandes d'événement qu'il ajoute
 //     conditions: { type: { nom } },       les conditions de page qu'il ajoute
+//     textes: { cle: [défaut, libellé] },  (Saga 1.13) les mots de ses écrans, que le jeu peut changer
+//                                          (Tafl les montre ; vide dans le jeu : le défaut)
 //   }
 //
 // Le premier module est « gestion » (Saga 1.5, Tafl 1.3).
@@ -47,6 +49,28 @@ const ModulesJeu = (() => {
         gestion_chantier: { nom: 'Un chantier est en cours' },
         gestion_stock: { nom: 'Le stock a assez d\'une ressource' },
         gestion_habitants: { nom: 'Le domaine a assez d\'habitants' },
+      },
+      // Saga 1.13 : les mots des écrans du domaine (modules_reglages.gestion.textes). produit, mange,
+      // utilise et perdu prennent un s tout seuls quand il y en a plusieurs.
+      textes: {
+        stock: ['Stock', 'Écran du domaine : la section du stock'],
+        habitants: ['Habitants', 'Écran du domaine : la section des habitants'],
+        groupe: ['Le groupe', 'Écran du domaine : la section des bonus du groupe'],
+        batiments: ['Bâtiments', 'Écran du domaine : la section des bâtiments'],
+        loges: ['Logés', 'Les habitants logés'],
+        travail: ['Au travail', 'Les habitants au travail'],
+        repas: ['Repas de ce soir', 'Ce que mangeront les habitants'],
+        termine: ['Terminé', 'Un bâtiment fini'],
+        chantier: ['en chantier', 'Un bâtiment pas encore fini'],
+        fini_demain: ['fini demain matin', 'Un chantier qui finit cette nuit'],
+        cette_nuit: ['cette nuit', 'La prévision sous une ressource'],
+        vide: ['Aucun pour l\'instant', 'Aucun bâtiment, aucune ressource'],
+        rapport_stock: ['Le stock', 'Rapport du matin : la section du bilan'],
+        rapport_domaine: ['', 'Rapport du matin : la section du reste (vide : le nom du domaine)'],
+        produit: ['produit', 'Bilan : ce qui a été produit'],
+        mange: ['mangé', 'Bilan : ce qui a été mangé'],
+        utilise: ['utilisé', 'Bilan : ce que les bâtiments ont utilisé'],
+        perdu: ['perdu', 'Bilan : ce qui a été perdu (stock plein)'],
       },
     },
   };

@@ -112,9 +112,20 @@ const GestionCalcul = (() => {
       // Saga 1.13 : les écrans. rapport_bilan : le rapport du matin commence par ce qui a bougé dans le stock
       // (et pourquoi) ; prevision : l'écran du domaine dit ce que la nuit va changer ; carnet_resume : le
       // stock et les habitants en résumé dans le carnet (Tab). Tous à true par défaut.
-      rapport_bilan: g.rapport_bilan !== false, prevision: g.prevision !== false, carnet_resume: g.carnet_resume !== false };
+      rapport_bilan: g.rapport_bilan !== false, prevision: g.prevision !== false, carnet_resume: g.carnet_resume !== false,
+      // pastilles (true) : une ressource sans icône a une pastille de couleur avec son initiale ; textes : les
+      // mots des écrans (le catalogue commun/modules.js donne les clés et les défauts ; vide : le défaut).
+      pastilles: g.pastilles !== false, textes: lesTextes(g.textes) };
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
     return { ressources, batiments, reglages };
+  }
+
+  // Saga 1.13 : les mots des écrans, ceux du jeu par-dessus les défauts du catalogue.
+  function lesTextes(t) {
+    let cat = typeof ModulesJeu !== 'undefined' ? ModulesJeu : null;
+    if (!cat && typeof require === 'function') try { cat = require('../../../../../commun/modules.js'); } catch { /* hors du dépôt */ }
+    const defauts = cat?.CATALOGUE?.gestion?.textes || {};
+    return Object.fromEntries(Object.entries(defauts).map(([k, [defaut]]) => [k, texte(t?.[k], 60).trim() || defaut]));
   }
 
   function repos(r, nom) {
