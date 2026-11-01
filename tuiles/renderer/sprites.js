@@ -107,7 +107,8 @@ const Sprites = (() => {
 
   // --- Pour la carte de Tafl : dessiner le personnage d'un événement, regardant `direction` ---
   // Les pieds en bas de la case, centré ; un sprite plus haut qu'une case dépasse vers le haut.
-  function dessinerSurCase(ctx, sprite, direction, px, py, cell, tileSize, ensuite) {
+  // image (Tafl 1.17, l'aperçu des cinématiques) : l'image de la rangée (0 = debout, les suivantes : la marche).
+  function dessinerSurCase(ctx, sprite, direction, px, py, cell, tileSize, ensuite, image = 0) {
     const img = imageSiPrete(sprite.planche, ensuite);
     if (!img) return false;
     const r = Math.max(0, DIRECTIONS.indexOf(direction));
@@ -115,7 +116,7 @@ const Sprites = (() => {
     const w = sprite.largeur * k, h = sprite.hauteur * k;
     const lisse = ctx.imageSmoothingEnabled;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, 0, r * sprite.hauteur, sprite.largeur, sprite.hauteur, px + (cell - w) / 2, py + cell - h, w, h);
+    ctx.drawImage(img, (Math.min(image, sprite.images - 1) || 0) * sprite.largeur, r * sprite.hauteur, sprite.largeur, sprite.hauteur, px + (cell - w) / 2, py + cell - h, w, h);
     ctx.imageSmoothingEnabled = lisse;
     return true;
   }

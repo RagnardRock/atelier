@@ -16,7 +16,7 @@ const Blocs = (() => {
   const COULEURS = {
     Dialogue: '#5ec8ff', Logique: '#b9a8ff', 'Objets et créatures': '#ffd040', Histoire: '#ff9e4a',
     Héros: '#ff7aa8', Progression: '#7bd88f', Services: '#4ad6c4', Déplacements: '#d27bff',
-    Ambiance: '#7f9cff', Scripts: '#a3e635', 'Dés et règles': '#f0c75e',
+    Ambiance: '#7f9cff', Scripts: '#a3e635', 'Dés et règles': '#f0c75e', Cinématique: '#ff6b6b',
   };
   const couleur = (type) => COULEURS[Events.COMMANDES[type]?.groupe] || '#9aa0ac';
   const SANS_APERCU = 'Clique sur un dialogue ou un choix pour voir sa boîte telle qu\'elle sera dans Saga.';
