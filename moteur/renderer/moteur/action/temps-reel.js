@@ -27,6 +27,11 @@ const TempsReel = (() => {
   const DUREE_MORT = 0.5;
   const PENSER = 0.28;          // un ennemi réfléchit ~3 fois par seconde
   const INVINCIBLE_ENNEMI = 0.35;
+  // Saga 1.15.1 : le coup d'épée touche pendant tout le balayage de la lame (pas à un seul instant), et
+  // dans l'éventail qu'on voit à l'écran (pas seulement dans un rectangle droit devant).
+  const COUP_DEBUT = 0.08, COUP_FIN = 0.8;   // la fenêtre où la lame touche (fraction de DUREE_COUP)
+  const DEMI_ARC = Math.PI / 2.2;            // l'éventail de la lame : un peu moins d'un demi-cercle
+  const APPROCHE = 1.8;                      // (cases) assez près : l'ennemi va droit sur le joueur
 
   const rect = (x, y, l, h) => ({ x, y, l, h });
   const touche = (a, b) => a.x < b.x + b.l && b.x < a.x + a.l && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -205,7 +210,8 @@ const TempsReel = (() => {
       }
       if (h.coup) {
         h.coup.t += dt;
-        if (!h.coup.fait && h.coup.t >= DUREE_COUP * 0.3) { h.coup.fait = true; frapperDevant(); }
+        // Chaque image du balayage : ce que la lame rencontre est touché (une fois par coup).
+        if (h.coup.t >= DUREE_COUP * COUP_DEBUT && h.coup.t <= DUREE_COUP * COUP_FIN) frapperDevant();
         if (h.coup.t >= DUREE_COUP) { h.coup = null; h.recharge = RECHARGE_COUP; }
       }
       if (!estLibre) { h.bouge = false; return; }
@@ -213,7 +219,7 @@ const TempsReel = (() => {
         const c = caseDe(h), [dx, dy] = DIRS[h.dir];
         // D'abord ce qu'il y a devant (parler, ouvrir un coffre) ; sinon, un coup d'épée.
         if (!hote.agir(c.x + dx, c.y + dy, h.dir)) {
-          if (h.recharge <= 0) { h.coup = { t: 0, fait: false }; hote.bruit('epee'); }
+          if (h.recharge <= 0) { h.coup = { t: 0, touches: new Set() }; hote.bruit('epee'); }
         }
       }
       let { x: vx, y: vy } = vecteur || { x: 0, y: 0 };
@@ -239,17 +245,36 @@ const TempsReel = (() => {
       heros.cx = c.x; heros.cy = c.y;
       hote.surCase(c.x, c.y, heros.dir, pousse);
     }
+    // La portée d'un coup, en pixels. Un ennemi qui frappe « à 2 cases » (portee dans Tafl) atteint bien
+    // 2 cases, même si son personnage n'a pas de zone de frappe aussi longue.
+    const porteeDe = (e) => Math.max(e.b.frappe.portee, e === heros ? 0 : (Number(e.def?.portee) || 0) * t);
     // La zone du coup, devant celui qui frappe.
     function zoneFrappe(e) {
-      const c = centre(enMonde(e, e.b.corps)), [dx, dy] = DIRS[e.dir], { portee, largeur } = e.b.frappe;
+      const c = centre(enMonde(e, e.b.corps)), [dx, dy] = DIRS[e.dir], { largeur } = e.b.frappe, portee = porteeDe(e);
       const demi = (dx ? e.b.corps.l : e.b.corps.h) / 2;
       if (dx) return rect(dx > 0 ? c.x + demi * 0.4 : c.x - demi * 0.4 - portee, c.y - largeur / 2, portee, largeur);
       return rect(c.x - largeur / 2, dy > 0 ? c.y + demi * 0.4 : c.y - demi * 0.4 - portee, largeur, portee);
     }
+    // Le rayon de l'éventail : jusqu'au bout de la lame dessinée (dessinerEpee).
+    const rayonCoup = (e) => porteeDe(e) + t * 0.15;
+    // Le coup de e atteint-il la boîte r ? Le rectangle devant lui, ou l'éventail (le point de r le plus
+    // proche de son centre est à portée et devant lui, à DEMI_ARC près), ou r collé contre son centre.
+    function atteint(e, r) {
+      if (touche(zoneFrappe(e), r)) return true;
+      const c = centre(enMonde(e, e.b.corps));
+      const px = Math.max(r.x, Math.min(c.x, r.x + r.l)), py = Math.max(r.y, Math.min(c.y, r.y + r.h));
+      const dx = px - c.x, dy = py - c.y, d = Math.hypot(dx, dy);
+      if (d > rayonCoup(e)) return false;
+      if (d < 1) return true;
+      const [fx, fy] = DIRS[e.dir];
+      return (dx * fx + dy * fy) / d >= Math.cos(DEMI_ARC);
+    }
     function frapperDevant() {
-      const z = zoneFrappe(heros);
+      const coup = heros.coup;
       for (const e of ennemis) {
-        if (e.mort || e.invincible > 0 || !touche(z, enMonde(e, e.b.corps))) continue;
+        // Encore invincible (touché au coup d'avant) : il pourra l'être plus tard dans ce même balayage.
+        if (e.mort || e.invincible > 0 || coup.touches.has(e) || !atteint(heros, enMonde(e, e.b.corps))) continue;
+        coup.touches.add(e);
         appliquer(R().coupDuHeros(jeu(), partie(), e.def), (n) => blesserEnnemi(e, n));
       }
     }
@@ -341,7 +366,7 @@ const TempsReel = (() => {
         e.coup.t += dt;
         if (!e.coup.fait && e.coup.t >= e.coup.duree * 0.55) {
           e.coup.fait = true;
-          if (touche(zoneFrappe(e), enMonde(heros, heros.b.corps))) appliquer(R().coupDeLEnnemi(jeu(), partie(), e.def), (n) => blesserHeros(n, centre(enMonde(e, e.b.corps))));
+          if (atteint(e, enMonde(heros, heros.b.corps))) appliquer(R().coupDeLEnnemi(jeu(), partie(), e.def), (n) => blesserHeros(n, centre(enMonde(e, e.b.corps))));
         }
         if (e.coup.t >= e.coup.duree) { e.coup = null; e.recharge = e.def.recharge; }
         return;
@@ -357,7 +382,12 @@ const TempsReel = (() => {
         const dx = moi.x - lui.x, dy = moi.y - lui.y, n = Math.hypot(dx, dy) || 1;
         e.bouge = deplacer(e, (dx / n) * v, (dy / n) * v);
         if (e.bouge) e.dir = vers(dx, dy);
-      } else if (e.decision.but && v > 0) suivreChemin(e, e.decision.but, v, dt);
+      } else if (e.decision.but && v > 0) {
+        // Il chasse le joueur et il est tout près : il va droit sur lui, au pixel près. (Avant, il visait
+        // le centre de la case du joueur et s'arrêtait là, parfois à côté de lui sans le toucher.)
+        const surJoueur = e.decision.but.x === Math.round(lui.x) && e.decision.but.y === Math.round(lui.y);
+        if (!(surJoueur && distance <= APPROCHE && approcher(e, v))) suivreChemin(e, e.decision.but, v, dt);
+      }
       if (e.bouge) e.marche += dt;
       // Le contact : un ennemi qui touche le héros le blesse.
       if (e.def.contact && heros.invincible <= 0 && touche(enMonde(e, e.b.corps), enMonde(heros, heros.b.corps))) {
@@ -376,6 +406,21 @@ const TempsReel = (() => {
       p.then((d) => { e.decision = Comportements.nettoyer(d, e.decision); })
         .catch(() => { e.decision = Comportements.decider({ ...etat, comportement: 'patrouiller' }); })
         .finally(() => { e.attend = false; });
+    }
+    // Aller droit sur le joueur, jusqu'à le toucher (ou l'avoir à portée de coup, pour un ennemi qui frappe
+    // sans blesser au contact). Rend false s'il est bloqué (un mur entre eux) : on reprend alors le chemin.
+    function approcher(e, v) {
+      const corpsHeros = enMonde(heros, heros.b.corps), moi = enMonde(e, e.b.corps);
+      const a = centre(moi), b = centre(corpsHeros);
+      const dx = b.x - a.x, dy = b.y - a.y, n = Math.hypot(dx, dy);
+      e.dir = vers(dx, dy);
+      // Un ennemi qui frappe s'arrête à sa portée (la même mesure que Comportements : de centre à centre).
+      const assez = touche(moi, corpsHeros) || (!e.def.contact && e.def.portee > 0 && n / t <= e.def.portee);
+      if (assez || n < 1) { e.chemin = []; return true; }
+      const k = Math.min(1, v / n);
+      e.bouge = deplacer(e, dx * k, dy * k);
+      if (e.bouge) e.chemin = [];
+      return e.bouge;
     }
     // Aller vers une case par le plus court chemin (A* de moteur/chemins.js, en 8 directions).
     function suivreChemin(e, but, v, dt) {
@@ -476,15 +521,15 @@ const TempsReel = (() => {
     function dessinerEpee(ctx, cam) {
       const h = heros, c = centre(enMonde(h, h.b.corps)), k = Math.min(1, h.coup.t / (DUREE_COUP * 0.7));
       const base = { droite: 0, bas: Math.PI / 2, gauche: Math.PI, haut: -Math.PI / 2 }[h.dir];
-      const a = base - Math.PI / 2.2 + k * (Math.PI / 1.1);
-      const r0 = t * 0.25, r1 = h.b.frappe.portee + t * 0.15;
+      const a = base - DEMI_ARC + k * 2 * DEMI_ARC;
+      const r0 = t * 0.25, r1 = rayonCoup(h);
       const cx = c.x - cam.x, cy = c.y - cam.y;
       ctx.save();
       // La traînée, puis la lame.
       ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
       ctx.beginPath();
       ctx.moveTo(cx, cy);
-      ctx.arc(cx, cy, r1, base - Math.PI / 2.2, a);
+      ctx.arc(cx, cy, r1, base - DEMI_ARC, a);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#eef3ff';
@@ -575,7 +620,18 @@ const TempsReel = (() => {
         if (!e || e.mort) continue;
         boite(enMonde(e, e.b.corps), 'rgba(90, 255, 120, 0.9)');
         boite(enMonde(e, e.b.pieds), 'rgba(90, 170, 255, 0.9)');
-        if (e.coup || e === heros) boite(zoneFrappe(e), e.coup ? 'rgba(255, 80, 80, 0.95)' : 'rgba(255, 80, 80, 0.3)');
+        if (e.coup || e === heros) {
+          const couleur = e.coup ? 'rgba(255, 80, 80, 0.95)' : 'rgba(255, 80, 80, 0.3)';
+          boite(zoneFrappe(e), couleur);
+          // L'éventail du coup (ce qu'il atteint en plus du rectangle).
+          const c = centre(enMonde(e, e.b.corps)), base = { droite: 0, bas: Math.PI / 2, gauche: Math.PI, haut: -Math.PI / 2 }[e.dir];
+          ctx.strokeStyle = couleur;
+          ctx.beginPath();
+          ctx.moveTo(c.x - cam.x, c.y - cam.y);
+          ctx.arc(c.x - cam.x, c.y - cam.y, rayonCoup(e), base - DEMI_ARC, base + DEMI_ARC);
+          ctx.closePath();
+          ctx.stroke();
+        }
         if (e !== heros && e.chemin?.length) {
           ctx.strokeStyle = 'rgba(255, 220, 90, 0.8)';
           ctx.beginPath();
