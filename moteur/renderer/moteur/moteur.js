@@ -137,6 +137,10 @@ const Moteur = (() => {
     // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
     const dialogue = Dialogue.creer(canvas.parentElement, { sons: bruit });
     let scripts = null, enScript = false, autoAFaire = false, reveilAFaire = false;
+    // Saga 1.17 : la mise en scène des cinématiques (caméra, fondus, secousses, bulles, bandes) et les
+    // marches en cours (commande deplacer) : { cible ('joueur' ou un présent), etapes: [dir], duree, attente, resoudre }.
+    const cine = Cinema.creer();
+    let marches = [];
     // Les scripts JS du jeu (Saga 0.12, scripts-js.js) et les moments qu'ils attendent de voir passer
     // (une carte, un combat fini…), joués dès que le joueur est libre.
     let scriptsJs = ScriptsJs.AUCUN, reactions = [];
@@ -382,6 +386,11 @@ const Moteur = (() => {
       };
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
       presents = Monde.evenementsPresents(jeu, carte, partie);
+      // Saga 1.17 : une autre carte. Les marches s'arrêtent et la caméra revient au joueur ; un fondu ou
+      // des bandes de cinéma restent (fondu au noir, téléporter, puis fondu d'entrée sur la nouvelle carte).
+      for (const m of marches) m.resoudre(false);
+      marches = [];
+      cine.changerCarte();
       if (table.actif) table.entrerCarte(carte, joueur.x, joueur.y);
       if (tempsReel) {
         if (change || rtRecommencer) rt.entrerCarte(carte, joueur.x, joueur.y, joueur.dir); else rt.placer(joueur.x, joueur.y, joueur.dir);
@@ -457,6 +466,7 @@ const Moteur = (() => {
       if (multi?.actif && !modeTable) monde.demarrer(); else monde?.arreter();
       carte = null;
       enScript = false;
+      finCinematique();
       attentes = [];
       dialogue.fermer();
       ecrans = Ecrans.creer({ jeu, partie: () => partie, menus, ui: () => scripts.ui });
@@ -466,6 +476,8 @@ const Moteur = (() => {
         carte: () => carte,
         attendre: (ms) => new Promise((resoudre) => attentes.push({ reste: ms / 1000, resoudre })),
         teleporter: (c, x, y, d) => new Promise((resoudre) => { fondu = { phase: 'sortie', t: 0, vers: { carte: c, x, y, direction: d }, resoudre }; }),
+        // Saga 1.17 : les cinématiques.
+        cine: hoteCine,
         combattre,
         // L'écran du nom et de la tenue (commande personnaliser, Tafl 0.16).
         personnaliser: (o) => ecranPerso.ouvrir(o),
@@ -763,6 +775,7 @@ const Moteur = (() => {
         actionDemandee = false;
         return;
       }
+      if (joueur.mouvement?.cine) return; // Saga 1.17 : un pas de cinématique (avancerMarches)
       const libre = !enPause && !fondu && !enScript && !enCombat;
       const { dir, course: maj } = libre ? entrees.lire() : { dir: null, course: false };
       const course = options.courirParDefaut ? !maj : maj;
@@ -804,6 +817,147 @@ const Moteur = (() => {
 
     // --- Les événements ---
     // Jouer la page active d'un événement. Le joueur ne bouge plus jusqu'à la fin.
+    // --- Saga 1.17 : les cinématiques ---
+    // Qui bouge : '@joueur' (ou vide), '@evenement' (celui dont le script se joue), ou l'id d'un événement
+    // présent sur la carte. null : il n'est pas là (caché, autre carte).
+    function cibleCine(qui, ev) {
+      if (!qui || qui === '@joueur') return 'joueur';
+      const id = qui === '@evenement' ? ev?.id : qui;
+      return presents.find((p) => p.ev.id === id) || null;
+    }
+    const caseCine = (c) => (c === 'joueur' ? { x: joueur.x, y: joueur.y } : { x: c.x, y: c.y });
+    // Sa place en pixels de carte, pendant un pas aussi (pour la caméra et les bulles).
+    function pixelsCine(c) {
+      if (c === 'joueur') { const p = pixelsJoueur(); return { x: p.x, y: p.y - (p.saut || 0) }; }
+      const t = jeu.taille, m = c.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
+      return { x: m ? m.de.x + (c.x * t - m.de.x) * k : c.x * t, y: m ? m.de.y + (c.y * t - m.de.y) * k : c.y * t };
+    }
+    const VITESSES = { lente: DUREE_PAS * 2, normale: DUREE_PAS * 1.2, rapide: DUREE_PAS_COURSE };
+    // Les cases libres pour un marcheur (c : celui qui marche, qu'on ne compte pas comme obstacle).
+    const caseLibre = (c, x, y) => {
+      if (!Monde.dansCarte(carte, x, y)) return false;
+      const code = Monde.code(carte, x, y);
+      if (code === Jeu.PASSAGE.bloque || Jeu.REBORDS[code] || Monde.bloqueParModule(carte, x, y)) return false;
+      if (c !== 'joueur' && joueur.x === x && joueur.y === y) return false;
+      return !presents.some((p) => p !== c && p.bloque && p.x === x && p.y === y);
+    };
+    // Le chemin jusqu'à une case (le plus court) ; s'arrête à côté si la case est prise par quelqu'un.
+    function etapesVers(c, arrivee) {
+      const de = caseCine(c);
+      const prise = !caseLibre(c, arrivee.x, arrivee.y);
+      const ch = Chemins.trouver({ largeur: carte.largeur, hauteur: carte.hauteur, depart: de, arrivee, max: 4000,
+        libre: (x, y) => (x === arrivee.x && y === arrivee.y) || caseLibre(c, x, y) });
+      if (!ch) return [];
+      if (prise) ch.pop();
+      const out = [];
+      let a = de;
+      for (const b of ch) { out.push(b.x > a.x ? 'droite' : b.x < a.x ? 'gauche' : b.y > a.y ? 'bas' : 'haut'); a = b; }
+      return out;
+    }
+    // La commande deplacer : { qui, mode: 'chemin' | 'vers', chemin: [{ direction, cases }], vers, x, y, vitesse, traverser, attendre }.
+    function deplacerCine(c, ev) {
+      const cible = cibleCine(c.qui, ev);
+      if (!cible || !carte) return Promise.resolve(false);
+      let etapes = [];
+      if (c.mode === 'vers') {
+        const autre = c.vers === 'case' ? { x: Math.round(Number(c.x) || 0), y: Math.round(Number(c.y) || 0) } : (() => { const q = cibleCine(c.vers, ev); return q ? caseCine(q) : null; })();
+        if (autre) etapes = etapesVers(cible, autre);
+      } else {
+        for (const e of Array.isArray(c.chemin) ? c.chemin : []) {
+          if (!DIRECTIONS[e?.direction]) continue;
+          for (let i = 0; i < Math.max(1, Math.min(99, Math.round(Number(e.cases) || 1))); i++) etapes.push(e.direction);
+        }
+      }
+      if (!etapes.length) return Promise.resolve(true);
+      // Un seul trajet à la fois par personnage : le nouveau remplace l'ancien.
+      for (const m of marches.filter((x) => x.cible === cible)) m.resoudre();
+      marches = marches.filter((x) => x.cible !== cible);
+      return new Promise((resoudre) => {
+        marches.push({ cible, etapes, duree: VITESSES[c.vitesse] || VITESSES.normale, traverser: Boolean(c.traverser), attente: 0, enPas: 0, resoudre });
+      });
+    }
+    function avancerMarches(dt) {
+      if (!marches.length || !carte) return;
+      const t = jeu.taille;
+      for (const m of marches) {
+        const c = m.cible;
+        if (c === 'joueur') {
+          const mv = joueur.mouvement;
+          if (mv?.cine) {
+            mv.t += dt;
+            if (mv.t < mv.duree) continue;
+            joueur.x = mv.vers.x; joueur.y = mv.vers.y; joueur.mouvement = null;
+            partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+          } else if (mv) continue; // il finit d'abord son pas à lui
+          if (tempsReel && m.enPas > 0) { m.enPas -= dt; if (m.enPas > 0) continue; }
+        } else if (c.mouvement) continue;
+        if (!m.etapes.length) { m.fini = true; continue; }
+        const dir = m.etapes[0];
+        const [dx, dy] = DIRECTIONS[dir];
+        const de = caseCine(c), x = de.x + dx, y = de.y + dy;
+        if (c === 'joueur') joueur.dir = dir; else c.direction = dir;
+        const ok = Monde.dansCarte(carte, x, y) && (m.traverser || caseLibre(c, x, y));
+        if (!ok) {
+          // Quelqu'un barre le chemin : il attend un peu, puis renonce à ce pas.
+          m.attente += dt;
+          if (m.attente > 1.5) { m.etapes.shift(); m.attente = 0; }
+          continue;
+        }
+        m.etapes.shift();
+        m.attente = 0;
+        if (c === 'joueur') {
+          joueur.pas++;
+          if (tempsReel) { joueur.x = x; joueur.y = y; rt.placer(x, y, dir); m.enPas = m.duree; } else joueur.mouvement = { de: { x: de.x, y: de.y }, vers: { x, y }, t: 0, saut: false, duree: m.duree, cine: true };
+        } else {
+          c.pas++;
+          c.mouvement = { de: { x: c.x * t, y: c.y * t }, t: 0, duree: m.duree };
+          c.x = x; c.y = y;
+        }
+      }
+      for (const m of marches.filter((x) => x.fini)) m.resoudre(true);
+      marches = marches.filter((x) => !x.fini);
+    }
+    // La fin d'un script : ceux qui marchent encore s'arrêtent sur leur case, la mise en scène se range.
+    function finCinematique() {
+      for (const m of marches) m.resoudre(false);
+      marches = [];
+      cine.fin();
+    }
+    // Ce que les scripts reçoivent (scripts.js › commandes deplacer, regarder, camera, fondu, secouer, bulle, cinema).
+    const hoteCine = {
+      deplacer: deplacerCine,
+      regarder: (qui, direction, ev) => {
+        const c = cibleCine(qui, ev);
+        if (!c) return;
+        let d = direction;
+        if (!DIRECTIONS[d]) {
+          const autre = cibleCine(d === '@joueur' ? '@joueur' : d, ev);
+          if (!autre || autre === c) return;
+          const a = caseCine(c), b = caseCine(autre);
+          d = Monde.directionVers(a.x, a.y, b.x, b.y);
+        }
+        if (c === 'joueur') joueur.dir = d; else c.direction = d;
+      },
+      camera: (o, ev) => {
+        const ici = pixelsJoueur();
+        if (o.action === 'revenir') return cine.cameraRevenir(Math.max(0, Number(o.duree) || 0) / 1000, ici);
+        const t = jeu.taille;
+        let point = null;
+        if (o.vers === 'case') point = { x: Math.round(Number(o.x) || 0) * t, y: Math.round(Number(o.y) || 0) * t };
+        else { const c = cibleCine(o.vers, ev); if (c) point = pixelsCine(c); }
+        if (!point) return Promise.resolve();
+        return cine.cameraVers(point, Math.max(0, Number(o.duree) || 0) / 1000, ici);
+      },
+      fondu: (o) => cine.fondu(o.couleur, o.action !== 'entrer', Math.max(0, Number(o.duree) || 0) / 1000),
+      secouer: (o) => cine.secouer(Number(o.force) || 4, Math.max(0, Number(o.duree) || 0) / 1000),
+      bulle: (o, ev) => {
+        const c = cibleCine(o.qui, ev);
+        if (!c) return Promise.resolve();
+        return cine.bulle(() => pixelsCine(c), o.bulle, Math.max(100, Number(o.duree) || 1000) / 1000);
+      },
+      cinema: (o) => cine.cinema(o.action !== 'cacher'),
+    };
+
     async function lancer(p) {
       if (enScript || !p.page?.commandes?.length) return;
       enScript = true;
@@ -817,6 +971,7 @@ const Moteur = (() => {
         rappels.message?.(`Erreur dans le script de « ${p.ev.nom || p.ev.id} » : ${err.message}`);
       }
       origineCombat = null;
+      finCinematique();
       Collection.noterTout(partie);
       // Le script a pu changer des interrupteurs : chaque événement reprend sa bonne page.
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
@@ -854,6 +1009,7 @@ const Moteur = (() => {
       figurantParle = null;
       Collection.noterTout(partie);
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      finCinematique();
       enScript = false;
       entrees.oublier();
     }
@@ -890,6 +1046,7 @@ const Moteur = (() => {
       dialogue.fermer();
       Collection.noterTout(partie);
       presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+      finCinematique();
       enScript = false;
       entrees.oublier();
     }
@@ -925,6 +1082,7 @@ const Moteur = (() => {
           Collection.noterTout(partie);
           presents = Monde.evenementsPresents(jeu, carte, partie, presents);
         }
+        finCinematique();
         enScript = false;
         entrees.oublier();
       }
@@ -947,6 +1105,7 @@ const Moteur = (() => {
           Collection.noterTout(partie);
           presents = Monde.evenementsPresents(jeu, carte, partie, presents);
         }
+        finCinematique();
         enScript = false;
         entrees.oublier();
       }
@@ -1003,10 +1162,14 @@ const Moteur = (() => {
       const t = jeu.taille, p = pixelsJoueur();
       const lw = carte.largeur * t, lh = carte.hauteur * t;
       // Saga 1.5 : pendant une visée, la caméra suit le rectangle visé.
-      const centre = visee ? { x: (visee.x + visee.largeur / 2) * t - t / 2, y: (visee.y + visee.hauteur / 2) * t - t / 2 } : p;
+      // Saga 1.17 : pendant une cinématique, la caméra va où le script l'envoie.
+      const centre = visee ? { x: (visee.x + visee.largeur / 2) * t - t / 2, y: (visee.y + visee.hauteur / 2) * t - t / 2 } : cine.centre(p);
       const cx = Math.round(centre.x) + Math.floor(t / 2) - Math.floor(W / 2), cy = Math.round(centre.y) + Math.floor(t / 2) - Math.floor(H / 2);
       cam.x = Math.round(lw <= W ? (lw - W) / 2 : Math.min(lw - W, Math.max(0, cx)));
       cam.y = Math.round(lh <= H ? (lh - H) / 2 : Math.min(lh - H, Math.max(0, cy)));
+      // Saga 1.17 : la secousse de l'écran.
+      const d = cine.decalage();
+      cam.x += d.x; cam.y += d.y;
     }
 
     // --- Dessin ---
@@ -1246,6 +1409,8 @@ const Moteur = (() => {
       // Saga 1.12 : les nombres des coups, les cœurs et l'argent du temps réel, par-dessus la nuit.
       if (tempsReel) rt.dessinerDessus(ctx, cam, W);
       if (debug) { dessinerDebug(); if (tempsReel) rt.dessinerDebug(ctx, cam); }
+      // Saga 1.17 : la mise en scène (bulles, fondu des cinématiques, bandes de cinéma).
+      cine.dessiner(ctx, W, H, cam, jeu.taille);
       // 5. le fondu au noir des téléporteurs.
       if (noir > 0) {
         ctx.fillStyle = `rgba(0, 0, 0, ${noir})`;
@@ -1303,7 +1468,9 @@ const Moteur = (() => {
         verifierMoments();
         avancerJoueur(dt);
         actionDemandee = false; // une action pendant un pas ne se garde pas pour plus tard
+        avancerMarches(dt);
         avancerPNJ(dt);
+        cine.avancer(dt);
         // Saga 1.9 : les figurants des modules (les habitants qui vont et viennent).
         // Saga 1.15 : comme les PNJ, ils s'arrêtent pendant un script (une conversation, un écran).
         if (!enCombat && !table.actif && !enScript) Modules.avancer(jeu, partie, hoteModules, carte, dt);
@@ -1365,6 +1532,7 @@ const Moteur = (() => {
         dialogue.fermer();
         Collection.noterTout(partie);
         presents = Monde.evenementsPresents(jeu, carte, partie, presents);
+        finCinematique();
         enScript = false;
         entrees.oublier();
       }

@@ -420,6 +420,13 @@ const Verificateur = (() => {
         if (cmd.type === 'gestion_construire') verifierId('batiments', cmd.batiment, quoi, ou);
         if (cmd.type === 'gestion_placer' && cmd.batiment) verifierId('batiments', cmd.batiment, quoi, ou);
         if (cmd.type === 'gestion_stock') verifierId('ressources', cmd.ressource, quoi, ou);
+        // Tafl 1.17 : les cinématiques parlent d'événements de la même carte (ou du héros, ou de l'événement lui-même).
+        for (const k of ['qui', 'vers', 'direction']) {
+          if (!['deplacer', 'regarder', 'camera', 'bulle'].includes(cmd.type)) break;
+          const v = cmd[k];
+          if (!v || v.startsWith('@') || v === 'case' || ['haut', 'bas', 'gauche', 'droite'].includes(v) || (k === 'vers' && cmd.type === 'deplacer' && cmd.mode !== 'vers') || (k === 'vers' && cmd.type === 'camera' && cmd.action === 'revenir')) continue;
+          if (!(carte.evenements || []).some((e) => e.id === v)) ajouter('erreur', 'references', `${quoi} : la cinématique parle de l'événement « ${v} », qui n'est pas sur cette carte.`, ou);
+        }
         // Tafl 1.13 : le module relations.
         if (['relation_parler', 'relation_offrir', 'relation_points'].includes(cmd.type) && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);
         if (cmd.type === 'relation_offrir' && cmd.objet) verifierId('objets', cmd.objet, quoi, ou);

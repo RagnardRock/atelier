@@ -181,6 +181,42 @@ const Scripts = (() => {
           if (issue === 'defaite') throw new Fin();
           return issue;
         }
+        // Saga 1.17 : les cinématiques. Ce qui prend du temps attend sa fin, sauf attendre: false
+        // (deux personnages qui marchent ensemble, une bulle pendant qu'il parle).
+        case 'deplacer': {
+          if (c.attendre !== false) dialogue.fermer();
+          const fin = moteur.cine.deplacer(c, ev);
+          if (c.attendre !== false) await fin;
+          break;
+        }
+        case 'regarder':
+          moteur.cine.regarder(c.qui, c.direction, ev);
+          break;
+        case 'camera': {
+          dialogue.fermer();
+          const fin = moteur.cine.camera(c, ev);
+          if (c.attendre !== false) await fin;
+          break;
+        }
+        case 'fondu': {
+          dialogue.fermer();
+          const fin = moteur.cine.fondu(c);
+          if (c.attendre !== false) await fin;
+          break;
+        }
+        case 'secouer': {
+          const fin = moteur.cine.secouer(c);
+          if (c.attendre !== false) await fin;
+          break;
+        }
+        case 'bulle': {
+          const fin = moteur.cine.bulle(c, ev);
+          if (c.attendre !== false) await fin;
+          break;
+        }
+        case 'cinema':
+          await moteur.cine.cinema(c);
+          break;
         case 'teleporter':
           dialogue.fermer();
           await moteur.teleporter(c.carte, c.x, c.y, c.direction);

@@ -276,6 +276,12 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Les scènes du matin** : un événement « auto » avec `reveil` se joue aussi quand le joueur se réveille sur sa carte (commande `dormir`), pas seulement quand il y arrive.
 - **L'apparence par page** : une page peut avoir sa propre `apparence` (personnage, tuile). Le PNJ change d'apparence avec la page, et c'est ce personnage qui parle pour `@evenement`.
 
+## Ce que fait Saga 1.17 : les cinématiques (avec Tafl 1.17)
+
+- **Des personnages qui marchent** : la commande `deplacer` fait suivre un chemin au héros ou à un événement de la carte, ou l'emmène par le plus court chemin jusqu'à quelqu'un ou une case. Trois vitesses ; plusieurs personnages peuvent marcher en même temps.
+- **La mise en scène** : `regarder` (tourner quelqu'un), `camera` (aller montrer un lieu, puis revenir sur le héros), `fondu` (au noir ou au blanc, qui tient pendant un téléporter), `secouer`, `bulle` (!, ?, ♥, …, ♪, colère, sommeil, idée) et `cinema` (les bandes noires).
+- À la fin du script, tout se range tout seul : la caméra revient, le voile et les bandes s'en vont.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

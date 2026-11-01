@@ -42,6 +42,39 @@ const Events = (() => {
   const VRAI_FAUX = [['true', 'Allumé (vrai)'], ['false', 'Éteint (faux)']];
   // Tafl 0.31 : les variables (un nombre ou un texte) et la façon de les comparer.
   // Tafl 1.16 (Saga 1.16) : « jour » y note le numéro du jour en cours (pour la condition « Jours écoulés depuis »).
+  // Tafl 1.17 (Saga 1.17) : les cinématiques.
+  const MODES_DEPLACER = [['chemin', 'Il suit un chemin'], ['vers', 'Il va jusqu\'à quelqu\'un ou une case']];
+  const VITESSES_CINE = [['lente', 'Lente'], ['normale', 'Normale'], ['rapide', 'Rapide']];
+  const BULLES = [['exclamation', '! (surprise)'], ['question', '? (question)'], ['coeur', '♥ (affection)'], ['points', '… (silence)'], ['note', '♪ (chantonne)'], ['colere', '# (colère)'], ['sommeil', 'z (sommeil)'], ['idee', '✦ (idée)']];
+  const FLECHES = { haut: '↑', bas: '↓', gauche: '←', droite: '→' };
+  // Qui peut bouger : le héros, l'événement lui-même, ou un autre événement de la carte ouverte.
+  const choixActeurs = (doc, actuel) => {
+    const l = [['@joueur', 'Le héros'], ['@evenement', 'L\'événement lui-même'], ...(doc.map?.events || []).map((e) => [e.id, `${e.nom || e.id} (${e.id})`])];
+    if (actuel && !l.some(([k]) => k === actuel) && actuel !== 'case') l.push([actuel, `${actuel} (pas sur cette carte)`]);
+    return l;
+  };
+  // « du héros », « de l'événement », « de Brune » ; « jusqu'au héros »…
+  const deActeur = (doc, qui) => (qui === '@joueur' ? 'du héros' : qui === '@evenement' ? 'de l\'événement' : `de ${nomActeur(doc, qui)}`);
+  const aActeur = (doc, qui) => (qui === '@joueur' ? 'au héros' : qui === '@evenement' ? 'à l\'événement' : `à ${nomActeur(doc, qui)}`);
+  const versActeur = (doc, qui) => (qui === '@joueur' ? 'le héros' : qui === '@evenement' ? 'l\'événement' : nomActeur(doc, qui));
+  const nomActeur = (doc, qui) => (qui === '@joueur' ? 'Le héros' : qui === '@evenement' ? 'L\'événement' : (doc.map?.events || []).find((e) => e.id === qui)?.nom || qui);
+  // « haut 2, droite 3 » ⇄ [{ direction: 'haut', cases: 2 }, …]. On accepte aussi h, b, g, d et les flèches.
+  const MOTS_DIRECTION = { haut: 'haut', h: 'haut', '↑': 'haut', bas: 'bas', b: 'bas', '↓': 'bas', gauche: 'gauche', g: 'gauche', '←': 'gauche', droite: 'droite', d: 'droite', '→': 'droite' };
+  function lireChemin(texte) {
+    const out = [];
+    const re = /(haut|bas|gauche|droite|[hbgd↑↓←→])\s*(\d*)/gi;
+    let m;
+    while ((m = re.exec(String(texte || '').toLowerCase()))) {
+      const direction = MOTS_DIRECTION[m[1]];
+      const cases = clamp(parseInt(m[2], 10) || 1, 1, 99);
+      const dernier = out[out.length - 1];
+      if (dernier && dernier.direction === direction) dernier.cases = Math.min(99, dernier.cases + cases); else out.push({ direction, cases });
+    }
+    return out.slice(0, 50);
+  }
+  const texteChemin = (chemin) => (Array.isArray(chemin) ? chemin : []).map((e) => `${e.direction} ${e.cases}`).join(', ');
+  const flechesChemin = (chemin) => (Array.isArray(chemin) ? chemin : []).map((e) => `${FLECHES[e.direction] || '?'}${e.cases > 1 ? e.cases : ''}`).join(' ') || '(nulle part)';
+  const normChemin = (chemin) => (Array.isArray(chemin) ? chemin : typeof chemin === 'string' ? lireChemin(chemin) : []).filter((e) => e && FLECHES[e.direction]).slice(0, 50).map((e) => ({ direction: e.direction, cases: clamp(int(e.cases, 1), 1, 99) }));
   const ACTIONS_VARIABLE = [['regler', 'La mettre à'], ['ajouter', 'Lui ajouter'], ['retirer', 'Lui retirer'], ['jour', 'Y noter le jour en cours']];
   const COMPARAISONS = [['>=', 'au moins (≥)'], ['<=', 'au plus (≤)'], ['==', 'égale à (=)'], ['!=', 'différente de (≠)'], ['>', 'plus que (>)'], ['<', 'moins que (<)']];
   // « 12 » → 12, « Bourg » → 'Bourg' (un texte court).
@@ -370,6 +403,108 @@ const Events = (() => {
         return { type: 'teleporter', carte: v.carte, x: clamp(Math.round(v.x), 0, (m?.width || 256) - 1), y: clamp(Math.round(v.y), 0, (m?.height || 256) - 1), direction: v.direction };
       },
       resume: (doc, c) => `Téléporter vers ${Doc.mapById(doc, c.carte)?.name || c.carte} (${c.x}, ${c.y})`,
+    },
+    // --- Tafl 1.17 (Saga 1.17) : les cinématiques ---
+    deplacer: {
+      nom: 'Déplacer un personnage', icone: 'run-all', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'deplacer', qui: '@evenement', mode: 'chemin', chemin: [{ direction: 'bas', cases: 1 }], vers: '@joueur', x: 0, y: 0, vitesse: 'normale', traverser: false, attendre: true }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: choixActeurs(doc, c.qui) },
+        { key: 'mode', label: 'Comment', type: 'select', value: c.mode, choices: MODES_DEPLACER },
+        { key: 'chemin', label: 'Chemin', type: 'text', value: texteChemin(c.chemin), placeholder: 'haut 2, droite 3' },
+        { key: 'vers', label: 'Jusqu\'à', type: 'select', value: c.vers, choices: [...choixActeurs(doc, c.vers), ['case', 'Une case de la carte…']] },
+        { key: 'x', label: 'Colonne (x)', type: 'number', value: c.x, min: 0, max: 255 },
+        { key: 'y', label: 'Rangée (y)', type: 'number', value: c.y, min: 0, max: 255 },
+        { key: 'vitesse', label: 'Vitesse', type: 'select', value: c.vitesse, choices: VITESSES_CINE },
+        { key: 'traverser', label: 'Il passe à travers tout (murs, personnages)', type: 'checkbox', value: c.traverser },
+        { key: 'attendre', label: 'Attendre qu\'il arrive avant la suite', type: 'checkbox', value: c.attendre },
+        { type: 'info', text: 'Le chemin : des directions et un nombre de cases, dans l\'ordre (haut 2, droite 3, bas). « Jusqu\'à » trouve le plus court chemin et s\'arrête à côté si la case est prise. Décoche « Attendre » pour faire marcher deux personnages en même temps. Un personnage bloqué attend un peu, puis saute le pas.' },
+      ],
+      onInput: (v, f) => {
+        f.inputs.chemin.row.hidden = v.mode !== 'chemin';
+        f.inputs.vers.row.hidden = v.mode !== 'vers';
+        f.inputs.x.row.hidden = v.mode !== 'vers' || v.vers !== 'case';
+        f.inputs.y.row.hidden = v.mode !== 'vers' || v.vers !== 'case';
+      },
+      depuis: (v) => ({ type: 'deplacer', qui: v.qui, mode: pick(v.mode, MODES_DEPLACER, 'chemin'), chemin: lireChemin(v.chemin), vers: v.vers, x: clamp(Math.round(v.x) || 0, 0, 255), y: clamp(Math.round(v.y) || 0, 0, 255), vitesse: pick(v.vitesse, VITESSES_CINE, 'normale'), traverser: Boolean(v.traverser), attendre: Boolean(v.attendre) }),
+      valide: (c) => (c.mode === 'chemin' && !c.chemin.length ? 'Écris le chemin : haut 2, droite 3…' : c.mode === 'vers' && c.vers === c.qui ? 'Il est déjà là : choisis quelqu\'un d\'autre, ou une case.' : null),
+      resume: (doc, c) => `${nomActeur(doc, c.qui)} ${c.mode === 'vers' ? `va jusqu'${c.vers === 'case' ? `à (${c.x}, ${c.y})` : aActeur(doc, c.vers)}` : `marche ${flechesChemin(c.chemin)}`}${c.vitesse !== 'normale' ? ` (${libelle(VITESSES_CINE, c.vitesse).toLowerCase()})` : ''}${c.attendre ? '' : ', sans attendre'}`,
+    },
+    regarder: {
+      nom: 'Tourner un personnage', icone: 'eye', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'regarder', qui: '@evenement', direction: '@joueur' }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: choixActeurs(doc, c.qui) },
+        { key: 'direction', label: 'Il regarde', type: 'select', value: c.direction, choices: [...Doc.DIRECTIONS, ...choixActeurs(doc, c.direction).map(([k, n]) => [k, `Vers ${n.charAt(0).toLowerCase()}${n.slice(1)}`])] },
+      ],
+      depuis: (v) => ({ type: 'regarder', qui: v.qui, direction: v.direction }),
+      resume: (doc, c) => `${nomActeur(doc, c.qui)} regarde ${Doc.DIRECTIONS.some(([k]) => k === c.direction) ? libelle(Doc.DIRECTIONS, c.direction).toLowerCase() : `vers ${versActeur(doc, c.direction)}`}`,
+    },
+    camera: {
+      nom: 'Déplacer la caméra', icone: 'device-camera-video', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'camera', action: 'aller', vers: '@evenement', x: 0, y: 0, duree: 1000, attendre: true }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'La caméra', type: 'select', value: c.action, choices: [['aller', 'Va vers…'], ['revenir', 'Revient sur le héros']] },
+        { key: 'vers', label: 'Vers', type: 'select', value: c.vers, choices: [...choixActeurs(doc, c.vers), ['case', 'Une case de la carte…']] },
+        { key: 'x', label: 'Colonne (x)', type: 'number', value: c.x, min: 0, max: 255 },
+        { key: 'y', label: 'Rangée (y)', type: 'number', value: c.y, min: 0, max: 255 },
+        { key: 'duree', label: 'Durée du trajet', type: 'number', value: c.duree, min: 0, max: 20000, unit: 'ms' },
+        { key: 'attendre', label: 'Attendre la fin du trajet', type: 'checkbox', value: c.attendre },
+        { type: 'info', text: 'Pour montrer un lieu ou quelqu\'un au loin. Elle reste là jusqu\'à « Revient sur le héros » ; à la fin du script, elle revient toute seule. 0 ms : d\'un coup.' },
+      ],
+      onInput: (v, f) => {
+        f.inputs.vers.row.hidden = v.action === 'revenir';
+        f.inputs.x.row.hidden = v.action === 'revenir' || v.vers !== 'case';
+        f.inputs.y.row.hidden = v.action === 'revenir' || v.vers !== 'case';
+      },
+      depuis: (v) => ({ type: 'camera', action: v.action === 'revenir' ? 'revenir' : 'aller', vers: v.vers, x: clamp(Math.round(v.x) || 0, 0, 255), y: clamp(Math.round(v.y) || 0, 0, 255), duree: clamp(Math.round(v.duree) || 0, 0, 20000), attendre: Boolean(v.attendre) }),
+      resume: (doc, c) => (c.action === 'revenir' ? 'La caméra revient sur le héros' : `La caméra va vers ${c.vers === 'case' ? `(${c.x}, ${c.y})` : versActeur(doc, c.vers)}`) + ` (${c.duree} ms)`,
+    },
+    fondu: {
+      nom: 'Fondu (noir ou blanc)', icone: 'color-mode', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'fondu', action: 'sortir', couleur: 'noir', duree: 600, attendre: true }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'L\'écran', type: 'select', value: c.action, choices: [['sortir', 'Se couvre (fondu au…)'], ['entrer', 'Revient (fondu depuis le…)']] },
+        { key: 'couleur', label: 'Couleur', type: 'select', value: c.couleur, choices: [['noir', 'Noir'], ['blanc', 'Blanc (un flash, un souvenir)']] },
+        { key: 'duree', label: 'Durée', type: 'number', value: c.duree, min: 0, max: 20000, unit: 'ms' },
+        { key: 'attendre', label: 'Attendre la fin du fondu', type: 'checkbox', value: c.attendre },
+        { type: 'info', text: 'Un écran couvert le reste pendant un téléporter : fondu au noir, téléporter, puis fondu d\'entrée sur la nouvelle carte. À la fin du script, il s\'en va tout seul.' },
+      ],
+      depuis: (v) => ({ type: 'fondu', action: v.action === 'entrer' ? 'entrer' : 'sortir', couleur: v.couleur === 'blanc' ? 'blanc' : 'noir', duree: clamp(Math.round(v.duree) || 0, 0, 20000), attendre: Boolean(v.attendre) }),
+      resume: (doc, c) => `${c.action === 'entrer' ? 'Fondu depuis le' : 'Fondu au'} ${c.couleur} (${c.duree} ms)`,
+    },
+    secouer: {
+      nom: 'Secouer l\'écran', icone: 'pulse', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'secouer', force: 4, duree: 500, attendre: true }),
+      champs: (doc, c) => [
+        { key: 'force', label: 'Force', type: 'number', value: c.force, min: 1, max: 10 },
+        { key: 'duree', label: 'Durée', type: 'number', value: c.duree, min: 0, max: 20000, unit: 'ms' },
+        { key: 'attendre', label: 'Attendre la fin', type: 'checkbox', value: c.attendre },
+      ],
+      depuis: (v) => ({ type: 'secouer', force: clamp(Math.round(v.force) || 4, 1, 10), duree: clamp(Math.round(v.duree) || 0, 0, 20000), attendre: Boolean(v.attendre) }),
+      resume: (doc, c) => `L'écran tremble (force ${c.force}, ${c.duree} ms)`,
+    },
+    bulle: {
+      nom: 'Bulle au-dessus d\'un personnage', icone: 'comment', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'bulle', qui: '@evenement', bulle: 'exclamation', duree: 1000, attendre: true }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: choixActeurs(doc, c.qui) },
+        { key: 'bulle', label: 'Bulle', type: 'select', value: c.bulle, choices: BULLES },
+        { key: 'duree', label: 'Durée', type: 'number', value: c.duree, min: 100, max: 20000, unit: 'ms' },
+        { key: 'attendre', label: 'Attendre qu\'elle disparaisse', type: 'checkbox', value: c.attendre },
+      ],
+      depuis: (v) => ({ type: 'bulle', qui: v.qui, bulle: pick(v.bulle, BULLES, 'exclamation'), duree: clamp(Math.round(v.duree) || 1000, 100, 20000), attendre: Boolean(v.attendre) }),
+      resume: (doc, c) => `${libelle(BULLES, c.bulle).split(' ')[0]} au-dessus ${deActeur(doc, c.qui)}`,
+    },
+    cinema: {
+      nom: 'Bandes de cinéma', icone: 'screen-full', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'cinema', action: 'montrer' }),
+      champs: () => [
+        { key: 'action', label: 'Les bandes noires', type: 'select', value: 'montrer', choices: [['montrer', 'Apparaissent (début de la scène)'], ['cacher', 'S\'en vont (fin de la scène)']] },
+        { type: 'info', text: 'Deux bandes noires en haut et en bas : le joueur sait qu\'il regarde une scène. Elles s\'en vont toutes seules à la fin du script.' },
+      ],
+      depuis: (v) => ({ type: 'cinema', action: v.action === 'cacher' ? 'cacher' : 'montrer' }),
+      resume: (doc, c) => (c.action === 'cacher' ? 'Les bandes de cinéma s\'en vont' : 'Les bandes de cinéma apparaissent'),
     },
     quete: {
       nom: 'Avancer une quête', icone: 'book', groupe: 'Progression',
@@ -1347,6 +1482,13 @@ const Events = (() => {
       case 'objet': return { type: 'objet', action: c.action === 'retirer' ? 'retirer' : 'donner', objet: str(c.objet), nombre: clamp(int(c.nombre, 1), 1, 999) };
       case 'creature': case 'combat_sauvage': return { type: c.type, creature: str(c.creature), niveau: clamp(int(c.niveau, 5), 1, 100) };
       case 'combat_dresseur': return { type: 'combat_dresseur', dresseur: str(c.dresseur) };
+      case 'deplacer': return { type: 'deplacer', qui: str(c.qui) || '@evenement', mode: c.mode === 'vers' ? 'vers' : 'chemin', chemin: normChemin(c.chemin), vers: str(c.vers) || '@joueur', x: clamp(int(c.x), 0, 255), y: clamp(int(c.y), 0, 255), vitesse: pick(c.vitesse, VITESSES_CINE, 'normale'), traverser: Boolean(c.traverser), attendre: c.attendre !== false };
+      case 'regarder': return { type: 'regarder', qui: str(c.qui) || '@evenement', direction: str(c.direction) || 'bas' };
+      case 'camera': return { type: 'camera', action: c.action === 'revenir' ? 'revenir' : 'aller', vers: str(c.vers) || '@evenement', x: clamp(int(c.x), 0, 255), y: clamp(int(c.y), 0, 255), duree: clamp(int(c.duree, 1000), 0, 20000), attendre: c.attendre !== false };
+      case 'fondu': return { type: 'fondu', action: c.action === 'entrer' ? 'entrer' : 'sortir', couleur: c.couleur === 'blanc' ? 'blanc' : 'noir', duree: clamp(int(c.duree, 600), 0, 20000), attendre: c.attendre !== false };
+      case 'secouer': return { type: 'secouer', force: clamp(int(c.force, 4), 1, 10), duree: clamp(int(c.duree, 500), 0, 20000), attendre: c.attendre !== false };
+      case 'bulle': return { type: 'bulle', qui: str(c.qui) || '@evenement', bulle: pick(c.bulle, BULLES, 'exclamation'), duree: clamp(int(c.duree, 1000), 100, 20000), attendre: c.attendre !== false };
+      case 'cinema': return { type: 'cinema', action: c.action === 'cacher' ? 'cacher' : 'montrer' };
       case 'teleporter': return { type: 'teleporter', carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)), direction: pick(c.direction, Doc.DIRECTIONS, 'bas') };
       case 'quete': return { type: 'quete', quete: str(c.quete), action: pick(c.action, [['commencer'], ['etape'], ['finir']], 'commencer'), etape: Math.max(1, int(c.etape, 1)) };
       case 'composer_equipe': return { type: 'composer_equipe', nombre: clamp(int(c.nombre, 6), 1, 6), niveau: clamp(int(c.niveau, 50), 1, 100), titre: str(c.titre).slice(0, 60), garder: c.garder !== false, pour: c.pour === 'adversaire' ? 'adversaire' : 'soi' };
@@ -2056,7 +2198,10 @@ const Events = (() => {
           b.onclick = () => { vue = v; try { localStorage.setItem('tafl.vueScript', v); } catch { /* sans mémoire, tant pis */ } renderPage(); };
           vues.append(b);
         }
-        main.append(section('Script : ce qui se passe, dans l\'ordre', el('span', { className: 'spacer' }), vues));
+        // Tafl 1.17 : l'aperçu de la scène (la page jouée sur la carte : dialogues, marches, caméra, fondus…).
+        const apercu = el('button', { className: 'button small', title: 'Jouer cette page sur la carte, comme dans Saga : dialogues, personnages qui marchent, caméra, fondus, bulles' }, [icon('play'), 'Aperçu de la scène']);
+        apercu.onclick = () => { if (typeof ApercuScene !== 'undefined') ApercuScene.ouvrir(doc, evPage(), p); };
+        main.append(section('Script : ce qui se passe, dans l\'ordre', el('span', { className: 'spacer' }), apercu, vues));
         if (vue === 'blocs') {
           const box = el('div', { className: 'flow-box' });
           main.append(box);
