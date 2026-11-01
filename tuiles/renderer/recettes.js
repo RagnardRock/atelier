@@ -180,25 +180,60 @@ const Recettes = (() => {
       },
     },
     rocher: {
-      rampe: 'pierre', libelle: 'Un rocher seul, sur fond transparent (à poser sur un calque de décor)', objet: true,
+      rampe: 'pierre', libelle: 'Un rocher seul (parfois avec un caillou), sur fond transparent : à poser sur un calque de décor', objet: true,
       ops: (r, s, g) => {
         const rnd = hasard(g + 13);
-        const cx = s / 2, cy = s * 0.56, rx = s * (0.34 + rnd() * 0.08), ry = s * (0.27 + rnd() * 0.06);
-        // Une silhouette taillée : un polygone de 7 sommets autour d'une ellipse, le bas aplati.
-        const pts = [];
-        for (let k = 0; k < 7; k++) {
-          const a = Math.PI + (k / 7) * Math.PI * 2 + (rnd() - 0.5) * 0.4;
-          const f = 0.85 + rnd() * 0.25;
-          pts.push([Math.round(cx + Math.cos(a) * rx * f), Math.round(Math.min(s - 3, cy + Math.sin(a) * ry * f))]);
+        // Chaque rocher : une ellipse au bas aplati, au bord irrégulier (rayon modulé par graine),
+        // éclairée comme un volume (lumière en haut à gauche) en 4 bandes de la rampe, avec une arête
+        // qui sépare la face éclairée du flanc, puis un contour sélectif : sombre en bas à droite,
+        // plus doux en haut à gauche.
+        const rochers = [{ cx: s * (0.45 + rnd() * 0.1), cy: s * 0.6, rx: s * (0.3 + rnd() * 0.1), ry: s * (0.24 + rnd() * 0.06) }];
+        if (rnd() < 0.6) {
+          const droite = rnd() < 0.5;
+          rochers.push({ cx: droite ? s * 0.8 : s * 0.18, cy: s * 0.78, rx: s * 0.12, ry: s * 0.09 });
         }
-        return [
-          { type: 'polygone', points: pts, couleur: r[2] },
-          { type: 'taches', couleurs: [r[3]], densite: 0.3, taille: 4 * s / 16, graine: g, seulement: [r[2]], raccord: false },
-          { type: 'ombrage', forme: [r[2], r[3]], clair: r[4], sombre: r[1], epaisseur: 2 },
-          { type: 'ligne', x1: Math.round(cx - rx * 0.2), y1: Math.round(cy - ry * 0.5), x2: Math.round(cx + rx * 0.15), y2: Math.round(cy + ry * 0.3), couleur: r[1], seulement: [r[2], r[3]] },
-          { type: 'contour', couleur: r[0], forme: [r[1], r[2], r[3], r[4]], cotes: 'tout' },
-          { type: 'ombre_portee', couleur: '#120c1e', forme: [r[0]], dx: 1, dy: 1 },
-        ];
+        const bosses = Array.from({ length: 5 }, () => ({ a: rnd() * Math.PI * 2, f: 0.1 + rnd() * 0.12 }));
+        const forme = new Uint8Array(s * s), teinte = new Float32Array(s * s);
+        for (const k of rochers) {
+          const fond = k.cy + k.ry * 0.55; // le bas, posé à plat
+          for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+            const dx = (x + 0.5 - k.cx) / k.rx, dy = (y + 0.5 - k.cy) / k.ry;
+            const ang = Math.atan2(dy, dx);
+            let rayon = 1;
+            for (const b of bosses) rayon -= b.f * Math.max(0, Math.cos(ang - b.a)) ** 6;
+            const d = Math.hypot(dx, dy);
+            if (d > rayon || y + 0.5 > fond) continue;
+            // La normale d'une demi-sphère aplatie, et la lumière en haut à gauche.
+            const nz = Math.sqrt(Math.max(0, 1 - Math.min(1, d / rayon) ** 2));
+            let l = (-dx * 0.55 - dy * 0.75 + nz * 0.9) / 1.4;
+            // Une arête : au-delà de la diagonale, le flanc tourne le dos à la lumière.
+            if (dx * 0.6 + dy * 0.4 > 0.15) l -= 0.35;
+            forme[y * s + x] = 1;
+            teinte[y * s + x] = l;
+          }
+        }
+        const ops = [];
+        const dans = (x, y) => x >= 0 && y >= 0 && x < s && y < s && forme[y * s + x];
+        for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+          if (!dans(x, y)) continue;
+          const l = teinte[y * s + x];
+          const c = l > 0.78 ? r[4] : l > 0.56 ? r[3] : l > 0.22 ? r[2] : r[1];
+          ops.push(point(x, y, c));
+        }
+        // Quelques marques sur la pierre (des creux sombres et leur bord éclairé au-dessus).
+        for (let k = 0; k < 3; k++) {
+          const x = Math.floor(rnd() * s), y = Math.floor(rnd() * s);
+          if (dans(x, y) && dans(x + 1, y) && dans(x, y - 1) && teinte[y * s + x] > 0.22) ops.push(point(x, y, r[1]), point(x + 1, y, r[1]), point(x, y - 1, r[3]));
+        }
+        // Contour sélectif, puis un liseré sombre au pied (le contact avec le sol).
+        for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
+          if (dans(x, y)) continue;
+          const bas = dans(x, y - 1) || dans(x - 1, y) || dans(x - 1, y - 1);
+          const haut = dans(x, y + 1) || dans(x + 1, y);
+          if (bas) ops.push(point(x, y, r[0]));
+          else if (haut) ops.push(point(x, y, melange(r[0], r[1], 0.6)));
+        }
+        return ops;
       },
     },
     falaise: {
