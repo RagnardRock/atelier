@@ -1,6 +1,6 @@
-// Tuiles d'exemple proposées à la création d'un jeu de tuiles (Tafl 1.14) : toutes les recettes de
+// Tuiles d'exemple proposées à la création d'un jeu de tuiles (Tafl 1.14, arbres et style « val » en 1.15) : toutes les recettes de
 // recettes.js (sols, eau animée, murs, falaises, toits, intérieurs, petits objets, hautes herbes), leurs
-// jeux de bords (chemin, eau, sable), une maison et une boutique (avec leurs tampons), rangées par
+// jeux de bords (chemin, eau, sable), une maison, une boutique, un sapin et un arbre (avec leurs tampons), rangées par
 // catégorie, avec une petite carte de village qui les utilise. De quoi voir tout de suite comment Tafl
 // marche, puis les retoucher ou les effacer. Elles se fabriquent à la taille des tuiles du jeu.
 
@@ -22,6 +22,8 @@ const Samples = (() => {
     ['transition_sable', 'sable', 'Bords du sable', 'auto', 1],
     ['maison', 'maison', 'Bâtiments', null, 1],
     ['boutique', 'boutique', 'Bâtiments', null, 1],
+    ['sapin', 'sapin', 'Arbres', null, 1],
+    ['arbre', 'arbre', 'Arbres', null, 1],
   ];
 
   // Remplit un jeu de tuiles neuf avec les tuiles d'exemple et une petite carte de village.
@@ -79,12 +81,16 @@ const Samples = (() => {
     // Les bâtiments posés juste au-dessus de la route (leur porte donne dessus), avec leurs tampons.
     const li = doc.map.layers.indexOf(decor);
     const poser = (nom, x, y) => { const st = stamps.find((t) => t.name === nom); if (st && x >= 0 && y >= 0 && x + st.w <= W && y + st.h <= H) Doc.placeStamp(doc, st, x, y, li); };
-    poser('maison', midX - 6, midY - 4);
-    poser('boutique', midX + 3, midY - 4);
+    poser('maison', midX - 6, midY - 5);
+    poser('boutique', midX + 3, midY - 5);
+    poser('sapin', 0, 0);
+    poser('arbre', W - 2, 0);
+    poser('sapin', W - 2, midY + 5);
+    poser('arbre', 0, midY + 5);
     // Le décor : une clôture devant les hautes herbes, des buissons, un rocher, une souche, des pots
     // de fleurs devant la boutique, le panneau au croisement.
     for (let x = herbes.x; x < herbes.x + herbes.w; x++) set(decor.cells, x, herbes.y - 1, idx['clôture']);
-    for (const [x, y] of [[1, 1], [2, 1], [W - 2, 1], [W - 3, 2], [1, midY - 2], [W - 2, midY + 3]]) set(decor.cells, x, y, idx.buisson);
+    for (const [x, y] of [[2, 1], [W - 3, 2], [1, midY - 2], [W - 2, midY + 3]]) set(decor.cells, x, y, idx.buisson);
     set(decor.cells, 8, H - 2, idx.rocher);
     set(decor.cells, W - 9, H - 2, idx.souche);
     set(decor.cells, midX + 8, midY - 1, idx['pot de fleurs']);

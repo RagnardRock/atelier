@@ -582,7 +582,7 @@ const CLAUDE_CONSIGNES = [
   'Ragna tient à la qualité : du détail, de la profondeur, un vrai pixel art 16 bits vu de dessus, sombre et',
   'feutré (verts éteints, ardoises sombres, bois, pluie). Ne livre pas une tuile plate ou bruitée au hasard.',
   '- Pour aller vite : recette_tuile donne en un appel un sol, un mur, un toit, des hautes herbes, de l\'eau animée,',
-  '  un petit objet, tout un jeu de bords (herbe → chemin, eau ou sable, 13 tuiles), ou une maison ou une boutique',
+  '  un petit objet, tout un jeu de bords (herbe → chemin, eau ou sable, 13 tuiles), une maison, une boutique ou un arbre',
   '  (ses tuiles et son tampon) ; pars de là et retouche avec',
   '  peindre_tuile plutôt que de tout refaire.',
   '- Méthode : 1) choisis 2 ou 3 rampes (palette « brume », ou action rampe autour d\'une couleur) ; 2) peindre_tuile',
@@ -621,9 +621,9 @@ const CLAUDE_CONSIGNES_LOCALES = [
   '- Pour enregistrer : enregistrer_jeu. Après une grosse modification : verifier.',
   '- Tuiles : recette_tuile d\'abord (sols, murs, toits, hautes herbes, eau animée, petits objets, et les bords',
   '  herbe → chemin, eau ou sable en 13 tuiles ; plusieurs variantes, une catégorie) : propre en un appel.',
-  '  peindre_tuile seulement pour retoucher. Une maison ou une boutique : recette_tuile maison ou boutique',
+  '  peindre_tuile seulement pour retoucher. Maison, boutique, sapin, arbre : recette_tuile maison, boutique, sapin ou arbre',
   '  (tuiles + tampon à poser avec l\'action tampon).',
-  '- Arbres, autres bâtiments, objets détaillés : generer_tuiles (ComfyUI, sur la carte graphique de Ragna).',
+  '- Autres bâtiments, objets détaillés : generer_tuiles (ComfyUI, sur la carte graphique de Ragna).',
   '- Tu ne vois pas les images : fie-toi au texte (catalogue, voir_carte sans image).',
 ].join('\n');
 // Les actions toujours données au modèle local comme vrais outils (les autres sont dans son catalogue).
