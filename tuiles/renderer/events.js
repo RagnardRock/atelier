@@ -1100,12 +1100,21 @@ const Events = (() => {
       nouveau: (doc) => ({ type: 'gestion_construire', batiment: doc.data.batiments?.[0]?.id || '', annoncer: true, reussi: [], rate: [] }),
       champs: (doc, c) => [
         { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) },
+        // Tafl 1.19 (Saga 1.19) : un emplacement fixe sur une carte, dessiné avec le tampon du bâtiment.
+        { key: 'carte', label: 'Où', type: 'select', value: c.carte || '', choices: [['', 'Nulle part (montré par un événement)'], ...doc.maps.map((m) => [m.id, `Sur la carte ${m.name}`])] },
+        { key: 'x', label: 'Colonne (x) de la case en haut à gauche', type: 'number', value: c.x || 0, min: 0, max: 255 },
+        { key: 'y', label: 'Rangée (y) de la case en haut à gauche', type: 'number', value: c.y || 0, min: 0, max: 255 },
         { ...ANNONCER, value: c.annoncer !== false },
-        { type: 'info', text: `Son coût est pris tout de suite dans le stock ; le chantier avance d'une nuit chaque fois que le joueur dort. Raté : pas assez de ressources, ou son maximum est atteint. ${AIDE_BRANCHES} Pour le montrer une fois fini : une page avec la condition « Un bâtiment est construit ».` },
+        { type: 'info', text: `Son coût est pris tout de suite dans le stock ; le chantier avance d'une nuit chaque fois que le joueur dort. Sur une carte : le bâtiment y apparaît avec son tampon (celui du chantier d'abord), à partir de la case en haut à gauche, et bloque son emprise sauf la porte ; pas besoin de zone constructible. Raté : pas assez de ressources, son maximum est atteint, ou un autre bâtiment occupe la place. ${AIDE_BRANCHES} « Nulle part » : pour le montrer, une page avec la condition « Un bâtiment est construit ».` },
       ],
-      depuis: (v, c) => ({ type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      depuis: (v, c) => {
+        const out = { type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] };
+        const m = v.carte ? Doc.mapById(App.doc, v.carte) : null;
+        if (v.carte) Object.assign(out, { carte: v.carte, x: clamp(Math.round(v.x) || 0, 0, (m?.width || 256) - 1), y: clamp(Math.round(v.y) || 0, 0, (m?.height || 256) - 1) });
+        return out;
+      },
       valide: (c) => (c.batiment ? null : 'Crée d\'abord un bâtiment (Données › Bâtiments).'),
-      resume: (doc, c) => `Construire « ${nomData(doc, 'batiments', c.batiment)} »`,
+      resume: (doc, c) => `Construire « ${nomData(doc, 'batiments', c.batiment)} »${c.carte ? ` sur ${Doc.mapById(doc, c.carte)?.name || c.carte} (${c.x}, ${c.y})` : ''}`,
     },
     // Tafl 1.3 : le joueur pose le bâtiment où il veut, dans une zone Constructible de la carte.
     gestion_placer: {
@@ -1512,7 +1521,7 @@ const Events = (() => {
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
       case 'dormir': return { type: 'dormir', texte: str(c.texte), soigner: vrai(c.soigner), heure: c.heure === '' || c.heure === null || c.heure === undefined ? '' : clamp(int(c.heure, 8), 0, 23) };
-      case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), ...(str(c.carte) ? { carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)) } : {}), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_placer': return { type: 'gestion_placer', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
       case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
