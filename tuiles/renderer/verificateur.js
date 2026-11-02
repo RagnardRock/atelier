@@ -360,6 +360,8 @@ const Verificateur = (() => {
     const gestionActif = typeof ModulesJeu !== 'undefined' ? ModulesJeu.actifs(reglages).includes('gestion') : (reglages.modules || []).includes('gestion');
     const zoneConstructible = [...cartes.values()].some((c) => (c.zones || []).some((z) => z.type === 'constructible'));
     const placeLibre = zoneConstructible && (donne.places || reglages.modules_reglages?.gestion?.construire_menu !== false);
+    // Tafl 1.19 : un bâtiment hors du menu Construire ne se pose que par un événement qui le nomme.
+    const auMenu = (id) => liste('batiments').find((b) => b.id === id)?.menu !== false;
     const impossible = (cond) => {
       switch (cond?.type) {
         case 'interrupteur':
@@ -372,7 +374,7 @@ const Verificateur = (() => {
           return null;
         case 'badge': return cond.badge && !donne.badges.has(cond.badge) ? `le badge « ${cond.badge} », que personne ne donne` : null;
         case 'membre': return jrpg && cond.personnage && !donne.membres.has(cond.personnage) ? `« ${cond.personnage} » dans le groupe, mais rien ne l'y fait entrer` : null;
-        case 'gestion_batiment': case 'gestion_chantier': return cond.batiment && connus.batiments.has(cond.batiment) && !donne.construits.has(cond.batiment) && !placeLibre ? `le bâtiment « ${cond.batiment} », mais aucune commande « Construire un bâtiment » ne le construit` : null;
+        case 'gestion_batiment': case 'gestion_chantier': return cond.batiment && connus.batiments.has(cond.batiment) && !donne.construits.has(cond.batiment) && !(placeLibre && auMenu(cond.batiment)) ? `le bâtiment « ${cond.batiment} », mais aucune commande « Construire un bâtiment » ne le construit` : null;
         default: return null;
       }
     };
@@ -504,6 +506,11 @@ const Verificateur = (() => {
             if (v?.[cle] && !tampons.has(v[cle])) ajouter('erreur', 'references', `La variante ${k + 2} du bâtiment « ${b.nom || b.id} » a pour ${cle === 'tampon' ? 'tampon' : 'tampon de chantier'} « ${v[cle]} », qui n'existe pas.`);
           }
         });
+      }
+    }
+    if (gestionActif) {
+      for (const b of liste('batiments')) {
+        if (b.menu === false && !donne.construits.has(b.id)) ajouter('attention', 'quetes', `Le bâtiment « ${b.nom || b.id} » n'est pas dans le menu Construire, et aucune commande « Construire un bâtiment » ou « Placer un bâtiment » ne le nomme : il ne sera jamais construit.`);
       }
     }
     if (gestionActif && donne.places && !zoneConstructible) ajouter('attention', 'quetes', 'La commande « Placer un bâtiment » ne réussira jamais : aucune carte n\'a de zone de type « Constructible ».');

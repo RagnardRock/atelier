@@ -1002,6 +1002,8 @@ Deux façons de mettre un bâtiment sur la carte :
 
 Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut poser ses bâtiments. Un bâtiment y tient si toutes ses cases sont dans une zone constructible, ni bloquées ni sur un rebord, sans événement visible ou bloquant, sans le joueur, et sans un autre bâtiment.
 
+`decor` (facultatif, Tafl 1.19, Saga 1.19) : `"bloque"` (par défaut) ou `"efface"`. Avec `"efface"`, le décor de la zone (les calques au-dessus du premier calque qui n'est pas « dessus » : fleurs, buissons, rochers, cimes) ne gêne pas la pose : seules les tuiles de ce premier calque (le sol) comptent, et le passage peint y est ignoré. Sous un bâtiment posé dans la zone (dès son chantier, placement libre ou emplacement fixe), le décor ne se dessine plus et ne compte plus pour le passage : seul le sol reste, et le passage du bâtiment. Ailleurs dans la zone, le décor se dessine et bloque comme d'habitude. Saga en garde une seconde grille de collisions, celle du sol (`collisionsSol`), calculée au chargement.
+
 #### `donnees/ressources.json`
 
 ```json
@@ -1025,6 +1027,8 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `jours` : les nuits de chantier (0 : construit tout de suite).
 - `production` et `consommation` : chaque nuit, un bâtiment fini prend sa `consommation` dans le stock et donne sa `production`. S'il manque quelque chose, il ne produit rien cette nuit-là (le rapport du matin le dit).
 - `maximum` : combien de bâtiments de ce type au plus (chantiers compris) ; 0 : sans limite.
+- `menu` (facultatif, Tafl 1.19, Saga 1.19, `true` par défaut) : `false` : le bâtiment n'est pas dans la liste « Construire » (carnet, ou `gestion_placer` sans bâtiment) ; seul un événement le construit (`gestion_construire`, ou `gestion_placer` avec ce `batiment`). Avec `maximum` à 1, il est unique.
+- `condition` (facultatif, Tafl 1.19) : une condition des événements (comme le déblocage d'un article de boutique) : le bâtiment n'est dans la liste « Construire » que quand elle est vraie. `verrouille_visible` (`false` par défaut) : avant, il s'y montre grisé, avec ce qui le débloque. Les événements peuvent le construire avant.
 - `tampon` (facultatif) : le nom d'un tampon de `tuiles.tafl` (un objet de plusieurs tuiles fait dans l'éditeur de cartes) : l'apparence du bâtiment posé, et sa taille. Ses rangées `dessus` passent devant le joueur.
 - `tampon_chantier` (facultatif) : le tampon pendant le chantier ; sans lui, le bâtiment en transparence.
 - `variantes` (facultatif, Tafl 1.18, Saga 1.18, `[{ "tampon", "tampon_chantier" }]`) : d'autres apparences pour ce bâtiment (maison2, maison3…). Chaque bâtiment posé (placement ou commande `gestion_construire`) prend la sienne : `tampon` (la variante 1) ou l'une de celles-ci, et la garde (`variante` dans l'état : son indice, absent pour la première). Une variante doit avoir la taille du bâtiment, sinon Saga l'ignore ; son `tampon_chantier` vide reprend celui du bâtiment ; le `passage` vaut pour toutes (ses cases `"auto"` suivent les tuiles de la variante). Le même tampon plusieurs fois sort plus souvent.
