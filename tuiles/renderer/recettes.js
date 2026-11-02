@@ -581,12 +581,14 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    // Hautes herbes : un contour droit et des coins bien arrondis.
-    const cran = () => () => Math.round(6 * s / 16);
+    // Hautes herbes : un contour presque droit, avec quelques crans d'une case (ça se raccorde), et
+    // des coins arrondis.
+    const CRANS = [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
+    const cran = () => (t) => Math.round((6 + CRANS[(((Math.floor(t * 16 / s)) % 16) + 16) % 16]) * s / 16);
     const f = b.style === 'touffu' ? { h: cran(), b: cran(), g: cran(), d: cran() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
-    const rayon = Math.round(s * (b.style === 'touffu' ? 0.4 : 0.3));
+    const rayon = Math.round(s * (b.style === 'touffu' ? 0.25 : 0.3));
     // zone : du côté voulu de toutes les limites (sens 1 : « dessus », -1 : « dessous »), coin arrondi.
     const zone = (cotes, x, y, sens) => {
       const m = cotes.map((c) => sens * marge[c](x, y) + (sens > 0 ? 0.5 : -0.5));
