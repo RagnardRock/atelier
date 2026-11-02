@@ -9,7 +9,8 @@
 //
 // Les bâtiments se posent librement (Saga 1.5) : le joueur choisit où, dans une zone « constructible » de
 // la carte, et le bâtiment est dessiné avec son tampon de Tafl et bloque ses cases (sauf sa porte). Un jeu
-// peut aussi construire sans place (commande gestion_construire) et montrer le bâtiment par un événement.
+// peut aussi construire à un emplacement fixe (commande gestion_construire avec carte, x, y), ou sans place
+// et montrer le bâtiment par un événement.
 //
 // Les habitants (Saga 1.6) : ils logent dans les bâtiments finis (logement), mangent chaque nuit (repas) et
 // font tourner les bâtiments qui demandent des ouvriers. Ils arrivent seuls quand il reste de la place et
@@ -591,7 +592,12 @@
       async gestion_construire(o) {
         const d = defs(o.jeu);
         const type = String(o.c.batiment || '');
-        const r = C.construire(d, etatDe(o), type, null, C.variante(d, etatDe(o), type));
+        // Saga 1.19 : un emplacement fixe (carte + case en haut à gauche) : le bâtiment y est dessiné avec son
+        // tampon et bloque son emprise, comme s'il avait été placé. Pas de zone constructible à respecter,
+        // seulement pas d'autre bâtiment dessous. Sans carte : aucun lieu (montré par un événement).
+        const fixe = o.c.carte ? { carte: String(o.c.carte), x: Math.max(0, Math.round(Number(o.c.x) || 0)), y: Math.max(0, Math.round(Number(o.c.y) || 0)) } : null;
+        const place = fixe && d.batiments.has(type) ? C.placement(d, etatDe(o), type, { ...fixe, constructible: () => true, libre: () => true }, fixe.x, fixe.y) : { ok: true };
+        const r = place.ok ? C.construire(d, etatDe(o), type, fixe, C.variante(d, etatDe(o), type)) : { ok: false, raison: place.raison };
         if (r.ok) {
           poser(o, r.etat);
           o.hote.rafraichir?.();

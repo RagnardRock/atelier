@@ -418,6 +418,12 @@ const Verificateur = (() => {
         if (cmd.type === 'combat_groupe') verifierId('groupes', cmd.groupe, quoi, ou);
         if (cmd.type === 'test_oppose' && cmd.monstre) verifierId('monstres_jdr', cmd.monstre, quoi, ou);
         if (cmd.type === 'gestion_construire') verifierId('batiments', cmd.batiment, quoi, ou);
+        // Tafl 1.19 : un emplacement fixe sur une carte qui n'existe plus, ou hors de la carte.
+        if (cmd.type === 'gestion_construire' && cmd.carte) {
+          const lc = cartes.get(cmd.carte);
+          if (!lc) ajouter('erreur', 'references', `${quoi} : « Construire un bâtiment » vise la carte « ${cmd.carte} », qui n'existe pas.`, ou);
+          else if (!dans(lc, Number(cmd.x) || 0, Number(cmd.y) || 0)) ajouter('erreur', 'references', `${quoi} : « Construire un bâtiment » vise la case (${cmd.x}, ${cmd.y}), hors de la carte « ${lc.nom} ».`, ou);
+        }
         if (cmd.type === 'gestion_placer' && cmd.batiment) verifierId('batiments', cmd.batiment, quoi, ou);
         if (cmd.type === 'gestion_stock') verifierId('ressources', cmd.ressource, quoi, ou);
         // Tafl 1.17 : les cinématiques parlent d'événements de la même carte (ou du héros, ou de l'événement lui-même).
