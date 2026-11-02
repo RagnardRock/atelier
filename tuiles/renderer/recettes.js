@@ -562,9 +562,9 @@ const Recettes = (() => {
   // et deux pièces voisines se raccordent (les ondulations reviennent tous les s pixels).
   const BORDS = {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
-    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau' },
+    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque' },
     transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable' },
-    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage' },
+    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque' },
   };
   const PIECES = [
     ['centre', []], ['haut', ['h']], ['bas', ['b']], ['gauche', ['g']], ['droite', ['d']],
@@ -629,7 +629,7 @@ const Recettes = (() => {
         // La deuxième rangée sous la berge, encore un peu sombre.
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));
       }
-      return { suffixe, frames: [data] };
+      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}) };
     });
   }
 
@@ -946,6 +946,7 @@ const Recettes = (() => {
   return {
     operations, fabriquer, NOMS,
     liste: () => NOMS.map((n) => `${n} (${libelle(n)})`),
+    libelle,
     objet: (n) => Boolean(RECETTES[n]?.objet),
     jeu: (n) => Boolean(BORDS[n]),
     // Un grand objet (bâtiment, arbre) : { l, h, dessus } (en tuiles), sinon null.
