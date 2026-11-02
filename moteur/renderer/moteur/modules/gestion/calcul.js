@@ -10,7 +10,8 @@
 // cout, production, consommation et stock_depart sont des listes [{ ressource, nombre }].
 //
 // L'état (partie.modules.gestion) :
-//   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y }], habitants, prochain, resolu }
+//   { stock: { ressource: nombre }, batiments: [{ id, type, etat: 'chantier' | 'fini', reste, carte, x, y, variante }], habitants, prochain, resolu }
+//   variante (Saga 1.18) = son apparence parmi les variantes du type (absente : la première)
 //   habitants (Saga 1.6) = combien de gens vivent au domaine (ils logent dans les bâtiments finis)
 //   faim (Saga 1.6.1)    = combien de nuits de suite quelqu'un n'a pas mangé
 //   retour (Saga 1.6.1)  = { carte, x, y, direction } : devant la porte du dernier bâtiment où le joueur est entré
@@ -82,6 +83,12 @@ const GestionCalcul = (() => {
       // groupe (soigner) et lui donne un bonus (stats en %, voir moteur/bonus.js) pour `combats` combats
       // (0 : sans limite), jusqu'à la nuit. Une visite peut coûter des ressources du stock (cout).
       def.repos = repos(b.repos, def.nom);
+      // Saga 1.18 : les variantes d'apparence (maison1, maison2, maison3…). La première est le tampon du
+      // bâtiment ; chaque bâtiment posé tire la sienne (tirage 'hasard', le défaut, ou 'tour' : chacune à son
+      // tour). Une variante est un tampon de la même taille (sinon elle est ignorée), avec son tampon de
+      // chantier (vide : celui du bâtiment). Le passage case par case reste celui du bâtiment.
+      def.variantes = lesVariantes(b, def, tampons);
+      def.tirage = b.variantes_tirage === 'tour' ? 'tour' : 'hasard';
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.gestion || {};
     const reglages = { nom: texte(g.nom, 40) || 'Domaine', stock_depart: quantites(g.stock_depart), capacite: entier(g.capacite, 0), menu: g.menu !== false, construire_menu: g.construire_menu !== false,
@@ -126,6 +133,34 @@ const GestionCalcul = (() => {
     return { ressources, batiments, reglages };
   }
 
+  function lesVariantes(b, def, tampons) {
+    const out = [{ tampon: def.tampon, tampon_chantier: def.tampon_chantier }];
+    for (const v of tableau(b.variantes).slice(0, 32)) {
+      const tampon = texte(typeof v === 'string' ? v : v?.tampon, 80);
+      if (!tampon) continue;
+      const t = tampons.get(tampon);
+      if (t && (t.largeur !== def.largeur || t.hauteur !== def.hauteur)) continue;
+      out.push({ tampon, tampon_chantier: texte(v?.tampon_chantier, 80) || def.tampon_chantier });
+    }
+    return out;
+  }
+  // Saga 1.18 : la variante d'un nouveau bâtiment de ce type (un indice dans def.variantes). alea : un nombre
+  // de [0, 1[ (Math.random par défaut ; un test passe le sien).
+  function variante(d, e, type, alea = Math.random) {
+    const def = d.batiments.get(type);
+    const n = def?.variantes?.length || 0;
+    if (n <= 1) return 0;
+    if (def.tirage === 'tour') return combien(e, type) % n;
+    return Math.min(n - 1, Math.floor(Math.max(0, Number(alea()) || 0) * n));
+  }
+  // L'apparence d'un bâtiment posé : { tampon, tampon_chantier } de sa variante (la première si le jeu ne
+  // l'a plus).
+  function apparence(d, b) {
+    const def = d.batiments.get(b?.type);
+    if (!def) return { tampon: '', tampon_chantier: '' };
+    return def.variantes?.[entier(b.variante, 0)] || def.variantes?.[0] || { tampon: def.tampon, tampon_chantier: def.tampon_chantier };
+  }
+
   // Saga 1.13 : les mots des écrans, ceux du jeu par-dessus les défauts du catalogue.
   function lesTextes(t) {
     let cat = typeof ModulesJeu !== 'undefined' ? ModulesJeu : null;
@@ -167,7 +202,8 @@ const GestionCalcul = (() => {
       vus.add(id);
       const fini = b.etat === 'fini' || entier(b.reste) <= 0;
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
-      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu });
+      const v = entier(b.variante, 0, 0, 99);
+      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu, ...(v ? { variante: v } : {}) });
     }
     return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
       // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
@@ -273,8 +309,9 @@ const GestionCalcul = (() => {
 
   // Lancer la construction d'un bâtiment : il faut de quoi le payer, et ne pas dépasser son maximum.
   // lieu (Saga 1.5) : { carte, x, y } s'il est posé sur une carte (vérifié avant par placement()).
+  // variante (Saga 1.18) : son apparence, un indice dans def.variantes (voir variante()).
   // Rend { ok, etat, raison, batiment } (raison : une phrase pour le joueur).
-  function construire(d, e, type, lieu = null) {
+  function construire(d, e, type, lieu = null, variante = 0) {
     const def = d.batiments.get(type);
     if (!def) return { ok: false, etat: e, raison: `Ce bâtiment n'existe pas (${type}).` };
     if (def.maximum && combien(e, type) >= def.maximum) return { ok: false, etat: e, raison: def.maximum === 1 ? `${def.nom} : il y en a déjà un.` : `${def.nom} : il y en a déjà ${def.maximum}.` };
@@ -283,6 +320,8 @@ const GestionCalcul = (() => {
     const etat = copie(e);
     for (const [r, n] of Object.entries(def.cout)) { etat.stock[r] -= n; if (!etat.stock[r]) delete etat.stock[r]; }
     const batiment = { id: `b${etat.prochain}`, type, etat: def.jours > 0 ? 'chantier' : 'fini', reste: def.jours, ...(lieu ? { carte: lieu.carte, x: lieu.x, y: lieu.y } : {}) };
+    const k = entier(variante, 0, 0, 99);
+    if (k > 0 && k < (def.variantes?.length || 0)) batiment.variante = k;
     while (etat.batiments.some((b) => b.id === batiment.id)) batiment.id = `b${++etat.prochain}`;
     etat.prochain += 1;
     etat.batiments.push(batiment);
@@ -493,7 +532,7 @@ const GestionCalcul = (() => {
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { nommes, arrivee, etListe, definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
+  return { nommes, arrivee, etListe, definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, variante, apparence, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;
