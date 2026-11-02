@@ -106,6 +106,14 @@ const Jeu = (() => {
   // Les collisions comme Tafl les calcule (FORMAT.md › Passage et collisions), au cas où le fichier
   // n'en aurait pas : le passage peint d'abord, sinon la tuile la plus haute qui décide (sans les
   // calques « dessus »), sinon libre.
+  function collisionsSol(carte, tuiles) {
+    const n = carte.largeur * carte.hauteur;
+    const out = new Int32Array(n).fill(PASSAGE.libre);
+    const sol = carte.calques.find((c) => c.profondeur !== 'dessus');
+    if (sol) for (let i = 0; i < n; i++) { const t = sol.cases[i]; if (t >= 0 && tuiles[t]?.passage) out[i] = tuiles[t].passage; }
+    return out;
+  }
+
   function calculerCollisions(carte, tuiles) {
     const n = carte.largeur * carte.hauteur;
     const out = new Int32Array(n);
@@ -176,6 +184,9 @@ const Jeu = (() => {
         rencontres: Array.isArray(z.rencontres) ? z.rencontres : [],
         // Tafl 0.33 (mode table) : une pièce, sous le brouillard, et qui la voit au départ.
         piece: Boolean(z.piece), visible_par: typeof z.visible_par === 'string' ? z.visible_par : '',
+        // Saga 1.19 (zone constructible) : 'efface' : le décor (les calques au-dessus du premier) ne gêne pas
+        // la pose d'un bâtiment, et disparaît sous lui ; 'bloque' (défaut) : le décor compte comme ailleurs.
+        decor: z.decor === 'efface' ? 'efface' : 'bloque',
       })),
       teleporteurs: (Array.isArray(data.teleporteurs) ? data.teleporteurs : []).filter((t) => t && t.vers),
       evenements: (Array.isArray(data.evenements) ? data.evenements : []).filter((e) => e && Array.isArray(e.pages)),
@@ -194,6 +205,9 @@ const Jeu = (() => {
     };
     const lue = Array.isArray(data.collisions) && data.collisions.length === n;
     carte.collisions = lue ? grille(data.collisions, n, PASSAGE.libre) : calculerCollisions(carte, tuiles);
+    // Saga 1.19 : avec une zone au décor effaçable, les collisions du seul premier calque (le sol), sans le
+    // passage peint : ce qui compte là où un module dégage le décor (Monde.degage).
+    carte.collisionsSol = carte.zones.some((z) => z.decor === 'efface') ? collisionsSol(carte, tuiles) : null;
     return carte;
   }
 

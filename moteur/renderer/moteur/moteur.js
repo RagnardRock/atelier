@@ -158,7 +158,8 @@ const Moteur = (() => {
       // (dans la carte, pas bloquée ni rebord, sans événement visible ni joueur).
       get carte() { return carte; },
       get joueur() { return joueur ? { x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
-      libre: (x, y) => Boolean(carte && Monde.dansCarte(carte, x, y) && Monde.code(carte, x, y) !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[Monde.code(carte, x, y)]
+      // Saga 1.19 : sol vrai : seules comptent les tuiles du premier calque (une zone au décor effaçable).
+      libre: (x, y, sol = false) => Boolean(carte && Monde.dansCarte(carte, x, y) && ((c) => c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c])(sol ? Monde.codeSol(carte, x, y) : Monde.code(carte, x, y))
         && !presents.some((p) => p.x === x && p.y === y && (p.visible || p.bloque)) && !(joueur && joueur.x === x && joueur.y === y)),
       // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
       // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
@@ -437,6 +438,8 @@ const Moteur = (() => {
       // Saga 1.4 : puis celles des modules, et les cases qu'ils bloquent (un bâtiment posé en jeu).
       Monde.brancherConditions((cond, p) => { const r = Regles.condition(jeu, cond, p); return r !== undefined ? r : Modules.condition(jeu, cond, p); });
       Monde.brancherBlocage((c, x, y) => Modules.bloque(jeu, partie, c, x, y));
+      // Saga 1.19 : et les cases où ils dégagent le décor (un bâtiment dans une zone au décor effaçable).
+      Monde.brancherDegage((c, x, y) => Modules.degage(jeu, partie, c, x, y));
       ecranDes.vitesse(jeu.donnees.reglages?.reglages?.jdr?.animation_des || 'normale');
       ecranDes.cacher();
       debutAFaire = !partieGardee;
@@ -1175,6 +1178,8 @@ const Moteur = (() => {
     // --- Dessin ---
     function dessinerCalque(calque, maintenant) {
       const t = jeu.taille;
+      // Saga 1.19 : sur les cases dégagées par un module, seul le premier calque (le sol) se dessine.
+      const degager = carte.collisionsSol && calque !== carte.calques.find((c) => c.profondeur !== 'dessus');
       // Parallaxe : un calque à 0,5 défile deux fois moins vite que la carte, un calque à 0 reste fixe.
       // Le point de référence est le coin de la carte : à parallaxe 1, tout tombe juste.
       const ox = Math.round(cam.x * calque.parallaxe.x), oy = Math.round(cam.y * calque.parallaxe.y);
@@ -1186,6 +1191,7 @@ const Moteur = (() => {
         for (let x = x0; x <= x1; x++) {
           const n = calque.cases[y * carte.largeur + x];
           if (n < 0) continue;
+          if (degager && Monde.degage(carte, x, y)) continue;
           const tuile = jeu.tuiles[n];
           if (!tuile) continue;
           // Tuile animée : toutes partagent la même horloge (toute l'eau ondule ensemble).
@@ -1342,7 +1348,7 @@ const Moteur = (() => {
       ctx.save();
       for (let y = y0; y <= y1; y++) {
         for (let x = x0; x <= x1; x++) {
-          const c = carte.collisions[y * carte.largeur + x];
+          const c = Monde.code(carte, x, y);
           if (c === 2) ctx.fillStyle = 'rgba(255, 60, 60, 0.32)';
           else if (c >= 3) ctx.fillStyle = 'rgba(255, 208, 64, 0.4)';
           else continue;

@@ -51,6 +51,11 @@ const DonneesGestion = (() => {
       production: normQuantites(b?.production),
       consommation: normQuantites(b?.consommation),
       maximum: int(b?.maximum, 0, 0, 999),
+      // Tafl 1.19 (Saga 1.19) : dans le menu Construire (false : seulement par un événement), débloqué par une
+      // condition des événements (null : tout de suite), et montré grisé avant (verrouille_visible).
+      menu: b?.menu !== false,
+      condition: b?.condition && typeof b.condition === 'object' && typeof b.condition.type === 'string' ? propre(b.condition) : null,
+      verrouille_visible: Boolean(b?.verrouille_visible),
       // Tafl 1.3 (placement libre) : l'apparence (un tampon, par son nom), la taille sans tampon, la porte.
       tampon: str(b?.tampon).slice(0, 80),
       tampon_chantier: str(b?.tampon_chantier).slice(0, 80),
@@ -152,6 +157,46 @@ const DonneesGestion = (() => {
       section('Utilisation'), ctx.usages('ressource', r.id),
     );
   }
+  // Tafl 1.19 (Saga 1.19) : le bâtiment dans le menu Construire : toujours, jamais (seulement par un
+  // événement : « Construire un bâtiment » ou « Placer un bâtiment » avec ce bâtiment), ou une fois débloqué.
+  function menuChamps(b, ctx) {
+    const { champ, info, sel } = U();
+    const box = el('div', {});
+    const doc = { ...(ctx.doc || {}), data: ctx.work };
+    const rendre = () => {
+      const mode = b.menu === false ? 'jamais' : b.condition ? 'condition' : 'toujours';
+      const choix = sel([['toujours', 'Toujours'], ['condition', 'Une fois débloqué (une condition)'], ['jamais', 'Jamais : seulement par un événement']], mode, (v) => {
+        b.menu = v !== 'jamais';
+        if (v !== 'condition') { b.condition = null; b.verrouille_visible = false; }
+        else if (!b.condition) b.condition = Events.CONDITIONS.interrupteur ? Events.CONDITIONS.interrupteur.nouveau(doc) : null;
+        rendre();
+      });
+      const lignes = [champ('Dans le menu Construire', choix)];
+      if (mode === 'condition') {
+        const puce = el('button', { className: 'chip cond-chip on', textContent: b.condition ? Events.resumeCondition(doc, b.condition) : '(choisir)' });
+        puce.onclick = async (e) => {
+          e.preventDefault();
+          const type = await Events.choisir(Object.entries(Events.CONDITIONS).filter(([k]) => k !== 'local').map(([k, d]) => ({ label: `Débloqué si : ${d.nom}`, value: k })), e.clientX, e.clientY);
+          if (!type) return;
+          const c = await Events.formCondition(doc, b.condition?.type === type ? b.condition : Events.CONDITIONS[type].nouveau(doc));
+          if (c) { b.condition = c; rendre(); }
+        };
+        lignes.push(el('div', { className: 'field-grid' }, [
+          champ('Débloqué si', puce),
+          champ('Grisé avant', ctx.coche(b, 'verrouille_visible'), 'le joueur le voit déjà, grisé, avec ce qui le débloque'),
+        ]));
+      }
+      lignes.push(info(mode === 'jamais'
+        ? 'Le joueur ne le voit pas dans Construire. Un événement le construit : « Construire un bâtiment » (à une place fixe, ou nulle part) ou « Placer un bâtiment » avec ce bâtiment choisi (le joueur choisit l\'endroit). Avec « Au plus » à 1, il est unique.'
+        : mode === 'condition'
+          ? 'Il apparaît dans Construire quand la condition est vraie (un interrupteur, une variable, une quête…). Les événements peuvent toujours le construire.'
+          : 'Le joueur le trouve dans Construire (carnet, ou la commande « Placer un bâtiment » sans bâtiment choisi).'));
+      box.replaceChildren(...lignes);
+    };
+    rendre();
+    return box;
+  }
+
   function formBatiment(b, ctx) {
     const { champ, info, nombreIn, section } = U();
     const idl = ctx.idLigne(b);
@@ -166,6 +211,7 @@ const DonneesGestion = (() => {
         champ('Logement', nombreIn(b, 'logement', 0, 999), 'habitants qu\'il loge une fois fini'),
         champ('Ouvriers', nombreIn(b, 'ouvriers', 0, 999), 'habitants qu\'il lui faut pour produire (0 = il produit seul)'),
       ]),
+      menuChamps(b, ctx),
       tableQuantites(ctx, b, 'cout', 'Coût (pris dans le stock)', 'Gratuit.'),
       tableQuantites(ctx, b, 'production', 'Produit chaque nuit', 'Ne produit rien (un entrepôt, une maison…).'),
       tableQuantites(ctx, b, 'consommation', 'Consomme chaque nuit pour produire', 'Ne consomme rien.'),
@@ -515,7 +561,7 @@ const DonneesGestion = (() => {
 
   function resumer(doc, sorte, o) {
     if (sorte === 'ressources') return `${o.id} « ${o.nom} »${o.objet ? `, objet du sac ${o.objet}` : ''}${o.description ? ` : ${o.description}` : ''}`;
-    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}${o.logement ? `, loge ${o.logement}` : ''}${o.ouvriers ? `, ${o.ouvriers} ouvrier(s)` : ''}${o.repos ? `, repos ${o.repos.quand === 'matin' ? 'chaque matin' : 'en visite'} (${o.repos.soigner ? 'soigne, ' : ''}${o.repos.stats.map((q) => `${q.stat} ${q.pourcent > 0 ? '+' : ''}${q.pourcent} %`).join(', ') || 'sans bonus'}${o.repos.combats ? `, ${o.repos.combats} combat(s)` : ''})` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
+    if (sorte === 'batiments') return `${o.id} « ${o.nom} » coût [${dire(doc.data, o.cout) || 'gratuit'}], chantier ${o.jours} nuit(s)${o.maximum ? `, au plus ${o.maximum}` : ''}${o.menu === false ? ', hors du menu Construire (événements seulement)' : o.condition ? `, au menu si ${Events.resumeCondition(doc, o.condition)}` : ''}${o.tampon ? `, tampon ${o.tampon}` : `, ${o.largeur}×${o.hauteur} cases`}${o.porte ? `, porte (${o.porte.x}, ${o.porte.y})` : ''}${o.logement ? `, loge ${o.logement}` : ''}${o.ouvriers ? `, ${o.ouvriers} ouvrier(s)` : ''}${o.repos ? `, repos ${o.repos.quand === 'matin' ? 'chaque matin' : 'en visite'} (${o.repos.soigner ? 'soigne, ' : ''}${o.repos.stats.map((q) => `${q.stat} ${q.pourcent > 0 ? '+' : ''}${q.pourcent} %`).join(', ') || 'sans bonus'}${o.repos.combats ? `, ${o.repos.combats} combat(s)` : ''})` : ''}, produit [${dire(doc.data, o.production) || 'rien'}]${o.consommation.length ? `, consomme [${dire(doc.data, o.consommation)}]` : ''}`;
     return null;
   }
   // Où une ressource ou un bâtiment est utilisé (Donnees.utilisations).
