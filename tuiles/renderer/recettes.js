@@ -526,24 +526,26 @@ const Recettes = (() => {
     hautes_herbes: {
       rampe: 'herbe', libelle: 'Hautes herbes (celles des rencontres), qui se balancent (animée)',
       ops: (r, s, g) => {
-        const ops = [{ type: 'remplir', couleur: r[1] }, { type: 'taches', couleurs: [melange(r[1], r[0], 0.5)], densite: 0.3, taille: 5, graine: g }];
-        // Des touffes de brins pointus (8 × 7 px, chiffres = rang dans la rampe), en deux rangées
-        // décalées : la rangée du bas recouvre le pied de celle du haut, ce qui donne la profondeur.
+        const ops = [{ type: 'remplir', couleur: r[1] }];
+        // Façon Pokémon : des touffes à deux feuilles pointues, cernées de sombre (7 × 8 px et une colonne d'herbe ; o = contour,
+        // chiffres = rang dans la rampe, lumière à gauche), en deux rangées décalées d'une demi-touffe.
         const touffe = [
-          '.4...4..',
-          '.3.4.3..',
-          '33.3.33.',
-          '32333230',
-          '22323220',
-          '2222222.',
-          '0111110.',
+          '.o...o..',
+          'o4o.o3o.',
+          'o43o43o.',
+          'o43433o.',
+          'o43333o.',
+          'o23332o.',
+          'o12221o.',
+          '.ooooo..',
         ];
-        const u = s / 16;
-        for (const [ox, oy] of [[0, 1], [8, 1], [4, 9], [12, 9]]) {
+        const contour = melange(r[0], '#000000', 0.35);
+        const u = s / 16, k = Math.max(1, Math.round(u));
+        for (const [ox, oy] of [[0, 0], [8, 0], [4, 8], [12, 8]]) {
           touffe.forEach((ligne, j) => [...ligne].forEach((c, i) => {
             if (c === '.') return;
             const x = Math.round((ox + i) * u) % s, y = Math.round((oy + j) * u) % s;
-            ops.push({ type: 'rect', x, y, largeur: Math.max(1, Math.round(u)), hauteur: Math.max(1, Math.round(u)), couleur: r[Number(c)] });
+            ops.push({ type: 'rect', x, y, largeur: k, hauteur: k, couleur: c === 'o' ? contour : r[Number(c)] });
           }));
         }
         return ops;
