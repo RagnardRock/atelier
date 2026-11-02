@@ -609,6 +609,7 @@ const CLAUDE_CONSIGNES = [
   '  « dessus » ; une rangée plus sombre au pied des murs et falaises.',
   '- Animation : animer_tuile plutôt qu\'image par image : cycle de couleurs pour l\'eau, balancement d\'1 pixel pour',
   '  les herbes, scintillement pour les reflets ; 3 à 6 images de 150 à 300 ms, des mouvements petits et doux.',
+  '  Des tuiles déjà faites qui sont les images d\'une même animation : assembler_animation (pas de copie pixel par pixel).',
 ].join('\n');
 // La version courte pour Loki en local (un modèle de 8 à 14 milliards de paramètres a peu de mémoire :
 // le catalogue des actions y prend déjà beaucoup de place). Les mêmes règles, sans les conseils de style.

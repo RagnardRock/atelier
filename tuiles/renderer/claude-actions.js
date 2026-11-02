@@ -701,6 +701,57 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return resultatTuile(doc, i, `Tuile ${i} « ${t.name} » animée : ${t.frames.length} images de ${t.duration || Doc.DEFAULT_DURATION} ms (${a.mode}). L'animation est lancée dans Tafl.`);
       },
     },
+    // Tafl 1.20 : assembler des tuiles déjà faites en une animation, et l'animation en bande PNG.
+    assembler_animation: {
+      icone: 'layers',
+      libelle: (a) => `Assemble les tuiles ${(a.tuiles || []).join(', ')} en une animation`,
+      description: 'Fait une seule tuile animée avec des tuiles déjà faites (les 3 images d\'une torche dessinées en 3 tuiles, par exemple). tuiles : leurs numéros, dans l\'ordre des images (2 au moins ; une tuile déjà animée apporte toutes ses images ; 16 images au plus). La première tuile devient l\'animation (son nom reste). ordre : normal, inverse ou aller-retour (1 2 3 2). duree : ms par image. retirer (true par défaut) : les autres tuiles sont retirées et, là où elles étaient posées (cartes, tampons, événements), l\'animation les remplace ; attention, les numéros des tuiles suivantes changent.',
+      schema: { type: 'object', properties: { tuiles: { type: 'array', items: nombre }, ordre: { type: 'string', enum: ['normal', 'inverse', 'aller-retour'] }, duree: nombre, retirer: { type: 'boolean' } }, required: ['tuiles'] },
+      faire: (a) => {
+        const doc = besoinJeu();
+        const lot = (a.tuiles || []).map((k) => tuileNumero(doc, k));
+        if (new Set(lot).size < 2) throw new Error('Il faut au moins deux tuiles différentes.');
+        const i = App.assemblerAnimation(doc, lot, { ordre: a.ordre || 'normal', duree: a.duree, retirer: a.retirer !== false });
+        const t = doc.tiles[i];
+        return resultatTuile(doc, i, `Tuile ${i} « ${t.name} » animée : ${t.frames.length} images de ${t.duration} ms.${a.retirer !== false && lot.length > 1 ? ' Les autres tuiles sont retirées (numéros décalés : relis le catalogue avant de poser des tuiles).' : ''}`);
+      },
+    },
+    exporter_animation: {
+      icone: 'export',
+      libelle: (a) => `Exporte l'animation de la tuile ${a.index ?? 'choisie'} vers ${a.chemin}`,
+      description: 'Écrit les images d\'une tuile côte à côte dans un PNG du projet (la première à gauche), pour la retoucher dans Photoshop ou Skald puis la réimporter (importer_animation). index : la tuile (sinon la tuile choisie) ; chemin : relatif au dossier du projet, en .png ; echelle : 1 à 8 (1 par défaut).',
+      schema: { type: 'object', properties: { index: nombre, chemin: { type: 'string' }, echelle: nombre }, required: ['chemin'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        if (!/\.png$/i.test(a.chemin)) throw new Error('Le fichier doit finir par .png.');
+        const i = tuileNumero(doc, a.index);
+        const c = IO.bandeCanvas(doc.tiles[i], doc.tileSize, clamp(Math.round(a.echelle || 1), 1, 8));
+        const chemin = await window.claude.ecrireFichier(a.chemin, await IO.canvasBytes(c));
+        return `Animation de « ${doc.tiles[i].name} » exportée : ${chemin} (${doc.tiles[i].frames.length} image(s), ${c.width} × ${c.height} px).`;
+      },
+    },
+    importer_animation: {
+      icone: 'cloud-download',
+      libelle: (a) => `Importe l'animation ${a.chemin}${a.index === undefined || a.index === null ? ' dans une nouvelle tuile' : ` dans la tuile ${a.index}`}`,
+      description: 'Découpe un PNG du projet (chemin relatif) en images de la taille des tuiles, de gauche à droite puis de haut en bas (16 au plus), comme Tuile › Importer une animation. index : la tuile dont les images sont remplacées ; sans index, une nouvelle tuile (nom : celui du fichier, ou nom). duree : ms par image ; echelle : l\'agrandissement de l\'image (détecté sinon) ; fond : true pour rendre transparent un damier ou une couleur de fond peints ; sauter_vides (true par défaut).',
+      schema: { type: 'object', properties: { chemin: { type: 'string' }, index: nombre, nom: { type: 'string' }, duree: nombre, echelle: nombre, fond: { type: 'boolean' }, sauter_vides: { type: 'boolean' } }, required: ['chemin'] },
+      faire: async (a) => {
+        const doc = besoinJeu();
+        const fichier = await window.claude.lireFichier(a.chemin);
+        const img = await IO.decodeBytes(fichier.bytes);
+        const s = doc.tileSize;
+        const echelle = a.echelle ? clamp(Math.round(a.echelle), 1, 8) : IO.echelleBande(img.naturalWidth, img.naturalHeight, s);
+        const r = IO.bandeImages(img, s, { echelle, fond: Boolean(a.fond), sauterVides: a.sauter_vides !== false });
+        if (!r.images.length) throw new Error(`Aucune image de ${s} px dans ${a.chemin} (${img.naturalWidth} × ${img.naturalHeight} px).`);
+        const index = a.index === undefined || a.index === null ? null : tuileNumero(doc, a.index);
+        const nom = a.nom || String(fichier.name || a.chemin).split(/[\\/]/).pop().replace(/\.[^.]+$/, '').replace(/-animation$/i, '');
+        const i = IO.poserAnimation(doc, r.images, { index, duree: a.duree || (index !== null && doc.tiles[index].frames.length > 1 ? doc.tiles[index].duration : Doc.DEFAULT_DURATION), nom });
+        App.selectTile(i);
+        App.selectFrame(0);
+        const notes = [r.total > IO.MAX_IMAGES ? ` ${r.total} cases lues, seules les 16 premières sont prises.` : '', r.juste ? '' : ' La taille de l\'image ne tombe pas sur des cases entières : le bord est ignoré.', echelle > 1 ? ` Image réduite de ×${echelle}.` : ''].join('');
+        return resultatTuile(doc, i, `Tuile ${i} « ${doc.tiles[i].name} » : ${r.images.length} image(s) importée(s).${notes}`);
+      },
+    },
     tuile: {
       icone: 'symbol-misc',
       libelle: (a) => `Tuile ${a.index ?? 'choisie'} : ${String(a.action || '').replace(/_/g, ' ')}`,

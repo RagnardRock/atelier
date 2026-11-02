@@ -206,7 +206,7 @@ const App = (() => {
     const item = $(`#tiles .tile-item[data-index="${api.doc.current}"]`);
     item?.scrollIntoView({ block: 'nearest' });
   }
-  // Tafl 1.19 : Tuile › Ajouter depuis une recette… — les recettes de recettes.js (sols, bords,
+  // Tafl 1.21 : Tuile › Ajouter depuis une recette… — les recettes de recettes.js (sols, bords,
   // objets, bâtiments, arbres) sans passer par Loki, avec un aperçu. Les tuiles s'ajoutent à la fin,
   // rangées dans la catégorie choisie ; un bâtiment ou un arbre donne aussi son tampon.
   async function ajouterRecette() {
@@ -504,6 +504,9 @@ const App = (() => {
       { label: 'Ajouter une image d\'animation', keys: 'Ctrl+Maj+A', run: addFrame },
       { label: 'Supprimer l\'image d\'animation', disabled: !Doc.animated(doc.tiles[doc.current]), run: deleteFrame },
       { label: api.playing ? 'Arrêter l\'animation' : 'Lancer l\'animation', keys: 'P', run: togglePlay },
+      { label: lot.length > 1 ? `Assembler les ${lot.length} tuiles choisies en une animation…` : 'Assembler des tuiles en une animation… (choisis-en plusieurs)', disabled: lot.length < 2, run: () => run(() => assembleTiles(lot)) },
+      { label: 'Exporter l\'animation (PNG)…', run: () => run(() => IO.exporterAnimation(doc)) },
+      { label: 'Importer une animation (PNG)…', run: () => run(() => IO.importerAnimation(doc)) },
       null,
       { label: 'Passage : auto (ne décide rien)', checked: (doc.tiles[doc.current].passage || 'auto') === 'auto', run: () => setTilePassage('auto') },
       { label: 'Passage : laisse passer le joueur', checked: doc.tiles[doc.current].passage === 'libre', run: () => setTilePassage('libre') },
@@ -567,6 +570,59 @@ const App = (() => {
     const src = tile.frames[clamp(api.frame, 0, tile.frames.length - 1)].slice();
     Doc.change(doc, 'Ajouter une image', () => { api.frame = Doc.addFrame(doc, doc.current, api.frame + 1, src); });
   }
+  // Tafl 1.20 : les tuiles choisies deviennent une seule tuile animée. Ses images : celles de chaque
+  // tuile, dans l'ordre du panneau (une tuile déjà animée apporte toutes les siennes). La première tuile
+  // garde son nom et sa place ; les autres peuvent être retirées : là où elles étaient posées (cartes,
+  // tampons, événements), c'est l'animation qui les remplace.
+  const ordreImages = (images, ordre) => (ordre === 'inverse' ? images.slice().reverse()
+    : ordre === 'aller-retour' && images.length > 2 ? [...images, ...images.slice(1, -1).reverse()] : images);
+  async function assembleTiles(lot = Panels.selection()) {
+    const doc = api.doc;
+    if (lot.length < 2) return notify('Choisis d\'abord au moins deux tuiles : Ctrl+clic ou Maj+clic dans le panneau Tuiles.', 'info', 5000);
+    const images = lot.flatMap((i) => doc.tiles[i].frames);
+    const first = doc.tiles[lot[0]];
+    const apercu = IO.apercuAnimation(doc.tileSize);
+    const v = await Dialogs.form({
+      title: `Assembler ${lot.length} tuiles en une animation`,
+      okLabel: 'Assembler',
+      width: 500,
+      fields: [
+        { type: 'info', text: `Les images suivent l'ordre des tuiles dans le panneau. L'animation prend la place de « ${first.name} ». L'ordre se change ensuite en glissant les images dans le panneau Animation.` },
+        { type: 'element', element: apercu.element },
+        { key: 'ordre', label: 'Ordre', type: 'select', value: 'normal', choices: [['normal', 'Dans l\'ordre (1 2 3)'], ['inverse', 'À l\'envers (3 2 1)'], ['aller-retour', 'Aller-retour (1 2 3 2)']] },
+        { key: 'duree', label: 'Durée d\'une image', type: 'number', value: Doc.animated(first) ? first.duration : Doc.DEFAULT_DURATION, min: 30, max: 5000, unit: 'ms' },
+        { key: 'retirer', label: `Retirer les ${lot.length - 1} autre(s) tuile(s) : là où elles sont posées, l'animation les remplace`, type: 'checkbox', value: true },
+      ],
+      onInput(values, f) {
+        const liste = ordreImages(images, values.ordre);
+        apercu.montrer(liste.slice(0, IO.MAX_IMAGES), values.duree);
+        f.card.querySelector('.modal-extra').textContent = `${Math.min(liste.length, IO.MAX_IMAGES)} image(s)${liste.length > IO.MAX_IMAGES ? ` (sur ${liste.length} : 16 au plus par tuile)` : ''}`;
+      },
+    });
+    apercu.arreter();
+    if (!v) return;
+    const i = assemblerAnimation(doc, lot, { ordre: v.ordre, duree: v.duree, retirer: v.retirer });
+    notify(`« ${doc.tiles[i].name} » est animée : ${doc.tiles[i].frames.length} images. Ctrl+Z pour revenir en arrière.`, 'success', 5000);
+  }
+  // Le cœur, aussi pour Loki : lot = les numéros des tuiles, dans l'ordre des images. Renvoie le numéro de la tuile animée.
+  function assemblerAnimation(doc, lot, { ordre = 'normal', duree = null, retirer = true } = {}) {
+    const images = ordreImages(lot.flatMap((i) => doc.tiles[i].frames), ordre).slice(0, IO.MAX_IMAGES);
+    const garde = doc.tiles[lot[0]];
+    const ms = clamp(Math.round(duree) || (Doc.animated(garde) ? garde.duration : Doc.DEFAULT_DURATION), 30, 5000);
+    const autres = [...new Set(lot.slice(1))].filter((i) => i !== lot[0]);
+    Doc.change(doc, 'Assembler en animation', () => {
+      const t = Doc.tileForEdit(doc, lot[0]);
+      t.frames = images.map((d) => d.slice());
+      t.duration = ms;
+      Doc.touch(t);
+      if (retirer && autres.length) Doc.removeTiles(doc, new Set(autres), new Map(autres.map((k) => [k, lot[0]])));
+      doc.current = doc.tiles.indexOf(t);
+    });
+    selectTile(doc.current);
+    selectFrame(0);
+    if (!api.playing) togglePlay();
+    return doc.current;
+  }
   function deleteFrame() {
     const doc = api.doc;
     if (doc.tiles[doc.current].frames.length < 2) return;
@@ -587,6 +643,8 @@ const App = (() => {
   }
   $('#frame-add').onclick = () => { if (api.doc) addFrame(); };
   $('#frame-delete').onclick = () => { if (api.doc) deleteFrame(); };
+  $('#frame-export').onclick = () => { if (api.doc) run(() => IO.exporterAnimation(api.doc)); };
+  $('#frame-import').onclick = () => { if (api.doc) run(() => IO.importerAnimation(api.doc)); };
   $('#anim-play').onclick = () => { if (api.doc) togglePlay(); };
   $('#frame-duration').onchange = (e) => { if (api.doc) setDuration(Number(e.target.value)); };
 
@@ -1904,7 +1962,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { ajouterRecette, choisirMode, applyEvent, renderWelcome, exporterJeu, renameGame, togglePanels, jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { ajouterRecette, choisirMode, applyEvent, renderWelcome, exporterJeu, renameGame, togglePanels, jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, assembleTiles, assemblerAnimation, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

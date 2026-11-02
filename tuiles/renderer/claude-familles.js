@@ -6,7 +6,7 @@
 ClaudePanneau.familles({
   tuiles: {
     libelle: 'Dessiner et ranger les tuiles',
-    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'recette_tuile', 'dessiner_objet', 'animer_tuile', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite', 'nommer', 'generer_tuiles'],
+    actions: ['dessiner_tuile', 'rampe', 'peindre_tuile', 'recette_tuile', 'dessiner_objet', 'animer_tuile', 'assembler_animation', 'tuile', 'ranger_tuiles', 'ajouter_couleurs', 'animation', 'palette', 'dessiner_sprite', 'nommer', 'generer_tuiles'],
   },
   cartes: {
     libelle: 'Construire les cartes',
@@ -18,7 +18,7 @@ ClaudePanneau.familles({
   },
   fichiers_tafl: {
     libelle: 'Ouvrir, enregistrer, importer et exporter',
-    actions: ['nouveau_jeu', 'ouvrir', 'importer_planche', 'enregistrer', 'enregistrer_sous', 'enregistrer_jeu', 'exporter_planche', 'exporter_planche_nommee', 'exporter_carte', 'exporter_tuiles', 'exporter_tiled'],
+    actions: ['nouveau_jeu', 'ouvrir', 'importer_planche', 'enregistrer', 'enregistrer_sous', 'enregistrer_jeu', 'exporter_planche', 'exporter_planche_nommee', 'exporter_carte', 'exporter_tuiles', 'exporter_tiled', 'exporter_animation', 'importer_animation'],
   },
   menus: {
     libelle: 'Les commandes des menus, annuler et rétablir',
