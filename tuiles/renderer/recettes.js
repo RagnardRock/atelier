@@ -564,6 +564,7 @@ const Recettes = (() => {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
     transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau' },
     transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable' },
+    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage' },
   };
   const PIECES = [
     ['centre', []], ['haut', ['h']], ['bas', ['b']], ['gauche', ['g']], ['droite', ['d']],
@@ -609,14 +610,21 @@ const Recettes = (() => {
           // Le bord côté « dessus » : l'ombre sous la berge (eau), une terre plus sombre (chemin), un sable tassé.
           // (et quelques brins d'herbe qui débordent sur le chemin ou le sable, toujours aux mêmes places
           // pour que deux pièces voisines se raccordent)
-          const brin = b.style !== 'eau' && ((x * 7 + y * 13 + g) % 9) < 2;
+          const brin = b.style !== 'eau' && b.style !== 'plage' && ((x * 7 + y * 13 + g) % 9) < 2;
           if (b.style === 'eau') t.set(x, y, hex(rb[0]));
+          else if (b.style === 'plage') t.set(x, y, hex((x + y) % 5 === 0 ? rb[3] : rb[4])); // l'écume
           else if (brin) t.set(x, y, hex(ra[2]));
           else if (b.style === 'chemin') t.set(x, y, hex(rb[1]));
           else if ((x + y) % 2 === 0) t.set(x, y, hex(rb[1]));
         } else if (!surB && voisinB) {
           // Le bord côté herbe : une lèvre éclairée au-dessus de l'eau, une herbe plus sombre ailleurs.
-          t.set(x, y, hex(b.style === 'eau' ? ra[3] : ra[1]));
+          t.set(x, y, hex(b.style === 'eau' ? ra[3] : b.style === 'plage' ? melange(ra[1], ra[0], 0.35) : ra[1]));
+        }
+        // La plage : l'eau peu profonde (plus claire) derrière l'écume, le sable mouillé (plus foncé) devant.
+        if (b.style === 'plage') {
+          const loin = (cote) => [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => cote(x + dx, y + dy));
+          if (surB && !voisinA && loin((i, j) => !estBInt(i, j))) t.set(x, y, hex(rb[3]));
+          else if (!surB && !voisinB && loin((i, j) => estBInt(i, j))) t.set(x, y, hex(ra[1]));
         }
         // La deuxième rangée sous la berge, encore un peu sombre.
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));

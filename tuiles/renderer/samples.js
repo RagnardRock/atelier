@@ -20,6 +20,7 @@ const Samples = (() => {
     ['transition_chemin', 'chemin', 'Bords du chemin', 'auto', 1],
     ['transition_eau', 'rive', 'Bords de l\'eau', 'bloque', 1],
     ['transition_sable', 'sable', 'Bords du sable', 'auto', 1],
+    ['transition_plage', 'plage', 'Bords de la plage', 'bloque', 1],
     ['maison', 'maison', 'Bâtiments', null, 1],
     ['boutique', 'boutique', 'Bâtiments', null, 1],
     ['sapin', 'sapin', 'Arbres', null, 1],
