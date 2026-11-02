@@ -994,13 +994,15 @@ Activé par `reglages.modules: ["gestion"]`, avec n'importe quel pack. Un **stoc
 Deux façons de mettre un bâtiment sur la carte :
 
 - **le placement libre** : le joueur choisit où le poser, dans une zone de type `"constructible"` de la carte (carnet › Construire, ou la commande `gestion_placer`). Il déplace le bâtiment avec les flèches (vert : il tient, rouge : non) et le pose avec la touche d'action ; retour annule. Saga le dessine avec son tampon et bloque son emprise, sauf la porte ;
-- **un emplacement fixe** : la commande `gestion_construire` (sans place) et un événement dont une page a la condition `gestion_batiment`.
+- **un emplacement fixe** (Tafl 1.18.1, Saga 1.18.1) : la commande `gestion_construire` avec `carte`, `x`, `y` (la case en haut à gauche). Saga dessine le bâtiment avec son tampon (celui du chantier d'abord) et bloque son emprise, comme s'il avait été placé ; pas besoin de zone constructible. Sans `carte`, le bâtiment n'est sur aucune carte : un événement dont une page a la condition `gestion_batiment` peut le montrer (une seule case).
 
 **Les habitants** (Tafl 1.4, Saga 1.6) logent dans les bâtiments finis (`logement`), mangent chaque nuit (`repas`) et font tourner les bâtiments qui demandent des `ouvriers`. Ils arrivent tout seuls, la nuit, quand il reste un logement et que personne n'a eu faim, ou par la commande `gestion_habitants`. Ils ne se promènent pas encore sur la carte.
 
 #### La zone `constructible`
 
 Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut poser ses bâtiments. Un bâtiment y tient si toutes ses cases sont dans une zone constructible, ni bloquées ni sur un rebord, sans événement visible ou bloquant, sans le joueur, et sans un autre bâtiment.
+
+`decor` (facultatif, Tafl 1.19, Saga 1.19) : `"bloque"` (par défaut) ou `"efface"`. Avec `"efface"`, le décor de la zone (les calques au-dessus du premier calque qui n'est pas « dessus » : fleurs, buissons, rochers, cimes) ne gêne pas la pose : seules les tuiles de ce premier calque (le sol) comptent, et le passage peint y est ignoré. Sous un bâtiment posé dans la zone (dès son chantier, placement libre ou emplacement fixe), le décor ne se dessine plus et ne compte plus pour le passage : seul le sol reste, et le passage du bâtiment. Ailleurs dans la zone, le décor se dessine et bloque comme d'habitude. Saga en garde une seconde grille de collisions, celle du sol (`collisionsSol`), calculée au chargement.
 
 #### `donnees/ressources.json`
 
@@ -1025,6 +1027,8 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `jours` : les nuits de chantier (0 : construit tout de suite).
 - `production` et `consommation` : chaque nuit, un bâtiment fini prend sa `consommation` dans le stock et donne sa `production`. S'il manque quelque chose, il ne produit rien cette nuit-là (le rapport du matin le dit).
 - `maximum` : combien de bâtiments de ce type au plus (chantiers compris) ; 0 : sans limite.
+- `menu` (facultatif, Tafl 1.19, Saga 1.19, `true` par défaut) : `false` : le bâtiment n'est pas dans la liste « Construire » (carnet, ou `gestion_placer` sans bâtiment) ; seul un événement le construit (`gestion_construire`, ou `gestion_placer` avec ce `batiment`). Avec `maximum` à 1, il est unique.
+- `condition` (facultatif, Tafl 1.19) : une condition des événements (comme le déblocage d'un article de boutique) : le bâtiment n'est dans la liste « Construire » que quand elle est vraie. `verrouille_visible` (`false` par défaut) : avant, il s'y montre grisé, avec ce qui le débloque. Les événements peuvent le construire avant.
 - `tampon` (facultatif) : le nom d'un tampon de `tuiles.tafl` (un objet de plusieurs tuiles fait dans l'éditeur de cartes) : l'apparence du bâtiment posé, et sa taille. Ses rangées `dessus` passent devant le joueur.
 - `tampon_chantier` (facultatif) : le tampon pendant le chantier ; sans lui, le bâtiment en transparence.
 - `variantes` (facultatif, Tafl 1.18, Saga 1.18, `[{ "tampon", "tampon_chantier" }]`) : d'autres apparences pour ce bâtiment (maison2, maison3…). Chaque bâtiment posé (placement ou commande `gestion_construire`) prend la sienne : `tampon` (la variante 1) ou l'une de celles-ci, et la garde (`variante` dans l'état : son indice, absent pour la première). Une variante doit avoir la taille du bâtiment, sinon Saga l'ignore ; son `tampon_chantier` vide reprend celui du bâtiment ; le `passage` vaut pour toutes (ses cases `"auto"` suivent les tuiles de la variante). Le même tampon plusieurs fois sort plus souvent.
@@ -1063,7 +1067,7 @@ Quand le joueur dort (commande `dormir`), dans cet ordre, une seule fois par jou
 
 | `type` | Champs | Ce qu'elle fait |
 |---|---|---|
-| `gestion_construire` | `batiment`, `annoncer`, `reussi`, `rate` | Paie le bâtiment sur le stock et lance son chantier (ou le construit tout de suite). Joue `reussi`, ou `rate` s'il manque des ressources ou si son `maximum` est atteint. `annoncer` (`true` par défaut) : le dire au joueur. Pour un script : `{ ok, batiment }` (l'id du bâtiment construit). |
+| `gestion_construire` | `batiment`, `carte`, `x`, `y`, `annoncer`, `reussi`, `rate` | Paie le bâtiment sur le stock et lance son chantier (ou le construit tout de suite). `carte` (facultatif, Tafl 1.18.1) : l'emplacement fixe où il apparaît, `x`, `y` = sa case en haut à gauche. Joue `reussi`, ou `rate` s'il manque des ressources, si son `maximum` est atteint ou si un autre bâtiment occupe la place. `annoncer` (`true` par défaut) : le dire au joueur. Pour un script : `{ ok, batiment }` (l'id du bâtiment construit). |
 | `gestion_placer` | `batiment` (`""` : le joueur le choisit dans la liste), `annoncer`, `reussi`, `rate` | Le joueur choisit où poser le bâtiment (placement libre, ci-dessus) ; il est payé quand il est posé. Joue `reussi`, ou `rate` s'il annule, s'il manque des ressources, si le `maximum` est atteint ou si la carte n'a pas de zone constructible. Pour un script : `{ ok, batiment }`. |
 | `gestion_stock` | `action` (`"ajouter"` ou `"retirer"`), `ressource`, `nombre`, `annoncer` | Ajoute ou retire une ressource du stock, sans passer sous 0 ni au-dessus de la capacité. Pour un script : `{ stock, change }`. |
 | `gestion_deposer` | `annoncer` | Change les objets du sac qui représentent une ressource (`ressource.objet`) en ressources du stock ; ce qui ne tient pas reste dans le sac. Pour un script : `{ depose: { ressource: nombre } }`. |

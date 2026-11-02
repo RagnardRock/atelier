@@ -9,7 +9,8 @@
 //
 // Les bâtiments se posent librement (Saga 1.5) : le joueur choisit où, dans une zone « constructible » de
 // la carte, et le bâtiment est dessiné avec son tampon de Tafl et bloque ses cases (sauf sa porte). Un jeu
-// peut aussi construire sans place (commande gestion_construire) et montrer le bâtiment par un événement.
+// peut aussi construire à un emplacement fixe (commande gestion_construire avec carte, x, y), ou sans place
+// et montrer le bâtiment par un événement.
 //
 // Les habitants (Saga 1.6) : ils logent dans les bâtiments finis (logement), mangent chaque nuit (repas) et
 // font tourner les bâtiments qui demandent des ouvriers. Ils arrivent seuls quand il reste de la place et
@@ -188,6 +189,28 @@
     return null;
   }
 
+  // Saga 1.19 : les cases au décor dégagé d'une carte : l'emprise des bâtiments posés dans une zone
+  // constructible au décor effaçable. Préparées une fois par liste de bâtiments (poser() la remplace).
+  const degagees = new WeakMap(); // etat.batiments → Map carte → Set des indices de cases
+  function casesDegagees(o) {
+    const liste = Array.isArray(o.etat.batiments) ? o.etat.batiments : [];
+    if (!degagees.has(liste) || degagees.get(liste).n !== liste.length) degagees.set(liste, { n: liste.length, cartes: new Map() });
+    const parCarte = degagees.get(liste).cartes;
+    const carte = o.carte;
+    if (!parCarte.has(carte.id)) {
+      const d = defs(o.jeu), out = new Set();
+      const zones = (carte.zones || []).filter((z) => z.type === 'constructible' && z.decor === 'efface');
+      const dedans = (x, y) => zones.some((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur);
+      for (const b of liste) {
+        const def = b.carte === carte.id ? d.batiments.get(b.type) : null;
+        if (!def) continue;
+        for (let j = 0; j < def.hauteur; j++) for (let i = 0; i < def.largeur; i++) if (dedans(b.x + i, b.y + j)) out.add((b.y + j) * carte.largeur + b.x + i);
+      }
+      parCarte.set(carte.id, out);
+    }
+    return parCarte.get(carte.id);
+  }
+
   // --- Saga 1.9 : les habitants qu'on voit aller et venir ---
   const SECONDES_PAR_CASE = 0.42;
   const COULEURS = ['#8fd18a', '#e0a35a', '#9ab8f0', '#e88fb0', '#d8d070', '#b0a0e8', '#80d0c8', '#f0b090'];
@@ -347,10 +370,12 @@
   const lieuDe = (o) => {
     const carte = o.hote?.carte;
     const zones = constructible(carte);
+    const zoneEn = (x, y) => zones.find((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur);
     return {
       carte: carte?.id || '',
-      constructible: (x, y) => zones.some((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur),
-      libre: (x, y) => Boolean(o.hote?.libre?.(x, y)),
+      constructible: (x, y) => Boolean(zoneEn(x, y)),
+      // Saga 1.19 : dans une zone au décor effaçable, seul le sol (premier calque) compte.
+      libre: (x, y) => Boolean(o.hote?.libre?.(x, y, zoneEn(x, y)?.decor === 'efface')),
     };
   };
   const coutTexte = (d, def) => C.dire(d, def.cout) || 'gratuit';
@@ -359,9 +384,14 @@
   // Choisir un bâtiment dans la liste (ceux qu'on ne peut pas payer sont grisés). → type, ou null.
   async function choisirBatiment(o) {
     const d = defs(o.jeu), e = etatDe(o), ui = o.hote?.ui;
-    const types = [...d.batiments.values()];
-    if (!ui || !types.length) return null;
+    // Saga 1.19 : sans ceux qui ne sont pas au menu (réservés aux événements), ni ceux pas encore
+    // débloqués (sauf « grisé avant » : montrés grisés, avec ce qui les débloque).
+    const ouvert = (def) => !def.condition || Monde.vraie(def.condition, o.partie, o.hote?.carte || { id: '' }, null);
+    const types = [...d.batiments.values()].filter((def) => def.menu && (def.verrouille_visible || ouvert(def)));
+    if (!ui) return null;
+    if (!types.length) { await ui.dire('Rien à construire pour l\'instant.'); return null; }
     const items = types.map((def) => {
+      if (!ouvert(def)) return { texte: def.nom, detail: `🔒 ${Monde.decrire(o.jeu, def.condition, o.partie)}`, sous: def.description.slice(0, 80), desactive: true };
       const r = C.construire(d, e, def.id);
       // Saga 1.13 : le coût toujours à droite, et dessous ce qu'il apporte (ou ce qui manque).
       const pourquoi = r.ok ? '' : r.raison.replace(`${def.nom} : `, '').replace(`Pour ${def.nom}, `, '');
@@ -487,6 +517,10 @@
 
     // Saga 1.6.1 : case par case, selon le passage du bâtiment (masque) : une ombre ou une case vide du
     // tampon ne bloque plus.
+    // Saga 1.19 : sous un bâtiment posé dans une zone au décor effaçable, le décor de la carte disparaît.
+    degage(o, x, y) {
+      return casesDegagees(o).has(y * o.carte.largeur + x);
+    },
     bloque(o, x, y) {
       const b = batimentEn(o, x, y);
       return Boolean(b && masque(o.jeu, b.def, b.tampon)[(y - b.y) * b.def.largeur + (x - b.x)] === 'bloque');
@@ -591,7 +625,12 @@
       async gestion_construire(o) {
         const d = defs(o.jeu);
         const type = String(o.c.batiment || '');
-        const r = C.construire(d, etatDe(o), type, null, C.variante(d, etatDe(o), type));
+        // Saga 1.19 : un emplacement fixe (carte + case en haut à gauche) : le bâtiment y est dessiné avec son
+        // tampon et bloque son emprise, comme s'il avait été placé. Pas de zone constructible à respecter,
+        // seulement pas d'autre bâtiment dessous. Sans carte : aucun lieu (montré par un événement).
+        const fixe = o.c.carte ? { carte: String(o.c.carte), x: Math.max(0, Math.round(Number(o.c.x) || 0)), y: Math.max(0, Math.round(Number(o.c.y) || 0)) } : null;
+        const place = fixe && d.batiments.has(type) ? C.placement(d, etatDe(o), type, { ...fixe, constructible: () => true, libre: () => true }, fixe.x, fixe.y) : { ok: true };
+        const r = place.ok ? C.construire(d, etatDe(o), type, fixe, C.variante(d, etatDe(o), type)) : { ok: false, raison: place.raison };
         if (r.ok) {
           poser(o, r.etat);
           o.hote.rafraichir?.();

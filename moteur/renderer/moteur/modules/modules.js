@@ -22,6 +22,8 @@
 //                                         nombre, image, pastille }] }] : ses sections dans le carnet (touche Tab)
 //   apresCombat(o)                      (Saga 1.11) un combat vient de finir (o.issue, o.sorte) ; → [lignes à dire]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
+//   degage(o, x, y)                     (Saga 1.19) → true si le module dégage le décor de cette case : seul le
+//                                         premier calque de la carte y est dessiné et compte pour le passage
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
 //                                         emmène (Saga 1.6.1 : la porte d'un bâtiment posé), sinon null
 //   dessiner(o)                         dessine sur la carte, à la profondeur o.profondeur ('sol' | 'dessus')
@@ -48,7 +50,7 @@
 // Chaque appel reçoit un objet o : { jeu, partie, etat, hote } (plus ce qui est propre à l'appel).
 //   etat   = partie.modules[id] : le seul endroit de la partie qui appartient au module (sauvegardé tel quel)
 //   hote   = ce que le moteur prête : reagir(moment, infos), rafraichir(), message(texte), ui (les menus) ;
-//            Saga 1.5 : carte, joueur, libre(x, y), viser({ largeur, hauteur, valide }) → { x, y } ou null
+//            Saga 1.5 : carte, joueur, libre(x, y) (Saga 1.19 : libre(x, y, true) : selon le seul premier calque), viser({ largeur, hauteur, valide }) → { x, y } ou null
 //            Saga 1.9 : chemin(depart, arrivee, { cout(x, y), coutMin }) → [{ x, y }…] ou null (moteur/chemins.js,
 //            sur les cases où l'on peut marcher de la carte du joueur)
 //            Saga 1.10 : heure() → l'heure du jeu, de 0 à 24, ou null sans horloge
@@ -191,6 +193,15 @@ const Modules = (() => {
       for (const m of actifs(jeu)) {
         if (typeof m.bloque !== 'function') continue;
         try { if (m.bloque(objet(m, jeu, partie, null, { carte }), x, y) === true) return true; } catch (err) { dire(m.id, 'bloque', err); }
+      }
+      return false;
+    },
+    // Saga 1.19 : une case où un module dégage le décor de la carte (seul le premier calque y compte, pour le
+    // dessin comme pour le passage). Appelé souvent : doit rester rapide.
+    degage(jeu, partie, carte, x, y) {
+      for (const m of actifs(jeu)) {
+        if (typeof m.degage !== 'function') continue;
+        try { if (m.degage(objet(m, jeu, partie, null, { carte }), x, y) === true) return true; } catch (err) { dire(m.id, 'degage', err); }
       }
       return false;
     },

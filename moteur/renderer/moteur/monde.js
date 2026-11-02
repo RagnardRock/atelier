@@ -123,6 +123,11 @@ const Monde = (() => {
   let blocage = null;
   const brancherBlocage = (f) => { blocage = f; };
   const bloqueParModule = (carte, x, y) => Boolean(blocage && blocage(carte, x, y));
+  // Saga 1.19 : les cases où un module dégage le décor (un bâtiment posé dans une zone au décor effaçable) :
+  // seuls le premier calque et ses collisions y comptent. Rien à faire sur une carte sans collisionsSol.
+  let degagement = null;
+  const brancherDegage = (f) => { degagement = f; };
+  const degage = (carte, x, y) => Boolean(carte?.collisionsSol && degagement && degagement(carte, x, y));
 
   // Une condition dite au joueur (Saga 0.7) : le déblocage d'un article de boutique montré grisé.
   // Un interrupteur ne se raconte pas (ce serait dévoiler l'histoire).
@@ -213,7 +218,9 @@ const Monde = (() => {
   }
 
   const dansCarte = (carte, x, y) => x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur;
-  const code = (carte, x, y) => (dansCarte(carte, x, y) ? carte.collisions[y * carte.largeur + x] : PASSAGE.bloque);
+  const code = (carte, x, y) => (dansCarte(carte, x, y) ? (degage(carte, x, y) ? carte.collisionsSol : carte.collisions)[y * carte.largeur + x] : PASSAGE.bloque);
+  // Saga 1.19 : le code d'une case selon son seul sol (premier calque), s'il est connu.
+  const codeSol = (carte, x, y) => (dansCarte(carte, x, y) ? (carte.collisionsSol || carte.collisions)[y * carte.largeur + x] : PASSAGE.bloque);
   const teleporteur = (carte, x, y) => carte.teleporteurs.find((t) => t.x === x && t.y === y) || null;
   const zonesEn = (carte, x, y) => carte.zones.filter((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur);
 
@@ -276,5 +283,5 @@ const Monde = (() => {
     return n;
   }
 
-  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, apparence, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, brancherDegage, degage, codeSol, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, apparence, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
 })();
