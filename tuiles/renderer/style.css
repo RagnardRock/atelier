@@ -1515,3 +1515,11 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
   opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis;
 }
 .apercu-scene-note.visible { opacity: 1; }
+
+/* Tafl 1.19 : aperçu d'une animation (importer une bande, assembler des tuiles) */
+.anim-apercu { display: flex; align-items: center; gap: 14px; padding: 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.anim-apercu canvas { image-rendering: pixelated; }
+.anim-apercu-vivant { flex: none; border-radius: 6px; background: rgba(0, 0, 0, 0.25); }
+.anim-apercu-bande { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.anim-apercu-image { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
+.anim-apercu-image canvas { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
