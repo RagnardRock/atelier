@@ -55,6 +55,12 @@ const GestionCalcul = (() => {
         id: b.id, nom: texte(b.nom, 60) || b.id, description: texte(b.description),
         cout: quantites(b.cout), jours: entier(b.jours, 0, 0, 999), production: quantites(b.production), consommation: quantites(b.consommation),
         maximum: entier(b.maximum, 0, 0, 999),
+        // Saga 1.19 : menu (true par défaut) : dans la liste Construire ; false : seulement par un événement.
+        // condition : une condition des événements qui le débloque dans cette liste ; verrouille_visible :
+        // montré grisé avant, avec ce qui le débloque.
+        menu: b.menu !== false,
+        condition: b.condition && typeof b.condition === 'object' && typeof b.condition.type === 'string' ? b.condition : null,
+        verrouille_visible: Boolean(b.verrouille_visible),
         // Saga 1.5 : posé sur la carte. Son apparence : un tampon de Tafl (par son nom), et sa taille avec ;
         // sans tampon, largeur × hauteur cases. porte : la case de l'emprise qu'on peut traverser.
         tampon: texte(b.tampon, 80), tampon_chantier: texte(b.tampon_chantier, 80),

@@ -189,6 +189,28 @@
     return null;
   }
 
+  // Saga 1.19 : les cases au décor dégagé d'une carte : l'emprise des bâtiments posés dans une zone
+  // constructible au décor effaçable. Préparées une fois par liste de bâtiments (poser() la remplace).
+  const degagees = new WeakMap(); // etat.batiments → Map carte → Set des indices de cases
+  function casesDegagees(o) {
+    const liste = Array.isArray(o.etat.batiments) ? o.etat.batiments : [];
+    if (!degagees.has(liste) || degagees.get(liste).n !== liste.length) degagees.set(liste, { n: liste.length, cartes: new Map() });
+    const parCarte = degagees.get(liste).cartes;
+    const carte = o.carte;
+    if (!parCarte.has(carte.id)) {
+      const d = defs(o.jeu), out = new Set();
+      const zones = (carte.zones || []).filter((z) => z.type === 'constructible' && z.decor === 'efface');
+      const dedans = (x, y) => zones.some((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur);
+      for (const b of liste) {
+        const def = b.carte === carte.id ? d.batiments.get(b.type) : null;
+        if (!def) continue;
+        for (let j = 0; j < def.hauteur; j++) for (let i = 0; i < def.largeur; i++) if (dedans(b.x + i, b.y + j)) out.add((b.y + j) * carte.largeur + b.x + i);
+      }
+      parCarte.set(carte.id, out);
+    }
+    return parCarte.get(carte.id);
+  }
+
   // --- Saga 1.9 : les habitants qu'on voit aller et venir ---
   const SECONDES_PAR_CASE = 0.42;
   const COULEURS = ['#8fd18a', '#e0a35a', '#9ab8f0', '#e88fb0', '#d8d070', '#b0a0e8', '#80d0c8', '#f0b090'];
@@ -348,10 +370,12 @@
   const lieuDe = (o) => {
     const carte = o.hote?.carte;
     const zones = constructible(carte);
+    const zoneEn = (x, y) => zones.find((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur);
     return {
       carte: carte?.id || '',
-      constructible: (x, y) => zones.some((z) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur),
-      libre: (x, y) => Boolean(o.hote?.libre?.(x, y)),
+      constructible: (x, y) => Boolean(zoneEn(x, y)),
+      // Saga 1.19 : dans une zone au décor effaçable, seul le sol (premier calque) compte.
+      libre: (x, y) => Boolean(o.hote?.libre?.(x, y, zoneEn(x, y)?.decor === 'efface')),
     };
   };
   const coutTexte = (d, def) => C.dire(d, def.cout) || 'gratuit';
@@ -360,9 +384,14 @@
   // Choisir un bâtiment dans la liste (ceux qu'on ne peut pas payer sont grisés). → type, ou null.
   async function choisirBatiment(o) {
     const d = defs(o.jeu), e = etatDe(o), ui = o.hote?.ui;
-    const types = [...d.batiments.values()];
-    if (!ui || !types.length) return null;
+    // Saga 1.19 : sans ceux qui ne sont pas au menu (réservés aux événements), ni ceux pas encore
+    // débloqués (sauf « grisé avant » : montrés grisés, avec ce qui les débloque).
+    const ouvert = (def) => !def.condition || Monde.vraie(def.condition, o.partie, o.hote?.carte || { id: '' }, null);
+    const types = [...d.batiments.values()].filter((def) => def.menu && (def.verrouille_visible || ouvert(def)));
+    if (!ui) return null;
+    if (!types.length) { await ui.dire('Rien à construire pour l\'instant.'); return null; }
     const items = types.map((def) => {
+      if (!ouvert(def)) return { texte: def.nom, detail: `🔒 ${Monde.decrire(o.jeu, def.condition, o.partie)}`, sous: def.description.slice(0, 80), desactive: true };
       const r = C.construire(d, e, def.id);
       // Saga 1.13 : le coût toujours à droite, et dessous ce qu'il apporte (ou ce qui manque).
       const pourquoi = r.ok ? '' : r.raison.replace(`${def.nom} : `, '').replace(`Pour ${def.nom}, `, '');
@@ -488,6 +517,10 @@
 
     // Saga 1.6.1 : case par case, selon le passage du bâtiment (masque) : une ombre ou une case vide du
     // tampon ne bloque plus.
+    // Saga 1.19 : sous un bâtiment posé dans une zone au décor effaçable, le décor de la carte disparaît.
+    degage(o, x, y) {
+      return casesDegagees(o).has(y * o.carte.largeur + x);
+    },
     bloque(o, x, y) {
       const b = batimentEn(o, x, y);
       return Boolean(b && masque(o.jeu, b.def, b.tampon)[(y - b.y) * b.def.largeur + (x - b.x)] === 'bloque');

@@ -290,6 +290,11 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 
 - La commande `gestion_construire` accepte `carte`, `x`, `y` : le bâtiment apparaît à cet endroit avec son tampon (celui du chantier, puis le bâtiment fini) et bloque son emprise sauf la porte, exactement comme un bâtiment placé par le joueur. Pas de zone constructible à respecter ; raté si un autre bâtiment occupe une case de l'emprise.
 
+## Ce que fait Saga 1.19 : les bâtiments réservés et le décor effaçable (avec Tafl 1.19)
+
+- **Un bâtiment hors du menu Construire** (module gestion) : `menu: false` le réserve aux événements (`gestion_construire`, ou `gestion_placer` qui le nomme). `condition` ne le montre qu'une fois débloqué (grisé avant avec `verrouille_visible`).
+- **Une zone constructible au décor effaçable** (`decor: "efface"`) : le décor (les calques au-dessus du sol) ne gêne pas la pose, et disparaît sous les bâtiments posés (dessin et passage). Pour les modules : le crochet `degage(o, x, y)` (MODULES.md), et `hote.libre(x, y, true)` qui ne regarde que le sol.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

@@ -1108,6 +1108,11 @@ const App = (() => {
       { type: 'element', element: Donnees.tableRencontres(api.doc, rencontres) },
       // Tafl 1.10 (pack action) : les ennemis sont déjà sur la carte, pas de rencontre au hasard.
       ...(Espaces.packDe(api.doc) === 'action' ? [] : [{ key: 'taux', label: 'Chance de rencontre', type: 'number', value: z.taux ?? 10, min: 0, max: 100, unit: '% à chaque pas' }]),
+      // Tafl 1.19 (Saga 1.19, module gestion) : le décor d'une zone constructible gêne-t-il la pose ?
+      ...((api.doc.data.reglages?.modules || []).includes('gestion') ? [
+        { key: 'decor', label: 'Le décor (zone constructible)', type: 'select', value: z.decor === 'efface' ? 'efface' : 'bloque', choices: [['bloque', 'Il compte : une tuile bloquante empêche de construire dessus'], ['efface', 'Il s\'efface : il ne gêne pas, et disparaît sous les bâtiments']] },
+        { type: 'info', text: 'Le décor, ce sont les calques au-dessus du premier (fleurs, buissons, rochers, cimes). « Il s\'efface » : dans cette zone, seul le premier calque (le sol) compte pour construire, et sous un bâtiment posé (dès son chantier), le décor ne se dessine plus et ne bloque plus. Le sol doit donc être sur le premier calque.' },
+      ] : []),
       // Tafl 0.33 (pack JDR) : une pièce pour le mode table de Saga, sous le brouillard jusqu'à ce que le MJ la révèle.
       ...(Espaces.packDe(api.doc) === 'jdr' ? [
         { key: 'piece', label: 'C\'est une pièce (mode table de Saga : sous le brouillard, le MJ la révèle d\'un clic)', type: 'checkbox', value: Boolean(z.piece) },
@@ -1118,6 +1123,7 @@ const App = (() => {
   const zoneFrom = (v, map, base, rencontres) => {
     const x = clamp(Math.round(v.x), 0, map.width - 1), y = clamp(Math.round(v.y), 0, map.height - 1);
     const z = { ...base, name: String(v.name || '').trim(), type: v.type, objet: String(v.objet || '').trim(), x, y, w: clamp(Math.round(v.w), 1, map.width - x), h: clamp(Math.round(v.h), 1, map.height - y), taux: clamp(Math.round(v.taux ?? 10), 0, 100), rencontres: Donnees.normRencontres(rencontres) };
+    if ('decor' in v) { delete z.decor; if (v.decor === 'efface') z.decor = 'efface'; }
     if ('piece' in v) { delete z.piece; delete z.visible; if (v.piece) Object.assign(z, { piece: true, visible: DonneesJdr.normVisible(v.visible, 'mj') }); }
     return z;
   };
