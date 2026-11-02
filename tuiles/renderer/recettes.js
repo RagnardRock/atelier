@@ -187,6 +187,22 @@ const Recettes = (() => {
     return ops;
   }
 
+  // Les hautes herbes (Tafl 1.21) : des touffes rondes sur une grille de 16, deux rangées en quinconce
+  // (y = 2 et y = 10). touffeHerbe(X, Y) dit quelle touffe possède ce point (la plus basse, celle de
+  // devant), avec la position dedans (dx, dy de -1 à 1) ; le haut des touffes est dentelé (des brins).
+  const TOUFFES_HERBE = [[4, 2, 0, 0], [12, 2.5, 0.3, 1], [0, 10, 0.2, 1], [8, 10.5, 0, 0], [16, 10, 0.2, 1]];
+  function touffeHerbe(X, Y, seulement) {
+    X = ((X % 16) + 16) % 16;
+    let best = null;
+    for (const [cx, cy, v, clair] of TOUFFES_HERBE) for (const oy of seulement !== undefined ? [0] : [-16, 0, 16]) {
+      if (seulement !== undefined && cy < 8 !== seulement) continue;
+      const dx = (X - cx) / (4.4 + v), dy = (Y - cy - oy) / (4.6 + v);
+      const a = Math.atan2(dy, dx), pointe = dy < 0 ? 0.13 * Math.max(0, Math.cos(7 * a + cx)) ** 6 : 0;
+      if (Math.hypot(dx, dy) <= 1 + pointe && (!best || cy + oy > best.cy)) best = { cy: cy + oy, dx, dy, clair };
+    }
+    return best;
+  }
+
   const RECETTES = {
     herbe: {
       rampe: 'herbe', libelle: 'Herbe rase, calme, avec quelques touffes',
@@ -526,15 +542,29 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un tapis vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour les bords en relief',
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un tapis de touffes rondes en écailles, en relief, qui ondule (animée) ; avec transition_hautes_herbes pour les bords en relief',
       ops: (r, s, g) => {
-        // Un tapis d'herbe haute, plus vif que l'herbe rase, semé de petites touffes en creux (un arc
-        // sombre, le dessus éclairé) rangées en quinconce, comme dans les jeux 16 bits.
-        const u = s / 16, k = Math.max(1, Math.round(u)), ops = [{ type: 'remplir', couleur: melange(r[2], r[3], 0.35) }];
-        // Une touffe : deux petits creux côte à côte (« ᴗᴗ »), sombres en bas, éclairés dedans.
-        const touffe = [[0, 0, 1], [1, 1, 1], [2, 0, 1], [3, 1, 1], [4, 0, 1], [1, 0, 4], [3, 0, 4], [0, -1, 3], [2, -1, 3], [4, -1, 3]];
-        for (const [ox, oy] of [[1, 4], [9, 4], [5, 12], [13, 12]]) {
-          for (const [dx, dy, c] of touffe) ops.push({ type: 'rect', x: Math.round(((ox + dx) % 16) * u), y: Math.round(((oy + dy + 16) % 16) * u), largeur: k, hauteur: k, couleur: r[c] });
+        // Un tapis de touffes rondes qui se chevauchent en écailles, en quinconce (deux rangées par
+        // tuile) : chaque touffe a le haut éclairé, le bas dans l'ombre de la rangée de devant, et une
+        // fente sombre qui la partage en deux feuilles. Dessiné sur une grille de 16 ramenée à la taille
+        // de la tuile, pixel par pixel (plus de détail en 32 et 48), et ça se raccorde de tous les côtés.
+        const u = s / 16, ops = [];
+        for (let py = 0; py < s; py++) for (let px = 0; px < s; px++) {
+          const best = touffeHerbe((px + 0.5) / u, (py + 0.5) / u);
+          let c;
+          if (!best) c = r[1];
+          else {
+            const { dx, dy, clair } = best, bord = 1 - Math.hypot(dx, dy); // 0 au bord, 1 au centre
+            const lum = -dy * 0.85 - dx * 0.35; // la lumière vient d'en haut à gauche
+            if (dy < 0 && bord < 0.16 / u + 0.08) c = lum > 0.75 ? r[4] : melange(r[3], r[4], 0.35);
+            else if (dy > 0.72) c = r[1];
+            else if (dy > 0.45) c = melange(r[1], r[2], 0.45);
+            else if (Math.abs(dx) < 0.09 + 0.06 / u && dy > -0.1) c = melange(r[1], r[2], 0.4); // la fente
+            else if (lum > 0.35) c = clair ? melange(r[3], r[4], 0.2) : r[3];
+            else if (lum > -0.2) c = clair ? melange(r[2], r[3], 0.55) : melange(r[2], r[3], 0.35);
+            else c = r[2];
+          }
+          ops.push(point(px, py, c));
         }
         return ops;
       },
@@ -567,9 +597,10 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    // Hautes herbes : un bord festonné, une bosse tous les quarts de tuile (ça se raccorde).
-    const feston = () => (t) => prof - Math.round((1.5 * s / 16) * Math.abs(Math.sin((Math.PI * t) / (s / 4))));
-    const f = b.style === 'touffu' ? { h: feston(), b: feston(), g: feston(), d: feston() } : { h: onde(), b: onde(), g: onde(), d: onde() };
+    // Le haut suit le dessus des touffes de la rangée du bas (avec leurs brins), les autres côtés ondulent doucement.
+    const dessusTouffes = (t) => { t = ((t % s) + s) % s; for (let y = 0; y < s; y++) if (touffeHerbe((t + 0.5) * 16 / s, (y + 0.5) * 16 / s, false)) return y; return prof; };
+    const doux = () => (t) => prof - Math.round((s / 16) * Math.abs(Math.sin((Math.PI * t) / (s / 2))));
+    const f = b.style === 'touffu' ? { h: dessusTouffes, b: doux(), g: doux(), d: doux() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
     const rayon = Math.round(s * 0.3);
@@ -608,13 +639,16 @@ const Recettes = (() => {
           if (surB) {
             if (pres(A_, 0, 1, e)) t.set(x, y, hex(rb[0]));
             else if (pres(A_, 0, 1, 2 * e)) t.set(x, y, hex(rb[1]));
+            else if (pres(A_, 0, 1, 3 * e)) t.set(x, y, hex(melange(rb[1], rb[2], 0.5)));
             else if (pres(A_, 1, 0, e)) t.set(x, y, hex(rb[1]));
             else if (pres(A_, 0, -1, e)) t.set(x, y, hex(rb[4]));
             else if (pres(A_, -1, 0, e)) t.set(x, y, hex(rb[3]));
             else if (pres(A_, 0, -1, 2 * e)) t.set(x, y, hex(rb[3]));
           } else {
-            if (pres(B_, 0, -1, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.5)));
-            else if (pres(B_, 0, -1, 2 * e) || pres(B_, -1, 0, e) || B_(-e, -e)) t.set(x, y, hex(ra[1]));
+            // L'ombre du massif, qui s'éclaircit en s'éloignant.
+            if (pres(B_, 0, -1, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.6)));
+            else if (pres(B_, 0, -1, 2 * e) || pres(B_, -1, 0, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.3)));
+            else if (pres(B_, 0, -1, 3 * e) || pres(B_, -1, 0, 2 * e) || B_(-e, -e)) t.set(x, y, hex(ra[1]));
           }
           continue;
         }
