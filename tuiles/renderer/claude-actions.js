@@ -701,7 +701,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
         return resultatTuile(doc, i, `Tuile ${i} « ${t.name} » animée : ${t.frames.length} images de ${t.duration || Doc.DEFAULT_DURATION} ms (${a.mode}). L'animation est lancée dans Tafl.`);
       },
     },
-    // Tafl 1.19 : assembler des tuiles déjà faites en une animation, et l'animation en bande PNG.
+    // Tafl 1.20 : assembler des tuiles déjà faites en une animation, et l'animation en bande PNG.
     assembler_animation: {
       icone: 'layers',
       libelle: (a) => `Assemble les tuiles ${(a.tuiles || []).join(', ')} en une animation`,

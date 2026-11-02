@@ -773,7 +773,7 @@ const IO = (() => {
     notify(`Planche exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  // --- Animation d'une tuile en bande PNG (Tafl 1.19) ---
+  // --- Animation d'une tuile en bande PNG (Tafl 1.20) ---
   // Exporter : les images de la tuile côte à côte, la première à gauche. On la retouche dans Photoshop
   // ou Skald, puis on la réimporte. Importer : l'image est découpée à la taille des tuiles, de gauche à
   // droite puis de haut en bas (une bande en ligne, en colonne ou une petite grille), 16 images au plus.

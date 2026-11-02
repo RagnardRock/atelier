@@ -514,7 +514,7 @@ const App = (() => {
     const src = tile.frames[clamp(api.frame, 0, tile.frames.length - 1)].slice();
     Doc.change(doc, 'Ajouter une image', () => { api.frame = Doc.addFrame(doc, doc.current, api.frame + 1, src); });
   }
-  // Tafl 1.19 : les tuiles choisies deviennent une seule tuile animée. Ses images : celles de chaque
+  // Tafl 1.20 : les tuiles choisies deviennent une seule tuile animée. Ses images : celles de chaque
   // tuile, dans l'ordre du panneau (une tuile déjà animée apporte toutes les siennes). La première tuile
   // garde son nom et sa place ; les autres peuvent être retirées : là où elles étaient posées (cartes,
   // tampons, événements), c'est l'animation qui les remplace.
