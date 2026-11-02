@@ -187,20 +187,21 @@ const Recettes = (() => {
     return ops;
   }
 
-  // Les hautes herbes (Tafl 1.21) : des touffes rondes sur une grille de 16, deux rangées en quinconce
-  // (y = 2 et y = 10). touffeHerbe(X, Y) dit quelle touffe possède ce point (la plus basse, celle de
-  // devant), avec la position dedans (dx, dy de -1 à 1) ; le haut des touffes est dentelé (des brins).
-  const TOUFFES_HERBE = [[4, 2, 0, 0], [12, 2.5, 0.3, 1], [0, 10, 0.2, 1], [8, 10.5, 0, 0], [16, 10, 0.2, 1]];
-  function touffeHerbe(X, Y, seulement) {
-    X = ((X % 16) + 16) % 16;
-    let best = null;
-    for (const [cx, cy, v, clair] of TOUFFES_HERBE) for (const oy of seulement !== undefined ? [0] : [-16, 0, 16]) {
-      if (seulement !== undefined && cy < 8 !== seulement) continue;
-      const dx = (X - cx) / (4.4 + v), dy = (Y - cy - oy) / (4.6 + v);
-      const a = Math.atan2(dy, dx), pointe = dy < 0 ? 0.13 * Math.max(0, Math.cos(7 * a + cx)) ** 6 : 0;
-      if (Math.hypot(dx, dy) <= 1 + pointe && (!best || cy + oy > best.cy)) best = { cy: cy + oy, dx, dy, clair };
+  // Les hautes herbes (Tafl 1.21), sur une grille de 16 ramenée à la taille de la tuile : un aplat vif,
+  // un grain de petites taches, et deux touffes « ᴖᴖ » en quinconce (sombres, le dessus éclairé).
+  // herbeHaute(i, j, r) : la couleur de la case (i, j) de la grille.
+  const TOUFFE_HERBE = ['.LL.LL', 'LDDLDD', 'D..D..'];
+  function herbeHaute(i, j, r) {
+    i = ((i % 16) + 16) % 16; j = ((j % 16) + 16) % 16;
+    for (const [ox, oy] of [[2, 3], [10, 11]]) {
+      const c = TOUFFE_HERBE[j - oy] && TOUFFE_HERBE[j - oy][i - ox];
+      if (c === 'L') return r[4];
+      if (c === 'D') return r[2];
     }
-    return best;
+    const h = ((i * 73856093) ^ (j * 19349663)) >>> 0;
+    if (h % 7 === 0) return melange(r[2], r[3], 0.55);
+    if (h % 23 === 4) return melange(r[3], r[4], 0.45);
+    return r[3];
   }
 
   const RECETTES = {
@@ -542,33 +543,16 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un tapis de touffes rondes en écailles, en relief, qui ondule (animée) ; avec transition_hautes_herbes pour les bords en relief',
-      ops: (r, s, g) => {
-        // Un tapis de touffes rondes qui se chevauchent en écailles, en quinconce (deux rangées par
-        // tuile) : chaque touffe a le haut éclairé, le bas dans l'ombre de la rangée de devant, et une
-        // fente sombre qui la partage en deux feuilles. Dessiné sur une grille de 16 ramenée à la taille
-        // de la tuile, pixel par pixel (plus de détail en 32 et 48), et ça se raccorde de tous les côtés.
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un aplat vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour le contour',
+      ops: (r, s) => {
         const u = s / 16, ops = [];
-        for (let py = 0; py < s; py++) for (let px = 0; px < s; px++) {
-          const best = touffeHerbe((px + 0.5) / u, (py + 0.5) / u);
-          let c;
-          if (!best) c = r[1];
-          else {
-            const { dx, dy, clair } = best, bord = 1 - Math.hypot(dx, dy); // 0 au bord, 1 au centre
-            const lum = -dy * 0.85 - dx * 0.35; // la lumière vient d'en haut à gauche
-            if (dy < 0 && bord < 0.16 / u + 0.08) c = lum > 0.75 ? r[4] : melange(r[3], r[4], 0.35);
-            else if (dy > 0.72) c = r[1];
-            else if (dy > 0.45) c = melange(r[1], r[2], 0.45);
-            else if (Math.abs(dx) < 0.09 + 0.06 / u && dy > -0.1) c = melange(r[1], r[2], 0.4); // la fente
-            else if (lum > 0.35) c = clair ? melange(r[3], r[4], 0.2) : r[3];
-            else if (lum > -0.2) c = clair ? melange(r[2], r[3], 0.55) : melange(r[2], r[3], 0.35);
-            else c = r[2];
-          }
-          ops.push(point(px, py, c));
+        for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+          const x = Math.round(i * u), y = Math.round(j * u);
+          ops.push({ type: 'rect', x, y, largeur: Math.round((i + 1) * u) - x, hauteur: Math.round((j + 1) * u) - y, couleur: herbeHaute(i, j, r) });
         }
         return ops;
       },
-      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: r[2], amplitude: 1, images: 4, duree: 300 }),
+      animation: (r) => ({ mode: 'balancement', forme: [r[4], r[2]], fond: r[3], amplitude: 1, images: 4, duree: 300 }),
     },
     eau_animee: {
       rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
@@ -597,13 +581,13 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    // Le haut suit le dessus des touffes de la rangée du bas (avec leurs brins), les autres côtés ondulent doucement.
-    const dessusTouffes = (t) => { t = ((t % s) + s) % s; for (let y = 0; y < s; y++) if (touffeHerbe((t + 0.5) * 16 / s, (y + 0.5) * 16 / s, false)) return y; return prof; };
-    const doux = () => (t) => prof - Math.round((s / 16) * Math.abs(Math.sin((Math.PI * t) / (s / 2))));
-    const f = b.style === 'touffu' ? { h: dessusTouffes, b: doux(), g: doux(), d: doux() } : { h: onde(), b: onde(), g: onde(), d: onde() };
+    // Hautes herbes : un contour presque droit, avec quelques crans d'une case (ça se raccorde).
+    const CRANS = [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
+    const cran = () => (t) => Math.round((6 + CRANS[(((Math.floor(t * 16 / s)) % 16) + 16) % 16]) * s / 16);
+    const f = b.style === 'touffu' ? { h: cran(), b: cran(), g: cran(), d: cran() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
-    const rayon = Math.round(s * 0.3);
+    const rayon = Math.round(s * (b.style === 'touffu' ? 0.12 : 0.3));
     // zone : du côté voulu de toutes les limites (sens 1 : « dessus », -1 : « dessous »), coin arrondi.
     const zone = (cotes, x, y, sens) => {
       const m = cotes.map((c) => sens * marge[c](x, y) + (sens > 0 ? 0.5 : -0.5));
@@ -631,25 +615,20 @@ const Recettes = (() => {
         const voisinA = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !estBInt(x + dx, y + dy));
         const voisinB = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => estBInt(x + dx, y + dy));
         if (b.style === 'touffu') {
-          // Le relief : la lisière du haut éclairée, celle du bas et de droite sombre, et l'ombre du
-          // massif sur l'herbe rase en dessous et à droite.
+          // Un contour sombre d'une case, un liseré clair pointillé juste dedans, le bas plus sombre
+          // sur trois cases (en dents), et un halo clair dehors.
+          const e = Math.max(1, Math.round(s / 16)); // une case de la grille, à l'échelle de la tuile
+          const autour = (fn, n) => { for (let j = 1; j <= n; j++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) if (fn(dx * j, dy * j)) return true; return false; };
           const A_ = (dx, dy) => !estBInt(x + dx, y + dy), B_ = (dx, dy) => estBInt(x + dx, y + dy);
-          const e = Math.max(1, Math.round(s / 16)); // l'épaisseur d'un trait, à l'échelle de la tuile
-          const pres = (fn, dx, dy, n) => { for (let j = 1; j <= n; j++) if (fn(dx * j, dy * j)) return true; return false; };
+          const bas = (n) => { for (let j = 1; j <= n; j++) if (A_(0, j)) return true; return false; };
+          const pair = (Math.floor(x / e) + Math.floor(y / e)) % 2 === 0;
           if (surB) {
-            if (pres(A_, 0, 1, e)) t.set(x, y, hex(rb[0]));
-            else if (pres(A_, 0, 1, 2 * e)) t.set(x, y, hex(rb[1]));
-            else if (pres(A_, 0, 1, 3 * e)) t.set(x, y, hex(melange(rb[1], rb[2], 0.5)));
-            else if (pres(A_, 1, 0, e)) t.set(x, y, hex(rb[1]));
-            else if (pres(A_, 0, -1, e)) t.set(x, y, hex(rb[4]));
-            else if (pres(A_, -1, 0, e)) t.set(x, y, hex(rb[3]));
-            else if (pres(A_, 0, -1, 2 * e)) t.set(x, y, hex(rb[3]));
-          } else {
-            // L'ombre du massif, qui s'éclaircit en s'éloignant.
-            if (pres(B_, 0, -1, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.6)));
-            else if (pres(B_, 0, -1, 2 * e) || pres(B_, -1, 0, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.3)));
-            else if (pres(B_, 0, -1, 3 * e) || pres(B_, -1, 0, 2 * e) || B_(-e, -e)) t.set(x, y, hex(ra[1]));
-          }
+            if (autour(A_, e)) t.set(x, y, hex(rb[0]));
+            else if (bas(2 * e)) t.set(x, y, hex(rb[1]));
+            else if (bas(3 * e)) t.set(x, y, hex(pair ? rb[1] : melange(rb[1], rb[2], 0.5)));
+            else if (bas(4 * e)) { if (pair) t.set(x, y, hex(melange(rb[1], rb[2], 0.5))); }
+            else if (autour(A_, 2 * e) && pair) t.set(x, y, hex(rb[4]));
+          } else if (autour(B_, e)) t.set(x, y, hex(rb[4]));
           continue;
         }
         if (surB && voisinA) {
