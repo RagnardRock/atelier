@@ -526,44 +526,19 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : des touffes de brins fins en éventail, qui se balancent (animée)',
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un tapis vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour les bords en relief',
       ops: (r, s, g) => {
-        // Des touffes de brins fins qui s'ouvrent en V, sur le vert de l'herbe rase (pour se raccorder
-        // à la tuile herbe) : chaque brin a sa teinte (sombre, vive ou claire), le pied plus sombre, la
-        // pointe plus claire, et un brin sur quatre a un reflet. Les touffes du fond d'abord, celles de devant par-dessus ; tout revient
-        // de l'autre côté de la tuile, pour qu'elle se répète sans couture.
-        const rnd = hasard(g + 613), fond = RAMPES.herbe[2];
-        const grille = new Array(s * s).fill(fond);
-        const pose = (x, y, c) => { grille[((Math.round(y) % s + s) % s) * s + ((Math.round(x) % s + s) % s)] = c; };
-        const pas = s < 24 ? 6 : s / 2.6, touffes = [];
-        for (let j = 0; j < s / pas; j++) for (let i = 0; i < s / pas; i++) {
-          touffes.push({ x: (i + 0.5 + (j % 2) * 0.5) * pas + (rnd() - 0.5) * pas * 0.5, y: (j + 1) * pas + (rnd() - 0.5) * pas * 0.4 });
+        // Un tapis d'herbe haute, plus vif que l'herbe rase, semé de petites touffes en creux (un arc
+        // sombre, le dessus éclairé) rangées en quinconce, comme dans les jeux 16 bits.
+        const u = s / 16, k = Math.max(1, Math.round(u)), ops = [{ type: 'remplir', couleur: melange(r[2], r[3], 0.35) }];
+        // Une touffe : deux petits creux côte à côte (« ᴗᴗ »), sombres en bas, éclairés dedans.
+        const touffe = [[0, 0, 1], [1, 1, 1], [2, 0, 1], [3, 1, 1], [4, 0, 1], [1, 0, 4], [3, 0, 4], [0, -1, 3], [2, -1, 3], [4, -1, 3]];
+        for (const [ox, oy] of [[1, 4], [9, 4], [5, 12], [13, 12]]) {
+          for (const [dx, dy, c] of touffe) ops.push({ type: 'rect', x: Math.round(((ox + dx) % 16) * u), y: Math.round(((oy + dy + 16) % 16) * u), largeur: k, hauteur: k, couleur: r[c] });
         }
-        touffes.sort((a, b) => a.y - b.y);
-        const L = Math.max(6, s * 0.5), epais = s >= 48 ? 2 : 1;
-        for (const t of touffes) {
-          const n = s >= 32 ? 7 : s >= 24 ? 5 : 4;
-          for (let k = 0; k < n; k++) {
-            const a = (-1 + (2 * k) / (n - 1)) * 0.75 + (rnd() - 0.5) * 0.2, long = L * (0.7 + rnd() * 0.35) * (1 - Math.abs(a) * 0.2);
-            const reflet = rnd() < 0.25, teinte = [1, 2, 2, 3][Math.floor(rnd() * 4)];
-            const pas2 = 0.5;
-            for (let d = 0; d <= long; d += pas2) {
-              const u = d / long;
-              // Le brin part presque droit et s'écarte en montant (courbe).
-              const x = t.x + Math.sin(a) * d * (0.4 + 0.6 * u), y = t.y - Math.cos(a * 0.6) * d;
-              const c = u < 0.3 ? r[teinte - 1] : u < 0.85 ? r[teinte] : r[Math.min(4, teinte + (reflet ? 2 : 1))];
-              pose(x, y, c);
-              if (epais > 1 && u < 0.6) pose(x + (a < 0 ? 1 : -1), y, u < 0.3 ? r[0] : r[1]);
-              if (reflet && u > 0.4 && u < 0.85 && epais > 1) pose(x + (a < 0 ? -1 : 1), y, r[4]);
-              else if (reflet && u > 0.4 && u < 0.85) pose(x, y, r[Math.min(4, teinte + 2)]);
-            }
-          }
-        }
-        const ops = [];
-        for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) ops.push({ type: 'rect', x, y, largeur: 1, hauteur: 1, couleur: grille[y * s + x] });
         return ops;
       },
-      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: RAMPES.herbe[2], amplitude: 1, images: 4, duree: 260 }),
+      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: r[2], amplitude: 1, images: 4, duree: 300 }),
     },
     eau_animee: {
       rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
@@ -579,6 +554,7 @@ const Recettes = (() => {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
     transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque' },
     transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable' },
+    transition_hautes_herbes: { libelle: 'Hautes herbes en relief sur l\'herbe rase : bord festonné éclairé en haut, lisière et ombre en bas et à droite (13 tuiles)', dessous: 'herbe', dessus: 'hautes_herbes', style: 'touffu' },
     transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque' },
   };
   const PIECES = [
@@ -591,7 +567,9 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    const f = { h: onde(), b: onde(), g: onde(), d: onde() };
+    // Hautes herbes : un bord festonné, une bosse tous les quarts de tuile (ça se raccorde).
+    const feston = () => (t) => prof - Math.round((1.5 * s / 16) * Math.abs(Math.sin((Math.PI * t) / (s / 4))));
+    const f = b.style === 'touffu' ? { h: feston(), b: feston(), g: feston(), d: feston() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
     const rayon = Math.round(s * 0.3);
@@ -621,6 +599,25 @@ const Recettes = (() => {
         t.set(x, y, Array.from((surB ? B : A).get(x, y)));
         const voisinA = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !estBInt(x + dx, y + dy));
         const voisinB = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => estBInt(x + dx, y + dy));
+        if (b.style === 'touffu') {
+          // Le relief : la lisière du haut éclairée, celle du bas et de droite sombre, et l'ombre du
+          // massif sur l'herbe rase en dessous et à droite.
+          const A_ = (dx, dy) => !estBInt(x + dx, y + dy), B_ = (dx, dy) => estBInt(x + dx, y + dy);
+          const e = Math.max(1, Math.round(s / 16)); // l'épaisseur d'un trait, à l'échelle de la tuile
+          const pres = (fn, dx, dy, n) => { for (let j = 1; j <= n; j++) if (fn(dx * j, dy * j)) return true; return false; };
+          if (surB) {
+            if (pres(A_, 0, 1, e)) t.set(x, y, hex(rb[0]));
+            else if (pres(A_, 0, 1, 2 * e)) t.set(x, y, hex(rb[1]));
+            else if (pres(A_, 1, 0, e)) t.set(x, y, hex(rb[1]));
+            else if (pres(A_, 0, -1, e)) t.set(x, y, hex(rb[4]));
+            else if (pres(A_, -1, 0, e)) t.set(x, y, hex(rb[3]));
+            else if (pres(A_, 0, -1, 2 * e)) t.set(x, y, hex(rb[3]));
+          } else {
+            if (pres(B_, 0, -1, e)) t.set(x, y, hex(melange(ra[1], ra[0], 0.5)));
+            else if (pres(B_, 0, -1, 2 * e) || pres(B_, -1, 0, e) || B_(-e, -e)) t.set(x, y, hex(ra[1]));
+          }
+          continue;
+        }
         if (surB && voisinA) {
           // Le bord côté « dessus » : l'ombre sous la berge (eau), une terre plus sombre (chemin), un sable tassé.
           // (et quelques brins d'herbe qui débordent sur le chemin ou le sable, toujours aux mêmes places

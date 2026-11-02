@@ -21,6 +21,7 @@ const Samples = (() => {
     ['transition_eau', 'rive', 'Bords de l\'eau', 'bloque', 1],
     ['transition_sable', 'sable', 'Bords du sable', 'auto', 1],
     ['transition_plage', 'plage', 'Bords de la plage', 'bloque', 1],
+    ['transition_hautes_herbes', 'hautes herbes', 'Bords des hautes herbes', 'auto', 1],
     ['maison', 'maison', 'Bâtiments', null, 1],
     ['boutique', 'boutique', 'Bâtiments', null, 1],
     ['sapin', 'sapin', 'Arbres', null, 1],
@@ -78,7 +79,7 @@ const Samples = (() => {
     const mare = { x: W - 7, y: midY + 3, w: 5, h: 4 };
     plaque('transition_eau', (x, y) => x >= mare.x && x < mare.x + mare.w && y >= mare.y && y < mare.y + mare.h, idx.eau);
     const herbes = { x: 2, y: midY + 4, w: 5, h: 3 };
-    for (let y = herbes.y; y < herbes.y + herbes.h; y++) for (let x = herbes.x; x < herbes.x + herbes.w; x++) set(sol.cells, x, y, idx['hautes herbes']);
+    plaque('transition_hautes_herbes', (x, y) => x >= herbes.x && x < herbes.x + herbes.w && y >= herbes.y && y < herbes.y + herbes.h, idx['hautes herbes']);
     // Les bâtiments posés juste au-dessus de la route (leur porte donne dessus), avec leurs tampons.
     const li = doc.map.layers.indexOf(decor);
     const poser = (nom, x, y) => { const st = stamps.find((t) => t.name === nom); if (st && x >= 0 && y >= 0 && x + st.w <= W && y + st.h <= H) Doc.placeStamp(doc, st, x, y, li); };
