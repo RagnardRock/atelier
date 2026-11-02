@@ -773,6 +773,167 @@ const IO = (() => {
     notify(`Planche exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
+  // --- Animation d'une tuile en bande PNG (Tafl 1.20) ---
+  // Exporter : les images de la tuile côte à côte, la première à gauche. On la retouche dans Photoshop
+  // ou Skald, puis on la réimporte. Importer : l'image est découpée à la taille des tuiles, de gauche à
+  // droite puis de haut en bas (une bande en ligne, en colonne ou une petite grille), 16 images au plus.
+  const MAX_IMAGES = 16;
+  function bandeCanvas(tile, s, scale = 1) {
+    const c = el('canvas', { width: tile.frames.length * s * scale, height: s * scale });
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    tile.frames.forEach((_f, k) => g.drawImage(Doc.tileCanvas(tile, s, k), k * s * scale, 0, s * scale, s * scale));
+    return c;
+  }
+  // L'agrandissement d'une bande exportée agrandie (×2, ×4…) : sa plus petite dimension fait k tuiles
+  // pile, et les deux tombent juste. Sinon 1.
+  const echelleBande = (W, H, s) => [8, 4, 3, 2].find((k) => Math.min(W, H) === s * k && W % (s * k) === 0 && H % (s * k) === 0) || 1;
+  // Les images d'une bande : { images, total (cases lues, avant la limite de 16), fond (le fond détecté),
+  // juste (la taille de l'image tombe sur des tuiles entières) }.
+  function bandeImages(img, s, { echelle = 1, fond = false, sauterVides = true } = {}) {
+    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    const k = Math.max(1, Math.round(echelle) || 1);
+    // Le fond se cherche sur l'image telle qu'elle est (un damier peint à ×4 a des cases de ×4)…
+    const grande = el('canvas', { width: W, height: H });
+    const gg = grande.getContext('2d', { willReadFrequently: true });
+    gg.drawImage(img, 0, 0);
+    const source = gg.getImageData(0, 0, W, H);
+    const detecte = Planche.detecterFond(source);
+    if (fond && detecte.couleurs.length) gg.putImageData(new ImageData(Planche.rendreTransparent(source, detecte.couleurs, true), W, H), 0, 0);
+    // … puis l'image est ramenée à la taille réelle : un pixel sur k, sans flou.
+    const w = Math.floor(W / k), h = Math.floor(H / k);
+    const c = el('canvas', { width: Math.max(1, w), height: Math.max(1, h) });
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.imageSmoothingEnabled = false;
+    g.drawImage(grande, 0, 0, w, h);
+    const pixels = g.getImageData(0, 0, c.width, c.height).data;
+    const { cols, rows } = Planche.grille(w, h, s);
+    let cases = cols && rows ? Planche.decouper(pixels, w, { s, zone: { x: 0, y: 0, w: cols, h: rows } }) : [];
+    if (sauterVides && cases.some((x) => !x.vide)) cases = cases.filter((x) => !x.vide);
+    return { images: cases.slice(0, MAX_IMAGES).map((x) => x.data), total: cases.length, fond: detecte, juste: W % (s * k) === 0 && H % (s * k) === 0 };
+  }
+
+  // Un aperçu d'animation pour les fenêtres : la tuile qui bouge, agrandie, et ses images en petit.
+  function apercuAnimation(s) {
+    const zoom = Math.max(2, Math.floor(96 / s));
+    const vivant = el('canvas', { width: s, height: s, className: 'anim-apercu-vivant' });
+    vivant.style.width = vivant.style.height = `${s * zoom}px`;
+    const bande = el('div', { className: 'anim-apercu-bande' });
+    const element = el('div', { className: 'anim-apercu' }, [vivant, bande]);
+    let images = [], duree = Doc.DEFAULT_DURATION, k = 0, minuteur = 0;
+    const dessiner = () => {
+      const g = vivant.getContext('2d');
+      g.clearRect(0, 0, s, s);
+      if (images.length) g.putImageData(new ImageData(new Uint8ClampedArray(images[k % images.length]), s, s), 0, 0);
+    };
+    const suivante = () => { k = (k + 1) % Math.max(1, images.length); dessiner(); minuteur = setTimeout(suivante, duree); };
+    return {
+      element,
+      montrer(nouvelles, ms) {
+        images = nouvelles;
+        duree = clamp(Math.round(ms) || Doc.DEFAULT_DURATION, 30, 5000);
+        bande.innerHTML = '';
+        images.forEach((data, n) => {
+          const c = el('canvas', { width: s, height: s, title: `Image ${n + 1}` });
+          c.style.width = c.style.height = `${s * Math.max(1, Math.floor(zoom / 2))}px`;
+          c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(data), s, s), 0, 0);
+          bande.append(el('div', { className: 'anim-apercu-image' }, [c, el('span', { textContent: n + 1 })]));
+        });
+        k = 0;
+        dessiner();
+        clearTimeout(minuteur);
+        if (images.length > 1) minuteur = setTimeout(suivante, duree);
+      },
+      arreter() { clearTimeout(minuteur); },
+    };
+  }
+
+  async function exporterAnimation(doc, index = doc.current) {
+    const tile = doc.tiles[index];
+    const s = doc.tileSize, n = tile.frames.length;
+    const v = await Dialogs.form({
+      title: `Exporter l'animation de « ${tile.name} »`,
+      okLabel: 'Exporter',
+      width: 460,
+      fields: [
+        { type: 'info', text: `${n > 1 ? `Ses ${n} images` : 'Son image (elle n\'est pas encore animée)'} côte à côte dans un PNG, la première à gauche. Retouche-le ou ajoute des images à droite (dans Photoshop, Skald…), sans changer la taille des cases, puis Tuile › Importer une animation.` },
+        { key: 'scale', label: 'Agrandissement', type: 'select', value: '1', choices: [['1', '×1 (taille réelle)'], ['2', '×2'], ['4', '×4'], ['8', '×8 (pour montrer)']] },
+      ],
+      onInput(values, f) { f.card.querySelector('.modal-extra').textContent = `${n * s * Number(values.scale)} × ${s * Number(values.scale)} px, ${n} image(s) de ${s} px`; },
+    });
+    if (!v) return;
+    const chemin = await window.tafl.saveDialog({ defaultName: `${safeName(tile.name)}-animation.png`, format: 'png' });
+    if (!chemin) return;
+    const saved = await window.tafl.writeFile(chemin, await canvasBytes(bandeCanvas(tile, s, Number(v.scale))));
+    notify(`Animation exportée : ${saved.name} (${n} image${n > 1 ? 's' : ''}, durée ${tile.duration || Doc.DEFAULT_DURATION} ms).`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
+  }
+
+  // Remplace les images de la tuile n° index (ou crée une tuile si index est null) ; renvoie son numéro.
+  function poserAnimation(doc, images, { index = null, duree = Doc.DEFAULT_DURATION, nom = 'animation' } = {}) {
+    const ms = clamp(Math.round(duree) || Doc.DEFAULT_DURATION, 30, 5000);
+    let i = index;
+    Doc.change(doc, 'Importer une animation', () => {
+      if (i === null) {
+        const base = Doc.slug(nom, 'animation');
+        i = Doc.addTile(doc, images.map((d) => new Uint8ClampedArray(d)), doc.tiles.some((t) => t.name === base) ? Doc.uniqueName(doc, base) : base, doc.tiles.length, ms);
+      } else {
+        const t = Doc.tileForEdit(doc, i);
+        t.frames = images.map((d) => new Uint8ClampedArray(d));
+        t.duration = ms;
+        Doc.touch(t);
+      }
+      doc.current = i;
+    });
+    return i;
+  }
+
+  async function importerAnimation(doc, file = null) {
+    file = file || await window.tafl.openFile({ kind: 'image', titre: 'Importer une animation (bande PNG)' });
+    if (!file) return;
+    const img = await decodeBytes(file.bytes);
+    const W = img.naturalWidth, H = img.naturalHeight, s = doc.tileSize;
+    if (W < s || H < s) return notify(`L'image (${W} × ${H} px) est plus petite qu'une tuile (${s} px).`, 'warning');
+    const tile = doc.tiles[doc.current];
+    const echelle0 = echelleBande(W, H, s);
+    const fond0 = bandeImages(img, s, { echelle: echelle0 }).fond;
+    const apercu = apercuAnimation(s);
+    let dernier = null;
+    const nomFichier = file.name.replace(/\.[^.]+$/, '').replace(/-animation$/i, '');
+    const v = await Dialogs.form({
+      title: 'Importer une animation',
+      okLabel: 'Importer',
+      width: 520,
+      fields: [
+        { type: 'info', text: `${file.name} (${W} × ${H} px) est découpé en images de la taille des tuiles, de gauche à droite puis de haut en bas (16 au plus).` },
+        { type: 'element', element: apercu.element },
+        { key: 'cible', label: 'Mettre dans', type: 'select', value: 'tuile', choices: [['tuile', `La tuile « ${tile.name} » (ses images sont remplacées)`], ['nouvelle', `Une nouvelle tuile « ${Doc.slug(nomFichier, 'animation')} »`]] },
+        { key: 'duree', label: 'Durée d\'une image', type: 'number', value: tile.frames.length > 1 ? tile.duration : Doc.DEFAULT_DURATION, min: 30, max: 5000, unit: 'ms' },
+        { key: 'echelle', label: 'L\'image est agrandie', type: 'select', value: String(echelle0), choices: [['1', 'Non (taille réelle)'], ['2', '×2'], ['3', '×3'], ['4', '×4'], ['8', '×8']] },
+        { key: 'fond', label: fond0.sorte === 'damier' ? `Rendre transparent le damier peint (${fond0.couleurs.join(', ')})` : `Rendre transparente la couleur de fond (${fond0.couleurs[0] || ''})`, type: 'checkbox', value: fond0.sorte === 'damier', hidden: !fond0.couleurs.length },
+        { key: 'sauterVides', label: 'Sauter les cases vides', type: 'checkbox', value: true },
+      ],
+      onInput(values, f) {
+        dernier = bandeImages(img, s, values);
+        apercu.montrer(dernier.images, values.duree);
+        const extra = f.card.querySelector('.modal-extra');
+        const notes = [];
+        if (!dernier.juste) notes.push('la taille de l\'image ne tombe pas sur des cases entières, le bord est ignoré');
+        if (dernier.total > MAX_IMAGES) notes.push(`${dernier.total} cases : seules les 16 premières sont prises`);
+        extra.textContent = `${dernier.images.length} image(s) de ${s * (Number(values.echelle) || 1)} px${notes.length ? ` — ${notes.join(' ; ')}` : ''}`;
+        f.card.querySelector('button[type="submit"]')?.toggleAttribute('disabled', !dernier.images.length);
+      },
+    });
+    apercu.arreter();
+    if (!v) return;
+    const r = bandeImages(img, s, v);
+    if (!r.images.length) return notify('Aucune image dans ce fichier (toutes les cases sont vides).', 'warning');
+    const i = poserAnimation(doc, r.images, { index: v.cible === 'nouvelle' ? null : doc.current, duree: v.duree, nom: nomFichier });
+    App.selectTile(i);
+    App.selectFrame(0);
+    if (r.images.length > 1 && !App.playing) App.togglePlay();
+    notify(`Animation importée : ${r.images.length} image(s) dans « ${doc.tiles[i].name} ». Ctrl+Z pour revenir en arrière.`, 'success', 5000);
+  }
+
   // Un PNG par tuile : [[nom du fichier, octets], …] (aussi pour Claude, qui écrit dans le projet).
   async function tileFiles(doc, scale = 1) {
     const s = doc.tileSize, files = [];
@@ -883,5 +1044,5 @@ const IO = (() => {
     notify(`Carte exportée : ${saved.name}`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
   }
 
-  return { decodeBytes, pixelsOf, open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportNamedSheet, plancheNommee, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
+  return { bandeCanvas, bandeImages, echelleBande, apercuAnimation, exporterAnimation, importerAnimation, poserAnimation, MAX_IMAGES, decodeBytes, pixelsOf, open, openPath, openLoaded, openGame, save, saveAsGame, gameFiles, mapToJSON, importDialog, importSheet, exportSheet, exportNamedSheet, plancheNommee, exportTiles, exportMap, exportMapImage, serialize, deserialize, sheetCanvas, mapCanvas, canvasBytes, tileFiles, mapFiles, textBytes };
 })();
