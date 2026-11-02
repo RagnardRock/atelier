@@ -34,6 +34,7 @@ const Recettes = (() => {
     toit_bleu: ['#181d33', '#223155', '#2f4a7e', '#4a6fa6', '#7e9fca'],
     crepi: ['#6e6464', '#a39686', '#cfc1a8', '#e3d8c2', '#f2ebdc'],
     vitre: ['#1c2a44', '#2c4a72', '#4a78a6', '#7eaed2', '#c8e4f2'],
+    hautes_herbes: ['#1d3a30', '#2f5444', '#4a7458', '#6c9478', '#9bb8a0'],
   };
   const VAL = {
     ...BRUME,
@@ -55,6 +56,7 @@ const Recettes = (() => {
     toit_bleu: ['#121a3a', '#1c2e66', '#284696', '#3c66c0', '#6a94e0'],
     crepi: ['#8a8072', '#c6bca8', '#e6decc', '#f4eee2', '#fffcf4'],
     vitre: ['#1c2c70', '#2c4cb0', '#4c74e0', '#88a8f8', '#d4e2ff'],
+    hautes_herbes: ['#14532a', '#1c7432', '#2c9c40', '#4cc254', '#94e28e'],
   };
   const STYLES = { val: VAL, brume: BRUME };
   let RAMPES = VAL;
@@ -524,33 +526,44 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'herbe', libelle: 'Hautes herbes (celles des rencontres), qui se balancent (animée)',
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : des touffes de brins fins en éventail, qui se balancent (animée)',
       ops: (r, s, g) => {
-        const ops = [{ type: 'remplir', couleur: r[1] }];
-        // Façon Pokémon : des touffes à deux feuilles pointues, cernées de sombre (7 × 8 px et une colonne d'herbe ; o = contour,
-        // chiffres = rang dans la rampe, lumière à gauche), en deux rangées décalées d'une demi-touffe.
-        const touffe = [
-          '.o...o..',
-          'o4o.o3o.',
-          'o43o43o.',
-          'o43433o.',
-          'o43333o.',
-          'o23332o.',
-          'o12221o.',
-          '.ooooo..',
-        ];
-        const contour = melange(r[0], '#000000', 0.35);
-        const u = s / 16, k = Math.max(1, Math.round(u));
-        for (const [ox, oy] of [[0, 0], [8, 0], [4, 8], [12, 8]]) {
-          touffe.forEach((ligne, j) => [...ligne].forEach((c, i) => {
-            if (c === '.') return;
-            const x = Math.round((ox + i) * u) % s, y = Math.round((oy + j) * u) % s;
-            ops.push({ type: 'rect', x, y, largeur: k, hauteur: k, couleur: c === 'o' ? contour : r[Number(c)] });
-          }));
+        // Des touffes de brins fins qui s'ouvrent en V, sur le vert de l'herbe rase (pour se raccorder
+        // à la tuile herbe) : chaque brin a sa teinte (sombre, vive ou claire), le pied plus sombre, la
+        // pointe plus claire, et un brin sur quatre a un reflet. Les touffes du fond d'abord, celles de devant par-dessus ; tout revient
+        // de l'autre côté de la tuile, pour qu'elle se répète sans couture.
+        const rnd = hasard(g + 613), fond = RAMPES.herbe[2];
+        const grille = new Array(s * s).fill(fond);
+        const pose = (x, y, c) => { grille[((Math.round(y) % s + s) % s) * s + ((Math.round(x) % s + s) % s)] = c; };
+        const pas = s < 24 ? 6 : s / 2.6, touffes = [];
+        for (let j = 0; j < s / pas; j++) for (let i = 0; i < s / pas; i++) {
+          touffes.push({ x: (i + 0.5 + (j % 2) * 0.5) * pas + (rnd() - 0.5) * pas * 0.5, y: (j + 1) * pas + (rnd() - 0.5) * pas * 0.4 });
         }
+        touffes.sort((a, b) => a.y - b.y);
+        const L = Math.max(6, s * 0.5), epais = s >= 48 ? 2 : 1;
+        for (const t of touffes) {
+          const n = s >= 32 ? 7 : s >= 24 ? 5 : 4;
+          for (let k = 0; k < n; k++) {
+            const a = (-1 + (2 * k) / (n - 1)) * 0.75 + (rnd() - 0.5) * 0.2, long = L * (0.7 + rnd() * 0.35) * (1 - Math.abs(a) * 0.2);
+            const reflet = rnd() < 0.25, teinte = [1, 2, 2, 3][Math.floor(rnd() * 4)];
+            const pas2 = 0.5;
+            for (let d = 0; d <= long; d += pas2) {
+              const u = d / long;
+              // Le brin part presque droit et s'écarte en montant (courbe).
+              const x = t.x + Math.sin(a) * d * (0.4 + 0.6 * u), y = t.y - Math.cos(a * 0.6) * d;
+              const c = u < 0.3 ? r[teinte - 1] : u < 0.85 ? r[teinte] : r[Math.min(4, teinte + (reflet ? 2 : 1))];
+              pose(x, y, c);
+              if (epais > 1 && u < 0.6) pose(x + (a < 0 ? 1 : -1), y, u < 0.3 ? r[0] : r[1]);
+              if (reflet && u > 0.4 && u < 0.85 && epais > 1) pose(x + (a < 0 ? -1 : 1), y, r[4]);
+              else if (reflet && u > 0.4 && u < 0.85) pose(x, y, r[Math.min(4, teinte + 2)]);
+            }
+          }
+        }
+        const ops = [];
+        for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) ops.push({ type: 'rect', x, y, largeur: 1, hauteur: 1, couleur: grille[y * s + x] });
         return ops;
       },
-      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: r[2], amplitude: 1, images: 4, duree: 260 }),
+      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: RAMPES.herbe[2], amplitude: 1, images: 4, duree: 260 }),
     },
     eau_animee: {
       rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
