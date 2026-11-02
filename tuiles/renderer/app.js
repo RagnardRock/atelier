@@ -206,6 +206,61 @@ const App = (() => {
     const item = $(`#tiles .tile-item[data-index="${api.doc.current}"]`);
     item?.scrollIntoView({ block: 'nearest' });
   }
+  // Tafl 1.21 : Tuile › Ajouter depuis une recette… — les recettes de recettes.js (sols, bords,
+  // objets, bâtiments, arbres) sans passer par Loki, avec un aperçu. Les tuiles s'ajoutent à la fin,
+  // rangées dans la catégorie choisie ; un bâtiment ou un arbre donne aussi son tampon.
+  async function ajouterRecette() {
+    const doc = api.doc, s = doc.tileSize;
+    const lire = (c) => PixelArt.lireCouleur(doc, c, '', new Set());
+    const apercu = el('canvas', { className: 'recette-apercu' });
+    apercu.style.cssText = 'display:block;margin:4px auto 8px;image-rendering:pixelated;background:repeating-conic-gradient(#3a3a46 0 25%,#2c2c36 0 50%) 0 0/12px 12px;border-radius:6px;max-width:100%';
+    const fabriquer = (v) => Recettes.fabriquer(v.recette, { taille: s, graine: 1, lire, style: v.style });
+    const dessiner = (v) => {
+      let pieces;
+      try { pieces = fabriquer(v); } catch { return; }
+      const bat = Recettes.batiment(v.recette);
+      const cols = bat ? bat.l : Math.min(pieces.length, 5), rows = bat ? bat.h : Math.ceil(pieces.length / cols);
+      const k = Math.max(1, Math.min(4, Math.floor(360 / (cols * s))));
+      apercu.width = cols * s; apercu.height = rows * s;
+      apercu.style.width = `${cols * s * k}px`; apercu.style.height = `${rows * s * k}px`;
+      const g = apercu.getContext('2d');
+      g.clearRect(0, 0, apercu.width, apercu.height);
+      pieces.forEach((p, n) => g.putImageData(new ImageData(new Uint8ClampedArray(p.frames[0]), s, s), (n % cols) * s, Math.floor(n / cols) * s));
+    };
+    const choix = Recettes.NOMS.map((n) => [n, `${n.replace(/_/g, ' ')} : ${Recettes.libelle(n)}`]);
+    const depart = { recette: 'herbe', style: 'val' };
+    const v = await Dialogs.form({
+      title: 'Ajouter depuis une recette',
+      okLabel: 'Ajouter',
+      width: 520,
+      fields: [
+        { key: 'recette', label: 'Recette', type: 'select', value: depart.recette, choices: choix },
+        { key: 'style', label: 'Style', type: 'select', value: depart.style, choices: [['val', 'Val (vif et contrasté)'], ['brume', 'Brume (sombre et feutré)']] },
+        { type: 'element', element: apercu },
+        { key: 'categorie', label: 'Catégorie', type: 'text', value: '', placeholder: 'vide = sans catégorie' },
+      ],
+      onInput: (vals) => dessiner(vals),
+    });
+    if (!v) return;
+    const bat = Recettes.batiment(v.recette), jeu = Recettes.jeu(v.recette);
+    const base = v.recette.replace(/^transition_/, 'bord ').replace(/_/g, ' ');
+    const pieces = fabriquer(v);
+    const indices = [];
+    Doc.change(doc, `Recette « ${base} »`, () => {
+      for (const p of pieces) {
+        const nom = jeu || bat ? `${base} ${bat ? p.suffixe : p.suffixe.replace(/_/g, ' ')}` : base;
+        const i = Doc.addTile(doc, p.frames, doc.tiles.some((t) => t.name === nom) ? Doc.uniqueName(doc, nom) : nom, doc.tiles.length, p.duree || undefined);
+        if (v.categorie.trim()) doc.tiles[i].categorie = v.categorie.trim();
+        if (p.passage && p.passage !== 'auto') doc.tiles[i].passage = p.passage;
+        indices.push(i);
+      }
+      if (bat) doc.stamps = [...doc.stamps, Doc.newStamp(doc, { name: base, w: bat.l, h: bat.h, cells: indices, dessus: bat.dessus })];
+      doc.current = indices[0];
+    });
+    selectTile(indices[0]);
+    notify(`${indices.length} tuile${indices.length > 1 ? 's' : ''} « ${base} » ajoutée${indices.length > 1 ? 's' : ''}${bat ? ', et son tampon' : ''}.`, 'success');
+  }
+
   function newTile() {
     const doc = api.doc;
     Doc.change(doc, 'Nouvelle tuile', () => { doc.current = Doc.addTile(doc, null, null, doc.current + 1); });
@@ -435,6 +490,7 @@ const App = (() => {
     return [
       { label: 'Nouvelle tuile', keys: 'Ctrl+Maj+N', run: newTile },
       { label: 'Dupliquer la tuile', keys: 'Ctrl+D', run: duplicateTile },
+      { label: 'Ajouter depuis une recette…', run: () => run(ajouterRecette) },
       { label: 'Renommer…', keys: 'F2', run: () => renameTile(doc.current) },
       { label: lot.length > 1 ? `Supprimer les ${lot.length} tuiles choisies` : 'Supprimer la tuile', run: () => run(deleteTile) },
       { label: lot.length > 1 ? `Ranger les ${lot.length} tuiles dans une catégorie…` : 'Ranger dans une catégorie…', keys: 'Ctrl+G', run: () => run(() => setTileCategory(lot)) },
@@ -1906,7 +1962,7 @@ const App = (() => {
   window.tafl.onExternalFile((file) => run(() => IO.openPath(file)));
   window.tafl.onExternalFolder((folder) => run(() => openFolder(folder)));
 
-  Object.assign(api, { choisirMode, applyEvent, renderWelcome, exporterJeu, renameGame, togglePanels, jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, assembleTiles, assemblerAnimation, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
+  Object.assign(api, { ajouterRecette, choisirMode, applyEvent, renderWelcome, exporterJeu, renameGame, togglePanels, jouer, testRapide, refresh, refreshLive, renderOptions, setStatusHint, setMode, setTool, setColor, swapColors, selectTile, selectFrame, renameTile, tileMenuItems, placeTiles, setTileCategory, renameCategory, uncategorize, categoryMenuItems, sortTiles, mergeDuplicates, removeUnused, sortMenuItems, setDocument, updateStatus, prepareQuit, init, MENUS, addFrame, deleteFrame, assembleTiles, assemblerAnimation, setDuration, togglePlay, undo, redo, newDocument, selectMap, renameMap, mapMenuItems, placeMap, setMapGroup, renameGroup, ungroup, groupMenuItems, toggleInterior, openWorld, groupNames, run, mapAmbiance, selectLayer, layerMenuItems, layerProperties, toggleLayerVisible, toggleOption, setPassageValue, setTilePassage, createZone, editZone, editWarpAt, setStart, goToStart, editEvent, createEvent, moveEvent, duplicateEvent, deleteEvent, eventMenu, openData, currentStamp, selectStamp, stampFromRect, stampProperties, deleteStamp, moveStamp, stampMenuItems });
   return api;
 })();
 

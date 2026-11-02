@@ -34,6 +34,7 @@ const Recettes = (() => {
     toit_bleu: ['#181d33', '#223155', '#2f4a7e', '#4a6fa6', '#7e9fca'],
     crepi: ['#6e6464', '#a39686', '#cfc1a8', '#e3d8c2', '#f2ebdc'],
     vitre: ['#1c2a44', '#2c4a72', '#4a78a6', '#7eaed2', '#c8e4f2'],
+    hautes_herbes: ['#1d3a30', '#2f5444', '#4a7458', '#6c9478', '#9bb8a0'],
   };
   const VAL = {
     ...BRUME,
@@ -55,6 +56,7 @@ const Recettes = (() => {
     toit_bleu: ['#121a3a', '#1c2e66', '#284696', '#3c66c0', '#6a94e0'],
     crepi: ['#8a8072', '#c6bca8', '#e6decc', '#f4eee2', '#fffcf4'],
     vitre: ['#1c2c70', '#2c4cb0', '#4c74e0', '#88a8f8', '#d4e2ff'],
+    hautes_herbes: ['#14532a', '#1c7432', '#2c9c40', '#4cc254', '#94e28e'],
   };
   const STYLES = { val: VAL, brume: BRUME };
   let RAMPES = VAL;
@@ -183,6 +185,23 @@ const Recettes = (() => {
       else if (dans(x, y + 1) || dans(x + 1, y)) ops.push(point(x, y, melange(r[0], r[1], 0.6)));
     }
     return ops;
+  }
+
+  // Les hautes herbes (Tafl 1.21), sur une grille de 16 ramenée à la taille de la tuile : un aplat vif,
+  // un grain de petites taches, et deux touffes « ᴖᴖ » en quinconce (sombres, le dessus éclairé).
+  // herbeHaute(i, j, r) : la couleur de la case (i, j) de la grille.
+  const TOUFFE_HERBE = ['.LL.LL', 'LDDLDD', 'D..D..'];
+  function herbeHaute(i, j, r) {
+    i = ((i % 16) + 16) % 16; j = ((j % 16) + 16) % 16;
+    for (const [ox, oy] of [[2, 3], [10, 11]]) {
+      const c = TOUFFE_HERBE[j - oy] && TOUFFE_HERBE[j - oy][i - ox];
+      if (c === 'L') return r[4];
+      if (c === 'D') return r[2];
+    }
+    const h = ((i * 73856093) ^ (j * 19349663)) >>> 0;
+    if (h % 7 === 0) return melange(r[2], r[3], 0.55);
+    if (h % 23 === 4) return melange(r[3], r[4], 0.45);
+    return r[3];
   }
 
   const RECETTES = {
@@ -524,31 +543,16 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'herbe', libelle: 'Hautes herbes (celles des rencontres), qui se balancent (animée)',
-      ops: (r, s, g) => {
-        const ops = [{ type: 'remplir', couleur: r[1] }, { type: 'taches', couleurs: [melange(r[1], r[0], 0.5)], densite: 0.3, taille: 5, graine: g }];
-        // Des touffes de brins pointus (8 × 7 px, chiffres = rang dans la rampe), en deux rangées
-        // décalées : la rangée du bas recouvre le pied de celle du haut, ce qui donne la profondeur.
-        const touffe = [
-          '.4...4..',
-          '.3.4.3..',
-          '33.3.33.',
-          '32333230',
-          '22323220',
-          '2222222.',
-          '0111110.',
-        ];
-        const u = s / 16;
-        for (const [ox, oy] of [[0, 1], [8, 1], [4, 9], [12, 9]]) {
-          touffe.forEach((ligne, j) => [...ligne].forEach((c, i) => {
-            if (c === '.') return;
-            const x = Math.round((ox + i) * u) % s, y = Math.round((oy + j) * u) % s;
-            ops.push({ type: 'rect', x, y, largeur: Math.max(1, Math.round(u)), hauteur: Math.max(1, Math.round(u)), couleur: r[Number(c)] });
-          }));
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un aplat vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour le contour',
+      ops: (r, s) => {
+        const u = s / 16, ops = [];
+        for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+          const x = Math.round(i * u), y = Math.round(j * u);
+          ops.push({ type: 'rect', x, y, largeur: Math.round((i + 1) * u) - x, hauteur: Math.round((j + 1) * u) - y, couleur: herbeHaute(i, j, r) });
         }
         return ops;
       },
-      animation: (r) => ({ mode: 'balancement', forme: [r[3], r[4]], fond: r[2], amplitude: 1, images: 4, duree: 260 }),
+      animation: (r) => ({ mode: 'balancement', forme: [r[4], r[2]], fond: r[3], amplitude: 1, images: 4, duree: 300 }),
     },
     eau_animee: {
       rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
@@ -562,8 +566,10 @@ const Recettes = (() => {
   // et deux pièces voisines se raccordent (les ondulations reviennent tous les s pixels).
   const BORDS = {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
-    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau' },
+    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque' },
     transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable' },
+    transition_hautes_herbes: { libelle: 'Hautes herbes en relief sur l\'herbe rase : bord festonné éclairé en haut, lisière et ombre en bas et à droite (13 tuiles)', dessous: 'herbe', dessus: 'hautes_herbes', style: 'touffu' },
+    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque' },
   };
   const PIECES = [
     ['centre', []], ['haut', ['h']], ['bas', ['b']], ['gauche', ['g']], ['droite', ['d']],
@@ -575,10 +581,14 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    const f = { h: onde(), b: onde(), g: onde(), d: onde() };
+    // Hautes herbes : un contour presque droit, avec quelques crans d'une case (ça se raccorde), et
+    // des coins arrondis.
+    const CRANS = [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
+    const cran = () => (t) => Math.round((6 + CRANS[(((Math.floor(t * 16 / s)) % 16) + 16) % 16]) * s / 16);
+    const f = b.style === 'touffu' ? { h: cran(), b: cran(), g: cran(), d: cran() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
-    const rayon = Math.round(s * 0.3);
+    const rayon = Math.round(s * (b.style === 'touffu' ? 0.25 : 0.3));
     // zone : du côté voulu de toutes les limites (sens 1 : « dessus », -1 : « dessous »), coin arrondi.
     const zone = (cotes, x, y, sens) => {
       const m = cotes.map((c) => sens * marge[c](x, y) + (sens > 0 ? 0.5 : -0.5));
@@ -605,23 +615,48 @@ const Recettes = (() => {
         t.set(x, y, Array.from((surB ? B : A).get(x, y)));
         const voisinA = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !estBInt(x + dx, y + dy));
         const voisinB = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => estBInt(x + dx, y + dy));
+        if (b.style === 'touffu') {
+          // Un contour sombre d'une case, un liseré clair pointillé juste dedans, le bas plus sombre
+          // sur trois cases (en dents), et un halo clair dehors.
+          const e = Math.max(1, Math.round(s / 16)); // une case de la grille, à l'échelle de la tuile
+          const autour = (fn, n) => { for (let j = 1; j <= n; j++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) if (fn(dx * j, dy * j)) return true; return false; };
+          const A_ = (dx, dy) => !estBInt(x + dx, y + dy), B_ = (dx, dy) => estBInt(x + dx, y + dy);
+          const bas = (n) => { for (let j = 1; j <= n; j++) if (A_(0, j)) return true; return false; };
+          const pair = (Math.floor(x / e) + Math.floor(y / e)) % 2 === 0;
+          const proche = (fn, n) => { for (let j = 1; j <= n; j++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (fn(dx * j, dy * j)) return true; return false; };
+          if (surB) {
+            if (proche(A_, e) || autour(A_, 1)) t.set(x, y, hex(rb[0]));
+            else if (bas(2 * e)) t.set(x, y, hex(rb[1]));
+            else if (bas(3 * e)) t.set(x, y, hex(pair ? rb[1] : melange(rb[1], rb[2], 0.5)));
+            else if (bas(4 * e)) { if (pair) t.set(x, y, hex(melange(rb[1], rb[2], 0.5))); }
+            else if (autour(A_, 2 * e) && pair) t.set(x, y, hex(rb[4]));
+          } else if (proche(B_, e) || autour(B_, 1)) t.set(x, y, hex(rb[4]));
+          continue;
+        }
         if (surB && voisinA) {
           // Le bord côté « dessus » : l'ombre sous la berge (eau), une terre plus sombre (chemin), un sable tassé.
           // (et quelques brins d'herbe qui débordent sur le chemin ou le sable, toujours aux mêmes places
           // pour que deux pièces voisines se raccordent)
-          const brin = b.style !== 'eau' && ((x * 7 + y * 13 + g) % 9) < 2;
+          const brin = b.style !== 'eau' && b.style !== 'plage' && ((x * 7 + y * 13 + g) % 9) < 2;
           if (b.style === 'eau') t.set(x, y, hex(rb[0]));
+          else if (b.style === 'plage') t.set(x, y, hex((x + y) % 5 === 0 ? rb[3] : rb[4])); // l'écume
           else if (brin) t.set(x, y, hex(ra[2]));
           else if (b.style === 'chemin') t.set(x, y, hex(rb[1]));
           else if ((x + y) % 2 === 0) t.set(x, y, hex(rb[1]));
         } else if (!surB && voisinB) {
           // Le bord côté herbe : une lèvre éclairée au-dessus de l'eau, une herbe plus sombre ailleurs.
-          t.set(x, y, hex(b.style === 'eau' ? ra[3] : ra[1]));
+          t.set(x, y, hex(b.style === 'eau' ? ra[3] : b.style === 'plage' ? melange(ra[1], ra[0], 0.35) : ra[1]));
+        }
+        // La plage : l'eau peu profonde (plus claire) derrière l'écume, le sable mouillé (plus foncé) devant.
+        if (b.style === 'plage') {
+          const loin = (cote) => [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => cote(x + dx, y + dy));
+          if (surB && !voisinA && loin((i, j) => !estBInt(i, j))) t.set(x, y, hex(rb[3]));
+          else if (!surB && !voisinB && loin((i, j) => estBInt(i, j))) t.set(x, y, hex(ra[1]));
         }
         // La deuxième rangée sous la berge, encore un peu sombre.
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));
       }
-      return { suffixe, frames: [data] };
+      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}) };
     });
   }
 
@@ -938,6 +973,7 @@ const Recettes = (() => {
   return {
     operations, fabriquer, NOMS,
     liste: () => NOMS.map((n) => `${n} (${libelle(n)})`),
+    libelle,
     objet: (n) => Boolean(RECETTES[n]?.objet),
     jeu: (n) => Boolean(BORDS[n]),
     // Un grand objet (bâtiment, arbre) : { l, h, dessus } (en tuiles), sinon null.
