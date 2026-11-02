@@ -581,13 +581,12 @@ const Recettes = (() => {
     const rnd = hasard(g + 7);
     const prof = Math.round(s * 0.375); // à quelle distance du bord passe la limite
     const onde = () => { const p1 = rnd() * 6.28, p2 = rnd() * 6.28; return (t) => prof + Math.round(0.9 * Math.sin((2 * Math.PI * t) / s + p1) + 0.6 * Math.sin((4 * Math.PI * t) / s + p2)); };
-    // Hautes herbes : un contour presque droit, avec quelques crans d'une case (ça se raccorde).
-    const CRANS = [0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0];
-    const cran = () => (t) => Math.round((6 + CRANS[(((Math.floor(t * 16 / s)) % 16) + 16) % 16]) * s / 16);
+    // Hautes herbes : un contour droit et des coins bien arrondis.
+    const cran = () => () => Math.round(6 * s / 16);
     const f = b.style === 'touffu' ? { h: cran(), b: cran(), g: cran(), d: cran() } : { h: onde(), b: onde(), g: onde(), d: onde() };
     // marge(cote, x, y) > 0 : du côté « dessus » de cette limite.
     const marge = { h: (x, y) => y - f.h(x), b: (x, y) => (s - 1 - y) - f.b(x), g: (x, y) => x - f.g(y), d: (x, y) => (s - 1 - x) - f.d(y) };
-    const rayon = Math.round(s * (b.style === 'touffu' ? 0.12 : 0.3));
+    const rayon = Math.round(s * (b.style === 'touffu' ? 0.4 : 0.3));
     // zone : du côté voulu de toutes les limites (sens 1 : « dessus », -1 : « dessous »), coin arrondi.
     const zone = (cotes, x, y, sens) => {
       const m = cotes.map((c) => sens * marge[c](x, y) + (sens > 0 ? 0.5 : -0.5));
@@ -622,13 +621,14 @@ const Recettes = (() => {
           const A_ = (dx, dy) => !estBInt(x + dx, y + dy), B_ = (dx, dy) => estBInt(x + dx, y + dy);
           const bas = (n) => { for (let j = 1; j <= n; j++) if (A_(0, j)) return true; return false; };
           const pair = (Math.floor(x / e) + Math.floor(y / e)) % 2 === 0;
+          const proche = (fn, n) => { for (let j = 1; j <= n; j++) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (fn(dx * j, dy * j)) return true; return false; };
           if (surB) {
-            if (autour(A_, e)) t.set(x, y, hex(rb[0]));
+            if (proche(A_, e) || autour(A_, 1)) t.set(x, y, hex(rb[0]));
             else if (bas(2 * e)) t.set(x, y, hex(rb[1]));
             else if (bas(3 * e)) t.set(x, y, hex(pair ? rb[1] : melange(rb[1], rb[2], 0.5)));
             else if (bas(4 * e)) { if (pair) t.set(x, y, hex(melange(rb[1], rb[2], 0.5))); }
             else if (autour(A_, 2 * e) && pair) t.set(x, y, hex(rb[4]));
-          } else if (autour(B_, e)) t.set(x, y, hex(rb[4]));
+          } else if (proche(B_, e) || autour(B_, 1)) t.set(x, y, hex(rb[4]));
           continue;
         }
         if (surB && voisinA) {
