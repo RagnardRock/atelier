@@ -152,11 +152,13 @@
   // 'auto' (ou rien de réglé dans Tafl) : les rangées « dessus » du tampon et ses cases vides sont libres,
   // sinon la tuile décide (son passage « libre » laisse passer, le reste bloque) ; sans tampon, tout bloque.
   const masques = new WeakMap();
-  function masque(jeu, def) {
+  // Saga 1.18 : nomTampon, celui de la variante du bâtiment posé (les cases 'auto' suivent ses tuiles).
+  function masque(jeu, def, nomTampon = def.tampon) {
     if (!masques.has(jeu)) masques.set(jeu, new Map());
     const cache = masques.get(jeu);
-    if (cache.has(def.id)) return cache.get(def.id);
-    const t = def.tampon ? jeu.tampons?.get(def.tampon) : null;
+    const cle = `${def.id}|${nomTampon || ''}`;
+    if (cache.has(cle)) return cache.get(cle);
+    const t = nomTampon ? jeu.tampons?.get(nomTampon) : null;
     const out = [];
     for (let j = 0; j < def.hauteur; j++) {
       for (let i = 0; i < def.largeur; i++) {
@@ -172,7 +174,7 @@
         out.push(v);
       }
     }
-    cache.set(def.id, out);
+    cache.set(cle, out);
     return out;
   }
   // Le bâtiment posé sur la case (x, y) de la carte affichée, avec sa définition, ou null.
@@ -181,7 +183,7 @@
     for (const b of Array.isArray(o.etat.batiments) ? o.etat.batiments : []) {
       if (b.carte !== o.carte?.id) continue;
       const def = d.batiments.get(b.type);
-      if (def && x >= b.x && y >= b.y && x < b.x + def.largeur && y < b.y + def.hauteur) return { ...b, def };
+      if (def && x >= b.x && y >= b.y && x < b.x + def.largeur && y < b.y + def.hauteur) return { ...b, def, tampon: C.apparence(d, b).tampon };
     }
     return null;
   }
@@ -352,7 +354,7 @@
     };
   };
   const coutTexte = (d, def) => C.dire(d, def.cout) || 'gratuit';
-  let apercu = null; // le type de bâtiment visé en ce moment (dessiné en transparence)
+  let apercu = null; // le bâtiment visé en ce moment, { type, variante } (dessiné en transparence)
 
   // Choisir un bâtiment dans la liste (ceux qu'on ne peut pas payer sont grisés). → type, ou null.
   async function choisirBatiment(o) {
@@ -378,13 +380,15 @@
     const essai = C.construire(d, etatDe(o), type);
     if (!essai.ok) { await dire(essai.raison); return { ok: false, batiment: '' }; }
     const def = d.batiments.get(type);
-    apercu = type;
+    // Saga 1.18 : sa variante est tirée avant la visée, pour que l'aperçu montre la bonne maison.
+    const variante = C.variante(d, etatDe(o), type);
+    apercu = { type, variante };
     let place;
     try {
       place = await o.hote.viser({ largeur: def.largeur, hauteur: def.hauteur, valide: (x, y) => C.placement(d, etatDe(o), type, lieu, x, y).ok });
     } finally { apercu = null; }
     if (!place) return { ok: false, batiment: '' };
-    const r = C.construire(d, etatDe(o), type, { carte: lieu.carte, x: place.x, y: place.y });
+    const r = C.construire(d, etatDe(o), type, { carte: lieu.carte, x: place.x, y: place.y }, variante);
     if (!r.ok) { await dire(r.raison); return { ok: false, batiment: '' }; }
     poser(o, r.etat);
     o.hote.rafraichir?.();
@@ -449,11 +453,12 @@
         if (b.carte !== o.carte.id) continue;
         const def = d.batiments.get(b.type);
         if (!def) continue;
+        const vu = C.apparence(d, b); // Saga 1.18 : le tampon de sa variante
         if (b.etat === 'chantier') {
           // Un chantier : son propre tampon s'il en a un, sinon le bâtiment en transparence.
-          if (def.tampon_chantier) dessinerTampon(o, def, def.tampon_chantier, b.x, b.y, sol ? 'bas' : 'haut', 1);
-          else if (sol) dessinerTampon(o, def, def.tampon, b.x, b.y, 'tout', 0.45);
-        } else dessinerTampon(o, def, def.tampon, b.x, b.y, sol ? 'bas' : 'haut', 1);
+          if (vu.tampon_chantier) dessinerTampon(o, def, vu.tampon_chantier, b.x, b.y, sol ? 'bas' : 'haut', 1);
+          else if (sol) dessinerTampon(o, def, vu.tampon, b.x, b.y, 'tout', 0.45);
+        } else dessinerTampon(o, def, vu.tampon, b.x, b.y, sol ? 'bas' : 'haut', 1);
       }
       // Saga 1.6.2 : pendant la visée, le reste de la carte s'assombrit et les zones constructibles ressortent,
       // avec un bord en pointillés qui bouge (on voit d'un coup d'œil où l'on peut bâtir).
@@ -475,8 +480,8 @@
       }
       // Le bâtiment qu'on est en train de placer, en transparence sous le rectangle visé.
       if (apercu && o.visee && !sol) {
-        const def = d.batiments.get(apercu);
-        if (def) dessinerTampon(o, def, def.tampon, o.visee.x, o.visee.y, 'tout', o.visee.ok ? 0.75 : 0.4);
+        const def = d.batiments.get(apercu.type);
+        if (def) dessinerTampon(o, def, C.apparence(d, apercu).tampon, o.visee.x, o.visee.y, 'tout', o.visee.ok ? 0.75 : 0.4);
       }
     },
 
@@ -484,14 +489,14 @@
     // tampon ne bloque plus.
     bloque(o, x, y) {
       const b = batimentEn(o, x, y);
-      return Boolean(b && masque(o.jeu, b.def)[(y - b.y) * b.def.largeur + (x - b.x)] === 'bloque');
+      return Boolean(b && masque(o.jeu, b.def, b.tampon)[(y - b.y) * b.def.largeur + (x - b.x)] === 'bloque');
     },
     // Saga 1.6.1 : la porte d'un bâtiment fini qui mène quelque part (porte_vers : son intérieur). On retient
     // la case d'où vient le joueur, pour l'y ramener (commande gestion_sortir).
     teleporteur(o, x, y) {
       const b = batimentEn(o, x, y);
       if (!b || b.etat !== 'fini' || !b.def.porte_vers) return null;
-      if (masque(o.jeu, b.def)[(y - b.y) * b.def.largeur + (x - b.x)] !== 'porte') return null;
+      if (masque(o.jeu, b.def, b.tampon)[(y - b.y) * b.def.largeur + (x - b.x)] !== 'porte') return null;
       const dir = o.hote?.joueur?.direction || 'haut';
       const [dx, dy] = { haut: [0, -1], bas: [0, 1], gauche: [-1, 0], droite: [1, 0] }[dir] || [0, -1];
       const inverse = { haut: 'bas', bas: 'haut', gauche: 'droite', droite: 'gauche' }[dir] || 'bas';
@@ -585,7 +590,8 @@
       // Construire un bâtiment : payé tout de suite sur le stock. Branches réussi / raté.
       async gestion_construire(o) {
         const d = defs(o.jeu);
-        const r = C.construire(d, etatDe(o), String(o.c.batiment || ''));
+        const type = String(o.c.batiment || '');
+        const r = C.construire(d, etatDe(o), type, null, C.variante(d, etatDe(o), type));
         if (r.ok) {
           poser(o, r.etat);
           o.hote.rafraichir?.();

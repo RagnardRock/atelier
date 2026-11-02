@@ -54,6 +54,10 @@ const DonneesGestion = (() => {
       // Tafl 1.3 (placement libre) : l'apparence (un tampon, par son nom), la taille sans tampon, la porte.
       tampon: str(b?.tampon).slice(0, 80),
       tampon_chantier: str(b?.tampon_chantier).slice(0, 80),
+      // Tafl 1.18 (Saga 1.18) : d'autres apparences (maison2, maison3…), tirées au hasard ou à tour de rôle.
+      variantes: arr(b?.variantes).slice(0, 32).map((v) => (typeof v === 'string' ? { tampon: v } : v)).filter((v) => v && str(v.tampon))
+        .map((v) => ({ tampon: str(v.tampon).slice(0, 80), tampon_chantier: str(v.tampon_chantier).slice(0, 80) })),
+      variantes_tirage: b?.variantes_tirage === 'tour' ? 'tour' : 'hasard',
       largeur: int(b?.largeur, 1, 1, 32),
       hauteur: int(b?.hauteur, 1, 1, 32),
       porte: b?.porte && typeof b.porte === 'object' ? { x: int(b.porte.x, 0, 0, 31), y: int(b.porte.y, 0, 0, 31) } : null,
@@ -237,7 +241,7 @@ const DonneesGestion = (() => {
     const { champ, info, nombreIn, sel } = U();
     const doc = ctx.doc || {};
     const noms = arr(doc.stamps).map((st) => st.name);
-    const choix = (vide) => [['', vide], ...noms.map((n) => [n, n]), ...[b.tampon, b.tampon_chantier].filter((n) => n && !noms.includes(n)).map((n) => [n, `${n} (inconnu)`])];
+    const choix = (vide, ...autres) => [['', vide], ...noms.map((n) => [n, n]), ...[b.tampon, b.tampon_chantier, ...autres].filter((n, k, l) => n && !noms.includes(n) && l.indexOf(n) === k).map((n) => [n, `${n} (inconnu)`])];
     const tampon = () => arr(doc.stamps).find((x) => x.name === b.tampon) || null;
     const taille = () => { const st = tampon(); return st ? [st.w, st.h] : [b.largeur || 1, b.hauteur || 1]; };
     // La grille du passage : l'image du tampon, une couleur par case. Un clic peint avec le pinceau choisi.
@@ -310,15 +314,40 @@ const DonneesGestion = (() => {
       const st = tampon();
       tailleBox.replaceChildren(...(st
         ? [info(`Taille : ${st.w} × ${st.h} cases (celle du tampon).`)]
-        : [champ('Largeur', nombreIn(b, 'largeur', 1, 32, 1, () => { assurer(true); dessiner(); }), 'cases'), champ('Hauteur', nombreIn(b, 'hauteur', 1, 32, 1, () => { assurer(true); dessiner(); }), 'cases')]));
+        : [champ('Largeur', nombreIn(b, 'largeur', 1, 32, 1, () => { assurer(true); dessiner(); majVariantes(); }), 'cases'), champ('Hauteur', nombreIn(b, 'hauteur', 1, 32, 1, () => { assurer(true); dessiner(); majVariantes(); }), 'cases')]));
     };
-    assurer(); majTaille(); majPinceaux(); dessiner();
+    // Tafl 1.18 : les variantes (d'autres tampons de la même taille), une ligne chacune.
+    if (!Array.isArray(b.variantes)) b.variantes = [];
+    const variantesBox = el('div', { className: 'field field-block' });
+    const majVariantes = () => {
+      const { petitBouton } = U();
+      const [w, h] = taille();
+      const lignes = b.variantes.map((v, k) => {
+        const st = arr(doc.stamps).find((x) => x.name === v.tampon);
+        const avert = st && (st.w !== w || st.h !== h) ? info(`« ${v.tampon} » fait ${st.w} × ${st.h} cases, le bâtiment ${w} × ${h} : Saga ignorera cette variante.`) : null;
+        return el('div', {}, [el('div', { className: 'field-grid' }, [
+          champ(`Variante ${k + 2}`, sel(choix('(choisir un tampon)', v.tampon), v.tampon, (x) => { v.tampon = x; majVariantes(); })),
+          champ('Son chantier', sel(choix('Celui du bâtiment', v.tampon_chantier), v.tampon_chantier, (x) => { v.tampon_chantier = x; })),
+          petitBouton('close', 'Retirer cette variante', () => { b.variantes.splice(k, 1); majVariantes(); }),
+        ]), ...(avert ? [avert] : [])]);
+      });
+      const ajout = el('button', { className: 'chip', textContent: '+ Variante' });
+      ajout.onclick = (e) => { e.preventDefault(); b.variantes.push({ tampon: '', tampon_chantier: '' }); majVariantes(); };
+      variantesBox.replaceChildren(
+        el('span', { className: 'field-label', textContent: 'Variantes : d\'autres apparences pour ce bâtiment' }),
+        ...lignes, ajout,
+        ...(b.variantes.length ? [champ('Choix de la variante', sel([['hasard', 'Au hasard'], ['tour', 'Chacune à son tour']], b.variantes_tirage === 'tour' ? 'tour' : 'hasard', (x) => { b.variantes_tirage = x; }))] : []),
+        info(`Chaque bâtiment posé prend une apparence : le tampon ci-dessus (variante 1) ou l'une des variantes, ${b.variantes_tirage === 'tour' ? 'chacune à son tour' : 'au hasard'}. Mets plusieurs fois le même tampon pour qu'il sorte plus souvent. Les variantes doivent avoir la taille du bâtiment ; le passage (la grille plus haut) vaut pour toutes.`),
+      );
+    };
+    assurer(); majTaille(); majPinceaux(); dessiner(); majVariantes();
     return [
       el('div', { className: 'field-grid' }, [
-        champ('Tampon', sel(choix('Aucun (un rectangle)'), b.tampon, (v) => { b.tampon = v; majTaille(); assurer(true); dessiner(); })),
+        champ('Tampon', sel(choix('Aucun (un rectangle)'), b.tampon, (v) => { b.tampon = v; majTaille(); assurer(true); dessiner(); majVariantes(); })),
         champ('Tampon du chantier', sel(choix('Le bâtiment, en transparence'), b.tampon_chantier, (v) => { b.tampon_chantier = v; })),
       ]),
       tailleBox,
+      variantesBox,
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Passage : choisis un pinceau, puis clique sur les cases' }), pinceaux, grille]),
       vers,
       info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (carnet › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),

@@ -1027,6 +1027,8 @@ Une zone de carte (`zones`, type `"constructible"`) : là où le joueur peut pos
 - `maximum` : combien de bâtiments de ce type au plus (chantiers compris) ; 0 : sans limite.
 - `tampon` (facultatif) : le nom d'un tampon de `tuiles.tafl` (un objet de plusieurs tuiles fait dans l'éditeur de cartes) : l'apparence du bâtiment posé, et sa taille. Ses rangées `dessus` passent devant le joueur.
 - `tampon_chantier` (facultatif) : le tampon pendant le chantier ; sans lui, le bâtiment en transparence.
+- `variantes` (facultatif, Tafl 1.18, Saga 1.18, `[{ "tampon", "tampon_chantier" }]`) : d'autres apparences pour ce bâtiment (maison2, maison3…). Chaque bâtiment posé (placement ou commande `gestion_construire`) prend la sienne : `tampon` (la variante 1) ou l'une de celles-ci, et la garde (`variante` dans l'état : son indice, absent pour la première). Une variante doit avoir la taille du bâtiment, sinon Saga l'ignore ; son `tampon_chantier` vide reprend celui du bâtiment ; le `passage` vaut pour toutes (ses cases `"auto"` suivent les tuiles de la variante). Le même tampon plusieurs fois sort plus souvent.
+- `variantes_tirage` (facultatif, Tafl 1.18) : `"hasard"` (par défaut) ou `"tour"` (chacune à son tour, selon combien de bâtiments de ce type existent déjà).
 - `largeur`, `hauteur` (1 par défaut) : la taille en cases d'un bâtiment sans tampon (dessiné comme un simple bloc).
 - `logement` (Saga 1.6, 0 par défaut) : combien d'habitants il loge, une fois fini.
 - `ouvriers` (Saga 1.6, 0 par défaut) : combien d'habitants il lui faut pour produire ; il ne produit pas s'il ne les a pas tous. 0 : il produit seul.

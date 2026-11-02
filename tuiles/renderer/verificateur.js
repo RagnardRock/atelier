@@ -492,6 +492,12 @@ const Verificateur = (() => {
         for (const cle of ['tampon', 'tampon_chantier']) {
           if (b[cle] && !tampons.has(b[cle])) ajouter('erreur', 'references', `Le bâtiment « ${b.nom || b.id} » a pour ${cle === 'tampon' ? 'tampon' : 'tampon de chantier'} « ${b[cle]} », qui n'existe pas (les tampons se créent dans l'éditeur de cartes).`);
         }
+        // Tafl 1.18 : les tampons des variantes.
+        (Array.isArray(b.variantes) ? b.variantes : []).forEach((v, k) => {
+          for (const cle of ['tampon', 'tampon_chantier']) {
+            if (v?.[cle] && !tampons.has(v[cle])) ajouter('erreur', 'references', `La variante ${k + 2} du bâtiment « ${b.nom || b.id} » a pour ${cle === 'tampon' ? 'tampon' : 'tampon de chantier'} « ${v[cle]} », qui n'existe pas.`);
+          }
+        });
       }
     }
     if (gestionActif && donne.places && !zoneConstructible) ajouter('attention', 'quetes', 'La commande « Placer un bâtiment » ne réussira jamais : aucune carte n\'a de zone de type « Constructible ».');

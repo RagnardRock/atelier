@@ -282,6 +282,10 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **La mise en scène** : `regarder` (tourner quelqu'un), `camera` (aller montrer un lieu, puis revenir sur le héros), `fondu` (au noir ou au blanc, qui tient pendant un téléporter), `secouer`, `bulle` (!, ?, ♥, …, ♪, colère, sommeil, idée) et `cinema` (les bandes noires).
 - À la fin du script, tout se range tout seul : la caméra revient, le voile et les bandes s'en vont.
 
+## Ce que fait Saga 1.18 : les variantes de bâtiments (avec Tafl 1.18)
+
+- **Plusieurs apparences pour un même bâtiment** (module gestion) : `variantes` donne d'autres tampons de la même taille. Chaque bâtiment posé tire la sienne (`variantes_tirage` : au hasard, ou chacune à son tour) et la garde dans la sauvegarde. Le tirage a lieu avant la visée, donc l'aperçu montre déjà la bonne maison. Le passage du bâtiment vaut pour toutes ses variantes.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
