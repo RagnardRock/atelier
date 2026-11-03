@@ -2539,7 +2539,8 @@ const Events = (() => {
           ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
           ...(pack() === 'jrpg' ? groupeJrpg(p) : []),
           ...(pack() === 'jdr' && typeof DonneesJdr !== 'undefined' ? DonneesJdr.formPersonnage(p, work, render) : []),
-          ...(pack() === 'action' && typeof DonneesAction !== 'undefined' ? DonneesAction.formPersonnage(p, work, renderListe, doc) : []),
+          // Tafl 1.10 : ses animations du temps réel (pack action) ; Tafl 1.22 : sa nage, dans tous les packs.
+          ...(typeof DonneesAction !== 'undefined' ? DonneesAction.formPersonnage(p, work, renderListe, doc, { action: pack() === 'action' }) : []),
           section('Portraits, un par expression'),
           el('p', { className: 'modal-info', textContent: 'Les visages montrés à côté des dialogues. Dessine-les dans Skald ou Photoshop (PNG, fond transparent), puis importe-les ici : un fichier nommé maman-triste.png devient l\'expression « triste ».' }),
           portraits,

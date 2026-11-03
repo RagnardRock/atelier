@@ -40,7 +40,7 @@ const Samples = (() => {
         const name = jeu ? `${nom} ${p.suffixe.replace(/_/g, ' ')}` : bat ? `${nom} ${p.suffixe}` : nom;
         idx[jeu && !bat ? `${recette}:${p.suffixe}` : bat ? `${recette}:${p.suffixe}` : nom] = tiles.length;
         indices.push(tiles.length);
-        tiles.push({ id: Doc.newId(), name, frames: p.frames, duration: p.duree || Doc.DEFAULT_DURATION, passage: p.passage || passage || 'auto', categorie });
+        tiles.push({ id: Doc.newId(), name, frames: p.frames, duration: p.duree || Doc.DEFAULT_DURATION, passage: p.passage || passage || 'auto', categorie, ...(p.effet ? { effet: { ...p.effet } } : {}) });
       }
       if (bat) stamps.push(Doc.newStamp({ stamps }, { name: nom, w: bat.l, h: bat.h, cells: indices, dessus: bat.dessus }));
     }

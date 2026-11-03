@@ -108,6 +108,7 @@ Le même format que les fichiers `.tafl` de Tafl, sans les cartes :
 - `passage` (facultatif) : `"libre"` ou `"bloque"`, ce que fait la tuile partout où elle est posée. Absent = `"auto"` (elle ne décide rien). Voir « Passage et collisions ».
 - `categorie` (facultatif) : le nom de la catégorie où la tuile est rangée dans Tafl (« Herbe », « Maisons »…). Elle ne sert qu'à s'y retrouver dans l'éditeur : le moteur peut l'ignorer.
 - `lumiere` (facultatif, Tafl 0.29) : la tuile éclaire (un lampadaire, une fenêtre allumée, un feu), partout où elle est posée. Voir « Lumières » plus bas.
+- `effet` (facultatif, Tafl 1.22) : ce qui arrive à celui qui marche sur la tuile (jambes cachées dans les hautes herbes, nage, particules, traces de pas…). Voir « Effets au passage » plus bas.
 - `tampons` (facultatif, Tafl 0.10) : les objets de plusieurs tuiles qu'on pose d'un clic dans Tafl (`{ "nom", "largeur", "hauteur", "dessus", "cases" }`, `cases` = un numéro de tuile par case, rangée par rangée, `-1` = rien ; `dessus` = combien de rangées du haut vont sur le calque au-dessus du joueur). **Le moteur peut l'ignorer** : une fois posés, ce sont des tuiles ordinaires sur les calques de la carte.
 
 Astuce pour le moteur : charger chaque `png` (et chaque image de `frames`) comme une petite texture, ou les recoller dans une planche au chargement.
@@ -240,6 +241,30 @@ Sans fichier, le moteur a ses propres bruitages, fabriqués à la volée : un «
 | `scintille` | `true` : elle vacille un peu (une flamme, une bougie). |
 
 Le moteur pose sur la carte une seule couche de lumière, en « produit » : la teinte de la carte, multipliée par la lumière du ciel (la nuit, l'aube, le couchant : voir `reglages.temps`), puis éclaircie autour de chaque lumière (un halo qui rend ses vraies couleurs à la carte, avec une lueur de sa couleur). Il fait jour : les lumières ne changent rien. Une carte teintée sombre (une grotte) les montre même de jour. La lumière d'un événement suit l'événement (un PNJ avec une lanterne qui se promène) et vaut pour toutes ses pages, tant qu'il est présent.
+
+#### Effets au passage
+
+(Tafl 1.22, joués par Saga 1.20.) Une tuile (`effet` dans `tuiles.tafl`) peut dire ce qui arrive à celui qui marche dessus : le héros, les PNJ, les habitants des modules, les autres joueurs et les personnages du temps réel. Tafl le règle dans **Tuile › Effet au passage…** (des préréglages remplissent la fenêtre), et les recettes de Tafl le mettent toutes seules (hautes herbes, eau, sable, neige, boue et leurs bords).
+
+```json
+"effet": { "corps": "herbes", "cache": 35, "remous": true, "particules": "feuilles", "couleur": "#5fb34a", "nombre": 4,
+           "ondes": false, "couleur_ondes": "#ffffff", "traces": 0, "couleur_traces": "#3a2a1a", "son": "herbe", "vitesse": 100, "nage": false }
+```
+
+| Champ | Défaut | Sens |
+|---|---|---|
+| `corps` | `"aucun"` | `"herbes"` : la tuile repasse devant le bas du corps (comme les hautes herbes de Pokémon) ; `"eau"` : le bas du corps est sous la surface, avec une ligne d'eau autour ; `"aucun"` : rien ne se cache. |
+| `cache` | 35 (herbes), 50 (eau) | La part du corps cachée, en % de la hauteur d'une case, depuis les pieds (0 à 90). |
+| `remous` | `false` | Herbes : la touffe frémit quand on y entre. Eau : le corps tangue doucement. |
+| `nage` | `false` | Eau : le personnage prend son animation `nage` (voir `personnages.json`) s'il en a une ; sinon le haut de son corps flotte. |
+| `particules` | `"aucune"` | À chaque pas : `"feuilles"`, `"gouttes"`, `"poussiere"`, `"flocons"` ou `"bulles"`. |
+| `couleur`, `nombre` | `#ffffff`, 4 | Leur couleur, et combien partent à chaque pas (1 à 12). |
+| `ondes`, `couleur_ondes` | `false`, `#ffffff` | Des ondes qui s'élargissent à chaque pas (et de temps en temps à l'arrêt dans l'eau) ; leur couleur est aussi celle de la ligne d'eau. |
+| `traces`, `couleur_traces` | 0, `#3a2a1a` | Des empreintes laissées à chaque pas, qui s'effacent en tant de secondes (0 à 30 ; 0 = aucune). |
+| `son` | `""` | Le bruit d'un pas du joueur : `"herbe"`, `"eau"` ou `"sable"` (fabriqués par le moteur), un fichier `"sons/…"`, ou `""` (aucun). |
+| `vitesse` | 100 | Le pas du joueur sur cette tuile, en % (25 à 200) : 80 pour nager, 70 pour la boue. Pas dans le temps réel. |
+
+L'effet d'une case est celui de sa tuile la plus haute, sans compter les calques `dessus` : une tuile sans effet posée par-dessus l'eau (un pont) n'en a donc pas. Les effets se déclenchent quand un personnage **entre** dans une case. Le joueur peut couper les effets dans les options de Saga ; la vitesse compte toujours. Un effet n'ouvre pas le passage : pour nager dans une eau bloquée, il faut toujours une zone `eau` avec son `objetRequis`.
 
 ### Téléporteurs
 
@@ -1190,6 +1215,8 @@ soigné, et les ennemis de la carte reviennent.
 
 - `animations` : `repos`, `attaque`, `coup`, `mort`, chacune une planche comme `sprite` (4 directions)
   avec `duree` (ms par image, 16 à 2000, 80 par défaut). Sans `attaque`, Saga dessine un arc d'épée.
+  Tafl 1.22 (Saga 1.20) : `nage`, au même format, vaut pour **tous les packs** : elle tourne en boucle sur
+  une tuile dont l'effet au passage a `nage` (voir « Effets au passage »).
 - `hitbox` : `{ x, y, largeur, hauteur }` en pixels dans la case : son corps (par défaut, le centre bas
   de la case).
 - `frappe` : `{ portee, largeur }` en pixels : la zone de son coup devant lui.
@@ -1367,4 +1394,5 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 1.12** : le module `roguelite` (Saga 1.14) : `salle` dans les cartes, `donnees/perks.json`, `donnees/ameliorations.json`, `modules_reglages.roguelite`, `etage_min` et `etage_max` dans les rencontres du pack action, ses commandes et conditions `roguelite_…`, `modules.roguelite` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.13** : le module `"relations"` (Saga 1.15) : `donnees/relations.json`, `modules_reglages.relations`, les commandes `relation_parler`, `relation_offrir`, `relation_points` et `relation_ecran`, les conditions `relation_niveau` et `relation_parle`, `relations` dans la sauvegarde ; `habitants_noms` dans les réglages du module gestion. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.16** : l'action `jour` de la commande `variable`, les conditions `jours_depuis` et `heure`, `apparence` dans les pages des événements, `reveil` dans les événements (Saga 1.16). Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.22** : `effet` dans les tuiles, l'animation `nage` des personnages (Saga 1.20). Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.17** : les commandes `deplacer`, `regarder`, `camera`, `fondu`, `secouer`, `bulle` et `cinema` (Saga 1.17). Des champs en plus, donc la version reste 1.

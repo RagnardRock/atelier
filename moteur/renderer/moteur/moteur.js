@@ -121,12 +121,14 @@ const Moteur = (() => {
     const ctx = canvas.getContext('2d');
     const entrees = creerEntrees();
     const ambiance = Ambiance.creer();
-    let options = { zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true, volumeMusique: 70, volumeSons: 80, vitesseTexte: 'normale' };
+    let options = { zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true, effetsSol: true, volumeMusique: 70, volumeSons: 80, vitesseTexte: 'normale' };
     // Le son (Saga 0.11) : la musique des cartes et des combats, les bruitages, la pluie et le tonnerre.
     const audio = Son.creer({ charger: (chemin) => rappels.chargerSon?.(chemin) ?? Promise.reject(new Error('pas de sons')) });
     audio.onErreur((m) => rappels.message?.(m));
     const reglagesAudio = () => jeu?.donnees.reglages?.reglages?.audio || {};
     const bruit = (nom) => audio.son(nom, reglagesAudio().sons?.[nom] || '');
+    // Saga 1.20 : les effets au passage des tuiles (hautes herbes, eau, sable…), effets-sol.js.
+    const effets = EffetsSol.creer({ son: (v) => (v.startsWith('sons/') ? audio.fichier(v) : audio.son(`pas_${v}`)) });
     let jeu = null, partie = null, carte = null, presents = [];
     let joueur = null;
     let cam = { x: 0, y: 0 };
@@ -652,9 +654,11 @@ const Moteur = (() => {
       }
       joueur.pietine = 0;
       joueur.pas++;
+      // Saga 1.20 : la tuile où il va peut le ralentir (l'eau, la boue) ou le presser.
+      const lent = d.saut ? 1 : effets.en(carte, jeu, d.x, d.y)?.vitesse || 1;
       joueur.mouvement = {
         de: { x: joueur.x, y: joueur.y }, vers: { x: d.x, y: d.y }, t: 0, saut: d.saut,
-        duree: d.saut ? DUREE_SAUT : course ? DUREE_PAS_COURSE : DUREE_PAS,
+        duree: (d.saut ? DUREE_SAUT : course ? DUREE_PAS_COURSE : DUREE_PAS) / lent,
       };
       return true;
     }
@@ -1213,14 +1217,45 @@ const Moteur = (() => {
     // Un personnage sur sa case (x, y : le coin haut gauche, à l'écran) : la tuile de l'événement,
     // sinon le sprite du personnage, sinon sa tuile, sinon le petit bonhomme à sa couleur.
     // pas : 0 debout, sinon le n° du pas en cours (pour l'image de marche).
-    function dessinerCorps({ tuile = -1, perso, couleur, direction, pas, x, y, hy = y, ombre = 1 }, maintenant) {
+    // Saga 1.12 : anim = { anim, temps, boucle } : une animation du personnage à la place (temps réel).
+    // Saga 1.20 : cle (le joueur : 'joueur') : il subit l'effet au passage de sa case (effets-sol.js).
+    function dessinerCorps({ tuile = -1, perso, couleur, direction, pas, x, y, hy = y, ombre = 1, anim = null, cle = null }, maintenant) {
       const t = jeu.taille;
       if (tuile >= 0) { dessinerTuile(tuile, x, hy, maintenant); return; }
-      Sprites.ombre(ctx, x, y, t, ombre);
-      if (perso?.sprite) Sprites.dessinerSprite(ctx, perso.sprite, direction, pas, x, hy, t);
-      else if (perso?.tuile >= 0) dessinerTuile(perso.tuile, x, hy, maintenant);
-      else Sprites.dessiner(ctx, perso?.couleur || couleur, direction, pas ? (pas % 2 ? 1 : 2) : 0, x, hy, t);
+      const corps = (cy, avecOmbre = true) => {
+        if (avecOmbre) Sprites.ombre(ctx, x, y, t, ombre);
+        if (anim) Sprites.dessinerAnimation(ctx, anim.anim, direction, anim.temps, x, cy, t, anim.boucle);
+        else if (perso?.sprite) Sprites.dessinerSprite(ctx, perso.sprite, direction, pas, x, cy, t);
+        else if (perso?.tuile >= 0) dessinerTuile(perso.tuile, x, cy, maintenant);
+        else Sprites.dessiner(ctx, perso?.couleur || couleur, direction, pas ? (pas % 2 ? 1 : 2) : 0, x, cy, t);
+      };
+      // En l'air (un saut de rebord), ou sans clé : rien ne l'atteint.
+      const sous = cle !== null && hy === y && options.effetsSol !== false
+        ? effets.sous(carte, jeu, cle, x + cam.x, y + cam.y, direction, maintenant) : null;
+      const ef = sous?.ef;
+      if (!ef || ef.corps === 'aucun') { corps(hy); return; }
+      if (ef.corps === 'herbes') {
+        // Les jambes dans les herbes : pas d'ombre, et la tuile repasse devant le bas du corps.
+        corps(hy, ef.cache <= 0);
+        effets.devant(ctx, oEffets(maintenant), x + cam.x, y + cam.y);
+        return;
+      }
+      // Dans l'eau : il tangue un peu (remous), le bas du corps est sous la surface.
+      const u = Math.max(1, Math.round(t / 16));
+      const tangue = ef.remous ? Math.round(Math.sin(maintenant / 320) * u) : 0;
+      const ligne = y + Math.round(t * (1 - ef.cache));
+      // Une animation de nage (Tafl : la fiche du personnage) remplace la marche ; pas un coup en cours (temps réel).
+      const nage = ef.nage && (!anim || anim.anim === perso?.animations?.repos) ? perso?.animations?.nage : null;
+      if (nage) Sprites.dessinerAnimation(ctx, nage, direction, maintenant / 1000, x, y + tangue, t, true);
+      else {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x - t, y - 3 * t, 3 * t, ligne - (y - 3 * t)); ctx.clip();
+        corps(hy + tangue, false);
+        ctx.restore();
+      }
+      effets.surface(ctx, ef, x, ligne, t, maintenant);
     }
+    const oEffets = (maintenant) => ({ carte, jeu, cam, maintenant, tuile: (n, x, y) => dessinerTuile(n, x, y, maintenant) });
 
     function dessinerObstacle(sorte, x, y) {
       const t = jeu.taille, u = t / 16;
@@ -1251,17 +1286,18 @@ const Moteur = (() => {
         // Un obstacle sans tuile ni personnage (Saga 0.7) : un petit arbre ou un rocher dessiné.
         if (p.tuile < 0 && !p.perso && Monde.obstacle(p.ev)) { liste.push({ y: py, dessiner: () => dessinerObstacle(Monde.obstacle(p.ev).sorte, px - cam.x, py - cam.y) }); continue; }
         liste.push({ y: py, dessiner: () => dessinerCorps({
-          tuile: p.tuile, perso: p.perso, couleur: '#5ec8ff', direction: p.direction,
+          tuile: p.tuile, perso: p.perso, couleur: '#5ec8ff', direction: p.direction, cle: p,
           pas: m && k < 0.5 ? p.pas : 0, x: px - cam.x, y: py - cam.y,
         }, maintenant) });
       }
       // Saga 1.9 : les passants des modules (les habitants du domaine).
-      for (const f of Modules.figurants(jeu, partie, carte)) {
+      Modules.figurants(jeu, partie, carte).forEach((f, n) => {
         const perso = f.personnage ? jeu.personnages.get(f.personnage) : null;
         // Saga 1.15 : celui à qui l'on parle regarde le joueur, debout.
         const parle = figurantParle && figurantParle.module === f.module && f.id !== undefined && figurantParle.id === f.id;
-        liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: parle ? figurantParle.direction : f.direction || 'bas', pas: parle ? 0 : f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y }, maintenant) });
-      }
+        const cle = `figurant:${f.module || ''}:${f.id ?? n}`;
+        liste.push({ y: f.y, dessiner: () => dessinerCorps({ perso, couleur: f.couleur || '#8fd18a', direction: parle ? figurantParle.direction : f.direction || 'bas', pas: parle ? 0 : f.pas || 0, x: Math.round(f.x) - cam.x, y: Math.round(f.y) - cam.y, cle }, maintenant) });
+      });
       // Les autres joueurs (multijoueur) : ils glissent vers leur case, au pas.
       const vus = new Set();
       for (const a of autres) {
@@ -1282,7 +1318,7 @@ const Moteur = (() => {
         // Son apparence : le personnage qu'il a choisi (sinon le héros du jeu), et sa tenue.
         const perso = (a.personnage && jeu.personnages.get(a.personnage)) || jeu.heros;
         const tenue = a.tenue ? perso?.tenues?.find((q) => q.id === a.tenue) : null;
-        liste.push({ y: Math.round(d.py), dessiner: () => dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : perso, couleur: '#e0a040', direction: a.direction, pas, x, y }, maintenant) });
+        liste.push({ y: Math.round(d.py), dessiner: () => dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : perso, couleur: '#e0a040', direction: a.direction, pas, x, y, cle: `autre:${a.id}` }, maintenant) });
       }
       for (const id of [...dessinAutres.keys()]) if (!vus.has(id)) dessinAutres.delete(id);
       if (tempsReel) {
@@ -1305,7 +1341,7 @@ const Moteur = (() => {
         const x = pj.x - cam.x, y = pj.y - cam.y;
         // La tenue choisie (Tafl 0.16) remplace le sprite du héros ; sans sprite, sa tenue de base.
         const tenue = partie.tenue ? jeu.heros?.tenues?.find((t) => t.id === partie.tenue) : null;
-        dessinerCorps({ perso: tenue?.sprite ? { sprite: tenue.sprite } : jeu.heros, couleur: '#d94a4a', direction: joueur.dir, pas, x, y, hy: y - pj.saut, ombre: pj.saut ? 0.8 : 1 }, maintenant);
+        dessinerCorps({ perso: tenue?.sprite ? { ...jeu.heros, sprite: tenue.sprite } : jeu.heros, couleur: '#d94a4a', direction: joueur.dir, pas, x, y, hy: y - pj.saut, ombre: pj.saut ? 0.8 : 1, cle: 'joueur' }, maintenant);
       } });
       liste.sort((a, b) => a.y - b.y);
       for (const e of liste) e.dessiner();
@@ -1402,10 +1438,13 @@ const Moteur = (() => {
       ctx.fillRect(0, 0, W, H);
       // 1. les calques « dessous » et « joueur », dans l'ordre de la liste ;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') dessinerCalque(c, maintenant);
+      // (Saga 1.20) les traces de pas, les ondes, les touffes qui frémissent ;
+      if (options.effetsSol !== false) effets.dessinerSol(ctx, oEffets(maintenant));
       // (Saga 1.4) ce que les modules posent au sol, sous les personnages ;
       dessinerModules('sol', maintenant);
-      // 2. les personnages ;
+      // 2. les personnages, puis (Saga 1.20) les particules qu'ils soulèvent ;
       dessinerPersonnages(maintenant);
+      if (options.effetsSol !== false) effets.dessinerParticules(ctx, oEffets(maintenant));
       // 3. les calques « dessus » (toits, cimes des arbres), devant le joueur, puis ce que les modules y mettent ;
       for (const c of carte.calques) if (c.visible && c.profondeur === 'dessus') dessinerCalque(c, maintenant);
       dessinerModules('dessus', maintenant);

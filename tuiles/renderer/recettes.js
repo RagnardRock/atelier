@@ -255,7 +255,7 @@ const Recettes = (() => {
       ops: (r, s, g) => pierres(r, s, g, { l: 8 * s / 16, h: 4 * s / 16, decalage: 4 * s / 16, coins: false }),
     },
     eau: {
-      rampe: 'eau', libelle: 'Eau calme : petites vagues en arc, reflets',
+      rampe: 'eau', libelle: 'Eau calme : petites vagues en arc, reflets', effet: 'eau_profonde',
       ops: (r, s, g) => {
         const rnd = hasard(g + 3);
         const ops = [
@@ -277,7 +277,7 @@ const Recettes = (() => {
       },
     },
     sable: {
-      rampe: 'sable', libelle: 'Sable clair, quelques ondulations',
+      rampe: 'sable', libelle: 'Sable clair, quelques ondulations', effet: 'sable',
       ops: (r, s, g) => [
         ...fond(r, s, g, { sombre: 0.14, clair: 0.32, taille: 7 }),
         { type: 'bruit', couleurs: [r[1]], forme: 'trait', taille: 2, densite: 0.03, espace: 4 * s / 16, graine: g + 5 },
@@ -382,7 +382,7 @@ const Recettes = (() => {
     },
     // --- Sols de terrain ---
     neige: {
-      rampe: 'neige', libelle: 'Neige tassée, quelques creux et éclats',
+      rampe: 'neige', libelle: 'Neige tassée, quelques creux et éclats', effet: 'neige',
       ops: (r, s, g) => [
         ...fond(r, s, g, { sombre: 0.22, clair: 0.22, taille: 9 }),
         { type: 'bruit', couleurs: [r[1]], forme: 'trait', taille: 2, densite: 0.025, espace: 5 * s / 16, graine: g + 5 },
@@ -402,7 +402,7 @@ const Recettes = (() => {
       },
     },
     boue: {
-      rampe: 'boue', libelle: 'Boue, flaques sombres et reflets mouillés',
+      rampe: 'boue', libelle: 'Boue, flaques sombres et reflets mouillés', effet: 'boue',
       ops: (r, s, g) => [
         ...fond(r, s, g, { sombre: 0.3, clair: 0.12, taille: 7 }),
         { type: 'taches', couleurs: [r[1]], densite: 0.12, taille: 4 * s / 16, graine: g + 29 },
@@ -543,7 +543,7 @@ const Recettes = (() => {
     },
     // --- Animées ---
     hautes_herbes: {
-      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un aplat vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour le contour',
+      rampe: 'hautes_herbes', libelle: 'Hautes herbes (celles des rencontres) : un aplat vif semé de petites touffes, qui ondule (animée) ; avec transition_hautes_herbes pour le contour', effet: 'hautes_herbes',
       ops: (r, s) => {
         const u = s / 16, ops = [];
         for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
@@ -555,7 +555,7 @@ const Recettes = (() => {
       animation: (r) => ({ mode: 'balancement', forme: [r[4], r[2]], fond: r[3], amplitude: 1, images: 4, duree: 300 }),
     },
     eau_animee: {
-      rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)',
+      rampe: 'eau', libelle: 'Eau dont les vagues défilent doucement (animée, 8 images)', effet: 'eau_profonde',
       ops: (r, s, g) => RECETTES.eau.ops(r, s, g),
       animation: (r, s) => ({ mode: 'defilement', dx: 2 * s / 16, dy: 0, images: 8, duree: 180 }),
     },
@@ -566,10 +566,10 @@ const Recettes = (() => {
   // et deux pièces voisines se raccordent (les ondulations reviennent tous les s pixels).
   const BORDS = {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
-    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque' },
-    transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable' },
-    transition_hautes_herbes: { libelle: 'Hautes herbes en relief sur l\'herbe rase : bord festonné éclairé en haut, lisière et ombre en bas et à droite (13 tuiles)', dessous: 'herbe', dessus: 'hautes_herbes', style: 'touffu' },
-    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque' },
+    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque', effet: 'eau_profonde' },
+    transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable', effet: 'sable' },
+    transition_hautes_herbes: { libelle: 'Hautes herbes en relief sur l\'herbe rase : bord festonné éclairé en haut, lisière et ombre en bas et à droite (13 tuiles)', dessous: 'herbe', dessus: 'hautes_herbes', style: 'touffu', effet: 'hautes_herbes' },
+    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque', effet: 'eau_basse' },
   };
   const PIECES = [
     ['centre', []], ['haut', ['h']], ['bas', ['b']], ['gauche', ['g']], ['droite', ['d']],
@@ -656,7 +656,7 @@ const Recettes = (() => {
         // La deuxième rangée sous la berge, encore un peu sombre.
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));
       }
-      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}) };
+      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}), ...effetDe(b.effet) };
     });
   }
 
@@ -940,6 +940,9 @@ const Recettes = (() => {
     return pieces;
   }
 
+  // Tafl 1.22 : l'effet au passage que la recette donne à ses tuiles (un préréglage d'effets.js).
+  const effetDe = (nom) => { const e = nom && typeof Effets !== 'undefined' ? Effets.prereglage(nom) : null; return e ? { effet: e } : {}; };
+
   const NOMS = [...Object.keys(RECETTES), ...Object.keys(BORDS), ...Object.keys(GRANDS)];
 
   // Les opérations d'une recette simple. couleur : une couleur de base (#rrggbb) pour une autre teinte.
@@ -951,7 +954,7 @@ const Recettes = (() => {
     return rec.ops(r, Math.max(8, Math.round(taille)), Math.max(1, Math.round(graine)));
   }
 
-  // Les tuiles d'une recette : [{ suffixe, frames: [pixels…], duree? }]. Une recette simple en donne
+  // Les tuiles d'une recette : [{ suffixe, frames: [pixels…], duree?, effet? }] (effet : Tafl 1.22, l'effet au passage). Une recette simple en donne
   // une (animée ou non), une transition en donne 13. lire : PixelArt.lireCouleur pour ce jeu.
   function fabriquer(nom, { taille = 16, graine = 1, couleur = null, lire, style = 'val' }) {
     RAMPES = STYLES[style] || VAL;
@@ -964,9 +967,9 @@ const Recettes = (() => {
     const data = new Uint8ClampedArray(s * s * 4);
     const t = PixelArt.Toile(data, s, s);
     for (const op of rec.ops(r, s, g)) PixelArt.operation(t, op, lire);
-    if (!rec.animation) return [{ suffixe: '', frames: [data] }];
+    if (!rec.animation) return [{ suffixe: '', frames: [data], ...effetDe(rec.effet) }];
     const a = rec.animation(r, s);
-    return [{ suffixe: '', frames: PixelArt.animer(data, s, s, a.mode, a, lire), duree: a.duree }];
+    return [{ suffixe: '', frames: PixelArt.animer(data, s, s, a.mode, a, lire), duree: a.duree, ...effetDe(rec.effet) }];
   }
 
   const libelle = (n) => (RECETTES[n] || BORDS[n] || GRANDS[n]).libelle;

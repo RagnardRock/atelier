@@ -75,7 +75,8 @@ const DonneesAction = (() => {
   });
 
   // Sur un personnage : ses animations, son corps et la portée de son coup (null = ce que Saga choisit).
-  const ANIMATIONS = [['repos', 'Repos (il respire, sur place)'], ['attaque', 'Attaque (son coup)'], ['coup', 'Coup reçu (il recule)'], ['mort', 'Mort (vaincu)']];
+  // Tafl 1.22 (Saga 1.20) : nage, pour tous les packs (une tuile dont l'effet au passage a « nage »).
+  const ANIMATIONS = [['repos', 'Repos (il respire, sur place)'], ['attaque', 'Attaque (son coup)'], ['coup', 'Coup reçu (il recule)'], ['mort', 'Mort (vaincu)'], ['nage', 'Nage (dans l\'eau profonde)']];
   function normPersonnage(p, tileSize = 16) {
     const out = {};
     const anims = {};
@@ -210,13 +211,15 @@ const DonneesAction = (() => {
   }
 
   // --- Sur la fiche d'un personnage : ses animations et ses boîtes ---
-  function formPersonnage(p, work, render, doc) {
+  // action : le pack action (toutes les animations et les boîtes) ; sinon, seulement la nage (Tafl 1.22).
+  function formPersonnage(p, work, render, doc, { action = true } = {}) {
     const { champ, info, section, sel, nombreIn } = U();
     const t = doc.tileSize;
     if (!p.animations || typeof p.animations !== 'object') p.animations = {};
-    let choix = ANIMATIONS[0][0];
+    const liste = action ? ANIMATIONS : ANIMATIONS.filter(([k]) => k === 'nage');
+    let choix = liste[0][0];
     try { choix = localStorage.getItem('tafl.animationChoisie') || choix; } catch { /* sans stockage */ }
-    if (!ANIMATIONS.some(([k]) => k === choix)) choix = ANIMATIONS[0][0];
+    if (!liste.some(([k]) => k === choix)) choix = liste[0][0];
     const boite = el('div');
     // L'éditeur de sprite de Tafl, sur une animation : il croit modifier p.sprite.
     function rendreAnimation() {
@@ -235,15 +238,22 @@ const DonneesAction = (() => {
       copier.disabled = !p.sprite;
       copier.onclick = (ev) => { ev.preventDefault(); if (!p.sprite) return; p.animations[k] = { ...p.sprite, duree: a?.duree || 80 }; rendreAnimation(); };
       boite.replaceChildren(
-        champ('Animation', sel(ANIMATIONS, k, (v) => { choix = v; try { localStorage.setItem('tafl.animationChoisie', v); } catch { /* */ } rendreAnimation(); })),
+        champ('Animation', sel(liste, k, (v) => { choix = v; try { localStorage.setItem('tafl.animationChoisie', v); } catch { /* */ } rendreAnimation(); })),
         ...(a ? [champ('Durée d\'une image', nombreIn(a, 'duree', 16, 2000, 10), 'millisecondes')] : [el('div', { className: 'sprite-actions' }, [copier])]),
         Sprites.editeur(vue, { tileSize: t, palette: doc.palette, change: () => render?.(), tuile: () => null }),
       );
     }
     rendreAnimation();
+    if (!action) {
+      return [
+        section('Animation de nage'),
+        info('Une planche comme le sprite : 4 rangées (face, gauche, droite, dos), qui tourne en boucle quand il est dans une eau dont l\'effet au passage a « Nage » (Tuile › Effet au passage). Sans elle, Saga montre le haut de son corps qui flotte. Dessine-la telle qu\'on la voit : la surface de l\'eau est déjà là.'),
+        boite,
+      ];
+    }
     return [
       section('Temps réel : animations (pack action)'),
-      info('Chaque animation est une planche comme le sprite : 4 rangées (face, gauche, droite, dos). Sans elle, Saga se débrouille : la marche au repos, une lame qui balaie pour l\'attaque, un clignotement pour un coup, un fondu pour la mort.'),
+      info('Chaque animation est une planche comme le sprite : 4 rangées (face, gauche, droite, dos). Sans elle, Saga se débrouille : la marche au repos, une lame qui balaie pour l\'attaque, un clignotement pour un coup, un fondu pour la mort. La nage (Tafl 1.22) vaut pour tous les packs : dans une eau dont l\'effet au passage a « Nage ».'),
       boite,
       section('Temps réel : boîtes de coups'),
       editeurBoites(p, t),

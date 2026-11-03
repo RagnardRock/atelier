@@ -226,6 +226,10 @@ const Son = (() => {
       blesse: () => { note('sawtooth', [300, 110], 0, 0.16, 0.1); note('square', [220, 90], 0.03, 0.12, 0.06); },
       ramasser: () => { note('square', 988, 0, 0.05, 0.06); note('square', 1319, 0.05, 0.08, 0.06); },
       niveau: () => [523, 659, 784, 1046, 1319].forEach((f, i) => note('square', f, i * 0.06, 0.12, 0.07)),
+      // Saga 1.20 : les pas des effets au passage (hautes herbes, eau, sable).
+      pas_herbe: () => { souffle(0, 0.11, 0.16, [4200, 1800]); souffle(0.05, 0.08, 0.1, [3000, 1500]); },
+      pas_eau: () => { souffle(0, 0.16, 0.2, [1400, 380]); note('sine', [520, 900], 0.02, 0.06, 0.05); },
+      pas_sable: () => souffle(0, 0.07, 0.1, [1600, 700]),
     };
 
     // nom : un son intégré (curseur, valider…). reglage : ce que le jeu a choisi pour lui dans Tafl

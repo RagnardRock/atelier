@@ -129,6 +129,7 @@ const IO = (() => {
         if (t.passage && t.passage !== 'auto') tile.passage = t.passage;
         if (t.categorie) tile.categorie = t.categorie;
         if (t.lumiere) tile.lumiere = t.lumiere; // Tafl 0.29 : la tuile éclaire (Saga 0.11)
+        if (t.effet) tile.effet = t.effet; // Tafl 1.22 : l'effet au passage (Saga 1.20)
         return tile;
       }),
     };
@@ -167,7 +168,7 @@ const IO = (() => {
       const sources = Array.isArray(t.frames) && t.frames.length ? t.frames.slice(0, 16) : [t.png];
       const frames = [];
       for (const src of sources) frames.push(await pixels(src));
-      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto', categorie: String(t.categorie || '').slice(0, 60), ...(t.lumiere ? { lumiere: Donnees.normLumiere(t.lumiere) } : {}) });
+      doc.tiles.push({ id: Doc.newId(), name: t.name || Doc.uniqueName(doc, 'tuile'), frames, duration: Number(t.duration) || Doc.DEFAULT_DURATION, passage: ['libre', 'bloque'].includes(t.passage) ? t.passage : 'auto', categorie: String(t.categorie || '').slice(0, 60), ...(t.lumiere ? { lumiere: Donnees.normLumiere(t.lumiere) } : {}), ...(Effets.norm(t.effet) ? { effet: Effets.norm(t.effet) } : {}) });
     }
     if (!doc.tiles.length) Doc.addTile(doc);
     doc.stamps = (Array.isArray(data.tampons) ? data.tampons : []).map((t) => {
@@ -415,6 +416,7 @@ const IO = (() => {
       ...(t.passage && t.passage !== 'auto' ? { passage: t.passage } : {}),
       ...(t.categorie ? { categorie: t.categorie } : {}),
       ...(t.lumiere ? { lumiere: t.lumiere } : {}),
+      ...(t.effet ? { effet: t.effet } : {}),
       ...(Doc.animated(t) ? { images: t.frames.slice(1).map((_f, k) => Doc.tileCanvas(t, s, k + 1).toDataURL('image/png')), duree: t.duration } : {}),
     }));
     // Un tampon part avec la planche si toutes ses tuiles y sont.
@@ -450,6 +452,7 @@ const IO = (() => {
         passage: ['libre', 'bloque'].includes(t?.passage) ? t.passage : null,
         categorie: typeof t?.categorie === 'string' ? t.categorie.trim().slice(0, 60) : '',
         lumiere: Donnees.normLumiere(t?.lumiere),
+        effet: Effets.norm(t?.effet),
         images,
         duree: clamp(Math.round(t?.duree) || Doc.DEFAULT_DURATION, 30, 5000),
       });
@@ -486,6 +489,7 @@ const IO = (() => {
       if (e.passage && (t.passage || 'auto') === 'auto') maj.passage = e.passage;
       if (e.categorie) maj.categorie = e.categorie;
       if (e.lumiere && !t.lumiere) maj.lumiere = e.lumiere;
+      if (e.effet && !t.effet) maj.effet = e.effet;
       if (e.images.length && t.frames.length === 1) { maj.frames = [t.frames[0], ...e.images.filter((f) => f.length === t.frames[0].length)]; maj.duration = e.duree; }
       target.tiles[i] = maj;
     }
