@@ -662,7 +662,7 @@ const Recettes = (() => {
       for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if (estBInt(x, y)) { const k = (y * s + x) * 4; if (data[k + 3]) couleursB.add(`#${[data[k], data[k + 1], data[k + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`); }
       return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}), ...effetDe(b.effet) };
     });
-    for (const p of pieces) if (p.effet?.corps === 'herbes') p.effet = Effets.norm({ ...p.effet, masque: [...couleursB] });
+    for (const p of pieces) if (p.effet && p.effet.corps !== 'aucun') p.effet = Effets.norm({ ...p.effet, masque: [...couleursB] });
     return pieces;
   }
 
