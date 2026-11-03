@@ -88,6 +88,18 @@ const Jeu = (() => {
         for (const im of tu.images) {
           const d = g.getImageData(im.sx, im.sy, taille, taille);
           for (let k = 0; k < d.data.length; k += 4) if (d.data[k + 3] && !garder.has((d.data[k] << 16) | (d.data[k + 1] << 8) | d.data[k + 2])) { d.data[k + 3] = 0; retires++; }
+          // Saga 1.20.2 : ne passe devant que ce qui touche le bas de la case (là où sont ses pieds), colonne par
+          // colonne en remontant. Sur une rive du bas, l'eau au-dessus de la berge est derrière lui, pas devant.
+          // (Un trou d'un ou deux pixels, une fleur dans l'herbe, ne coupe pas la colonne.)
+          const trou = Math.max(2, Math.round(taille / 8));
+          for (let x = 0; x < taille; x++) {
+            let vides = 0, coupe = false;
+            for (let y = taille - 1; y >= 0; y--) {
+              const k = (y * taille + x) * 4;
+              if (coupe) { if (d.data[k + 3]) { d.data[k + 3] = 0; retires++; } continue; }
+              if (d.data[k + 3]) vides = 0; else if (++vides >= trou) coupe = true;
+            }
+          }
           gd.putImageData(d, im.sx, im.sy);
         }
         // Une tuile toute de ces couleurs (le centre de la plaque) se dessine comme sans masque.
