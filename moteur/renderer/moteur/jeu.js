@@ -72,6 +72,7 @@ const Jeu = (() => {
         duree: Math.max(30, Number(liste[i].duration) || 200),
         passage: liste[i].passage === 'libre' ? PASSAGE.libre : liste[i].passage === 'bloque' ? PASSAGE.bloque : PASSAGE.auto,
         lumiere: lumiere(liste[i].lumiere), // Saga 0.11 : une tuile qui éclaire (lampadaire, fenêtre, feu)
+        effet: effet(liste[i].effet), // Saga 1.20 : ce qui arrive à celui qui marche dessus (effets-sol.js)
       });
     }
     return { planche, tuiles };
@@ -90,6 +91,33 @@ const Jeu = (() => {
       intensite: borne(l.intensite, 80, 0, 100) / 100,
       scintille: Boolean(l.scintille),
     };
+  }
+  // Saga 1.20 : l'effet au passage d'une tuile (FORMAT.md › tiles.json › effet) → null s'il n'y en a pas.
+  // corps : aucun | herbes (la tuile repasse devant le bas du corps) | eau (le bas du corps est sous l'eau) ;
+  // cache : la part du corps cachée (0 à 0,9) ; vitesse : un facteur (0,25 à 2) du pas du joueur.
+  const PARTICULES = ['aucune', 'feuilles', 'gouttes', 'poussiere', 'flocons', 'bulles'];
+  const SONS_EFFET = ['herbe', 'eau', 'sable'];
+  function effet(e) {
+    if (!e || typeof e !== 'object') return null;
+    const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : def);
+    const corps = ['herbes', 'eau'].includes(e.corps) ? e.corps : 'aucun';
+    const out = {
+      corps,
+      cache: corps === 'aucun' ? 0 : borne(e.cache, corps === 'eau' ? 50 : 35, 0, 90) / 100,
+      remous: Boolean(e.remous),
+      particules: PARTICULES.includes(e.particules) ? e.particules : 'aucune',
+      couleur: hex(e.couleur, '#ffffff'),
+      nombre: Math.round(borne(e.nombre, 4, 1, 12)),
+      ondes: Boolean(e.ondes),
+      couleur_ondes: hex(e.couleur_ondes, '#ffffff'),
+      traces: borne(e.traces, 0, 0, 30),
+      couleur_traces: hex(e.couleur_traces, '#3a2a1a'),
+      son: son(e.son, SONS_EFFET),
+      vitesse: borne(e.vitesse, 100, 25, 200) / 100,
+      nage: Boolean(e.nage),
+    };
+    const rien = out.corps === 'aucun' && !out.remous && out.particules === 'aucune' && !out.ondes && !out.traces && !out.son && out.vitesse === 1 && !out.nage;
+    return rien ? null : out;
   }
   // Un son du jeu : un chemin sons/… (sans remonter ailleurs), ou un mot (aucune, aucun, pluie…).
   const son = (v, mots = []) => {
@@ -267,7 +295,8 @@ const Jeu = (() => {
       // Saga 1.12 (temps réel) : ses animations (attaque, coup, mort, repos), au format du sprite plus `duree`.
       const anims = p.animations && typeof p.animations === 'object' ? p.animations : {};
       p.animations = {};
-      for (const nom of ['repos', 'attaque', 'coup', 'mort']) {
+      // Saga 1.20 : et sa nage (une tuile dont l'effet au passage a « nage »), pour tous les packs.
+      for (const nom of ['repos', 'attaque', 'coup', 'mort', 'nage']) {
         try {
           const a = await chargerSprite(anims[nom]);
           if (a) p.animations[nom] = { ...a, duree: Math.max(16, Math.min(2000, nombre(anims[nom].duree, 80))) };
@@ -321,5 +350,5 @@ const Jeu = (() => {
     };
   }
 
-  return { charger, ErreurJeu, baseDe, PASSAGE, DIRECTIONS, REBORDS, lumiere, son };
+  return { charger, ErreurJeu, baseDe, PASSAGE, DIRECTIONS, REBORDS, lumiere, son, effet };
 })();

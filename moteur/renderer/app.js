@@ -71,6 +71,7 @@ function creerSaga() {
         { key: 'casesVisibles', label: 'Cases visibles', type: 'range', min: 7, max: 24, step: 1, value: config.casesVisibles, unit: 'en hauteur' },
         { type: 'info', text: 'En zoom automatique, Saga choisit le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur. Un zoom entier garde le pixel art parfaitement net.' },
         { key: 'meteo', label: 'Montrer la météo des cartes', type: 'checkbox', value: config.meteo },
+        { key: 'effetsSol', label: 'Effets au passage (hautes herbes, eau, traces de pas…)', type: 'checkbox', value: config.effetsSol !== false },
         { key: 'theme', label: 'Interface en jeu', type: 'select', value: config.theme || 'jeu', choices: [['jeu', 'Celle choisie par le jeu'], ['verre', 'Verre (sombre, flou)'], ['pixel', 'Pixel (rétro)']] },
         titre('Commandes'),
         { key: 'courirParDefaut', label: 'Courir sans tenir la touche Courir (elle fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },

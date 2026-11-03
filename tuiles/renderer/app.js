@@ -252,6 +252,7 @@ const App = (() => {
         const i = Doc.addTile(doc, p.frames, doc.tiles.some((t) => t.name === nom) ? Doc.uniqueName(doc, nom) : nom, doc.tiles.length, p.duree || undefined);
         if (v.categorie.trim()) doc.tiles[i].categorie = v.categorie.trim();
         if (p.passage && p.passage !== 'auto') doc.tiles[i].passage = p.passage;
+        if (p.effet) doc.tiles[i].effet = { ...p.effet }; // Tafl 1.22 : hautes herbes, eau, sable…
         indices.push(i);
       }
       if (bat) doc.stamps = [...doc.stamps, Doc.newStamp(doc, { name: base, w: bat.l, h: bat.h, cells: indices, dessus: bat.dessus })];
@@ -512,6 +513,7 @@ const App = (() => {
       { label: 'Passage : laisse passer le joueur', checked: doc.tiles[doc.current].passage === 'libre', run: () => setTilePassage('libre') },
       { label: 'Passage : bloque le joueur (arbre, mur, eau…)', checked: doc.tiles[doc.current].passage === 'bloque', run: () => setTilePassage('bloque') },
       { label: doc.tiles[doc.current].lumiere ? 'Lumière de la tuile… (elle éclaire)' : 'Lumière de la tuile… (lampadaire, fenêtre, feu)', checked: Boolean(doc.tiles[doc.current].lumiere), run: () => run(() => tileLight(lot)) },
+      { label: doc.tiles[doc.current].effet ? `Effet au passage… (${Effets.resume(doc.tiles[doc.current].effet)})` : 'Effet au passage… (hautes herbes, eau, sable, neige)', checked: Boolean(doc.tiles[doc.current].effet), run: () => run(() => tileEffect(lot)) },
       null,
       { label: 'Taille des tuiles du jeu…', run: resizeTiles },
     ];
@@ -549,6 +551,63 @@ const App = (() => {
       for (const i of lot) {
         const t = { ...doc.tiles[i] };
         if (lumiere) t.lumiere = { ...lumiere }; else delete t.lumiere;
+        doc.tiles[i] = t;
+      }
+    });
+  }
+
+  // Tafl 1.22 : l'effet au passage d'une tuile (effets.js) : ce qui arrive dans Saga 1.20 à celui qui
+  // marche dessus (jambes cachées dans les herbes, nage, particules, ondes, traces, son, vitesse).
+  async function tileEffect(lot = [api.doc.current]) {
+    const doc = api.doc;
+    const e = { ...Effets.VIDE, ...(doc.tiles[lot[0]].effet || {}) };
+    let son = e.son;
+    const sonChoix = Sons.choix(doc, son, { mots: Effets.SONS, change: (v) => { son = v; } });
+    const CHAMPS = ['corps', 'cache', 'remous', 'nage', 'particules', 'couleur', 'nombre', 'ondes', 'couleur_ondes', 'traces', 'couleur_traces', 'vitesse'];
+    let dernier = '';
+    const v = await Dialogs.form({
+      title: lot.length > 1 ? `Effet au passage de ${lot.length} tuiles` : `Effet au passage de « ${doc.tiles[lot[0]].name} »`,
+      okLabel: 'Appliquer',
+      width: 520,
+      fields: [
+        { key: 'prereglage', label: 'Préréglage', type: 'select', value: '', choices: [['', 'Choisir pour remplir…'], ['aucun', 'Aucun effet'], ...Object.entries(Effets.PREREGLAGES).map(([k, p]) => [k, p.nom])] },
+        { type: 'info', text: 'Dans Saga, pour tous ceux qui marchent sur la tuile : le héros, les personnages, les habitants, les autres joueurs. Ça compte là où c\'est la tuile la plus haute de la case (sans les calques « dessus »).' },
+        { key: 'corps', label: 'Le corps', type: 'select', value: e.corps, choices: Effets.CORPS },
+        { key: 'cache', label: 'Part cachée', type: 'range', value: e.cache, min: 0, max: 90, step: 5, unit: '% du bas' },
+        { key: 'remous', label: 'Mouvement : la touffe frémit quand on y entre (herbes), le corps tangue (eau)', type: 'checkbox', value: e.remous },
+        { key: 'nage', label: 'Nage : le personnage prend son animation « nage » s\'il en a une (sa fiche, Jeu › Données)', type: 'checkbox', value: e.nage },
+        { key: 'particules', label: 'Particules à chaque pas', type: 'select', value: e.particules, choices: Effets.PARTICULES },
+        { key: 'couleur', label: 'Leur couleur', type: 'color', value: e.couleur },
+        { key: 'nombre', label: 'Combien', type: 'range', value: e.nombre, min: 1, max: 12, step: 1, unit: 'par pas' },
+        { key: 'ondes', label: 'Ondes autour de lui (l\'eau)', type: 'checkbox', value: e.ondes },
+        { key: 'couleur_ondes', label: 'Couleur des ondes et de la surface', type: 'color', value: e.couleur_ondes },
+        { key: 'traces', label: 'Traces de pas', type: 'range', value: e.traces, min: 0, max: 30, step: 0.5, unit: 's (0 = aucune)' },
+        { key: 'couleur_traces', label: 'Couleur des traces', type: 'color', value: e.couleur_traces },
+        { type: 'element', element: Sons.ligne('Son du pas', sonChoix) },
+        { key: 'vitesse', label: 'Vitesse du joueur', type: 'range', value: e.vitesse, min: 25, max: 200, step: 5, unit: '% (100 = normale)' },
+        { type: 'info', text: 'Les traces et les ondes se voient mieux sur une tuile unie. Le joueur peut couper ces effets dans les options de Saga ; la vitesse, elle, compte toujours.' },
+      ],
+      onInput: (vals, f) => {
+        if (vals.prereglage && vals.prereglage !== dernier) {
+          dernier = vals.prereglage;
+          const p = vals.prereglage === 'aucun' ? Effets.VIDE : { ...Effets.VIDE, ...Effets.prereglage(vals.prereglage) };
+          for (const k of CHAMPS) f.setValue(k, p[k]);
+          son = p.son; sonChoix.element.querySelector('select').value = p.son;
+          return;
+        }
+        f.inputs.cache.row.hidden = vals.corps === 'aucun';
+        f.inputs.nage.row.hidden = vals.corps !== 'eau';
+        f.inputs.couleur.row.hidden = f.inputs.nombre.row.hidden = vals.particules === 'aucune';
+        f.inputs.couleur_ondes.row.hidden = !vals.ondes && vals.corps !== 'eau';
+        f.inputs.couleur_traces.row.hidden = !vals.traces;
+      },
+    });
+    if (!v) return;
+    const effet = Effets.norm({ ...v, son });
+    Doc.change(doc, 'Effet au passage', () => {
+      for (const i of lot) {
+        const t = { ...doc.tiles[i] };
+        if (effet) t.effet = { ...effet }; else delete t.effet;
         doc.tiles[i] = t;
       }
     });

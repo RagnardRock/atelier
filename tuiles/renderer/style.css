@@ -1257,6 +1257,9 @@ body.resizing-row { cursor: row-resize; }
 =======
 
 /* Tafl 0.29 : une tuile qui éclaire (un point lumineux de sa couleur), et le choix d'un son du jeu. */
+/* Tafl 1.22 : une tuile qui a un effet au passage (herbes, eau, traces) : une petite vague en bas à gauche. */
+.tile-effet { position: absolute; left: 3px; bottom: 3px; width: 10px; height: 5px; border-radius: 0 0 5px 5px; background: #7fd0ff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.tile-effet.herbes { background: #6fdc6f; }
 .tile-lumiere { position: absolute; right: 3px; top: 3px; width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 0 6px 1px rgba(255, 220, 140, 0.9); }
 .son-champ { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
 .son-champ select { flex: 1; min-width: 0; }

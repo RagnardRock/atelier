@@ -493,9 +493,10 @@ const TempsReel = (() => {
         const d = k < 0.55 ? -k * 3 : (1 - k) * 6;
         ox = Math.round(dx * d); oy = Math.round(dy * d);
       }
+      // Saga 1.20 : par le moteur (hote.corps), pour l'effet au passage de sa case (herbes, eau…).
+      const cle = e === heros ? 'joueur' : e;
       if (anim) {
-        Sprites.ombre(ctx, x + ox, y + oy, t, 1);
-        Sprites.dessinerAnimation(ctx, anim, e.dir, temps, x + ox, y + oy, t, boucle);
+        hote.corps({ perso, couleur, direction: e.dir, anim: { anim, temps, boucle }, x: x + ox, y: y + oy, cle }, maintenant, ctx);
       } else {
         const pas = e.bouge ? 1 + Math.floor(e.marche * 8) : 0;
         if (e.mort && !anim) {
@@ -505,7 +506,7 @@ const TempsReel = (() => {
           ctx.scale(1 + k * 0.4, 1 - k * 0.7);
           ctx.translate(-(x + t / 2), -(y + t));
         }
-        hote.corps({ perso, couleur, direction: e.dir, pas, x: x + ox, y: y + oy }, maintenant, ctx);
+        hote.corps({ perso, couleur, direction: e.dir, pas, x: x + ox, y: y + oy, cle: e.mort ? null : cle }, maintenant, ctx);
       }
       ctx.restore();
       if (e === heros && e.coup && !anim) dessinerEpee(ctx, cam);

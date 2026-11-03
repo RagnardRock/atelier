@@ -295,6 +295,11 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Un bâtiment hors du menu Construire** (module gestion) : `menu: false` le réserve aux événements (`gestion_construire`, ou `gestion_placer` qui le nomme). `condition` ne le montre qu'une fois débloqué (grisé avant avec `verrouille_visible`).
 - **Une zone constructible au décor effaçable** (`decor: "efface"`) : le décor (les calques au-dessus du sol) ne gêne pas la pose, et disparaît sous les bâtiments posés (dessin et passage). Pour les modules : le crochet `degage(o, x, y)` (MODULES.md), et `hote.libre(x, y, true)` qui ne regarde que le sol.
 
+## Ce que fait Saga 1.20 : les effets au passage (avec Tafl 1.22)
+
+- **Une tuile dit ce qui arrive à celui qui marche dessus** (`effet` dans `tuiles.tafl`, FORMAT.md › Effets au passage) : dans les hautes herbes, la tuile repasse devant ses jambes et la touffe frémit quand il y entre ; dans l'eau, le bas de son corps est sous la surface avec une ligne d'eau et des ondes, il tangue, et il prend son animation `nage` s'il en a une ; à chaque pas, des feuilles, des gouttes, de la poussière, des flocons ou des bulles ; des traces de pas qui s'effacent (sable, neige, boue) ; un bruit de pas (froissement, clapotis, pas feutré, ou un fichier) ; une vitesse pour le joueur. Pour tout le monde : le héros, les PNJ, les habitants des modules, les autres joueurs, le temps réel (`moteur/effets-sol.js`).
+- **Options › Effets au passage** : le joueur peut les couper (la vitesse compte toujours).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
@@ -318,6 +323,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/equipe-libre.js` | Saga 1.0 : l'écran où le joueur compose son équipe — ses créatures, leurs quatre attaques et leur objet (les jeux « arène »). |
 | `renderer/app.js` | L'interface autour du jeu : accueil, menu de pause, réglages, plein écran, raccourcis. |
 | `renderer/moteur/jeu.js` | Le chargement : les textes du dossier de jeu deviennent des objets prêts à jouer (toutes les tuiles recollées dans une planche). |
+| `renderer/moteur/effets-sol.js` | Saga 1.20 : les effets au passage des tuiles (corps caché, frémissement, particules, ondes, traces, son). |
 | `renderer/moteur/monde.js` | La partie en cours (interrupteurs, quêtes, sac…), les conditions des événements, et ce qu'on demande à une carte (bloqué ? téléporteur ? qui est là ?). |
 | `renderer/moteur/moteur.js` | La boucle du jeu : commandes, déplacements, caméra, dessin des calques et des personnages, fondus. |
 | `renderer/moteur/ambiance.js` | La lumière (teinte de la carte, jour et nuit, lampes) et la météo. |

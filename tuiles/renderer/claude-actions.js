@@ -213,7 +213,7 @@
   const lignesTuiles = (doc, indices) => {
     const cle = (i) => {
       const t = doc.tiles[i];
-      return `${sansNom(t) ? 'sans nom' : t.name}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${t.frames.length > 1 ? ' {animée}' : ''}`;
+      return `${sansNom(t) ? 'sans nom' : t.name}${t.passage && t.passage !== 'auto' ? ` [${t.passage}]` : ''}${t.frames.length > 1 ? ' {animée}' : ''}${t.effet ? ` (effet : ${Effets.resume(t.effet)})` : ''}`;
     };
     const out = [];
     for (let k = 0; k < indices.length; k++) {
@@ -588,6 +588,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
             const i = Doc.addTile(doc, t.frames, doc.tiles.some((x) => x.name === t.nom) ? Doc.uniqueName(doc, t.nom) : t.nom, doc.tiles.length, t.duree || undefined);
             if (a.categorie) doc.tiles[i].categorie = String(a.categorie);
             if (t.passage) doc.tiles[i].passage = t.passage;
+            if (t.effet) doc.tiles[i].effet = { ...t.effet };
             indices.push(i);
           }
           if (bat) doc.stamps = [...doc.stamps, Doc.newStamp(doc, { name: base, w: bat.l, h: bat.h, cells: indices, dessus: bat.dessus })];
@@ -952,15 +953,22 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     nommer: {
       icone: 'tag',
       libelle: (a) => `Nomme ${(a.tuiles || []).length + (a.tampons || []).length} groupe(s) de tuiles et tampons`,
-      description: 'Donne un nom court et parlant (« herbe haute », « toit rouge coin haut gauche », « porte d\'arène ») à des tuiles et des tampons, en un seul appel ; le nom est gardé dans le jeu et sert ensuite au catalogue et à plan_carte. tuiles : [{ tuiles : « 12-15, 40 » ou [numéros], nom, passage : auto, libre ou bloque (facultatif) }] (des tuiles qui vont ensemble peuvent garder le même nom) ; tampons : [{ tampon : numéro ou nom, nom, dessus : rangées du haut devant le joueur (facultatif) }]. Les numéros ne changent pas.',
+      description: `Donne un nom court et parlant (« herbe haute », « toit rouge coin haut gauche », « porte d'arène ») à des tuiles et des tampons, en un seul appel ; le nom est gardé dans le jeu et sert ensuite au catalogue et à plan_carte. tuiles : [{ tuiles : « 12-15, 40 » ou [numéros], nom, passage : auto, libre ou bloque (facultatif), effet (facultatif, Tafl 1.22 : l'effet au passage dans Saga : "aucun", un préréglage ${Object.keys(Effets.PREREGLAGES).join(', ')}, ou un objet { corps: aucun|herbes|eau, cache: 0-90 (% du bas du corps caché), remous, nage, particules: aucune|feuilles|gouttes|poussiere|flocons|bulles, couleur, nombre 1-12, ondes, couleur_ondes, traces: secondes 0-30, couleur_traces, son: ""|herbe|eau|sable|sons/…, vitesse: 25-200 %}) }] (des tuiles qui vont ensemble peuvent garder le même nom) ; tampons : [{ tampon : numéro ou nom, nom, dessus : rangées du haut devant le joueur (facultatif) }]. Les numéros ne changent pas.`,
       schema: { type: 'object', properties: {
-        tuiles: { type: 'array', items: { type: 'object', properties: { tuiles: { type: ['string', 'array', 'number'] }, nom: { type: 'string' }, passage: { type: 'string', enum: ['auto', 'libre', 'bloque'] } }, required: ['tuiles'] } },
+        tuiles: { type: 'array', items: { type: 'object', properties: { tuiles: { type: ['string', 'array', 'number'] }, nom: { type: 'string' }, passage: { type: 'string', enum: ['auto', 'libre', 'bloque'] }, effet: { type: ['string', 'object'] } }, required: ['tuiles'] } },
         tampons: { type: 'array', items: { type: 'object', properties: { tampon: { type: ['string', 'number'] }, nom: { type: 'string' }, dessus: nombre }, required: ['tampon'] } },
       } },
       faire: (a) => {
         const doc = besoinJeu();
         // Tout est vérifié avant de changer quoi que ce soit.
-        const tuiles = (a.tuiles || []).map((e) => ({ liste: lirePlages(doc, e.tuiles), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), passage: e.passage }));
+        const tuiles = (a.tuiles || []).map((e) => {
+          // Tafl 1.22 : l'effet au passage ('aucun', un préréglage ou un objet) ; undefined = on n'y touche pas.
+          let effet;
+          if (e.effet === 'aucun' || e.effet === null) effet = null;
+          else if (typeof e.effet === 'string') { effet = Effets.prereglage(e.effet); if (!effet) throw new Error(`effet : « ${e.effet} » inconnu. Possibles : aucun, ${Object.keys(Effets.PREREGLAGES).join(', ')}, ou un objet.`); }
+          else if (e.effet && typeof e.effet === 'object') effet = Effets.norm(e.effet);
+          return { liste: lirePlages(doc, e.tuiles), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), passage: e.passage, effet };
+        });
         const tampons = (a.tampons || []).map((e) => ({ k: tamponParNumeroOuNom(doc, e.tampon), nom: e.nom === undefined ? null : String(e.nom).trim().slice(0, 80), dessus: e.dessus }));
         let n = 0;
         Doc.change(doc, 'Nommer des tuiles (Loki)', () => {
@@ -968,6 +976,8 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           for (const e of tuiles) {
             for (const i of e.liste) {
               copie[i] = { ...copie[i], ...(e.nom ? { name: e.nom } : {}), ...(['auto', 'libre', 'bloque'].includes(e.passage) ? { passage: e.passage } : {}) };
+              if (e.effet) copie[i].effet = { ...e.effet };
+              else if (e.effet === null) delete copie[i].effet;
               n++;
             }
           }
