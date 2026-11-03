@@ -14,7 +14,7 @@
 //   fx.en(carte, jeu, x, y)                       l'effet de la case (ou null)
 //   fx.sous(carte, jeu, cle, px, py, dir, now)    suivre un personnage (pixels de la carte) → { ef, i } ou null
 //   fx.dessinerSol(ctx, o)                        traces, ondes, touffes qui frémissent (sous les personnages)
-//   fx.devant(ctx, o, px, py)                     la tuile repasse devant le bas du corps (corps « herbes »)
+//   fx.devant(ctx, o, px, py)                     la tuile repasse devant le bas du corps (herbes, rive d'eau à masque)
 //   fx.surface(ctx, ef, x, ligne, t, now)         la ligne d'eau autour du corps (corps « eau »)
 //   fx.dessinerParticules(ctx, o)                 les particules (devant les personnages)
 //   o = { carte, jeu, cam, maintenant, tuile(n, x, y), devant(n, x, y) → true si la tuile a un masque }
@@ -119,7 +119,7 @@ const EffetsSol = (() => {
         }
         s.vu = now;
       }
-      return ef ? { ef, i, cx, cy } : null;
+      return ef ? { ef, i, cx, cy, n: tuiles[i] } : null;
     }
 
     // Le décalage d'une touffe qui frémit (en pixels), 0 sinon.
@@ -184,7 +184,7 @@ const EffetsSol = (() => {
       for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
         if (cx < 0 || cy < 0 || cx >= carte.largeur || cy >= carte.hauteur) continue;
         const i = cy * carte.largeur + cx, ef = grille[i];
-        if (!ef || ef.corps !== 'herbes' || ef.cache <= 0 || tuiles[i] < 0) continue;
+        if (!ef || ef.corps === 'aucun' || ef.cache <= 0 || tuiles[i] < 0) continue;
         // La bande cachée : le bas de son corps (cache × la hauteur d'une case), dans cette case.
         const haut = Math.max(py + Math.round(t * (1 - ef.cache)), cy * t), bas = Math.min(py + t, cy * t + t);
         const gauche = Math.max(px, cx * t), droite = Math.min(px + t, cx * t + t);

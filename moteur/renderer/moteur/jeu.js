@@ -84,12 +84,26 @@ const Jeu = (() => {
       for (const tu of tuiles) {
         if (!tu.effet?.masque?.length) continue;
         const garder = new Set(tu.effet.masque.map((c) => parseInt(c.slice(1), 16)));
+        let retires = 0;
         for (const im of tu.images) {
           const d = g.getImageData(im.sx, im.sy, taille, taille);
-          for (let k = 0; k < d.data.length; k += 4) if (!garder.has((d.data[k] << 16) | (d.data[k + 1] << 8) | d.data[k + 2])) d.data[k + 3] = 0;
+          for (let k = 0; k < d.data.length; k += 4) if (d.data[k + 3] && !garder.has((d.data[k] << 16) | (d.data[k + 1] << 8) | d.data[k + 2])) { d.data[k + 3] = 0; retires++; }
+          // Saga 1.20.2 : ne passe devant que ce qui touche le bas de la case (là où sont ses pieds), colonne par
+          // colonne en remontant. Sur une rive du bas, l'eau au-dessus de la berge est derrière lui, pas devant.
+          // (Un trou d'un ou deux pixels, une fleur dans l'herbe, ne coupe pas la colonne.)
+          const trou = Math.max(2, Math.round(taille / 8));
+          for (let x = 0; x < taille; x++) {
+            let vides = 0, coupe = false;
+            for (let y = taille - 1; y >= 0; y--) {
+              const k = (y * taille + x) * 4;
+              if (coupe) { if (d.data[k + 3]) { d.data[k + 3] = 0; retires++; } continue; }
+              if (d.data[k + 3]) vides = 0; else if (++vides >= trou) coupe = true;
+            }
+          }
           gd.putImageData(d, im.sx, im.sy);
         }
-        tu.devant = true;
+        // Une tuile toute de ces couleurs (le centre de la plaque) se dessine comme sans masque.
+        tu.devant = retires > 0;
       }
       return { planche, tuiles, devant };
     }
@@ -133,8 +147,8 @@ const Jeu = (() => {
       son: son(e.son, SONS_EFFET),
       vitesse: borne(e.vitesse, 100, 25, 200) / 100,
       nage: Boolean(e.nage),
-      // Saga 1.20.1 : herbes, seuls les pixels de ces couleurs passent devant le corps (vide : toute la tuile).
-      masque: corps === 'herbes' && Array.isArray(e.masque) ? e.masque.filter((c) => /^#[0-9a-f]{6}$/i.test(c || '')).slice(0, 64).map((c) => c.toLowerCase()) : [],
+      // Saga 1.20.1 : herbes et eau, seuls les pixels de ces couleurs passent devant le corps (vide : toute la tuile).
+      masque: corps !== 'aucun' && Array.isArray(e.masque) ? e.masque.filter((c) => /^#[0-9a-f]{6}$/i.test(c || '')).slice(0, 64).map((c) => c.toLowerCase()) : [],
     };
     const rien = out.corps === 'aucun' && !out.remous && out.particules === 'aucune' && !out.ondes && !out.traces && !out.son && out.vitesse === 1 && !out.nage;
     return rien ? null : out;

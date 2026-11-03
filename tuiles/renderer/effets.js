@@ -55,9 +55,9 @@ const Effets = (() => {
       son: son(e.son),
       vitesse: Math.round(nombre(e.vitesse, 100, 25, 200)),
       nage: Boolean(e.nage),
-      // Tafl 1.22.1 : herbes, ce qui passe devant le corps : seulement les pixels de ces couleurs (les
+      // Tafl 1.22.1 : herbes et eau, ce qui passe devant le corps : seulement les pixels de ces couleurs (les
       // hautes herbes d'une tuile de bord, pas l'herbe rase) ; vide = toute la tuile.
-      masque: corps === 'herbes' ? couleurs(e.masque) : [],
+      masque: corps !== 'aucun' ? couleurs(e.masque) : [],
     };
     const rien = out.corps === 'aucun' && !out.remous && out.particules === 'aucune' && !out.ondes && !out.traces && !out.son && out.vitesse === 100 && !out.nage;
     return rien ? null : out;
@@ -69,7 +69,7 @@ const Effets = (() => {
     if (!e) return 'aucun';
     const bouts = [];
     if (e.corps === 'herbes') bouts.push(`bas du corps caché ${e.cache} %${e.masque?.length ? ` (${e.masque.length} couleurs)` : ''}`);
-    if (e.corps === 'eau') bouts.push(`dans l'eau ${e.cache} %`);
+    if (e.corps === 'eau') bouts.push(`dans l'eau ${e.cache} %${e.masque?.length ? ` (${e.masque.length} couleurs)` : ''}`);
     if (e.nage) bouts.push('nage');
     if (e.remous) bouts.push(e.corps === 'eau' ? 'il tangue' : 'frémit');
     if (e.particules !== 'aucune') bouts.push(PARTICULES.find(([k]) => k === e.particules)[1].split(',')[0].toLowerCase());

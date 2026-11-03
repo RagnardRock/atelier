@@ -255,7 +255,7 @@ Le moteur pose sur la carte une seule couche de lumière, en « produit » : la 
 |---|---|---|
 | `corps` | `"aucun"` | `"herbes"` : la tuile repasse devant le bas du corps (comme les hautes herbes de Pokémon) ; `"eau"` : le bas du corps est sous la surface, avec une ligne d'eau autour ; `"aucun"` : rien ne se cache. |
 | `cache` | 35 (herbes), 50 (eau) | La part du corps cachée, en % de la hauteur d'une case, depuis les pieds (0 à 90). |
-| `masque` | `[]` | (Tafl 1.22.1) Herbes : seuls les pixels de ces couleurs (`"#rrggbb"`, 64 au plus) passent devant le corps, les autres restent derrière lui. Pour une tuile de bord, moitié hautes herbes, moitié herbe rase : les couleurs des hautes herbes. Vide : toute la tuile. |
+| `masque` | `[]` | (Tafl 1.22.1, l'eau en 1.22.2) Herbes et eau : seuls les pixels de ces couleurs (`"#rrggbb"`, 64 au plus) passent devant le corps, les autres restent derrière lui. Pour une tuile de bord, moitié hautes herbes (ou eau), moitié herbe rase (ou berge) : les couleurs des hautes herbes (ou de l'eau). Sur une rive à masque, le corps n'est plus coupé par une ligne : c'est l'eau de la tuile qui passe devant, sans ligne d'eau. Une tuile toute de ces couleurs se comporte comme sans masque. Vide : toute la tuile. |
 | `remous` | `false` | La tuile frémit quand on y entre (avec un masque, seulement ses pixels). Eau : le corps tangue doucement. |
 | `nage` | `false` | Eau : le personnage prend son animation `nage` (voir `personnages.json`) s'il en a une ; sinon le haut de son corps flotte. |
 | `particules` | `"aucune"` | À chaque pas : `"feuilles"`, `"gouttes"`, `"poussiere"`, `"flocons"` ou `"bulles"`. |

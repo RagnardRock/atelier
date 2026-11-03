@@ -577,7 +577,7 @@ const App = (() => {
         { key: 'corps', label: 'Le corps', type: 'select', value: e.corps, choices: Effets.CORPS },
         { key: 'cache', label: 'Part cachée', type: 'range', value: e.cache, min: 0, max: 90, step: 5, unit: '% du bas' },
         { key: 'masque', label: 'Ce qui passe devant', type: 'select', value: e.masque?.length ? 'garder' : '', choices: choixMasque },
-        { type: 'info', text: 'Pour une tuile de bord (moitié hautes herbes, moitié herbe rase) : choisis la tuile pleine de hautes herbes. Seuls ses pixels de mêmes couleurs passent devant le personnage, pas l\'herbe rase.' },
+        { type: 'info', text: 'Pour une tuile de bord (moitié hautes herbes ou eau, moitié herbe rase ou berge) : choisis la tuile pleine (hautes herbes, eau). Seuls ses pixels de mêmes couleurs passent devant le personnage, pas le reste.' },
         { key: 'remous', label: 'Mouvement : la tuile frémit quand on y entre, le corps tangue (eau)', type: 'checkbox', value: e.remous },
         { key: 'nage', label: 'Nage : le personnage prend son animation « nage » s\'il en a une (sa fiche, Jeu › Données)', type: 'checkbox', value: e.nage },
         { key: 'particules', label: 'Particules à chaque pas', type: 'select', value: e.particules, choices: Effets.PARTICULES },
@@ -600,7 +600,7 @@ const App = (() => {
           return;
         }
         f.inputs.cache.row.hidden = vals.corps === 'aucun';
-        f.inputs.masque.row.hidden = vals.corps !== 'herbes';
+        f.inputs.masque.row.hidden = vals.corps === 'aucun';
         f.inputs.nage.row.hidden = vals.corps !== 'eau';
         f.inputs.couleur.row.hidden = f.inputs.nombre.row.hidden = vals.particules === 'aucune';
         f.inputs.couleur_ondes.row.hidden = !vals.ondes && vals.corps !== 'eau';

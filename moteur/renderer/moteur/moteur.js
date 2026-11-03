@@ -1246,6 +1246,14 @@ const Moteur = (() => {
       const ligne = y + Math.round(t * (1 - ef.cache));
       // Une animation de nage (Tafl : la fiche du personnage) remplace la marche ; pas un coup en cours (temps réel).
       const nage = ef.nage && (!anim || anim.anim === perso?.animations?.repos) ? perso?.animations?.nage : null;
+      // Saga 1.20.1 : une rive (une tuile à masque, moitié eau, moitié berge) : pas de ligne coupée, seule
+      // l'eau de la tuile repasse devant le bas du corps (comme les herbes).
+      if (jeu.tuiles[sous.n]?.devant) {
+        if (nage) Sprites.dessinerAnimation(ctx, nage, direction, maintenant / 1000, x, y + tangue, t, true);
+        else corps(hy + tangue, false);
+        effets.devant(ctx, oEffets(maintenant), x + cam.x, y + cam.y);
+        return;
+      }
       if (nage) Sprites.dessinerAnimation(ctx, nage, direction, maintenant / 1000, x, y + tangue, t, true);
       else {
         ctx.save();
