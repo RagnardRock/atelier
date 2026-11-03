@@ -604,7 +604,10 @@ const Recettes = (() => {
     };
     const A = peindre(b.dessous), B = peindre(b.dessus);
     const ra = RAMPES[RECETTES[b.dessous].rampe], rb = RAMPES[RECETTES[b.dessus].rampe];
-    return PIECES.map(([suffixe, cotes, interieur]) => {
+    // Tafl 1.22.1 : les couleurs du côté « dessus » de toutes les pièces : le masque de l'effet au passage
+    // (dans Saga, seules les hautes herbes passent devant le corps, pas l'herbe rase du bord).
+    const couleursB = new Set();
+    const pieces = PIECES.map(([suffixe, cotes, interieur]) => {
       // estBInt(x, y) : ce pixel (même hors de la tuile, pour les bords) est-il « dessus » ?
       const estBInt = (x, y) => !cotes.length || (interieur ? !zone(cotes, x, y, -1) : zone(cotes, x, y, 1));
       const data = new Uint8ClampedArray(s * s * 4);
@@ -656,8 +659,11 @@ const Recettes = (() => {
         // La deuxième rangée sous la berge, encore un peu sombre.
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));
       }
+      for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if (estBInt(x, y)) { const k = (y * s + x) * 4; if (data[k + 3]) couleursB.add(`#${[data[k], data[k + 1], data[k + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`); }
       return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}), ...effetDe(b.effet) };
     });
+    for (const p of pieces) if (p.effet?.corps === 'herbes') p.effet = Effets.norm({ ...p.effet, masque: [...couleursB] });
+    return pieces;
   }
 
   // --- Grands objets : bâtiments et arbres (Tafl 1.15) ---

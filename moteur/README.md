@@ -299,6 +299,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 
 - **Une tuile dit ce qui arrive à celui qui marche dessus** (`effet` dans `tuiles.tafl`, FORMAT.md › Effets au passage) : dans les hautes herbes, la tuile repasse devant ses jambes et la touffe frémit quand il y entre ; dans l'eau, le bas de son corps est sous la surface avec une ligne d'eau et des ondes, il tangue, et il prend son animation `nage` s'il en a une ; à chaque pas, des feuilles, des gouttes, de la poussière, des flocons ou des bulles ; des traces de pas qui s'effacent (sable, neige, boue) ; un bruit de pas (froissement, clapotis, pas feutré, ou un fichier) ; une vitesse pour le joueur. Pour tout le monde : le héros, les PNJ, les habitants des modules, les autres joueurs, le temps réel (`moteur/effets-sol.js`).
 - **Options › Effets au passage** : le joueur peut les couper (la vitesse compte toujours).
+- **Saga 1.20.1** : le `masque` d'un effet (les couleurs qui passent devant le corps) : sur un bord de hautes herbes, seule l'herbe haute cache le personnage, plus l'herbe rase. La planche « devant » est préparée au chargement (`jeu.devant`).
 
 ## La suite
 

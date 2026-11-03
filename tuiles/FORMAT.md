@@ -255,7 +255,8 @@ Le moteur pose sur la carte une seule couche de lumière, en « produit » : la 
 |---|---|---|
 | `corps` | `"aucun"` | `"herbes"` : la tuile repasse devant le bas du corps (comme les hautes herbes de Pokémon) ; `"eau"` : le bas du corps est sous la surface, avec une ligne d'eau autour ; `"aucun"` : rien ne se cache. |
 | `cache` | 35 (herbes), 50 (eau) | La part du corps cachée, en % de la hauteur d'une case, depuis les pieds (0 à 90). |
-| `remous` | `false` | Herbes : la touffe frémit quand on y entre. Eau : le corps tangue doucement. |
+| `masque` | `[]` | (Tafl 1.22.1) Herbes : seuls les pixels de ces couleurs (`"#rrggbb"`, 64 au plus) passent devant le corps, les autres restent derrière lui. Pour une tuile de bord, moitié hautes herbes, moitié herbe rase : les couleurs des hautes herbes. Vide : toute la tuile. |
+| `remous` | `false` | La tuile frémit quand on y entre (avec un masque, seulement ses pixels). Eau : le corps tangue doucement. |
 | `nage` | `false` | Eau : le personnage prend son animation `nage` (voir `personnages.json`) s'il en a une ; sinon le haut de son corps flotte. |
 | `particules` | `"aucune"` | À chaque pas : `"feuilles"`, `"gouttes"`, `"poussiere"`, `"flocons"` ou `"bulles"`. |
 | `couleur`, `nombre` | `#ffffff`, 4 | Leur couleur, et combien partent à chaque pas (1 à 12). |
@@ -1394,5 +1395,5 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 1.12** : le module `roguelite` (Saga 1.14) : `salle` dans les cartes, `donnees/perks.json`, `donnees/ameliorations.json`, `modules_reglages.roguelite`, `etage_min` et `etage_max` dans les rencontres du pack action, ses commandes et conditions `roguelite_…`, `modules.roguelite` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.13** : le module `"relations"` (Saga 1.15) : `donnees/relations.json`, `modules_reglages.relations`, les commandes `relation_parler`, `relation_offrir`, `relation_points` et `relation_ecran`, les conditions `relation_niveau` et `relation_parle`, `relations` dans la sauvegarde ; `habitants_noms` dans les réglages du module gestion. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.16** : l'action `jour` de la commande `variable`, les conditions `jours_depuis` et `heure`, `apparence` dans les pages des événements, `reveil` dans les événements (Saga 1.16). Des champs en plus, donc la version reste 1.
-- **Version 1, ajouts de Tafl 1.22** : `effet` dans les tuiles, l'animation `nage` des personnages (Saga 1.20). Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.22** : `effet` dans les tuiles (et son `masque` en 1.22.1), l'animation `nage` des personnages (Saga 1.20). Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.17** : les commandes `deplacer`, `regarder`, `camera`, `fondu`, `secouer`, `bulle` et `cinema` (Saga 1.17). Des champs en plus, donc la version reste 1.

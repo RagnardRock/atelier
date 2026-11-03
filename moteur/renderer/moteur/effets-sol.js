@@ -17,7 +17,7 @@
 //   fx.devant(ctx, o, px, py)                     la tuile repasse devant le bas du corps (corps « herbes »)
 //   fx.surface(ctx, ef, x, ligne, t, now)         la ligne d'eau autour du corps (corps « eau »)
 //   fx.dessinerParticules(ctx, o)                 les particules (devant les personnages)
-//   o = { carte, jeu, cam, maintenant, tuile(n, x, y) }
+//   o = { carte, jeu, cam, maintenant, tuile(n, x, y), devant(n, x, y) → true si la tuile a un masque }
 
 const EffetsSol = (() => {
   const FRISSON = 380;     // ms : une touffe qui frémit
@@ -79,7 +79,8 @@ const EffetsSol = (() => {
     const pieds = (cx, cy, t) => ({ x: cx * t + t / 2, y: cy * t + t * 0.86 });
 
     function entrer(ef, i, cx, cy, dir, cle, t, now) {
-      if (ef.remous && ef.corps === 'herbes') frissons.set(i, now);
+      // La touffe frémit (herbes, ou un bord d'herbes qui ne cache rien) ; dans l'eau, c'est le corps qui tangue.
+      if (ef.remous && ef.corps !== 'eau') frissons.set(i, now);
       const p = pieds(cx, cy, t), u = t / 16;
       const s = SORTES[ef.particules];
       if (s) {
@@ -130,7 +131,7 @@ const EffetsSol = (() => {
       return Math.round(Math.sin(k * Math.PI * 4) * (1 - k) * Math.max(1, t / 16));
     }
 
-    function dessinerSol(ctx, { carte, jeu, cam, maintenant: now, tuile }) {
+    function dessinerSol(ctx, { carte, jeu, cam, maintenant: now, devant: dessus }) {
       preparer(carte, jeu);
       const t = jeu.taille, u = t / 16;
       // Les personnages qu'on ne voit plus depuis 2 s sont oubliés (un PNJ parti, un joueur déconnecté).
@@ -168,14 +169,15 @@ const EffetsSol = (() => {
         const x = cx * t - cam.x, y = cy * t - cam.y;
         ctx.save();
         ctx.beginPath(); ctx.rect(x, y, t, t); ctx.clip();
-        tuile(tuiles[i], x + dx, y);
-        tuile(tuiles[i], x + dx - Math.sign(dx) * t, y);
+        // Une tuile à masque (un bord) : seules ses hautes herbes bougent ; sinon toute la tuile, et le vide
+        // laissé d'un côté est comblé par elle-même (elle se raccorde).
+        if (!dessus(tuiles[i], x + dx, y)) dessus(tuiles[i], x + dx - Math.sign(dx) * t, y);
         ctx.restore();
       }
     }
 
     // Corps « herbes » : la tuile de chaque case que touchent ses pieds repasse devant le bas du corps.
-    function devant(ctx, { carte, jeu, cam, maintenant: now, tuile }, px, py) {
+    function devant(ctx, { carte, jeu, cam, maintenant: now, devant: dessus }, px, py) {
       const t = jeu.taille;
       const x0 = Math.floor(px / t), x1 = Math.floor((px + t - 1) / t);
       const y0 = Math.floor((py + t * 0.1) / t), y1 = Math.floor((py + t - 1) / t);
@@ -190,9 +192,10 @@ const EffetsSol = (() => {
         ctx.save();
         ctx.beginPath(); ctx.rect(gauche - cam.x, haut - cam.y, droite - gauche, bas - haut); ctx.clip();
         const dx = frisson(i, now, t);
-        tuile(tuiles[i], cx * t - cam.x + dx, cy * t - cam.y);
-        // Décalée, la tuile laisse un vide d'un côté : on le comble avec elle-même (elle se raccorde).
-        if (dx) tuile(tuiles[i], cx * t - cam.x + dx - Math.sign(dx) * t, cy * t - cam.y);
+        // Seulement ses hautes herbes si elle a un masque (une tuile de bord) ; sinon toute la tuile, et décalée
+        // elle laisse un vide d'un côté, comblé avec elle-même (elle se raccorde).
+        const masque = dessus(tuiles[i], cx * t - cam.x + dx, cy * t - cam.y);
+        if (dx && !masque) dessus(tuiles[i], cx * t - cam.x + dx - Math.sign(dx) * t, cy * t - cam.y);
         ctx.restore();
       }
     }

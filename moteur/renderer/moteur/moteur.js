@@ -1255,7 +1255,16 @@ const Moteur = (() => {
       }
       effets.surface(ctx, ef, x, ligne, t, maintenant);
     }
-    const oEffets = (maintenant) => ({ carte, jeu, cam, maintenant, tuile: (n, x, y) => dessinerTuile(n, x, y, maintenant) });
+    // Saga 1.20.1 : devant(n, x, y) dessine ce qui passe devant le corps : seulement les pixels du masque
+    // (les hautes herbes d'une tuile de bord), sinon toute la tuile. Rend true s'il y avait un masque.
+    const dessinerDevant = (n, x, y, maintenant) => {
+      const tu = jeu.tuiles[n];
+      if (!tu?.devant || !jeu.devant) { dessinerTuile(n, x, y, maintenant); return false; }
+      const img = tu.images.length > 1 ? tu.images[Math.floor(maintenant / tu.duree) % tu.images.length] : tu.images[0];
+      ctx.drawImage(jeu.devant, img.sx, img.sy, jeu.taille, jeu.taille, x, y, jeu.taille, jeu.taille);
+      return true;
+    };
+    const oEffets = (maintenant) => ({ carte, jeu, cam, maintenant, tuile: (n, x, y) => dessinerTuile(n, x, y, maintenant), devant: (n, x, y) => dessinerDevant(n, x, y, maintenant) });
 
     function dessinerObstacle(sorte, x, y) {
       const t = jeu.taille, u = t / 16;
