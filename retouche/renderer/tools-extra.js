@@ -216,6 +216,7 @@
     id: 'transform', name: 'Transformation libre', key: '', hidden: true, icon: ICONS.move, cursor: 'default',
     hint: 'Coins : redimensionner (Maj : proportions libres). Intérieur : déplacer. Extérieur : tourner (Maj : par 15°). Entrée : valider, Échap : annuler.',
     options: [
+      { key: 'interp', label: 'Interpolation', type: 'select', value: 'auto', choices: [['auto', 'Automatique'], ['proche', 'Plus proche voisin'], ['bilineaire', 'Bilinéaire'], ['bicubique', 'Bicubique']] },
       { key: 'apply', label: 'Valider', type: 'button', icon: 'check', run: () => Tools.byId.transform.enter(App.doc()) },
       { key: 'cancel', label: 'Annuler', type: 'button', icon: 'close', run: () => Tools.byId.transform.escape(App.doc()) },
     ],
@@ -234,7 +235,7 @@
       if (sel) Sel.erase(base.getContext('2d'), sel, layer.x, layer.y);
       else base.getContext('2d').clearRect(b.x, b.y, b.w, b.h);
       this.t = {
-        doc, layer, src, base, previous, sel, ox: layer.x + b.x, oy: layer.y + b.y,
+        doc, layer, src, base, previous, sel, ox: layer.x + b.x, oy: layer.y + b.y, pixelArt: Ops.looksLikePixelArt(src),
         cx: layer.x + b.x + b.w / 2, cy: layer.y + b.y + b.h / 2, sx: 1, sy: 1, angle: 0,
       };
       // La sélection suit la transformation : on cache ses pointillés pendant ce temps.
@@ -255,9 +256,14 @@
       ctx.translate(t.cx, t.cy);
       ctx.rotate(t.angle);
       ctx.scale(t.sx, t.sy);
-      ctx.imageSmoothingQuality = 'medium';
+      Ops.setSmoothing(ctx, this.interp(t));
       ctx.drawImage(t.src, -t.src.width / 2, -t.src.height / 2);
       ctx.restore();
+    },
+    // Interpolation choisie dans la barre d'options (« auto » : nette si le morceau est du pixel art).
+    interp(t) {
+      const mode = S.transform?.interp || 'auto';
+      return mode === 'auto' ? (t.pixelArt ? 'proche' : 'bicubique') : mode;
     },
     corners(t) {
       const w = (t.src.width * t.sx) / 2, h = (t.src.height * t.sy) / 2;
@@ -270,9 +276,10 @@
       const maxX = Math.ceil(Math.max(...pts.map((p) => p.x))), maxY = Math.ceil(Math.max(...pts.map((p) => p.y)));
       const out = newCanvas(maxX - minX, maxY - minY);
       const g = out.getContext('2d');
-      g.imageSmoothingQuality = 'high';
+      const interp = this.interp(t);
+      Ops.setSmoothing(g, interp);
       let src = source, sx = t.sx, sy = t.sy;
-      if (smooth && (sx < 1 || sy < 1)) { src = Ops.resample(source, source.width * sx, source.height * sy); sx = (source.width * t.sx) / src.width; sy = (source.height * t.sy) / src.height; }
+      if (smooth && interp === 'bicubique' && (sx < 1 || sy < 1)) { src = Ops.resample(source, source.width * sx, source.height * sy, interp); sx = (source.width * t.sx) / src.width; sy = (source.height * t.sy) / src.height; }
       g.translate(t.cx - minX, t.cy - minY);
       g.rotate(t.angle);
       g.scale(sx, sy);

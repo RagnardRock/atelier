@@ -89,6 +89,7 @@ const App = (() => {
     g.fillRect(0, 0, c.width, c.height);
     const scale = Math.min(c.width / d.width, c.height / d.height);
     const ox = (c.width - d.width * scale) / 2, oy = (c.height - d.height * scale) / 2;
+    g.imageSmoothingEnabled = scale < 1; // petite image (tuile, sprite) : vignette nette
     g.imageSmoothingQuality = 'high';
     if (Adjust.isSpecial(layer)) {
       // Calque de réglage ou de remplissage : on montre son masque, comme Photoshop (noir = caché, blanc = visible).

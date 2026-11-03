@@ -108,7 +108,9 @@ const View = (() => {
     ctx.translate(Math.round(x), Math.round(y));
     ctx.fillRect(0, 0, Math.round(w), Math.round(h));
     ctx.restore();
-    ctx.imageSmoothingEnabled = zoom < 2; // gros zoom : pixels nets, comme Photoshop
+    // Dès qu'un pixel de l'image couvre au moins un pixel de l'écran : pixels nets (plus proche voisin),
+    // comme Photoshop. Le lissage ne sert qu'en vue réduite (sinon l'image paraît floue entre 100 et 200 %).
+    ctx.imageSmoothingEnabled = zoom * dpr < 1;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(doc.comp, Math.round(x), Math.round(y), Math.round(w), Math.round(h));
 
