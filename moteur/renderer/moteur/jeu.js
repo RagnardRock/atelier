@@ -75,6 +75,24 @@ const Jeu = (() => {
         effet: effet(liste[i].effet), // Saga 1.20 : ce qui arrive à celui qui marche dessus (effets-sol.js)
       });
     }
+    // Saga 1.20.1 : l'image « devant » des tuiles dont l'effet a un masque : seulement les pixels de ses
+    // couleurs (les hautes herbes d'une tuile de bord), les autres transparents. Même place que dans la planche.
+    if (tuiles.some((t) => t.effet?.masque?.length)) {
+      const devant = document.createElement('canvas');
+      devant.width = planche.width; devant.height = planche.height;
+      const gd = devant.getContext('2d');
+      for (const tu of tuiles) {
+        if (!tu.effet?.masque?.length) continue;
+        const garder = new Set(tu.effet.masque.map((c) => parseInt(c.slice(1), 16)));
+        for (const im of tu.images) {
+          const d = g.getImageData(im.sx, im.sy, taille, taille);
+          for (let k = 0; k < d.data.length; k += 4) if (!garder.has((d.data[k] << 16) | (d.data[k + 1] << 8) | d.data[k + 2])) d.data[k + 3] = 0;
+          gd.putImageData(d, im.sx, im.sy);
+        }
+        tu.devant = true;
+      }
+      return { planche, tuiles, devant };
+    }
     return { planche, tuiles };
   }
 
@@ -115,6 +133,8 @@ const Jeu = (() => {
       son: son(e.son, SONS_EFFET),
       vitesse: borne(e.vitesse, 100, 25, 200) / 100,
       nage: Boolean(e.nage),
+      // Saga 1.20.1 : herbes, seuls les pixels de ces couleurs passent devant le corps (vide : toute la tuile).
+      masque: corps === 'herbes' && Array.isArray(e.masque) ? e.masque.filter((c) => /^#[0-9a-f]{6}$/i.test(c || '')).slice(0, 64).map((c) => c.toLowerCase()) : [],
     };
     const rien = out.corps === 'aucun' && !out.remous && out.particules === 'aucune' && !out.ondes && !out.traces && !out.son && out.vitesse === 1 && !out.nage;
     return rien ? null : out;
@@ -266,7 +286,7 @@ const Jeu = (() => {
     const tuilesData = lireJson(textes.tuiles, `Le fichier des tuiles (${jeu.tuiles || 'tuiles.tafl'})`);
     verifierVersion(tuilesData, 'Le fichier des tuiles');
     const taille = Math.max(1, nombre(jeu.tailleTuiles, nombre(tuilesData.tileSize, 16)));
-    const { planche, tuiles } = await chargerTuiles(tuilesData, taille);
+    const { planche, tuiles, devant } = await chargerTuiles(tuilesData, taille);
 
     const cartes = new Cartes();
     const problemes = [];
@@ -333,7 +353,7 @@ const Jeu = (() => {
       dossier: textes.dossier,
       titre: jeu.titre || 'Mon jeu',
       taille,
-      planche, tuiles,
+      planche, tuiles, devant: devant || null,
       // Saga 1.5 : les tampons de Tafl (objets de plusieurs tuiles), par nom. Les cartes n'en ont pas
       // besoin (ils y sont déjà des tuiles) ; un module s'en sert pour dessiner ce qu'il pose en jeu.
       tampons: new Map((Array.isArray(tuilesData.tampons) ? tuilesData.tampons : []).filter((t) => t && typeof t.nom === 'string' && Array.isArray(t.cases)).map((t) => {

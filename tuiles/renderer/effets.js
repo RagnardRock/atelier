@@ -13,7 +13,7 @@ const Effets = (() => {
   // Les sons de pas intégrés à Saga (sinon un fichier du dossier sons/ du jeu).
   const SONS = [['', 'Aucun'], ['herbe', 'Froissement (intégré)'], ['eau', 'Clapotis (intégré)'], ['sable', 'Pas feutré (intégré)']];
 
-  const VIDE = { corps: 'aucun', cache: 0, remous: false, particules: 'aucune', couleur: '#ffffff', nombre: 4, ondes: false, couleur_ondes: '#ffffff', traces: 0, couleur_traces: '#3a2a1a', son: '', vitesse: 100, nage: false };
+  const VIDE = { masque: [], corps: 'aucun', cache: 0, remous: false, particules: 'aucune', couleur: '#ffffff', nombre: 4, ondes: false, couleur_ondes: '#ffffff', traces: 0, couleur_traces: '#3a2a1a', son: '', vitesse: 100, nage: false };
 
   const PREREGLAGES = {
     hautes_herbes: { nom: 'Hautes herbes', effet: { corps: 'herbes', cache: 35, remous: true, particules: 'feuilles', couleur: '#5fb34a', nombre: 4, son: 'herbe' } },
@@ -29,6 +29,14 @@ const Effets = (() => {
   const nombre = (v, def, min, max) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def; };
   const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(String(v || '')) ? String(v).toLowerCase() : def);
   const son = (v) => { const s = String(v || '').replace(/\\/g, '/'); return SONS.some(([k]) => k === s) || (/^sons\/[^/]+$/.test(s) && !s.includes('..')) ? s : ''; };
+
+  const couleurs = (l) => [...new Set((Array.isArray(l) ? l : []).map((c) => hex(c, '')).filter(Boolean))].slice(0, 64);
+  // Les couleurs d'une tuile de Tafl (toutes ses images), pour un masque : '#rrggbb' des pixels visibles.
+  function couleursTuile(tile) {
+    const out = new Set();
+    for (const f of tile?.frames || []) for (let i = 0; i < f.length; i += 4) if (f[i + 3] > 0) out.add(`#${[f[i], f[i + 1], f[i + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`);
+    return [...out];
+  }
 
   function norm(e) {
     if (!e || typeof e !== 'object') return null;
@@ -47,6 +55,9 @@ const Effets = (() => {
       son: son(e.son),
       vitesse: Math.round(nombre(e.vitesse, 100, 25, 200)),
       nage: Boolean(e.nage),
+      // Tafl 1.22.1 : herbes, ce qui passe devant le corps : seulement les pixels de ces couleurs (les
+      // hautes herbes d'une tuile de bord, pas l'herbe rase) ; vide = toute la tuile.
+      masque: corps === 'herbes' ? couleurs(e.masque) : [],
     };
     const rien = out.corps === 'aucun' && !out.remous && out.particules === 'aucune' && !out.ondes && !out.traces && !out.son && out.vitesse === 100 && !out.nage;
     return rien ? null : out;
@@ -57,7 +68,7 @@ const Effets = (() => {
   function resume(e) {
     if (!e) return 'aucun';
     const bouts = [];
-    if (e.corps === 'herbes') bouts.push(`bas du corps caché ${e.cache} %`);
+    if (e.corps === 'herbes') bouts.push(`bas du corps caché ${e.cache} %${e.masque?.length ? ` (${e.masque.length} couleurs)` : ''}`);
     if (e.corps === 'eau') bouts.push(`dans l'eau ${e.cache} %`);
     if (e.nage) bouts.push('nage');
     if (e.remous) bouts.push(e.corps === 'eau' ? 'il tangue' : 'frémit');
@@ -69,5 +80,5 @@ const Effets = (() => {
     return bouts.join(', ');
   }
 
-  return { CORPS, PARTICULES, SONS, VIDE, PREREGLAGES, norm, prereglage, resume };
+  return { CORPS, PARTICULES, SONS, VIDE, PREREGLAGES, norm, prereglage, resume, couleursTuile };
 })();
