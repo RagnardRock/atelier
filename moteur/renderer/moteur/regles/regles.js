@@ -223,6 +223,8 @@ const Regles = (() => {
     fiche(jeu, ...a) {
       const f = pack(jeu).fiche(jeu, ...a), ordre = menus(jeu).pages;
       const pages = ordre.map((id) => f.pages.find((p) => p.id === id)).filter(Boolean);
+      // Saga 1.21.3 : une page « toujours » (la fiche du jeu) est là même si le menu ne la nomme pas.
+      f.pages.forEach((p, k) => { if (p.toujours && !ordre.includes(p.id)) pages.splice(Math.min(k, pages.length), 0, p); });
       return { ...f, pages: pages.length ? pages : f.pages };
     },
     dex: (jeu) => ({ ...pack(jeu).dex(jeu), nom: menus(jeu).dex }),

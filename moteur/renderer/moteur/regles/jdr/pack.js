@@ -4,8 +4,9 @@
 //
 // En plus du contrat commun, ce pack apporte (Saga 0.13, facultatifs pour les autres packs) :
 //   commandes      les commandes des événements qu'il sait jouer : test, sauvegarde, test_oppose, jet,
-//                  repos, xp, etat, creer_personnage (FORMAT.md › « Le pack JDR »)
-//   condition      ses conditions : jdr_perception, jdr_maitrise, jdr_etat, jdr_classe, jdr_origine, jdr_niveau
+//                  repos, xp, etat, creer_personnage, champ_fiche (FORMAT.md › « Le pack JDR »)
+//   condition      ses conditions : jdr_perception, jdr_maitrise, jdr_etat, jdr_classe, jdr_origine, jdr_niveau,
+//                  jdr_champ
 //   debut          au début d'une nouvelle partie, quand le joueur est libre : la création des personnages
 //   actionsPause   des choix en plus dans le menu de pause : Jets de dés, Se reposer
 //   pourScript     ce qu'un script JS lit de chaque personnage (saga.fiche)
@@ -103,6 +104,23 @@ const Jdr = (() => {
         else if (!a) { x.etats = [...(x.etats || []), c.etat]; await narrer(`${P.nom(jeu, x)} est ${B.nomEtat(jeu, c.etat).toLowerCase()}.`); }
       }
     },
+    // Saga 1.21.3 : un champ de la fiche du jeu (Tafl › Réglages › Fiche des personnages).
+    // c : { champ, action: 'regler' | 'ajouter' | 'retirer' | 'remplir' | 'basculer', valeur, qui, dire }
+    async champ_fiche({ jeu, partie, ui, c, narrer }) {
+      const x = (B.fiche(jeu)?.champs || []).find((k) => k.id === c.champ);
+      if (!x) return { change: 0 };
+      const textes = [];
+      let n = 0;
+      for (const m of await vises(jeu, partie, ui, c.qui || 'tous', `${x.nom} : qui ?`)) {
+        const v = JdrFiches.changerChamp(jeu, m, x.id, c.valeur, c.action || 'regler');
+        if (v === undefined) continue;
+        n++;
+        const apres = JdrFiches.champs(jeu, m).find((k) => k.id === x.id);
+        textes.push(`${P.nom(jeu, m)} : ${x.nom} ${JdrFiches.texteChamp(apres)}.`);
+      }
+      if (c.dire && textes.length) await narrer(textes.join(' '));
+      return { change: n };
+    },
     async creer_personnage({ jeu, partie, ui, ranger, narrer }) {
       const c = await JdrCreation.creer({ jeu, partie, ui, numero: partie.equipe.length + 1, annulable: true });
       if (!c) return;
@@ -121,6 +139,11 @@ const Jdr = (() => {
       case 'jdr_classe': return l.some((c) => c.classe === cond.classe);
       case 'jdr_origine': return l.some((c) => c.origine === cond.origine);
       case 'jdr_niveau': return l.some((c) => c.niveau >= (Number(cond.min) || 1));
+      // Saga 1.21.3 : un champ de la fiche du jeu, pour au moins un membre (ou pour tous : cond.tous).
+      case 'jdr_champ': {
+        const ok = (c) => { const x = JdrFiches.champs(jeu, c).find((k) => k.id === cond.champ); return x ? Monde.comparer(x.type === 'case' ? (x.valeur ? 1 : 0) : x.valeur, cond.comparaison || '>=', cond.type_valeur === 'case' || typeof cond.valeur === 'boolean' ? (cond.valeur ? 1 : 0) : cond.valeur ?? 0) : false; };
+        return l.length ? (cond.tous ? l.every(ok) : l.some(ok)) : false;
+      }
       default: return undefined;
     }
   }

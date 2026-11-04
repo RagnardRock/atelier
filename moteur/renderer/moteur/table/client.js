@@ -31,12 +31,18 @@ const TableClient = (() => {
     const plateau = Plateau.creer(canvas);
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
     const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
-    let jeu = null, vue = null, selection = null, survol = null;
+    let jeu = null, vue = null, selection = null, survol = null, imageFiche = '', ficheLarge = false;
     let dernierEffet = -1, dernierJet = -1;
 
     (async () => {
       try {
-        jeu = await Jeu.charger(await window.saga.ouvrirJeu(dossier));
+        const textes = await window.saga.ouvrirJeu(dossier);
+        // Saga 1.21.3 : l'image de fond de la fiche du jeu (sur le réseau, le jeu public ne garde qu'elle des réglages).
+        try { imageFiche = JSON.parse(textes.jeu)?.fiche_image || ''; } catch { imageFiche = ''; }
+        jeu = await Jeu.charger(textes);
+        if (!imageFiche) imageFiche = jeu.donnees.reglages?.reglages?.jdr?.fiche?.theme?.image || '';
+        signature = '';
+        montrerFiche();
         document.title = `${jeu.titre} · écran des joueurs`;
       } catch (err) {
         attente.textContent = `Impossible d'ouvrir le jeu : ${err.message}`;
@@ -112,10 +118,31 @@ const TableClient = (() => {
       fiche.hidden = !f;
       if (!f) return;
       // On ne redessine que si quelque chose a changé (sinon on gênerait les clics).
-      const s = JSON.stringify([f, ongletFiche, Boolean(vue.creation), Boolean(vue.combat)]);
+      const s = JSON.stringify([f, ongletFiche, Boolean(vue.creation), Boolean(vue.combat), ficheLarge, Boolean(imageFiche)]);
       if (s === signature) return;
+      // On n'efface pas un champ en train d'être écrit : on redessinera à la prochaine vue.
+      const ecrit = document.activeElement;
+      if (ecrit && fiche.contains(ecrit) && ecrit.matches('input[type="text"], select')) return;
       signature = s;
       fiche.innerHTML = '';
+      // Saga 1.21.3 : la fiche du jeu (Tafl › Réglages › Fiche des personnages), dessinée par commun/fiche-perso.js.
+      if (f.modele && typeof FichePerso !== 'undefined') {
+        const occupe = Boolean(vue.creation || vue.combat);
+        fiche.classList.toggle('large', ficheLarge || f.modele.colonnes > 1);
+        const taille = el('button', { className: 'joueurs-fiche-taille', type: 'button', textContent: ficheLarge ? 'Réduire' : 'Agrandir', title: 'La taille de la fiche' });
+        taille.onclick = () => { ficheLarge = !ficheLarge; signature = ''; montrerFiche(); };
+        const corpsF = el('div', { className: 'joueurs-fiche-corps' }, FichePerso.rendre(f.modele, f, {
+          jet: (sorte, id, quoi) => window.saga.tableDemander({ type: 'jet', sorte, id, quoi }),
+          utiliser: (objet) => { if (!occupe) window.saga.tableDemander({ type: 'agir_fiche', id: 'objet', objet }); },
+          agir: (id) => { if (!occupe) window.saga.tableDemander({ type: 'agir_fiche', id }); },
+          changer: (id, valeur) => window.saga.tableDemander({ type: 'champ', id, valeur }),
+          occupe, combat: Boolean(vue.combat), image: imageFiche,
+        }));
+        fiche.classList.toggle('xl', ficheLarge && f.modele.colonnes > 1);
+        fiche.append(taille, corpsF);
+        return;
+      }
+      fiche.classList.remove('large', 'xl');
       fiche.append(el('div', { className: 'joueurs-fiche-tete' },
         el('b', { textContent: f.nom }),
         el('span', { className: 'joueurs-fiche-pv', textContent: `${f.pv} / ${f.pvMax} PV` }),

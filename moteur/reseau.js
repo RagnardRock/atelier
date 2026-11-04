@@ -37,7 +37,7 @@ const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (on les confond avec 
 const MAX_ATTENTE = 6;            // demandes en attente de l'hôte, au plus
 const MAX_MAUVAIS_CODES = 20;     // sur Internet : mauvais codes par minute, toutes adresses confondues
 // Les seuls fichiers de commun/ dont l'interface a besoin.
-const COMMUN = new Set(['bac-a-sable.js', 'modules.js']);
+const COMMUN = new Set(['bac-a-sable.js', 'modules.js', 'fiche-perso.js']);
 const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -424,6 +424,11 @@ function jeuPublic(textes) {
     cartes[rel] = JSON.stringify(c);
   }
   const jeuOut = { ...jeu, donnees: mapDonnees, scripts: [] };
+  // Saga 1.21.3 : des réglages, seule l'image de fond de la fiche du jeu part (la fiche elle-même, filtrée
+  // pour chaque joueur, vient avec sa vue).
+  const relR = String(donneesJeu.reglages || '').replace(/\\/g, '/');
+  const image = relR && textes.donnees[relR] != null ? lire(textes.donnees[relR])?.reglages?.jdr?.fiche?.theme?.image : '';
+  if (typeof image === 'string' && /^data:image\/(png|jpeg|webp);base64,/.test(image)) jeuOut.fiche_image = image;
   return { dossier: 'reseau', jeu: JSON.stringify(jeuOut), tuiles: textes.tuiles, cartes, donnees, scripts: {} };
 }
 

@@ -1526,3 +1526,12 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .anim-apercu-bande { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .anim-apercu-image { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
 .anim-apercu-image canvas { background: rgba(0, 0, 0, 0.2); border-radius: 3px; }
+
+/* Tafl 1.23 : Réglages › Fiche des personnages (l'éditeur à gauche, l'aperçu à droite, commun/fiche-perso.js) */
+.fiche-editeur-corps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 380px); gap: 16px; align-items: start; }
+.fiche-apercu { position: sticky; top: 8px; padding: 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border, rgba(255, 255, 255, 0.1)); }
+.fiche-apercu:empty { display: none; }
+.fiche-apercu-titre { font-size: 11px; opacity: 0.6; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.fiche-editeur .unit.erreur { color: #ff8a7a; }
+@media (max-width: 1100px) { .fiche-editeur-corps { grid-template-columns: minmax(0, 1fr); } .fiche-apercu { position: static; } }
+.mini-table .ligne2:has(> .fiche-sans-champs) { display: none; }

@@ -407,6 +407,7 @@ Le moteur gère tout seul la question et la disparition : la page 1 (la page act
 | `repos` | `sorte` (`"court"` ou `"long"`) | (Tafl 0.32, pack JDR) Le groupe se repose. Court : chacun peut dépenser des dés de vie, certaines aptitudes reviennent. Long : tous les PV, la moitié des dés de vie, les emplacements de sorts et les aptitudes reviennent. La durée affichée suit `reglages.jdr.repos`. |
 | `xp` | `montant`, `jalon` | (Tafl 0.32, pack JDR) Chaque héros gagne `montant` XP ; ceux qui peuvent monter de niveau le font depuis le menu du groupe. `jalon: true` : un jalon de l'histoire, tout le groupe monte d'un niveau tout de suite (pour la progression `"jalons"`). |
 | `etat` | `action` (`"ajouter"` ou `"retirer"`), `etat`, `qui` | (Tafl 0.32, pack JDR) Met ou enlève un état de `etats.json` (`"empoisonne"`, `"a_terre"`…) aux personnages visés (`qui` : comme pour `sauvegarde`). |
+| `champ_fiche` | `champ`, `action`, `valeur`, `qui`, `dire` | (Tafl 1.23, pack JDR) Change un champ de la fiche du jeu (« La fiche personnalisée » plus bas) : `action` `regler` (mettre à `valeur`), `ajouter`, `retirer`, `remplir` (une jauge à son max) ou `basculer` (une case) ; `qui` `tous`, `premier` ou `choix` ; `dire` : le résultat s'affiche. Un champ calculé par une formule ne change pas ; une jauge reste entre 0 et son max. |
 | `creer_personnage` | | (Tafl 0.32, pack JDR) Ouvre la création de personnage : un nouveau membre rejoint le groupe (ou la Réserve si le groupe est complet). Le joueur peut annuler. |
 
 Un type inconnu (écrit par une version plus récente de Tafl) doit être ignoré par le moteur, sans planter.
@@ -431,6 +432,7 @@ Un type inconnu (écrit par une version plus récente de Tafl) doit être ignor�
 | `jdr_classe` | `classe` | (Tafl 0.32, pack JDR) un héros est de cette classe (`classes_jdr.json`). |
 | `jdr_origine` | `origine` | (Tafl 0.32, pack JDR) un héros est de cette origine (`origines.json`). |
 | `jdr_niveau` | `min` | (Tafl 0.32, pack JDR) un héros est au moins au niveau `min`. |
+| `jdr_champ` | `champ`, `comparaison`, `valeur`, `tous` | (Tafl 1.23, pack JDR) un champ de la fiche du jeu comparé à `valeur` (un nombre, un texte, `true`/`false` pour une case), pour au moins un héros, ou pour tous si `tous`. |
 | `bonus` | `id` | (Tafl 1.9, Saga 1.11) le groupe a ce bonus (vide : un bonus, quel qu'il soit). Ceux des bâtiments de repos : `gestion:<id du bâtiment>`. |
 | `jour` | `comparaison`, `valeur` | (Tafl 1.3, Saga 1.5) le numéro du jour compare à `valeur` (comme `variable`). Le jeu commence au jour 1 ; la commande `dormir` passe au suivant. |
 | `jours_depuis` | `variable`, `comparaison`, `valeur` | (Tafl 1.16, Saga 1.16) les jours passés depuis le jour noté dans la `variable` (commande `variable`, action `jour`) comparent à `valeur` : `">="` et 2, c'est deux nuits plus tard ou après. Tant que rien n'est noté (la variable vaut 0, ou n'est pas un nombre), elle est fausse. |
@@ -1013,6 +1015,24 @@ Pour un jeu JDR, Tafl met aussi `equipe_max` à 4 et `argent_depart` à 0 au cha
 
 `partie.jdr` : `graine` (le hasard des dés : recharger rejoue les mêmes jets) et `journal` (les 200 derniers jets : `{ n, qui, quoi, formule, des: [{ faces, valeur, garde }], bonus, total, contre, resultat, cache }`). Chaque membre du groupe garde sa fiche : `origine`, `classe`, `niveau`, `xp`, `carac`, `competences`, `expertises`, `pv`, `pv_temp`, `pv_niveaux`, `des_vie`, `equipement`, `sorts`, `emplacements`, `ressources`, `etats`, `mort`, et `joueur` (vide pour l'instant : l'ami à qui appartient la fiche, pour le multijoueur). La CA, les bonus et les PV max se recalculent depuis les données, pour qu'un changement fait dans Tafl se voie aussitôt.
 
+#### La fiche personnalisée (Tafl 1.23, Saga 1.21.3)
+
+`reglages.jdr.fiche` (facultatif) : la fiche de personnage du jeu, faite dans **Données › Réglages › Fiche des personnages** (avec un aperçu). Sans elle, Saga montre sa fiche à lui. Le format et les calculs sont dans `commun/fiche-perso.js`, partagé par Tafl et Saga.
+
+```json
+{ "active": true, "colonnes": 2,
+  "blocs": [{ "type": "entete", "colonne": 1 }, { "type": "champs", "titre": "Esprit", "colonne": 1, "champs": ["sante"] }, { "type": "competences", "colonne": 2 }],
+  "champs": [{ "id": "sante", "nom": "Santé mentale", "type": "jauge", "formule": "10 + mod_sag * 2", "modifiable": "joueur", "visible": "tous" }],
+  "theme": { "perso": true, "fond": "#231a12", "texte": "#f1e4c8", "accent": "#d9a441", "cadre": "#6b4f2e", "police": "serif", "image": "", "opacite_image": 30, "bordure": 2, "coins": 6 } }
+```
+
+- `colonnes` : 1 à 3 (sur un écran étroit, tout passe en une colonne). `blocs[].type` : `entete` (nom, PV, CA, états), `caracs`, `competences`, `attaques`, `sac`, `actions` (hors combat), `champs`, `notes` ; `titre` (vide : le titre par défaut), `colonne`. Un bloc `champs` montre les champs de sa liste `champs` ; le premier d'entre eux montre aussi ceux qu'aucun bloc ne nomme.
+- `champs[]` : `id` (minuscules, chiffres, `_` ; ni `niveau`, `maitrise`, `pv`, `pv_max`, `ca`, ni `mod_…`), `nom`, `type` (`nombre`, `jauge`, `texte`, `case`, `liste`), `depart` (la valeur d'une nouvelle partie ; une jauge sans `depart` part pleine), `max` (jauge), `options` (liste), `formule` (nombre : sa valeur, qui ne se change plus à la main ; jauge : son max), `modifiable` (`joueur` : le joueur du héros et le MJ, `mj` : le MJ seulement), `visible` (`tous` ou `mj` : jamais envoyé à l'écran des joueurs), `note` (une bulle d'aide).
+- Une formule : `+ - * / ( )`, des nombres, `min`, `max`, `floor`, `ceil`, `round`, `abs` (séparer par une virgule), et les noms `niveau`, `maitrise`, `pv`, `pv_max`, `ca`, chaque caractéristique (`con`) et son modificateur (`mod_con`), et les champs placés avant (une jauge : `sante` et `sante_max` ; une case : 1 ou 0 ; une liste : le rang du choix). Le résultat est arrondi vers le bas.
+- `theme` : avec `perso`, la fiche prend ces couleurs, cette police (`systeme`, `serif`, `mono`, `arrondie`, `manuscrite`), ces bordures et coins (px) et cette image de fond (une image du jeu, en JPEG, que Tafl réduit à l'import), à `opacite_image` %.
+
+Les valeurs d'un héros sont dans la sauvegarde (`champs` de chaque membre : `{ id: valeur }`). Saga montre la fiche à l'écran des joueurs (chacun change ce que le jeu lui laisse), au MJ (panneau › Pions › la fiche d'un héros : tous les champs), et les champs dans une page du menu Groupe. Les événements les changent (`champ_fiche`) et les testent (`jdr_champ`) ; un script les lit dans `saga.fiche(i).champs`.
+
 ### Le module gestion (Tafl 1.3, Saga 1.5)
 
 Activé par `reglages.modules: ["gestion"]`, avec n'importe quel pack. Un **stock** commun (celui du domaine, pas le sac du joueur) et des **bâtiments** qu'on paie sur ce stock, dont le chantier avance d'une nuit chaque fois que le joueur dort, puis qui produisent chaque nuit. Rien n'est propre à un jeu : les ressources et les bâtiments sont des données. Le code est dans `moteur/renderer/moteur/modules/gestion/` (les calculs, purs, dans `calcul.js`).
@@ -1385,6 +1405,7 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 0.29** : le dossier `sons/`, `musique`, `fond_sonore`, `volume_fond` et `jour_nuit` dans l'ambiance des cartes, `lumiere` dans les tuiles et les événements, `temps`, `audio` et `sauvegarde_auto` dans les réglages, les commandes `musique`, `son` et `heure`, la condition `moment`, `heure` dans les états du test rapide, `temps` et `musique` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.31** : le dossier `scripts/` et `scripts` dans `jeu.json` (les scripts JS, voir SCRIPTS.md), `donnees/variables.json`, les commandes `variable` et `script`, la condition `variable`, `scripts.formules_coupees` dans les réglages, `variables` et `graine` dans la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 0.32** : le pack de règles `"jdr"` : les fichiers `caracteristiques.json`, `competences.json`, `origines.json`, `classes_jdr.json`, `sorts.json`, `monstres_jdr.json` et `etats.json`, `jdr` dans les objets (arme, armure) et `effet.des`, `jdr` dans les personnages (pré-tirés), `reglages.jdr` (création et règles maison), les rencontres de groupes de ce pack, les commandes `test`, `sauvegarde`, `test_oppose`, `jet`, `repos`, `xp`, `etat` et `creer_personnage` (les trois premières ont deux branches, `reussi` et `rate`), les conditions `jdr_perception`, `jdr_maitrise`, `jdr_etat`, `jdr_classe`, `jdr_origine` et `jdr_niveau`, `jdr` dans la sauvegarde. Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.23** : `reglages.jdr.fiche` (la fiche personnalisée du jeu), la commande `champ_fiche`, la condition `jdr_champ`, `champs` dans les membres de la sauvegarde. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.0** : la commande `composer_equipe` et `reglages.multijoueur` (le multijoueur de Saga 1.0). Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.2** : `modules` et `modules_reglages` dans les réglages, `modules` dans la sauvegarde (Saga 1.4). Tafl garde aussi tel quel tout fichier de `donnees/` qu'il ne sait pas éditer (les données d'un module), et le réécrit à l'enregistrement. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.4** : `repousse_nuits` dans les événements et `repousses` dans la sauvegarde (Saga 1.6) ; pour le module gestion, `logement` et `ouvriers` des bâtiments, `habitants_depart`, `repas` et `arrivees` dans ses réglages, la commande et la condition `gestion_habitants`, `habitants` dans son état. Des champs en plus, donc la version reste 1.

@@ -142,6 +142,15 @@ const JdrBase = (() => {
     const r = jeu.donnees.reglages?.reglages?.jdr || {};
     return { ...DEFAUTS_REGLES, ...r, creation: { ...DEFAUTS_REGLES.creation, ...(r.creation || {}) } };
   }
+  // Saga 1.21.3 : la fiche personnalisée du jeu (reglages.jdr.fiche, commun/fiche-perso.js), ou null.
+  const fiches = new WeakMap();
+  function fiche(jeu) {
+    const brut = jeu.donnees.reglages?.reglages?.jdr?.fiche;
+    if (!brut || typeof FichePerso === 'undefined') return null;
+    if (!fiches.has(brut)) fiches.set(brut, FichePerso.normaliser(brut) || null);
+    const f = fiches.get(brut);
+    return f?.active ? f : null;
+  }
   const monnaie = (jeu) => (regles(jeu).monnaie === 'unique' ? jeu.donnees.reglages?.reglages?.monnaie || 'po' : 'po');
   // Une distance des données (en mètres) dite dans l'unité du jeu : 9 m, 6 cases, 30 pieds.
   function distance(jeu, metres) {
@@ -172,7 +181,7 @@ const JdrBase = (() => {
     COUT_POINTS, TABLEAU_STANDARD, NIVEAUX_AMELIORATION, DEFAUTS_REGLES,
     borne, mod, signe, maitrise, valeurFp, xpFp, emplacementsDemi, toursConnus,
     liste, trouver, listeOuDefaut, caracteristiques, competences, etats, nomCarac, courtCarac, nomCompetence, nomEtat, nomDegats,
-    regles, monnaie, distance, lireDes, moyenne,
+    regles, fiche, monnaie, distance, lireDes, moyenne,
   };
 })();
 

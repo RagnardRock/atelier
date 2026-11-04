@@ -66,6 +66,13 @@ const JdrFiches = (() => {
       lignes: P.aptitudes(jeu, c).map((x) => ({ nom: x.nom, valeur: x.niveau ? `niv. ${x.niveau}` : x.source || '', detail: x.description || '' })),
       texte: [o?.langues ? `Langues : ${o.langues}.` : '', c.notes ? `Notes : ${c.notes}` : ''].filter(Boolean).join('\n') || (P.aptitudes(jeu, c).length ? '' : 'Pas encore d\'aptitude.'),
     });
+    // Saga 1.21.3 : les champs de la fiche du jeu (toujours montrée, même si le menu ne la nomme pas).
+    const persos = champs(jeu, c);
+    if (persos.length) {
+      const f = B.fiche(jeu);
+      pages.splice(1, 0, { id: 'perso', nom: f.blocs.find((b) => b.type === 'champs')?.titre || 'Fiche', toujours: true,
+        lignes: persos.map((x) => ({ nom: x.nom, valeur: texteChamp(x), detail: x.note || (x.calcule ? `= ${x.formule}` : ''), ...(x.type === 'jauge' ? { barre: x.max ? x.valeur / x.max : 0, couleur: f.theme.perso ? f.theme.accent : '#4aa8ff' } : {}) })) });
+    }
     return {
       titre: P.nom(jeu, c),
       sousTitre: `${o?.nom ? `${o.nom} · ` : ''}${k?.nom || ''} niv. ${c.niveau}`,
@@ -116,6 +123,35 @@ const JdrFiches = (() => {
     return { titre: m.nom || m.id, sousTitre: `${numero(m)}${m.type ? ` · ${m.type}` : ''}${m.boss ? ' · Boss' : ''}`, image: m.image || '', etiquettes: [], pages };
   }
 
+  // --- Saga 1.21.3 : les champs de la fiche personnalisée du jeu (commun/fiche-perso.js) ---
+  // Les valeurs d'un membre : [{ ...champ, valeur, max, calcule }] (vide sans fiche du jeu).
+  function champs(jeu, c) {
+    const f = B.fiche(jeu);
+    if (!f?.champs.length || !c) return [];
+    const base = {
+      niveau: c.niveau, maitrise: P.pb(c), pv: Math.max(0, c.pv), pv_max: P.pvMax(jeu, c), ca: P.ca(jeu, c),
+      caracs: Object.fromEntries(B.caracteristiques(jeu).map((k) => [k.id, P.carac(jeu, c, k.id)])),
+    };
+    return FichePerso.valeurs(f, base, c.champs);
+  }
+  // Changer un champ d'un membre (un joueur, le MJ, un événement). action : 'regler' | 'ajouter' |
+  // 'retirer' | 'remplir' (une jauge à son max) | 'basculer' (une case). Rend la nouvelle valeur, ou
+  // undefined si rien n'a changé (champ inconnu, calculé, valeur sans sens).
+  function changerChamp(jeu, c, id, valeur, action = 'regler') {
+    const l = champs(jeu, c);
+    const x = l.find((k) => k.id === id);
+    if (!x) return undefined;
+    let v = valeur;
+    if (action === 'ajouter' || action === 'retirer') v = (Number(x.valeur) || 0) + (action === 'retirer' ? -1 : 1) * (Number(valeur) || 0);
+    else if (action === 'remplir') v = x.type === 'jauge' ? x.max : x.valeur;
+    else if (action === 'basculer') v = !x.valeur;
+    const propre = FichePerso.valeurPropre(x, v, x.max);
+    if (propre === undefined) return undefined;
+    c.champs = { ...(c.champs || {}), [id]: propre };
+    return propre;
+  }
+  const texteChamp = (x) => (x.type === 'jauge' ? `${x.valeur} / ${x.max}` : x.type === 'case' ? (x.valeur ? 'oui' : 'non') : String(x.valeur ?? ''));
+
   // Ce qu'un script JS lit d'un personnage (saga.fiche(i)) : les nombres déjà calculés.
   function pourScript(jeu, c) {
     return {
@@ -128,8 +164,11 @@ const JdrFiches = (() => {
       maitrises: P.competencesMaitrisees(jeu, c), perception_passive: P.perceptionPassive(jeu, c),
       etats: [...(c.etats || [])], sorts: [...(c.sorts || [])], dd_sorts: P.lanceur(jeu, c) ? P.ddSorts(jeu, c) : 0,
       mort: Boolean(c.mort_definitive),
+      // Saga 1.21.3 : les champs de la fiche du jeu (une jauge : sa valeur, et son max dans champs_max).
+      champs: Object.fromEntries(champs(jeu, c).map((x) => [x.id, x.valeur])),
+      champs_max: Object.fromEntries(champs(jeu, c).filter((x) => x.type === 'jauge').map((x) => [x.id, x.max])),
     };
   }
 
-  return { fiche, especes, ficheEspece, pourScript };
+  return { fiche, especes, ficheEspece, pourScript, champs, changerChamp, texteChamp };
 })();

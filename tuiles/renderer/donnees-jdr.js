@@ -233,6 +233,8 @@ const DonneesJdr = (() => {
       unite: pick(r.unite, UNITES, d.unite), monnaie: pick(r.monnaie, MONNAIES, d.monnaie), mj_decide: Boolean(r.mj_decide),
       animation_des: pick(r.animation_des, ANIMATIONS, d.animation_des), attribution: str(r.attribution),
       case_m: Math.round(num(r.case_m, d.case_m, 0.5, 30) * 10) / 10, diagonales: pick(r.diagonales, DIAGONALES, d.diagonales), jets_mj_caches: Boolean(r.jets_mj_caches),
+      // Tafl 1.23 : la fiche des personnages du jeu (commun/fiche-perso.js), si le jeu a la sienne.
+      ...(r.fiche && typeof FichePerso !== 'undefined' ? { fiche: FichePerso.normaliser(r.fiche) } : {}),
     };
   }
   const PV_NIVEAU = [['moyenne', 'La moyenne du dé de vie (arrondie au-dessus)'], ['jet', 'Un jet du dé de vie'], ['choix', 'Le joueur choisit à chaque niveau']];
@@ -709,6 +711,191 @@ const DonneesJdr = (() => {
       coche(j, 'jets_mj_caches', 'Les jets des monstres sont cachés aux joueurs', 'le MJ les voit, et peut les révéler'),
     ];
   }
+  // --- Tafl 1.23 : Réglages › Fiche des personnages (commun/fiche-perso.js, jouée par Saga 1.21.3) ---
+  // Les blocs, les champs du jeu et l'apparence, avec un aperçu qui suit chaque changement.
+  function formFiche(r, ctx) {
+    const { champ, sel, section, info, table, petitBouton } = U();
+    if (!r.jdr) r.jdr = normRegles({});
+    const j = r.jdr;
+    const F = FichePerso;
+    const boite = el('div', { className: 'fiche-editeur' });
+    const coche = (o, cle, label, unit, apres) => { const i = el('input', { type: 'checkbox', checked: Boolean(o[cle]) }); i.onchange = () => { o[cle] = i.checked; apres?.(); }; return champ(label, i, unit); };
+    const caracs = liste(ctx.work, 'caracteristiques');
+    // L'aperçu : un héros pour voir (niveau 3, des valeurs moyennes).
+    const apercu = el('div', { className: 'fiche-apercu' });
+    function majApercu() {
+      const f = j.fiche ? F.normaliser(j.fiche) : null;
+      if (!f) { apercu.replaceChildren(); return; }
+      const valeursC = Object.fromEntries(caracs.map((k, i) => [k.id, [15, 14, 13, 12, 10, 8][i % 6]]));
+      const base = { niveau: 3, maitrise: 2, pv: 24, pv_max: 24, ca: 16, caracs: valeursC };
+      const comps = liste(ctx.work, 'competences').slice(0, 5);
+      const d = {
+        nom: 'Aldric', sousTitre: 'Humain · Guerrier niv. 3', niveau: 3, pv: 24, pvMax: 24, ca: 16, etats: [],
+        caracs: caracs.map((k) => ({ id: k.id, nom: k.nom, valeur: valeursC[k.id], mod: Math.floor((valeursC[k.id] - 10) / 2), sauvegarde: Math.floor((valeursC[k.id] - 10) / 2) })),
+        competences: comps.map((k, i) => ({ id: k.id, nom: k.nom, bonus: i % 2 ? 1 : 4, maitrise: !(i % 2) })),
+        attaques: [{ nom: 'Épée longue', bonus: 5, des: '1d8', mod: 3 }],
+        sac: [{ id: 'potion', nom: 'Potion de soins', n: 2, utilisable: true }], argent: 15,
+        actions: [{ id: 'equiper', texte: 'Changer d\'équipement' }], notes: 'Cherche son frère disparu.',
+        champs: F.valeurs(f, base, {}).map((c) => ({ ...c, modifiable: true })),
+      };
+      const noop = () => {};
+      apercu.replaceChildren(el('div', { className: 'fiche-apercu-titre', textContent: 'Aperçu (un héros pour voir)' }),
+        F.rendre(f, d, { jet: noop, utiliser: noop, agir: noop, changer: noop, image: f.theme.image }));
+    }
+    let attente = 0;
+    const plusTard = () => { clearTimeout(attente); attente = setTimeout(majApercu, 120); };
+    boite.addEventListener('input', plusTard);
+    boite.addEventListener('change', plusTard);
+    boite.addEventListener('click', () => setTimeout(plusTard, 0));
+
+    const corps = el('div');
+    function dessiner() {
+      corps.replaceChildren();
+      const f = j.fiche;
+      if (!f?.active) { majApercu(); return; }
+      const idsChamps = () => f.champs.map((c) => c.id);
+      // Les blocs, colonne par colonne.
+      const blocs = table(f.blocs, [
+        ['Bloc', (b, k, rendre) => sel(F.BLOCS, b.type, (v) => { b.type = v; if (v === 'champs' && !b.champs) b.champs = []; rendre(); }), true],
+        ['Titre', (b) => { const i = el('input', { type: 'text', value: b.titre || '', placeholder: F.TITRES[b.type] || '(aucun)' }); i.oninput = () => { b.titre = i.value; }; return i; }],
+        ['Colonne', (b) => sel([[1, '1'], [2, '2'], [3, '3']].slice(0, f.colonnes).map(([v, l]) => [String(v), l]), String(Math.min(b.colonne || 1, f.colonnes)), (v) => { b.colonne = Number(v); })],
+        ['Ordre', (b, k, rendre) => el('span', { className: 'inline' }, [
+          petitBouton('arrow-up', 'Monter', () => { if (k > 0) { f.blocs.splice(k - 1, 0, ...f.blocs.splice(k, 1)); rendre(); plusTard(); } }),
+          petitBouton('arrow-down', 'Descendre', () => { if (k < f.blocs.length - 1) { f.blocs.splice(k + 1, 0, ...f.blocs.splice(k, 1)); rendre(); plusTard(); } }),
+        ])],
+        ['Champs montrés', (b) => {
+          if (b.type !== 'champs') return el('span', { className: 'fiche-sans-champs' });
+          if (!f.champs.length) return el('span', { className: 'unit', textContent: 'Ajoute des champs ci-dessous.' });
+          const premier = f.blocs.find((x) => x.type === 'champs') === b;
+          return el('span', { className: 'chips' }, [
+            ...f.champs.map((c) => {
+              const i = el('input', { type: 'checkbox', checked: (b.champs || []).includes(c.id) });
+              i.onchange = () => { b.champs = i.checked ? [...new Set([...(b.champs || []), c.id])] : (b.champs || []).filter((x) => x !== c.id); };
+              return el('label', { className: 'checkbox-row inline' }, [i, el('span', { textContent: ` ${c.nom}  ` })]);
+            }),
+            premier ? el('span', { className: 'unit', textContent: ' (les champs non cochés ailleurs viennent ici)' }) : null,
+          ]);
+        }, false, true],
+      ], () => ({ type: 'champs', titre: '', colonne: 1, champs: [] }), { ajouter: '+ Bloc', max: 24, change: plusTard });
+
+      // Les champs du jeu.
+      const nomsPour = (c) => F.nomsPour(F.normaliser(f), c.id, caracs.map((k) => k.id));
+      const champs = table(f.champs, [
+        ['Nom', (c) => { const i = el('input', { type: 'text', value: c.nom || '', placeholder: 'Santé mentale' }); i.oninput = () => { c.nom = i.value; }; return i; }, true],
+        ['Id (formules, événements)', (c) => {
+          const i = el('input', { type: 'text', value: c.id || '', placeholder: 'sante' });
+          i.onchange = () => {
+            const neuf = F.idChamp(i.value) || F.idChamp(c.nom) || 'champ';
+            let id = neuf, n = 2;
+            while (f.champs.some((x) => x !== c && x.id === id) || F.RESERVES.has(id)) id = `${neuf}_${n++}`;
+            for (const b of f.blocs) if (b.champs) b.champs = b.champs.map((x) => (x === c.id ? id : x));
+            c.id = id; i.value = id;
+          };
+          return i;
+        }],
+        ['Type', (c, k, rendre) => sel(F.TYPES, c.type, (v) => { c.type = v; if (v === 'liste' && !c.options?.length) c.options = ['Calme', 'Inquiet', 'Terrifié']; rendre(); })],
+        ['Ordre', (c, k, rendre) => el('span', { className: 'inline' }, [
+          petitBouton('arrow-up', 'Monter (une formule lit les champs d\'avant)', () => { if (k > 0) { f.champs.splice(k - 1, 0, ...f.champs.splice(k, 1)); rendre(); plusTard(); } }),
+          petitBouton('arrow-down', 'Descendre', () => { if (k < f.champs.length - 1) { f.champs.splice(k + 1, 0, ...f.champs.splice(k, 1)); rendre(); plusTard(); } }),
+        ])],
+        ['Valeurs', (c) => {
+          const ligne = el('div', { className: 'field-grid' });
+          const num = (cle, label, unit, d = '') => { const i = el('input', { type: 'number', value: c[cle] ?? d, className: 'num-input' }); i.oninput = () => { c[cle] = i.value === '' ? undefined : Number(i.value); }; return champ(label, i, unit); };
+          if (c.type === 'nombre') ligne.append(num('depart', 'Au départ', c.formule ? 'sans effet : la formule calcule' : '', 0));
+          if (c.type === 'jauge') ligne.append(num('max', 'Max', c.formule ? 'sans effet : la formule calcule' : '', 10), num('depart', 'Au départ', 'vide : pleine'));
+          if (c.type === 'texte') { const i = el('input', { type: 'text', value: c.depart || '' }); i.oninput = () => { c.depart = i.value; }; ligne.append(champ('Au départ', i)); }
+          if (c.type === 'case') { const i = el('input', { type: 'checkbox', checked: Boolean(c.depart) }); i.onchange = () => { c.depart = i.checked; }; ligne.append(champ('Cochée au départ', i)); }
+          if (c.type === 'liste') {
+            const i = el('input', { type: 'text', value: (c.options || []).join(', '), placeholder: 'Calme, Inquiet, Terrifié' });
+            i.oninput = () => { c.options = i.value.split(',').map((x) => x.trim()).filter(Boolean); };
+            ligne.append(champ('Choix', i, 'séparés par des virgules ; le premier au départ'));
+          }
+          if (c.type === 'nombre' || c.type === 'jauge') {
+            const msg = el('span', { className: 'unit' });
+            const i = el('input', { type: 'text', value: c.formule || '', placeholder: c.type === 'jauge' ? 'max = 10 + mod_sag * 2' : '8 + maitrise + mod_sag' });
+            const verif = () => { const t = i.value.trim(); const e = t ? F.verifier(t, nomsPour(c)) : ''; msg.textContent = e ? `⚠ ${e}` : t ? '✓' : (c.type === 'jauge' ? 'calcule le max (vide : le max ci-dessus)' : 'vide : un nombre que l\'on change'); msg.classList.toggle('erreur', Boolean(e)); };
+            i.oninput = () => { c.formule = i.value; verif(); };
+            verif();
+            ligne.append(el('label', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Formule' }), i, msg]));
+          }
+          ligne.append(
+            champ('Qui le change', sel([['joueur', 'Le joueur (et le MJ)'], ['mj', 'Le MJ seulement']], c.modifiable || 'joueur', (v) => { c.modifiable = v; })),
+            champ('Qui le voit', sel([['tous', 'Le joueur du héros et le MJ'], ['mj', 'Le MJ seulement']], c.visible || 'tous', (v) => { c.visible = v; })),
+          );
+          const note = el('input', { type: 'text', value: c.note || '', placeholder: 'une bulle d\'aide (facultatif)' });
+          note.oninput = () => { c.note = note.value; };
+          ligne.append(champ('Aide', note));
+          return ligne;
+        }, false, true],
+      ], () => {
+        let n = f.champs.length + 1, id = `champ_${n}`;
+        while (f.champs.some((x) => x.id === id)) id = `champ_${++n}`;
+        return { id, nom: `Champ ${n}`, type: 'nombre', depart: 0, modifiable: 'joueur', visible: 'tous' };
+      }, { ajouter: '+ Champ', max: 40, change: () => { dessiner(); } });
+
+      // L'apparence.
+      const t = f.theme;
+      const couleur = (cle, label) => { const i = el('input', { type: 'color', value: t[cle] }); i.oninput = () => { t[cle] = i.value; }; return champ(label, i); };
+      const apparence = el('div', { hidden: !t.perso }, [
+        el('div', { className: 'field-grid' }, [couleur('fond', 'Fond'), couleur('texte', 'Texte'), couleur('accent', 'Accent (titres, jauges)'), couleur('cadre', 'Bordures')]),
+        el('div', { className: 'field-grid' }, [
+          champ('Police', sel(F.POLICES, t.police, (v) => { t.police = v; })),
+          champ('Bordures', U().nombreIn(t, 'bordure', 0, 6), 'px'),
+          champ('Coins arrondis', U().nombreIn(t, 'coins', 0, 24), 'px'),
+        ]),
+        el('div', { className: 'field-grid' }, [
+          el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Image de fond' }), el('span', { className: 'inline' }, [
+            petitBouton('folder-opened', 'Importer une image (parchemin, cuir, carte…)', async () => {
+              const fi = await window.tafl.openFile({ kind: 'image', titre: 'Image de fond de la fiche' });
+              if (!fi) return;
+              try { t.image = await imageFond(fi); notify('Image ajoutée à la fiche.', 'success'); plusTard(); } catch (err) { notify(cleanError(err), 'error'); }
+            }),
+            petitBouton('trash', 'Retirer l\'image', () => { t.image = ''; plusTard(); }),
+          ])]),
+          champ('Opacité de l\'image', U().nombreIn(t, 'opacite_image', 0, 100), '%'),
+        ]),
+      ]);
+      corps.append(
+        section('Disposition'),
+        champ('Colonnes', sel([['1', '1 (étroite : l\'écran d\'un téléphone)'], ['2', '2'], ['3', '3 (large)']], String(f.colonnes), (v) => { f.colonnes = Number(v); for (const b of f.blocs) b.colonne = Math.min(b.colonne || 1, f.colonnes); dessiner(); }), 'sur un petit écran, tout passe en une colonne'),
+        blocs,
+        section('Champs du jeu'),
+        info('Des valeurs à ton jeu sur chaque héros : une jauge de Santé mentale, des points de Destin, une case « Inspiré », un Serment à choisir… Une formule les calcule à partir du niveau, de la maîtrise, des PV, de la CA, des caractéristiques (« con ») et de leurs modificateurs (« mod_con »), et des champs placés avant (une jauge : « sante » et « sante_max »). Fonctions : min, max, floor, ceil, round, abs ; séparer les nombres par une virgule.'),
+        champs,
+        info('Les événements les changent (bloc « Changer un champ de la fiche ») et les testent (condition « Un champ de la fiche »). Un script les lit dans saga.fiche(i).champs et les change avec saga.commande({ type: \'champ_fiche\', … }).'),
+        section('Apparence'),
+        coche(t, 'perso', 'Une apparence à elle', 'sinon celle de Saga', () => { apparence.hidden = !t.perso; }),
+        apparence,
+      );
+      plusTard();
+    }
+    if (j.fiche) j.fiche = F.normaliser(j.fiche);
+    const activer = coche({ v: Boolean(j.fiche?.active) }, 'v', 'Le jeu a sa propre fiche', 'sinon la fiche de Saga', null);
+    activer.querySelector('input').onchange = (e) => {
+      if (e.target.checked) j.fiche = j.fiche ? { ...j.fiche, active: true } : F.defaut();
+      else if (j.fiche) j.fiche.active = false;
+      dessiner();
+    };
+    boite.append(
+      section('Fiche des personnages'),
+      info('La fiche que voient les joueurs (leur écran, en multijoueur) et le MJ : quels blocs, dans quel ordre, sur combien de colonnes, des champs à ton jeu, et son allure. Le menu Groupe de Saga montre les champs du jeu dans une page à eux.'),
+      activer,
+      el('div', { className: 'fiche-editeur-corps' }, [corps, apercu]),
+    );
+    dessiner();
+    return [boite];
+  }
+  // L'image de fond : réduite (1000 px au plus) et en JPEG, pour garder le jeu léger.
+  async function imageFond(fi) {
+    const src = await Events.imagePortrait(fi);
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('Image illisible')); i.src = src.png; });
+    const k = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.82);
+  }
+
   // « Visible par » (Tafl 0.33, le mode table de Saga) : tout le monde, le MJ seulement, ou le joueur
   // d'un personnage (un pré-tiré, ou le personnage dont part une création).
   function visibilites(work) {
@@ -836,6 +1023,6 @@ const DonneesJdr = (() => {
 
   return {
     SORTES, NORMES, ONGLETS, DEFAUTS_REGLES, TYPES_DEGATS, EFFETS_APTITUDE, normObjet, normFiche, normRegles, listes, resumer, utilisations,
-    formObjet, formPersonnage, formRegles, chargerModele, imageMonstre, des, moyenne, visibilites, normVisible,
+    formObjet, formPersonnage, formRegles, formFiche, chargerModele, imageMonstre, des, moyenne, visibilites, normVisible,
   };
 })();
