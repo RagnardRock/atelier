@@ -996,7 +996,13 @@ body.en-combat #notifications { bottom: auto; top: 48px; right: auto; left: 50%;
 .joueurs-question-tete { font-weight: 600; }
 .joueurs-question-titre { font-size: 12px; opacity: 0.85; }
 .joueurs-question-aide { font-size: 12px; color: var(--accent, #ffd36b); }
-.joueurs-role { position: absolute; z-index: 21; left: 50%; top: 52px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 7px 12px; border-radius: 10px;
-  background: rgba(14, 14, 22, 0.85); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; font-size: 13px; text-align: center; }
+.joueurs-role { position: absolute; z-index: 24; left: 50%; top: 52px; transform: translateX(-50%); width: min(380px, calc(100% - 24px)); max-height: calc(100% - 120px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px; padding: 12px; border-radius: 12px; background: rgba(14, 14, 22, 0.92); backdrop-filter: blur(16px);
+  border: 1px solid var(--accent, #ffd36b); color: #f4f4f6; font-size: 13px; }
+.joueurs-role.creation { width: min(460px, calc(100% - 24px)); }
+.joueurs-creation-liste { display: flex; flex-direction: column; gap: 4px; }
+.joueurs-creation-texte { margin: 4px 0; line-height: 1.45; }
+.joueurs-creation-form { display: flex; flex-direction: column; gap: 6px; }
+.joueurs-creation-champ { width: 100%; }
 .joueurs-role[hidden] { display: none; }
 body.mon-tour .joueurs-jets { right: calc(min(300px, 100% - 24px) + 24px); }

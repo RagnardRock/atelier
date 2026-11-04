@@ -57,8 +57,7 @@ const TableClient = (() => {
     // Ce qui n'est pas sur le canvas : l'ordre du tour, ce qui se dit, les jets montrés à tous, la pause.
     function montrer() {
       attente.hidden = Boolean(vue && jeu);
-      roleEl.hidden = !(reseau && vue && vue.role === 'joueurs');
-      roleEl.textContent = 'Tu regardes la partie. Pour jouer, le MJ te donne un héros (panneau « Amis » de sa table).';
+      montrerChoixPerso();
       pauseEl.hidden = !vue?.pause;
       ordre.hidden = !vue?.combat;
       if (vue?.combat) {
@@ -147,6 +146,69 @@ const TableClient = (() => {
       }
       fiche.append(corps);
     }
+    // --- Saga 1.21.2 : sans héros, en prendre un libre ou créer le sien (la création tourne chez l'hôte) ---
+    let signatureP = '';
+    const repondreCreation = (o) => window.saga.tableDemander({ type: 'creation', ...o });
+    function montrerChoixPerso() {
+      const cr = vue?.creation || null;
+      const sans = reseau && vue && vue.role === 'joueurs';
+      roleEl.hidden = !(sans || cr);
+      roleEl.classList.toggle('creation', Boolean(cr));
+      const s = JSON.stringify([sans, cr, vue?.libres, vue?.groupePlein]);
+      if (s === signatureP) return;
+      signatureP = s;
+      roleEl.innerHTML = '';
+      if (cr) { montrerCreation(cr); return; }
+      if (!sans) return;
+      roleEl.append(el('div', { className: 'joueurs-question-tete', textContent: 'Ton personnage' }));
+      const creer = el('button', { className: 'table-combat-option', type: 'button', disabled: Boolean(vue.groupePlein) },
+        el('i', { className: 'codicon codicon-add' }), el('span', { textContent: 'Créer mon personnage' }), vue.groupePlein ? el('small', { textContent: 'groupe complet' }) : null);
+      creer.onclick = () => window.saga.tableDemander({ type: 'creer' });
+      roleEl.append(creer);
+      for (const l of vue.libres || []) {
+        const b = el('button', { className: 'table-combat-option', type: 'button' }, el('i', { className: 'codicon codicon-person' }), el('span', { textContent: `Jouer ${l.nom}` }), l.detail ? el('small', { textContent: l.detail }) : null);
+        b.onclick = () => window.saga.tableDemander({ type: 'prendre', heros: l.id });
+        roleEl.append(b);
+      }
+      roleEl.append(el('p', { className: 'joueurs-fiche-note', textContent: 'Ton héros reste dans la partie du MJ : en revenant sous le même nom, tu le retrouves.' }));
+    }
+    function montrerCreation(q) {
+      if (q.sorte === 'attente') { roleEl.append(el('div', { className: 'joueurs-question-aide', textContent: 'Un instant…' })); return; }
+      if (q.titre) roleEl.append(el('div', { className: 'joueurs-question-tete', textContent: q.titre }));
+      if (q.entete) roleEl.append(el('div', { className: 'joueurs-question-titre', textContent: q.entete }));
+      if (q.sorte === 'dire') {
+        roleEl.append(el('p', { className: 'joueurs-creation-texte', textContent: q.texte }));
+        const b = el('button', { className: 'table-combat-option', type: 'button' }, el('i', { className: 'codicon codicon-check' }), el('span', { textContent: 'Continuer' }));
+        b.onclick = () => repondreCreation({ n: q.n });
+        roleEl.append(b);
+        return;
+      }
+      if (q.sorte === 'texte') {
+        const champ = el('input', { className: 'multi-champ joueurs-creation-champ', type: 'text', maxLength: q.max || 24, value: q.valeur || '' });
+        const ok = el('button', { className: 'table-combat-option', type: 'submit' }, el('i', { className: 'codicon codicon-check' }), el('span', { textContent: 'Valider' }));
+        const non = el('button', { className: 'table-combat-option retour', type: 'button' }, el('i', { className: 'codicon codicon-arrow-left' }), el('span', { textContent: 'Annuler' }));
+        non.onclick = () => repondreCreation({ n: q.n, annuler: true });
+        const f = el('form', { className: 'joueurs-creation-form' }, champ, ok, non);
+        f.onsubmit = (e) => { e.preventDefault(); repondreCreation({ n: q.n, texte: champ.value }); };
+        roleEl.append(f);
+        setTimeout(() => champ.focus(), 0);
+        return;
+      }
+      const liste = el('div', { className: 'joueurs-creation-liste' });
+      q.items.forEach((it, k) => {
+        const b = el('button', { className: 'table-combat-option', type: 'button', disabled: it.desactive }, el('span', { textContent: it.texte }), it.detail ? el('small', { textContent: it.detail }) : null);
+        b.onclick = () => repondreCreation({ n: q.n, k });
+        liste.append(b);
+      });
+      roleEl.append(liste);
+      if (q.note) roleEl.append(el('p', { className: 'joueurs-fiche-note', textContent: q.note }));
+      if (q.annulable) {
+        const b = el('button', { className: 'table-combat-option retour', type: 'button' }, el('i', { className: 'codicon codicon-arrow-left' }), el('span', { textContent: 'Retour' }));
+        b.onclick = () => repondreCreation({ n: q.n, k: -1 });
+        roleEl.append(b);
+      }
+    }
+
     // --- Mon tour en combat : la question de l'hôte (son menu, ou un choix sur le plateau) ---
     let signatureQ = '';
     const q = () => vue?.question || null;
@@ -182,7 +244,7 @@ const TableClient = (() => {
       }
     }
     // Mon héros (celui que le MJ m'a donné), pour le déplacer sans avoir à le choisir d'abord.
-    const monHeros = () => (vue?.role?.startsWith('perso:') ? vue.pions.find((p) => p.sorte === 'heros' && `perso:${p.personnage}` === vue.role) : null);
+    const monHeros = () => (vue?.moi ? vue.pions.find((p) => p.id === vue.moi) : vue?.role?.startsWith('perso:') ? vue.pions.find((p) => p.sorte === 'heros' && `perso:${p.personnage}` === vue.role) : null);
 
     function bouton(texte, faire, titre = '') {
       const b = el('button', { className: 'joueurs-jet-bouton', type: 'button', textContent: texte, title: titre });

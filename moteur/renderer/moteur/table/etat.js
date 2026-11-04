@@ -44,6 +44,9 @@ const TableEtat = (() => {
     if (v === 'mj') return false;
     return Boolean(role.perso) && v === `perso:${role.perso}`;
   }
+  // Ce héros est-il celui de ce rôle ? Saga 1.21.2 : par son pion quand on le connaît (deux héros créés
+  // peuvent emprunter la même apparence), sinon par son personnage.
+  const estMien = (role, c) => Boolean(c) && (role.heros ? c.pion === role.heros : Boolean(role.perso) && c.creature === role.perso);
 
   function preparer(jeu, partie) {
     const t = partie.table && typeof partie.table === 'object' ? partie.table : {};
@@ -170,7 +173,7 @@ const TableEtat = (() => {
         const pvMax = ctx.pvMaxHeros?.(c) || c.pvMax || c.pv;
         Object.assign(v, { nom: ctx.nomHeros?.(c) || c.nom || c.creature, personnage: c.creature || '', pv: Math.max(0, c.pv), pvMax, ko: c.pv <= 0, joueur: c.joueur || '' });
         // Les PV des autres héros : exacts, ou seulement leur état, selon le réglage du jeu (Tafl 1.0).
-        if (!mj && reglages(jeu).pvAutres === 'etat' && (!role.perso || role.perso !== c.creature)) {
+        if (!mj && reglages(jeu).pvAutres === 'etat' && !estMien(role, c)) {
           delete v.pv; delete v.pvMax;
           v.sante = sante(Math.max(0, c.pv), Math.max(1, pvMax));
         }
@@ -208,7 +211,8 @@ const TableEtat = (() => {
       caseM: reglages(jeu).caseM,
     };
     // Saga 1.0 : le joueur d'un héros reçoit sa fiche (lui seul), pour la lire et lancer ses jets.
-    if (!mj && role.perso && ctx.ficheDe) out.fiche = ctx.ficheDe(role.perso);
+    if (!mj && role.perso && ctx.ficheDe) out.fiche = ctx.ficheDe(role);
+    if (!mj && role.heros) out.moi = role.heros;
     if (mj) out.pieces = pieces(carte).map((z) => ({ id: z.id, nom: z.nom || z.id, x: z.x, y: z.y, largeur: z.largeur, hauteur: z.hauteur, visible: visibilitePiece(table, carte, z) }));
     return out;
   }
@@ -224,14 +228,14 @@ const TableEtat = (() => {
       // l'hôte qui lance, et la ligne va au journal, vue de tous.
       case 'jet': {
         if (!role.mj && !role.perso) return non('Les spectateurs ne lancent pas de dés.');
-        return { ok: true, jet: { perso: role.mj ? String(a.perso || '') : role.perso, quoi: String(a.quoi || ''), sorte: a.sorte === 'sauvegarde' ? 'sauvegarde' : 'test', id: String(a.id || '') } };
+        return { ok: true, jet: { perso: role.mj ? String(a.perso || '') : role.perso, heros: role.mj ? '' : role.heros || '', quoi: String(a.quoi || ''), sorte: a.sorte === 'sauvegarde' ? 'sauvegarde' : 'test', id: String(a.id || '') } };
       }
       case 'deplacer': {
         if (!pion || pion.carte !== carte.id) return non('Ce pion n\'est pas sur cette carte.');
         if (!role.mj) {
           if (pion.sorte !== 'heros') return non('Un joueur ne déplace que son héros.');
           const c = membreDe(partie, pion);
-          if (role.perso && c?.creature !== role.perso) return non('Ce n\'est pas ton héros.');
+          if (role.perso && !estMien(role, c)) return non('Ce n\'est pas ton héros.');
           if (ctx.combat) return non('Pendant un combat, on se déplace à son tour.');
           if (table.pause) return non('La partie est en pause.');
         }
@@ -295,7 +299,7 @@ const TableEtat = (() => {
     }
   }
 
-  return { reglages, normVisible, visiblePour, preparer, etatCarte, pieces, dansZone, brouillard, visibilitePiece, masque, pionsSur, occupee, caseLibre, placerHeros, membreDe, poserGroupe, sante, vue, agir };
+  return { reglages, normVisible, visiblePour, estMien, preparer, etatCarte, pieces, dansZone, brouillard, visibilitePiece, masque, pionsSur, occupee, caseLibre, placerHeros, membreDe, poserGroupe, sante, vue, agir };
 })();
 
 if (typeof module !== 'undefined') module.exports = TableEtat;
