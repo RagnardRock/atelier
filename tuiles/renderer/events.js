@@ -732,6 +732,12 @@ const Events = (() => {
   const choixEtats = (doc) => jdrListe(doc, 'etats').map((k) => [k.id, k.nom]);
   const QUI_TEST = [['choix', 'Le joueur choisit qui le tente'], ['meilleur', 'Le meilleur du groupe'], ['premier', 'Le premier du groupe'], ['tous', 'Chacun : réussi si au moins un réussit'], ['groupe', 'Test de groupe : réussi si la moitié réussit']];
   const QUI_VISES = [['tous', 'Tout le groupe'], ['premier', 'Le premier du groupe'], ['choix', 'Le joueur choisit qui']];
+  // Tafl 1.23 : les champs de la fiche du jeu (reglages.jdr.fiche, commun/fiche-perso.js).
+  const champsFiche = (doc) => (typeof FichePerso !== 'undefined' ? FichePerso.normaliser(doc.data.reglages?.jdr?.fiche)?.champs || [] : []);
+  const nomChampFiche = (doc, id) => champsFiche(doc).find((x) => x.id === id)?.nom || id || '?';
+  const ACTIONS_CHAMP = [['regler', 'Mettre à'], ['ajouter', 'Ajouter'], ['retirer', 'Retirer'], ['remplir', 'Remplir (une jauge à son max)'], ['basculer', 'Inverser (une case)']];
+  // « 3 » → 3, « oui » → true, sinon le texte.
+  const valeurChamp = (v) => { const t = String(v ?? '').trim(); if (/^-?\d+$/.test(t)) return Number(t); if (/^(oui|vrai|true)$/i.test(t)) return true; if (/^(non|faux|false)$/i.test(t)) return false; return t.slice(0, 200); };
   const MODES_JET = [['', 'Normal'], ['avantage', 'Avec avantage (2d20, le meilleur)'], ['desavantage', 'Avec désavantage (2d20, le pire)']];
   const lireDes = (t) => /^\s*(\d*d\d+(\s*[+-]\s*\d+)?|\d+)\s*$/i.test(String(t || ''));
   const PACK_JDR = ['jdr'];
@@ -832,6 +838,23 @@ const Events = (() => {
       ],
       depuis: (v) => ({ type: 'etat', action: v.action === 'retirer' ? 'retirer' : 'ajouter', etat: v.etat, qui: v.qui }),
       resume: (doc, c) => `${c.action === 'retirer' ? 'Retirer' : 'Mettre'} l'état ${jdrNom(doc, 'etats', c.etat).toLowerCase()} (${libelle(QUI_VISES, c.qui).toLowerCase()})`,
+    },
+    // Tafl 1.23 : un champ de la fiche du jeu (Réglages › Fiche des personnages).
+    champ_fiche: {
+      nom: 'Changer un champ de la fiche (santé mentale…)', icone: 'note', groupe: 'Dés et règles', packs: PACK_JDR,
+      nouveau: (doc) => ({ type: 'champ_fiche', champ: champsFiche(doc)[0]?.id || '', action: 'ajouter', valeur: 1, qui: 'tous', dire: true }),
+      champs: (doc, c) => [
+        { key: 'champ', label: 'Champ', type: 'select', value: c.champ, choices: champsFiche(doc).map((x) => [x.id, `${x.nom} (${libelle(FichePerso.TYPES, x.type).toLowerCase()})`]) },
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: ACTIONS_CHAMP },
+        { key: 'valeur', label: 'Valeur', type: 'text', value: String(c.valeur ?? ''), placeholder: 'un nombre, un texte, un choix de la liste, oui / non' },
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: QUI_VISES },
+        { key: 'dire', label: 'Le dire au joueur', type: 'checkbox', value: c.dire !== false },
+        { type: 'info', text: 'Un champ calculé par une formule ne se change pas : changez ce qu\'il lit. Une jauge reste entre 0 et son max.' },
+      ],
+      onInput: (v, f) => { f.inputs.valeur.row.hidden = v.action === 'remplir' || v.action === 'basculer'; },
+      depuis: (v) => ({ type: 'champ_fiche', champ: v.champ || '', action: pick(v.action, ACTIONS_CHAMP, 'regler'), valeur: valeurChamp(v.valeur), qui: v.qui, dire: Boolean(v.dire) }),
+      valide: (c) => (c.champ ? null : 'Ajoute d\'abord des champs à la fiche (Données › Réglages › Fiche des personnages).'),
+      resume: (doc, c) => `${nomChampFiche(doc, c.champ)} : ${libelle(ACTIONS_CHAMP, c.action).toLowerCase()}${['remplir', 'basculer'].includes(c.action) ? '' : ` ${c.valeur}`} (${libelle(QUI_VISES, c.qui).toLowerCase()})`,
     },
     creer_personnage: {
       nom: 'Créer un personnage (un héros de plus)', icone: 'person-add', groupe: 'Dés et règles', packs: PACK_JDR,
@@ -1041,6 +1064,19 @@ const Events = (() => {
       nouveau: () => ({ type: 'jdr_niveau', min: 3 }),
       champs: (doc, c) => [{ key: 'min', label: 'Au moins le niveau', type: 'number', value: c.min, min: 1, max: 20 }],
       depuis: (v) => ({ type: 'jdr_niveau', min: clamp(Math.round(v.min) || 1, 1, 20) }),
+    },
+    // Tafl 1.23 : un champ de la fiche du jeu.
+    jdr_champ: {
+      nom: 'Un champ de la fiche (JDR)', packs: PACK_JDR,
+      nouveau: (doc) => ({ type: 'jdr_champ', champ: champsFiche(doc)[0]?.id || '', comparaison: '>=', valeur: 1, tous: false }),
+      champs: (doc, c) => [
+        { key: 'champ', label: 'Champ', type: 'select', value: c.champ, choices: champsFiche(doc).map((x) => [x.id, x.nom]) },
+        { key: 'comparaison', label: 'Est', type: 'select', value: c.comparaison, choices: COMPARAISONS },
+        { key: 'valeur', label: 'Valeur', type: 'text', value: String(c.valeur ?? ''), placeholder: 'un nombre, un texte, oui / non' },
+        { key: 'tous', label: 'Pour', type: 'select', value: String(Boolean(c.tous)), choices: [['false', 'Au moins un héros'], ['true', 'Tous les héros']] },
+      ],
+      depuis: (v) => ({ type: 'jdr_champ', champ: v.champ || '', comparaison: pick(v.comparaison, COMPARAISONS, '>='), valeur: valeurChamp(v.valeur), tous: v.tous === 'true' }),
+      valide: (c) => (c.champ ? null : 'Ajoute d\'abord des champs à la fiche (Données › Réglages › Fiche des personnages).'),
     },
   });
 
@@ -1424,6 +1460,7 @@ const Events = (() => {
     if (c.type === 'jdr_classe') return `un héros est ${nomData(doc, 'classes_jdr', c.classe)}`;
     if (c.type === 'jdr_origine') return `un héros est ${nomData(doc, 'origines', c.origine)}`;
     if (c.type === 'jdr_niveau') return `un héros est au moins niveau ${c.min}`;
+    if (c.type === 'jdr_champ') return `${c.tous ? 'chaque héros' : 'un héros'} a ${nomChampFiche(doc, c.champ)} ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${typeof c.valeur === 'string' ? `« ${c.valeur} »` : c.valeur === true ? 'oui' : c.valeur === false ? 'non' : c.valeur}`;
     if (c.type === 'jour') return `le jour ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
     if (c.type === 'jours_depuis') return `jours depuis « ${nomVariable(doc, c.variable)} » ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
     if (c.type === 'heure') return `de ${c.de} h à ${c.a} h`;
@@ -1464,6 +1501,7 @@ const Events = (() => {
       case 'jdr_classe': return { type: 'jdr_classe', classe: str(c.classe) };
       case 'jdr_origine': return { type: 'jdr_origine', origine: str(c.origine) };
       case 'jdr_niveau': return { type: 'jdr_niveau', min: clamp(int(c.min, 1), 1, 20) };
+      case 'jdr_champ': return { type: 'jdr_champ', champ: str(c.champ), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: typeof c.valeur === 'boolean' || typeof c.valeur === 'number' ? c.valeur : valeurChamp(c.valeur), tous: Boolean(c.tous) };
       case 'jour': return { type: 'jour', comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 1), 1, 99999) };
       case 'jours_depuis': return { type: 'jours_depuis', variable: str(c.variable), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 0), 0, 99999) };
       case 'heure': return { type: 'heure', de: clamp(int(c.de, 0), 0, 23), a: clamp(int(c.a, 0), 0, 23) };
@@ -1517,6 +1555,7 @@ const Events = (() => {
       case 'xp': return { type: 'xp', jalon: Boolean(c.jalon), montant: clamp(int(c.montant, 0), 0, 999999) };
       case 'etat': return { type: 'etat', action: c.action === 'retirer' ? 'retirer' : 'ajouter', etat: str(c.etat), qui: pick(c.qui, QUI_VISES, 'tous') };
       case 'creer_personnage': return { type: 'creer_personnage' };
+      case 'champ_fiche': return { type: 'champ_fiche', champ: str(c.champ), action: pick(c.action, ACTIONS_CHAMP, 'regler'), valeur: typeof c.valeur === 'boolean' || typeof c.valeur === 'number' ? c.valeur : valeurChamp(c.valeur), qui: pick(c.qui, QUI_VISES, 'tous'), dire: c.dire !== false };
       case 'musique': return { type: 'musique', fichier: Donnees.son(c.fichier, ['aucune']) };
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };

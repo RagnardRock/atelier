@@ -1520,14 +1520,16 @@ const Donnees = (() => {
   }
   // Tafl 0.32.1 : les Réglages en 4 onglets, et seulement ce que le pack de règles du jeu utilise.
   // Les valeurs cachées ne sont pas effacées : revenir au pack les retrouve.
-  const ONGLETS_REGLAGES = [['regles', 'Règles du jeu', 'law'], ['partie', 'Partie', 'play'], ['interface', 'Interface', 'symbol-color'], ['ambiance', 'Ambiance', 'color-mode']];
+  const ONGLETS_REGLAGES = [['regles', 'Règles du jeu', 'law'], ['partie', 'Partie', 'play'], ['interface', 'Interface', 'symbol-color'], ['ambiance', 'Ambiance', 'color-mode'], ['fiche', 'Fiche des personnages', 'account', 'jdr']];
+  // Un onglet marqué d'un pack (Tafl 1.23 : la fiche, pour le JDR) ne se montre que pour ce pack.
+  const ongletsReglages = (r) => ONGLETS_REGLAGES.filter(([, , , pack]) => !pack || (pack === r.regles && (pack !== 'jdr' || J)));
   const PACKS_COURTS = { pokemon: ['Pokémon', 'Créatures à capturer, types, natures, badges, dresseurs.'], jrpg: ['JRPG classique', 'Un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres.'], jdr: ['JDR (D&D 5e)', 'Création de personnages, tests au d20, sorts, combats à l\'initiative.'], action: ['Action (temps réel)', 'Façon Zelda : on bouge librement, on frappe à l\'épée, des ennemis sur la carte.'] };
   const nomPack = (k) => PACKS_COURTS[k]?.[0] || k;
   let ongletReglages = (() => { try { return localStorage.getItem('tafl.reglagesOnglet') || 'regles'; } catch { return 'regles'; } })();
   function formReglages(r, ctx) {
-    if (!ONGLETS_REGLAGES.some(([k]) => k === ongletReglages)) ongletReglages = 'regles';
+    if (!ongletsReglages(r).some(([k]) => k === ongletReglages)) ongletReglages = 'regles';
     const barre = el('div', { className: 'reglages-onglets', role: 'tablist' }, [
-      ...ONGLETS_REGLAGES.map(([k, label, ic]) => {
+      ...ongletsReglages(r).map(([k, label, ic]) => {
         const b = el('button', { type: 'button', role: 'tab', className: `reglages-onglet${k === ongletReglages ? ' active' : ''}`, ariaSelected: String(k === ongletReglages) }, [icon(ic), el('span', { textContent: label })]);
         b.onclick = (e) => {
           e.preventDefault();
@@ -1540,7 +1542,7 @@ const Donnees = (() => {
       }),
       el('span', { className: 'reglages-pack', title: 'Le pack de règles du jeu (onglet Règles du jeu)', textContent: `Pack : ${nomPack(r.regles)}` }),
     ]);
-    const contenu = { regles: ongletRegles, partie: ongletPartie, interface: ongletInterface, ambiance: ongletAmbiance }[ongletReglages](r, ctx);
+    const contenu = { regles: ongletRegles, partie: ongletPartie, interface: ongletInterface, ambiance: ongletAmbiance, fiche: (x, c) => J.formFiche(x, c) }[ongletReglages](r, ctx);
     ctx.form.append(barre, ...contenu.filter(Boolean));
     ctx.form.scrollTop = 0;
   }

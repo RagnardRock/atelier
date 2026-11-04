@@ -71,7 +71,62 @@ const TableMode = (() => {
         }).filter(Boolean),
         argent: partie().argent || 0,
         notes: c.notes || '',
+        ...ficheDuJeu(c, false),
       };
+    }
+    // Saga 1.21.3 : la fiche personnalisée du jeu (commun/fiche-perso.js). Au joueur : la disposition et
+    // l'apparence (sans l'image, que son écran lit dans le jeu) et ses champs, sans ceux du MJ seul.
+    function ficheDuJeu(c, mj) {
+      const f = JdrBase.fiche(jeu());
+      if (!f) return {};
+      const j = jeu();
+      const k = JdrPerso.classe(j, c), o = JdrPerso.origine(j, c);
+      const champs = JdrFiches.champs(j, c).filter((x) => mj || x.visible !== 'mj')
+        .map(({ id, nom, type, valeur, max, options, formule, calcule, note, visible, modifiable }) => ({ id, nom, type, valeur, max, options, formule, calcule, note, visible, modifiable: mj || modifiable === 'joueur' }));
+      const caches = new Set(f.champs.filter((x) => !mj && x.visible === 'mj').map((x) => x.id));
+      return {
+        sousTitre: `${o?.nom ? `${o.nom} · ` : ''}${k?.nom || ''} niv. ${c.niveau}`,
+        champs,
+        modele: { ...f, theme: { ...f.theme, image: '' }, champs: f.champs.filter((x) => !caches.has(x.id)).map((x) => ({ id: x.id })), blocs: f.blocs.map((b) => (b.champs ? { ...b, champs: b.champs.filter((x) => !caches.has(x)) } : b)) },
+      };
+    }
+    // Un champ changé depuis une fiche (un joueur : la sienne, et seulement ce que le jeu lui laisse).
+    function changerChamp(c, id, valeur, mj) {
+      const x = JdrFiches.champs(jeu(), c).find((k) => k.id === id);
+      if (!x || (!mj && (x.visible === 'mj' || x.modifiable !== 'joueur'))) return false;
+      if (JdrFiches.changerChamp(jeu(), c, id, valeur) === undefined) return false;
+      envoyes.clear();
+      panneau?.rafraichir();
+      ficheMj?.maj();
+      return true;
+    }
+
+    // La fiche d'un héros pour le MJ : tous les champs, qu'il peut tous changer.
+    let ficheMj = null;
+    function ouvrirFiche(c) {
+      ficheMj?.fermer();
+      if (!c) return;
+      const fond = el('div', { className: 'table-fiche-mj' });
+      const cadre = el('div', { className: 'table-fiche-mj-cadre' });
+      const fermer = el('button', { type: 'button', className: 'table-fiche-mj-fermer', title: 'Fermer (Échap)', textContent: '✕' });
+      fond.append(cadre);
+      let signatureMj = '';
+      const maj = () => {
+        if (!partie()?.equipe.includes(c)) { ficheMj?.fermer(); return; }
+        const d = { ...fichePour({ mj: false, perso: c.creature, heros: c.pion }) || {}, ...ficheDuJeu(c, true) };
+        const s = JSON.stringify(d);
+        if (s === signatureMj) return;
+        signatureMj = s;
+        const f = JdrBase.fiche(jeu());
+        cadre.replaceChildren(fermer, FichePerso.rendre(f, d, { changer: (id, v) => changerChamp(c, id, v, true), image: f?.theme.image, mj: true }));
+      };
+      const minuterie = setInterval(maj, 700);
+      const quitter = () => { clearInterval(minuterie); fond.remove(); ficheMj = null; };
+      fermer.onclick = quitter;
+      fond.onclick = (e) => { if (e.target === fond) quitter(); };
+      ficheMj = { fermer: quitter, maj: () => { signatureMj = ''; maj(); } };
+      document.body.append(fond);
+      maj();
     }
     const vuePour = (r) => {
       const v = { ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) };
@@ -118,6 +173,7 @@ const TableMode = (() => {
       h.dialogue.observer(null);
       panneau?.fermer();
       panneau = null;
+      ficheMj?.fermer();
       boite.hidden = true;
       combat = null;
       window.saga.tableFermer?.();
@@ -409,6 +465,7 @@ const TableMode = (() => {
     }
     // Les touches du clavier (et de la manette) pour la boîte de combat.
     function touche(t) {
+      if (ficheMj && (t === 'retour' || t === 'echap')) { ficheMj.fermer(); return true; }
       if (picker && (t === 'retour' || t === 'echap')) { annulerPicker(); afficherAide(''); return true; }
       const a = attente;
       if (!a) return false;
@@ -544,6 +601,8 @@ const TableMode = (() => {
           return;
         }
         if (a.type === 'agir_fiche') { agirFiche(nom, r, a); return; }
+        // Saga 1.21.3 : un champ de la fiche du jeu, sur son propre héros.
+        if (a.type === 'champ') { const c = herosDuGroupe().find((q) => E.estMien(r, q)); if (c && !creations.has(nom)) changerChamp(c, String(a.id || ''), a.valeur, false); return; }
         if (a.type === 'voter') { voter(nom, a); return; }
         a = { ...a, perso: r.perso, heros: r.heros };
       }
@@ -815,6 +874,8 @@ const TableMode = (() => {
       jeu, partie, carte, table, agir, pion, VISIBILITES: () => VISIBILITES(jeu(), partie()), libelleVisible,
       // Le multijoueur (Saga 1.0) : qui joue quel héros (panneau du MJ).
       roleDe, cleRole, cleDe, donnerRole, multi: () => h.multi?.(),
+      // Saga 1.21.3 : la fiche d'un héros (tous ses champs) pour le MJ.
+      ouvrirFiche, get ficheOuverte() { return Boolean(ficheMj); },
       get selection() { return selection; }, set selection(v) { selection = v; },
       get pinceau() { return pinceau; }, set pinceau(v) { pinceau = v; canvas.classList.toggle('pinceau', Boolean(v)); },
       get apercu() { return apercu; }, set apercu(v) { apercu = v; },

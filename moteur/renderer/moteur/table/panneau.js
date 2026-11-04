@@ -113,6 +113,8 @@ const TablePanneau = (() => {
             el('small', { className: 'table-pv', textContent: `${pv} PV` }));
           ligne.onclick = (e) => { if (e.target.closest('select, button')) return; T.selection = T.selection === p.id ? null : p.id; dessiner(); };
           if (p.sorte !== 'heros') ligne.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
+          // Saga 1.21.3 : la fiche du héros (et les champs du jeu, que le MJ peut tous changer).
+          if (c) ligne.append(btn('account', '', () => T.ouvrirFiche(c), { titre: `La fiche de ${nom}` }));
           out.push(ligne);
         }
         if (T.combat?.ordre?.length) {
