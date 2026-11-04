@@ -70,7 +70,15 @@ const TableClient = (() => {
         boite.innerHTML = '';
         if (vue.scene.qui) boite.append(el('div', { className: 'joueurs-qui', textContent: vue.scene.qui }));
         boite.append(el('div', { className: 'joueurs-texte', textContent: vue.scene.texte }));
-        if (vue.scene.choix) boite.append(el('div', { className: 'joueurs-choix' }, ...vue.scene.choix.map((c) => el('span', { textContent: c }))));
+        // Saga 1.21.2 : avec un héros, on vote ; sinon on voit seulement les choix.
+        const v = vue.vote;
+        if (vue.scene.choix) boite.append(el('div', { className: `joueurs-choix${v ? ' vote' : ''}` }, ...vue.scene.choix.map((c, k) => {
+          if (!v) return el('span', { textContent: c });
+          const b = el('button', { className: `joueurs-vote${v.moi === k ? ' moi' : ''}`, type: 'button' }, el('span', { textContent: c }), v.comptes[k] ? el('small', { textContent: `${v.comptes[k]} voix` }) : null);
+          b.onclick = () => window.saga.tableDemander({ type: 'voter', n: v.n, k });
+          return b;
+        })));
+        if (v) boite.append(el('div', { className: 'joueurs-fiche-note', textContent: v.moi >= 0 ? 'Ton vote est pris (tu peux changer). La majorité l\'emporte, le MJ tranche en cas d\'égalité.' : 'Vote pour la réponse du groupe.' }));
       }
       // Les nouveaux jets (ceux du MJ cachés n'arrivent jamais ici).
       const lignes = vue?.journal || [];

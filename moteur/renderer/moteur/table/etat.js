@@ -207,7 +207,7 @@ const TableEtat = (() => {
       carte: carte.id, nom: carte.nom, largeur: carte.largeur, hauteur: carte.hauteur,
       brouillard: brouillard(table, carte), masque: Array.from(m).join(''),
       pions, pnj, combat, journal, pause: Boolean(table.pause),
-      scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '' } : null,
+      scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '', ...(Array.isArray(ctx.scene.choix) ? { choix: ctx.scene.choix.map(String) } : {}) } : null,
       caseM: reglages(jeu).caseM,
     };
     // Saga 1.0 : le joueur d'un héros reçoit sa fiche (lui seul), pour la lire et lancer ses jets.

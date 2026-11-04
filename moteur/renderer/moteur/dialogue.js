@@ -131,6 +131,15 @@ const Dialogue = (() => {
     return {
       dire, choisir, fermer, touche, avancer, annoncer,
       observer(f) { observateur = f; },
+      // Saga 1.21.2 (mode table) : le choix décidé ailleurs (le vote des joueurs). Rend vrai s'il a été pris.
+      choisirIndice(i) {
+        if (attente?.type !== 'choix' || !(i >= 0 && i < attente.n)) return false;
+        attente.i = i;
+        surligner(attente);
+        sons('valider');
+        valider();
+        return true;
+      },
       get ouvert() { return !boite.hidden; },
       regler({ vitesseTexte } = {}) { vitesse = VITESSES[vitesseTexte] || VITESSES.normale; },
     };

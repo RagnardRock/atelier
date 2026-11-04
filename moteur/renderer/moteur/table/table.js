@@ -100,7 +100,12 @@ const TableMode = (() => {
       actif = true;
       document.body.classList.add('mode-table');
       E.preparer(jeu(), partie());
-      h.dialogue.observer((o) => { sceneTexte = o; });
+      h.dialogue.observer((o) => {
+        sceneTexte = o;
+        // Saga 1.21.2 : des choix de dialogue → un vote des joueurs (le MJ peut toujours cliquer lui-même).
+        vote = o?.choix?.length ? { n: ++numeroQuestion, nb: o.choix.length, votes: new Map() } : null;
+        montrerVotes();
+      });
       // Un deuxième démarrage (une nouvelle partie, F5) remplace le panneau au lieu d'en empiler un autre.
       panneau?.fermer();
       panneau = TablePanneau.creer({ conteneur: colonne, table: api });
@@ -539,6 +544,7 @@ const TableMode = (() => {
           return;
         }
         if (a.type === 'agir_fiche') { agirFiche(nom, r, a); return; }
+        if (a.type === 'voter') { voter(nom, a); return; }
         a = { ...a, perso: r.perso, heros: r.heros };
       }
       const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null, heros: typeof a.heros === 'string' ? a.heros : '' };
@@ -677,11 +683,44 @@ const TableMode = (() => {
         panneau?.rafraichir();
       }
     }
+    // --- Saga 1.21.2 : les joueurs votent les choix de dialogue ---
+    // Chaque joueur qui a un héros vote ; quand tous les joueurs connectés ont voté, la majorité l'emporte.
+    // En cas d'égalité, le MJ tranche (il peut aussi cliquer un choix à tout moment).
+    let vote = null; // { n, nb, votes: Map nom → indice }
+    const votants = () => (h.multi?.()?.joueurs || []).filter((j) => !j.hote && j.connecte && !rolePour(j.nom).spectateur);
+    function comptes() {
+      const c = Array(vote?.nb || 0).fill(0);
+      for (const k of vote?.votes.values() || []) c[k]++;
+      return c;
+    }
+    function voter(nom, a) {
+      if (!vote || Number(a.n) !== vote.n) return;
+      const k = Math.round(Number(a.k));
+      if (!(k >= 0 && k < vote.nb)) return;
+      vote.votes.set(nom, k);
+      envoyes.clear();
+      montrerVotes();
+      const l = votants();
+      if (!l.length || !l.every((j) => vote.votes.has(j.nom))) return;
+      const c = comptes();
+      const max = Math.max(...c);
+      const gagnants = c.map((x, i) => (x === max ? i : -1)).filter((i) => i >= 0);
+      if (gagnants.length === 1) h.dialogue.choisirIndice(gagnants[0]);
+      else h.message(`Égalité au vote (${gagnants.map((i) => `« ${sceneTexte?.choix?.[i] || i + 1} »`).join(', ')}) : à toi de choisir.`);
+    }
+    // Chez le MJ, le nombre de voix à côté de chaque choix.
+    function montrerVotes() {
+      const c = comptes();
+      document.querySelectorAll('.dialogue-choix .dialogue-option').forEach((b, i) => {
+        if (vote && c[i]) b.dataset.votes = `${c[i]} voix`; else delete b.dataset.votes;
+      });
+    }
     // Ce qu'un ami sans héros voit en plus : les héros libres, sa création en cours.
     function extrasPour(nom, r) {
       const x = {};
       const e = creations.get(nom);
       if (e) x.creation = e.q || { sorte: 'attente' };
+      if (vote && !r.spectateur) x.vote = { n: vote.n, comptes: comptes(), moi: vote.votes.has(nom) ? vote.votes.get(nom) : -1 };
       else if (r.spectateur) {
         x.libres = libres().map((c) => ({ id: cleDe(c), nom: JdrPerso.nom(jeu(), c),
           detail: [JdrPerso.origine?.(jeu(), c)?.nom, JdrPerso.classe?.(jeu(), c)?.nom, `niv. ${c.niveau || 1}`].filter(Boolean).join(' · ') }));
