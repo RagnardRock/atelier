@@ -66,16 +66,16 @@ const TablePanneau = (() => {
           const out = [];
           const i = multi.infos;
           if (i.ouvert) out.push(el('p', { className: 'table-note', textContent: `Ils ouvrent ${i.adresses[0] ? `http://${i.adresses[0]}:${i.port}` : `le port ${i.port}`} et entrent le code ${i.code}.` }));
-          const heros = partie.equipe.filter((c) => c.jdr).map((c) => [c.creature, JdrPerso.nom(jeu, c)]);
+          const heros = partie.equipe.filter((c) => c?.jdr).map((c) => [T.cleDe(c), JdrPerso.nom(jeu, c)]);
           for (const j of multi.joueurs) {
             if (j.hote) continue;
             out.push(el('div', { className: `table-ligne ami${j.connecte ? '' : ' absent'}` },
               el('i', { className: `codicon codicon-${j.connecte ? 'person' : 'debug-disconnect'}` }),
               el('span', { className: 'table-nom', textContent: j.nom }),
-              select(T.roleDe(j.nom), [['', 'Spectateur'], ...heros.map(([id, nom]) => [id, nom])], (v) => T.donnerRole(j.nom, v))));
+              select(T.cleRole(j.nom), [['', 'Sans héros'], ...heros.map(([id, nom]) => [id, nom])], (v) => T.donnerRole(j.nom, v))));
           }
           if (multi.joueurs.length <= 1) out.push(el('p', { className: 'table-note', textContent: 'Personne encore. Donne l\'adresse et le code à tes amis : ils jouent depuis leur navigateur, sans rien installer.' }));
-          out.push(el('p', { className: 'table-note', textContent: 'Chaque ami qui arrive reçoit un héros libre. Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat (ton menu reste ouvert : la première réponse compte). Un spectateur ne voit que l\'écran partagé.' }));
+          out.push(el('p', { className: 'table-note', textContent: 'Un ami sans héros en prend un libre ou crée le sien depuis son écran (il est gardé dans la sauvegarde). Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat (ton menu reste ouvert : la première réponse compte). Un spectateur ne voit que l\'écran partagé.' }));
           return out;
         }));
       }

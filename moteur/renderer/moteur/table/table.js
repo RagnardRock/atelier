@@ -53,8 +53,8 @@ const TableMode = (() => {
       ficheDe: (perso) => fichePour(perso),
     });
     // La fiche qu'un joueur reçoit (la sienne) : de quoi la lire et lancer ses jets.
-    function fichePour(perso) {
-      const c = partie().equipe.find((q) => q.jdr && q.creature === perso);
+    function fichePour(role) {
+      const c = partie().equipe.find((q) => q?.jdr && E.estMien(role, q));
       if (!c) return null;
       const j = jeu();
       return {
@@ -63,6 +63,14 @@ const TableMode = (() => {
         competences: JdrBase.listeOuDefaut(j, 'competences').map((x) => ({ id: x.id, nom: x.nom, bonus: JdrPerso.bonusCompetence(j, c, x.id), maitrise: JdrPerso.competencesMaitrisees(j, c).includes(x.id) })),
         attaques: JdrPerso.attaques(j, c).map((x) => ({ nom: x.nom, bonus: x.bonus, des: x.des, mod: x.mod })),
         etats: c.etats || [],
+        // Saga 1.21.2 : ce que le joueur peut faire hors combat (équipement, sorts, niveau…) et le sac du groupe.
+        actions: JdrHorsCombat.actionsMembre(j, c).map(([id, texte]) => ({ id, texte })),
+        sac: Object.entries(partie().sac || {}).filter(([, n]) => n > 0).map(([id, n]) => {
+          const o = JdrPerso.objet(j, id);
+          return o ? { id, nom: o.nom, n, detail: JdrHorsCombat.texteObjet(o), utilisable: JdrHorsCombat.utilisable(o) } : null;
+        }).filter(Boolean),
+        argent: partie().argent || 0,
+        notes: c.notes || '',
       };
     }
     const vuePour = (r) => {
@@ -92,7 +100,12 @@ const TableMode = (() => {
       actif = true;
       document.body.classList.add('mode-table');
       E.preparer(jeu(), partie());
-      h.dialogue.observer((o) => { sceneTexte = o; });
+      h.dialogue.observer((o) => {
+        sceneTexte = o;
+        // Saga 1.21.2 : des choix de dialogue → un vote des joueurs (le MJ peut toujours cliquer lui-même).
+        vote = o?.choix?.length ? { n: ++numeroQuestion, nb: o.choix.length, votes: new Map() } : null;
+        montrerVotes();
+      });
       // Un deuxième démarrage (une nouvelle partie, F5) remplace le panneau au lieu d'en empiler un autre.
       panneau?.fermer();
       panneau = TablePanneau.creer({ conteneur: colonne, table: api });
@@ -128,8 +141,8 @@ const TableMode = (() => {
       return res;
     }
     // Le jet demandé par un joueur : lancé ici (l'hôte), montré sur le plateau de dés et noté au journal.
-    async function lancerJet({ perso, sorte, id, quoi }) {
-      const c = partie().equipe.find((q) => q.jdr && q.creature === perso);
+    async function lancerJet({ perso, heros, sorte, id, quoi }) {
+      const c = partie().equipe.find((q) => q?.jdr && E.estMien({ perso, heros }, q));
       if (!c) return;
       const o = { jeu: jeu(), partie: partie(), ui: { des: (x) => h.des(x) }, c, quoi };
       try {
@@ -494,16 +507,26 @@ const TableMode = (() => {
       return t.roles;
     }
     const roleDe = (nom) => String(roles()[nom] || '');
-    function donnerRole(nom, perso) {
-      roles()[nom] = String(perso || '');
+    // Saga 1.21.2 : un héros se désigne par son pion (unique) ; les parties d'avant gardaient son personnage.
+    const cleDe = (c) => c.pion || c.creature;
+    const herosDuGroupe = () => partie().equipe.filter((c) => c?.jdr);
+    const membreParCle = (cle) => (cle ? herosDuGroupe().find((c) => c.pion === cle) || herosDuGroupe().find((c) => c.creature === cle) || null : null);
+    const cleRole = (nom) => { const c = membreParCle(roleDe(nom)); return c ? cleDe(c) : ''; };
+    function donnerRole(nom, cle) {
+      roles()[nom] = String(cle || '');
       envoyes.clear();
       panneau?.rafraichir();
     }
-    // Le rôle d'un ami, pour le filtrage et pour ses droits : un spectateur ne peut rien demander.
+    // Le rôle d'un ami, pour le filtrage et pour ses droits : un spectateur ne peut que choisir ou créer son perso.
     const rolePour = (nom) => {
-      const p = roleDe(nom);
-      return p ? { mj: false, perso: p } : { mj: false, perso: null, spectateur: true };
+      const c = membreParCle(roleDe(nom));
+      return c ? { mj: false, perso: c.creature, heros: c.pion || '' } : { mj: false, perso: null, spectateur: true };
     };
+    // Les héros que personne ne joue (un ami sans héros peut en prendre un).
+    function libres() {
+      const pris = new Set(Object.values(roles()).map((v) => membreParCle(v)).filter(Boolean).map(cleDe));
+      return herosDuGroupe().filter((c) => !c.mort_definitive && !pris.has(cleDe(c)));
+    }
 
     // --- Les joueurs (leur fenêtre, ou le navigateur d'un ami) : leurs demandes, vérifiées ici ---
     function recevoir(a) {
@@ -511,11 +534,20 @@ const TableMode = (() => {
       // D'un ami par le réseau : son rôle décide, pas ce qu'il dit être.
       if (a.client) {
         const nom = h.multi?.()?.nomDe(a.client) || '';
+        if (!nom) return;
         const r = rolePour(nom);
-        if (r.spectateur) return;
-        a = { ...a, perso: r.perso };
+        // Saga 1.21.2 : un ami sans héros en prend un libre ou crée le sien (étape par étape, ici).
+        if (a.type === 'creation') { repondreCreation(nom, a); return; }
+        if (r.spectateur) {
+          if (a.type === 'creer') creerPour(nom);
+          else if (a.type === 'prendre') { const c = libres().find((x) => cleDe(x) === a.heros); if (c && !creations.has(nom)) { donnerRole(nom, cleDe(c)); h.message(`${nom} joue ${JdrPerso.nom(jeu(), c)}.`); } }
+          return;
+        }
+        if (a.type === 'agir_fiche') { agirFiche(nom, r, a); return; }
+        if (a.type === 'voter') { voter(nom, a); return; }
+        a = { ...a, perso: r.perso, heros: r.heros };
       }
-      const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null };
+      const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null, heros: typeof a.heros === 'string' ? a.heros : '' };
       if (a.type === 'deplacer') {
         if (h.occupe()) return;
         const p = pion(a.pion);
@@ -525,7 +557,7 @@ const TableMode = (() => {
         const q = presentDe(a.id);
         const p = pion(a.pion);
         if (!q || !p || combat || h.occupe() || q.ev.declenchement !== 'parler' || !E.visiblePour(q.ev.visible_par, r)) return;
-        if (r.perso && E.membreDe(partie(), p)?.creature !== r.perso) return;
+        if (r.perso && !E.estMien(r, E.membreDe(partie(), p))) return;
         if (G.distance(p, q) > 1) return;
         h.placerJoueur(p.x, p.y, p.direction);
         h.lancer(q);
@@ -540,12 +572,12 @@ const TableMode = (() => {
 
     // --- Saga 1.21 : en combat, le joueur d'un héros joue son tour depuis son écran ---
     // Le MJ garde la main : son menu reste ouvert, et la première réponse (la sienne ou celle du joueur) compte.
-    function persoActif() {
+    function heroActif() {
       const p = combat?.actif ? pion(combat.actif) : null;
-      return p?.sorte === 'heros' ? E.membreDe(partie(), p)?.creature || '' : '';
+      return p?.sorte === 'heros' ? E.membreDe(partie(), p) : null;
     }
     function questionPour(r) {
-      if (r.mj || !r.perso || !combat || r.perso !== persoActif()) return null;
+      if (r.mj || !r.perso || !combat || !E.estMien(r, heroActif())) return null;
       const q = { tete: tete.textContent, aide: aide.hidden ? '' : aide.textContent };
       if (attente?.sorte === 'menu') {
         q.menu = { n: attente.n, titre: attente.titre || '', annulable: Boolean(attente.annulable),
@@ -555,7 +587,7 @@ const TableMode = (() => {
       return q.menu || q.choix ? q : null;
     }
     function repondre(a, r) {
-      if (!r.perso || r.perso !== persoActif()) return;
+      if (!r.perso || !E.estMien(r, heroActif())) return;
       if (a.menu != null) {
         if (attente?.sorte !== 'menu' || attente.n !== Number(a.menu)) return;
         const k = a.k == null || Number(a.k) < 0 ? null : Math.round(Number(a.k));
@@ -571,24 +603,140 @@ const TableMode = (() => {
       }
     }
 
-    // Un ami qui arrive à la table reçoit un héros libre (le MJ peut changer dans le panneau Amis). Un ami que
-    // le MJ a mis « Spectateur » le reste.
-    function attribuer(joueurs) {
-      if (!actif || !jeu() || !partie()) return;
-      const r = roles();
-      const heros = partie().equipe.filter((c) => c.jdr);
-      const pris = new Set(Object.values(r).filter(Boolean));
-      let change = false;
-      for (const j of joueurs || []) {
-        if (j.hote || !j.connecte || !j.nom || Object.prototype.hasOwnProperty.call(r, j.nom)) continue;
-        const c = heros.find((x) => !pris.has(x.creature));
-        if (!c) continue;
-        r[j.nom] = c.creature;
-        pris.add(c.creature);
-        change = true;
-        h.message(`${j.nom} joue ${JdrPerso.nom(jeu(), c)} (panneau Amis pour changer).`);
+    // --- Saga 1.21.2 : un ami crée son personnage depuis son écran ---
+    // La création du pack (regles/jdr/creation.js) tourne ici, chez l'hôte ; ses questions (une liste, un nom,
+    // une phrase) partent sur l'écran de l'ami, qui répond. Le héros rejoint le groupe : il est dans la partie,
+    // donc dans la sauvegarde, et l'ami le retrouve en revenant sous le même nom.
+    const creations = new Map(); // nom → { q: la question en cours (null pendant que l'hôte calcule), resoudre }
+    function uiDistant(nom, { des = false } = {}) {
+      const demander = (q) => new Promise((resoudre) => { creations.set(nom, { q: { ...q, n: ++numeroQuestion }, resoudre }); envoyes.clear(); });
+      const lignes = (l) => (Array.isArray(l) ? l : []).map((x) => ({ texte: String(x?.texte ?? ''), detail: String(x?.detail || ''), desactive: Boolean(x?.desactive) }));
+      return {
+        liste(titre, items, annulable = true) {
+          const o = titre && typeof titre === 'object' ? titre : { titre, items, annulable };
+          return demander({ sorte: 'liste', titre: String(o.titre || ''), entete: String(o.entete || ''), note: String(o.note || ''), items: lignes(o.items), annulable: o.annulable !== false });
+        },
+        texte: (o = {}) => demander({ sorte: 'texte', titre: String(o.titre || ''), valeur: String(o.valeur || ''), max: Number(o.max) || 24 }),
+        dire: (t) => demander({ sorte: 'dire', texte: String(t || '') }),
+        // Les jets vont au journal, que l'ami voit ; hors création, le MJ les voit aussi rouler.
+        des: (o) => (des ? h.des(o) : Promise.resolve()),
+      };
+    }
+    function repondreCreation(nom, a) {
+      const e = creations.get(nom);
+      const q = e?.q;
+      if (!q || q.n !== Number(a.n)) return;
+      let v;
+      if (q.sorte === 'liste') {
+        if (a.k == null || Number(a.k) < 0) { if (!q.annulable) return; v = null; } else {
+          const k = Math.round(Number(a.k));
+          if (!q.items[k] || q.items[k].desactive) return;
+          v = k;
+        }
+      } else if (q.sorte === 'texte') v = a.annuler ? null : String(a.texte || '').trim().slice(0, q.max);
+      creations.set(nom, { q: null, resoudre: null });
+      envoyes.clear();
+      e.resoudre(v);
+    }
+    async function creerPour(nom) {
+      if (creations.has(nom) || !jeu() || !partie()) return;
+      creations.set(nom, { q: null, resoudre: null });
+      envoyes.clear();
+      h.message(`${nom} crée son personnage.`);
+      try {
+        const c = await JdrCreation.creer({ jeu: jeu(), partie: partie(), ui: uiDistant(nom), numero: herosDuGroupe().length + 1, annulable: true });
+        if (!c || !actif) return;
+        c.joueur = nom;
+        const ou = Collection.ranger(jeu(), partie(), c);
+        if (ou?.ou !== 'equipe') { h.message(`Le groupe est complet : ${JdrPerso.nom(jeu(), c)} (de ${nom}) attend dans la réserve.`); return; }
+        E.placerHeros(table(), partie(), carte(), h.joueur().x, h.joueur().y, h.presents());
+        donnerRole(nom, cleDe(c));
+        h.message(`${nom} a créé ${JdrPerso.nom(jeu(), c)}.`);
+      } catch (err) {
+        h.message(`Création impossible : ${err.message}`);
+      } finally {
+        creations.delete(nom);
+        envoyes.clear();
+        panneau?.rafraichir();
       }
-      if (change) { envoyes.clear(); panneau?.rafraichir(); }
+    }
+    // Saga 1.21.2 : la fiche hors combat d'un joueur (équipement, sorts, monter de niveau, dés de vie, notes,
+    // utiliser un objet du sac) : les écrans du pack (regles/jdr/hors-combat.js), joués chez l'hôte, sur son écran.
+    async function agirFiche(nom, r, a) {
+      if (creations.has(nom) || combat || !jeu() || !partie()) return;
+      const c = herosDuGroupe().find((q) => E.estMien(r, q));
+      if (!c) return;
+      const id = String(a.id || '');
+      const objet = id === 'objet' ? String(a.objet || '') : '';
+      if (objet ? !(partie().sac?.[objet] > 0) : !JdrHorsCombat.actionsMembre(jeu(), c).some(([x]) => x === id)) return;
+      creations.set(nom, { q: null, resoudre: null });
+      envoyes.clear();
+      try {
+        const ui = uiDistant(nom, { des: true });
+        if (objet) await JdrHorsCombat.utiliserObjet({ jeu: jeu(), partie: partie(), ui, id: objet });
+        else await JdrHorsCombat.agirMembre({ jeu: jeu(), partie: partie(), ui, c, id });
+      } catch (err) {
+        h.message(`${nom} : ${err.message}`);
+      } finally {
+        creations.delete(nom);
+        envoyes.clear();
+        panneau?.rafraichir();
+      }
+    }
+    // --- Saga 1.21.2 : les joueurs votent les choix de dialogue ---
+    // Chaque joueur qui a un héros vote ; quand tous les joueurs connectés ont voté, la majorité l'emporte.
+    // En cas d'égalité, le MJ tranche (il peut aussi cliquer un choix à tout moment).
+    let vote = null; // { n, nb, votes: Map nom → indice }
+    const votants = () => (h.multi?.()?.joueurs || []).filter((j) => !j.hote && j.connecte && !rolePour(j.nom).spectateur);
+    function comptes() {
+      const c = Array(vote?.nb || 0).fill(0);
+      for (const k of vote?.votes.values() || []) c[k]++;
+      return c;
+    }
+    function voter(nom, a) {
+      if (!vote || Number(a.n) !== vote.n) return;
+      const k = Math.round(Number(a.k));
+      if (!(k >= 0 && k < vote.nb)) return;
+      vote.votes.set(nom, k);
+      envoyes.clear();
+      montrerVotes();
+      const l = votants();
+      if (!l.length || !l.every((j) => vote.votes.has(j.nom))) return;
+      const c = comptes();
+      const max = Math.max(...c);
+      const gagnants = c.map((x, i) => (x === max ? i : -1)).filter((i) => i >= 0);
+      if (gagnants.length === 1) h.dialogue.choisirIndice(gagnants[0]);
+      else h.message(`Égalité au vote (${gagnants.map((i) => `« ${sceneTexte?.choix?.[i] || i + 1} »`).join(', ')}) : à toi de choisir.`);
+    }
+    // Chez le MJ, le nombre de voix à côté de chaque choix.
+    function montrerVotes() {
+      const c = comptes();
+      document.querySelectorAll('.dialogue-choix .dialogue-option').forEach((b, i) => {
+        if (vote && c[i]) b.dataset.votes = `${c[i]} voix`; else delete b.dataset.votes;
+      });
+    }
+    // Ce qu'un ami sans héros voit en plus : les héros libres, sa création en cours.
+    function extrasPour(nom, r) {
+      const x = {};
+      const e = creations.get(nom);
+      if (e) x.creation = e.q || { sorte: 'attente' };
+      if (vote && !r.spectateur) x.vote = { n: vote.n, comptes: comptes(), moi: vote.votes.has(nom) ? vote.votes.get(nom) : -1 };
+      else if (r.spectateur) {
+        x.libres = libres().map((c) => ({ id: cleDe(c), nom: JdrPerso.nom(jeu(), c),
+          detail: [JdrPerso.origine?.(jeu(), c)?.nom, JdrPerso.classe?.(jeu(), c)?.nom, `niv. ${c.niveau || 1}`].filter(Boolean).join(' · ') }));
+        x.groupePlein = partie().equipe.length >= (Number(jeu().donnees?.reglages?.reglages?.equipe_max) || 6);
+      }
+      return x;
+    }
+    // Un ami arrive sans héros : le MJ le sait.
+    const vus = new Set();
+    function arrivees(joueurs) {
+      if (!actif) return;
+      for (const j of joueurs || []) {
+        if (j.hote || !j.connecte || vus.has(j.nom)) continue;
+        vus.add(j.nom);
+        if (rolePour(j.nom).spectateur) h.message(`${j.nom} est là : il choisit un héros libre ou crée le sien.`);
+      }
     }
     let ecouteMulti = false;
     function brancherMulti() {
@@ -599,10 +747,10 @@ const TableMode = (() => {
         // Les demandes des amis (déplacer, parler, lancer un jet, répondre en combat) arrivent par le réseau.
         m.sur((sorte, d) => {
           if (sorte === 'demande') recevoir(d);
-          else if (sorte === 'joueurs') attribuer(d);
+          else if (sorte === 'joueurs') arrivees(d);
         });
       }
-      attribuer(m.joueurs);
+      arrivees(m.joueurs);
     }
 
     // --- Chaque image ---
@@ -642,7 +790,7 @@ const TableMode = (() => {
           for (const j of multi.joueurs) {
             if (j.hote || !j.connecte) continue;
             const r = rolePour(j.nom);
-            const v = JSON.stringify(vuePour(r.spectateur ? { mj: false, perso: null } : r));
+            const v = JSON.stringify({ ...vuePour(r.spectateur ? { mj: false, perso: null } : r), ...extrasPour(j.nom, r) });
             if (envoyes.get(j.id) !== v) { envoyes.set(j.id, v); window.saga.reseauEnvoyer(j.id, 'vue', v); }
           }
         }
@@ -666,7 +814,7 @@ const TableMode = (() => {
       // Pour le panneau du MJ.
       jeu, partie, carte, table, agir, pion, VISIBILITES: () => VISIBILITES(jeu(), partie()), libelleVisible,
       // Le multijoueur (Saga 1.0) : qui joue quel héros (panneau du MJ).
-      roleDe, donnerRole, multi: () => h.multi?.(),
+      roleDe, cleRole, cleDe, donnerRole, multi: () => h.multi?.(),
       get selection() { return selection; }, set selection(v) { selection = v; },
       get pinceau() { return pinceau; }, set pinceau(v) { pinceau = v; canvas.classList.toggle('pinceau', Boolean(v)); },
       get apercu() { return apercu; }, set apercu(v) { apercu = v; },
