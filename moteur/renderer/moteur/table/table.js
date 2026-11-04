@@ -65,7 +65,16 @@ const TableMode = (() => {
         etats: c.etats || [],
       };
     }
-    const vuePour = (r) => ({ ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) });
+    const vuePour = (r) => {
+      const v = { ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) };
+      // Saga 1.21 : en combat, le joueur du héros dont c'est le tour reçoit ses choix (le menu, les cases, les cibles).
+      const q = questionPour(r);
+      if (q) {
+        if (q.choix?.cibles) q.choix.cibles = q.choix.cibles.filter((id) => v.pions.some((p) => p.id === id));
+        v.question = q;
+      }
+      return v;
+    };
     const pion = (id) => table().pions.find((p) => p.id === id) || null;
     const presentDe = (id) => h.presents().find((q) => `ev:${q.ev.id}` === id) || null;
     const occupee = (x, y, sauf = null) => E.occupee(table(), carte().id, x, y, sauf) || h.presents().some((q) => q.bloque && q.x === x && q.y === y);
@@ -84,8 +93,11 @@ const TableMode = (() => {
       document.body.classList.add('mode-table');
       E.preparer(jeu(), partie());
       h.dialogue.observer((o) => { sceneTexte = o; });
+      // Un deuxième démarrage (une nouvelle partie, F5) remplace le panneau au lieu d'en empiler un autre.
+      panneau?.fermer();
       panneau = TablePanneau.creer({ conteneur: colonne, table: api });
       plateau.oublier();
+      brancherMulti();
     }
     function arreter() {
       actif = false;
@@ -252,10 +264,10 @@ const TableMode = (() => {
 
     // --- Choisir une case ou un pion (les combats, poser une rencontre) ---
     function choisirCase(cases, { titre = '' } = {}) {
-      return new Promise((resoudre) => { picker = { sorte: 'case', cases, resoudre, titre }; });
+      return new Promise((resoudre) => { picker = { sorte: 'case', cases, resoudre, titre, n: ++numeroQuestion }; });
     }
     function choisirPion(cibles, { zone = 0 } = {}) {
-      return new Promise((resoudre) => { picker = { sorte: 'pion', cibles, resoudre, zone }; });
+      return new Promise((resoudre) => { picker = { sorte: 'pion', cibles, resoudre, zone, n: ++numeroQuestion }; });
     }
     function cliquerPicker(c, id) {
       const p = picker;
@@ -352,13 +364,14 @@ const TableMode = (() => {
     const aide = el('div', { className: 'table-combat-aide', hidden: true });
     boite.append(tete, texte, choix, aide);
     let attente = null; // { sorte: 'message' | 'menu', resoudre, items, i }
+    let numeroQuestion = 0; // chaque menu et chaque choix sur le plateau a son numéro (une réponse en retard ne compte pas)
     function afficherAide(t) { aide.textContent = t; aide.hidden = !t; }
     function viderChoix() { choix.innerHTML = ''; }
     function menuBoite(items, annulable, titre = '') {
       viderChoix();
       if (titre) choix.append(el('div', { className: 'table-combat-titre', textContent: titre }));
       return new Promise((resoudre) => {
-        const a = { sorte: 'menu', resoudre, annulable, boutons: [], i: Math.max(0, items.findIndex((x) => !x.desactive)) };
+        const a = { sorte: 'menu', resoudre, annulable, titre, n: ++numeroQuestion, boutons: [], i: Math.max(0, items.findIndex((x) => !x.desactive)) };
         items.forEach((it, k) => {
           const b = el('button', { className: `table-combat-option${it.desactive ? ' desactive' : ''}`, type: 'button', disabled: Boolean(it.desactive) },
             it.icone ? el('i', { className: `codicon codicon-${it.icone}` }) : null, el('span', { textContent: it.texte }), it.detail ? el('small', { textContent: it.detail }) : null);
@@ -509,12 +522,91 @@ const TableMode = (() => {
         if (G.distance(p, q) > 1) return;
         h.placerJoueur(p.x, p.y, p.direction);
         h.lancer(q);
+      } else if (a.type === 'jet') {
+        // Un jet de SA fiche : l'hôte lance les dés (etat.js › agir vérifie le rôle).
+        if (table().pause) return;
+        agir({ type: 'jet', sorte: a.sorte, id: a.id, quoi: a.quoi }, r);
+      } else if (a.type === 'repondre') {
+        repondre(a, r);
       }
+    }
+
+    // --- Saga 1.21 : en combat, le joueur d'un héros joue son tour depuis son écran ---
+    // Le MJ garde la main : son menu reste ouvert, et la première réponse (la sienne ou celle du joueur) compte.
+    function persoActif() {
+      const p = combat?.actif ? pion(combat.actif) : null;
+      return p?.sorte === 'heros' ? E.membreDe(partie(), p)?.creature || '' : '';
+    }
+    function questionPour(r) {
+      if (r.mj || !r.perso || !combat || r.perso !== persoActif()) return null;
+      const q = { tete: tete.textContent, aide: aide.hidden ? '' : aide.textContent };
+      if (attente?.sorte === 'menu') {
+        q.menu = { n: attente.n, titre: attente.titre || '', annulable: Boolean(attente.annulable),
+          items: attente.items.map((x) => ({ texte: String(x.texte || ''), detail: String(x.detail || ''), icone: x.icone || '', desactive: Boolean(x.desactive) })) };
+      }
+      if (picker) q.choix = { n: picker.n, sorte: picker.sorte, cases: picker.cases ? [...picker.cases.keys()] : null, cibles: picker.cibles ? [...picker.cibles] : null, zone: picker.zone || 0 };
+      return q.menu || q.choix ? q : null;
+    }
+    function repondre(a, r) {
+      if (!r.perso || r.perso !== persoActif()) return;
+      if (a.menu != null) {
+        if (attente?.sorte !== 'menu' || attente.n !== Number(a.menu)) return;
+        const k = a.k == null || Number(a.k) < 0 ? null : Math.round(Number(a.k));
+        if (k == null) { if (attente.annulable) attente.finir(null); }
+        else if (attente.items[k] && !attente.items[k].desactive) attente.finir(k);
+      } else if (a.choix != null) {
+        if (!picker || picker.n !== Number(a.choix)) return;
+        if (a.annuler) { annulerPicker(); afficherAide(''); return; }
+        if (picker.sorte === 'case') {
+          const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
+          if (x >= 0 && y >= 0 && x < carte().largeur && y < carte().hauteur) cliquerPicker({ x, y }, null);
+        } else if (typeof a.id === 'string') cliquerPicker({ x: 0, y: 0 }, a.id);
+      }
+    }
+
+    // Un ami qui arrive à la table reçoit un héros libre (le MJ peut changer dans le panneau Amis). Un ami que
+    // le MJ a mis « Spectateur » le reste.
+    function attribuer(joueurs) {
+      if (!actif || !jeu() || !partie()) return;
+      const r = roles();
+      const heros = partie().equipe.filter((c) => c.jdr);
+      const pris = new Set(Object.values(r).filter(Boolean));
+      let change = false;
+      for (const j of joueurs || []) {
+        if (j.hote || !j.connecte || !j.nom || Object.prototype.hasOwnProperty.call(r, j.nom)) continue;
+        const c = heros.find((x) => !pris.has(x.creature));
+        if (!c) continue;
+        r[j.nom] = c.creature;
+        pris.add(c.creature);
+        change = true;
+        h.message(`${j.nom} joue ${JdrPerso.nom(jeu(), c)} (panneau Amis pour changer).`);
+      }
+      if (change) { envoyes.clear(); panneau?.rafraichir(); }
+    }
+    let ecouteMulti = false;
+    function brancherMulti() {
+      const m = h.multi?.();
+      if (!m) return;
+      if (!ecouteMulti) {
+        ecouteMulti = true;
+        // Les demandes des amis (déplacer, parler, lancer un jet, répondre en combat) arrivent par le réseau.
+        m.sur((sorte, d) => {
+          if (sorte === 'demande') recevoir(d);
+          else if (sorte === 'joueurs') attribuer(d);
+        });
+      }
+      attribuer(m.joueurs);
     }
 
     // --- Chaque image ---
     function dessiner(maintenant, dt) {
       if (!actif || !jeu() || !carte()) return;
+      // Saga 1.21 : un héros arrivé après l'entrée sur la carte (créé au début d'une nouvelle partie, ou
+      // ajouté au groupe) reçoit son pion tout de suite, près du meneur.
+      if (!combat && partie().equipe.some((c) => c?.jdr && (!c.pion || !table().pions.some((p) => p.id === c.pion)))) {
+        E.placerHeros(table(), partie(), carte(), h.joueur().x, h.joueur().y, h.presents());
+        panneau?.rafraichir();
+      }
       const r = role();
       derniereVue = vuePour(r);
       const cases = picker?.sorte === 'case' ? picker.cases : null;

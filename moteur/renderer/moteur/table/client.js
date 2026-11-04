@@ -23,7 +23,11 @@ const TableClient = (() => {
     const attente = el('div', { className: 'joueurs-attente', textContent: 'En attente du MJ…' });
     // Saga 1.0 : la fiche du joueur (seul celui qui joue un héros la reçoit), avec ses jets.
     const fiche = el('aside', { className: 'joueurs-fiche', hidden: true });
-    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche);
+    // Saga 1.21 : en combat, mon tour (le menu du héros, puis la case ou la cible à cliquer).
+    const questionEl = el('div', { className: 'joueurs-question', hidden: true });
+    // Saga 1.21 : un ami sans héros sait pourquoi il ne peut que regarder.
+    const roleEl = el('div', { className: 'joueurs-role', hidden: true });
+    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche, questionEl, roleEl);
     const plateau = Plateau.creer(canvas);
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
     const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
@@ -47,11 +51,14 @@ const TableClient = (() => {
       if (carteAvant !== v.carte) plateau.oublier();
       montrer();
       montrerFiche();
+      montrerQuestion();
     });
 
     // Ce qui n'est pas sur le canvas : l'ordre du tour, ce qui se dit, les jets montrés à tous, la pause.
     function montrer() {
       attente.hidden = Boolean(vue && jeu);
+      roleEl.hidden = !(reseau && vue && vue.role === 'joueurs');
+      roleEl.textContent = 'Tu regardes la partie. Pour jouer, le MJ te donne un héros (panneau « Amis » de sa table).';
       pauseEl.hidden = !vue?.pause;
       ordre.hidden = !vue?.combat;
       if (vue?.combat) {
@@ -136,10 +143,47 @@ const TableClient = (() => {
             el('span', { className: 'joueurs-fiche-nom', textContent: a.nom }),
             el('small', { textContent: `${signe(a.bonus)} · ${a.des}${a.mod ? ` ${signe(a.mod)}` : ''}` })));
         }
-        corps.append(el('p', { className: 'joueurs-fiche-note', textContent: 'En combat, c\'est le MJ qui mène les tours sur le plateau : dis-lui ce que tu fais (ou écris-le dans la discussion).' }));
+        corps.append(el('p', { className: 'joueurs-fiche-note', textContent: 'En combat, à ton tour, tes actions s\'affichent ici : choisis, puis clique la case ou la cible sur le plateau.' }));
       }
       fiche.append(corps);
     }
+    // --- Mon tour en combat : la question de l'hôte (son menu, ou un choix sur le plateau) ---
+    let signatureQ = '';
+    const q = () => vue?.question || null;
+    const repondre = (o) => window.saga.tableDemander({ type: 'repondre', ...o });
+    function montrerQuestion() {
+      const x = q();
+      questionEl.hidden = !x;
+      document.body.classList.toggle('mon-tour', Boolean(x));
+      const s = JSON.stringify(x);
+      if (s === signatureQ) return;
+      signatureQ = s;
+      questionEl.innerHTML = '';
+      if (!x) return;
+      questionEl.append(el('div', { className: 'joueurs-question-tete', textContent: x.tete || 'À toi' }));
+      if (x.menu?.titre) questionEl.append(el('div', { className: 'joueurs-question-titre', textContent: x.menu.titre }));
+      if (x.aide) questionEl.append(el('div', { className: 'joueurs-question-aide', textContent: x.aide }));
+      if (x.menu) {
+        x.menu.items.forEach((it, k) => {
+          const b = el('button', { className: 'table-combat-option', type: 'button', disabled: it.desactive },
+            it.icone ? el('i', { className: `codicon codicon-${it.icone}` }) : null, el('span', { textContent: it.texte }), it.detail ? el('small', { textContent: it.detail }) : null);
+          b.onclick = () => repondre({ menu: x.menu.n, k });
+          questionEl.append(b);
+        });
+        if (x.menu.annulable) {
+          const b = el('button', { className: 'table-combat-option retour', type: 'button' }, el('i', { className: 'codicon codicon-arrow-left' }), el('span', { textContent: 'Retour' }));
+          b.onclick = () => repondre({ menu: x.menu.n, k: -1 });
+          questionEl.append(b);
+        }
+      } else if (x.choix) {
+        const b = el('button', { className: 'table-combat-option retour', type: 'button' }, el('i', { className: 'codicon codicon-arrow-left' }), el('span', { textContent: 'Retour' }));
+        b.onclick = () => repondre({ choix: x.choix.n, annuler: true });
+        questionEl.append(b);
+      }
+    }
+    // Mon héros (celui que le MJ m'a donné), pour le déplacer sans avoir à le choisir d'abord.
+    const monHeros = () => (vue?.role?.startsWith('perso:') ? vue.pions.find((p) => p.sorte === 'heros' && `perso:${p.personnage}` === vue.role) : null);
+
     function bouton(texte, faire, titre = '') {
       const b = el('button', { className: 'joueurs-jet-bouton', type: 'button', textContent: texte, title: titre });
       b.onclick = faire;
@@ -157,11 +201,22 @@ const TableClient = (() => {
       if (e.button !== 0) { glisse = { x: e.clientX, y: e.clientY }; return; }
       const id = plateau.pionSous(px, py, jeu, vue);
       const c = plateau.caseSous(px, py, jeu);
-      const p = id ? vue.pions.find((q) => q.id === id) : null;
-      if (p?.sorte === 'heros') { selection = selection === id ? null : id; return; }
-      if (!selection || vue.combat || vue.pause) return;
-      if (id?.startsWith('ev:')) window.saga.tableDemander({ type: 'parler', pion: selection, id });
-      else if (!id) window.saga.tableDemander({ type: 'deplacer', pion: selection, x: c.x, y: c.y });
+      // Mon tour en combat : la case où aller, ou la cible.
+      const ch = q()?.choix;
+      if (ch) {
+        if (ch.sorte === 'case') {
+          if (!ch.cases || ch.cases.includes(c.y * jeu.cartes.get(vue.carte).largeur + c.x)) repondre({ choix: ch.n, x: c.x, y: c.y });
+        } else if (id && ch.cibles?.includes(id)) repondre({ choix: ch.n, id });
+        return;
+      }
+      const p = id ? vue.pions.find((x) => x.id === id) : null;
+      const mien = monHeros();
+      // Un joueur ne choisit que son héros ; l'écran partagé (sans rôle) peut choisir n'importe lequel.
+      if (p?.sorte === 'heros' && (!mien || p.id === mien.id)) { selection = selection === id ? null : id; return; }
+      const qui = selection || mien?.id;
+      if (!qui || vue.combat || vue.pause) return;
+      if (id?.startsWith('ev:')) window.saga.tableDemander({ type: 'parler', pion: qui, id });
+      else if (!id) window.saga.tableDemander({ type: 'deplacer', pion: qui, x: c.x, y: c.y });
     });
     window.addEventListener('mousemove', (e) => {
       if (!jeu) return;
@@ -170,7 +225,13 @@ const TableClient = (() => {
       if (glisse) { plateau.glisser(e.clientX - glisse.x, e.clientY - glisse.y); glisse.x = e.clientX; glisse.y = e.clientY; }
     });
     window.addEventListener('mouseup', () => { glisse = null; });
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') selection = null; });
+    window.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const x = q();
+      if (x?.choix) repondre({ choix: x.choix.n, annuler: true });
+      else if (x?.menu?.annulable) repondre({ menu: x.menu.n, k: -1 });
+      else selection = null;
+    });
 
     function tour(maintenant) {
       requestAnimationFrame(tour);
@@ -178,10 +239,13 @@ const TableClient = (() => {
       const carte = jeu.cartes.get(vue.carte);
       if (!carte) return;
       if (selection && !vue.pions.some((p) => p.id === selection)) selection = null;
-      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection, survol });
+      const ch = vue.question?.choix;
+      const cases = ch?.cases ? new Map(ch.cases.map((i) => [i, 'aller'])) : null;
+      const cibles = ch?.cibles ? new Set(ch.cibles) : null;
+      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles });
     }
     requestAnimationFrame(tour);
-    return { plateau, multi, get vue() { return vue; } };
+    return { plateau, multi, get vue() { return vue; }, get jeu() { return jeu; } };
   }
   return { demarrer };
 })();
