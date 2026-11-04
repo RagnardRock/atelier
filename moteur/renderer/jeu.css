@@ -688,6 +688,8 @@ body.mode-table:not(.ecran-joueurs) #scene .dialogue { left: calc((100% - var(--
 body.mode-table:not(.ecran-joueurs) #scene .dialogue-choix { right: calc(var(--table-panneau) + 24px); }
 body.mode-table:not(.ecran-joueurs) #scene .des-plateau { right: calc(var(--table-panneau) + 14px); }
 body.mode-table:not(.ecran-joueurs) #scene .annonces { right: calc(var(--table-panneau) + 14px); }
+/* Saga 1.21 : la discussion du MJ à gauche de sa colonne (elle cachait les boutons du combat). */
+body.mode-table:not(.ecran-joueurs) #scene .multi-panneau, body.mode-table:not(.ecran-joueurs) #scene .multi-bulles { right: calc(var(--table-panneau) + 12px); }
 @media (max-width: 900px) { body.mode-table { --table-panneau: 260px; } }
 
 .table-colonne {
@@ -985,3 +987,16 @@ body.en-combat #notifications { bottom: auto; top: 48px; right: auto; left: 50%;
 #scene[data-theme="pixel"] .carnet-jeton b { font-weight: 400; }
 #scene[data-theme="pixel"] #carnet-corps li.carnet-resume { border-bottom: none; }
 #scene[data-theme="pixel"] #carnet-heure { font-size: 18px; }
+
+/* Saga 1.21 : mon tour en combat, sur l'écran d'un joueur (table/client.js) */
+.joueurs-question { position: absolute; z-index: 23; right: 12px; top: 12px; width: min(300px, calc(100% - 24px)); max-height: calc(100% - 90px); overflow-y: auto;
+  display: flex; flex-direction: column; gap: 5px; padding: 10px; border-radius: 12px; background: rgba(14, 14, 22, 0.9);
+  backdrop-filter: blur(16px); border: 1px solid var(--accent, #ffd36b); color: #f4f4f6; font-size: 13px; }
+.joueurs-question[hidden] { display: none; }
+.joueurs-question-tete { font-weight: 600; }
+.joueurs-question-titre { font-size: 12px; opacity: 0.85; }
+.joueurs-question-aide { font-size: 12px; color: var(--accent, #ffd36b); }
+.joueurs-role { position: absolute; z-index: 21; left: 50%; top: 52px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 7px 12px; border-radius: 10px;
+  background: rgba(14, 14, 22, 0.85); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; font-size: 13px; text-align: center; }
+.joueurs-role[hidden] { display: none; }
+body.mon-tour .joueurs-jets { right: calc(min(300px, 100% - 24px) + 24px); }
