@@ -63,6 +63,14 @@ const TableMode = (() => {
         competences: JdrBase.listeOuDefaut(j, 'competences').map((x) => ({ id: x.id, nom: x.nom, bonus: JdrPerso.bonusCompetence(j, c, x.id), maitrise: JdrPerso.competencesMaitrisees(j, c).includes(x.id) })),
         attaques: JdrPerso.attaques(j, c).map((x) => ({ nom: x.nom, bonus: x.bonus, des: x.des, mod: x.mod })),
         etats: c.etats || [],
+        // Saga 1.21.2 : ce que le joueur peut faire hors combat (équipement, sorts, niveau…) et le sac du groupe.
+        actions: JdrHorsCombat.actionsMembre(j, c).map(([id, texte]) => ({ id, texte })),
+        sac: Object.entries(partie().sac || {}).filter(([, n]) => n > 0).map(([id, n]) => {
+          const o = JdrPerso.objet(j, id);
+          return o ? { id, nom: o.nom, n, detail: JdrHorsCombat.texteObjet(o), utilisable: JdrHorsCombat.utilisable(o) } : null;
+        }).filter(Boolean),
+        argent: partie().argent || 0,
+        notes: c.notes || '',
       };
     }
     const vuePour = (r) => {
@@ -530,6 +538,7 @@ const TableMode = (() => {
           else if (a.type === 'prendre') { const c = libres().find((x) => cleDe(x) === a.heros); if (c && !creations.has(nom)) { donnerRole(nom, cleDe(c)); h.message(`${nom} joue ${JdrPerso.nom(jeu(), c)}.`); } }
           return;
         }
+        if (a.type === 'agir_fiche') { agirFiche(nom, r, a); return; }
         a = { ...a, perso: r.perso, heros: r.heros };
       }
       const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null, heros: typeof a.heros === 'string' ? a.heros : '' };
@@ -593,7 +602,7 @@ const TableMode = (() => {
     // une phrase) partent sur l'écran de l'ami, qui répond. Le héros rejoint le groupe : il est dans la partie,
     // donc dans la sauvegarde, et l'ami le retrouve en revenant sous le même nom.
     const creations = new Map(); // nom → { q: la question en cours (null pendant que l'hôte calcule), resoudre }
-    function uiDistant(nom) {
+    function uiDistant(nom, { des = false } = {}) {
       const demander = (q) => new Promise((resoudre) => { creations.set(nom, { q: { ...q, n: ++numeroQuestion }, resoudre }); envoyes.clear(); });
       const lignes = (l) => (Array.isArray(l) ? l : []).map((x) => ({ texte: String(x?.texte ?? ''), detail: String(x?.detail || ''), desactive: Boolean(x?.desactive) }));
       return {
@@ -603,7 +612,8 @@ const TableMode = (() => {
         },
         texte: (o = {}) => demander({ sorte: 'texte', titre: String(o.titre || ''), valeur: String(o.valeur || ''), max: Number(o.max) || 24 }),
         dire: (t) => demander({ sorte: 'dire', texte: String(t || '') }),
-        des: () => Promise.resolve(), // les jets (4d6) vont au journal, que l'ami voit
+        // Les jets vont au journal, que l'ami voit ; hors création, le MJ les voit aussi rouler.
+        des: (o) => (des ? h.des(o) : Promise.resolve()),
       };
     }
     function repondreCreation(nom, a) {
@@ -638,6 +648,29 @@ const TableMode = (() => {
         h.message(`${nom} a créé ${JdrPerso.nom(jeu(), c)}.`);
       } catch (err) {
         h.message(`Création impossible : ${err.message}`);
+      } finally {
+        creations.delete(nom);
+        envoyes.clear();
+        panneau?.rafraichir();
+      }
+    }
+    // Saga 1.21.2 : la fiche hors combat d'un joueur (équipement, sorts, monter de niveau, dés de vie, notes,
+    // utiliser un objet du sac) : les écrans du pack (regles/jdr/hors-combat.js), joués chez l'hôte, sur son écran.
+    async function agirFiche(nom, r, a) {
+      if (creations.has(nom) || combat || !jeu() || !partie()) return;
+      const c = herosDuGroupe().find((q) => E.estMien(r, q));
+      if (!c) return;
+      const id = String(a.id || '');
+      const objet = id === 'objet' ? String(a.objet || '') : '';
+      if (objet ? !(partie().sac?.[objet] > 0) : !JdrHorsCombat.actionsMembre(jeu(), c).some(([x]) => x === id)) return;
+      creations.set(nom, { q: null, resoudre: null });
+      envoyes.clear();
+      try {
+        const ui = uiDistant(nom, { des: true });
+        if (objet) await JdrHorsCombat.utiliserObjet({ jeu: jeu(), partie: partie(), ui, id: objet });
+        else await JdrHorsCombat.agirMembre({ jeu: jeu(), partie: partie(), ui, c, id });
+      } catch (err) {
+        h.message(`${nom} : ${err.message}`);
       } finally {
         creations.delete(nom);
         envoyes.clear();

@@ -104,7 +104,7 @@ const TableClient = (() => {
       fiche.hidden = !f;
       if (!f) return;
       // On ne redessine que si quelque chose a changé (sinon on gênerait les clics).
-      const s = JSON.stringify([f.nom, f.pv, f.pvMax, f.ca, f.etats, ongletFiche]);
+      const s = JSON.stringify([f, ongletFiche, Boolean(vue.creation), Boolean(vue.combat)]);
       if (s === signature) return;
       signature = s;
       fiche.innerHTML = '';
@@ -114,7 +114,7 @@ const TableClient = (() => {
         el('span', { className: 'joueurs-fiche-ca', textContent: `CA ${f.ca}` })));
       if (f.etats?.length) fiche.append(el('div', { className: 'joueurs-fiche-etats', textContent: f.etats.join(', ') }));
       const onglets = el('div', { className: 'joueurs-onglets' });
-      for (const [id, nom] of [['caracs', 'Caractéristiques'], ['competences', 'Compétences'], ['attaques', 'Attaques']]) {
+      for (const [id, nom] of [['caracs', 'Caracs'], ['competences', 'Compétences'], ['attaques', 'Attaques'], ['sac', 'Sac'], ['actions', `Actions${f.actions?.some((x) => x.id === 'niveau') ? ' ★' : ''}`]]) {
         const b = el('button', { className: `joueurs-onglet${ongletFiche === id ? ' actif' : ''}`, type: 'button', textContent: nom });
         b.onclick = () => { ongletFiche = id; signature = ''; montrerFiche(); };
         onglets.append(b);
@@ -136,6 +136,26 @@ const TableClient = (() => {
             el('span', { className: 'joueurs-fiche-nom', textContent: c.nom }),
             bouton(signe(c.bonus), () => jet('test', c.id, c.nom), 'Lancer ce test')));
         }
+      } else if (ongletFiche === 'sac') {
+        // Saga 1.21.2 : le sac du groupe, et utiliser un objet (une potion…) hors combat.
+        const agir = (o) => window.saga.tableDemander({ type: 'agir_fiche', ...o });
+        const occupe = Boolean(vue.creation || vue.combat);
+        corps.append(el('div', { className: 'joueurs-fiche-note', textContent: `Sac du groupe · ${f.argent} pièce${f.argent > 1 ? 's' : ''}` }));
+        if (!f.sac?.length) corps.append(el('p', { className: 'joueurs-fiche-note', textContent: 'Le sac est vide.' }));
+        for (const o of f.sac || []) {
+          corps.append(el('div', { className: 'joueurs-fiche-ligne' },
+            el('span', { className: 'joueurs-fiche-nom', textContent: `${o.nom} ×${o.n}`, title: o.detail || '' }),
+            o.utilisable ? bouton('Utiliser', () => { if (!occupe) agir({ id: 'objet', objet: o.id }); }, 'Utiliser cet objet') : null));
+        }
+      } else if (ongletFiche === 'actions') {
+        const occupe = Boolean(vue.creation || vue.combat);
+        for (const a of f.actions || []) {
+          const b = el('button', { className: `table-combat-option${a.id === 'niveau' ? ' actif' : ''}`, type: 'button', disabled: occupe }, el('span', { textContent: a.texte }));
+          b.onclick = () => window.saga.tableDemander({ type: 'agir_fiche', id: a.id });
+          corps.append(b);
+        }
+        if (vue.combat) corps.append(el('p', { className: 'joueurs-fiche-note', textContent: 'En combat, tout se fait à ton tour.' }));
+        if (f.notes) corps.append(el('p', { className: 'joueurs-fiche-note', textContent: `Notes : ${f.notes}` }));
       } else {
         for (const a of f.attaques) {
           corps.append(el('div', { className: 'joueurs-fiche-ligne' },

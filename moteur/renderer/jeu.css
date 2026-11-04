@@ -850,7 +850,7 @@ body.plein-ecran.mode-table #scene { cursor: default; }
 .joueurs-fiche-pv { color: #7ddc8a; font-variant-numeric: tabular-nums; }
 .joueurs-fiche-ca { margin-left: auto; opacity: 0.85; }
 .joueurs-fiche-etats { font-size: 12px; color: #ffb36b; }
-.joueurs-onglets { display: flex; gap: 4px; }
+.joueurs-onglets { display: flex; flex-wrap: wrap; gap: 4px; }
 .joueurs-onglet { flex: 1 1 auto; padding: 4px 6px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px; background: rgba(255, 255, 255, 0.04); color: inherit; font-size: 11px; cursor: pointer; }
 .joueurs-onglet.actif { background: var(--accent, #ffd36b); color: #16161c; border-color: transparent; }
 .joueurs-fiche-corps { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
