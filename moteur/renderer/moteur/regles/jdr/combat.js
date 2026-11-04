@@ -696,7 +696,14 @@ const JdrCombat = (() => {
         return aPortee(u, t, p.normale);
       }
       const dispo = actionsMonstre(u).filter((a) => !a.recharge || u.recharges[a.nom] !== false);
-      const armes = dispo.filter((a) => Number.isFinite(Number(a.attaque)) && a.attaque !== '' && a.attaque !== null);
+      const armes = dispo.filter(estArme);
+      // Saga 1.21.1 : en mode table, le MJ joue le monstre (sauf s'il clique « Auto »).
+      if (ui.commandeMonstre && grille && !monstresAuto) {
+        const r = await tourMonstreMJ(u, dispo, armes, pas);
+        if (r === 'fini') return;
+        pas = r.pas;
+        if (r.actionFaite) return;
+      }
       // Multiattaque : `multiattaque` attaques avec ses armes ; sinon une action tirée selon les poids.
       let plan;
       if (Number(u.m.multiattaque) > 1 && armes.length && !(dispo.some((a) => a.recharge) && D.chance(partie, 60))) {
@@ -711,35 +718,100 @@ const JdrCombat = (() => {
       for (const a of plan) {
         if (fini() || !debout(u)) return;
         if (grille && !(await aPorteeDe(viser(), a))) { await ui.message(`${Le(u)} ${pas < vitesseDe(u) ? 's\'approche' : 'attend'}.`); return; }
-        if (a.recharge) u.recharges[a.nom] = false;
-        ui.bandeau(a.nom);
-        await ui.animer('ennemis', u.i, 'attaque');
-        if (a.sauvegarde?.carac) {
-          // Un souffle, un cri : chaque héros visé fait une sauvegarde (sur la grille, une zone touche
-          // ceux qui sont à `rayon` mètres de la cible, 3 m par défaut).
-          const vises = a.zone ? (grille ? grille.autour(viser(), grille.cases(Number(a.rayon) || 3), vivants(heros)) : vivants(heros)) : [viser()].filter(Boolean);
-          await ui.effet(vises.map((t) => ['heros', t.i]), a.couleur || '#ff9d4a');
-          const r = a.degats ? D.lancer(partie, a.degats) : null;
-          if (r) await montrer(a.nom, [noterJet(u, { qui: nom(u), quoi: `${a.nom} : dégâts`, formule: r.formule, des: r.des, bonus: r.bonus, total: r.total })]);
-          for (const t of vises) {
-            const ok = await sauver(t, a.sauvegarde.carac, Number(a.sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde de ${B.nomCarac(jeu, a.sauvegarde.carac)}` });
-            if (r) { const n = ok ? (a.sauvegarde.moitie !== false ? Math.floor(r.total / 2) : 0) : r.total; if (n) await blesser(t, n, { type: a.type_degats }); }
-            if (!ok && a.etat && debout(t)) await mettreEtat(t, a.etat, { tours: Number(a.tours) || 0, sauvegarde: a.repete ? { carac: a.sauvegarde.carac, dd: Number(a.sauvegarde.dd) || 10 } : null });
-          }
-        } else if (Number.isFinite(Number(a.attaque)) && a.attaque !== '' && a.attaque !== null) {
-          const t = viser();
-          if (!t) return;
-          const r = await attaquer(u, t, { nom: a.nom, bonus: Number(a.attaque), des: a.degats || '1d4', mod: 0, type: a.type_degats || 'contondant', distance: Boolean(a.distance), portee: a.portee, allonge: a.allonge });
-          if (r.touche && a.etat && debout(t)) {
-            if (a.etat_sauvegarde?.carac) {
-              const ok = await sauver(t, a.etat_sauvegarde.carac, Number(a.etat_sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde` });
-              if (!ok) await mettreEtat(t, a.etat, { tours: Number(a.tours) || 0 });
-            } else await mettreEtat(t, a.etat, { tours: Number(a.tours) || 0 });
-          }
-        } else {
-          await ui.message(`${Le(u)} : ${a.nom}. ${a.description || ''}`.trim());
+        await faireActionMonstre(u, a, viser());
+      }
+    }
+    const estArme = (a) => Number.isFinite(Number(a.attaque)) && a.attaque !== '' && a.attaque !== null;
+    // La portée d'une action de monstre, en cases (une arme, ou un souffle avec sauvegarde).
+    const porteeAction = (a) => (a.sauvegarde?.carac ? { normale: grille.cases(Number(a.portee) || (a.zone ? 4.5 : 9)), longue: 0 } : porteeAttaque(a));
+    // Une action de monstre sur sa cible t (le centre de la zone pour un souffle).
+    async function faireActionMonstre(u, a, t) {
+      if (a.recharge) u.recharges[a.nom] = false;
+      ui.bandeau(a.nom);
+      await ui.animer('ennemis', u.i, 'attaque');
+      if (a.sauvegarde?.carac) {
+        // Un souffle, un cri : chaque héros visé fait une sauvegarde (sur la grille, une zone touche
+        // ceux qui sont à `rayon` mètres de la cible, 3 m par défaut).
+        const vises = a.zone ? (grille ? grille.autour(t, grille.cases(Number(a.rayon) || 3), vivants(heros)) : vivants(heros)) : [t].filter(Boolean);
+        await ui.effet(vises.map((x) => ['heros', x.i]), a.couleur || '#ff9d4a');
+        const r = a.degats ? D.lancer(partie, a.degats) : null;
+        if (r) await montrer(a.nom, [noterJet(u, { qui: nom(u), quoi: `${a.nom} : dégâts`, formule: r.formule, des: r.des, bonus: r.bonus, total: r.total })]);
+        for (const x of vises) {
+          const ok = await sauver(x, a.sauvegarde.carac, Number(a.sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde de ${B.nomCarac(jeu, a.sauvegarde.carac)}` });
+          if (r) { const n = ok ? (a.sauvegarde.moitie !== false ? Math.floor(r.total / 2) : 0) : r.total; if (n) await blesser(x, n, { type: a.type_degats }); }
+          if (!ok && a.etat && debout(x)) await mettreEtat(x, a.etat, { tours: Number(a.tours) || 0, sauvegarde: a.repete ? { carac: a.sauvegarde.carac, dd: Number(a.sauvegarde.dd) || 10 } : null });
         }
-        ui.bandeau('');
+      } else if (estArme(a)) {
+        if (!t) { ui.bandeau(''); return; }
+        const r = await attaquer(u, t, { nom: a.nom, bonus: Number(a.attaque), des: a.degats || '1d4', mod: 0, type: a.type_degats || 'contondant', distance: Boolean(a.distance), portee: a.portee, allonge: a.allonge });
+        if (r.touche && a.etat && debout(t)) {
+          if (a.etat_sauvegarde?.carac) {
+            const ok = await sauver(t, a.etat_sauvegarde.carac, Number(a.etat_sauvegarde.dd) || 10, { quoi: `${a.nom} : sauvegarde` });
+            if (!ok) await mettreEtat(t, a.etat, { tours: Number(a.tours) || 0 });
+          } else await mettreEtat(t, a.etat, { tours: Number(a.tours) || 0 });
+        }
+      } else {
+        await ui.message(`${Le(u)} : ${a.nom}. ${a.description || ''}`.trim());
+      }
+      ui.bandeau('');
+    }
+
+    // --- Saga 1.21.1 : le MJ joue un monstre (mode table) ---
+    // Le même genre de menu qu'un héros : se déplacer, une de ses actions (puis sa cible sur le plateau), finir.
+    // « Auto » rend la main au pack pour la suite du tour ; « Auto jusqu'à la fin » pour tout le combat.
+    // Rend 'fini', ou { pas, actionFaite } quand le MJ passe en auto.
+    let monstresAuto = false;
+    async function tourMonstreMJ(u, dispo, armes, pas) {
+      let actionFaite = false;
+      const multi = Number(u.m.multiattaque) > 1 && armes.length ? Number(u.m.multiattaque) : 0;
+      // Une cible parmi les héros à portée de cette action ; null si le MJ revient en arrière.
+      async function cibleDe(a) {
+        const p = porteeAction(a);
+        const max = Math.max(p.normale, p.longue || 0);
+        const possibles = heros.map((t) => debout(t) && aPortee(u, t, max));
+        if (!possibles.some(Boolean)) { await ui.message(`Aucun héros à portée de ${a.nom}.`); return null; }
+        const i = await ui.cible({ camp: 'heros', possibles, zone: a.sauvegarde?.carac && a.zone ? grille.cases(Number(a.rayon) || 3) : 0 });
+        return i == null || i < 0 ? null : heros[i];
+      }
+      for (;;) {
+        if (fini() || !debout(u)) return 'fini';
+        if (actionFaite && pas <= 0) return 'fini';
+        grille.actif(u, tour, pas);
+        const items = [
+          { id: 'deplacer', texte: `Se déplacer (${pas} case${pas > 1 ? 's' : ''})`, icone: 'move', desactive: pas <= 0 },
+          ...(actionFaite ? [] : [
+            ...(multi ? [{ id: 'multi', texte: `Multiattaque (${multi} attaques)`, icone: 'flame' }] : []),
+            ...dispo.map((a, k) => ({ id: `a${k}`, texte: a.nom, icone: a.sauvegarde?.carac ? 'sparkle' : estArme(a) ? 'flame' : 'comment', detail: estArme(a) ? `${a.attaque >= 0 ? '+' : ''}${a.attaque} · ${a.degats || '1d4'}` : a.sauvegarde?.carac ? `DD ${a.sauvegarde.dd || 10} ${B.courtCarac(jeu, a.sauvegarde.carac)}` : '' })),
+            { id: 'auto', texte: 'Auto (le pack joue ce tour)', icone: 'wand' },
+            { id: 'auto_tous', texte: 'Auto jusqu\'à la fin du combat', icone: 'run-all' },
+          ]),
+          { id: 'fin', texte: 'Finir le tour', icone: 'check' },
+        ];
+        const choix = await ui.commandeMonstre(u.i, items);
+        if (choix == null) continue;
+        if (choix === 'fin') return 'fini';
+        if (choix === 'auto' || choix === 'auto_tous') { if (choix === 'auto_tous') monstresAuto = true; return { pas, actionFaite }; }
+        if (choix === 'deplacer') { pas -= Math.max(0, Number(await grille.deplacer(u, pas)) || 0); continue; }
+        if (choix === 'multi') {
+          let n = 0;
+          for (let k = 0; k < multi; k++) {
+            if (fini() || !debout(u)) break;
+            const a = armes[k % armes.length];
+            const t = await cibleDe(a);
+            if (!t) { if (k === 0) break; continue; }
+            await faireActionMonstre(u, a, t);
+            n++;
+          }
+          if (n) actionFaite = true;
+          continue;
+        }
+        const a = dispo[Number(String(choix).slice(1))];
+        if (!a) continue;
+        if (!estArme(a) && !a.sauvegarde?.carac) { await faireActionMonstre(u, a, null); actionFaite = true; continue; }
+        const t = await cibleDe(a);
+        if (!t) continue;
+        await faireActionMonstre(u, a, t);
+        actionFaite = true;
       }
     }
 

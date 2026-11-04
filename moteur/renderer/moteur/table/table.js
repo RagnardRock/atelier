@@ -429,6 +429,13 @@ const TableMode = (() => {
         selection = p?.id || null;
         return menuBoite(items, true).then((k) => (k == null ? null : items[k].id));
       },
+      // Saga 1.21.1 : le MJ joue les monstres (regles/jdr/combat.js › tourMonstreMJ).
+      commandeMonstre(i, items) {
+        const p = combat.ennemis[i];
+        tete.textContent = `Tour de ${p?.nom || 'monstre'}`;
+        selection = p?.id || null;
+        return menuBoite(items, false).then((k) => (k == null ? null : items[k].id));
+      },
       liste(titre, items, annulable = true) {
         if (titre && typeof titre === 'object') ({ titre, items, annulable = true } = titre);
         return menuBoite(items.map((x) => ({ ...x, desactive: x.desactive })), annulable, titre);
