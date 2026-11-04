@@ -176,8 +176,8 @@
     redimensionner: {
       icone: 'screen-full',
       libelle: (a) => (a.pourcentage ? `Redimensionne l'image à ${a.pourcentage} %` : `Redimensionne l'image en ${a.largeur ?? 'auto'} × ${a.hauteur ?? 'auto'} px`),
-      description: 'Change la taille de toute l\'image (tous les calques). Donne pourcentage, ou largeur et/ou hauteur en px (avec une seule des deux, les proportions sont gardées).',
-      schema: { type: 'object', properties: { largeur: nombre, hauteur: nombre, pourcentage: nombre } },
+      description: 'Change la taille de toute l\'image (tous les calques). Donne pourcentage, ou largeur et/ou hauteur en px (avec une seule des deux, les proportions sont gardées). interpolation : auto (défaut : nette si c\'est du pixel art), proche (plus proche voisin, pixels nets), bilineaire ou bicubique (lisse, photos).',
+      schema: { type: 'object', properties: { largeur: nombre, hauteur: nombre, pourcentage: nombre, interpolation: { type: 'string', enum: ['auto', 'proche', 'bilineaire', 'bicubique'] } } },
       faire: (a) => {
         const doc = besoinImage();
         let w = a.largeur, h = a.hauteur;
@@ -186,7 +186,7 @@
         else if (h && !w) w = (h * doc.width) / doc.height;
         w = Math.round(w); h = Math.round(h);
         if (!(w >= 1 && h >= 1 && w <= 30000 && h <= 30000)) throw new Error('Donne une largeur, une hauteur ou un pourcentage valables.');
-        change(doc, 'Taille de l\'image', (d) => Ops.scaleDocument(d, w, h));
+        change(doc, 'Taille de l\'image', (d) => Ops.scaleDocument(d, w, h, a.interpolation || 'auto'));
         View.fit(doc);
         return `Image redimensionnée en ${w} × ${h} px.`;
       },

@@ -259,31 +259,90 @@ const Ops = (() => {
 
   // --- Image entière ---
 
-  // Redimensionnement de bonne qualité : pour une forte réduction, on divise par deux
-  // plusieurs fois de suite (sinon l'image devient granuleuse).
-  function resample(src, width, height) {
+  // Interpolation au redimensionnement (comme Photoshop) :
+  // - « proche » : plus proche voisin, chaque pixel reste un bloc net (pixel art, tuiles) ;
+  // - « bilineaire » : lissage simple ;
+  // - « bicubique » : le plus lisse (photos), avec des divisions par deux successives pour une forte réduction ;
+  // - « auto » : plus proche voisin si l'image ressemble à du pixel art, bicubique sinon.
+  const INTERPOLATIONS = [
+    ['auto', 'Automatique (net pour le pixel art)'],
+    ['proche', 'Plus proche voisin (pixels nets)'],
+    ['bilineaire', 'Bilinéaire'],
+    ['bicubique', 'Bicubique (le plus lisse)'],
+  ];
+  const INTERP_KEYS = INTERPOLATIONS.map(([k]) => k);
+  function lastInterpolation() {
+    try { const v = localStorage.getItem('skald.interpolation'); if (INTERP_KEYS.includes(v)) return v; } catch { /* pas grave */ }
+    return 'auto';
+  }
+  function rememberInterpolation(v) {
+    try { localStorage.setItem('skald.interpolation', v); } catch { /* pas grave */ }
+  }
+
+  // Du pixel art ? Une transparence franche (0 ou 255), peu de couleurs, et des voisins soit
+  // identiques soit bien différents (un dégradé ou une photo passe par de petits écarts).
+  // On ne lit qu'une partie des lignes sur une grande image, pour rester rapide.
+  function looksLikePixelArt(src) {
+    if (!src.width || !src.height) return false;
+    const W = src.width, H = src.height;
+    const data = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    const rowStep = Math.max(1, Math.floor((W * H) / 65536 / Math.max(1, W / 256)));
+    const colors = new Set();
+    let opaque = 0, pairs = 0, soft = 0;
+    for (let y = 0; y < H; y += rowStep) {
+      for (let x = 0; x < W; x++) {
+        const o = (y * W + x) * 4, a = data[o + 3];
+        if (a !== 0 && a !== 255) return false;
+        if (!a) continue;
+        opaque++;
+        colors.add((data[o] << 16) | (data[o + 1] << 8) | data[o + 2]);
+        if (colors.size > 256) return false;
+        if (x + 1 < W && data[o + 7] === 255) {
+          const d = Math.abs(data[o] - data[o + 4]) + Math.abs(data[o + 1] - data[o + 5]) + Math.abs(data[o + 2] - data[o + 6]);
+          pairs++;
+          if (d > 0 && d <= 24) soft++;
+        }
+      }
+    }
+    return opaque > 0 && soft <= pairs * 0.15;
+  }
+  function resolveInterpolation(mode, src) {
+    if (mode === 'proche' || mode === 'bilineaire' || mode === 'bicubique') return mode;
+    return looksLikePixelArt(src) ? 'proche' : 'bicubique';
+  }
+  // Prépare un contexte de dessin pour l'interpolation choisie (déjà résolue).
+  function setSmoothing(g, interp) {
+    g.imageSmoothingEnabled = interp !== 'proche';
+    g.imageSmoothingQuality = interp === 'bilineaire' ? 'low' : 'high';
+  }
+
+  function resample(src, width, height, mode = 'auto') {
+    const interp = resolveInterpolation(mode, src);
     let current = src;
     width = Math.max(1, Math.round(width));
     height = Math.max(1, Math.round(height));
-    while (current.width / 2 >= width && current.height / 2 >= height) {
+    // Forte réduction en bicubique : on divise par deux plusieurs fois (sinon l'image devient granuleuse).
+    while (interp === 'bicubique' && current.width / 2 >= width && current.height / 2 >= height) {
       const half = newCanvas(current.width / 2, current.height / 2);
       const g = half.getContext('2d');
-      g.imageSmoothingQuality = 'high';
+      setSmoothing(g, interp);
       g.drawImage(current, 0, 0, half.width, half.height);
       current = half;
     }
     const out = newCanvas(width, height);
     const g = out.getContext('2d');
-    g.imageSmoothingQuality = 'high';
+    setSmoothing(g, interp);
     g.drawImage(current, 0, 0, width, height);
     return out;
   }
 
-  function scaleDocument(doc, width, height) {
+  function scaleDocument(doc, width, height, mode = 'auto') {
     const sx = width / doc.width, sy = height / doc.height;
+    // En automatique, on décide une fois pour toute l'image (tous les calques pareil).
+    const interp = mode === 'auto' ? resolveInterpolation('auto', flatten(doc)) : mode;
     for (const layer of doc.layers) {
       const text = layer.text;
-      replacePixels(layer, resample(layer.canvas, layer.canvas.width * sx, layer.canvas.height * sy), layer.x * sx, layer.y * sy);
+      replacePixels(layer, resample(layer.canvas, layer.canvas.width * sx, layer.canvas.height * sy, interp), layer.x * sx, layer.y * sy);
       // Un texte agrandi uniformément reste modifiable, avec sa nouvelle taille.
       if (text && Math.abs(sx - sy) < 0.001) layer.text = { ...text, size: Math.round(text.size * sx * 10) / 10, letterSpacing: (text.letterSpacing || 0) * sx };
     }
@@ -305,6 +364,7 @@ const Ops = (() => {
         { key: 'width', label: 'Largeur', type: 'number', value: doc.width, min: 1, max: 30000, unit: 'px' },
         { key: 'height', label: 'Hauteur', type: 'number', value: doc.height, min: 1, max: 30000, unit: 'px' },
         { key: 'lock', label: 'Garder les proportions', type: 'checkbox', value: true },
+        { key: 'interp', label: 'Interpolation', type: 'select', value: lastInterpolation(), choices: INTERPOLATIONS },
       ],
       onInput(values, f) {
         // Les trois champs restent cohérents : on recalcule les autres à partir de celui modifié.
@@ -321,8 +381,10 @@ const Ops = (() => {
         }
       },
     });
-    if (!v || (v.width === doc.width && v.height === doc.height)) return;
-    change(doc, 'Taille de l\'image', (d) => scaleDocument(d, v.width, v.height));
+    if (!v) return;
+    rememberInterpolation(v.interp);
+    if (v.width === doc.width && v.height === doc.height) return;
+    change(doc, 'Taille de l\'image', (d) => scaleDocument(d, v.width, v.height, v.interp));
     View.fit(doc);
   }
 
@@ -539,14 +601,17 @@ const Ops = (() => {
     return adjust('Transformer le calque', [
       { key: 'scale', label: 'Échelle', type: 'range', min: 1, max: 400, step: 0.5, value: 100, unit: '%' },
       { key: 'rotation', label: 'Rotation', type: 'range', min: -180, max: 180, step: 0.5, value: 0, unit: '°' },
+      { key: 'interp', label: 'Interpolation', type: 'select', value: lastInterpolation(), choices: INTERPOLATIONS },
     ], (src, v) => {
+      rememberInterpolation(v.interp);
+      const interp = resolveInterpolation(v.interp, src);
       const s = v.scale / 100, a = (v.rotation * Math.PI) / 180;
       const w = src.width * s, h = src.height * s;
       const bw = Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a)), bh = Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a));
-      const scaled = Math.abs(s - 1) < 0.001 ? src : resample(src, w, h);
+      const scaled = Math.abs(s - 1) < 0.001 ? src : resample(src, w, h, interp);
       const out = newCanvas(bw, bh);
       const g = out.getContext('2d');
-      g.imageSmoothingQuality = 'high';
+      setSmoothing(g, interp);
       g.translate(out.width / 2, out.height / 2);
       g.rotate(a);
       g.drawImage(scaled, -scaled.width / 2, -scaled.height / 2);
@@ -688,6 +753,7 @@ const Ops = (() => {
   return {
     colors, levels, exposure, blur, sharpen, invertSelection, selectLayerPixels, featherSelection, growSelection, transformNumeric, grayscale, invert, removeColor, recolor, outline, shadow,
     imageSize, canvasSize, rotateImage, flipLayer, trim, cropToSelection, resample, scaleDocument,
+    INTERPOLATIONS, lastInterpolation, rememberInterpolation, resolveInterpolation, setSmoothing, looksLikePixelArt,
     newLayer, duplicateLayer, deleteLayer, moveLayer, mergeDown, flattenImage, rasterizeLayer, centerLayer, transformLayer,
     selectAll, deselect, clearSelection, fillSelection, layerFromSelection, copy, paste, clipboardSize, canvasToPng,
     insertLayer, avecValeurs,

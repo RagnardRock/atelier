@@ -59,7 +59,7 @@ Avant de fermer, Skald propose d'enregistrer les images modifiées. Ses réglage
 | Texte | T | Police, taille, couleur, gras, italique, alignement, interligne, espacement. Le texte reste modifiable (clic dessus avec l'outil). |
 | Formes | U | Rectangle, rectangle arrondi, ellipse, ligne, flèche, polygone, étoile ; remplissage et contour. Chaque forme va dans son propre calque. |
 | Main | H | Déplace la vue (aussi : barre d'espace maintenue, ou clic molette). |
-| Zoom | Z | Clic : zoom, Alt + clic : dézoom. La molette zoome autour de la souris. |
+| Zoom | Z | Clic : zoom, Alt + clic : dézoom. La molette zoome autour de la souris. Dès 100 %, les pixels restent nets. |
 
 Pour toutes les sélections : Maj au clic ajoute, Alt retire, Maj+Alt garde l'intersection (ou le menu « Mode »). Quand deux outils partagent une lettre, Maj + la lettre passe de l'un à l'autre.
 
@@ -71,7 +71,7 @@ Taille du pinceau au clavier : `[` et `]` (ou `ù` et `*` en AZERTY). `X` échan
 
 **Sélection** : tout (`Ctrl+A`), désélectionner (`Ctrl+D`), intervertir (`Ctrl+Maj+I`), contenu d'un calque (`Ctrl` + clic sur le calque), contour progressif (`Maj+F6`), étendre ou réduire, nouveau calque avec la sélection (`Ctrl+J`).
 
-**Image** : taille de l'image (en %, en px, proportions gardées), taille de la zone de travail (avec position de l'image), rotations 90°/180°, miroirs, recadrer à la sélection, rogner le vide.
+**Image** : taille de l'image (en %, en px, proportions gardées, interpolation : automatique, plus proche voisin pour le pixel art, bilinéaire ou bicubique), taille de la zone de travail (avec position de l'image), rotations 90°/180°, miroirs, recadrer à la sélection, rogner le vide.
 
 **Couleurs** : luminosité / contraste / saturation / teinte (`Ctrl+U`), niveaux (`Ctrl+L`), exposition et vibrance, noir et blanc, inverser, flou, netteté. Chaque réglage a un aperçu en direct et ne touche que la sélection s'il y en a une.
 
