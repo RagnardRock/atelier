@@ -143,7 +143,7 @@ const Sommaire = (() => {
 
   function rendreListe() {
     const page = doc?.page;
-    const titres = page ? [...page.querySelectorAll('h1, h2, h3, h4, h5, h6')].filter((h) => !h.hasAttribute('data-sentinelle')) : [];
+    const titres = page ? [...page.querySelectorAll('h1, h2, h3, h4, h5, h6')].filter((h) => !h.hasAttribute('data-sentinelle') && h.textContent.trim()) : [];
     if (!titres.length) {
       liste.replaceChildren(el('p', { className: 'sommaire-vide', textContent: 'Aucun titre pour l\'instant. Choisis « Titre 1 », « Titre 2 »… dans le ruban (Ctrl+Alt+1, 2, 3).' }));
       return;
@@ -271,7 +271,19 @@ const Sommaire = (() => {
       if (prec && replisQuiCachent(prec, page).length) montrer(prec);
     }
   }, true);
-  // Copier ce qui contient une partie repliée : le texte caché est copié aussi.
+  // Coller ou lâcher du texte sur un titre replié : on le déplie d'abord (sinon le texte collé
+  // tomberait dans la partie cachée).
+  for (const t of ['paste', 'drop']) {
+    document.addEventListener(t, () => {
+      const page = doc?.page;
+      const sel = window.getSelection();
+      if (!page || !feuilleStyle.textContent || !sel.rangeCount) return;
+      let bloc = sel.anchorNode;
+      while (bloc && bloc.parentNode !== page) bloc = bloc.parentNode;
+      if (bloc && setDe(page).has(bloc)) replier(bloc, false);
+    }, true);
+  }
+    // Copier ce qui contient une partie repliée : le texte caché est copié aussi.
   for (const t of ['copy', 'cut', 'dragstart']) {
     document.addEventListener(t, () => {
       if (!feuilleStyle.textContent) return;

@@ -590,6 +590,37 @@ const Editeur = (() => {
   }
 
   // --- Coller ---
+  // Coller des paragraphes (un titre et son texte, par exemple) au début ou au bout d'un titre :
+  // Chromium mêlerait le premier bloc collé au titre (« Partie 2Partie 1 »), et le titre collé ne
+  // serait plus un titre. On colle plutôt juste avant ou juste après ce titre, dans une sentinelle
+  // (voir insererA). Au milieu d'un titre, on laisse faire Chromium.
+  function collerAutourDuTitre(html) {
+    const s = window.getSelection();
+    if (!s.rangeCount || !s.isCollapsed || !dansPage(s.anchorNode)) return false;
+    const titre = ancetre(s.anchorNode, 'h1, h2, h3, h4, h5, h6');
+    if (!titre || titre.parentNode !== page()) return false;
+    const propre = Nettoyage.html(html, { racine: doc?.dossierUrl });
+    if (!/<(p|h[1-6]|ul|ol|li|table|blockquote|pre|div|hr)\b/i.test(propre)) return false;
+    const r = s.getRangeAt(0);
+    const avant = document.createRange(); avant.selectNodeContents(titre); avant.setEnd(r.startContainer, r.startOffset);
+    const apres = document.createRange(); apres.selectNodeContents(titre); apres.setStart(r.startContainer, r.startOffset);
+    const auBout = !apres.toString().length;
+    if (!auBout && avant.toString().length) return false;
+    const sentinelle = document.createElement('p');
+    sentinelle.dataset.sentinelle = '';
+    sentinelle.innerHTML = '<br>';
+    if (auBout) titre.after(sentinelle); else titre.before(sentinelle);
+    const r2 = document.createRange();
+    r2.selectNodeContents(sentinelle);
+    s.removeAllRanges();
+    s.addRange(r2);
+    document.execCommand('insertHTML', false, propre);
+    if (sentinelle.isConnected && !sentinelle.textContent.trim() && !sentinelle.querySelector('img, video, audio, table, hr')) sentinelle.hidden = true;
+    memoriser();
+    changement();
+    return true;
+  }
+
   async function coller(e) {
     const cd = e.clipboardData;
     if (!cd) return;
@@ -609,7 +640,7 @@ const Editeur = (() => {
       // Le HTML de Word, d'un site ou d'un autre document : nettoyé (pas de scripts, pas de styles
       // qui casseraient la page), mais la mise en forme du texte reste.
       const corps = html.replace(/^[\s\S]*?<!--StartFragment-->|<!--EndFragment-->[\s\S]*$/g, '');
-      inserer(corps);
+      if (!collerAutourDuTitre(corps)) inserer(corps);
     }
     // Sinon (texte simple) : Chromium colle lui-même.
   }
