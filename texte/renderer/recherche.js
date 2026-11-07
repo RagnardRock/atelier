@@ -72,6 +72,8 @@ const Recherche = (() => {
     CSS.highlights.delete('edda-courant');
     if (trouves.length) CSS.highlights.set('edda-trouve', new Highlight(...trouves));
     if (courant >= 0 && trouves[courant]) {
+      // Un mot trouvé dans une partie repliée : on la déplie.
+      Sommaire.montrer(trouves[courant].startContainer);
       CSS.highlights.set('edda-courant', new Highlight(trouves[courant]));
       const r = trouves[courant].getBoundingClientRect();
       const z = $('#defilement');

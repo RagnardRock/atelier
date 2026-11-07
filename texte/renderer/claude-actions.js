@@ -52,7 +52,7 @@
 
   const decrire = (d, i) => ({
     numero: i, nom: d.nom, affiche: d === C.actif(), chemin: d.chemin || '(pas encore enregistré)', format: d.format || '-',
-    modifie: d.modifie, mots: mots(d.page.innerText || ''),
+    modifie: d.modifie, mots: mots(Sommaire.texte(d.page) || ''),
     mise_en_page: `${d.miseEnPage.format} ${d.miseEnPage.orientation}, marges ${Object.values(d.miseEnPage.marges).join('/')} cm (haut/bas/gauche/droite), police ${d.police} ${d.taille} pt`,
   });
 
@@ -77,7 +77,7 @@
       faire: (a) => {
         const d = docDe(a.document);
         const f = a.format || 'markdown';
-        const tout = f === 'html' ? d.page.innerHTML.replace(/<p data-sentinelle=""[^>]*>(<br>)?<\/p>/g, '') : f === 'texte' ? d.page.innerText : Formats.versMarkdown(d.page);
+        const tout = f === 'html' ? d.page.innerHTML.replace(/<p data-sentinelle=""[^>]*>(<br>)?<\/p>/g, '') : f === 'texte' ? Sommaire.texte(d.page) : Formats.versMarkdown(d.page);
         const debut = Math.max(0, Number(a.debut) || 0);
         const morceau = tout.slice(debut, debut + LIMITE);
         const suite = debut + LIMITE < tout.length ? `\n\n[… ${tout.length - debut - LIMITE} caractères de plus : lire_document avec debut ${debut + LIMITE}]` : '';
@@ -189,7 +189,7 @@
       faire: (a) => {
         const d = docEcrit(a.document);
         Editeur.remplacerTout(versHtml(a));
-        return `${d.nom} réécrit (${mots(d.page.innerText)} mots).`;
+        return `${d.nom} réécrit (${mots(Sommaire.texte(d.page))} mots).`;
       },
     },
     nouveau_document: {
@@ -298,7 +298,7 @@
         const info = await window.edda.adopter(f.path);
         const d = await C.ouvrirOctets(info, new Uint8Array(f.bytes));
         if (!d) throw new Error(`${info.nom} n'a pas pu être ouvert (voir le message dans Edda).`);
-        return `Ouvert : ${d.nom} (numéro ${C.docs().indexOf(d)}, ${mots(d.page.innerText)} mots).`;
+        return `Ouvert : ${d.nom} (numéro ${C.docs().indexOf(d)}, ${mots(Sommaire.texte(d.page))} mots).`;
       },
     },
   });

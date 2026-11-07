@@ -125,6 +125,7 @@ const App = (() => {
     for (const x of docs) x.page.hidden = x !== d;
     actif = d;
     Editeur.activer(d);
+    Sommaire.activer(d);
     afficher();
     rendreOnglets();
     majStatut();
@@ -137,7 +138,7 @@ const App = (() => {
     $('#accueil').hidden = !vide;
     zone.hidden = vide;
     document.body.classList.toggle('sans-document', vide);
-    if (vide) { actif = null; Editeur.activer(null); rendreAccueil(); majTitre(); majStatut(); }
+    if (vide) { actif = null; Editeur.activer(null); Sommaire.activer(null); rendreAccueil(); majTitre(); majStatut(); }
   }
 
   function rendreOnglets() {
@@ -451,12 +452,12 @@ const App = (() => {
   const majStatutBientot = () => { clearTimeout(statutTimer); statutTimer = setTimeout(majStatut, 300); };
   function majStatut() {
     if (!actif) { $('#status-pages').textContent = ''; $('#status-mots').textContent = ''; $('#status-format').textContent = ''; return; }
-    const texte = actif.page.innerText || '';
+    const texte = Sommaire.texte(actif.page);
     const mots = (texte.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu) || []).length;
     const caracteres = texte.replace(/\n/g, '').length;
     const z = config.zoom / 100;
     const hauteurPage = Unites.cmEnPx(Formats.dimensions(actif.miseEnPage).hauteur);
-    const nPages = Math.max(1, Math.ceil((actif.page.getBoundingClientRect().height / z - 2) / hauteurPage) + actif.page.querySelectorAll('hr.saut-page').length);
+    const nPages = Math.max(1, Math.ceil((Sommaire.sansReplis(() => actif.page.getBoundingClientRect().height) / z - 2) / hauteurPage) + actif.page.querySelectorAll('hr.saut-page').length);
     $('#status-pages').textContent = `${nPages} page${nPages > 1 ? 's' : ''} (environ)`;
     $('#status-mots').textContent = `${mots.toLocaleString('fr-FR')} mot${mots > 1 ? 's' : ''} · ${caracteres.toLocaleString('fr-FR')} caractères`;
     const f = actif.format ? Formats.liste[actif.format] : null;
@@ -472,6 +473,7 @@ const App = (() => {
     for (const d of docs) d.page.style.zoom = String(z);
     $('#zoom').value = config?.zoom || 100;
     $('#zoom-valeur').textContent = `${config?.zoom || 100} %`;
+    Sommaire.rafraichir();
   }
   let zoomTimer = 0;
   function zoomer(valeur) {
@@ -656,6 +658,10 @@ const App = (() => {
       { label: 'Taille réelle (100 %)', keys: `${ctrl}0`, run: () => zoomer(100) },
       { label: 'Toute la largeur de la page', run: zoomLargeur },
       null,
+      { label: 'Sommaire', keys: `${ctrl}Maj+O`, icone: 'list-tree', coche: Sommaire.estOuvert(), run: () => Sommaire.basculer() },
+      { label: 'Tout replier', icone: 'collapse-all', run: () => Sommaire.toutReplier(true), desactive: !actif },
+      { label: 'Tout déplier', icone: 'expand-all', run: () => Sommaire.toutReplier(false), desactive: !actif },
+      null,
       { label: 'Page blanche', coche: config.page !== 'sombre', run: () => changerPage('claire') },
       { label: 'Page sombre', coche: config.page === 'sombre', run: () => changerPage('sombre') },
       null,
@@ -763,6 +769,7 @@ const App = (() => {
     // Fichiers et fenêtre : partout.
     if (k === 'n' && !e.shiftKey) return faire(nouveau);
     if (k === 'o' && !e.shiftKey) return faire(ouvrir);
+    if (k === 'o' && e.shiftKey) return faire(() => Sommaire.basculer());
     if (k === 's' && e.shiftKey) return faire(() => enregistrer(actif, { sous: true }));
     if (k === 's') return faire(() => enregistrer());
     if (k === 'w') return faire(() => fermerDocument());
@@ -877,6 +884,7 @@ const App = (() => {
       config = lu.config;
       configPath = lu.path;
       await applyTheme(config);
+      Sommaire.initialiser(config.sommaire !== false, (oui) => { config.sommaire = oui; window.edda.writeConfig({ sommaire: oui }); });
       window.edda.onDocumentsExternes(async (fichiers) => { for (const f of fichiers) await ouvrirChemin(f); });
       window.edda.onDossierExterne((dossier) => { dossierProjet = dossier; if (!docs.length) rendreAccueil(); else notify(`Projet : ${nomFichier(dossier)}. Ses documents sont listés sur l'accueil.`, 'info', 4000); });
       const { dossier, fichiers } = await window.edda.demarrage();

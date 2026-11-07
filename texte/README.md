@@ -35,6 +35,7 @@ Le ruban suit le curseur : le bouton gras s'allume dans du gras, la police et la
 | `Ctrl+N`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Maj+S`, `Ctrl+W` | Nouveau, ouvrir, enregistrer, enregistrer sous, fermer l'onglet |
 | `Ctrl+P` | Imprimer (et « Exporter en PDF » dans le menu Fichier) |
 | `Ctrl+Tab` | Document suivant |
+| `Ctrl+Maj+O` | Afficher ou cacher le sommaire |
 | `Ctrl+F`, `Ctrl+H` | Rechercher, remplacer (`Ctrl+Alt+Entrée` : tout remplacer) |
 | `Ctrl+G` ou `Ctrl+B`, `Ctrl+I`, `Ctrl+U` | Gras, italique, souligné |
 | `Ctrl+L`, `Ctrl+E`, `Ctrl+R`, `Ctrl+J` | Aligner à gauche, centrer, à droite, justifier |
@@ -52,6 +53,8 @@ Le ruban suit le curseur : le bouton gras s'allume dans du gras, la police et la
 **Sélection multiple**, comme dans Word : choisis un premier bout de texte, puis `Ctrl+glisser` (ou `Ctrl+double-clic` sur un mot) pour en ajouter d'autres. Gras, italique, souligné, barré, indice, exposant, couleur, surlignage, police, taille, alignement, style de paragraphe et « effacer la mise en forme » s'appliquent à tous les bouts d'un coup ; `Suppr` les efface tous ; `Ctrl+C` / `Ctrl+X` copie leurs textes l'un sous l'autre. Pour gras, italique… : si tous les bouts le sont déjà, on l'enlève partout, sinon on le met partout. Un seul `Ctrl+Z` défait l'action sur tous les bouts. Un clic sans `Ctrl`, une frappe ou `Échap` arrête la sélection multiple.
 
 Le clic droit propose les corrections d'orthographe (français, ou français et anglais, dans les Réglages), le copier-coller, et dans un tableau : ajouter ou supprimer des lignes et colonnes, la ligne d'en-tête, la couleur de fond des cases.
+
+**Sommaire et titres repliables** : le panneau **Sommaire**, à gauche de la page (Affichage › Sommaire, `Ctrl+Maj+O`, ou le bouton en bas à gauche), liste les Titre 1 à 6. Un clic sur un titre y emmène et y pose le curseur ; le titre où l'on est est surligné. La petite flèche à gauche d'un titre (dans la marge de la page, au survol, ou dans le sommaire) **replie** ce qui le suit jusqu'au prochain titre de même niveau ou plus haut ; un titre replié finit par « ⋯ ». « Tout replier » / « Tout déplier » en haut du sommaire et dans le menu Affichage. Replier ne change pas le document : l'enregistrement (Word, LibreOffice…), l'impression, le PDF, le compteur de mots et Loki voient tout le texte, et le pliage n'est pas gardé dans le fichier. La recherche déplie la partie où elle trouve le mot ; `Entrée` ou `Suppr` sur un titre replié le déplie d'abord. Sur un écran étroit, le sommaire passe par-dessus la page.
 
 **Format › Mise en page** : papier (A4, A5, A3, Letter, Legal), portrait ou paysage, marges (normales, étroites, larges ou au centimètre près), police et taille du document. Elles sont enregistrées dans le fichier (Word, LibreOffice, RTF, HTML).
 

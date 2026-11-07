@@ -68,6 +68,7 @@ const DEFAULT_CONFIG = {
   police: 'Calibri', // police et taille des nouveaux documents
   taille: 11,
   zoom: 100,
+  sommaire: true, // le panneau Sommaire (à gauche de la page) est ouvert
   orthographe: true,
   languesOrthographe: 'fr', // 'fr', 'en' ou 'fr+en'
   formatParDefaut: 'docx', // format proposé pour enregistrer un nouveau document
