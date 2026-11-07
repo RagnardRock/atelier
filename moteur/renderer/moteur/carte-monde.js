@@ -61,22 +61,8 @@ const CarteMonde = (() => {
   // --- Les images des cartes (faites une fois par jeu) ---
   const caches = new WeakMap();
   function cache(jeu) {
-    if (!caches.has(jeu)) caches.set(jeu, { teintes: null, simples: new Map(), details: new Map(), style: '' });
+    if (!caches.has(jeu)) caches.set(jeu, { simples: new Map(), details: new Map(), style: '' });
     return caches.get(jeu);
-  }
-  // La couleur moyenne de chaque tuile (sa première image) : [r, g, b, a] de 0 à 255.
-  function teintes(jeu) {
-    const k = cache(jeu);
-    if (k.teintes) return k.teintes;
-    const s = jeu.taille, g = jeu.planche.getContext('2d', { willReadFrequently: true });
-    k.teintes = jeu.tuiles.map((t) => {
-      const { sx, sy } = t.images[0];
-      const d = g.getImageData(sx, sy, s, s).data;
-      let r = 0, v = 0, b = 0, a = 0;
-      for (let i = 0; i < d.length; i += 4) { const w = d[i + 3]; r += d[i] * w; v += d[i + 1] * w; b += d[i + 2] * w; a += w; }
-      return a ? [r / a, v / a, b / a, a / (s * s)] : [0, 0, 0, 0];
-    });
-    return k.teintes;
   }
   const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   // Le dessin simplifié d'une carte : un pixel par case.
@@ -90,7 +76,7 @@ const CarteMonde = (() => {
     c.width = L; c.height = H;
     const g = c.getContext('2d');
     const img = g.createImageData(L, H);
-    const T = teintes(jeu);
+    const M = R.style === 'plan' ? null : moyennes(detail(jeu, carte), L, H, jeu.taille);
     const calques = carte.calques.filter((l) => l.visible);
     const sol = rgb(R.sol), obstacle = rgb(R.obstacle), eau = rgb(R.eau);
     for (let i = 0; i < L * H; i++) {
@@ -99,15 +85,9 @@ const CarteMonde = (() => {
       const estEau = calques.some((l) => jeu.tuiles[l.cases[i]]?.effet?.corps === 'eau');
       if (R.style === 'plan') col = estEau ? eau : bloque ? obstacle : sol;
       else {
-        // Les calques l'un sur l'autre, chacun avec la couverture de sa tuile.
-        col = [0, 0, 0]; let a = 0;
-        for (const l of calques) {
-          const t = T[l.cases[i]];
-          if (!t || !t[3]) continue;
-          const w = Math.min(1, t[3] * 1.4) * l.opacite;
-          col = col.map((x, j) => x * (1 - w) + t[j] * w);
-          a = a + w * (1 - a);
-        }
+        // La vraie couleur moyenne de la case, telle qu'on la voit (tous les calques ensemble).
+        const a = M[i * 4 + 3];
+        col = [M[i * 4], M[i * 4 + 1], M[i * 4 + 2]];
         if (!a) col = obstacle;
         // Plus simple : des teintes un peu plus franches, par paliers, et les obstacles un peu plus sombres.
         const m = (col[0] + col[1] + col[2]) / 3;
@@ -119,6 +99,27 @@ const CarteMonde = (() => {
     g.putImageData(img, 0, 0);
     k.simples.set(carte.id, c);
     return c;
+  }
+  // La couleur moyenne de chaque case d'une image de carte (s pixels par case) : [r, g, b, a] à la suite.
+  // Saga 1.26.1 : avant, on mêlait la teinte moyenne de chaque tuile, calque par calque, et une herbe de
+  // bord (presque pleine, avec un trou pour le chemin) cachait tout le chemin dessous.
+  function moyennes(image, L, H, s) {
+    const d = image.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, L * s, H * s).data;
+    const out = new Float32Array(L * H * 4);
+    for (let y = 0; y < H * s; y++) {
+      const cy = Math.floor(y / s);
+      for (let x = 0; x < L * s; x++) {
+        const k = (y * L * s + x) * 4, w = d[k + 3];
+        if (!w) continue;
+        const o = (cy * L + Math.floor(x / s)) * 4;
+        out[o] += d[k] * w; out[o + 1] += d[k + 1] * w; out[o + 2] += d[k + 2] * w; out[o + 3] += w;
+      }
+    }
+    for (let i = 0; i < L * H; i++) {
+      const w = out[i * 4 + 3];
+      if (w) { out[i * 4] /= w; out[i * 4 + 1] /= w; out[i * 4 + 2] /= w; }
+    }
+    return out;
   }
   // La vraie carte en miniature (les tuiles, première image), faite à la demande quand on zoome.
   function detail(jeu, carte) {

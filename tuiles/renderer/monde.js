@@ -178,12 +178,22 @@ const Monde = (() => {
       };
 
       // Le dessin simplifié de Saga (un pixel par case), pour l'aperçu « comme en jeu ».
-      const teintes = tuiles.map((c) => {
-        const d = c.getContext('2d').getImageData(0, 0, s, s).data;
-        let r = 0, v = 0, b = 0, a = 0;
-        for (let i = 0; i < d.length; i += 4) { const w = d[i + 3]; r += d[i] * w; v += d[i + 1] * w; b += d[i + 2] * w; a += w; }
-        return a ? [r / a, v / a, b / a, a / (s * s)] : [0, 0, 0, 0];
-      });
+      // Saga 1.26.1 : la vraie couleur moyenne de chaque case, tous calques ensemble (comme Saga).
+      function moyennes(m) {
+        const L = m.width, H = m.height;
+        const d = image(m).getContext('2d', { willReadFrequently: true }).getImageData(0, 0, L * s, H * s).data;
+        const out = new Float32Array(L * H * 4);
+        for (let y = 0; y < H * s; y++) {
+          const cy = Math.floor(y / s);
+          for (let x = 0; x < L * s; x++) {
+            const k = (y * L * s + x) * 4, w = d[k + 3];
+            if (!w) continue;
+            const o = (cy * L + Math.floor(x / s)) * 4;
+            out[o] += d[k] * w; out[o + 1] += d[k + 1] * w; out[o + 2] += d[k + 2] * w; out[o + 3] += w;
+          }
+        }
+        return out;
+      }
       const simples = new Map();
       const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
       function simple(m) {
@@ -194,6 +204,7 @@ const Monde = (() => {
         const img = g2.createImageData(m.width, m.height);
         const col = Doc.collisions(doc, m);
         const calques = m.layers.filter((l) => l.visible !== false);
+        const M = cm.style === 'plan' ? null : moyennes(m);
         const sol = rgb(cm.sol), obstacle = rgb(cm.obstacle), eau = rgb(cm.eau);
         for (let i = 0; i < m.width * m.height; i++) {
           const bloque = col[i] === 2;
@@ -201,14 +212,8 @@ const Monde = (() => {
           let k;
           if (cm.style === 'plan') k = estEau ? eau : bloque ? obstacle : sol;
           else {
-            k = [0, 0, 0]; let a = 0;
-            for (const l of calques) {
-              const t = teintes[l.cells[i]];
-              if (!t || !t[3]) continue;
-              const w = Math.min(1, t[3] * 1.4) * (l.opacite ?? 1);
-              k = k.map((x, j) => x * (1 - w) + t[j] * w);
-              a = a + w * (1 - a);
-            }
+            const a = M[i * 4 + 3];
+            k = a ? [M[i * 4] / a, M[i * 4 + 1] / a, M[i * 4 + 2] / a] : obstacle;
             if (!a) k = obstacle;
             const moy = (k[0] + k[1] + k[2]) / 3;
             k = k.map((x) => Math.round(Math.min(255, Math.max(0, moy + (x - moy) * 1.25)) / 24) * 24);
