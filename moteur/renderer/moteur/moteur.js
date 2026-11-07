@@ -21,12 +21,12 @@ const Moteur = (() => {
   const TOUCHES_DEFAUT = {
     haut: ['ArrowUp', 'KeyW'], bas: ['ArrowDown', 'KeyS'], gauche: ['ArrowLeft', 'KeyA'], droite: ['ArrowRight', 'KeyD'],
     action: ['Space', 'Enter', 'NumpadEnter', 'KeyE'], retour: ['Backspace', 'KeyX'], courir: ['ShiftLeft', 'ShiftRight'],
-    pause: ['Escape'], carnet: ['Tab'],
+    pause: ['Escape'], carnet: ['Tab'], carte: ['KeyM'],
   };
   // Les boutons de la manette (numéros de la « manette standard » : 0 A, 1 B, 2 X, 3 Y, 8 Select, 9 Start).
   // La croix et le stick gauche déplacent toujours.
   const MANETTE_DEFAUT = { action: [0], retour: [1], courir: [1, 2], pause: [9], carnet: [8] };
-  const COMMANDES = ['haut', 'bas', 'gauche', 'droite', 'action', 'retour', 'courir', 'pause', 'carnet'];
+  const COMMANDES = ['haut', 'bas', 'gauche', 'droite', 'action', 'retour', 'courir', 'pause', 'carnet', 'carte'];
   const DIRS = ['haut', 'bas', 'gauche', 'droite'];
   const liste = (v, def) => (Array.isArray(v) ? v : def);
   function commandes(touches, manette) {
@@ -394,6 +394,7 @@ const Moteur = (() => {
         mouvement: null, pas: 0, attente: 0, pietine: 0,
       };
       partie.position = { carte: carte.id, x: joueur.x, y: joueur.y, direction: joueur.dir };
+      CarteMonde.noter(jeu, partie, carte.id); // Saga 1.26 : le brouillard de la carte du monde
       presents = Monde.evenementsPresents(jeu, carte, partie);
       // Saga 1.17 : une autre carte. Les marches s'arrêtent et la caméra revient au joueur ; un fondu ou
       // des bandes de cinéma restent (fondu au noir, téléporter, puis fondu d'entrée sur la nouvelle carte).
@@ -1643,6 +1644,12 @@ const Moteur = (() => {
       utiliserObjet: (id) => horsScript(() => Regles.utiliserObjet({ jeu, partie, ui: scripts.ui, id }), 'Erreur avec cet objet'),
       // Saga 0.6 : ouvrir l'équipe (sur la créature n° i), le Pokédex ou le PC, depuis le carnet ou la pause.
       ouvrirEcran: (nom, ...a) => horsScript(() => ecrans[nom](...a), 'Erreur dans ce menu'),
+      // Saga 1.26 : la carte du monde (carte-monde.js), si le jeu en a une.
+      get carteDisponible() { return CarteMonde.disponible(jeu); },
+      ouvrirCarte: () => horsScript(() => CarteMonde.ouvrir({
+        jeu, partie, menus, position: joueur ? { carte: carte.id, x: joueur.x, y: joueur.y } : partie.position,
+        accent: getComputedStyle(canvas.parentElement).getPropertyValue('--accent').trim() || '#7bd88f',
+      }), 'Erreur dans la carte'),
       // Saga 0.13 : les choix du pack dans le menu de pause (Jets de dés, Se reposer pour le pack JDR).
       // Saga 1.4 : puis ceux des modules du jeu (leur id commence par « module: »).
       actionsPause: () => (jeu ? [...Regles.actionsPause(jeu), ...Modules.actionsPause(jeu, partie, hoteModules)] : []),

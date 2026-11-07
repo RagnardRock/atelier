@@ -31,6 +31,7 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Espace, Entrée ou E | **Action** : parler au PNJ en face, ouvrir un coffre, lire un panneau, faire avancer un dialogue, valider un choix. |
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
 | Tab | Le **raccourci** du jeu (Saga 1.25) : le sac par défaut, ou ce que le jeu a choisi dans Tafl (Menus du jeu) : le menu, l'équipe, le Pokédex, les quêtes, les badges, Construire… |
+| M | La **carte du monde** (Saga 1.26, si le jeu en a une) : les villes et routes visitées, où tu es, les repères ; Action ou la molette zooment, et de près la vraie carte apparaît. M ou Échap la referme. Elle est aussi dans le menu du jeu. |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
 | Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : le **menu du jeu** (Saga 1.25, le seul menu) : reprendre, équipe, Pokédex, sac, quêtes, badges, les choix du pack et des modules (jets de dés, domaine, construire…), sauvegarder, options, quitter ; « Plus… » regroupe le mode table, jouer à plusieurs, recommencer et, hors d'un jeu exporté, les outils du créateur. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
@@ -358,6 +359,7 @@ Electron, sans framework ni bundler, comme Tafl. Le jeu tourne dans un `<canvas>
 | `renderer/moteur/menus.js` | Les menus du jeu hors combat : une liste, le choix d'une quantité, l'écran des EV, une fiche à pages, un nom à taper, un écran libre. |
 | `renderer/moteur/collection.js` | L'équipe, les boîtes du PC et le Pokédex (vus, attrapés) : où ranger une créature reçue. |
 | `renderer/moteur/ecrans.js` | Le menu Équipe, le Pokédex et le PC. |
+| `renderer/moteur/carte-monde.js` | Saga 1.26 : la carte du monde en jeu (dessin simplifié des cartes extérieures, brouillard, joueur, repères, zoom). |
 | `renderer/moteur/boutique.js` | Les boutiques : acheter, revendre, vendre des créatures, articles débloqués par les succès. |
 | `renderer/moteur/personnaliser.js` | L'écran du nom et de la tenue du héros. |
 | `renderer/moteur/ecran-combat.js` | L'écran de combat (en HTML, posé sur le canvas) : créatures, barres, messages, menus, animations et le journal du combat (touche J, Saga 1.2). |

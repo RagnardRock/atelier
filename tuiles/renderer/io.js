@@ -308,6 +308,7 @@ const IO = (() => {
   const DATA_KINDS = ['personnages', 'quetes', 'interrupteurs', 'variables', ...Donnees.SORTES];
   const dataFile = (kind) => `donnees/${kind}.json`;
   function gameFiles(doc) {
+    const places = typeof Monde !== 'undefined' ? Monde.positions(doc) : new Map();
     const jeu = {
       format: 'tafl-jeu',
       version: 1,
@@ -327,7 +328,9 @@ const IO = (() => {
     };
     return [
       ['tuiles.tafl', textBytes(serialize(doc, { tilesOnly: true }))],
-      ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify(mapToJSON(doc, m)))]),
+      // Tafl 1.27 : chaque carte extérieure a sa place sur la carte monde (calculée si Ragna ne l'a pas posée) :
+      // l'écran Carte de Saga s'en sert.
+      ...doc.maps.map((m) => [mapFile(m), textBytes(JSON.stringify({ ...mapToJSON(doc, m), ...(!m.interieur && !m.monde && places.get(m.id) ? { monde: { ...places.get(m.id) } } : {}) }))]),
       ...DATA_KINDS.map((k) => [dataFile(k), textBytes(JSON.stringify({ format: `tafl-${k}`, version: 1, [k]: doc.data[k] }, null, 1))]),
       // Tafl 1.2 : les données gardées telles quelles (un module, un Tafl plus récent).
       ...Object.values(doc.donneesAutres || {}).filter((d) => !DATA_KINDS.some((k) => dataFile(k) === d.fichier)).map((d) => [d.fichier, textBytes(d.texte)]),

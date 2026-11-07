@@ -362,6 +362,7 @@ function creerSaga() {
     $('#pause-dex').textContent = forme.dex;
     $('#pause-equipe').textContent = forme.equipe;
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
+    $('.pause-choix[data-action="carte"]').hidden = !moteur.carteDisponible;
     // L'argent, le jour et l'heure du jeu : dans le titre du menu (avant, dans le carnet).
     const quand = [moteur.jourVisible() ? `Jour ${Number(p.jour) || 1}` : '', moteur.heure()].filter(Boolean).join(' · ');
     $('#pause-heure').textContent = quand;
@@ -476,6 +477,7 @@ function creerSaga() {
     if (t === 'aucun') return;
     if (t === 'menu') ouvrirPause();
     else if (t === 'equipe' || (t === 'dex' && forme.dex_visible)) moteur.ouvrirEcran(t);
+    else if (t === 'carte' && moteur.carteDisponible) moteur.ouvrirCarte(); // Saga 1.26
     else if (['sac', 'quetes', 'badges'].includes(t)) ouvrirPage(t);
     else if (moteur.actionsPause().some(([id]) => id === t)) moteur.agirPause(t);
     else ouvrirPause(); // un choix absent ici (Construire hors d'une zone constructible) : le menu
@@ -503,6 +505,7 @@ function creerSaga() {
     else if (action === 'multi') { fermerPause(); multijoueur(); }
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
+    else if (action === 'carte') { fermerPause(); moteur.ouvrirCarte(); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'exporter') { fermerPause(); exporter(); }
@@ -611,7 +614,10 @@ function creerSaga() {
     else if (e.key === 'F5' && ouvert) { e.preventDefault(); recharger(); }
     else if (e.key === 'F3' && ouvert) { e.preventDefault(); basculerDebug(); }
     else if (ctrl && e.key.toLowerCase() === 's' && ouvert) { e.preventDefault(); sauvegarder(); }
-    else if (touche('carnet', e) && ouvert) { e.preventDefault(); raccourci(); }
+    else if (touche('carnet', e) && ouvert) { e.preventDefault(); if (CarteMonde.ouverte) CarteMonde.fermer(); else raccourci(); }
+    // Saga 1.26 : la carte du monde (M par défaut) ; la même touche la referme.
+    else if (touche('carte', e) && CarteMonde.ouverte) { e.preventDefault(); CarteMonde.fermer(); }
+    else if (touche('carte', e) && ouvert && moteur.carteDisponible && !pauseOuverte() && !moteur.enScript && !moteur.enCombat) { e.preventDefault(); moteur.ouvrirCarte(); }
     else if ((e.key === 'Escape' || touche('pause', e)) && ouvert) {
       e.preventDefault();
       if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas le menu

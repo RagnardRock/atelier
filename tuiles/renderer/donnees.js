@@ -326,6 +326,7 @@ const Donnees = (() => {
     multijoueur: { echanges: true, duels: true, pv_autres: 'exacts' },
     scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
     accords: { variable: '', valeurs: [] }, // Tafl 1.24 : les accords dans les textes ({il|elle})
+    carte_monde: normCarteMonde({}), // Tafl 1.27 (Saga 1.26) : la carte du monde en jeu, réglée dans la fenêtre Carte monde
     ...(J ? { jdr: J.normRegles({}) } : {}), // Tafl 0.32 : les règles maison du pack JDR
     ...(A ? { action: A.normRegles({}) } : {}), // Tafl 1.10 : le héros du temps réel (pack action)
   });
@@ -399,6 +400,28 @@ const Donnees = (() => {
       tab: /^[a-z0-9_:-]{1,60}$/.test(str(m.tab)) ? str(m.tab) : '',
     };
   }
+  // Tafl 1.27 (Saga 1.26) : la carte du monde en jeu. Réglée dans la fenêtre Carte monde (Ctrl+Maj+M),
+  // panneau « Carte en jeu ». Les repères sont posés sur une carte extérieure, à une case.
+  const ICONES_REPERE = [['point', '● Point'], ['soin', '✚ Soin'], ['boutique', '◆ Boutique'], ['quete', '! Quête'], ['etoile', '★ Étoile'], ['maison', '⌂ Maison'], ['grotte', '▲ Grotte, donjon'], ['danger', '✕ Danger']];
+  function normCarteMonde(c) {
+    c = c && typeof c === 'object' ? c : {};
+    const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v.toLowerCase() : def);
+    const reperes = [];
+    arr(c.reperes).filter((p) => p && typeof p === 'object' && typeof p.carte === 'string' && p.carte).slice(0, 200).forEach((p, i) => {
+      reperes.push({
+        id: Events.ident(Doc.slug(p.id || p.nom, `repere-${i + 1}`), reperes, Doc.slug(p.id || p.nom, `repere-${i + 1}`)),
+        nom: str(p.nom).slice(0, 40), icone: pick(p.icone, ICONES_REPERE, 'point'),
+        carte: p.carte, x: int(p.x, 0, 0, 255), y: int(p.y, 0, 0, 255),
+        quete: Doc.slug(p.quete, ''), etape: p.etape === '' || p.etape == null ? '' : int(p.etape, 0, 0, 99),
+      });
+    });
+    return {
+      active: c.active !== false, brouillard: c.brouillard !== false, zoom: c.zoom !== false,
+      objet: Doc.slug(c.objet, ''), style: c.style === 'plan' ? 'plan' : 'tuiles',
+      sol: hex(c.sol, '#8cc56f'), obstacle: hex(c.obstacle, '#3f6e4c'), eau: hex(c.eau, '#4b8fd6'), fond: hex(c.fond, '#10131c'),
+      reperes,
+    };
+  }
   // L'interface en jeu (Tafl 0.15, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
   const THEMES = [['verre', 'Verre : sombre et flou, coins arrondis'], ['pixel', 'Pixel : police pixel, cadres nets, rétro']];
   function normReglages(r) {
@@ -449,6 +472,7 @@ const Donnees = (() => {
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
       ...(J ? { jdr: { ...J.normRegles(r.jdr), monnaie: 'unique' } } : {}),
       ...(A ? { action: A.normRegles(r.action) } : {}),
+      carte_monde: normCarteMonde(r.carte_monde),
       // Tafl 1.24 (Saga 1.22) : les accords dans les textes ({il|elle}), selon une variable du jeu.
       accords: { variable: Doc.slug(r.accords?.variable, ''), valeurs: arr(r.accords?.valeurs).map((v) => str(v).trim().slice(0, 40)).filter(Boolean).slice(0, 8) },
       scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
@@ -1481,6 +1505,7 @@ const Donnees = (() => {
     const modules = Array.isArray(r.modules) ? r.modules : [];
     const choixTab = [['', 'Le sac (par défaut)'], ['menu', 'Le menu du jeu'], ['equipe', `${m.equipe || d.equipe}`],
       ...(m.dex_visible ? [['dex', `${m.dex || d.dex}`]] : []), ['quetes', 'Les quêtes'],
+      ...(r.carte_monde?.active !== false ? [['carte', 'La carte du monde']] : []),
       ...(r.badges?.length || pokemon ? [['badges', 'Les badges']] : []),
       ...(r.regles === 'jdr' ? [['jets', 'Jets de dés'], ['repos', 'Se reposer']] : []),
       ...(modules.includes('gestion') ? [['module:gestion:construire', 'Construire (sur une zone constructible)'], ['module:gestion:domaine', 'L\'écran du domaine']] : []),
@@ -2018,6 +2043,6 @@ const Donnees = (() => {
   return {
     ui, SORTES, REGLES, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
     METEOS, ambianceVide, normAmbiance, lumiereVide, normLumiere, son, SONS_INTEGRES, HORLOGES, tableRencontres, normRencontres,
-    vides, normer, normElement, reglagesVides, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
+    vides, normer, normElement, reglagesVides, normCarteMonde, ICONES_REPERE, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };
 })();

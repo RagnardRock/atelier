@@ -234,6 +234,8 @@ const Jeu = (() => {
       nom: data.nom || entree.nom || entree.id,
       largeur, hauteur, taille,
       interieur: Boolean(data.interieur), // Tafl 0.11 : une maison, une grotte… (le décor des combats)
+      // Tafl 0.11 : la place de la carte sur la carte monde, en cases (Saga 1.26 : l'écran Carte s'en sert).
+      monde: !data.interieur && Number.isFinite(Number(data.monde?.x)) && Number.isFinite(Number(data.monde?.y)) ? { x: Math.round(Number(data.monde.x)), y: Math.round(Number(data.monde.y)) } : null,
       // Tafl 1.12 (module roguelite) : une salle de donjon modèle : { type, poids, etage_min, etage_max }.
       salle: data.salle && typeof data.salle === 'object' && typeof data.salle.type === 'string' ? { type: data.salle.type, poids: nombre(data.salle.poids, 10), etage_min: nombre(data.salle.etage_min, 1), etage_max: nombre(data.salle.etage_max, 0) } : null,
       calques,
