@@ -1005,6 +1005,23 @@ body.mode-map .tile-only, body:not(.mode-map) .map-only { display: none; }
 .world-view { position: relative; flex: 1; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.04), transparent 70%), rgba(8, 9, 14, 0.55); border-bottom-right-radius: 0; }
 .world-view canvas { display: block; touch-action: none; cursor: grab; }
 .world-tip { position: absolute; pointer-events: none; padding: 4px 9px; border-radius: 7px; background: rgba(16, 17, 24, 0.92); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text); font-size: 12px; white-space: nowrap; }
+.world-side { overflow-y: auto; }
+/* Tafl 1.26 : l'onglet « Carte en jeu » (la carte du monde de Saga) */
+.world-tabs { display: flex; gap: 4px; margin-bottom: 8px; padding: 3px; border-radius: 9px; background: rgba(255, 255, 255, 0.05); }
+.world-tab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 5px 6px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.world-tab.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text-strong); }
+.world-field { display: flex; flex-direction: column; gap: 3px; margin: 4px 2px; font-size: 12px; }
+.world-field.world-check { flex-direction: row; align-items: center; gap: 7px; cursor: pointer; }
+.world-field input[type="checkbox"] { margin: 0; accent-color: var(--accent); }
+.world-label { color: var(--muted); }
+.world-field select, .world-repere select, .world-repere input[type="text"] { min-width: 0; padding: 4px 6px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px; background: rgba(0, 0, 0, 0.25); color: var(--text); font-size: 12px; }
+.world-field input[type="color"] { width: 100%; height: 24px; padding: 0; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 6px; background: none; }
+.world-poser { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 4px 2px 6px; padding: 6px; border: 1px dashed rgba(255, 255, 255, 0.22); border-radius: 8px; background: transparent; color: var(--text); font-size: 12px; cursor: pointer; }
+.world-poser:hover, .world-poser.active { border-color: var(--accent); color: var(--accent); }
+.world-repere { display: flex; flex-direction: column; gap: 4px; margin: 3px 2px; padding: 6px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; cursor: pointer; }
+.world-repere.active { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.world-repere-tete { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 4px; align-items: center; }
+.world-repere-detail { font-size: 11px; color: var(--muted); }
 
 /* Tafl 0.12 : l'éditeur de sprite d'un personnage (Données du jeu › Personnages) */
 .sprite-editeur { display: flex; flex-direction: column; gap: 10px; }

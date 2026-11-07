@@ -8,7 +8,7 @@
 const Commandes = (() => {
   const NOMS = {
     haut: 'Haut', bas: 'Bas', gauche: 'Gauche', droite: 'Droite',
-    action: 'Action (parler, valider)', retour: 'Retour', courir: 'Courir (tenir)', pause: 'Menu du jeu', carnet: 'Raccourci (Tab)',
+    action: 'Action (parler, valider)', retour: 'Retour', courir: 'Courir (tenir)', pause: 'Menu du jeu', carnet: 'Raccourci (Tab)', carte: 'Carte du monde',
   };
   // Les boutons d'une manette « standard » (Xbox ; PlayStation : A = ✕, B = ○, X = □, Y = △).
   const BOUTONS = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', 'Haut', 'Bas', 'Gauche', 'Droite', 'Home'];
@@ -61,7 +61,7 @@ const Commandes = (() => {
           ? el('div', { className: 'commandes-cases' },
             ...m[c].map((b) => pastille(nomBouton(b), () => { m[c] = m[c].filter((x) => x !== b); dessiner(); })),
             el('button', { type: 'button', className: `pastille plus${ecoute?.sorte === 'bouton' && ecoute.commande === c ? ' ecoute' : ''}`, textContent: ecoute?.sorte === 'bouton' && ecoute.commande === c ? 'Appuie…' : '+', title: 'Ajouter un bouton (appuie-le sur la manette)', onclick: () => ecouter('bouton', c) }))
-          : el('div', { className: 'commandes-cases discret', textContent: 'Croix, stick' });
+          : el('div', { className: 'commandes-cases discret', textContent: c === 'carte' ? 'Depuis le menu' : 'Croix, stick' });
         table.append(el('div', { className: 'commandes-ligne' }, el('span', { className: 'commandes-nom', textContent: NOMS[c] }), clavier, pad));
       }
     }

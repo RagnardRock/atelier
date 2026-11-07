@@ -1044,3 +1044,9 @@ body.mon-tour .joueurs-jets { right: calc(min(300px, 100% - 24px) + 24px); }
 #scene[data-theme="pixel"] #pause-page h3 { font-family: 'Jersey 10', monospace; font-size: 20px; font-weight: 400; }
 #scene[data-theme="pixel"] .pause-aide { font-family: 'Jersey 10', monospace; font-size: 16px; }
 #scene[data-theme="pixel"] #pause-argent { font-size: 22px; }
+
+/* ---------- Saga 1.26 : la carte du monde (carte-monde.js) ---------- */
+.menu-boite.menu-large.carte-monde { display: flex; flex-direction: column; width: min(1100px, calc(100% - 32px)); height: 86%; max-height: 86%; overflow: hidden; }
+.carte-monde-vue { position: relative; flex: 1; min-height: 160px; margin: 0 2px 8px; border-radius: 10px; overflow: hidden; }
+.carte-monde-vue canvas { position: absolute; inset: 0; display: block; cursor: grab; touch-action: none; }
+#scene[data-theme="pixel"] .carte-monde-vue { border-radius: 0; }

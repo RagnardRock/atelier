@@ -10,6 +10,7 @@
 
 const Monde = (() => {
   const COTES = ['droite', 'gauche', 'bas', 'haut'];
+  const ICONES = { soin: '✚', boutique: '◆', quete: '!', etoile: '★', maison: '⌂', grotte: '▲', danger: '✕', point: '●' };
 
   // De quel côté de A se trouve B, d'après un téléporteur w de A (vers la case tx, ty de B).
   function cote(A, w, B) {
@@ -145,12 +146,17 @@ const Monde = (() => {
       const s = doc.tileSize;
       const interieur = new Map(doc.maps.map((m) => [m.id, Boolean(m.interieur)]));
       const pos = new Map(doc.maps.filter((m) => m.monde).map((m) => [m.id, { ...m.monde }]));
-      const avant = JSON.stringify([...interieur, ...pos]);
       const exterieures = () => doc.maps.filter((m) => !interieur.get(m.id));
       const estInterieure = (m) => interieur.get(m.id);
       const completer = () => placer(doc, exterieures(), pos, estInterieure);
+      const avantBrut = JSON.stringify([...interieur, ...pos]);
       completer();
+      // Tafl 1.27 (Saga 1.26) : la carte du monde en jeu (panneau « Carte en jeu »), avec ses repères.
+      const cm = structuredClone(doc.data.reglages?.carte_monde || Donnees.normCarteMonde({}));
+      const avantCm = JSON.stringify(cm);
       const avantPlace = JSON.stringify([...interieur, ...pos]);
+      const avant = JSON.stringify([...JSON.parse(avantBrut), cm]); // même forme que etat()
+      let onglet = 'cartes', apercu = false, poser = false, repereChoisi = null;
 
       const w = Events.fenetre({ titre: 'Carte monde', icone: 'globe', largeur: 1600 });
       w.card.classList.add('world-editor');
@@ -170,6 +176,50 @@ const Monde = (() => {
         if (!images.has(m.id)) images.set(m.id, IO.mapCanvas(doc, 1, m, tuiles));
         return images.get(m.id);
       };
+
+      // Le dessin simplifié de Saga (un pixel par case), pour l'aperçu « comme en jeu ».
+      const teintes = tuiles.map((c) => {
+        const d = c.getContext('2d').getImageData(0, 0, s, s).data;
+        let r = 0, v = 0, b = 0, a = 0;
+        for (let i = 0; i < d.length; i += 4) { const w = d[i + 3]; r += d[i] * w; v += d[i + 1] * w; b += d[i + 2] * w; a += w; }
+        return a ? [r / a, v / a, b / a, a / (s * s)] : [0, 0, 0, 0];
+      });
+      const simples = new Map();
+      const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+      function simple(m) {
+        const cle = `${m.id}${cm.style}${cm.sol}${cm.obstacle}${cm.eau}`;
+        if (simples.has(cle)) return simples.get(cle);
+        const c = el('canvas', { width: m.width, height: m.height });
+        const g2 = c.getContext('2d');
+        const img = g2.createImageData(m.width, m.height);
+        const col = Doc.collisions(doc, m);
+        const calques = m.layers.filter((l) => l.visible !== false);
+        const sol = rgb(cm.sol), obstacle = rgb(cm.obstacle), eau = rgb(cm.eau);
+        for (let i = 0; i < m.width * m.height; i++) {
+          const bloque = col[i] === 2;
+          const estEau = calques.some((l) => doc.tiles[l.cells[i]]?.effet?.corps === 'eau');
+          let k;
+          if (cm.style === 'plan') k = estEau ? eau : bloque ? obstacle : sol;
+          else {
+            k = [0, 0, 0]; let a = 0;
+            for (const l of calques) {
+              const t = teintes[l.cells[i]];
+              if (!t || !t[3]) continue;
+              const w = Math.min(1, t[3] * 1.4) * (l.opacite ?? 1);
+              k = k.map((x, j) => x * (1 - w) + t[j] * w);
+              a = a + w * (1 - a);
+            }
+            if (!a) k = obstacle;
+            const moy = (k[0] + k[1] + k[2]) / 3;
+            k = k.map((x) => Math.round(Math.min(255, Math.max(0, moy + (x - moy) * 1.25)) / 24) * 24);
+            if (bloque && !estEau) k = k.map((x) => x * 0.72);
+          }
+          img.data.set([k[0], k[1], k[2], 255], i * 4);
+        }
+        g2.putImageData(img, 0, 0);
+        simples.set(cle, c);
+        return c;
+      }
 
       // Vue : 1 case = s × zoom pixels à l'écran ; (ox, oy) = où tombe la case (0, 0).
       let zoom = 1, ox = 0, oy = 0, survol = null, choisie = null;
@@ -214,7 +264,8 @@ const Monde = (() => {
         }
         g.setTransform(r, 0, 0, r, 0, 0);
         g.clearRect(0, 0, W, H);
-        g.imageSmoothingEnabled = zoom < 1;
+        g.imageSmoothingEnabled = !apercu && zoom < 1;
+        if (apercu) { g.fillStyle = cm.fond; g.fillRect(0, 0, W, H); }
         const maps = exterieures();
         if (!maps.length) {
           g.fillStyle = 'rgba(255,255,255,0.45)';
@@ -226,7 +277,7 @@ const Monde = (() => {
         // Les cartes, puis leurs liens, puis les noms (toujours lisibles par-dessus).
         for (const m of maps) {
           const p = versEcran(pos.get(m.id).x, pos.get(m.id).y);
-          g.drawImage(image(m), p.x, p.y, m.width * s * zoom, m.height * s * zoom);
+          g.drawImage(apercu ? simple(m) : image(m), p.x, p.y, m.width * s * zoom, m.height * s * zoom);
         }
         const accent = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#7bd88f';
         for (const m of maps) {
@@ -267,7 +318,35 @@ const Monde = (() => {
           g.fillStyle = m === choisie ? accent : '#e8e8ea';
           g.fillText(texte, p.x + 13, p.y + 17);
         }
+        // Les repères de la carte en jeu.
+        g.textAlign = 'center';
+        for (const r of cm.reperes) {
+          const p = posRepere(r);
+          if (!p) continue;
+          const rayon = 10;
+          g.fillStyle = 'rgba(12, 14, 22, 0.88)';
+          g.beginPath(); g.arc(p.x, p.y, rayon, 0, Math.PI * 2); g.fill();
+          g.strokeStyle = r === repereChoisi ? accent : r.quete ? '#ffd166' : '#ffffff'; g.lineWidth = 2; g.stroke();
+          g.fillStyle = r.quete ? '#ffd166' : '#ffffff';
+          g.font = '700 11px "Segoe UI", sans-serif';
+          g.fillText(ICONES[r.icone] || ICONES.point, p.x, p.y + 1);
+          if (r.nom) {
+            g.font = '600 11px "Segoe UI", sans-serif';
+            const tw = g.measureText(r.nom).width;
+            g.fillStyle = 'rgba(12, 14, 22, 0.8)';
+            g.beginPath(); g.roundRect(p.x - tw / 2 - 5, p.y + rayon + 3, tw + 10, 16, 5); g.fill();
+            g.fillStyle = '#f2f2f4';
+            g.fillText(r.nom, p.x, p.y + rayon + 11);
+          }
+        }
       }
+      // Où est un repère à l'écran (au centre de sa case), ou null si sa carte n'est pas sur la carte monde.
+      function posRepere(r) {
+        const m = Doc.mapById(doc, r.carte);
+        const p = m && !interieur.get(m.id) && pos.get(m.id);
+        return p ? versEcran(p.x + r.x + 0.5, p.y + r.y + 0.5) : null;
+      }
+      const repereSous = (sx, sy) => [...cm.reperes].reverse().find((r) => { const p = posRepere(r); return p && Math.hypot(p.x - sx, p.y - sy) <= 12; }) || null;
 
       // --- Souris : glisser une carte, glisser le fond, molette = zoom ---
       let geste = null;
@@ -276,6 +355,26 @@ const Monde = (() => {
         const sx = e.clientX - r.left, sy = e.clientY - r.top;
         const m = e.button === 0 && !e.altKey ? carteSous(sx, sy) : null;
         canvas.setPointerCapture(e.pointerId);
+        const rep = e.button === 0 && !poser ? repereSous(sx, sy) : null;
+        if (poser && m) {
+          // Poser un repère sur la case cliquée.
+          const c = versCase(sx, sy), p = pos.get(m.id);
+          const r = { id: Events.ident('repere', cm.reperes, 'repere'), nom: '', icone: 'point', carte: m.id, x: clamp(Math.floor(c.x - p.x), 0, m.width - 1), y: clamp(Math.floor(c.y - p.y), 0, m.height - 1), quete: '', etape: '' };
+          cm.reperes.push(r);
+          repereChoisi = r;
+          poser = false;
+          onglet = 'jeu';
+          renderListe();
+          dessiner();
+          return;
+        }
+        if (rep) {
+          repereChoisi = rep;
+          geste = { sorte: 'repere', r: rep };
+          if (onglet === 'jeu') renderListe();
+          dessiner();
+          return;
+        }
         if (m) {
           choisie = m;
           geste = { sorte: 'carte', m, depart: versCase(sx, sy), origine: { ...pos.get(m.id) } };
@@ -286,6 +385,15 @@ const Monde = (() => {
       canvas.onpointermove = (e) => {
         const r = canvas.getBoundingClientRect();
         const sx = e.clientX - r.left, sy = e.clientY - r.top;
+        if (geste?.sorte === 'repere') {
+          const m = carteSous(sx, sy);
+          if (m) {
+            const c = versCase(sx, sy), p = pos.get(m.id);
+            Object.assign(geste.r, { carte: m.id, x: clamp(Math.floor(c.x - p.x), 0, m.width - 1), y: clamp(Math.floor(c.y - p.y), 0, m.height - 1) });
+            dessiner();
+          }
+          return;
+        }
         if (geste?.sorte === 'carte') {
           const c = versCase(sx, sy);
           const p = { x: geste.origine.x + Math.round(c.x - geste.depart.x), y: geste.origine.y + Math.round(c.y - geste.depart.y) };
@@ -297,7 +405,7 @@ const Monde = (() => {
         }
         const m = carteSous(sx, sy);
         if (m !== survol) { survol = m; dessiner(); }
-        canvas.style.cursor = geste?.sorte === 'vue' ? 'grabbing' : m ? 'move' : 'grab';
+        canvas.style.cursor = poser ? (m ? 'crosshair' : 'not-allowed') : geste?.sorte === 'vue' ? 'grabbing' : repereSous(sx, sy) || m ? 'move' : 'grab';
         bulle.hidden = !m || Boolean(geste);
         if (m) {
           const p = pos.get(m.id);
@@ -305,7 +413,7 @@ const Monde = (() => {
           bulle.style.left = `${sx + 14}px`; bulle.style.top = `${sy + 16}px`;
         }
       };
-      canvas.onpointerup = () => { geste = null; };
+      canvas.onpointerup = () => { if (geste?.sorte === 'repere' && onglet === 'jeu') renderListe(); geste = null; };
       canvas.onpointerleave = () => { bulle.hidden = true; if (survol) { survol = null; dessiner(); } };
       canvas.ondblclick = (e) => {
         const r = canvas.getBoundingClientRect();
@@ -327,6 +435,9 @@ const Monde = (() => {
       // --- La liste à gauche : quelles cartes sont sur la carte monde ---
       function renderListe() {
         side.innerHTML = '';
+        const tab = (id, texte, ic) => el('button', { type: 'button', className: `world-tab${onglet === id ? ' active' : ''}`, onclick: () => { onglet = id; renderListe(); } }, [icon(ic), texte]);
+        side.append(el('div', { className: 'world-tabs' }, [tab('cartes', 'Cartes', 'map'), tab('jeu', 'Carte en jeu', 'globe')]));
+        if (onglet === 'jeu') return renderJeu();
         side.append(el('p', { className: 'rows-empty world-help', textContent: 'Coche les cartes extérieures (villes, routes). Les intérieurs (maisons, grottes…) restent décochés.' }));
         const groupes = [];
         for (const m of doc.maps) {
@@ -370,6 +481,65 @@ const Monde = (() => {
         }
       }
 
+      // --- L'onglet « Carte en jeu » : ce que Saga montre (écran Carte, touche M) ---
+      function renderJeu() {
+        const majVue = () => { simples.clear(); dessiner(); };
+        const coche = (cle, texte, aide) => {
+          const b = el('input', { type: 'checkbox', checked: Boolean(cm[cle]), onchange: () => { cm[cle] = b.checked; renderListe(); dessiner(); } });
+          return el('label', { className: 'world-field world-check', title: aide || '' }, [b, el('span', { textContent: texte })]);
+        };
+        const champ = (texte, ctrl) => el('label', { className: 'world-field' }, [el('span', { className: 'world-label', textContent: texte }), ctrl]);
+        const choix = (liste, valeur, change) => {
+          const sel = el('select', { onchange: () => change(sel.value) }, liste.map(([v, t]) => el('option', { value: v, textContent: t, selected: v === valeur })));
+          return sel;
+        };
+        const couleur = (cle, texte) => champ(texte, el('input', { type: 'color', value: cm[cle], oninput: (e) => { cm[cle] = e.target.value; majVue(); } }));
+        side.append(
+          el('p', { className: 'rows-empty world-help', textContent: 'Dans le jeu, le joueur ouvre la carte depuis la pause ou avec M. Elle montre les cartes cochées dans l\'onglet Cartes, à leur place.' }),
+          coche('active', 'Carte dans le jeu', 'Décoché : pas d\'écran Carte dans ce jeu'));
+        if (cm.active) {
+          const objets = (doc.data.objets || []).map((o) => [o.id, o.nom || o.id]);
+          side.append(
+            coche('brouillard', 'Brouillard : seulement les cartes visitées'),
+            coche('zoom', 'Zoom (de près, la vraie carte apparaît)'),
+            champ('Il faut avoir', choix([['', 'Rien (toujours permise)'], ...objets], cm.objet, (v) => { cm.objet = v; })),
+            champ('Dessin', choix([['tuiles', 'Couleurs des tuiles'], ['plan', 'Plan : mes couleurs']], cm.style, (v) => { cm.style = v; renderListe(); majVue(); })));
+          if (cm.style === 'plan') side.append(couleur('sol', 'Sol'), couleur('obstacle', 'Obstacles'), couleur('eau', 'Eau'));
+          side.append(couleur('fond', 'Fond'));
+          const ap = el('input', { type: 'checkbox', checked: apercu, onchange: () => { apercu = ap.checked; dessiner(); } });
+          side.append(el('label', { className: 'world-field world-check' }, [ap, el('span', { textContent: 'Aperçu comme en jeu' })]));
+          // Les repères.
+          side.append(el('div', { className: 'editor-section' }, [el('span', { textContent: `Repères (${cm.reperes.length})` })]));
+          side.append(el('button', { type: 'button', className: `btn world-poser${poser ? ' active' : ''}`, onclick: () => { poser = !poser; renderListe(); } }, [icon('location'), poser ? 'Clique sur la carte… (annuler)' : 'Poser un repère']));
+          const quetes = [['', 'Toujours visible'], ...(doc.data.quetes || []).map((q) => [q.id, `Pendant « ${q.titre || q.id} »`])];
+          for (const r of cm.reperes) {
+            const m = Doc.mapById(doc, r.carte);
+            const ligne = el('div', { className: `world-repere${r === repereChoisi ? ' active' : ''}` });
+            const nom = el('input', { type: 'text', value: r.nom, placeholder: 'Nom (facultatif)', maxLength: 40, oninput: () => { r.nom = nom.value; dessiner(); } });
+            const suppr = el('button', { type: 'button', className: 'icon-button', title: 'Retirer ce repère', onclick: () => { cm.reperes = cm.reperes.filter((x) => x !== r); if (repereChoisi === r) repereChoisi = null; renderListe(); dessiner(); } }, [icon('trash')]);
+            ligne.append(
+              el('div', { className: 'world-repere-tete' }, [choix(Donnees.ICONES_REPERE, r.icone, (v) => { r.icone = v; dessiner(); }), nom, suppr]),
+              el('div', { className: 'world-repere-detail', textContent: `${m ? m.name : r.carte} · case ${r.x}, ${r.y}` }),
+              choix(quetes, r.quete, (v) => { r.quete = v; renderListe(); dessiner(); }));
+            if (r.quete) {
+              const q = (doc.data.quetes || []).find((x) => x.id === r.quete);
+              const etapes = [['', 'Toute la quête'], ...(q?.etapes || []).map((e, i) => [String(i), `Étape ${i + 1}${e.texte ? ` : ${e.texte.slice(0, 30)}` : ''}`])];
+              ligne.append(choix(etapes, r.etape === '' ? '' : String(r.etape), (v) => { r.etape = v === '' ? '' : Number(v); }));
+            }
+            ligne.onclick = (e) => {
+              if (e.target.closest('input, select, button')) return;
+              repereChoisi = r;
+              const p = m && pos.get(m.id);
+              if (p) { ox = vue.clientWidth / 2 - (p.x + r.x + 0.5) * s * zoom; oy = vue.clientHeight / 2 - (p.y + r.y + 0.5) * s * zoom; }
+              renderListe();
+              dessiner();
+            };
+            side.append(ligne);
+          }
+          if (!cm.reperes.length) side.append(el('p', { className: 'rows-empty', textContent: 'Aucun repère. Un repère peut marquer un centre de soin, une boutique, ou le but d\'une quête (il ne se voit alors que pendant la quête). Glisse-le pour le déplacer.' }));
+        }
+      }
+
       // --- Exporter toute la carte monde en une image ---
       async function exporter() {
         const ext = new Set(exterieures().map((m) => m.id));
@@ -381,12 +551,15 @@ const Monde = (() => {
         notify(`Carte monde exportée : ${saved.name} (${c.width} × ${c.height} px)`, 'success', 6000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
       }
 
-      const etat = () => JSON.stringify([...interieur, ...pos]);
+      const etat = () => JSON.stringify([...interieur, ...pos, cm]);
+      const places = () => JSON.stringify([...interieur, ...pos]);
       const change = () => etat() !== avant;
       function appliquer() {
         if (!change()) return;
         // Les places calculées toutes seules sont gardées aussi : le moteur les lira telles quelles.
-        Doc.change(doc, etat() === avantPlace ? 'Placer les cartes sur la carte monde' : 'Carte monde', () => {
+        const cmChange = JSON.stringify(cm) !== avantCm;
+        Doc.change(doc, places() === avantPlace && !cmChange ? 'Placer les cartes sur la carte monde' : 'Carte monde', () => {
+          if (cmChange) doc.data = { ...doc.data, reglages: { ...doc.data.reglages, carte_monde: Donnees.normCarteMonde(cm) } };
           doc.maps = doc.maps.map((m) => {
             const dedans = interieur.get(m.id);
             const p = dedans ? m.monde : pos.get(m.id) || null;
@@ -404,7 +577,7 @@ const Monde = (() => {
       };
       const fermer = async () => {
         // Seules les places calculées par Tafl ont changé : rien à perdre.
-        if (etat() === avantPlace || await Dialogs.ask('Carte monde', 'Garder ce que tu as changé sur la carte monde ?', [
+        if ((places() === avantPlace && JSON.stringify(cm) === avantCm) || await Dialogs.ask('Carte monde', 'Garder ce que tu as changé sur la carte monde ?', [
           { label: 'Fermer sans garder', value: true },
           { label: 'Continuer', value: false, primary: true },
         ])) finir(null, false);
