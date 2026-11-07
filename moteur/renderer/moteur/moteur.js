@@ -121,7 +121,7 @@ const Moteur = (() => {
     const ctx = canvas.getContext('2d');
     const entrees = creerEntrees();
     const ambiance = Ambiance.creer();
-    let options = { zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true, effetsSol: true, volumeMusique: 70, volumeSons: 80, vitesseTexte: 'normale' };
+    let options = { affichage: 'jeu', zoom: 0, casesVisibles: 11, courirParDefaut: false, meteo: true, effetsSol: true, volumeMusique: 70, volumeSons: 80, vitesseTexte: 'normale' };
     // Le son (Saga 0.11) : la musique des cartes et des combats, les bruitages, la pluie et le tonnerre.
     const audio = Son.creer({ charger: (chemin) => rappels.chargerSon?.(chemin) ?? Promise.reject(new Error('pas de sons')) });
     audio.onErreur((m) => rappels.message?.(m));
@@ -359,7 +359,13 @@ const Moteur = (() => {
       const dpr = window.devicePixelRatio || 1;
       const lw = Math.max(1, Math.floor(parent.clientWidth * dpr)), lh = Math.max(1, Math.floor(parent.clientHeight * dpr));
       const taille = jeu?.taille || 16;
-      zoom = options.zoom > 0 ? options.zoom : Math.max(1, Math.floor(lh / (options.casesVisibles * taille)));
+      // Saga 1.24 : par défaut, le zoom choisi par le jeu (Tafl › Réglages › Interface › Affichage) ;
+      // le joueur peut prendre le sien (options.affichage === 'perso').
+      const aj = jeu?.donnees.reglages?.reglages?.interface?.affichage || {};
+      const perso = options.affichage === 'perso';
+      const z = perso ? options.zoom : Math.round(Number(aj.zoom) || 0);
+      const cases = perso ? options.casesVisibles : Math.min(30, Math.max(5, Math.round(Number(aj.cases_visibles) || 11)));
+      zoom = z > 0 ? Math.min(8, z) : Math.max(1, Math.floor(lh / (cases * taille)));
       W = Math.ceil(lw / zoom);
       H = Math.ceil(lh / zoom);
       canvas.width = W;

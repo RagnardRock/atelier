@@ -67,9 +67,10 @@ function creerSaga() {
         { key: 'vitesseTexte', label: 'Vitesse du texte', type: 'select', value: config.vitesseTexte || 'normale', choices: [['lente', 'Lente'], ['normale', 'Normale'], ['rapide', 'Rapide'], ['instantanee', 'Instantanée (tout le texte d\'un coup)']] },
         titre('Affichage'),
         { key: 'pleinEcran', label: 'Plein écran (F11)', type: 'checkbox', value: document.body.classList.contains('plein-ecran') },
+        { key: 'affichage', label: 'Taille de la vue', type: 'select', value: config.affichage === 'perso' ? 'perso' : 'jeu', choices: [['jeu', 'Celle du jeu'], ['perso', 'La mienne']] },
         { key: 'zoom', label: 'Zoom', type: 'select', value: String(config.zoom), choices: [['0', 'Automatique'], ...[1, 2, 3, 4, 5, 6, 7, 8].map((z) => [String(z), `× ${z}`])] },
-        { key: 'casesVisibles', label: 'Cases visibles', type: 'range', min: 7, max: 24, step: 1, value: config.casesVisibles, unit: 'en hauteur' },
-        { type: 'info', text: 'En zoom automatique, Saga choisit le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur. Un zoom entier garde le pixel art parfaitement net.' },
+        { key: 'casesVisibles', label: 'Cases visibles', type: 'range', min: 5, max: 30, step: 1, value: config.casesVisibles, unit: 'en hauteur' },
+        { type: 'info', text: 'Celle du jeu : le zoom choisi par le créateur du jeu dans Tafl. La mienne : le zoom et les cases ci-dessus. En zoom automatique, Saga choisit le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur. Un zoom entier garde le pixel art parfaitement net.' },
         { key: 'meteo', label: 'Montrer la météo des cartes', type: 'checkbox', value: config.meteo },
         { key: 'effetsSol', label: 'Effets au passage (hautes herbes, eau, traces de pas…)', type: 'checkbox', value: config.effetsSol !== false },
         { key: 'theme', label: 'Interface en jeu', type: 'select', value: config.theme || 'jeu', choices: [['jeu', 'Celle choisie par le jeu'], ['verre', 'Verre (sombre, flou)'], ['pixel', 'Pixel (rétro)']] },
@@ -77,7 +78,9 @@ function creerSaga() {
         { key: 'courirParDefaut', label: 'Courir sans tenir la touche Courir (elle fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },
         { type: 'element', element: commandes.element },
       ],
-      onInput: (vals) => {
+      onInput: (vals, api) => {
+        // « Celle du jeu » : le zoom et les cases du joueur ne servent pas, on les grise.
+        for (const k of ['zoom', 'casesVisibles']) api.inputs[k]?.input.closest('.field')?.classList.toggle('inactif', vals.affichage !== 'perso');
         moteur.regler({ ...vals, zoom: Number(vals.zoom) });
         config = { ...config, theme: vals.theme };
         appliquerTheme();
