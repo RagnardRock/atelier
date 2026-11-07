@@ -69,6 +69,10 @@ jobs:
           cache-dependency-path: moteur/package-lock.json
       - run: npm ci
 
+      # NSIS, que Saga emporte pour fabriquer l'installateur des jeux exportés (MonJeu-Setup.exe).
+      - name: Préparer NSIS pour l'export des jeux
+        run: node build/preparer-nsis.js && test -f nsis/Bin/makensis.exe
+
       # On fabrique d'abord, puis on crée la Release en une seule fois avec tous ses fichiers.
       - name: Fabriquer l'installeur
         run: npx electron-builder --win nsis --publish never

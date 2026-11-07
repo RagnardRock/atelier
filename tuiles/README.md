@@ -383,7 +383,7 @@ Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuil
 
 ## Exporter le jeu (Tafl 0.26, avec Saga 0.9)
 
-Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (`index.html`, à ouvrir dans un navigateur ou à mettre sur itch.io) et/ou une **version Windows** (`MonJeu.exe`, rien à installer). Chacune donne un dossier et un `.zip` à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
+Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (un seul fichier `MonJeu.html`, à ouvrir dans un navigateur ; case en plus pour un `.zip` à mettre sur itch.io) et/ou une **version Windows** (un installateur `MonJeu-Setup.exe`, depuis Tafl 1.24.1 et Saga 1.23). Un seul fichier par version, à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
 
 ## Copier-coller, annuler partout, scripts en blocs (Tafl 0.28)
 
