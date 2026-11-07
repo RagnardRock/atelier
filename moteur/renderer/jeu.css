@@ -1024,3 +1024,19 @@ body.mon-tour .joueurs-jets { right: calc(min(300px, 100% - 24px) + 24px); }
 .table-fiche-mj { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(4px); }
 .table-fiche-mj-cadre { position: relative; width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; padding: 16px; border-radius: 14px; background: rgba(14, 14, 22, 0.94); border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; font-size: 13px; }
 .table-fiche-mj-fermer { position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); color: inherit; cursor: pointer; }
+
+/* Saga 1.21.4 : le journal des joueurs (le récit et les jets), en bas à droite */
+.joueurs-journal-bouton { position: absolute; z-index: 23; right: 14px; bottom: 14px; padding: 6px 12px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(14, 14, 22, 0.88); color: #f4f4f6; font: inherit; font-size: 12px; cursor: pointer; backdrop-filter: blur(12px); }
+.joueurs-journal-bouton.nouveau { border-color: var(--accent, #ffd36b); }
+.joueurs-journal { position: absolute; z-index: 23; overflow: hidden; height: min(55%, 460px); right: 14px; bottom: 52px; width: min(360px, calc(100% - 28px)); max-height: min(55%, 460px);
+  display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: rgba(14, 14, 22, 0.92); backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.14); color: #f4f4f6; font-size: 13px; }
+.joueurs-journal[hidden] { display: none; }
+.joueurs-journal > .joueurs-onglets { flex: none; }
+.joueurs-journal-liste { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.joueurs-journal-ligne { padding: 4px 6px; border-radius: 7px; line-height: 1.35; }
+.joueurs-journal-ligne.jl-combat { border-left: 2px solid rgba(239, 91, 91, 0.6); }
+.joueurs-journal-ligne.jet { border-left: 2px solid var(--accent, #ffd36b); background: rgba(255, 255, 255, 0.03); }
+.joueurs-journal-ligne.reussi, .joueurs-journal-ligne.critique, .joueurs-journal-ligne.touche { border-left-color: #7ddc8a; }
+.joueurs-journal-ligne.rate, .joueurs-journal-ligne.manque, .joueurs-journal-ligne.echec_critique { border-left-color: #ef5b5b; }

@@ -27,7 +27,10 @@ const TableClient = (() => {
     const questionEl = el('div', { className: 'joueurs-question', hidden: true });
     // Saga 1.21 : un ami sans héros sait pourquoi il ne peut que regarder.
     const roleEl = el('div', { className: 'joueurs-role', hidden: true });
-    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche, questionEl, roleEl);
+    // Saga 1.21.4 : le journal (le récit et les jets), à ouvrir quand on veut relire.
+    const journalBouton = el('button', { className: 'joueurs-journal-bouton', type: 'button', textContent: 'Journal', title: 'Relire ce qui s\'est dit et les jets' });
+    const journalEl = el('aside', { className: 'joueurs-journal', hidden: true });
+    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche, questionEl, roleEl, journalEl, journalBouton);
     const plateau = Plateau.creer(canvas);
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
     const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
@@ -58,6 +61,7 @@ const TableClient = (() => {
       montrer();
       montrerFiche();
       montrerQuestion();
+      montrerJournal();
     });
 
     // Ce qui n'est pas sur le canvas : l'ordre du tour, ce qui se dit, les jets montrés à tous, la pause.
@@ -108,6 +112,41 @@ const TableClient = (() => {
         else plateau.flotter(e.id, e.texte, e.sorte);
         dernierEffet = e.n;
       }
+    }
+
+    // --- Saga 1.21.4 : le journal des joueurs (le récit, les jets visibles de tous) ---
+    let ongletJournal = 'recit', signatureJ = '', nonLus = 0, vusJ = '';
+    journalBouton.onclick = () => { journalEl.hidden = !journalEl.hidden; nonLus = 0; signatureJ = ''; montrerJournal(); };
+    function montrerJournal() {
+      const recitV = vue?.recit || [], jetsV = vue?.journal || [];
+      const fin = `${recitV.at(-1)?.n || 0}:${jetsV.at(-1)?.n || 0}`;
+      if (vusJ && fin !== vusJ && journalEl.hidden) nonLus++;
+      vusJ = fin;
+      journalBouton.textContent = nonLus && journalEl.hidden ? `Journal · ${nonLus}` : 'Journal';
+      journalBouton.classList.toggle('nouveau', Boolean(nonLus && journalEl.hidden));
+      if (journalEl.hidden) return;
+      const s = `${fin}|${ongletJournal}`;
+      if (s === signatureJ) return;
+      signatureJ = s;
+      const onglets = el('div', { className: 'joueurs-onglets' }, ...[['recit', 'Récit'], ['jets', 'Jets de dés']].map(([id, nom]) => {
+        const b = el('button', { className: `joueurs-onglet${ongletJournal === id ? ' actif' : ''}`, type: 'button', textContent: nom });
+        b.onclick = () => { ongletJournal = id; signatureJ = ''; montrerJournal(); };
+        return b;
+      }));
+      const liste = el('div', { className: 'joueurs-journal-liste' });
+      if (ongletJournal === 'recit') {
+        for (const l of recitV) liste.append(el('div', { className: `joueurs-journal-ligne${l.combat ? ' jl-combat' : ''}` }, l.qui ? el('b', { textContent: `${l.qui} : ` }) : null, el('span', { textContent: l.texte })));
+        if (!recitV.length) liste.append(el('p', { className: 'joueurs-fiche-note', textContent: 'Rien encore : les dialogues et les combats s\'écrivent ici.' }));
+      } else {
+        for (const l of jetsV) {
+          liste.append(el('div', { className: `joueurs-journal-ligne jet ${l.resultat || ''}` },
+            el('div', { className: 'joueurs-jet-tete' }, el('b', { textContent: l.qui }), el('span', { textContent: ` ${l.quoi}` }), el('span', { className: 'joueurs-jet-total', textContent: String(l.total) })),
+            el('div', { className: 'joueurs-jet-detail', textContent: `${JdrDes.detail(l)}${l.resultat ? ` · ${JdrDes.RESULTATS[l.resultat] || l.resultat}` : ''}` })));
+        }
+        if (!jetsV.length) liste.append(el('p', { className: 'joueurs-fiche-note', textContent: 'Aucun jet pour l\'instant.' }));
+      }
+      journalEl.replaceChildren(onglets, liste);
+      liste.scrollTop = liste.scrollHeight;
     }
 
     // --- La fiche du joueur : la lire, et lancer ses jets (c'est l'hôte qui lance les dés) ---

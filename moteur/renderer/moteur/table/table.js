@@ -34,6 +34,17 @@ const TableMode = (() => {
     let selection = null, survol = null, picker = null, pinceau = null, apercu = null;
     let combat = null;     // { tour, ordre, actif, reste, heros: [pion], ennemis: [pion] }
     let sceneTexte = null; // ce que dit la boîte de dialogue (recopié chez les joueurs)
+    // Saga 1.21.4 : le récit (les dialogues et les messages des combats), gardé pour le journal des joueurs.
+    const recit = [];
+    let numeroRecit = 0;
+    function noterRecit(o) {
+      const texte = String(o?.texte || '').trim();
+      if (!texte) return;
+      const der = recit[recit.length - 1];
+      if (der && der.texte === texte && der.qui === (o.qui || '')) return; // la même boîte (avec ses choix)
+      recit.push({ n: ++numeroRecit, qui: o.qui || '', texte, visible: o.visible || 'tous', combat: Boolean(combat) });
+      if (recit.length > 80) recit.shift();
+    }
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
     let derniereVue = null, envoye = '', chronoEnvoi = 0;
     // Saga 1.0 : le multijoueur. Chaque ami connecté reçoit SA vue (celle de son rôle), jamais celle du MJ.
@@ -130,6 +141,7 @@ const TableMode = (() => {
     }
     const vuePour = (r) => {
       const v = { ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) };
+      v.recit = recit.filter((e) => r.mj || E.visiblePour(e.visible, r)).slice(-50);
       // Saga 1.21 : en combat, le joueur du héros dont c'est le tour reçoit ses choix (le menu, les cases, les cibles).
       const q = questionPour(r);
       if (q) {
@@ -157,6 +169,7 @@ const TableMode = (() => {
       E.preparer(jeu(), partie());
       h.dialogue.observer((o) => {
         sceneTexte = o;
+        noterRecit(o);
         // Saga 1.21.2 : des choix de dialogue → un vote des joueurs (le MJ peut toujours cliquer lui-même).
         vote = o?.choix?.length ? { n: ++numeroQuestion, nb: o.choix.length, votes: new Map() } : null;
         montrerVotes();
@@ -485,6 +498,7 @@ const TableMode = (() => {
       message(t, { attendre = false } = {}) {
         texte.textContent = t;
         sceneTexte = { qui: '', texte: t };
+        noterRecit(sceneTexte);
         return new Promise((resoudre) => {
           const a = { sorte: 'message', finir: () => { if (attente === a) { attente = null; texte.classList.remove('attend'); resoudre(); } } };
           attente = a;
