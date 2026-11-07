@@ -271,11 +271,18 @@ const Notes = (() => {
   // Les dates « il y a 5 min » vieillissent : on les rafraîchit chaque minute.
   setInterval(() => { renderListe(); if (courante) $('#note-date').textContent = `Modifiée ${dateRelative(courante.modifiee)}`; }, 60_000);
 
+  const BIENVENUE_AVANT = 'Bienvenue dans Atelier\n\nCe widget garde tes notes sur ton PC. La première ligne devient le titre.\n\n• Ctrl+N : nouvelle note\n• Ctrl+F : chercher dans toutes les notes\n• L\'épingle garde une note en haut de la liste\n\nTu peux supprimer cette note quand tu veux.';
+  const BIENVENUE = 'Bienvenue dans Atelier\n\nCe widget garde tes notes sur ton PC. La première ligne devient le titre.\n\n• Ctrl+N : nouvelle note\n• Ctrl+F : chercher dans toutes les notes\n• L\'épingle garde une note en haut de la liste\n• Ctrl+Shift+L (ou le bouton liste) : transforme la ligne en case à cocher\n• Entrée sur une case : case suivante ; Entrée sur une case vide : fin de la liste\n\n- [x] Clique sur une case pour la cocher\n- [ ] Écris « - [ ] » au début d\'une ligne pour faire une case\n\nTu peux supprimer cette note quand tu veux.';
+
   async function start() {
     ({ notes } = await window.atelier.lireNotes());
     if (!notes.length) {
-      notes = [{ id: crypto.randomUUID(), epinglee: true, creee: Date.now(), modifiee: Date.now(), texte: 'Bienvenue dans Atelier\n\nCe widget garde tes notes sur ton PC. La première ligne devient le titre.\n\n• Ctrl+N : nouvelle note\n• Ctrl+F : chercher dans toutes les notes\n• L\'épingle garde une note en haut de la liste\n\nTu peux supprimer cette note quand tu veux.' }];
+      notes = [{ id: crypto.randomUUID(), epinglee: true, creee: Date.now(), modifiee: Date.now(), texte: BIENVENUE }];
       await enregistrer();
+    } else {
+      // La note de bienvenue d'avant 0.20.1, jamais retouchée : on lui donne le nouveau mode d'emploi.
+      const ancienne = notes.find((n) => n.texte === BIENVENUE_AVANT);
+      if (ancienne) { ancienne.texte = BIENVENUE; await enregistrer(); }
     }
     courante = triees()[0] || null;
     renderListe();
