@@ -77,6 +77,26 @@ const DonneesGestion = (() => {
       repos: normRepos(b?.repos),
     }),
   };
+  // Tafl 1.24 (Saga 1.22) : des effets sur le domaine (un poste occupé, un modificateur) : production et
+  // vitesse des chantiers en %, pour certains bâtiments (vide : tous).
+  // Avec les règles des événements quand elles sont là (Tafl) : une condition écrite à la main est remise d'aplomb.
+  const normCondition = (c) => (c && typeof c === 'object' && typeof c.type === 'string' ? (typeof Events !== 'undefined' && Events.normCondition ? Events.normCondition(c) : propre(c)) : null);
+  const normEffets = (e) => ({ production: int(e?.production, 0, -100, 500), chantiers: int(e?.chantiers, 0, -90, 500), batiments: [...new Set(arr(e?.batiments).map((x) => ident(x, '')).filter(Boolean))].slice(0, 60) });
+  const normPostes = (l) => {
+    const vus = new Set();
+    return arr(l).filter((p) => p && typeof p === 'object').slice(0, 40).map((p, i) => {
+      let id = ident(p.id || p.nom, `poste-${i + 1}`);
+      while (vus.has(id)) id = `${id}-${i + 1}`;
+      vus.add(id);
+      return { ...propre(p), id, nom: str(p.nom).slice(0, 60) || `Poste ${i + 1}`, description: str(p.description).slice(0, 300),
+        candidats: arr(p.candidats).map((c) => (typeof c === 'string' ? { personnage: c } : c)).filter((c) => c && str(c.personnage)).slice(0, 40)
+          .map((c) => ({ personnage: str(c.personnage).slice(0, 64), condition: normCondition(c.condition) })),
+        effets: normEffets(p.effets) };
+    });
+  };
+  const normModificateurs = (l) => arr(l).filter((m) => m && typeof m === 'object').slice(0, 60).map((m, i) => ({ ...propre(m), id: ident(m.id, `effet-${i + 1}`), nom: str(m.nom).slice(0, 60), condition: normCondition(m.condition), effets: normEffets(m.effets) }));
+  const AFFECTATIONS = [['auto', 'Eux-mêmes : chaque bâtiment prend ses ouvriers, dans l\'ordre de construction'], ['joueur', 'Le joueur : il met en marche ou arrête chaque bâtiment (écran Organiser)']];
+
   // Les réglages du module : reglages.modules_reglages.gestion.
   const normReglages = (g) => ({
     ...propre(g),
@@ -120,6 +140,10 @@ const DonneesGestion = (() => {
     // Tafl 1.9 (Saga 1.11) : le lien avec les sorties.
     butin_au_stock: g?.butin_au_stock === true,
     perte_defaite: int(g?.perte_defaite, 0, 0, 100),
+    // Tafl 1.24 (Saga 1.22) : qui affecte les habitants, les postes et les modificateurs.
+    affectation: g?.affectation === 'joueur' ? 'joueur' : 'auto',
+    postes: normPostes(g?.postes),
+    modificateurs: normModificateurs(g?.modificateurs),
   });
 
   const U = () => Donnees.ui;
@@ -461,8 +485,9 @@ const DonneesGestion = (() => {
         nuits,
       ]),
       ...champsSorties(g),
+      ...champsOrganisation(g, ctx),
       ...champsPromeneurs(g, ctx, r),
-      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous.'),
+      info('Les habitants logent dans les bâtiments finis (leur champ Logement). Chaque nuit, ils mangent dans le stock ; s\'il en manque, ils travaillent quand même ; « Quand ils ont faim » dit ce qui se passe alors. Un bâtiment qui demande des ouvriers ne produit que s\'il les a tous. Avec « Le joueur » dans « Qui décide où travaillent les habitants », un nouveau bâtiment prend ses ouvriers s\'il en reste de libres, puis le joueur le met en marche ou l\'arrête dans l\'écran Organiser.'),
       info('Les ressources et les bâtiments se créent dans Données › Ressources et Bâtiments (groupe Gestion). Le temps passe quand le joueur dort (commande Dormir).'),
     ];
   }
@@ -492,6 +517,65 @@ const DonneesGestion = (() => {
       el('span', { className: 'field-label', textContent: 'Habitants nommés, dans l\'ordre d\'arrivée' }), box,
       info(`Le premier habitant qui arrive est le premier de la liste, avec son nom et son apparence ; au-delà, des habitants sans nom. ${relations ? 'Le joueur leur parle quand ils se promènent (module Relations : ajoute-les dans Données › Relations).' : 'Active aussi le module Relations pour que le joueur puisse leur parler quand ils se promènent.'}`),
     ]);
+  }
+
+  // Tafl 1.24 (Saga 1.22) : une condition des événements, en puce : un clic pour la choisir ou la changer.
+  // vide : ce que dit la puce sans condition (null : une condition est obligatoire).
+  function puceCondition(ctx, o, cle, vide = 'Toujours') {
+    const doc = { ...(ctx.doc || {}), data: ctx.work };
+    const box = el('span', { className: 'chips' });
+    const rendre = () => {
+      const puce = el('button', { className: `chip cond-chip${o[cle] ? ' on' : ''}`, textContent: o[cle] ? `si ${(() => { try { return Events.resumeCondition(doc, o[cle]); } catch { return o[cle].type; } })()}` : vide });
+      puce.onclick = async (e) => {
+        e.preventDefault();
+        const type = await Events.choisir(Object.entries(Events.CONDITIONS).filter(([k]) => k !== 'local').map(([k, d]) => ({ label: `Si : ${d.nom}`, value: k })), e.clientX, e.clientY);
+        if (!type) return;
+        const c = await Events.formCondition(doc, o[cle]?.type === type ? o[cle] : Events.CONDITIONS[type].nouveau(doc));
+        if (c) { o[cle] = c; rendre(); }
+      };
+      box.replaceChildren(puce, ...(o[cle] ? [U().petitBouton('close', 'Sans condition', () => { o[cle] = null; rendre(); })] : []));
+    };
+    rendre();
+    return box;
+  }
+  // Les bâtiments concernés par un effet : des ids séparés par des virgules (vide : tous).
+  function batimentsIn(ctx, ef) {
+    listes(ctx.work);
+    const i = el('input', { type: 'text', value: ef.batiments.join(', '), placeholder: 'tous', list: 'tafl-batiments' });
+    i.onchange = () => { ef.batiments = [...new Set(i.value.split(/[,;]/).map((x) => ident(x.trim(), '')).filter(Boolean))]; i.value = ef.batiments.join(', '); };
+    return i;
+  }
+
+  // Tafl 1.24 (Saga 1.22) : qui affecte les habitants, les postes (un personnage nommé donne ses effets au
+  // domaine) et les modificateurs (des effets tant qu'une condition est vraie).
+  function champsOrganisation(g, ctx) {
+    const { champ, info, nombreIn, texteIn, sel, table } = U();
+    const persos = arr(ctx.work?.personnages).filter((p) => !p.heros);
+    const choixPersos = (actuel) => [...persos.map((p) => [p.id, p.nom || p.id]), ...(actuel && !persos.some((p) => p.id === actuel) ? [[actuel, `${actuel} (inconnu)`]] : [])];
+    const tPostes = table(g.postes, [
+      ['Poste', (p) => texteIn(p, 'nom', 'Intendance'), true],
+      ['Production %', (p) => nombreIn(p.effets, 'production', -100, 500)],
+      ['Chantiers %', (p) => nombreIn(p.effets, 'chantiers', -90, 500)],
+      ['Pour les bâtiments', (p) => batimentsIn(ctx, p.effets), false, true],
+      ['Candidats', (p) => table(p.candidats, [
+        ['Personnage', (c) => sel(choixPersos(c.personnage), c.personnage, (v) => { c.personnage = v; }), true],
+        ['Disponible', (c) => puceCondition(ctx, c, 'condition', 'Toujours'), true],
+      ], () => ({ personnage: persos[0]?.id || '', condition: null }), { ajouter: '+ Candidat', max: 40, vide: 'Aucun candidat : n\'importe quel personnage peut l\'occuper.' }), false, true],
+    ], () => ({ id: `poste-${g.postes.length + 1}`, nom: '', description: '', candidats: [], effets: { production: 10, chantiers: 0, batiments: [] } }), { ajouter: '+ Poste', max: 40, vide: 'Aucun poste.' });
+    const tEffets = table(g.modificateurs, [
+      ['Nom', (m) => texteIn(m, 'nom', 'Bénédiction des champs'), true],
+      ['Production %', (m) => nombreIn(m.effets, 'production', -100, 500)],
+      ['Chantiers %', (m) => nombreIn(m.effets, 'chantiers', -90, 500)],
+      ['Tant que', (m) => puceCondition(ctx, m, 'condition', 'Toujours'), false, true],
+      ['Pour les bâtiments', (m) => batimentsIn(ctx, m.effets), false, true],
+    ], () => ({ id: `effet-${g.modificateurs.length + 1}`, nom: '', condition: null, effets: { production: 0, chantiers: -50, batiments: [] } }), { ajouter: '+ Effet', max: 60, vide: 'Aucun effet.' });
+    return [
+      champ('Qui décide où travaillent les habitants', sel(AFFECTATIONS, g.affectation, (v) => { g.affectation = v; })),
+      el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les postes du domaine (Intendance, Construction…)' }), tPostes]),
+      info('Un personnage nommé à un poste donne ses effets au domaine chaque nuit : la production des bâtiments (+20 : 20 % de plus, arrondi) et la vitesse des chantiers (+100 : deux fois plus vite, −50 : deux fois moins). Vide dans « Pour les bâtiments » : tous. Le joueur choisit qui occupe chaque poste dans l\'écran Organiser (carnet, Tab) parmi les candidats disponibles ; un événement peut aussi nommer quelqu\'un (commande « Nommer quelqu\'un à un poste »). Un personnage n\'occupe qu\'un poste à la fois.'),
+      el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les effets sous condition' }), tEffets]),
+      info('Un effet vaut chaque nuit où sa condition est vraie : une bénédiction des champs (une variable), des chantiers plus lents tant que le bâtisseur n\'est pas arrivé (un interrupteur éteint)… L\'écran du domaine montre ceux qui valent ce soir.'),
+    ];
   }
 
   // Tafl 1.9 (Saga 1.11) : ce que les sorties (les combats) rapportent au domaine, ou lui coûtent.
@@ -566,12 +650,22 @@ const DonneesGestion = (() => {
   }
   // Où une ressource ou un bâtiment est utilisé (Donnees.utilisations).
   function utilisations(doc, sorte, id, out) {
+    const g = doc.data.reglages?.modules_reglages?.gestion || {};
+    // Tafl 1.24 : un personnage candidat ou nommé à un poste.
+    if (sorte === 'personnage') {
+      for (const p of g.postes || []) if ((p.candidats || []).some((c) => c.personnage === id)) out.add(`Réglages (candidat au poste ${p.nom})`);
+      Events.parcourirJeu(doc, ({ commande, condition, ev, map, page }) => {
+        const c = commande || condition;
+        if (['gestion_poste'].includes(c.type) && c.personnage === id) out.add(`${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`);
+      });
+    }
     if (sorte !== 'ressource' && sorte !== 'batiment') return;
+    if (sorte === 'batiment') for (const x of [...(g.postes || []), ...(g.modificateurs || [])]) if ((x.effets?.batiments || []).includes(id)) out.add(`Réglages (${x.nom || 'un effet'})`);
     Events.parcourirJeu(doc, ({ commande, condition, ev, map, page }) => {
       const c = commande || condition;
       const ici = `${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`;
       if (sorte === 'ressource' && c.type === 'gestion_stock' && c.ressource === id) out.add(ici);
-      if (sorte === 'batiment' && ['gestion_construire', 'gestion_placer', 'gestion_batiment', 'gestion_chantier', 'gestion_repos'].includes(c.type) && c.batiment === id) out.add(ici);
+      if (sorte === 'batiment' && ['gestion_construire', 'gestion_placer', 'gestion_batiment', 'gestion_chantier', 'gestion_repos', 'gestion_travail'].includes(c.type) && c.batiment === id) out.add(ici);
     });
     if (sorte === 'ressource') {
       for (const b of doc.data.batiments || []) if ([...b.cout, ...b.production, ...b.consommation, ...(b.repos?.cout || [])].some((q) => q.ressource === id)) out.add(`Bâtiment ${b.nom}`);
@@ -579,5 +673,5 @@ const DonneesGestion = (() => {
     }
   }
 
-  return { SORTES, NORMES, ONGLETS, MODULE, normReglages, normQuantites, listes, resumer, utilisations, formReglages };
+  return { SORTES, NORMES, ONGLETS, MODULE, AFFECTATIONS, normReglages, normQuantites, listes, resumer, utilisations, formReglages };
 })();

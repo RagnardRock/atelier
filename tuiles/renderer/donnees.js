@@ -325,6 +325,7 @@ const Donnees = (() => {
     // Tafl 1.0 (Saga 1.0) : le multijoueur (jouer à plusieurs sur le réseau de la maison).
     multijoueur: { echanges: true, duels: true, pv_autres: 'exacts' },
     scripts: { formules_coupees: [] }, // Tafl 0.31 : les règles maison des scripts JS coupées (Saga 0.12)
+    accords: { variable: '', valeurs: [] }, // Tafl 1.24 : les accords dans les textes ({il|elle})
     ...(J ? { jdr: J.normRegles({}) } : {}), // Tafl 0.32 : les règles maison du pack JDR
     ...(A ? { action: A.normRegles({}) } : {}), // Tafl 1.10 : le héros du temps réel (pack action)
   });
@@ -443,6 +444,8 @@ const Donnees = (() => {
       sauvegarde_auto: { active: Boolean(r.sauvegarde_auto?.active), carte: r.sauvegarde_auto?.carte !== false, minutes: int(r.sauvegarde_auto?.minutes, 5, 0, 120) },
       ...(J ? { jdr: { ...J.normRegles(r.jdr), monnaie: 'unique' } } : {}),
       ...(A ? { action: A.normRegles(r.action) } : {}),
+      // Tafl 1.24 (Saga 1.22) : les accords dans les textes ({il|elle}), selon une variable du jeu.
+      accords: { variable: Doc.slug(r.accords?.variable, ''), valeurs: arr(r.accords?.valeurs).map((v) => str(v).trim().slice(0, 40)).filter(Boolean).slice(0, 8) },
       scripts: { formules_coupees: [...new Set(arr(r.scripts?.formules_coupees).map((x) => str(x)).filter((x) => /^[a-z0-9_][a-z0-9_-]{0,59}$/.test(x)))] },
       badges: (() => {
         const out = [];
@@ -1693,8 +1696,24 @@ const Donnees = (() => {
         tableBadges(r, ctx),
       );
     }
-    out.push(...formMultijoueur(r, ctx), ...formSauvegarde(r, ctx));
+    out.push(...formAccords(r, ctx), ...formMultijoueur(r, ctx), ...formSauvegarde(r, ctx));
     return out;
+  }
+  // Tafl 1.24 (Saga 1.22) : les accords dans les textes. « Tu es arrivé{|e} » : la 1re forme va avec la 1re
+  // valeur de la variable, la 2e avec la 2e… Pour accorder les dialogues au héros choisi par le joueur.
+  function formAccords(r, ctx) {
+    if (!r.accords || typeof r.accords !== 'object') r.accords = { variable: '', valeurs: [] };
+    const a = r.accords;
+    const vars = arr(ctx.work?.variables);
+    const choix = [['', 'Aucune (la 1re forme partout)'], ...vars.map((v) => [v.id, v.nom || v.id]), ...(a.variable && !vars.some((v) => v.id === a.variable) ? [[a.variable, `${a.variable} (n'existe plus)`]] : [])];
+    const valeurs = el('input', { type: 'text', value: (a.valeurs || []).join(', '), placeholder: 'homme, femme' });
+    valeurs.onchange = () => { a.valeurs = valeurs.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8); valeurs.value = a.valeurs.join(', '); };
+    return [
+      section('Accords dans les textes'),
+      champ('Selon la variable', sel(choix, a.variable, (v) => { a.variable = v; })),
+      champ('Ses valeurs, dans l\'ordre des formes', valeurs, 'séparées par des virgules'),
+      info('Dans un dialogue, un choix ou une parole, {forme1|forme2} prend la forme qui va avec la valeur de la variable : « Tu es arrivé{|e} », « {Il|Elle} est {prêt|prête} ». Avec homme, femme : la 1re forme pour homme, la 2e pour femme (une autre valeur : la 1re). {var:id} montre la valeur d\'une variable, {joueur} le nom du joueur. Pour faire choisir le joueur : une commande Choix qui règle la variable (et met au besoin une tenue du héros, qui peut avoir ses propres portraits).'),
+    ];
   }
   // Réglages › Partie › Multijoueur (Tafl 1.0, joué par Saga 1.0) : ce que les amis ont le droit de faire.
   function formMultijoueur(r, ctx) {

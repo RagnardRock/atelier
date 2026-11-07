@@ -8,7 +8,8 @@
 // connaissent pas.
 
 const DonneesRelations = (() => {
-  const SORTES = ['relations'];
+  // Tafl 1.24 (Saga 1.22) : les peuples (donnees/peuples.json), une relation avec toute une communauté.
+  const SORTES = ['relations', 'peuples'];
   const MODULE = ['relations'];
 
   const str = (v, d = '') => (v === undefined || v === null || typeof v === 'object' ? d : String(v));
@@ -25,6 +26,11 @@ const DonneesRelations = (() => {
     { nom: 'Bon ami', points: 120 }, { nom: 'Proche', points: 200 }, { nom: 'Inséparable', points: 300 },
   ];
   const CADEAUX = { adore: 30, aime: 15, neutre: 5, deteste: 0 };
+  // Tafl 1.24 : les niveaux par défaut d'un peuple (les mêmes que Saga : RelationsCalcul.NIVEAUX_PEUPLES).
+  const NIVEAUX_PEUPLES = [
+    { nom: 'Hostile', points: 0 }, { nom: 'Méfiant', points: 25 }, { nom: 'Neutre', points: 50 },
+    { nom: 'Cordial', points: 100 }, { nom: 'Ami', points: 160 }, { nom: 'Allié', points: 240 },
+  ];
 
   const NORMES = {
     // Une relation : son id est celui du personnage.
@@ -38,12 +44,27 @@ const DonneesRelations = (() => {
         .map((p) => ({ niveau: int(p.niveau, 0, 0, 99), texte: str(p.texte).slice(0, 2000), expression: str(p.expression).slice(0, 40) })),
       merci: Object.fromEntries(MERCIS.map(([k]) => [k, str(r?.merci?.[k]).slice(0, 500)]).filter(([, v]) => v)),
     }),
+    // Tafl 1.24 : un peuple : ses membres (des personnages), son départ et la part des points de ses membres.
+    peuples: (p, i) => ({
+      ...propre(p),
+      id: ident(p?.id, `peuple-${i + 1}`),
+      nom: str(p?.nom).slice(0, 60) || `Peuple ${i + 1}`,
+      description: str(p?.description).slice(0, 500),
+      couleur: str(p?.couleur).slice(0, 20),
+      depart: int(p?.depart, 50, 0, 99999),
+      membres: [...new Set(arr(p?.membres).map((x) => ident(x, '')).filter(Boolean))].slice(0, 200),
+      part: int(p?.part, 0, 0, 100),
+    }),
   };
 
   // Les niveaux d'un jeu (reglages entiers) : ceux de modules_reglages.relations, sinon ceux par défaut.
   function niveaux(reglages) {
     const l = arr(reglages?.modules_reglages?.relations?.niveaux).filter((n) => n && str(n.nom).trim());
     return l.length >= 2 ? l : NIVEAUX;
+  }
+  function niveauxPeuples(reglages) {
+    const l = arr(reglages?.modules_reglages?.relations?.niveaux_peuples).filter((n) => n && str(n.nom).trim());
+    return l.length >= 2 ? l : NIVEAUX_PEUPLES;
   }
 
   // Tafl 1.13 : les mots des écrans et des réactions, { cle: [défaut, libellé] } (le catalogue commun à Saga).
@@ -53,10 +74,13 @@ const DonneesRelations = (() => {
   const normReglages = (g) => {
     let nv = arr(g?.niveaux).filter((n) => n && str(n.nom).trim()).slice(0, 20).map((n) => ({ nom: str(n.nom).slice(0, 40), points: int(n.points, 0, 0, 99999) }));
     if (nv.length < 2) nv = NIVEAUX.map((n) => ({ ...n }));
+    let np = arr(g?.niveaux_peuples).filter((n) => n && str(n.nom).trim()).slice(0, 20).map((n) => ({ nom: str(n.nom).slice(0, 40), points: int(n.points, 0, 0, 99999) }));
+    if (np.length < 2) np = NIVEAUX_PEUPLES.map((n) => ({ ...n }));
     return {
       ...propre(g),
       nom: str(g?.nom).slice(0, 40) || 'Relations',
       niveaux: nv,
+      niveaux_peuples: np,
       parler: int(g?.parler, 5, 0, 999),
       cadeaux: Object.fromEntries(Object.keys(CADEAUX).map((k) => [k, int(g?.cadeaux?.[k], CADEAUX[k], -999, 999)])),
       cadeaux_jour: int(g?.cadeaux_jour, 1, 0, 99),
@@ -77,7 +101,10 @@ const DonneesRelations = (() => {
   const nomObjet = (work, id) => arr(work.objets).find((o) => o.id === id)?.nom || id;
   function listes(data) {
     U().datalist('tafl-relations', arr(data.relations).map((r) => [r.id, nomPerso(data, r.id)]));
+    U().datalist('tafl-peuples', arr(data.peuples).map((p) => [p.id, p.nom]));
+    U().datalist('tafl-donnees-personnages', arr(data.personnages).filter((p) => !p.heros).map((p) => [p.id, p.nom || p.id]));
   }
+  const nomPeuple = (work, id) => arr(work.peuples).find((p) => p.id === id)?.nom || id;
 
   // Une liste d'objets en petites pastilles : un champ pour en ajouter (avec la liste des objets du jeu),
   // une croix pour en retirer.
@@ -137,6 +164,46 @@ const DonneesRelations = (() => {
     );
   }
 
+  // Tafl 1.24 : un peuple (Données › Peuples).
+  function formPeuple(p, ctx) {
+    const { champ, info, nombreIn, texteIn, section } = U();
+    const work = ctx.work;
+    Donnees.listes(work);
+    if (!Array.isArray(p.membres)) p.membres = [];
+    const lv = niveauxPeuples(work.reglages);
+    const niveauDe = (pts) => { let n = 0; lv.forEach((x, i) => { if (pts >= x.points) n = i; }); return lv[n]?.nom || ''; };
+    const depart = nombreIn(p, 'depart', 0, 99999);
+    const quel = el('span', { className: 'unit', textContent: niveauDe(p.depart) });
+    depart.addEventListener('input', () => { quel.textContent = niveauDe(p.depart); });
+    // Les membres, en pastilles (comme les goûts d'une relation), avec la liste des personnages.
+    const box = el('div', { className: 'chips' });
+    const rendre = () => {
+      const i = el('input', { type: 'text', list: 'tafl-donnees-personnages', placeholder: '+ un personnage', className: 'ref-input' });
+      const ajouter = () => { const v = ident(i.value, ''); if (v && !p.membres.includes(v)) p.membres.push(v); rendre(); box.querySelector('input')?.focus(); };
+      i.onchange = ajouter;
+      i.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); ajouter(); } };
+      box.replaceChildren(...p.membres.map((id, k) => el('span', { className: 'chip' }, [
+        el('span', { textContent: nomPerso(work, id) }),
+        U().petitBouton('close', 'Retirer', () => { p.membres.splice(k, 1); rendre(); }),
+      ])), i);
+    };
+    rendre();
+    const desc = el('textarea', { rows: 2, style: 'width: 100%; resize: vertical', value: p.description || '', placeholder: 'Ce que l\'écran des relations en dit (une phrase).' });
+    desc.oninput = () => { p.description = desc.value; };
+    ctx.form.append(
+      champ('Nom', texteIn(p, 'nom', 'Les onis')),
+      champ('Description', desc),
+      el('div', { className: 'field-grid' }, [
+        champ('Au départ', el('span', {}, [depart, ' ', quel]), 'points (les niveaux sont dans Réglages › Modules › Relations)'),
+        champ('Part des membres', nombreIn(p, 'part', 0, 100), '% des points gagnés ou perdus avec un membre qui comptent pour le peuple (0 : rien)'),
+      ]),
+      section('Ses membres'),
+      el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les personnages de ce peuple' }), box]),
+      info('Un peuple a sa propre relation, à côté de celles de ses membres : la commande « Changer la relation avec un peuple » la fait monter ou descendre (une première rencontre réussie ou ratée), et la condition « La relation avec un peuple » débloque des scènes. Avec une part, parler à un membre ou lui offrir un cadeau compte aussi un peu pour son peuple. L\'écran des relations le montre dès qu\'il est connu (ou dès le début, selon le réglage « On voit »).'),
+      section('Utilisation'), ctx.usages('peuple', p.id),
+    );
+  }
+
   const leadImage = (src) => el('img', { className: 'row-portrait pixel', src, alt: '' });
   const ONGLETS = [
     { key: 'relations', modules: MODULE, groupe: 'Relations', label: 'Relations', icon: 'heart', kind: 'relation', base: 'personnage',
@@ -147,6 +214,10 @@ const DonneesRelations = (() => {
       },
       meta: (r) => [r.adore.length || r.aime.length ? `${r.adore.length + r.aime.length} goût(s)` : '', r.paroles.length ? `${r.paroles.length} parole(s)` : ''].filter(Boolean).join(' · '),
       vide: 'Aucune relation. Ajoute les personnages dont le joueur peut devenir l\'ami : leurs goûts et leurs paroles.', form: formRelation },
+    { key: 'peuples', modules: MODULE, groupe: 'Relations', label: 'Peuples', icon: 'organization', kind: 'peuple', base: 'peuple',
+      nouveau: (id) => NORMES.peuples({ id, nom: '' }),
+      meta: (p) => [p.membres.length ? `${p.membres.length} membre(s)` : '', `départ ${p.depart}`, p.part ? `part ${p.part} %` : ''].filter(Boolean).join(' · '),
+      vide: 'Aucun peuple. Un peuple, c\'est une relation avec toute une communauté (un village, une nation) : ses niveaux vont d\'Hostile à Allié.', form: formPeuple },
   ];
 
   // Les mots des écrans et des réactions, repliés (vide : le mot de Saga, montré en gris).
@@ -171,9 +242,14 @@ const DonneesRelations = (() => {
       ['Nom du niveau', (n) => texteIn(n, 'nom', 'Ami'), true],
       ['À partir de', (n, k) => (k === 0 ? el('span', { className: 'unit', textContent: '0 point' }) : nombreIn(n, 'points', 1, 99999))],
     ], () => ({ nom: '', points: (g.niveaux[g.niveaux.length - 1]?.points || 0) + 100 }), { ajouter: '+ Niveau', max: 20 });
+    const tNiveauxPeuples = table(g.niveaux_peuples, [
+      ['Nom du niveau', (n) => texteIn(n, 'nom', 'Cordial'), true],
+      ['À partir de', (n, k) => (k === 0 ? el('span', { className: 'unit', textContent: '0 point' }) : nombreIn(n, 'points', 1, 99999))],
+    ], () => ({ nom: '', points: (g.niveaux_peuples[g.niveaux_peuples.length - 1]?.points || 0) + 80 }), { ajouter: '+ Niveau', max: 20 });
     return [
       champ('Nom de l\'écran', texteIn(g, 'nom', 'Relations')),
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les niveaux d\'affinité (dans l\'ordre, le premier à 0)' }), tNiveaux]),
+      el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les niveaux des peuples (Données › Peuples ; dans l\'ordre, le premier à 0)' }), tNiveauxPeuples]),
       el('div', { className: 'field-grid' }, [
         champ('Parler', nombreIn(g, 'parler', 0, 999), 'points, la première fois de la journée'),
         champ('Cadeaux par jour', nombreIn(g, 'cadeaux_jour', 0, 99), 'à chaque personnage (0 : sans limite)'),
@@ -204,6 +280,7 @@ const DonneesRelations = (() => {
   }
 
   function resumer(doc, sorte, o) {
+    if (sorte === 'peuples') return `${o.id} « ${o.nom} » départ ${o.depart} point(s)${o.part ? `, part ${o.part} %` : ''}${o.membres.length ? `, membres [${o.membres.map((id) => nomPerso(doc.data, id)).join(', ')}]` : ''}`;
     if (sorte !== 'relations') return null;
     const n = (l) => l.map((id) => nomObjet(doc.data, id)).join(', ');
     return `${o.id} « ${nomPerso(doc.data, o.id)} » départ ${o.depart} point(s)${o.adore.length ? `, adore [${n(o.adore)}]` : ''}${o.aime.length ? `, aime [${n(o.aime)}]` : ''}${o.deteste.length ? `, n'aime pas [${n(o.deteste)}]` : ''}, ${o.paroles.length} parole(s)${o.paroles.length ? ` (niveaux ${[...new Set(o.paroles.map((p) => p.niveau))].join(', ')})` : ''}`;
@@ -220,7 +297,14 @@ const DonneesRelations = (() => {
       });
       if ((doc.data.reglages?.modules_reglages?.gestion?.habitants_noms || []).includes(id)) out.add('Réglages (habitants nommés du domaine)');
     }
+    if (sorte === 'personnage') for (const p of doc.data.peuples || []) if (p.membres.includes(id)) out.add(`Peuple « ${p.nom} » (membre)`);
+    if (sorte === 'peuple') {
+      Events.parcourirJeu(doc, ({ commande, condition, ev, map, page }) => {
+        const c = commande || condition;
+        if (c.type === 'relation_peuple' && c.peuple === id) out.add(`${map.name} › ${ev.nom || ev.id}${ev.pages.length > 1 ? ` (page ${page + 1})` : ''}`);
+      });
+    }
   }
 
-  return { SORTES, NORMES, ONGLETS, MODULE, NIVEAUX, niveaux, normReglages, listes, resumer, utilisations, formReglages };
+  return { SORTES, NORMES, ONGLETS, MODULE, NIVEAUX, NIVEAUX_PEUPLES, niveaux, niveauxPeuples, nomPeuple, normReglages, listes, resumer, utilisations, formReglages };
 })();

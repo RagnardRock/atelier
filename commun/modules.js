@@ -33,6 +33,8 @@ const ModulesJeu = (() => {
         gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } },
         gestion_arrivee: { nom: 'Des habitants arrivent (pendant la nuit)', infos: { nombre: 'Combien sont arrivés', habitants: 'Combien vivent maintenant au domaine' } },
         gestion_depart: { nom: 'Un habitant part, après trop de nuits de faim', infos: { nombre: 'Combien sont partis', habitants: 'Combien vivent maintenant au domaine' } },
+        // Saga 1.22 : les postes.
+        gestion_poste: { nom: 'Quelqu\'un est nommé à un poste (ou le quitte)', infos: { poste: 'L\'id du poste', personnage: 'L\'id du personnage (vide : le poste est libre)', avant: 'Qui l\'occupait avant' } },
       },
       commandes: {
         gestion_construire: { nom: 'Construire un bâtiment' },
@@ -43,12 +45,15 @@ const ModulesJeu = (() => {
         gestion_sortir: { nom: 'Ressortir du bâtiment (devant sa porte)' },
         gestion_domaine: { nom: 'Ouvrir l\'écran du domaine' },
         gestion_repos: { nom: 'Se reposer dans un bâtiment de repos (soin et bonus)' },
+        gestion_poste: { nom: 'Nommer quelqu\'un à un poste du domaine' },
+        gestion_travail: { nom: 'Organiser le travail (écran, ou mettre en marche ou arrêter un bâtiment)' },
       },
       conditions: {
         gestion_batiment: { nom: 'Un bâtiment est construit' },
         gestion_chantier: { nom: 'Un chantier est en cours' },
         gestion_stock: { nom: 'Le stock a assez d\'une ressource' },
         gestion_habitants: { nom: 'Le domaine a assez d\'habitants' },
+        gestion_poste: { nom: 'Un poste du domaine est occupé' },
       },
       // Saga 1.13 : les mots des écrans du domaine (modules_reglages.gestion.textes). produit, mange,
       // utilise et perdu prennent un s tout seuls quand il y en a plusieurs.
@@ -73,25 +78,39 @@ const ModulesJeu = (() => {
         perdu: ['perdu', 'Bilan : ce qui a été perdu (stock plein)'],
         // Saga 1.15 : les habitants nommés.
         qui_vit_ici: ['Qui vit ici', 'Écran du domaine : la ligne des habitants nommés'],
+        // Saga 1.22 : les postes, les effets et l'écran Organiser.
+        organiser: ['Organiser', 'Le bouton et le titre de l\'écran des postes et du travail'],
+        postes: ['Postes', 'La section des postes (Intendance, Construction…)'],
+        effets: ['En ce moment', 'Écran du domaine : les effets qui valent ce soir'],
+        personne: ['personne', 'Un poste libre'],
+        occupe: ['déjà à un poste', 'Un candidat qui occupe un autre poste'],
+        aucun_candidat: ['Personne ne peut occuper ce poste pour l\'instant.', 'Aucun candidat disponible'],
+        en_marche: ['en marche', 'Un bâtiment qui tourne'],
+        a_l_arret: ['à l\'arrêt', 'Un bâtiment où personne ne travaille'],
+        libres: ['libres', 'Organiser : les habitants sans travail'],
       },
     },
     // Saga 1.15, Tafl 1.13 : moteur/renderer/moteur/modules/relations/.
     relations: {
       nom: 'Relations',
       description: 'Des liens avec les personnages du jeu : une affinité qui monte quand on leur parle (une fois par jour) ou qu\'on leur offre un objet, selon leurs goûts. Chaque niveau d\'affinité débloque leurs paroles, et les événements peuvent tester le niveau pour débloquer leurs propres scènes. Avec le module Gestion, on parle aussi aux habitants nommés qui se promènent.',
-      donnees: ['relations'],
+      donnees: ['relations', 'peuples'],
       moments: {
         relation_niveau: { nom: 'L\'affinité avec un personnage passe un niveau', infos: { personnage: 'L\'id du personnage', niveau: 'Le numéro du nouveau niveau (0 = le premier)', nom: 'Le nom du niveau (Ami…)', avant: 'Le numéro du niveau d\'avant' } },
+        // Saga 1.22 : les peuples.
+        relation_peuple_niveau: { nom: 'La relation avec un peuple change de niveau', infos: { peuple: 'L\'id du peuple', niveau: 'Le numéro du nouveau niveau (0 = le premier)', nom: 'Le nom du niveau (Méfiant…)', avant: 'Le numéro du niveau d\'avant' } },
       },
       commandes: {
         relation_parler: { nom: 'Parler à un personnage (affinité du jour et ses paroles)' },
         relation_offrir: { nom: 'Offrir un objet à un personnage' },
         relation_points: { nom: 'Changer l\'affinité avec un personnage' },
         relation_ecran: { nom: 'Ouvrir l\'écran des relations' },
+        relation_peuple: { nom: 'Changer la relation avec un peuple' },
       },
       conditions: {
         relation_niveau: { nom: 'L\'affinité avec un personnage atteint un niveau' },
         relation_parle: { nom: 'Le joueur a déjà parlé à ce personnage aujourd\'hui' },
+        relation_peuple: { nom: 'La relation avec un peuple atteint un niveau' },
       },
       // Les mots des écrans et des réactions (modules_reglages.relations.textes). {nom} : le nom du
       // personnage ; {niveau} : le nom du niveau ; {joueur} : le nom du joueur.
@@ -113,6 +132,10 @@ const ModulesJeu = (() => {
         aime: ['aime', 'Écran : ce qu\'il aime'],
         deteste: ['n\'aime pas', 'Écran : ce qu\'il n\'aime pas'],
         vide: ['Tu ne connais encore personne.', 'Écran : personne à montrer'],
+        // Saga 1.22 : les peuples.
+        peuples: ['Peuples', 'Écran : la section des peuples'],
+        personnes: ['Personnes', 'Écran : la section des personnages (quand il y a aussi des peuples)'],
+        peuple_change: ['{nom} : {niveau}.', 'Quand la relation avec un peuple change de niveau'],
       },
     },
     // Saga 1.14, Tafl 1.12 : moteur/renderer/moteur/modules/roguelite/.

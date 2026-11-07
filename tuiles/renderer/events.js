@@ -159,9 +159,12 @@ const Events = (() => {
   // Les listes de commandes rangées dans une commande : [titre, liste, sorte] pour les réponses d'un
   // choix, l'alors et le sinon d'un « si », et (Tafl 0.32, pack JDR) le réussi et le raté d'un test.
   const A_BRANCHES = ['test', 'sauvegarde', 'test_oppose'];
+  // Tafl 1.24 (Saga 1.22) : un combat de groupe amical (un duel) a deux branches, gagné et perdu.
+  const aBranches = (c) => A_BRANCHES.includes(c?.type) || (c?.type === 'combat_groupe' && Boolean(c.amical));
   function branches(c) {
     if (c?.type === 'choix') return (c.options || []).map((o) => [`Si le joueur répond « ${o.texte} »`, o.commandes || [], 'reponse']);
     if (c?.type === 'si') return [['Alors', c.alors || [], 'alors'], ['Sinon', c.sinon || [], 'sinon']];
+    if (c?.type === 'combat_groupe' && c.amical) return [['Si le groupe gagne', c.reussi || [], 'alors'], ['Si le groupe perd (ou fuit)', c.rate || [], 'sinon']];
     if (A_BRANCHES.includes(c?.type)) return [['Si c\'est réussi', c.reussi || [], 'alors'], ['Si c\'est raté', c.rate || [], 'sinon']];
     return [];
   }
@@ -372,11 +375,14 @@ const Events = (() => {
       nouveau: () => ({ type: 'combat_groupe', groupe: '' }),
       champs: (doc, c) => [
         { key: 'groupe', label: 'Groupe de monstres', type: 'text', value: c.groupe, list: 'tafl-groupes', placeholder: 'dragon' },
-        { type: 'info', text: 'Un groupe de Jeu › Données du jeu › Groupes de monstres. Perdu : le script s\'arrête et le joueur se réveille au dernier soin. Pour un boss, décoche « On peut fuir » dans le groupe.' },
+        // Tafl 1.24 (Saga 1.22) : le combat amical (un duel, un entraînement).
+        { key: 'amical', label: 'Combat amical (un duel : perdre ne coûte rien)', type: 'checkbox', value: Boolean(c.amical) },
+        { key: 'soigner', label: 'Amical : le groupe est soigné après', type: 'checkbox', value: c.soigner !== false },
+        { type: 'info', text: 'Un groupe de Jeu › Données du jeu › Groupes de monstres. Perdu : le script s\'arrête et le joueur se réveille au dernier soin. Pour un boss, décoche « On peut fuir » dans le groupe. Combat amical : perdu, le joueur reste là, ne perd ni argent ni stock, et le script continue ; le bloc a alors deux branches, « gagné » et « perdu (ou fui) ». Pour un adversaire qui est un personnage (un duel d\'honneur), fais-en un monstre du même nom dans un groupe à lui.' },
       ],
-      depuis: (v) => ({ type: 'combat_groupe', groupe: Doc.slug(v.groupe, '') }),
+      depuis: (v, c) => (v.amical ? { type: 'combat_groupe', groupe: Doc.slug(v.groupe, ''), amical: true, soigner: Boolean(v.soigner), reussi: c.reussi || [], rate: c.rate || [] } : { type: 'combat_groupe', groupe: Doc.slug(v.groupe, '') }),
       valide: (c) => (c.groupe ? null : 'Quel groupe de monstres ?'),
-      resume: (doc, c) => `Combat contre ${nomData(doc, 'groupes', c.groupe)}`,
+      resume: (doc, c) => `${c.amical ? 'Combat amical' : 'Combat'} contre ${nomData(doc, 'groupes', c.groupe)}${c.amical && c.soigner === false ? ' (sans soin après)' : ''}`,
     },
     argent: {
       nom: 'Donner ou retirer de l\'argent', icone: 'credit-card', groupe: 'Objets et créatures',
@@ -1129,7 +1135,15 @@ const Events = (() => {
   const choixRessources = (doc, actuel) => choixDe(doc, 'ressources', actuel, 'Aucune ressource : crée-les dans Données › Ressources');
   const choixBatiments = (doc, actuel) => choixDe(doc, 'batiments', actuel, 'Aucun bâtiment : crée-les dans Données › Bâtiments');
   const ANNONCER = { key: 'annoncer', label: 'Le dire au joueur', type: 'checkbox' };
-  A_BRANCHES.push('gestion_construire', 'gestion_placer', 'gestion_repos');
+  // Tafl 1.24 : les postes (Réglages › Modules › Gestion).
+  const postesGestion = (doc) => doc.data.reglages?.modules_reglages?.gestion?.postes || [];
+  const nomPoste = (doc, id) => postesGestion(doc).find((p) => p.id === id)?.nom || id;
+  const choixPostes = (doc, actuel) => {
+    const l = postesGestion(doc).map((p) => [p.id, p.nom || p.id]);
+    if (actuel && !l.some(([k]) => k === actuel)) l.unshift([actuel, `${actuel} (n'existe plus)`]);
+    return l.length ? l : [['', 'Aucun poste : crée-les dans Réglages › Modules › Gestion']];
+  };
+  A_BRANCHES.push('gestion_construire', 'gestion_placer', 'gestion_repos', 'gestion_poste', 'gestion_travail');
   Object.assign(COMMANDES, {
     gestion_construire: {
       nom: 'Construire un bâtiment', icone: 'tools', groupe: 'Gestion', modules: MODULE_GESTION,
@@ -1220,6 +1234,45 @@ const Events = (() => {
       ],
       depuis: (v, c) => ({ type: 'gestion_repos', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
       resume: (doc, c) => (c.batiment ? `Se reposer à « ${nomData(doc, 'batiments', c.batiment)} »` : 'Se reposer (le bâtiment où l\'on est)'),
+    },
+    // Tafl 1.24 (Saga 1.22) : les postes du domaine et le travail.
+    gestion_poste: {
+      nom: 'Nommer quelqu\'un à un poste du domaine', icone: 'person', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_poste', poste: postesGestion(doc)[0]?.id || '', personnage: '', annoncer: true, reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'poste', label: 'Poste', type: 'select', value: c.poste, choices: choixPostes(doc, c.poste) },
+        { key: 'personnage', label: 'Qui', type: 'select', value: c.personnage, choices: [['', 'Personne (le poste se libère)'], ...doc.data.personnages.filter((p) => !p.heros).map((p) => [p.id, p.nom || p.id])] },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Le personnage occupe ce poste (et quitte celui qu'il avait) : ses effets valent chaque nuit (Réglages › Modules › Gestion › Postes). Pas besoin qu'il soit disponible pour le joueur ; mais s'il y a des candidats, il doit en faire partie. Raté : poste inconnu, ou pas un candidat. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'gestion_poste', poste: v.poste, personnage: v.personnage, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      valide: (c) => (c.poste ? null : 'Crée d\'abord un poste (Réglages › Modules › Gestion).'),
+      resume: (doc, c) => (c.personnage ? `${nomData(doc, 'personnages', c.personnage)} : ${nomPoste(doc, c.poste)}` : `${nomPoste(doc, c.poste)} : personne`),
+    },
+    gestion_travail: {
+      nom: 'Organiser le travail des habitants', icone: 'organization', groupe: 'Gestion', modules: MODULE_GESTION,
+      nouveau: () => ({ type: 'gestion_travail', action: 'ecran', batiment: '', annoncer: true, reussi: [], rate: [] }),
+      champs: (doc, c) => [
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ecran', 'Ouvrir l\'écran Organiser (postes et travail)'], ['demarrer', 'Mettre en marche un bâtiment'], ['arreter', 'Arrêter un bâtiment']] },
+        { key: 'batiment', label: 'Bâtiment (pour mettre en marche ou arrêter)', type: 'select', value: c.batiment, choices: [['', '(aucun)'], ...choixBatiments(doc, c.batiment).filter(([k]) => k)] },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Mettre en marche ou arrêter sert avec « Le joueur » dans « Qui décide où travaillent les habitants » (Réglages › Modules › Gestion) : le premier bâtiment de ce type à l'arrêt prend tous ses ouvriers, ou le dernier en marche les libère. Raté : pas assez d'habitants libres, ou rien à changer. ${AIDE_BRANCHES}` },
+      ],
+      depuis: (v, c) => ({ type: 'gestion_travail', action: ['demarrer', 'arreter'].includes(v.action) ? v.action : 'ecran', batiment: v.batiment || '', annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] }),
+      valide: (c) => (c.action !== 'ecran' && !c.batiment ? 'Quel bâtiment ?' : null),
+      resume: (doc, c) => (c.action === 'demarrer' ? `Mettre en marche « ${nomData(doc, 'batiments', c.batiment)} »` : c.action === 'arreter' ? `Arrêter « ${nomData(doc, 'batiments', c.batiment)} »` : 'Ouvrir l\'écran Organiser'),
+    },
+  });
+  Object.assign(CONDITIONS, {
+    gestion_poste: {
+      nom: 'Un poste du domaine est occupé (gestion)', modules: MODULE_GESTION,
+      nouveau: (doc) => ({ type: 'gestion_poste', poste: postesGestion(doc)[0]?.id || '', personnage: '' }),
+      champs: (doc, c) => [
+        { key: 'poste', label: 'Poste', type: 'select', value: c.poste, choices: choixPostes(doc, c.poste) },
+        { key: 'personnage', label: 'Par', type: 'select', value: c.personnage, choices: [['', 'Quelqu\'un, peu importe qui'], ...doc.data.personnages.filter((p) => !p.heros).map((p) => [p.id, p.nom || p.id])] },
+      ],
+      depuis: (v) => ({ type: 'gestion_poste', poste: v.poste, personnage: v.personnage || '' }),
+      valide: (c) => (c.poste ? null : 'Quel poste ?'),
     },
   });
   Object.assign(CONDITIONS, {
@@ -1376,6 +1429,15 @@ const Events = (() => {
   const niveauxRelations = (doc) => (typeof DonneesRelations !== 'undefined' ? DonneesRelations.niveaux(doc.data.reglages) : []).map((n, i) => [String(i), `${n.nom} (${n.points} points)`]);
   const nomNiveauRelation = (doc, i) => niveauxRelations(doc)[i]?.[1]?.replace(/ \(.*\)$/, '') || `niveau ${i}`;
   const nomLien = (doc, qui) => (qui === '@evenement' ? 'l\'événement' : nomData(doc, 'personnages', qui));
+  // Tafl 1.24 : les peuples et leurs niveaux.
+  const nomPeuple = (doc, id) => (doc.data.peuples || []).find((p) => p.id === id)?.nom || id;
+  const choixPeuples = (doc, actuel) => {
+    const l = (doc.data.peuples || []).map((p) => [p.id, p.nom || p.id]);
+    if (actuel && !l.some(([k]) => k === actuel)) l.unshift([actuel, `${actuel} (n'existe plus)`]);
+    return l.length ? l : [['', 'Aucun peuple : crée-les dans Données › Peuples']];
+  };
+  const niveauxPeuples = (doc) => (typeof DonneesRelations !== 'undefined' ? DonneesRelations.niveauxPeuples(doc.data.reglages) : []).map((n, i) => [String(i), `${n.nom} (${n.points} points)`]);
+  const nomNiveauPeuple = (doc, i) => niveauxPeuples(doc)[i]?.[1]?.replace(/ \(.*\)$/, '') || `niveau ${i}`;
   A_BRANCHES.push('relation_offrir');
   Object.assign(COMMANDES, {
     relation_parler: {
@@ -1418,6 +1480,21 @@ const Events = (() => {
       nouveau: () => ({ type: 'relation_ecran' }),
       resume: () => 'Montrer les relations (chaque personnage et son affinité)',
     },
+    // Tafl 1.24 (Saga 1.22) : la relation avec un peuple (Données › Peuples).
+    relation_peuple: {
+      nom: 'Changer la relation avec un peuple', icone: 'organization', groupe: 'Relations', modules: MODULE_RELATIONS,
+      nouveau: (doc) => ({ type: 'relation_peuple', peuple: doc.data.peuples?.[0]?.id || '', action: 'ajouter', nombre: 10, annoncer: true }),
+      champs: (doc, c) => [
+        { key: 'peuple', label: 'Peuple', type: 'select', value: c.peuple, choices: choixPeuples(doc, c.peuple) },
+        { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['ajouter', 'Ajouter des points'], ['retirer', 'Retirer des points'], ['regler', 'Mettre à']] },
+        { key: 'nombre', label: 'Points', type: 'number', value: c.nombre, min: 0, max: 99999 },
+        { ...ANNONCER, value: c.annoncer !== false },
+        { type: 'info', text: `Une rencontre réussie ou ratée, une promesse tenue, une trahison. Le peuple devient connu (l'écran des relations le montre). Niveaux : ${niveauxPeuples(doc).map(([, l]) => l).join(', ')} (Réglages › Modules › Relations).` },
+      ],
+      depuis: (v) => ({ type: 'relation_peuple', peuple: v.peuple, action: ['retirer', 'regler'].includes(v.action) ? v.action : 'ajouter', nombre: clamp(Math.round(v.nombre) || 0, 0, 99999), annoncer: Boolean(v.annoncer) }),
+      valide: (c) => (c.peuple ? null : 'Crée d\'abord un peuple (Données › Peuples).'),
+      resume: (doc, c) => `Relation avec ${nomPeuple(doc, c.peuple)} : ${c.action === 'regler' ? `mettre à ${c.nombre}` : `${c.action === 'retirer' ? '−' : '+'}${c.nombre}`}`,
+    },
   });
   Object.assign(CONDITIONS, {
     relation_niveau: {
@@ -1430,6 +1507,18 @@ const Events = (() => {
       ],
       depuis: (v) => ({ type: 'relation_niveau', personnage: v.personnage, min: clamp(Math.round(Number(v.min)) || 0, 0, 99) }),
       valide: (c) => (c.personnage ? null : 'Quel personnage ?'),
+    },
+    relation_peuple: {
+      nom: 'La relation avec un peuple (relations)', modules: MODULE_RELATIONS,
+      nouveau: (doc) => ({ type: 'relation_peuple', peuple: doc.data.peuples?.[0]?.id || '', min: 0, max: 1 }),
+      champs: (doc, c) => [
+        { key: 'peuple', label: 'Peuple', type: 'select', value: c.peuple, choices: choixPeuples(doc, c.peuple) },
+        { key: 'min', label: 'Au moins', type: 'select', value: String(c.min ?? 0), choices: niveauxPeuples(doc) },
+        { key: 'max', label: 'Au plus', type: 'select', value: c.max === undefined ? '' : String(c.max), choices: [['', 'Sans limite'], ...niveauxPeuples(doc)] },
+        { type: 'info', text: 'Entre deux niveaux : « au moins Hostile, au plus Méfiant » pour une scène tendue, « au moins Cordial » pour une scène d\'amitié.' },
+      ],
+      depuis: (v) => ({ type: 'relation_peuple', peuple: v.peuple, min: clamp(Math.round(Number(v.min)) || 0, 0, 99), ...(v.max !== '' && v.max !== undefined ? { max: clamp(Math.round(Number(v.max)) || 0, 0, 99) } : {}) }),
+      valide: (c) => (c.peuple ? null : 'Quel peuple ?'),
     },
     relation_parle: {
       nom: 'Le joueur lui a déjà parlé aujourd\'hui (relations)', modules: MODULE_RELATIONS,
@@ -1468,6 +1557,8 @@ const Events = (() => {
     if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
     if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
     if (c.type === 'gestion_habitants') return `au moins ${c.min} habitant${c.min > 1 ? 's' : ''} au domaine`;
+    if (c.type === 'gestion_poste') return `${nomPoste(doc, c.poste)} occupé${c.personnage ? ` par ${nomData(doc, 'personnages', c.personnage)}` : ''}`;
+    if (c.type === 'relation_peuple') return `relation avec ${nomPeuple(doc, c.peuple)} : au moins ${nomNiveauPeuple(doc, c.min)}${c.max !== undefined ? `, au plus ${nomNiveauPeuple(doc, c.max)}` : ''}`;
     if (c.type === 'roguelite_en_partie') return c.valeur === false ? 'hors partie de roguelite' : 'pendant une partie de roguelite';
     if (c.type === 'roguelite_salle_vide') return c.valeur === false ? 'il reste des ennemis dans la salle' : 'la salle est vidée';
     if (c.type === 'roguelite_etage') return `au moins l'étage ${c.min}`;
@@ -1511,6 +1602,8 @@ const Events = (() => {
       case 'gestion_habitants': return { type: 'gestion_habitants', min: clamp(int(c.min, 0), 0, 9999) };
       case 'relation_niveau': return { type: 'relation_niveau', personnage: str(c.personnage), min: clamp(int(c.min, 1), 0, 99), ...(c.max !== undefined && c.max !== '' && c.max !== null ? { max: clamp(int(c.max, 99), 0, 99) } : {}) };
       case 'relation_parle': return { type: 'relation_parle', personnage: str(c.personnage) };
+      case 'gestion_poste': return { type: 'gestion_poste', poste: str(c.poste), personnage: str(c.personnage) };
+      case 'relation_peuple': return { type: 'relation_peuple', peuple: str(c.peuple), min: clamp(int(c.min, 0), 0, 99), ...(c.max !== undefined && c.max !== '' && c.max !== null ? { max: clamp(int(c.max, 99), 0, 99) } : {}) };
       default: return { ...c }; // une condition d'une version plus récente : gardée telle quelle
     }
   }
@@ -1545,7 +1638,7 @@ const Events = (() => {
       case 'personnaliser': return { type: 'personnaliser', nom: c.nom !== false, tenue: c.tenue !== false };
       case 'tenue': return { type: 'tenue', tenue: str(c.tenue) };
       case 'groupe': return { type: 'groupe', action: c.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: str(c.personnage), niveau: clamp(int(c.niveau, 0), 0, 999) };
-      case 'combat_groupe': return { type: 'combat_groupe', groupe: str(c.groupe) };
+      case 'combat_groupe': return c.amical ? { type: 'combat_groupe', groupe: str(c.groupe), amical: true, soigner: c.soigner !== false, reussi: normListe(c.reussi), rate: normListe(c.rate) } : { type: 'combat_groupe', groupe: str(c.groupe) };
       // Tafl 0.32 : le pack JDR.
       case 'test': return { type: 'test', competence: str(c.competence) || 'perception', dd: clamp(int(c.dd, 10), 1, 40), qui: pick(c.qui, QUI_TEST, 'choix'), avantage: Boolean(c.avantage), desavantage: Boolean(c.desavantage) && !c.avantage, quoi: str(c.quoi), variable: str(c.variable), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'sauvegarde': return { type: 'sauvegarde', carac: str(c.carac) || 'dex', dd: clamp(int(c.dd, 10), 1, 40), qui: pick(c.qui, QUI_VISES, 'tous'), quoi: str(c.quoi), degats: lireDes(c.degats) ? str(c.degats).trim() : '', type_degats: str(c.type_degats), moitie: c.moitie !== false, etat: str(c.etat), reussi: normListe(c.reussi), rate: normListe(c.rate) };
@@ -1572,6 +1665,9 @@ const Events = (() => {
       case 'relation_offrir': return { type: 'relation_offrir', qui: str(c.qui) || '@evenement', objet: str(c.objet), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'relation_points': return { type: 'relation_points', qui: str(c.qui) || '@evenement', action: ['retirer', 'regler'].includes(c.action) ? c.action : 'ajouter', nombre: clamp(int(c.nombre, 0), 0, 99999), annoncer: vrai(c.annoncer) };
       case 'relation_ecran': return { type: 'relation_ecran' };
+      case 'relation_peuple': return { type: 'relation_peuple', peuple: str(c.peuple), action: ['retirer', 'regler'].includes(c.action) ? c.action : 'ajouter', nombre: clamp(int(c.nombre, 0), 0, 99999), annoncer: vrai(c.annoncer) };
+      case 'gestion_poste': return { type: 'gestion_poste', poste: str(c.poste), personnage: str(c.personnage), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'gestion_travail': return { type: 'gestion_travail', action: ['demarrer', 'arreter'].includes(c.action) ? c.action : 'ecran', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'bonus': return { type: 'bonus', action: c.action === 'retirer' ? 'retirer' : 'donner', id: str(c.id).slice(0, 80), nom: str(c.nom).slice(0, 60),
         stats: (Array.isArray(c.stats) ? c.stats : []).filter((q) => q && q.stat).slice(0, 4).map((q) => ({ stat: str(q.stat), pourcent: clamp(int(q.pourcent, 10), -90, 200) })),
         combats: clamp(int(c.combats, 0), 0, 99), nuit: c.nuit !== false, annoncer: vrai(c.annoncer) };
@@ -1667,6 +1763,8 @@ const Events = (() => {
           // Tafl 0.16 : les tenues que le joueur peut choisir pour le héros (chacune son sprite).
           tenues: uniques(arr(p?.tenues).filter((t) => t && typeof t === 'object').map((t, k) => ({
             id: Doc.slug(t.id || t.nom, `tenue-${k + 1}`), nom: str(t.nom || t.id, `Tenue ${k + 1}`), sprite: Sprites.norm(t.sprite),
+            // Tafl 1.24 (Saga 1.22) : ses propres portraits (vide : ceux du héros).
+            portraits: arr(t.portraits).filter((x) => /^data:image\/(png|gif|webp|jpeg|bmp);base64,/.test(x?.png)).map((x) => ({ expression: Doc.slug(x.expression, 'normal'), png: x.png })),
           }))),
           // Tafl 0.25 (pack JRPG) : sa classe, son niveau et son équipement quand il rejoint le groupe.
           classe: Doc.slug(p?.classe, ''),
@@ -1752,7 +1850,7 @@ const Events = (() => {
           if (c.alors !== undefined) verifListe(c.alors, `${ici}, alors`);
           if (c.sinon !== undefined) verifListe(c.sinon, `${ici}, sinon`);
         }
-        if (A_BRANCHES.includes(c.type)) for (const k of ['reussi', 'rate']) if (c[k] !== undefined) verifListe(c[k], `${ici}, ${k}`);
+        if (aBranches(c)) for (const k of ['reussi', 'rate']) if (c[k] !== undefined) verifListe(c[k], `${ici}, ${k}`);
         for (const [type, champ] of [['interrupteur', 'id'], ['objet', 'objet'], ['creature', 'creature'], ['combat_sauvage', 'creature'], ['combat_dresseur', 'dresseur'], ['boutique', 'boutique'], ['combat_groupe', 'groupe'], ['groupe', 'personnage']]) {
           if (c.type === type && !str(c[champ]).trim()) erreurs.push(`${ici} (${type}) : ${champ} manquant.`);
         }
@@ -1793,7 +1891,7 @@ const Events = (() => {
         lignes.push(`${'  '.repeat(n)}- ${resumeCommande(doc, c, ev)}`);
         if (c.type === 'choix') c.options.forEach((o) => { lignes.push(`${'  '.repeat(n + 1)}« ${o.texte} » :`); liste(o.commandes, n + 2); });
         if (c.type === 'si') { lignes.push(`${'  '.repeat(n + 1)}alors :`); liste(c.alors, n + 2); if (c.sinon.length) { lignes.push(`${'  '.repeat(n + 1)}sinon :`); liste(c.sinon, n + 2); } }
-        if (A_BRANCHES.includes(c.type)) for (const [k, mot] of [['reussi', 'réussi'], ['rate', 'raté']]) if (c[k].length) { lignes.push(`${'  '.repeat(n + 1)}${mot} :`); liste(c[k], n + 2); }
+        if (aBranches(c)) for (const [k, mot] of (c.type === 'combat_groupe' ? [['reussi', 'gagné'], ['rate', 'perdu']] : [['reussi', 'réussi'], ['rate', 'raté']])) if (c[k]?.length) { lignes.push(`${'  '.repeat(n + 1)}${mot} :`); liste(c[k], n + 2); }
       }
     };
     ev.pages.forEach((p, k) => {
@@ -2520,12 +2618,10 @@ const Events = (() => {
       }
 
 
-      function formPersonnage(p, items, i) {
-        const idl = idLigne(p, items);
-        const couleur = el('input', { type: 'color', value: p.couleur || '#ffffff' });
-        couleur.oninput = () => { p.couleur = couleur.value; };
-        const sansCouleur = petitBouton('discard', 'Couleur par défaut', () => { p.couleur = ''; couleur.value = '#ffffff'; });
+      // Les portraits d'un personnage (ou, Tafl 1.24, d'une tenue du héros) : un par expression.
+      function blocPortraits(p, nom, rerender) {
         const portraits = el('div', { className: 'portraits' });
+        if (!Array.isArray(p.portraits)) p.portraits = [];
         p.portraits.forEach((x, k) => {
           const expr = el('input', { type: 'text', value: x.expression, list: 'tafl-expressions', title: 'Expression : normal, content, triste, colere…' });
           expr.oninput = () => { x.expression = Doc.slug(expr.value, 'normal'); };
@@ -2537,18 +2633,18 @@ const Events = (() => {
             el('div', { className: 'portrait-bar' }, [
               expr,
               petitBouton('refresh', 'Remplacer l\'image', async () => {
-                const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait « ${x.expression} » de ${p.nom}` });
+                const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait « ${x.expression} » de ${nom}` });
                 if (!f) return;
                 try { x.png = (await imagePortrait(f)).png; } catch (err) { notify(cleanError(err), 'error'); }
-                render();
+                rerender();
               }),
-              petitBouton('trash', 'Supprimer ce portrait', () => { p.portraits.splice(k, 1); render(); }),
+              petitBouton('trash', 'Supprimer ce portrait', () => { p.portraits.splice(k, 1); rerender(); }),
             ]),
           ]));
         });
         const importer = el('button', { className: 'portrait-add' }, [icon('add'), el('span', { textContent: 'Importer un portrait…' })]);
         importer.onclick = async () => {
-          const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait de ${p.nom}` });
+          const f = await window.tafl.openFile({ kind: 'image', titre: `Portrait de ${nom}` });
           if (!f) return;
           try {
             const { png } = await imagePortrait(f);
@@ -2557,10 +2653,19 @@ const Events = (() => {
             const nomFichier = Doc.slug(f.name.replace(/\.[^.]+$/, ''), '');
             const expression = EXPRESSIONS.find((e) => nomFichier.endsWith(e) && !pris.has(e)) || EXPRESSIONS.find((e) => !pris.has(e)) || `expression-${p.portraits.length + 1}`;
             p.portraits.push({ expression, png });
-            render();
+            rerender();
           } catch (err) { notify(cleanError(err), 'error'); }
         };
         portraits.append(importer);
+        return portraits;
+      }
+
+      function formPersonnage(p, items, i) {
+        const idl = idLigne(p, items);
+        const couleur = el('input', { type: 'color', value: p.couleur || '#ffffff' });
+        couleur.oninput = () => { p.couleur = couleur.value; };
+        const sansCouleur = petitBouton('discard', 'Couleur par défaut', () => { p.couleur = ''; couleur.value = '#ffffff'; });
+        const portraits = blocPortraits(p, p.nom, render);
         form.append(
           champ('Nom', input(p, 'nom', 'Maman, Prof. Chêne, Léo (rival)…', idl.maj)),
           idl.el,
@@ -2611,7 +2716,7 @@ const Events = (() => {
         const sertTenue = (id) => { let oui = false; parcourirJeu(doc, ({ commande }) => { if (commande?.type === 'tenue' && commande.tenue === id) oui = true; }); return oui; };
         const box = el('div', { className: 'tenues' });
         const rendre = () => {
-          box.replaceChildren(el('p', { className: 'modal-info', textContent: 'Le sprite du dessus est sa tenue de base. Chaque tenue ici est une autre planche de marche (même format) ; ses portraits ne changent pas. Astuce : « Partir de la tenue de base » copie le sprite pour ne changer que les couleurs.' }));
+          box.replaceChildren(el('p', { className: 'modal-info', textContent: 'Le sprite du dessus est sa tenue de base. Chaque tenue ici est une autre planche de marche (même format), avec, si tu veux, ses propres portraits (une héroïne, un déguisement) ; sans portrait, le héros garde les siens. Astuce : « Partir de la tenue de base » copie le sprite pour ne changer que les couleurs.' }));
           p.tenues.forEach((t, k) => {
             const nom = el('input', { type: 'text', value: t.nom, placeholder: 'Sportive, Hiver, Uniforme…' });
             // L'identifiant suit le nom, sauf si un script met déjà cette tenue (il ne la retrouverait plus).
@@ -2629,6 +2734,7 @@ const Events = (() => {
                 petitBouton('trash', 'Supprimer la tenue', () => { p.tenues.splice(k, 1); rendre(); }),
               ]),
               Sprites.editeur(t, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe }),
+              el('details', { className: 'reglages-details', open: Boolean(t.portraits?.length) }, el('summary', { textContent: `Portraits de cette tenue${t.portraits?.length ? ` (${t.portraits.length})` : ' (aucun : ceux du héros)'}` }), blocPortraits(t, `${p.nom} (${t.nom})`, rendre)),
             ]));
           });
           const add = el('button', { className: 'cmd-add', textContent: '+ Tenue' });
