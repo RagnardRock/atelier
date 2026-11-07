@@ -573,3 +573,10 @@ body.sommaire-ouvert #btn-sommaire { color: var(--accent); }
 .repli-fleche.survol, .repli-fleche:hover, .repli-fleche.replie { opacity: 1; }
 .repli-fleche:hover { background: color-mix(in srgb, var(--accent) 35%, rgba(30, 30, 38, 0.9)); color: #fff; }
 .repli-fleche.replie { color: var(--accent); }
+
+/* Repères et blocs déroulants (voir sommaire.js) */
+.feuille blockquote[data-bloc] { margin: 0.5em 0; padding: 2px 0 2px 12px; border-left: 3px solid rgba(80, 140, 220, 0.45); color: inherit; font-style: normal; }
+.feuille blockquote[data-bloc] > :first-child { font-weight: 600; }
+.feuille.sombre blockquote[data-bloc] { border-left-color: rgba(124, 196, 255, 0.45); color: inherit; }
+.repere-marque { position: absolute; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; color: var(--accent); opacity: 0.8; pointer-events: none; }
+.sommaire-fleche.signet { color: var(--accent); }

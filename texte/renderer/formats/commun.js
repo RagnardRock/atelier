@@ -16,6 +16,9 @@
 //                 f = { gras, italique, souligne, barre, indice, exposant, couleur, fond, police, taille }
 //                 (couleur et fond en « rrggbb », taille en points)
 //   { type: 'table', lignes: [[{ blocs, colspan, rowspan, entete, fond }]] }
+//   Un paragraphe peut aussi avoir signetsDebut / signetsFin : des noms de signets qui commencent
+//   avant son texte ou finissent après (repères et blocs déroulants d'Edda : edda_repere_N, edda_bloc_N ;
+//   à l'ouverture, Formats.signetsVersPage les remet en place).
 //   { type: 'saut' }   un saut de page
 //   { type: 'ligne' }  un trait horizontal
 //
@@ -97,7 +100,27 @@ const Formats = (() => {
     return g;
   }
 
+  // Les marques { type: 'signet' } deviennent signetsDebut / signetsFin du paragraphe d'à côté.
+  function attacherSignets(liste) {
+    const res = [];
+    let enAttente = [];
+    for (const b of liste) {
+      if (b.type === 'signet') {
+        if (b.debut) { enAttente.push(b.nom); continue; }
+        if (enAttente.includes(b.nom)) { enAttente = enAttente.filter((x) => x !== b.nom); continue; } // vide : pas de signet
+        const p = res.findLast((x) => x.type === 'p');
+        if (p) (p.signetsFin ||= []).push(b.nom);
+        continue;
+      }
+      if (b.type === 'table') for (const l of b.lignes) for (const c of l) if (c?.blocs) c.blocs = attacherSignets(c.blocs);
+      if (b.type === 'p' && enAttente.length) { b.signetsDebut = enAttente; enAttente = []; }
+      res.push(b);
+    }
+    return res;
+  }
+
   function blocs(racine) {
+    let numSignet = 0;
     const out = [];
     let listeId = 0;
     // ctx : { style, align, retrait, liste, pre, f }
@@ -116,6 +139,9 @@ const Formats = (() => {
         if (n.dataset.sentinelle !== undefined && !n.textContent.trim()) continue; // voir Editeur.insererA
         vider();
         const c = enfantCtx(n, ctx);
+        // Repère ou bloc déroulant : un signet autour de ses paragraphes.
+        const signet = n.hasAttribute('data-repere') ? `edda_repere_${++numSignet}` : n.tagName === 'BLOCKQUOTE' && n.hasAttribute('data-bloc') ? `edda_bloc_${++numSignet}` : null;
+        if (signet) sortie.push({ type: 'signet', nom: signet, debut: true });
         switch (n.tagName) {
           case 'HR':
             sortie.push({ type: n.classList.contains('saut-page') ? 'saut' : 'ligne' });
@@ -138,6 +164,7 @@ const Formats = (() => {
             liSuite = liSuite || Boolean(ctx.liste);
         }
         if (ctx.liste && n.tagName !== 'UL' && n.tagName !== 'OL') liSuite = true;
+        if (signet) sortie.push({ type: 'signet', nom: signet, fin: true });
       }
       vider();
       // Un élément de liste vide garde sa puce.
@@ -150,6 +177,7 @@ const Formats = (() => {
       if (/^H[1-6]$/.test(n.tagName)) c.style = n.tagName.toLowerCase();
       else if (n.tagName === 'P' || n.tagName === 'DIV') c.style = ctx.style === 'code' || ctx.style === 'citation' || /^h/.test(ctx.style) ? ctx.style : 'normal';
       else if (n.tagName === 'PRE') { c.style = 'code'; c.pre = true; }
+      else if (n.tagName === 'BLOCKQUOTE' && n.hasAttribute('data-bloc')) { /* bloc déroulant : rien ne change dans la mise en forme */ }
       else if (n.tagName === 'BLOCKQUOTE') {
         // L'indentation de Chromium (bouton « Augmenter le retrait ») est une citation avec une marge.
         if (s?.marginLeft || /margin/.test(n.getAttribute('style') || '')) c.retrait = (ctx.retrait || 0) + (Unites.lire(s.marginLeft) ?? 40);
@@ -238,7 +266,7 @@ const Formats = (() => {
     }
 
     conteneur(racine, { style: 'normal', align: null, retrait: 0, liste: null, pre: false, f: {} }, out);
-    return out;
+    return attacherSignets(out);
   }
 
   const CLES_FORMAT = ['gras', 'italique', 'souligne', 'barre', 'indice', 'exposant', 'couleur', 'fond', 'police', 'taille'];
@@ -338,6 +366,41 @@ const Formats = (() => {
 
   // Ranger les paragraphes d'une liste dans des <ul>/<ol> imbriqués (pour les lecteurs).
   // items : [{ html (le <p>…</p>), liste: null | { type, niveau, id, debut } }]
+  // Les signets d'Edda relus dans un fichier (voir blocs) : un format les marque dans son HTML par des
+  // commentaires <!--edda:debut:NOM--> et <!--edda:fin:NOM-->, autour des paragraphes. Un repère met
+  // data-repere sur le bloc qui suit ; un bloc déroulant enveloppe ce qui est entre ses deux marques
+  // (seulement si elles sont au même niveau ; sinon, le texte reste tel quel).
+  const MARQUE = /^edda:(debut|fin):(edda_(repere|bloc)_\w+)$/;
+  const marque = (debutOuFin, nom) => (/^edda_(repere|bloc)_\w+$/.test(nom) ? `<!--edda:${debutOuFin}:${nom}-->` : '');
+  function signetsVersPage(html) {
+    if (!html.includes('<!--edda:')) return html;
+    const t = document.createElement('template');
+    t.innerHTML = html;
+    const marques = [];
+    const w = document.createTreeWalker(t.content, NodeFilter.SHOW_COMMENT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const m = n.nodeValue.match(MARQUE); if (m) marques.push({ n, sens: m[1], nom: m[2], type: m[3] }); }
+    const suivant = (n) => { let x = n; while (x && !x.nextElementSibling && x.parentNode !== t.content) x = x.parentNode; return x?.nextElementSibling || null; };
+    for (const d of marques.filter((x) => x.sens === 'debut')) {
+      const f = marques.find((x) => x.sens === 'fin' && x.nom === d.nom);
+      if (d.type === 'repere') {
+        let cible = d.n.nextElementSibling || suivant(d.n);
+        while (cible && /^(UL|OL)$/.test(cible.tagName) && cible.firstElementChild) cible = cible.firstElementChild;
+        if (cible && cible.tagName !== 'HR') cible.setAttribute('data-repere', '');
+      } else if (f && f.n.parentNode === d.n.parentNode) {
+        const bq = document.createElement('blockquote');
+        bq.setAttribute('data-bloc', '');
+        for (let n = d.n.nextSibling; n && n !== f.n;) { const s = n.nextSibling; bq.append(n); n = s; }
+        if (bq.firstElementChild) {
+          // La première ligne du bloc est son titre : un paragraphe, pas une liste.
+          if (bq.firstElementChild.tagName !== 'P' && !/^H[1-6]$/.test(bq.firstElementChild.tagName)) bq.prepend(Object.assign(document.createElement('p'), { textContent: 'Détails' }));
+          d.n.after(bq);
+        }
+      }
+    }
+    for (const m of marques) m.n.remove();
+    return t.innerHTML;
+  }
+
   function assemblerListes(items) {
     let h = '';
     const pile = []; // [{ type, id }]
@@ -397,5 +460,7 @@ const Formats = (() => {
     stylePara,
     assemblerListes,
     cheminMedia,
+    signetsVersPage,
+    marque,
   };
 })();

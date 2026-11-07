@@ -223,8 +223,17 @@
       const morceaux = [''];
       await enLigne(p, base, null, morceaux);
       const tag = role === 'citation' ? 'blockquote' : role === 'code' ? 'pre' : role === 'normal' ? 'p' : role;
-      const attrs = stylePara({ align: props.align, retrait: listeCtx || tag === 'blockquote' || tag === 'pre' ? 0 : props.retrait, premiere: props.premiere });
-      const out = [];
+      let attrs = stylePara({ align: props.align, retrait: listeCtx || tag === 'blockquote' || tag === 'pre' ? 0 : props.retrait, premiere: props.premiere });
+      // Les signets d'Edda (repères, blocs déroulants : voir Formats.signetsVersPage).
+      const avant = [], apres = [];
+      for (const b of enfants(p)) {
+        if (b.localName !== 'bookmark-start' && b.localName !== 'bookmark-end' && b.localName !== 'bookmark') continue;
+        const nomSignet = b.getAttributeNS(NS.text, 'name') || '';
+        if (/^edda_repere_/.test(nomSignet)) { if (b.localName !== 'bookmark-end') attrs += ' data-repere=""'; continue; }
+        const m = Formats.marque(b.localName === 'bookmark-end' ? 'fin' : 'debut', nomSignet);
+        if (m) (b.localName === 'bookmark-end' ? apres : avant).push({ html: m, liste: null });
+      }
+      const out = [...avant];
       if (props.sautAvant) out.push({ html: '<hr class="saut-page">', liste: null });
       morceaux.forEach((m, i) => {
         const contenu = tag === 'blockquote' ? `<p>${m || '<br>'}</p>` : m || '<br>';
@@ -232,7 +241,7 @@
       });
       if (listeCtx?.suite) out.forEach((o) => { o.liste = null; o.html = o.html.replace(/^<(\w+)/, `<$1 style="margin-left: ${24 * (listeCtx.niveau + 1)}px"`).replace(/ style="([^"]*)" style="/, ' style="$1; '); });
       if (props.sautApres) out.push({ html: '<hr class="saut-page">', liste: null });
-      return out;
+      return [...out, ...apres];
     }
 
     async function enLigne(n, f, lien, morceaux) {
@@ -323,7 +332,7 @@
       }
       if (m && (enfant(m, 'header') || enfant(m, 'footer'))) alertes.add('Les en-têtes et pieds de page ne sont pas affichés (ils restent dans le fichier d\'origine).');
     }
-    return { html: String(html), miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
+    return { html: Formats.signetsVersPage(String(html)), miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
 
   // ======================================================================
@@ -445,7 +454,8 @@
       if (b.type === 'ligne') return `<text:p text:style-name="${consommerSaut() ? 'LigneSaut' : 'Ligne'}"/>`;
       if (b.type === 'table') return (sautEnAttente ? `<text:p text:style-name="${stylePar({ style: 'normal' }, { sautAvant: consommerSaut() })}"/>` : '') + await tableXml(b);
       const style = stylePar(b, { sautAvant: consommerSaut() });
-      const contenu = await runsXml(b.runs);
+      const contenu = (b.signetsDebut || []).map((n) => `<text:bookmark-start text:name="${n}"/>`).join('') + await runsXml(b.runs)
+        + (b.signetsFin || []).map((n) => `<text:bookmark-end text:name="${n}"/>`).join('');
       if (/^h\d$/.test(b.style)) return `<text:h text:style-name="${style}" text:outline-level="${b.style[1]}">${contenu}</text:h>`;
       return `<text:p text:style-name="${style}">${contenu}</text:p>`;
     }

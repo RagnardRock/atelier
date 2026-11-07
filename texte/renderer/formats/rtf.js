@@ -83,6 +83,8 @@
     let aSauter = 0; // caractères à ignorer après \uN
     let tableau = null; // { lignes: [[cellule html]], ligne: [], cellule: '' }
     let texteListe = ''; // le texte de la puce ou du numéro (\listtext, \pntext)
+    let nomSignet = ''; // {\*\bkmkstart nom} en cours de lecture
+    let signetsPara = []; // les signets d'Edda du paragraphe en cours : [{ sens: 'debut' | 'fin', nom }]
     let police = { nom: '', num: 0 };
     let style = { num: 0, nom: '', titre: null };
 
@@ -104,6 +106,7 @@
       else if (dest === 'polices') police.nom += t;
       else if (dest === 'styles') style.nom += t;
       else if (dest === 'listtext') texteListe += t;
+      else if (dest === 'bkmkstart' || dest === 'bkmkend') nomSignet += t;
     }
     function texteBrut(t) {
       // Les octets \'hh en attente passent d'abord (un caractère peut en prendre deux en chinois…).
@@ -120,16 +123,22 @@
       viderOctets();
       const h = courant;
       courant = '';
+      // Les signets d'Edda (repères, blocs déroulants : voir Formats.signetsVersPage).
+      const signets = signetsPara;
+      signetsPara = [];
       if (tableau && para.dansTableau) { tableau.cellule += `<p${stylePara(para)}>${h || '<br>'}</p>`; return; }
       if (tableau && !para.dansTableau) finTableau();
       const tag = para.style === 'normal' ? 'p' : para.style;
+      const repere = signets.some((x) => x.sens === 'debut' && /^edda_repere_/.test(x.nom)) ? ' data-repere=""' : '';
+      for (const x of signets) if (x.sens === 'debut' && /^edda_bloc_/.test(x.nom)) items.push({ html: Formats.marque('debut', x.nom), liste: null });
       // Une liste écrite « à la main » par Word (puce dans \listtext ou \pntext).
       // LibreOffice numérote ses titres avec une « liste » : un titre n'est pas un élément de liste.
       let liste = /^h\d$/.test(para.style) ? null : para.liste;
       if (liste && /^\s*[\dA-Za-z]{1,4}[.)]/.test(texteListe)) liste = { ...liste, type: 'ol' };
       if (!liste && texteListe.trim() && !/^h\d$/.test(para.style)) liste = { type: /^\s*[\d\w]+[.)]/.test(texteListe) ? 'ol' : 'ul', niveau: 0, id: 'rtf' };
       texteListe = '';
-      items.push({ html: `<${tag}${stylePara({ ...para, retrait: liste ? 0 : para.retrait, premiere: liste ? 0 : para.premiere })}>${h || '<br>'}</${tag}>`, liste });
+      items.push({ html: `<${tag}${stylePara({ ...para, retrait: liste ? 0 : para.retrait, premiere: liste ? 0 : para.premiere })}${repere}>${h || '<br>'}</${tag}>`, liste });
+      for (const x of signets) if (x.sens === 'fin' && /^edda_bloc_/.test(x.nom)) items.push({ html: Formats.marque('fin', x.nom), liste: null });
     }
     function finTableau() {
       if (!tableau) return;
@@ -169,6 +178,7 @@
         if (dest === 'polices' && police.nom) { polices[police.num] = police.nom.replace(/;\s*$/, '').trim(); police = { nom: '', num: 0 }; }
         if (dest === 'styles' && style.nom) { stylesheet[style.num] = { nom: style.nom.replace(/;\s*$/, '').trim(), titre: style.titre }; style = { num: 0, nom: '', titre: null }; }
         const ancienneDest = dest;
+        if ((dest === 'bkmkstart' || dest === 'bkmkend') && nomSignet.trim()) signetsPara.push({ sens: dest === 'bkmkstart' ? 'debut' : 'fin', nom: nomSignet.trim() });
         const s = pile.pop();
         if (s) { car = s.car; para = s.para; }
         dest = destPile.pop() ?? 'texte';
@@ -209,6 +219,7 @@
       if (attendEtoile) {
         attendEtoile = false;
         if (mot === 'fldinst') { dest = 'champ'; continue; }
+        if (mot === 'bkmkstart' || mot === 'bkmkend') { dest = mot; nomSignet = ''; continue; }
         if (mot === 'shppict' || mot === 'blipuid') { if (mot === 'blipuid') dest = 'ignorer'; continue; }
         dest = 'ignorer';
         continue;
@@ -338,7 +349,7 @@
     if (paysage && miseEnPage.orientation !== 'paysage') miseEnPage.orientation = 'paysage';
     const cm = (tw) => Math.round(Unites.pxEnCm(Unites.twipsEnPx(tw)) * 100) / 100;
     miseEnPage.marges = { haut: marges.haut != null ? cm(marges.haut) : 2.5, bas: marges.bas != null ? cm(marges.bas) : 2.5, gauche: marges.gauche != null ? cm(marges.gauche) : 3.17, droite: marges.droite != null ? cm(marges.droite) : 3.17 };
-    return { html: assemblerListes(items), miseEnPage, police: polices[policeDefaut] || null, alertes: [...alertes] };
+    return { html: Formats.signetsVersPage(assemblerListes(items)), miseEnPage, police: polices[policeDefaut] || null, alertes: [...alertes] };
   }
   // Variables de la mise en page (lues au fil du fichier).
   let pageL = null, pageH = null, paysage = false, marges = {}, couleurEnCours = null;
@@ -491,7 +502,8 @@
           } else prefixe = `{\\listtext ${['\\u8226?', '\\u9702?', '\\u9642?'][b.liste.niveau % 3]}\\tab}`;
         }
       } else if (b.retrait) s += `\\li${Unites.pxEnTwips(b.retrait)}`;
-      return `${s} ${prefixe}${await runs(b.runs, base)}\\par\n`;
+      const signets = (noms, mot) => (noms || []).map((n) => `{\\*\\${mot} ${n}}`).join('');
+      return `${s} ${prefixe}${signets(b.signetsDebut, 'bkmkstart')}${await runs(b.runs, base)}${signets(b.signetsFin, 'bkmkend')}\\par\n`;
     }
 
     async function table(t) {
