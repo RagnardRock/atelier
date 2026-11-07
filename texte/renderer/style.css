@@ -401,6 +401,8 @@ body.claude-ouvert > #onglets-barre, body.claude-ouvert > #ruban, body.claude-ou
 .feuille[hidden] { display: none; }
 .feuille.sombre { --texte-page: #e4e4e8; --fond-page: #1d1e25; --trait-page: rgba(255, 255, 255, 0.12); caret-color: var(--accent); }
 .feuille ::selection { background: rgba(80, 150, 255, 0.35); }
+/* Les plages gardées d'une sélection multiple (Ctrl+glisser) : la même couleur que la sélection. */
+::highlight(edda-plages) { background-color: rgba(80, 150, 255, 0.35); color: inherit; }
 .feuille p { margin: 0 0 0.6em; }
 .feuille h1, .feuille h2, .feuille h3, .feuille h4, .feuille h5, .feuille h6 { font-weight: 700; line-height: 1.25; }
 .feuille h1 { font-size: 20pt; color: #1f3864; margin: 0.8em 0 0.4em; }
@@ -410,6 +412,8 @@ body.claude-ouvert > #onglets-barre, body.claude-ouvert > #ruban, body.claude-ou
 .feuille.sombre h1 { color: #8fb4ff; }
 .feuille.sombre h2, .feuille.sombre h3, .feuille.sombre h4, .feuille.sombre h5, .feuille.sombre h6 { color: #a9c4ff; }
 .feuille > :first-child { margin-top: 0; }
+/* Les sentinelles cachées (voir Editeur.insererA) ne comptent pas : le premier vrai bloc reste collé en haut. */
+.feuille > :nth-child(1 of :not([hidden])) { margin-top: 0; }
 .feuille blockquote { margin: 0.6em 1cm; padding-left: 0.4cm; border-left: 3px solid #a0a0a0; color: #595959; font-style: italic; }
 .feuille.sombre blockquote { color: #b5b5bd; }
 .feuille blockquote[style*="margin"] { border-left: none; font-style: normal; color: inherit; padding-left: 0; }
