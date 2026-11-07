@@ -30,16 +30,16 @@ Depuis **Atelier** (colonne Outils), ou avec `Saga-Setup-<version>.exe` dans l'o
 | Maj (tenue) | Courir (ou marcher, si « Courir sans tenir Maj » est coché dans les réglages). |
 | Espace, Entrée ou E | **Action** : parler au PNJ en face, ouvrir un coffre, lire un panneau, faire avancer un dialogue, valider un choix. |
 | Retour arrière ou X | Faire avancer un dialogue (comme Action). |
-| Tab | Le **carnet** : équipe, badges, sac (avec « Utiliser »), argent, quêtes. |
+| Tab | Le **raccourci** du jeu (Saga 1.25) : le sac par défaut, ou ce que le jeu a choisi dans Tafl (Menus du jeu) : le menu, l'équipe, le Pokédex, les quêtes, les badges, Construire… |
 | Ctrl+S | **Sauvegarder** la partie (aussi dans le menu de pause). |
-| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : menu de pause : reprendre, carnet, sauvegarder, options, changer de jeu ; « Outils du créateur… » regroupe recharger, recommencer, dossier du jeu et exporter (Saga 1.6.1). |
+| Échap | En combat : revenir en arrière (comme Retour arrière, X ou le clic droit). Ailleurs : le **menu du jeu** (Saga 1.25, le seul menu) : reprendre, équipe, Pokédex, sac, quêtes, badges, les choix du pack et des modules (jets de dés, domaine, construire…), sauvegarder, options, quitter ; « Plus… » regroupe le mode table, jouer à plusieurs, recommencer et, hors d'un jeu exporté, les outils du créateur. |
 | F5 | **Recharger le jeu** depuis le disque, sans bouger le joueur : enregistre dans Tafl, appuie sur F5 dans Saga, et vois le changement. |
 | F3 | Montrer le passage (rouge : bloqué, jaune : rebord), les zones, les téléporteurs (bleu) et les événements (rose), avec la case du joueur. |
 | F11 | Plein écran. |
 | Ctrl+O | Ouvrir un autre jeu. |
 | Ctrl+, | Options : son, texte, affichage, commandes. |
 
-Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour revenir et courir, Start pour la pause, Select pour le carnet), et depuis Saga 0.11 dans **tous** les menus. Les touches du clavier et les boutons de la manette se changent dans Options › Commandes.
+Une **manette** marche aussi (croix ou stick gauche, A pour l'action, B pour revenir et courir, Start pour le menu du jeu, Select pour le raccourci), et depuis Saga 0.11 dans **tous** les menus. Les touches du clavier et les boutons de la manette se changent dans Options › Commandes.
 
 ## Ce que fait Saga 0.1
 
@@ -304,6 +304,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Options › Effets au passage** : le joueur peut les couper (la vitesse compte toujours).
 - **Saga 1.20.1** : le `masque` d'un effet (les couleurs qui passent devant le corps) : sur un bord de hautes herbes, seule l'herbe haute cache le personnage, plus l'herbe rase. La planche « devant » est préparée au chargement (`jeu.devant`).
 - **Saga 1.20.2** : les rives d'eau à masque (moitié eau, moitié berge) : le corps n'est plus coupé par une ligne, c'est l'eau de la tuile qui passe devant lui ; une tuile toute de ces couleurs (le milieu de l'étang) garde la coupe et la ligne d'eau.
+- **Saga 1.25** : un seul menu dans le jeu. Le carnet (Tab) et le menu de pause (Échap) ne font plus qu'un : le **menu du jeu**, sans le logo de Saga, avec le thème du jeu (verre ou pixel) ; l'argent et l'heure dans son titre ; le sac, les quêtes, les badges et le résumé des modules sont ses pages. Tab devient un raccourci que le jeu choisit dans Tafl (Réglages › Menus du jeu).
 
 ## Ce que fait Saga 1.22 : duels, textes accordés, travail, postes et peuples (avec Tafl 1.24)
 

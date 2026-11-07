@@ -214,7 +214,7 @@ const DonneesGestion = (() => {
         ? 'Le joueur ne le voit pas dans Construire. Un événement le construit : « Construire un bâtiment » (à une place fixe, ou nulle part) ou « Placer un bâtiment » avec ce bâtiment choisi (le joueur choisit l\'endroit). Avec « Au plus » à 1, il est unique.'
         : mode === 'condition'
           ? 'Il apparaît dans Construire quand la condition est vraie (un interrupteur, une variable, une quête…). Les événements peuvent toujours le construire.'
-          : 'Le joueur le trouve dans Construire (carnet, ou la commande « Placer un bâtiment » sans bâtiment choisi).'));
+          : 'Le joueur le trouve dans Construire (menu du jeu, ou la commande « Placer un bâtiment » sans bâtiment choisi).'));
       box.replaceChildren(...lignes);
     };
     rendre();
@@ -420,7 +420,7 @@ const DonneesGestion = (() => {
       variantesBox,
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Passage : choisis un pinceau, puis clique sur les cases' }), pinceaux, grille]),
       vers,
-      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (carnet › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
+      info('Le joueur pose le bâtiment où il veut dans une zone de type « Constructible » de la carte (menu du jeu › Construire, ou la commande « Placer un bâtiment »). Les cases rouges bloquent, les vertes laissent passer (une ombre, le toit), la bleue est la porte. Les tampons se créent dans l\'éditeur de cartes.'),
     ];
   }
 
@@ -466,9 +466,9 @@ const DonneesGestion = (() => {
         champ('Nom du domaine', texteIn(g, 'nom', 'Domaine')),
         champ('Capacité du stock', nombreIn(g, 'capacite', 0, 99999), 'par ressource (0 = sans limite)'),
       ]),
-      champ('Dans le carnet (Tab)', menu, 'l\'écran du domaine'),
-      champ('Construire depuis le carnet (Tab)', construire, 'sur une carte qui a une zone Constructible'),
-      champ('Résumé dans le carnet (Tab)', caseA('carnet_resume'), 'le stock en petites icônes, les habitants et les chantiers'),
+      champ('Dans le menu du jeu (Échap)', menu, 'l\'écran du domaine'),
+      champ('Construire depuis le menu du jeu', construire, 'sur une carte qui a une zone Constructible'),
+      champ('Résumé dans le menu du jeu', caseA('carnet_resume'), 'le stock en petites icônes, les habitants et les chantiers'),
       champ('Prévoir la nuit', caseA('prevision'), 'l\'écran du domaine dit ce que la nuit va changer au stock'),
       champ('Bilan du matin', caseA('rapport_bilan'), 'le rapport du matin commence par ce qui a bougé dans le stock, et pourquoi'),
       champ('Pastilles de couleur', caseA('pastilles'), 'une ressource sans icône montre une pastille avec son initiale'),
@@ -572,7 +572,7 @@ const DonneesGestion = (() => {
     return [
       champ('Qui décide où travaillent les habitants', sel(AFFECTATIONS, g.affectation, (v) => { g.affectation = v; })),
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les postes du domaine (Intendance, Construction…)' }), tPostes]),
-      info('Un personnage nommé à un poste donne ses effets au domaine chaque nuit : la production des bâtiments (+20 : 20 % de plus, arrondi) et la vitesse des chantiers (+100 : deux fois plus vite, −50 : deux fois moins). Vide dans « Pour les bâtiments » : tous. Le joueur choisit qui occupe chaque poste dans l\'écran Organiser (carnet, Tab) parmi les candidats disponibles ; un événement peut aussi nommer quelqu\'un (commande « Nommer quelqu\'un à un poste »). Un personnage n\'occupe qu\'un poste à la fois.'),
+      info('Un personnage nommé à un poste donne ses effets au domaine chaque nuit : la production des bâtiments (+20 : 20 % de plus, arrondi) et la vitesse des chantiers (+100 : deux fois plus vite, −50 : deux fois moins). Vide dans « Pour les bâtiments » : tous. Le joueur choisit qui occupe chaque poste dans l\'écran Organiser (menu du jeu, Échap) parmi les candidats disponibles ; un événement peut aussi nommer quelqu\'un (commande « Nommer quelqu\'un à un poste »). Un personnage n\'occupe qu\'un poste à la fois.'),
       el('div', { className: 'field field-block' }, [el('span', { className: 'field-label', textContent: 'Les effets sous condition' }), tEffets]),
       info('Un effet vaut chaque nuit où sa condition est vraie : une bénédiction des champs (une variable), des chantiers plus lents tant que le bâtisseur n\'est pas arrivé (un interrupteur éteint)… L\'écran du domaine montre ceux qui valent ce soir.'),
     ];

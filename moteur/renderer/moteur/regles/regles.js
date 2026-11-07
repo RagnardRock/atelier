@@ -182,6 +182,8 @@ const Regles = (() => {
       places: entier(m.places, d.places, 1, 120), colonnes: entier(m.colonnes, d.colonnes, 1, 12),
       forme_boites: ['grille', 'liste'].includes(m.forme_boites) ? m.forme_boites : d.forme_boites,
       pages: pages.length ? pages : d.pages,
+      // Saga 1.25 : ce qu'ouvre Tab (Select) : '' = le sac, 'menu', 'aucun', une page, un écran ou un choix.
+      tab: typeof m.tab === 'string' && /^[a-z0-9_:-]{1,60}$/.test(m.tab) ? m.tab : '',
     };
   }
   // Chaque fonction va au pack du jeu (le jeu est toujours le premier argument, ou dans l'objet passé).

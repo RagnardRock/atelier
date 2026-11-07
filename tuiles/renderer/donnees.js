@@ -384,7 +384,7 @@ const Donnees = (() => {
     },
   };
   const FORMES_BOITES = [['', 'Celle du pack de règles'], ['grille', 'Grille (des cases, comme les PC Pokémon)'], ['liste', 'Liste (une ligne par créature, avec son nom)']];
-  function menusVides() { return { equipe: '', dex: '', pc: '', boite: '', dex_visible: true, places: 0, colonnes: 0, forme_boites: '', pages: [] }; }
+  function menusVides() { return { equipe: '', dex: '', pc: '', boite: '', dex_visible: true, places: 0, colonnes: 0, forme_boites: '', pages: [], tab: '' }; }
   function normMenus(m) {
     const d = menusVides();
     if (!m || typeof m !== 'object') return d;
@@ -395,6 +395,8 @@ const Donnees = (() => {
       places: int(m.places, 0, 0, 120), colonnes: int(m.colonnes, 0, 0, 12),
       forme_boites: pick(m.forme_boites, FORMES_BOITES, ''),
       pages: [...new Set(arr(m.pages).map((x) => str(x)).filter((x) => /^[a-z0-9_-]+$/.test(x)))],
+      // Tafl 1.26 (Saga 1.25) : ce qu'ouvre Tab dans Saga ; '' = le sac.
+      tab: /^[a-z0-9_:-]{1,60}$/.test(str(m.tab)) ? str(m.tab) : '',
     };
   }
   // L'interface en jeu (Tafl 0.15, lue par Saga 0.4) : le thème des dialogues, du combat et des menus.
@@ -1475,7 +1477,21 @@ const Donnees = (() => {
     const colonnes = champ('Colonnes (grille)', nombre('colonnes', 12));
     colonnes.hidden = forme !== 'grille';
     const formes = pokemon ? FORMES_BOITES : [['', 'Celle du pack de règles'], ['liste', 'Liste (une ligne par héros)'], ['grille', 'Grille (des cases)']];
+    // Tafl 1.26 (Saga 1.25) : un seul menu dans le jeu (Échap) ; Tab (Select) ouvre un raccourci au choix.
+    const modules = Array.isArray(r.modules) ? r.modules : [];
+    const choixTab = [['', 'Le sac (par défaut)'], ['menu', 'Le menu du jeu'], ['equipe', `${m.equipe || d.equipe}`],
+      ...(m.dex_visible ? [['dex', `${m.dex || d.dex}`]] : []), ['quetes', 'Les quêtes'],
+      ...(r.badges?.length || pokemon ? [['badges', 'Les badges']] : []),
+      ...(r.regles === 'jdr' ? [['jets', 'Jets de dés'], ['repos', 'Se reposer']] : []),
+      ...(modules.includes('gestion') ? [['module:gestion:construire', 'Construire (sur une zone constructible)'], ['module:gestion:domaine', 'L\'écran du domaine']] : []),
+      ...(modules.includes('relations') ? [['module:relations:relations', 'Les relations']] : []),
+      ...(modules.includes('roguelite') ? [['module:roguelite:perks', 'Les perks de la partie']] : []),
+      ['aucun', 'Rien']];
+    if (m.tab && !choixTab.some(([k]) => k === m.tab)) choixTab.push([m.tab, m.tab]);
     return [
+      section('Le menu du jeu'),
+      info('Dans Saga, Échap (Start à la manette) ouvre le menu du jeu : équipe, sac, quêtes, options… Tab (Select) ouvre directement ce que tu choisis ici.'),
+      champ('Touche Tab (Select)', sel(choixTab, m.tab || '', (v) => { m.tab = v; })),
       section('Noms des menus'),
       info('Les noms que Saga affiche. Vide = celui que donne le pack de règles (en gris).'),
       el('div', { className: 'field-grid' }, pokemon ? [
@@ -1488,7 +1504,7 @@ const Donnees = (() => {
         champ('Le bestiaire', ctx.input(m, 'dex', d.dex)),
         champ('Les héros en attente', ctx.input(m, 'pc', d.pc)),
       ]),
-      champ(`Montrer le ${m.dex || d.dex} (menu de pause et carnet)`, visible),
+      champ(`Montrer le ${m.dex || d.dex} (menu du jeu)`, visible),
       section(pokemon ? 'Les boîtes du PC' : `La ${m.pc || d.pc}`),
       el('div', { className: 'field-grid' }, [
         champ('Forme', sel(formes, m.forme_boites, (v) => { m.forme_boites = v; colonnes.hidden = (v || d.forme_boites) !== 'grille'; })),
@@ -1651,7 +1667,7 @@ const Donnees = (() => {
       ]),
       info('Chaque créature a une amitié de 0 à 255 : elle monte en gagnant des niveaux, en marchant avec le joueur, avec les vitamines et les objets « Fait monter l\'amitié », et baisse un peu quand la créature tombe K.O. Une évolution « Par amitié » se fait à la montée de niveau quand l\'amitié atteint ce seuil.'),
       section('Badges'),
-      info('Les badges que le joueur gagne (commande « Donner un badge »). Saga les montre dans le carnet, avec leur icône. Leur nombre fait monter le niveau maximum de l\'équipe et celui des dresseurs qui s\'ajustent.'),
+      info('Les badges que le joueur gagne (commande « Donner un badge »). Saga les montre dans le menu du jeu (Badges), avec leur icône. Leur nombre fait monter le niveau maximum de l\'équipe et celui des dresseurs qui s\'ajustent.'),
       tableBadges(r, ctx),
       section('Niveau maximum selon les badges'),
       info('Les créatures du joueur ne dépassent pas ce niveau tant qu\'il n\'a pas assez de badges : l\'aventure reste un défi.'),
@@ -1695,7 +1711,7 @@ const Donnees = (() => {
     if (!pokemon && r.badges.length) {
       out.push(
         section('Badges'),
-        info(`Ton jeu a des badges, mais le pack ${nomPack(r.regles)} ne s'en sert pas pour les niveaux : ce sont de simples récompenses, montrées dans le carnet. Retire-les tous pour ne plus les voir.`),
+        info(`Ton jeu a des badges, mais le pack ${nomPack(r.regles)} ne s'en sert pas pour les niveaux : ce sont de simples récompenses, montrées dans le menu du jeu. Retire-les tous pour ne plus les voir.`),
         tableBadges(r, ctx),
       );
     }
@@ -1791,7 +1807,7 @@ const Donnees = (() => {
         champ('En-tête', texteIn(t, 'matin_entete', ''), 'à droite du titre (vide : rien)'),
         champ('Note', texteIn(t, 'matin_note', ''), 'sous le titre (vide : rien)'),
       ]),
-      champ('Le jour dans le carnet (Tab)', sel(CARNET_JOUR, t.carnet_jour, (v) => { t.carnet_jour = v; }), 'à côté de l\'heure'),
+      champ('Le jour dans le menu du jeu', sel(CARNET_JOUR, t.carnet_jour, (v) => { t.carnet_jour = v; }), 'à côté de l\'heure'),
       section('Musique et sons'),
       info('Les sons sont des fichiers du dossier sons/ du jeu (MP3, OGG, WAV…) : + en ajoute, ▶ en écoute un. La musique de chaque carte se choisit dans Carte › Ambiance. Sans fichier, Saga joue ses propres bruitages (des petits « bips ») ; « Aucun » les fait taire.'),
       musique('musique_combat', 'Musique des combats', 'Aucune (la musique de la carte continue)'),

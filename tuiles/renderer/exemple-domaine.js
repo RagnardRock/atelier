@@ -186,7 +186,7 @@ const ExempleDomaine = (() => {
       ev('brune', 'Brune la bâtisseuse', 'pnj', 10, 15, [
         page([
           dire('Bienvenue dans la clairière ! Ici, on bâtit un domaine, une nuit après l\'autre.', 'brune'),
-          dire('Ouvre ton carnet (Tab) : le bouton Domaine montre le stock, et Construire te laisse poser un bâtiment dans le pré, avec les flèches.', 'brune'),
+          dire('Ouvre le menu (Échap) : Domaine montre le stock, et Construire te laisse poser un bâtiment dans le pré, avec les flèches.', 'brune'),
           dire('Une maison coûte 6 bois et loge deux habitants. Une ferme coûte 4 bois : avec un ouvrier, elle donne 3 blé chaque nuit.', 'brune'),
           dire('Les habitants mangent un blé par nuit. Après trois nuits de faim, ils s\'en vont. Le bois et les gerbes repoussent : ramasse-les !', 'brune'),
           dire('Regarde-les aller et venir entre leur maison et la ferme : à force, leurs pas tracent des sentiers dans l\'herbe.', 'brune'),
@@ -203,7 +203,7 @@ const ExempleDomaine = (() => {
           { type: 'relation_parler', qui: '@evenement', dire: true },
           { type: 'choix', options: [
             { texte: 'Lui offrir quelque chose', commandes: [{ type: 'relation_offrir', qui: '@evenement', objet: '', reussi: [], rate: [] }] },
-            { texte: 'Comment ça marche, déjà ?', commandes: [dire('Le carnet (Tab) › Construire, puis va dormir : le chantier avance la nuit. Entre dans une maison finie par sa porte !', 'brune')] },
+            { texte: 'Comment ça marche, déjà ?', commandes: [dire('Le menu (Échap) › Construire, puis va dormir : le chantier avance la nuit. Entre dans une maison finie par sa porte !', 'brune')] },
             { texte: 'À plus tard', commandes: [] },
           ] },
         ], [fait]),
@@ -217,7 +217,7 @@ const ExempleDomaine = (() => {
       ], { apparence: { personnage: 'brune', tuile: -1 }, deplacement: 'regarde', direction: 'bas' }),
       lit('lit-de-camp', 16, 15, T),
       ev('panneau', 'Panneau', 'panneau', 13, 13, [
-        page([dire('Domaine de la Clairière. Le pré, au nord, est à bâtir. Le carnet (Tab) › Construire.')]),
+        page([dire('Domaine de la Clairière. Le pré, au nord, est à bâtir. Le menu (Échap) › Construire.')]),
       ]),
       ramassage('bois-1', 'Tas de bois', 19, 9, T.tas_bois, 'bois', 3, 2),
       ramassage('bois-2', 'Tas de bois', 22, 10, T.tas_bois, 'bois', 3, 2),
