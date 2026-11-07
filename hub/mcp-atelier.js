@@ -67,12 +67,12 @@ const OUTILS = [
   },
   {
     name: 'installer_outil',
-    description: 'Installe un outil d\'Atelier pas encore installé, ou le met à jour s\'il a une nouvelle version (id dans atelier.md). Si une version est en préparation sur GitHub, l\'action le dit : demande alors à Ragna s\'il veut l\'attendre (attendre: true) ou installer tout de suite la dernière publiée (attendre: false).',
+    description: 'Installe un outil d\'Atelier pas encore installé, ou le met à jour s\'il a une nouvelle version (id dans atelier.md). Si une version est en préparation sur GitHub, l\'action le dit : demande alors à l\'utilisateur s\'il veut l\'attendre (attendre: true) ou installer tout de suite la dernière publiée (attendre: false).',
     inputSchema: { type: 'object', properties: { outil: { type: 'string' }, attendre: { type: 'boolean', description: 'Seulement si une version est en préparation : true = l\'installer dès sa publication, false = installer la dernière publiée' } }, required: ['outil'] },
   },
   {
     name: 'desinstaller_outil',
-    description: 'Désinstalle un outil d\'Atelier (id dans atelier.md). Les réglages et fichiers de Ragna sont gardés. Seulement si Ragna le demande.',
+    description: 'Désinstalle un outil d\'Atelier (id dans atelier.md). Les réglages et fichiers de l\'utilisateur sont gardés. Seulement s\'il le demande.',
     inputSchema: { type: 'object', properties: { outil: { type: 'string' } }, required: ['outil'] },
   },
   {

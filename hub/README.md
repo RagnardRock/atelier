@@ -10,6 +10,12 @@ Comme Rune et Skald : télécharge le dernier `Atelier-Setup-….exe` dans l'ong
 
 Ensuite, Atelier installe lui-même Rune, Skald, Brokk et Tafl : plus besoin d'aller dans les Releases.
 
+## Ton prénom
+
+Au premier lancement, Atelier demande ton prénom : il s'affiche en haut à gauche (« Bonjour … »)
+et Loki le connaît dans tous les outils (il est recopié dans `%APPDATA%\atelier-commun\utilisateur.json`).
+« Plus tard » redemande au prochain lancement. Il se change dans les réglages (Ctrl+,).
+
 ## La colonne Outils
 
 Une carte par outil, avec sa version installée et la dernière publiée sur GitHub. Le bouton change selon le cas :

@@ -265,7 +265,7 @@ function handleMessage(m, log) {
 function repondrePermission(requestId, toolUseId, autoriser, input) {
   const response = autoriser
     ? { behavior: 'allow', updatedInput: input, toolUseID: toolUseId }
-    : { behavior: 'deny', message: 'Refusé : dans Atelier, Loki peut lire, et agir seulement avec les actions d\'Atelier autorisées par Ragna.', toolUseID: toolUseId };
+    : { behavior: 'deny', message: 'Refusé : dans Atelier, Loki peut lire, et agir seulement avec les actions d\'Atelier autorisées par l\'utilisateur.', toolUseID: toolUseId };
   write({ type: 'control_response', response: { subtype: 'success', request_id: requestId, response } });
 }
 
@@ -359,7 +359,7 @@ const dateHeure = (ms) => new Date(ms).toLocaleString('fr-FR', { dateStyle: 'med
 
 function notesMd(notes) {
   const triees = [...notes].sort((a, b) => (b.epinglee - a.epinglee) || (b.modifiee - a.modifiee));
-  const lignes = [`# Notes de Ragna (${notes.length})`, '', 'Écrites dans le widget Notes d\'Atelier. La première ligne de chaque note est son titre.', ''];
+  const lignes = [`# Notes (${notes.length})`, '', 'Écrites dans le widget Notes d\'Atelier. La première ligne de chaque note est son titre.', ''];
   for (const n of triees) {
     const titre = n.texte.split('\n').find((l) => l.trim())?.trim().replace(/^#+\s*/, '') || 'Sans titre';
     lignes.push('---', '', `## ${titre}`, '', `_id : ${n.id} · ${n.epinglee ? 'épinglée · ' : ''}modifiée le ${dateHeure(n.modifiee)}_`, '', n.texte.trim(), '');
@@ -375,7 +375,7 @@ function calendrierMd(evenements, maintenant) {
   const ligne = (e) => `- ${e.date}${e.heure ? ` ${e.heure}` : ' (journée)'} : ${e.titre}${e.note ? ` (note : ${e.note.replace(/\n/g, ' ')})` : ''} [id : ${e.id}]`;
   const passes = tries.filter((e) => e.date < cleAuj);
   const lignes = [
-    '# Calendrier de Ragna',
+    '# Calendrier',
     '',
     `Aujourd'hui : ${jour(maintenant)} (${cleAuj}). Dates au format AAAA-MM-JJ, heures locales.`,
     '',
@@ -410,17 +410,17 @@ async function detailsGit(folder, run) {
 }
 
 async function projetsMd(liste, run) {
-  if (!liste.existe) return `# Projets de Ragna\n\nLe dossier des projets (${liste.racine || 'aucun'}) n'existe pas.`;
+  if (!liste.existe) return `# Projets\n\nLe dossier des projets (${liste.racine || 'aucun'}) n'existe pas.`;
   const details = await Promise.all(liste.projets.map((p) => detailsGit(p.dossier, run)));
   const lignes = [
-    '# Projets de Ragna',
+    '# Projets',
     '',
     `Dossier des projets : ${liste.racine}. Du plus récemment touché au plus ancien (${liste.projets.length} sur ${liste.total}).`,
     'Pour chaque projet : type, outil d\'Atelier qui l\'ouvre (voir atelier.md), dernière activité,',
     'état Git (branche, fichiers modifiés pas encore commités, commits pas encore poussés / à récupérer)',
     'et les commits des 30 derniers jours, toutes branches confondues.',
     '« Mémoire » : ce que tu as retenu toi-même sur le projet (actions retenir_projet / oublier_projet),',
-    'gardé d\'une conversation à l\'autre. Ragna peut aussi le modifier dans le widget Projets récents.',
+    'gardé d\'une conversation à l\'autre. L\'utilisateur peut aussi le modifier dans le widget Projets récents.',
     '',
   ];
   const memoireMd = (infos) => {
@@ -470,7 +470,7 @@ async function projetsMd(liste, run) {
 const WIDGETS = [
   ['notes', 'Notes', 'notes rapides en Markdown ; la première ligne est le titre ; épingler une note la garde en haut ; correction d\'orthographe au clic droit ; cases à cocher : une ligne « - [ ] tâche » s\'affiche comme une case (« - [x] » = faite, barrée), clic = cocher, bouton ou Ctrl+Shift+L = ligne ↔ tâche, compteur « 2/5 » dans la liste.', 'Lire (notes.md), ajouter, modifier, supprimer ; pour cocher une tâche, modifier la note en remplaçant « - [ ] » par « - [x] » sur sa ligne.'],
   ['projets', 'Projets récents', 'les dossiers du dossier des projets, du plus récent au plus ancien, avec leur état Git ; clic = ouvrir dans l\'outil choisi ; clic droit = choisir l\'outil (Rune, Skald, Tafl…) ou l\'Explorateur ; signet = la mémoire du projet.', 'Lire (projets.md), ouvrir un projet, retenir / oublier des infos.'],
-  ['pressePapiers', 'Presse-papiers et couleurs', 'historique de ce que Ragna copie (texte), et une palette de couleurs partagée avec Skald et Rune, avec une pipette.', 'aucun accès (il peut contenir des mots de passe).'],
+  ['pressePapiers', 'Presse-papiers et couleurs', 'historique de ce que l\'utilisateur copie (texte), et une palette de couleurs partagée avec Skald et Rune, avec une pipette.', 'aucun accès (il peut contenir des mots de passe).'],
   ['minuteurs', 'Minuteurs', 'comptes à rebours qui tournent en même temps (raccourcis 5, 15, 25 min, Pomodoro), carillon et notification à la fin, gardés si Atelier se ferme.', 'Lancer un minuteur.'],
   ['calendrier', 'Calendrier', 'évènements à une date, avec ou sans heure, et une note.', 'Lire (calendrier.md), ajouter, modifier, supprimer.'],
   ['calculatrice', 'Calculatrice', 'calcul tapé ou cliqué, résultat pendant la frappe ; + − × ÷, ^, √, parenthèses, %, π, « Rés » ; historique des 30 derniers calculs.', 'Calculer (action calculer, même interpréteur que le widget).'],
@@ -489,8 +489,8 @@ function atelierMd(etat, config, version) {
   const lignes = [
     `# Atelier ${version}`,
     '',
-    'Atelier est le hub de Ragna : il lance, installe, met à jour et désinstalle ses outils (colonne Outils),',
-    'et affiche des widgets. Tous les outils sont faits pour Ragna, dans un seul dépôt GitHub',
+    'Atelier est un hub d\'outils : il lance, installe, met à jour et désinstalle ses outils (colonne Outils),',
+    'et affiche des widgets. Tous les outils viennent d\'un seul dépôt GitHub',
     '(RagnardRock/atelier) ; chacun publie ses versions (Releases) tout seul après une fusion sur main,',
     'en 2 à 5 minutes.',
     '',
@@ -498,7 +498,7 @@ function atelierMd(etat, config, version) {
     '',
     'Rangés par catégorie dans la colonne Outils. Un filtre en haut montre Tous / Installés / Mises à jour.',
     'Sur chaque carte : Installer, Mettre à jour ou Lancer ; un outil installé a aussi un bouton dossier',
-    '(dossier d\'installation) et une corbeille (Désinstaller : réglages et fichiers de Ragna gardés).',
+    '(dossier d\'installation) et une corbeille (Désinstaller : réglages et fichiers de l\'utilisateur gardés).',
     'Si une version est en préparation sur GitHub, Atelier propose d\'attendre et de l\'installer dès sa publication.',
     'Le bouton ↻ relit les versions sur GitHub (les versions « dernière publiée » ci-dessous datent de la dernière',
     'lecture ; l\'action verifier_mises_a_jour les relit).',
@@ -533,16 +533,25 @@ function atelierMd(etat, config, version) {
   return lignes.join('\n');
 }
 
+// Le prénom donné au premier lancement d'Atelier (Réglages › Ton prénom) : Loki appelle la personne ainsi.
+function lignePrenom(prenom) {
+  return prenom
+    ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
+    : 'Tu ne connais pas encore le prénom de l\'utilisateur : s\'il te le donne, dis-lui de l\'écrire dans les réglages d\'Atelier (Ctrl+,), pour que tous les outils le sachent.';
+}
+
 // Instructions pour Claude, lues par Claude Code au lancement (CLAUDE.md du dossier de travail).
-function claudeMd(addDir, actions) {
+function claudeMd(addDir, actions, prenom = '') {
+  const qui = prenom || 'l\'utilisateur';
   return [
     '# Assistant d\'Atelier',
     '',
-    'Tu es Loki, l\'assistant intégré à Atelier, le hub d\'outils de Ragna (développeur web, sous Windows).',
+    'Tu es Loki, l\'assistant intégré à Atelier, un hub d\'outils sous Windows.',
     'Dans l\'Atelier, l\'assistant s\'appelle Loki (il est propulsé par Claude) : présente-toi sous ce nom.',
+    lignePrenom(prenom),
     'Réponds en français, simplement et brièvement, avec des listes quand c\'est plus clair.',
     '',
-    'Ce dossier contient quatre fichiers, réécrits par Atelier avant chaque message de Ragna :',
+    'Ce dossier contient quatre fichiers, réécrits par Atelier avant chaque message :',
     '- atelier.md : Atelier lui-même, ses outils (installés ou non, versions) et ses widgets ;',
     '- notes.md : toutes les notes du widget Notes ;',
     '- calendrier.md : les évènements du calendrier, avec la date du jour ;',
@@ -564,13 +573,13 @@ function claudeMd(addDir, actions) {
         '(verifier_mises_a_jour), et calculer (calculer) : pour tout calcul, sers-t\'en plutôt que de calculer de tête.',
         'Tu as aussi une mémoire par projet (retenir_projet, oublier_projet), recopiée dans projets.md :',
         'retiens-y ce qui sera utile plus tard (décisions, client, hébergement, étapes restantes…) quand',
-        'Ragna te le demande ou te l\'apprend. Une info courte et datée par élément ; oublie ce qui n\'est plus vrai.',
-        'Atelier demande à Ragna de valider tes actions (sauf celles autorisées pour toujours) : quand Ragna',
+        `${qui} te le demande ou te l'apprend. Une info courte et datée par élément ; oublie ce qui n'est plus vrai.`,
+        `Atelier demande à ${qui} de valider tes actions (sauf celles autorisées pour toujours) : quand ${qui}`,
         'te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
         'Pour modifier une note, envoie son texte complet. Les dates sont au format AAAA-MM-JJ.',
       ]
       : [
-        'Tu ne peux rien modifier ni lancer de commande : si Ragna te demande d\'ajouter une note ou un évènement,',
+        `Tu ne peux rien modifier ni lancer de commande : si ${qui} te demande d'ajouter une note ou un évènement,`,
         'propose-lui le texte à copier dans le widget correspondant.',
       ]),
     '',
@@ -594,7 +603,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
       readConfig(),
     ]);
     const fichiers = {
-      'CLAUDE.md': claudeMd(addDir, actions),
+      'CLAUDE.md': claudeMd(addDir, actions, config.prenom),
       'atelier.md': atelierMd(etat, config, version),
       'notes.md': notesMd(Array.isArray(notes) ? notes : []),
       'calendrier.md': calendrierMd(Array.isArray(evenements) ? evenements : [], maintenant),
@@ -639,7 +648,7 @@ function register({ handle, log, dataDir, readConfig, readJson, notesPath, donne
       try { t = await fsp.readFile(path.join(cwd, nom), 'utf8'); } catch { /* pas encore écrit */ }
       contexte.push('', `## ${nom} (à jour)`, '', t.length > COUPE ? `${t.slice(0, COUPE)}\n… (coupé : lire_fichier ${nom} pour la suite)` : t);
     }
-    const consignes = `${claudeMd(null, actions)
+    const consignes = `${claudeMd(null, actions, config.prenom)
       .replace('(il est propulsé par Claude)', '(ici, il tourne sur un modèle local)')
       .replace('Lis le ou les fichiers utiles avant de répondre, et relis-les à chaque question : ils changent.', 'Ils sont recopiés plus bas, à jour : pas besoin de les relire.')
       .replace('Tu ne peux pas lire les fichiers des projets eux-mêmes : seulement ces quatre fichiers.', 'En local, tu ne lis pas les fichiers des projets eux-mêmes : seulement ces quatre fichiers.')

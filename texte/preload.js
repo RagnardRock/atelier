@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('edda', {
   rangerMedia: (document, src) => ipcRenderer.invoke('media:ranger', document, src),
   ouvrirMedia: (src) => ipcRenderer.invoke('media:ouvrir', src),
   ouvrirLien: (url) => ipcRenderer.invoke('lien:ouvrir', url),
+  prenom: () => ipcRenderer.invoke('utilisateur:prenom'),
   // PDF et impression
   exporterPdf: (options) => ipcRenderer.invoke('pdf:exporter', options),
   ouvrirPdf: (chemin) => ipcRenderer.invoke('pdf:ouvrir', chemin),

@@ -278,7 +278,7 @@ const App = (() => {
     $('#status-enregistre').textContent = 'Enregistrement…';
     let r;
     try {
-      r = await format.ecrire(contexteEcriture(d, chemin));
+      r = await format.ecrire({ ...contexteEcriture(d, chemin), auteur: await window.edda.prenom().catch(() => '') });
       const info = await window.edda.ecrireDocument(chemin, r.bytes);
       Object.assign(d, { chemin: info.chemin, nom: info.nom, format: format.id, dossierUrl: info.dossierUrl, dateFichier: info.modifie, modifie: false });
     } catch (err) {

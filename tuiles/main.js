@@ -632,7 +632,7 @@ const CLAUDE_CONSIGNES_LOCALES = [
 // Les actions toujours données au modèle local comme vrais outils (les autres sont dans son catalogue).
 const LOKI_ESSENTIELLES = ['infos', 'catalogue', 'recette_tuile', 'voir_carte', 'plan_carte', 'poser_tuiles', 'enregistrer_jeu', 'annuler'];
 
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art de Ragna (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES, consignesLocales: CLAUDE_CONSIGNES_LOCALES, essentielles: LOKI_ESSENTIELLES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: async (changes) => writeConfig({ ...(await readConfig()), ...changes }), avantLocal: () => comfy.liberer(), outil: { nom: 'Tafl', role: "l'éditeur de tuiles et de cartes en pixel art (pour son jeu façon Pokémon, export Tiled)", consignes: CLAUDE_CONSIGNES, consignesLocales: CLAUDE_CONSIGNES_LOCALES, essentielles: LOKI_ESSENTIELLES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {

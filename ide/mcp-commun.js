@@ -31,7 +31,7 @@ const OUTILS = [
   },
   {
     name: 'lire_notes',
-    description: 'Lit les notes de Ragna (widget Notes d\'Atelier), en Markdown.',
+    description: 'Lit les notes du widget Notes d\'Atelier, en Markdown.',
     inputSchema: { type: 'object', properties: {} },
   },
   {

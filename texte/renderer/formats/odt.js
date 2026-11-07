@@ -543,7 +543,7 @@
     zip.file('mimetype', 'application/vnd.oasis.opendocument.text', { compression: 'STORE' });
     zip.file('content.xml', content);
     zip.file('styles.xml', stylesXml(ctx, fontFaces));
-    zip.file('meta.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-meta ${DECL} office:version="1.3"><office:meta><meta:generator>Edda</meta:generator><dc:title>${xml(ctx.titre || '')}</dc:title><meta:initial-creator>Ragna</meta:initial-creator><dc:date>${new Date().toISOString()}</dc:date></office:meta></office:document-meta>`);
+    zip.file('meta.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-meta ${DECL} office:version="1.3"><office:meta><meta:generator>Edda</meta:generator><dc:title>${xml(ctx.titre || '')}</dc:title><meta:initial-creator>${xml(ctx.auteur || '')}</meta:initial-creator><dc:date>${new Date().toISOString()}</dc:date></office:meta></office:document-meta>`);
     for (const im of images) zip.file(im.nom, im.bytes);
     zip.file('META-INF/manifest.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
       + '<manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="application/vnd.oasis.opendocument.text"/>'

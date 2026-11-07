@@ -109,6 +109,9 @@ const DEFAULT_CONFIG = {
   // Correction d'orthographe (notes, message à Claude…) : activée, et dans quelle(s) langue(s).
   orthographe: true,
   languesOrthographe: 'fr',
+  // Le prénom de la personne qui utilise Atelier : demandé au premier lancement (« Bonjour … » en haut
+  // à gauche), modifiable dans les réglages, recopié dans atelier-commun/utilisateur.json pour Loki.
+  prenom: '',
 };
 const readConfig = async () => {
   const config = { ...DEFAULT_CONFIG, ...(await readJson(configPath(), {})) };
@@ -119,9 +122,12 @@ const readConfig = async () => {
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
-  const config = { ...(await readConfig()), ...changes };
+  const avant = await readConfig();
+  const config = { ...avant, ...changes };
+  config.prenom = String(config.prenom || '').trim().slice(0, 40);
   await writeJson(configPath(), config);
   appliquerOrthographe(config);
+  if (config.prenom !== avant.prenom) await ecrireUtilisateur(config.prenom).catch((err) => reportError('Dossier partagé', err));
   return config;
 });
 
@@ -189,14 +195,18 @@ handle('donnees:ecrire', async (_event, nom, data) => writeJson(donneesPath(nom)
 //   outils lisent et écrivent tous ce fichier) ;
 // - notes.md : une copie lisible des notes, réécrite à chaque changement ;
 // - projet-en-cours.json : le dernier projet ouvert depuis Atelier, et avec quel outil ;
+// - utilisateur.json : le prénom de la personne (Réglages d'Atelier), pour que Loki l'appelle par son nom ;
 // - LISEZMOI.md : ce mode d'emploi, pour toi et pour Claude.
 const communDir = () => path.join(app.getPath('appData'), 'atelier-commun');
 const memoirePath = () => path.join(communDir(), 'memoire-projets.json');
 
 const LISEZMOI = `# Dossier partagé de l'Atelier
 
-Écrit par Atelier, lu par Loki dans Rune, Skald et Tafl : quand Ragna passe d'un outil à l'autre,
-Loki sait sur quoi Ragna travaille et ce qui a déjà été décidé.
+Écrit par Atelier, lu par Loki dans chaque outil : quand tu passes d'un outil à l'autre, Loki sait
+qui tu es, sur quoi tu travailles et ce qui a déjà été décidé.
+
+- utilisateur.json : { "prenom": "…" }, ton prénom (demandé au premier lancement d'Atelier,
+  modifiable dans ses réglages). Loki t'appelle par ce prénom dans tous les outils.
 
 - memoire-projets.json : ce que Loki retient sur chaque projet.
   { "NomDuDossierDuProjet": [{ "id": "a1b2c3d4", "texte": "…", "quand": 1760000000000 }] }
@@ -212,9 +222,15 @@ async function ecrireNotesMd(notes) {
   await fs.writeFile(path.join(communDir(), 'notes.md'), claude.notesMd(Array.isArray(notes) ? notes : []), 'utf8');
 }
 
+async function ecrireUtilisateur(prenom) {
+  await fs.mkdir(communDir(), { recursive: true });
+  await writeJson(path.join(communDir(), 'utilisateur.json'), { prenom: prenom || '' });
+}
+
 async function preparerCommun() {
   await fs.mkdir(communDir(), { recursive: true });
   await fs.writeFile(path.join(communDir(), 'LISEZMOI.md'), LISEZMOI, 'utf8');
+  await ecrireUtilisateur((await readConfig()).prenom);
   // Avant Atelier 0.8, la mémoire était dans %APPDATA%\atelier-hub\projets-memoire.json : on la déplace
   // (l'ancien fichier reste, en sauvegarde).
   const ancienne = path.join(app.getPath('userData'), 'projets-memoire.json');

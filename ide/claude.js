@@ -206,15 +206,30 @@ async function ecrireConfigMcp(cwd) {
   return mcpFile;
 }
 
+// Le prénom donné au premier lancement d'Atelier (recopié dans atelier-commun/utilisateur.json).
+async function lirePrenom() {
+  if (!communDir) return '';
+  try {
+    return String(JSON.parse(await fsp.readFile(path.join(communDir, 'utilisateur.json'), 'utf8')).prenom || '').trim();
+  } catch {
+    return '';
+  }
+}
+const lignePrenom = (prenom) => (prenom
+  ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
+  : 'Tu ne connais pas encore le prénom de l\'utilisateur : il se donne dans les réglages d\'Atelier (Ctrl+,).');
+
 // Glissé avant ton premier message de chaque lancement (tu ne le vois pas dans le panneau) :
 // Claude sait ainsi qu'il a une mémoire du projet et des notes à sa disposition.
-function introAtelier(cwd) {
+function introAtelier(cwd, prenom) {
+  const qui = prenom || 'l\'utilisateur';
   return [
     `(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude). Tu travailles dans le projet « ${path.basename(cwd)} ».`,
-    'Ragna utilise aussi Atelier, son hub, dont l\'assistant Loki garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :',
+    lignePrenom(prenom),
+    `${prenom || 'Il'} utilise aussi Atelier, son hub, dont l'assistant Loki garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :`,
     'lire_contexte (la mémoire de ce projet : décisions, client, hébergement… ; lis-la avant de répondre à ce premier message,',
-    'puis relis-la si Ragna parle de ce qui a été décidé), lire_notes (ses notes, quand la question s\'y rapporte),',
-    'retenir_projet et oublier_projet (garde une info courte et utile plus tard quand Ragna te la demande ou te l\'apprend ;',
+    `puis relis-la si ${qui} parle de ce qui a été décidé), lire_notes (ses notes, quand la question s'y rapporte),`,
+    `retenir_projet et oublier_projet (garde une info courte et utile plus tard quand ${qui} te la demande ou te l'apprend ;`,
     'elle sera visible dans Atelier et dans les autres outils).)',
     '',
     '',
@@ -403,13 +418,15 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
         });
       }
     }
+    const prenom = await lirePrenom();
     const consignes = [
-      `Tu es Loki, l'assistant intégré à Rune, l'éditeur de code de Ragna (développeur web, Vue.js, sous Windows), un des outils de l'Atelier.`,
+      `Tu es Loki, l'assistant intégré à Rune, un éditeur de code (web, Vue.js, sous Windows), un des outils de l'Atelier.`,
+      lignePrenom(prenom),
       'Ici, tu tournes sur un modèle local. Réponds en français, simplement et brièvement.',
       `Tu travailles dans le projet « ${path.basename(root)} », dossier ${root}. Les chemins sont relatifs à ce dossier.`,
       'Pour les fichiers : lire_fichier, lister_fichiers, chercher_texte, modifier_fichier (remplace un passage exact), ecrire_fichier.',
-      'Avant de modifier un fichier, lis-le. Ragna valide chaque modification sur une carte Autoriser / Refuser.',
-      ...(memoire.length ? ['La mémoire du projet (décisions, client, hébergement…) : lire_contexte ; les notes de Ragna : lire_notes ; retenir_projet / oublier_projet pour garder une info utile plus tard.'] : []),
+      `Avant de modifier un fichier, lis-le. ${prenom || 'L\'utilisateur'} valide chaque modification sur une carte Autoriser / Refuser.`,
+      ...(memoire.length ? ['La mémoire du projet (décisions, client, hébergement…) : lire_contexte ; ses notes : lire_notes ; retenir_projet / oublier_projet pour garder une info utile plus tard.'] : []),
     ].join('\n');
     await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(root), ...memoire] });
   }
@@ -490,12 +507,12 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
       if (config.claudeAtelier !== false) {
         try {
           mcpConfig = await ecrireConfigMcp(root);
-          intro = introAtelier(root);
+          intro = introAtelier(root, await lirePrenom());
         } catch (err) {
           log('ERREUR', `Claude : dossier partagé de l'Atelier indisponible : ${err.message}`);
         }
       }
-      if (!intro) intro = "(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude).)\n\n";
+      if (!intro) intro = `(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude). ${lignePrenom(await lirePrenom())})\n\n`;
       if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd: root, log, resume, mcpConfig })) return;
     }
     write({ type: 'user', message: { role: 'user', content: intro + text }, parent_tool_use_id: null, session_id: '' });
