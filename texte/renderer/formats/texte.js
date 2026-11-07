@@ -25,6 +25,16 @@
     turndown = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-', emDelimiter: '*', strongDelimiter: '**', hr: '---' });
     turndown.addRule('barre', { filter: ['s', 'del', 'strike'], replacement: (c) => `~~${c}~~` });
     turndown.addRule('saut', { filter: (n) => n.nodeName === 'HR' && n.classList.contains('saut-page'), replacement: () => '\n\n<div class="saut-page"></div>\n\n' });
+    // Bloc déroulant : du HTML <details> (GitHub, Obsidian… le replient), voir versDetails.
+    turndown.addRule('bloc', {
+      filter: (n) => n.nodeName === 'BLOCKQUOTE' && n.hasAttribute('data-bloc'),
+      replacement: (c, n) => {
+        const titre = (n.firstElementChild?.textContent || '').replace(/\s+/g, ' ').trim().replace(/</g, '&lt;');
+        const reste = n.cloneNode(true);
+        reste.firstElementChild?.remove();
+        return `\n\n<details>\n<summary>${titre}</summary>\n\n${convertisseur().turndown(reste.innerHTML || '').trim()}\n\n</details>\n\n`;
+      },
+    });
     turndown.addRule('tab', { filter: (n) => n.nodeName === 'SPAN' && n.classList.contains('tab'), replacement: () => '\t' });
     // Vidéo, son : le Markdown n'en a pas, on écrit la balise HTML (lue par la plupart des visionneuses).
     turndown.addRule('media', {
@@ -90,6 +100,21 @@
     if (perdu(page)) alertes.add('Le Markdown ne garde pas les couleurs, les polices, les tailles ni l\'alignement : enregistre en .docx ou .odt pour les garder.');
     const md = convertisseur().turndown(page);
     return { bytes: encoderTexte(`${md.trim()}\n`), alertes: [...alertes] };
+  }
+
+  // Un bloc déroulant d'Edda (<blockquote data-bloc>) devient un vrai <details> ouvert, avec sa
+  // première ligne en <summary> : il se replie dans tous les navigateurs, et Edda le relit.
+  function versDetails(racine) {
+    for (const bq of [...racine.querySelectorAll('blockquote[data-bloc]')].reverse()) {
+      const doc = bq.ownerDocument;
+      const d = doc.createElement('details');
+      d.setAttribute('open', '');
+      const resume = doc.createElement('summary');
+      const titre = bq.firstElementChild;
+      if (titre) { resume.append(...titre.childNodes); titre.remove(); }
+      d.append(resume, ...bq.childNodes);
+      bq.replaceWith(d);
+    }
   }
 
   // La page contient-elle de la mise en forme que le Markdown ou le texte perdent ?
@@ -176,6 +201,9 @@ p { margin: 0 0 0.6em; }
 h1 { font-size: 20pt; color: #1f3864; margin: 0.8em 0 0.4em; } h2 { font-size: 16pt; color: #2f5496; margin: 0.7em 0 0.35em; }
 h3 { font-size: 14pt; color: #2f5496; margin: 0.6em 0 0.3em; } h4, h5, h6 { font-size: 12pt; color: #2f5496; margin: 0.5em 0 0.25em; }
 blockquote { margin: 0.6em 1cm; padding-left: 0.4cm; border-left: 3px solid #a0a0a0; color: #595959; font-style: italic; }
+blockquote[data-bloc], details { margin: 0.5em 0; padding: 2px 0 2px 12px; border-left: 3px solid #8fb4e0; color: inherit; font-style: normal; }
+blockquote[data-bloc] > :first-child, summary { font-weight: 600; }
+summary { cursor: pointer; margin: 0.4em 0; }
 pre { font-family: Consolas, monospace; font-size: 10pt; background: #f2f2f2; padding: 0.4em 0.6em; white-space: pre-wrap; }
 table { border-collapse: collapse; width: 100%; margin: 0.4em 0 0.8em; } td, th { border: 1px solid #a0a0a0; padding: 4px 7px; vertical-align: top; } td > p:last-child, th > p:last-child { margin-bottom: 0; }
 img, video { max-width: 100%; height: auto; vertical-align: bottom; } img[style*="float: left"] { margin: 0.2em 12px 6px 0; } img[style*="float: right"] { margin: 0.2em 0 6px 12px; } audio { width: 320px; max-width: 100%; }
@@ -206,6 +234,7 @@ ${corps}
   async function ecrireHtml(ctx) {
     const alertes = new Set();
     const page = await avecMediasRanges(ctx, alertes);
+    versDetails(page);
     return { bytes: encoderTexte(documentHtml(ctx, page.innerHTML)), alertes: [...alertes] };
   }
 

@@ -104,7 +104,7 @@ const Editeur = (() => {
     style: (bloc) => {
       // Une citation se retire en repassant en texte normal.
       const actuel = blocCourant();
-      if (bloc === 'p' && ancetre(actuel, 'blockquote')) exec('formatBlock', 'p');
+      if (bloc === 'p' && ancetre(actuel, 'blockquote:not([data-bloc])')) exec('formatBlock', 'p');
       exec('formatBlock', bloc);
     },
     police: (nom) => { if (nom) exec('fontName', nom); },
@@ -125,6 +125,8 @@ const Editeur = (() => {
     couleur: (hex) => exec('foreColor', hex ? `#${hex}` : 'inherit'),
     surligner: (hex) => exec('hiliteColor', hex ? `#${hex}` : 'transparent'),
     saut: () => inserer('<hr class="saut-page"><p><br></p>'),
+    repere: () => basculerRepere(),
+    blocDeroulant: () => basculerBloc(),
     ligne: () => inserer('<hr><p><br></p>'),
   };
   // --- Sélection multiple (Ctrl+glisser, Ctrl+double-clic, comme dans Word) ---
@@ -385,7 +387,7 @@ const Editeur = (() => {
     for (let n = bloc; n && n !== p; n = n.parentNode) {
       if (/^H[1-6]$/.test(n.tagName)) { style = n.tagName.toLowerCase(); break; }
       if (n.tagName === 'PRE') { style = 'pre'; break; }
-      if (n.tagName === 'BLOCKQUOTE' && !n.getAttribute('style')) { style = 'blockquote'; break; }
+      if (n.tagName === 'BLOCKQUOTE' && !n.getAttribute('style') && !n.hasAttribute('data-bloc')) { style = 'blockquote'; break; }
     }
     // Police et taille : celles calculées par Chromium au début de la sélection.
     let n = selection?.startContainer;
@@ -402,6 +404,8 @@ const Editeur = (() => {
       justifyLeft: align === 'left' || align === 'start', justifyCenter: align === 'center', justifyRight: align === 'right' || align === 'end', justifyFull: align === 'justify',
       style, police, taille,
       dansTableau: Boolean(ancetre(n, 'td, th')),
+      repere: Boolean(ancetre(bloc, '[data-repere]')),
+      blocDeroulant: Boolean(ancetre(bloc, 'blockquote[data-bloc]')),
       lien: ancetre(n, 'a[href]'),
     };
   }
@@ -590,6 +594,153 @@ const Editeur = (() => {
   }
 
   // --- Coller ---
+  // --- Repères et blocs déroulants (voir sommaire.js) ---
+  //
+  // Un repère : un paragraphe marqué data-repere, qui apparaît dans le sommaire.
+  // Un bloc déroulant : <blockquote data-bloc> ; sa première ligne est son titre, le reste se replie.
+  // Les deux s'écrivent en remplaçant le HTML du bloc (insertHTML) : un seul Ctrl+Z les défait.
+  // Dans un fichier Word ou LibreOffice, ce sont des signets (voir formats/commun.js).
+
+  // Remplace des blocs voisins par du HTML, puis met le curseur dans le bloc d'arrivée (rang dans le parent).
+  function remplacerBlocs(premier, dernier, html, { cible = 0, choisir = false } = {}) {
+    const parent = premier.parentNode;
+    const vrais = () => [...parent.children].filter((x) => !x.hasAttribute('data-sentinelle'));
+    const rang = vrais().indexOf(premier);
+    page().focus({ preventScroll: true });
+    // Comme pour insererA : une sentinelle (paragraphe vide) juste avant, pour que le HTML ne se mêle
+    // pas au bloc d'avant.
+    const sentinelle = document.createElement('p');
+    sentinelle.dataset.sentinelle = '';
+    sentinelle.innerHTML = '<br>';
+    parent.insertBefore(sentinelle, premier);
+    // Et une après : la zone finit au début de celle-ci, hors du dernier bloc remplacé (finir dans ce
+    // bloc garderait son enveloppe : un bloc déroulant remplacé se retrouverait dans l'ancien).
+    const apres = sentinelle.cloneNode(true);
+    dernier.after(apres);
+    const r = document.createRange();
+    r.setStart(sentinelle, 0);
+    r.setEnd(apres, 0);
+    const s = window.getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+    document.execCommand('insertHTML', false, html);
+    // La sentinelle restée vide est cachée (ni affichée, ni enregistrée) ; après Ctrl+Z aussi (voir creerPage).
+    for (const x of parent.querySelectorAll(':scope > p[data-sentinelle]')) if (!x.textContent.trim()) x.hidden = true;
+    let n = vrais()[rang + cible];
+    if (n && choisir) n = n.firstElementChild || n;
+    if (n && dansPage(n)) {
+      const c = document.createRange();
+      c.selectNodeContents(n);
+      if (!choisir) c.collapse(false);
+      s.removeAllRanges();
+      s.addRange(c);
+    }
+    memoriser();
+    changement();
+    planifier();
+  }
+  // Le bloc à marquer comme repère : le paragraphe (ou l'élément de liste) du curseur.
+  function basculerRepere() {
+    if (!restaurer()) return;
+    let b = blocCourant();
+    if (b && b.tagName === 'DIV' && b.parentNode === page() && !b.textContent.trim()) b = null;
+    if (!b) return;
+    if (/^H[1-6]$/.test(b.tagName)) { notify('Un titre est déjà dans le sommaire : le repère sert aux autres paragraphes.', 'info', 4000); return; }
+    const marque = ancetre(b, '[data-repere]');
+    const cible = marque || b;
+    const copie = cible.cloneNode(true);
+    if (marque) copie.removeAttribute('data-repere'); else copie.setAttribute('data-repere', '');
+    remplacerBlocs(cible, cible, copie.outerHTML);
+  }
+  // Les blocs (enfants d'un même parent : la page ou un bloc déroulant) que couvre la sélection.
+  function blocsChoisis() {
+    const s = window.getSelection();
+    if (!s.rangeCount || !dansPage(s.anchorNode)) return null;
+    const r = s.getRangeAt(0);
+    const conteneurOk = (c) => c === page() || (c.nodeType === 1 && c.matches('blockquote[data-bloc]'));
+    let c = r.commonAncestorContainer;
+    while (c && !conteneurOk(c)) c = c.parentNode;
+    if (!c) return null;
+    const enfantDe = (n) => { while (n && n.parentNode !== c) n = n.parentNode; return n; };
+    let debut = enfantDe(r.startContainer === c ? c.childNodes[r.startOffset] || c.lastChild : r.startContainer);
+    let fin = enfantDe(r.endContainer === c ? c.childNodes[Math.max(0, r.endOffset - 1)] : r.endContainer);
+    // Une sélection qui finit tout au début d'un bloc ne le prend pas (triple-clic, sélection à la souris).
+    if (!r.collapsed && fin && fin !== debut && r.endContainer !== c) {
+      const avant = document.createRange(); avant.selectNodeContents(fin); avant.setEnd(r.endContainer, r.endOffset);
+      if (!avant.toString().length) fin = fin.previousElementSibling || fin;
+    }
+    if (!debut || !fin || debut.nodeType !== 1 || fin.nodeType !== 1) return null;
+    // Le titre d'un bloc ne peut pas être enroulé seul dans un autre bloc : on prend le bloc entier.
+    return { conteneur: c, debut, fin };
+  }
+  function basculerBloc() {
+    if (!restaurer()) return;
+    const s = window.getSelection();
+    const dedans = ancetre(blocCourant(), 'blockquote[data-bloc]');
+    // Le curseur (sans sélection) dans un bloc : on retire le bloc, son texte reste.
+    if (dedans && s.isCollapsed) {
+      remplacerBlocs(dedans, dedans, [...dedans.children].map((x) => x.outerHTML).join('') || '<p><br></p>', { cible: 0 });
+      return;
+    }
+    const choix = blocsChoisis();
+    if (!choix) return;
+    const { debut, fin } = choix;
+    const blocs = [];
+    for (let n = debut; n; n = n.nextElementSibling) { blocs.push(n); if (n === fin) break; }
+    if (blocs.some((x) => x.hasAttribute('data-sentinelle'))) return;
+    const contenu = blocs.map((x) => x.outerHTML).join('');
+    remplacerBlocs(debut, fin, `<blockquote data-bloc=""><p>Titre du bloc</p>${contenu}</blockquote>`, { cible: 0, choisir: true });
+  }
+  // Entrée sur une ligne vide à la fin d'un bloc déroulant : on sort du bloc (comme dans une liste).
+  function sortirDuBloc(e) {
+    if (e.key !== 'Enter' || e.shiftKey || e.ctrlKey || e.altKey) return false;
+    const s = window.getSelection();
+    if (!s.isCollapsed) return false;
+    const b = blocCourant();
+    const bloc = b?.parentNode;
+    if (!bloc?.matches?.('blockquote[data-bloc]') || b === bloc.firstElementChild || b !== bloc.lastElementChild || b.textContent.trim() || b.querySelector('img, video, audio, table')) return false;
+    e.preventDefault();
+    const parent = bloc.parentNode;
+    const rang = [...parent.children].indexOf(bloc);
+    const restes = [...bloc.children].slice(0, -1).map((x) => x.outerHTML).join('');
+    const attrs = [...bloc.attributes].map((a) => ` ${a.name}="${escapeHtml(a.value)}"`).join('');
+    remplacerBlocs(bloc, bloc, `<blockquote${attrs}>${restes}</blockquote><p><br></p>`, { cible: 1 });
+    const p = parent.children[rang + 1];
+    if (p) { const r = document.createRange(); r.setStart(p, 0); r.collapse(true); s.removeAllRanges(); s.addRange(r); memoriser(); }
+    return true;
+  }
+
+  // Coller des paragraphes (un titre et son texte, par exemple) au début ou au bout d'un titre :
+  // Chromium mêlerait le premier bloc collé au titre (« Partie 2Partie 1 »), et le titre collé ne
+  // serait plus un titre. On colle plutôt juste avant ou juste après ce titre, dans une sentinelle
+  // (voir insererA). Au milieu d'un titre, on laisse faire Chromium.
+  function collerAutourDuTitre(html) {
+    const s = window.getSelection();
+    if (!s.rangeCount || !s.isCollapsed || !dansPage(s.anchorNode)) return false;
+    const titre = ancetre(s.anchorNode, 'h1, h2, h3, h4, h5, h6');
+    if (!titre || titre.parentNode !== page()) return false;
+    const propre = Nettoyage.html(html, { racine: doc?.dossierUrl });
+    if (!/<(p|h[1-6]|ul|ol|li|table|blockquote|pre|div|hr)\b/i.test(propre)) return false;
+    const r = s.getRangeAt(0);
+    const avant = document.createRange(); avant.selectNodeContents(titre); avant.setEnd(r.startContainer, r.startOffset);
+    const apres = document.createRange(); apres.selectNodeContents(titre); apres.setStart(r.startContainer, r.startOffset);
+    const auBout = !apres.toString().length;
+    if (!auBout && avant.toString().length) return false;
+    const sentinelle = document.createElement('p');
+    sentinelle.dataset.sentinelle = '';
+    sentinelle.innerHTML = '<br>';
+    if (auBout) titre.after(sentinelle); else titre.before(sentinelle);
+    const r2 = document.createRange();
+    r2.selectNodeContents(sentinelle);
+    s.removeAllRanges();
+    s.addRange(r2);
+    document.execCommand('insertHTML', false, propre);
+    if (sentinelle.isConnected && !sentinelle.textContent.trim() && !sentinelle.querySelector('img, video, audio, table, hr')) sentinelle.hidden = true;
+    memoriser();
+    changement();
+    return true;
+  }
+
   async function coller(e) {
     const cd = e.clipboardData;
     if (!cd) return;
@@ -609,7 +760,7 @@ const Editeur = (() => {
       // Le HTML de Word, d'un site ou d'un autre document : nettoyé (pas de scripts, pas de styles
       // qui casseraient la page), mais la mise en forme du texte reste.
       const corps = html.replace(/^[\s\S]*?<!--StartFragment-->|<!--EndFragment-->[\s\S]*$/g, '');
-      inserer(corps);
+      if (!collerAutourDuTitre(corps)) inserer(corps);
     }
     // Sinon (texte simple) : Chromium colle lui-même.
   }
@@ -624,6 +775,7 @@ const Editeur = (() => {
       if (!raccourci) viderPlages();
       if (e.key === 'Escape') return;
     }
+    if (sortirDuBloc(e)) return;
     const n = s.anchorNode;
     if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) {
       const cellule = ancetre(n, 'td, th');

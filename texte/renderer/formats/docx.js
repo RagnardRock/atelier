@@ -129,6 +129,13 @@
     if (zip.file('word/footnotes.xml') && /<w:footnote [^>]*w:id="[1-9]/.test(await texte('word/footnotes.xml'))) alertes.add('Les notes de bas de page ne sont pas affichées.');
     if (/<w:comment\b/.test(await texte('word/comments.xml') || '')) alertes.add('Les commentaires ne sont pas affichés.');
 
+    // Les signets d'Edda (repères, blocs déroulants : voir Formats.signetsVersPage).
+    const nomsSignets = {}; // w:id → nom
+    function marqueSignet(n) {
+      if (n.localName === 'bookmarkStart') { nomsSignets[attr(n, 'w:id')] = attr(n, 'w:name'); return Formats.marque('debut', attr(n, 'w:name')); }
+      return Formats.marque('fin', nomsSignets[attr(n, 'w:id')] || '');
+    }
+
     const html = await blocsDe(body);
 
     async function blocsDe(conteneur) {
@@ -136,6 +143,7 @@
       for (const n of enfants(conteneur)) {
         if (n.localName === 'p') items.push(...(await paragraphe(n)));
         else if (n.localName === 'tbl') items.push({ html: await tableau(n), liste: null });
+        else if (n.localName === 'bookmarkStart' || n.localName === 'bookmarkEnd') items.push({ html: marqueSignet(n), liste: null });
         else if (n.localName === 'sdt') {
           const c = enfant(n, 'sdtContent');
           if (c) items.push({ html: await blocsDe(c), liste: null });
@@ -165,7 +173,16 @@
       await contenuEnLigne(p, baseRun, null, morceaux, etat);
       const tag = role === 'citation' ? 'blockquote' : role === 'code' ? 'pre' : role === 'normal' ? 'p' : role;
       const retrait = liste ? Math.max(0, (props.retrait || 0) - 24 * (liste.niveau + 1)) : props.retrait;
-      const attrs = stylePara({ align: props.align, retrait: liste || tag === 'blockquote' || tag === 'pre' ? 0 : retrait, premiere: props.premiere });
+      let attrs = stylePara({ align: props.align, retrait: liste || tag === 'blockquote' || tag === 'pre' ? 0 : retrait, premiere: props.premiere });
+      // Les signets d'Edda posés dans ce paragraphe : un repère le marque, un bloc déroulant
+      // commence avant lui ou finit après lui.
+      const avant = [], apres = [];
+      for (const b of enfants(p)) {
+        if (b.localName !== 'bookmarkStart' && b.localName !== 'bookmarkEnd') continue;
+        const m = marqueSignet(b);
+        if (!m) continue;
+        if (/edda_repere_/.test(m)) { if (b.localName === 'bookmarkStart') attrs += ' data-repere=""'; } else (b.localName === 'bookmarkStart' ? avant : apres).push({ html: m, liste: null });
+      }
       const out = [];
       morceaux.forEach((m, i) => {
         if (m === '\f') { out.push({ html: '<hr class="saut-page">', liste: null }); return; }
@@ -175,7 +192,7 @@
         out.push({ html: `<${tag}${attrs}>${contenu}</${tag}>`, liste: i === 0 || morceaux[i - 1] !== '\f' ? liste : null });
       });
       if (props.sautAvant) out.unshift({ html: '<hr class="saut-page">', liste: null });
-      return out;
+      return [...avant, ...out, ...apres];
     }
 
     // Les morceaux de texte d'un paragraphe (récursif : liens, champs, révisions…).
@@ -349,7 +366,7 @@
       return `${h}</table>`;
     }
 
-    return { html, miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
+    return { html: Formats.signetsVersPage(html), miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
 
   function proprietesRun(rPr, base) {
@@ -430,6 +447,12 @@
       return id;
     };
     const largeurMax = Formats.largeurUtile(ctx.miseEnPage);
+    // Les signets (repères et blocs déroulants d'Edda, voir Formats.blocs) : un numéro par nom.
+    const idsSignets = new Map();
+    const signetsXml = (noms, debut) => (noms || []).map((nom) => {
+      if (!idsSignets.has(nom)) idsSignets.set(nom, idsSignets.size + 1);
+      return debut ? `<w:bookmarkStart w:id="${idsSignets.get(nom)}" w:name="${nom}"/>` : `<w:bookmarkEnd w:id="${idsSignets.get(nom)}"/>`;
+    }).join('');
 
     // Listes : une numérotation par liste (pour que chaque liste numérotée reparte de 1).
     const numsListe = new Map(); // id de liste → { numId, type }
@@ -536,7 +559,7 @@
       const retrait = (b.retrait || 0) + (b.liste ? 24 * (b.liste.niveau + 1) : 0);
       if (b.liste?.suite || (!b.liste && retrait)) ppr += `<w:ind w:left="${Unites.pxEnTwips(retrait)}"/>`;
       if (b.align && b.align !== 'left') ppr += `<w:jc w:val="${b.align === 'justify' ? 'both' : b.align}"/>`;
-      return `<w:p>${ppr ? `<w:pPr>${ppr}</w:pPr>` : ''}${await runsXml(b.runs)}</w:p>`;
+      return `<w:p>${ppr ? `<w:pPr>${ppr}</w:pPr>` : ''}${signetsXml(b.signetsDebut, true)}${await runsXml(b.runs)}${signetsXml(b.signetsFin, false)}</w:p>`;
     }
 
     async function tableXml(t) {

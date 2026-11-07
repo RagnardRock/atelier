@@ -111,9 +111,10 @@ const Nettoyage = (() => {
     'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'caption', 'colgroup', 'col',
     'a', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'ins', 'sub', 'sup', 'mark', 'span', 'font', 'small', 'big',
     'br', 'hr', 'div', 'section', 'article', 'header', 'footer', 'main', 'figure', 'figcaption', 'center',
-    'img', 'video', 'audio', 'source', 'dl', 'dt', 'dd', 'kbd', 'samp', 'var', 'abbr', 'cite', 'q'];
+    'img', 'video', 'audio', 'source', 'dl', 'dt', 'dd', 'kbd', 'samp', 'var', 'abbr', 'cite', 'q', 'details', 'summary'];
   const ATTRIBUTS = ['style', 'href', 'src', 'alt', 'title', 'width', 'height', 'controls', 'colspan', 'rowspan',
-    'class', 'start', 'type', 'align', 'color', 'face', 'size', 'poster', 'loop', 'data-nom', 'data-flotte', 'valign', 'bgcolor'];
+    'class', 'start', 'type', 'align', 'color', 'face', 'size', 'poster', 'loop', 'data-nom', 'data-flotte', 'valign', 'bgcolor',
+    'data-repere', 'data-bloc', 'open'];
   // Seulement les propriétés de mise en forme qu'Edda comprend : le reste (position, display…)
   // casserait la page.
   const STYLES = ['color', 'background-color', 'background', 'font-family', 'font-size', 'font-weight', 'font-style',
@@ -164,6 +165,31 @@ const Nettoyage = (() => {
   // <font> devient <span style>, <center> un paragraphe centré, un saut de page (de Word ou d'un
   // site) un <hr class="saut-page">, les médias ont leur adresse complète.
   function normaliser(root, racine) {
+    // Un bloc déroulant d'une page web ou d'un Markdown (<details><summary>) : dans Edda, c'est un
+    // <blockquote data-bloc> dont la première ligne est le titre (voir sommaire.js).
+    for (const d of [...root.querySelectorAll('details')].reverse()) {
+      const bq = document.createElement('blockquote');
+      bq.setAttribute('data-bloc', '');
+      const titre = document.createElement('p');
+      const resume = [...d.children].find((x) => x.tagName === 'SUMMARY');
+      if (resume) { titre.append(...resume.childNodes); resume.remove(); }
+      if (!titre.textContent.trim()) titre.textContent = 'Détails';
+      bq.append(titre);
+      // Le texte en ligne laissé directement dans <details> va dans un paragraphe.
+      let attente = null;
+      for (const n of [...d.childNodes]) {
+        const bloc = n.nodeType === 1 && /^(P|H[1-6]|UL|OL|TABLE|BLOCKQUOTE|PRE|DIV|HR|FIGURE|DL|SECTION)$/.test(n.tagName);
+        if (bloc) { attente = null; bq.append(n); continue; }
+        if (n.nodeType === 3 && !n.nodeValue.trim() && !attente) continue;
+        if (!attente) { attente = document.createElement('p'); bq.append(attente); }
+        attente.append(n);
+      }
+      d.replaceWith(bq);
+    }
+    for (const s of [...root.querySelectorAll('summary')]) { const p = document.createElement('p'); p.append(...s.childNodes); s.replaceWith(p); }
+    for (const n of root.querySelectorAll('[data-repere]')) n.setAttribute('data-repere', '');
+    for (const n of root.querySelectorAll('[data-bloc]')) { if (n.tagName !== 'BLOCKQUOTE') n.removeAttribute('data-bloc'); else n.setAttribute('data-bloc', ''); }
+    for (const n of root.querySelectorAll('[open]')) n.removeAttribute('open');
     // Une image flottante : dans la page, son habillage est l'attribut data-flotte (gauche / droite),
     // pas « float » : Chromium sortirait de son paragraphe une image qui flotte déjà quand on l'insère
     // ou qu'on la modifie. La règle CSS (style.css) la fait flotter une fois à sa place.

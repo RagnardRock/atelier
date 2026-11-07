@@ -36,6 +36,7 @@ Le ruban suit le curseur : le bouton gras s'allume dans du gras, la police et la
 | `Ctrl+P` | Imprimer (et « Exporter en PDF » dans le menu Fichier) |
 | `Ctrl+Tab` | Document suivant |
 | `Ctrl+Maj+O` | Afficher ou cacher le sommaire |
+| `Ctrl+Maj+R`, `Ctrl+Maj+D` | Repère dans le sommaire, bloc déroulant |
 | `Ctrl+F`, `Ctrl+H` | Rechercher, remplacer (`Ctrl+Alt+Entrée` : tout remplacer) |
 | `Ctrl+G` ou `Ctrl+B`, `Ctrl+I`, `Ctrl+U` | Gras, italique, souligné |
 | `Ctrl+L`, `Ctrl+E`, `Ctrl+R`, `Ctrl+J` | Aligner à gauche, centrer, à droite, justifier |
@@ -55,6 +56,8 @@ Le ruban suit le curseur : le bouton gras s'allume dans du gras, la police et la
 Le clic droit propose les corrections d'orthographe (français, ou français et anglais, dans les Réglages), le copier-coller, et dans un tableau : ajouter ou supprimer des lignes et colonnes, la ligne d'en-tête, la couleur de fond des cases.
 
 **Sommaire et titres repliables** : le panneau **Sommaire**, à gauche de la page (Affichage › Sommaire, `Ctrl+Maj+O`, ou le bouton en bas à gauche), liste les Titre 1 à 6. Un clic sur un titre y emmène et y pose le curseur ; le titre où l'on est est surligné. La petite flèche à gauche d'un titre (dans la marge de la page, au survol, ou dans le sommaire) **replie** ce qui le suit jusqu'au prochain titre de même niveau ou plus haut ; un titre replié finit par « ⋯ ». « Tout replier » / « Tout déplier » en haut du sommaire et dans le menu Affichage. Replier ne change pas le document : l'enregistrement (Word, LibreOffice…), l'impression, le PDF, le compteur de mots et Loki voient tout le texte, et le pliage n'est pas gardé dans le fichier. La recherche déplie la partie où elle trouve le mot ; `Entrée` ou `Suppr` sur un titre replié le déplie d'abord. Sur un écran étroit, le sommaire passe par-dessus la page.
+
+**Repères et blocs déroulants** : en plus des titres, le bouton **signet** du ruban (`Ctrl+Maj+R`, ou Insertion › Repère dans le sommaire) ajoute au sommaire le paragraphe du curseur ; recliquer le retire. Le bouton **bloc déroulant** (`Ctrl+Maj+D`) transforme le texte choisi en un bloc qui se replie sous une ligne-titre (écrite à la création, à la place de « Titre du bloc ») ; il apparaît aussi dans le sommaire. `Entrée` sur une ligne vide à la fin d'un bloc en sort ; le curseur dans un bloc (sans sélection) et le même bouton retire le bloc (le texte reste). Dans un `.docx`, `.odt` ou `.rtf`, repères et blocs sont des **signets** (Word et LibreOffice les gardent, Edda les relit) ; en `.html` et `.md`, un bloc devient un vrai `<details>` dépliable.
 
 **Format › Mise en page** : papier (A4, A5, A3, Letter, Legal), portrait ou paysage, marges (normales, étroites, larges ou au centimètre près), police et taille du document. Elles sont enregistrées dans le fichier (Word, LibreOffice, RTF, HTML).
 

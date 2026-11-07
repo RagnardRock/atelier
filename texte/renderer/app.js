@@ -628,6 +628,9 @@ const App = (() => {
       { label: 'Lien…', keys: `${ctrl}K`, icone: 'link', run: () => Editeur.lien() },
       { label: 'Trait horizontal', icone: 'horizontal-rule', run: Editeur.commandes.ligne },
       { label: 'Saut de page', keys: `${ctrl}Entrée`, icone: 'newline', run: Editeur.commandes.saut },
+      null,
+      { label: 'Repère dans le sommaire', keys: `${ctrl}Maj+R`, icone: 'bookmark', coche: Editeur.etat().repere, run: Editeur.commandes.repere },
+      { label: 'Bloc déroulant', keys: `${ctrl}Maj+D`, icone: 'fold-down', coche: Editeur.etat().blocDeroulant, run: Editeur.commandes.blocDeroulant },
       { label: 'Date du jour', icone: 'calendar', run: () => Editeur.inserer(escapeHtml(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))) },
     ],
     format: () => {
@@ -794,6 +797,8 @@ const App = (() => {
     if (k === 'e') return faire(C.justifyCenter);
     if (k === 'l' && e.shiftKey) return faire(C.insertUnorderedList);
     if (k === 'l') return faire(C.justifyLeft);
+    if (k === 'r' && e.shiftKey) return faire(C.repere);
+    if (k === 'd' && e.shiftKey) return faire(C.blocDeroulant);
     if (k === 'r') return faire(C.justifyRight);
     if (k === 'j') return faire(C.justifyFull);
     if (k === 'k') return faire(() => Editeur.lien());
