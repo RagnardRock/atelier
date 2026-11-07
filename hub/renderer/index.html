@@ -55,10 +55,14 @@
               <span id="note-date" class="discret"></span>
               <span class="spacer"></span>
               <span id="note-etat" class="discret"></span>
+              <button id="btn-tache" class="icon-button" title="Case à cocher : transforme la ligne en tâche (Ctrl+Shift+L)"><i class="codicon codicon-checklist"></i></button>
               <button id="btn-epingler" class="icon-button" title="Épingler en haut de la liste"><i class="codicon codicon-pinned"></i></button>
               <button id="btn-supprimer-note" class="icon-button" title="Supprimer cette note"><i class="codicon codicon-trash"></i></button>
             </div>
-            <textarea id="note-texte" placeholder="Écris ici. La première ligne devient le titre de la note. Tout s'enregistre tout seul." spellcheck="true"></textarea>
+            <div class="note-zone">
+              <div id="note-miroir" aria-hidden="true"></div>
+              <textarea id="note-texte" placeholder="Écris ici. La première ligne devient le titre de la note. Tout s'enregistre tout seul. « - [ ] » au début d'une ligne = case à cocher." spellcheck="true"></textarea>
+            </div>
           </div>
         </div>
       </article>
