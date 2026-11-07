@@ -18,6 +18,9 @@
 //   carte, x, y : où il est posé (Saga 1.5 ; absent pour un bâtiment construit sans place, par un événement)
 //   reste   = les nuits qu'il faut encore à un chantier
 //   resolu  = le dernier jour dont la fin a été calculée : la recalculer ne fait rien
+//   Saga 1.22 : affectes (sur un bâtiment) = les habitants que le joueur y a mis (réglage affectation
+//   « joueur » ; absent : pas encore organisé, il est pourvu tout seul s'il reste du monde) ; progres = la
+//   part de nuit d'un chantier ralenti ou accéléré (0 à 1) ; postes = { poste: id du personnage }.
 
 const GestionCalcul = (() => {
   const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -136,7 +139,137 @@ const GestionCalcul = (() => {
     const persos = new Map((donnees?.personnages?.personnages || []).filter((p) => p && p.id).map((p) => [p.id, texte(p.nom, 60) || p.id]));
     reglages.noms = reglages.habitants_noms.map((id) => persos.get(id) || id);
     reglages.seuil_sentier = Math.max(reglages.seuil_sentier, reglages.seuil_usee);
+    // Saga 1.22 : qui décide où travaillent les habitants. 'auto' (le défaut) : ils vont d'eux-mêmes aux
+    // bâtiments, dans l'ordre de construction ; 'joueur' : le joueur met en marche ou arrête chaque bâtiment
+    // (écran Organiser), et un bâtiment ne tourne qu'avec tous ses ouvriers.
+    reglages.affectation = g.affectation === 'joueur' ? 'joueur' : 'auto';
+    // Saga 1.22 : les postes (Intendance, Construction…) : un personnage du jeu qui l'occupe donne ses effets
+    // au domaine. Les modificateurs : des effets qui valent tant que leur condition est vraie (une bénédiction,
+    // un personnage arrivé ou pas). Les effets : production et vitesse des chantiers en %, pour certains
+    // bâtiments (vide : tous).
+    reglages.postes = tableau(g.postes).filter((x) => x && typeof x.id === 'string' && ID.test(x.id)).slice(0, 40).map((x) => ({
+      id: x.id, nom: texte(x.nom, 60) || x.id, description: texte(x.description, 300),
+      candidats: tableau(x.candidats).map((c) => (typeof c === 'string' ? { personnage: c } : c)).filter((c) => c && typeof c.personnage === 'string' && c.personnage)
+        .slice(0, 40).map((c) => ({ personnage: c.personnage, condition: c.condition && typeof c.condition === 'object' && typeof c.condition.type === 'string' ? c.condition : null })),
+      effets: effets(x.effets ?? x),
+    }));
+    reglages.postes = reglages.postes.filter((x, i) => reglages.postes.findIndex((y) => y.id === x.id) === i);
+    reglages.modificateurs = tableau(g.modificateurs).filter((x) => x && typeof x === 'object').slice(0, 60).map((x, i) => ({
+      id: typeof x.id === 'string' && x.id ? x.id.slice(0, 64) : `m${i + 1}`, nom: texte(x.nom, 60) || `Effet ${i + 1}`,
+      condition: x.condition && typeof x.condition === 'object' && typeof x.condition.type === 'string' ? x.condition : null,
+      effets: effets(x.effets ?? x),
+    }));
+    for (const p of reglages.postes) p.candidats = p.candidats.map((c) => ({ ...c, nom: persos.get(c.personnage) || c.personnage }));
+    reglages.persos = persos;
     return { ressources, batiments, reglages };
+  }
+
+  // Saga 1.22 : des effets sur le domaine. production : % de plus (ou de moins) sur ce que produisent les
+  // bâtiments ; chantiers : % de vitesse des chantiers (+100 : deux fois plus vite, −50 : deux fois moins) ;
+  // batiments : les types concernés (vide : tous).
+  function effets(x) {
+    return {
+      production: entier(x?.production, 0, -100, 500),
+      chantiers: entier(x?.chantiers, 0, -90, 500),
+      batiments: [...new Set(tableau(x?.batiments).filter((b) => typeof b === 'string' && ID.test(b)))].slice(0, 60),
+    };
+  }
+  const vaPour = (ef, type) => !ef.batiments.length || ef.batiments.includes(type);
+  // Le total des effets actifs pour un type de bâtiment : { production, chantiers } en %.
+  function bonusPour(liste, type) {
+    let production = 0, chantiers = 0;
+    for (const ef of tableau(liste)) {
+      if (!ef || !vaPour(ef, type)) continue;
+      production += Number(ef.production) || 0;
+      chantiers += Number(ef.chantiers) || 0;
+    }
+    return { production: Math.max(-100, production), chantiers: Math.max(-90, chantiers) };
+  }
+  // Les effets qui valent ce soir : ceux des postes occupés, puis les modificateurs dont la condition est
+  // vraie (vraie(cond) : le moteur évalue les conditions des événements ; sans lui, une condition compte
+  // comme fausse, sauf l'absence de condition). → [{ nom, source, production, chantiers, batiments }]
+  function effetsActifs(d, e, vraie = null) {
+    const out = [];
+    const postes = e?.postes || {};
+    for (const p of d.reglages.postes) {
+      const qui = postes[p.id];
+      if (!qui) continue;
+      out.push({ ...p.effets, nom: `${p.nom} (${d.reglages.persos?.get(qui) || qui})`, source: `poste:${p.id}` });
+    }
+    for (const m of d.reglages.modificateurs) {
+      if (m.condition && !(typeof vraie === 'function' && vraie(m.condition))) continue;
+      out.push({ ...m.effets, nom: m.nom, source: `effet:${m.id}` });
+    }
+    return out.filter((x) => x.production || x.chantiers);
+  }
+  // « production +20 % · chantiers −50 % (Ferme, Atelier) »
+  function direEffets(d, ef) {
+    const pc = (k) => `${k > 0 ? '+' : '−'}${Math.abs(k)} %`;
+    const l = [ef.production ? `production ${pc(ef.production)}` : '', ef.chantiers ? `chantiers ${pc(ef.chantiers)}` : ''].filter(Boolean).join(' · ');
+    return l && ef.batiments?.length ? `${l} (${ef.batiments.map((t) => nomBatiment(d, t)).join(', ')})` : l;
+  }
+
+  // Saga 1.22 : nommer quelqu'un à un poste (personnage vide : le poste reste libre). Un personnage n'occupe
+  // qu'un poste : nommé ailleurs, il quitte l'ancien. Les candidats (s'il y en a) sont les seuls possibles ;
+  // leur condition est vérifiée par le module. Rend { ok, raison, etat, avant }.
+  function nommer(d, e, poste, personnage) {
+    const p = d.reglages.postes.find((x) => x.id === poste);
+    if (!p) return { ok: false, raison: `Ce poste n'existe pas (${poste}).`, etat: e, avant: '' };
+    const qui = typeof personnage === 'string' ? personnage : '';
+    if (qui && p.candidats.length && !p.candidats.some((c) => c.personnage === qui)) return { ok: false, raison: `${d.reglages.persos?.get(qui) || qui} ne peut pas occuper ce poste (${p.nom}).`, etat: e, avant: e.postes?.[poste] || '' };
+    const etat = copie(e);
+    etat.postes = etat.postes || {};
+    const avant = etat.postes[poste] || '';
+    if (qui) for (const [k, v] of Object.entries(etat.postes)) if (v === qui) delete etat.postes[k];
+    if (qui) etat.postes[poste] = qui; else delete etat.postes[poste];
+    return { ok: true, raison: '', etat, avant };
+  }
+
+  // Saga 1.22 : les bâtiments où l'on travaille (finis, qui produisent et demandent des ouvriers).
+  const atelier = (d, b) => { const def = d.batiments.get(b.type); return b.etat === 'fini' && def && def.ouvriers > 0 && Object.keys(def.production).length > 0 ? def : null; };
+  // Avec l'affectation « joueur » : les bâtiments pas encore organisés (affectes absent) prennent leurs
+  // ouvriers parmi les habitants libres, dans l'ordre de construction ; s'il y a moins d'habitants que de
+  // gens affectés (des départs), les derniers bâtiments perdent les leurs. Sur place, dans une copie.
+  function pourvoir(d, etat) {
+    if (d.reglages.affectation !== 'joueur') return etat;
+    const tous = Math.max(0, entier(etat.habitants, 0));
+    let pris = 0;
+    for (const b of etat.batiments) {
+      const def = atelier(d, b);
+      if (!def) { delete b.affectes; continue; }
+      if (b.affectes !== undefined) b.affectes = Math.min(def.ouvriers, entier(b.affectes, 0, 0, 999));
+      pris += b.affectes || 0;
+    }
+    if (pris > tous) {
+      for (let k = etat.batiments.length - 1; k >= 0 && pris > tous; k--) {
+        const b = etat.batiments[k];
+        if (!b.affectes) continue;
+        const enlever = Math.min(b.affectes, pris - tous);
+        b.affectes -= enlever;
+        pris -= enlever;
+      }
+    }
+    for (const b of etat.batiments) {
+      const def = atelier(d, b);
+      if (!def || b.affectes !== undefined) continue;
+      const libres = tous - pris;
+      b.affectes = def.ouvriers <= libres ? def.ouvriers : 0;
+      pris += b.affectes;
+    }
+    return etat;
+  }
+  // Mettre en marche (avec tous ses ouvriers) ou arrêter un bâtiment posé (son id). → { ok, raison, etat }
+  function travail(d, e, id, marche) {
+    if (d.reglages.affectation !== 'joueur') return { ok: false, raison: 'Les habitants choisissent eux-mêmes où travailler.', etat: e };
+    const etat = pourvoir(d, copie(e));
+    const b = etat.batiments.find((x) => x.id === id);
+    const def = b ? atelier(d, b) : null;
+    if (!def) return { ok: false, raison: 'Personne ne peut travailler ici.', etat: e };
+    if (!marche) { b.affectes = 0; return { ok: true, raison: '', etat }; }
+    const pris = etat.batiments.reduce((t, x) => t + (x === b ? 0 : x.affectes || 0), 0);
+    if (Math.max(0, entier(etat.habitants, 0)) - pris < def.ouvriers) return { ok: false, raison: `Pas assez d'habitants libres pour ${def.nom} (il en faut ${def.ouvriers}). Arrête d'abord un autre bâtiment.`, etat: e };
+    b.affectes = def.ouvriers;
+    return { ok: true, raison: '', etat };
   }
 
   function lesVariantes(b, def, tampons) {
@@ -209,14 +342,19 @@ const GestionCalcul = (() => {
       const fini = b.etat === 'fini' || entier(b.reste) <= 0;
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
       const v = entier(b.variante, 0, 0, 99);
-      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu, ...(v ? { variante: v } : {}) });
+      const progres = !fini && Number.isFinite(Number(b.progres)) ? Math.min(0.99, Math.max(0, Math.round(Number(b.progres) * 100) / 100)) : 0;
+      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu, ...(v ? { variante: v } : {}),
+        ...(progres ? { progres } : {}), ...(fini && b.affectes !== undefined && b.affectes !== null ? { affectes: entier(b.affectes, 0, 0, 999) } : {}) });
     }
-    return { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
+    const postes = {};
+    for (const [k, qui] of Object.entries(etat.postes && typeof etat.postes === 'object' ? etat.postes : {})) if (ID.test(k) && typeof qui === 'string' && qui) postes[k] = qui.slice(0, 64);
+    return pourvoir(d, { stock, batiments, habitants: entier(etat.habitants, 0, 0, 9999), faim: entier(etat.faim, 0, 0, 999),
+      ...(Object.keys(postes).length ? { postes } : {}),
       // Saga 1.6.1 : par où ressortir de l'intérieur d'un bâtiment (la case devant sa porte).
       ...(etat.retour && typeof etat.retour === 'object' && typeof etat.retour.carte === 'string' ? { retour: { carte: etat.retour.carte, x: entier(etat.retour.x, 0, 0, 9999), y: entier(etat.retour.y, 0, 0, 9999), direction: typeof etat.retour.direction === 'string' ? etat.retour.direction : 'bas' } } : {}),
       prochain: Math.max(entier(etat.prochain, 1, 1), batiments.length + 1), resolu: entier(etat.resolu, 0),
       // Saga 1.9 : l'usure des cases, par carte : { carte: { « indice de la case » : pas } }.
-      ...(etat.usure && typeof etat.usure === 'object' ? { usure: normUsure(etat.usure) } : {}) };
+      ...(etat.usure && typeof etat.usure === 'object' ? { usure: normUsure(etat.usure) } : {}) });
   }
   function normUsure(u) {
     const out = {};
@@ -424,10 +562,14 @@ const GestionCalcul = (() => {
   // Saga 1.13 : bilan = { ressource: { avant, apres, produit, mange, consomme, perdu } } (ce qui a bougé dans
   // le stock, et pourquoi) ; evenements = [{ texte, ton }] : le reste du rapport (ton 'alerte' : un souci).
   // Le même jour une deuxième fois : rien.
-  function finDeJournee(d, e, jour) {
+  // Saga 1.22 : effets = les effets actifs ce soir (effetsActifs : postes et modificateurs), qui changent la
+  // production et la vitesse des chantiers ; avec l'affectation « joueur », un bâtiment ne tourne que si le
+  // joueur y a mis tous ses ouvriers (affectes).
+  function finDeJournee(d, e, jour, effetsDuSoir = []) {
     const n = entier(jour, 0);
     if (n <= e.resolu) return { etat: e, lignes: [], termines: [], arrives: 0, partis: 0, bilan: {}, evenements: [] };
-    const etat = copie(e);
+    const etat = pourvoir(d, copie(e));
+    const joueur = d.reglages.affectation === 'joueur';
     etat.habitants = entier(etat.habitants, 0, 0, 9999);
     const avant = { ...etat.stock };
     const bilan = {};
@@ -453,28 +595,44 @@ const GestionCalcul = (() => {
     // 2 et 3. Le travail et la production. Ce qui est produit cette nuit n'arrive au stock qu'à la fin : un
     // bâtiment ne consomme que ce qu'il y avait au coucher, quel que soit l'ordre des bâtiments.
     let libres = etat.habitants;
-    const sansOuvriers = [];
+    const sansOuvriers = [], arretes = [];
     const produit = {};
     for (const b of etat.batiments) {
       const def = d.batiments.get(b.type);
       if (b.etat !== 'fini' || !def || !Object.keys(def.production).length) continue;
-      if (def.ouvriers > libres) { sansOuvriers.push(def.nom); continue; }
+      if (joueur && def.ouvriers > 0) { if ((b.affectes || 0) < def.ouvriers) { arretes.push(def.nom); continue; } }
+      else if (def.ouvriers > libres) { sansOuvriers.push(def.nom); continue; }
       const m = manque(etat.stock, def.consommation);
       if (m.length) { raconter(`${def.nom} n'a rien produit : il manque ${dire(d, Object.fromEntries(m))}.`, 'alerte'); continue; }
-      libres -= def.ouvriers;
+      if (!joueur) libres -= def.ouvriers;
       retirer(def.consommation);
       noter('consomme', def.consommation);
-      for (const [r, q] of Object.entries(def.production)) produit[r] = (produit[r] || 0) + q;
+      // Saga 1.22 : les effets du soir (un poste occupé, une bénédiction) sur sa production.
+      const pc = bonusPour(effetsDuSoir, b.type).production;
+      for (const [r, q] of Object.entries(def.production)) {
+        const k = pc ? Math.max(0, Math.round((q * (100 + pc)) / 100)) : q;
+        if (k) produit[r] = (produit[r] || 0) + k;
+      }
     }
     if (sansOuvriers.length) raconter(`Pas assez d'habitants pour faire tourner : ${grouper(sansOuvriers)}.`, 'alerte');
+    if (arretes.length) raconter(`À l'arrêt (personne n'y travaille) : ${grouper(arretes)}.`);
     for (const [r, q] of Object.entries(produit)) etat.stock[r] = (etat.stock[r] || 0) + q;
     noter('produit', produit);
     // 4. Les chantiers. Saga 1.13 : une ligne pour tous ceux du même jour (« Maison ×2 »).
     const termines = [];
     for (const b of etat.batiments) {
       if (b.etat !== 'chantier') continue;
-      b.reste = Math.max(0, b.reste - 1);
-      if (b.reste === 0) { b.etat = 'fini'; termines.push(b.type); }
+      // Saga 1.22 : un chantier accéléré avance de plus d'une nuit, un chantier ralenti d'une part de nuit
+      // (gardée dans progres jusqu'à faire une nuit entière).
+      const pc = bonusPour(effetsDuSoir, b.type).chantiers;
+      if (pc) {
+        const total = (Number(b.progres) || 0) + (100 + pc) / 100;
+        const k = Math.floor(total + 1e-9);
+        b.progres = Math.round((total - k) * 100) / 100;
+        b.reste = Math.max(0, b.reste - k);
+      } else b.reste = Math.max(0, b.reste - 1);
+      if (!b.progres) delete b.progres;
+      if (b.reste === 0) { b.etat = 'fini'; delete b.progres; termines.push(b.type); }
     }
     if (termines.length) raconter(`${termines.length > 1 ? 'Chantiers terminés' : 'Chantier terminé'} : ${grouper(termines.map((t) => nomBatiment(d, t)))}.`);
     // 5. Les départs (faim 'departs') puis les arrivées (pas de faim, ou faim 'rien').
@@ -500,6 +658,7 @@ const GestionCalcul = (() => {
     }
     // 7. (Saga 1.9) Les sentiers délaissés repoussent un peu.
     repousserUsure(d, etat);
+    pourvoir(d, etat); // Saga 1.22 : les bâtiments finis cette nuit prennent leurs ouvriers, s'il en reste
     etat.resolu = n;
     for (const [r, b] of Object.entries(bilan)) { b.avant = avant[r] || 0; b.apres = etat.stock[r] || 0; }
     const lignes = [...(Object.keys(produit).length ? [`Production : ${dire(d, produit)}.`] : []), ...evenements.map((x) => x.texte)];
@@ -529,16 +688,19 @@ const GestionCalcul = (() => {
   function emplois(d, e) {
     let libres = entier(e.habitants, 0);
     let demandes = 0;
+    const joueur = d.reglages.affectation === 'joueur';
     for (const b of e.batiments) {
       const def = d.batiments.get(b.type);
       if (b.etat !== 'fini' || !def?.ouvriers || !Object.keys(def.production).length) continue;
       demandes += def.ouvriers;
-      if (def.ouvriers <= libres) libres -= def.ouvriers;
+      // Saga 1.22 : avec l'affectation « joueur », ceux qu'il y a mis.
+      if (joueur) libres -= Math.min(libres, entier(b.affectes, 0));
+      else if (def.ouvriers <= libres) libres -= def.ouvriers;
     }
     return { habitants: entier(e.habitants, 0), logement: logement(d, e), demandes, libres };
   }
 
-  return { nommes, arrivee, etListe, definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, variante, apparence, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
+  return { effets, bonusPour, effetsActifs, direEffets, nommer, pourvoir, travail, atelier, nommes, arrivee, etListe, definitions, perdre, reposFinis, sereposer, etatNeuf, normaliser, user, niveauUsure, periode, repousserUsure, capacite, combien, ajouter, construire, variante, apparence, habitants, logement, emplois, cases, placement, deposer, finDeJournee, grouper, nomRessource, nomBatiment, dire, quantites };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = GestionCalcul;

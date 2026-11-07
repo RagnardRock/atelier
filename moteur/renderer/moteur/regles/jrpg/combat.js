@@ -41,7 +41,8 @@ const JrpgCombat = (() => {
   // Fuir : 50 %, plus deux fois l'écart d'Agilité moyenne, plus 10 % par essai raté.
   const formuleFuite = ({ agiliteHeros, agiliteMonstres, essais }) => borne(50 + (agiliteHeros - agiliteMonstres) * 2 + essais * 10, 5, 95);
 
-  async function lancer({ jeu, partie, ui, groupe = null, fond = 'herbes' }) {
+  // Saga 1.22 : amical (un duel) : perdu, le groupe « s'incline » et ne perd pas d'argent.
+  async function lancer({ jeu, partie, ui, groupe = null, fond = 'herbes', amical = false }) {
     const trouver = (sorte, id) => H.trouver(jeu, sorte, id);
     const g = typeof groupe === 'string' ? trouver('groupes', groupe) : groupe;
     const monnaie = H.reglages(jeu).monnaie || 'Or';
@@ -480,6 +481,12 @@ const JrpgCombat = (() => {
         return { issue: 'victoire' };
       }
       if (!vivants(heros).length) {
+        if (amical) {
+          await ui.message('Le groupe s\'incline.', { attendre: true });
+          garderStatuts();
+          ui.fermer();
+          return { issue: 'defaite' };
+        }
         await ui.message('Le groupe est vaincu…', { attendre: true });
         const perdu = Math.floor((partie.argent || 0) / 2);
         if (perdu) { partie.argent -= perdu; await ui.message(`Dans la panique, tu perds ${perdu} ${monnaie}…`, { attendre: true }); }

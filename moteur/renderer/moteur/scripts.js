@@ -24,8 +24,10 @@ const Scripts = (() => {
     const trouver = (sorte, id) => liste(sorte).find((x) => x.id === id) || null;
     const nomDe = (sorte, id) => trouver(sorte, id)?.nom || id;
 
-    // {joueur} → le nom du joueur.
-    const remplir = (t) => String(t ?? '').replace(/\{joueur\}/g, moteur.partie().nom);
+    // {joueur} → le nom du joueur. Saga 1.22 : {var:id} → la valeur de la variable id ; {il|elle} → la
+    // forme qui va avec la variable des accords (reglages.accords : { variable, valeurs }), pour accorder les
+    // textes au héros choisi (« Tu es arrivé{|e} »). Voir Textes.remplir (textes.js).
+    const remplir = (t) => Textes.remplir(t, { nom: moteur.partie().nom, variables: moteur.partie().variables, accords: jeu.donnees?.reglages?.reglages?.accords });
 
     // Qui parle : son nom, sa couleur, son portrait pour cette expression.
     function orateur(qui, expression, ev) {
@@ -36,7 +38,11 @@ const Scripts = (() => {
       const portraits = Array.isArray(p.portraits) ? p.portraits : [];
       const img = portraits.find((x) => x.expression === (expression || 'normal')) || portraits.find((x) => x.expression === 'normal') || portraits[0];
       const nom = p.heros ? moteur.partie().nom : p.nom;
-      return { nom, couleur: p.couleur || '', portrait: img?.png || '' };
+      // Saga 1.22 : une tenue du héros peut avoir ses propres portraits (une héroïne, un déguisement).
+      const tenue = p.heros && moteur.partie().tenue ? (p.tenues || []).find((t) => t.id === moteur.partie().tenue) : null;
+      const siens = Array.isArray(tenue?.portraits) ? tenue.portraits.filter((x) => x?.png) : [];
+      const img2 = siens.length ? siens.find((x) => x.expression === (expression || 'normal')) || siens.find((x) => x.expression === 'normal') || siens[0] : img;
+      return { nom, couleur: p.couleur || '', portrait: img2?.png || '' };
     }
 
     // Plusieurs boîtes : une ligne vide coupe le texte.
@@ -177,6 +183,15 @@ const Scripts = (() => {
         case 'combat_groupe': {
           if (!trouver('groupes', c.groupe)) { await narrer(`(Le groupe de monstres « ${c.groupe} » n'existe pas dans les données du jeu.)`); break; }
           if (!partie.equipe.some((x) => x.pv > 0)) { await narrer('Personne dans le groupe n\'est en état de se battre !'); break; }
+          // Saga 1.22 : un combat amical (un duel, un entraînement) : perdu, le joueur reste là, rien n'est
+          // perdu, et le script continue par la branche « gagné » (reussi) ou « perdu ou fui » (rate). Le
+          // groupe est soigné après (soigner, vrai par défaut).
+          if (c.amical) {
+            const issue = await moteur.combattre({ groupe: c.groupe, amical: true });
+            if (c.soigner !== false) for (const x of partie.equipe) Regles.soigner(jeu, x);
+            await jouer(issue === 'victoire' ? c.reussi : c.rate, ev);
+            return issue;
+          }
           const issue = await moteur.combattre({ groupe: c.groupe });
           if (issue === 'defaite') throw new Fin();
           return issue;

@@ -37,6 +37,11 @@
   // Remplacer l'état du module par un état neuf (o.etat est l'objet de la partie : on garde le même).
   const poser = (o, neuf) => { for (const k of Object.keys(o.etat)) delete o.etat[k]; Object.assign(o.etat, neuf); };
   const etatDe = (o) => C.normaliser(defs(o.jeu), o.etat);
+  // Saga 1.22 : les effets qui valent maintenant (postes occupés, modificateurs dont la condition est vraie).
+  const vraieDe = (o) => (cond) => Monde.vraie(cond, o.partie, o.hote?.carte || o.carte || { id: '' }, null);
+  const effetsDe = (o, e = etatDe(o)) => C.effetsActifs(defs(o.jeu), e, vraieDe(o));
+  // Un candidat à un poste est libre de le prendre (sa condition est vraie, ou il n'en a pas).
+  const disponible = (o, c) => !c.condition || vraieDe(o)(c.condition);
 
   // Saga 1.13 : l'apparence d'une ressource dans les menus : son icône, sinon celle de l'objet qui la
   // représente (ressource.objet), sinon une pastille de couleur avec son initiale.
@@ -68,7 +73,9 @@
     for (const [type, n] of finis) {
       const def = d.batiments.get(type);
       const rep = def?.repos;
-      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: role(d, def, n), detail: rep ? (rep.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : d.reglages.textes.termine });
+      // Saga 1.22 : avec l'affectation « joueur », combien tournent.
+      const marche = d.reglages.affectation === 'joueur' && def && C.atelier(d, { type, etat: 'fini' }) ? e.batiments.filter((b) => b.type === type && b.etat === 'fini' && (b.affectes || 0) >= def.ouvriers).length : null;
+      out.push({ texte: n > 1 ? `${C.nomBatiment(d, type)} ×${n}` : C.nomBatiment(d, type), sous: role(d, def, n), detail: marche !== null ? (marche === n ? d.reglages.textes.en_marche : marche ? `${marche} / ${n} ${d.reglages.textes.en_marche}` : d.reglages.textes.a_l_arret) : rep ? (rep.quand === 'matin' ? 'repos chaque matin' : 'lieu de repos') : d.reglages.textes.termine, ...(marche === 0 ? { ton: 'doux' } : {}) });
     }
     // Les chantiers : regroupés eux aussi, par type et par nuits qui restent.
     const chantiers = new Map();
@@ -89,7 +96,8 @@
     const cap = C.capacite(d);
     const section = (texte, detail = '') => ({ texte, detail, section: true });
     // La nuit qui vient, calculée sur une copie (rien ne change pour de vrai).
-    const nuit = d.reglages.prevision ? C.finDeJournee(d, e, e.resolu + 1) : null;
+    const actifs = effetsDe(o, e);
+    const nuit = d.reglages.prevision ? C.finDeJournee(d, e, e.resolu + 1, actifs) : null;
     const T = d.reglages.textes;
     const items = [section(T.stock, cap ? `${cap} au plus de chaque` : '')];
     const ressources = [...new Set([...d.ressources.keys(), ...Object.keys(e.stock)])].filter((r) => e.stock[r] || d.ressources.has(r));
@@ -116,6 +124,19 @@
         items.push({ texte: T.repas, detail: C.dire(d, faut) || 'rien', ...(Object.keys(manque).length ? { ton: 'alerte', sous: `il manque ${C.dire(d, manque)}` } : {}) });
       }
     }
+    // Saga 1.22 : les postes (qui les occupe) et les effets qui valent ce soir.
+    if (d.reglages.postes.length) {
+      items.push(section(T.postes));
+      for (const p of d.reglages.postes) {
+        const qui = e.postes?.[p.id];
+        items.push({ texte: p.nom, detail: qui ? d.reglages.persos.get(qui) || qui : T.personne, sous: C.direEffets(d, p.effets) || p.description.slice(0, 80), ...(qui ? {} : { ton: 'doux' }) });
+      }
+    }
+    const autres = actifs.filter((x) => x.source.startsWith('effet:'));
+    if (autres.length) {
+      items.push(section(T.effets));
+      for (const x of autres) items.push({ texte: x.nom, sous: C.direEffets(d, x) });
+    }
     // Saga 1.11 : les bonus du groupe en cours (des bains, d'un repas).
     const bonus = Array.isArray(o.partie.bonus) ? o.partie.bonus : [];
     if (bonus.length) {
@@ -127,6 +148,72 @@
     if (!bat.length) items.push({ texte: T.vide, ton: 'doux' });
     items.push(...bat);
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true, lecture: true });
+  }
+
+  // Saga 1.22 : l'écran « Organiser » : qui occupe les postes, et (affectation « joueur ») quels bâtiments
+  // tournent. On choisit une ligne pour la changer ; retour ferme.
+  const aOrganiser = (d) => d.reglages.postes.length > 0 || (d.reglages.affectation === 'joueur' && [...d.batiments.values()].some((b) => b.ouvriers > 0 && Object.keys(b.production).length));
+  async function organiser(o) {
+    const ui = o.hote?.ui;
+    const d = defs(o.jeu);
+    if (!ui) return;
+    const T = d.reglages.textes;
+    for (;;) {
+      const e = etatDe(o);
+      const items = [], actions = [];
+      const ajouter = (item, action = null) => { items.push(item); actions.push(action); };
+      if (d.reglages.postes.length) {
+        ajouter({ texte: T.postes, section: true });
+        for (const p of d.reglages.postes) {
+          const qui = e.postes?.[p.id];
+          ajouter({ texte: p.nom, detail: qui ? d.reglages.persos.get(qui) || qui : T.personne, sous: C.direEffets(d, p.effets) || p.description.slice(0, 80) }, { poste: p });
+        }
+      }
+      const ateliers = e.batiments.filter((b) => C.atelier(d, b));
+      if (d.reglages.affectation === 'joueur') {
+        const em = C.emplois(d, e);
+        ajouter({ texte: T.travail, detail: `${em.libres} ${T.libres}`, section: true });
+        if (!ateliers.length) ajouter({ texte: T.vide, ton: 'doux' });
+        const rang = {};
+        for (const b of ateliers) {
+          const def = d.batiments.get(b.type);
+          rang[b.type] = (rang[b.type] || 0) + 1;
+          const plusieurs = ateliers.filter((x) => x.type === b.type).length > 1;
+          const marche = (b.affectes || 0) >= def.ouvriers;
+          ajouter({ texte: plusieurs ? `${def.nom} n° ${rang[b.type]}` : def.nom, detail: `${b.affectes || 0} / ${def.ouvriers}`, sous: `${marche ? T.en_marche : T.a_l_arret} · ${role(d, def)}`, ...(marche ? {} : { ton: 'doux' }) }, { batiment: b, marche });
+        }
+      }
+      const i = await ui.liste({ titre: T.organiser, entete: `Jour ${Number(o.partie.jour) || 1}`, items, annulable: true, note: d.reglages.affectation === 'joueur' ? 'Choisis un bâtiment pour le mettre en marche ou l\'arrêter.' : '' });
+      if (i === null || i === undefined || i < 0) return;
+      const a = actions[i];
+      if (!a) continue;
+      if (a.batiment) {
+        const r = C.travail(d, e, a.batiment.id, !a.marche);
+        if (!r.ok) { await ui.dire(r.raison); continue; }
+        poser(o, r.etat);
+        o.hote?.rafraichir?.();
+        foule = null;
+        continue;
+      }
+      // Un poste : choisir qui l'occupe parmi les candidats disponibles (ou personne).
+      const p = a.poste;
+      const gens = (p.candidats.length ? p.candidats.filter((c) => disponible(o, c)).map((c) => ({ id: c.personnage, nom: c.nom }))
+        : [...d.reglages.persos].filter(([id]) => !o.jeu.personnages?.get?.(id)?.heros).map(([id, nom]) => ({ id, nom })));
+      const ailleurs = (id) => Object.entries(e.postes || {}).find(([k, v]) => v === id && k !== p.id);
+      const liste = [{ texte: T.personne, detail: !e.postes?.[p.id] ? '✓' : '' }, ...gens.map((g) => {
+        const autre = ailleurs(g.id);
+        return { texte: g.nom, image: o.jeu.personnages?.get?.(g.id)?.portraits?.[0]?.png || '', detail: e.postes?.[p.id] === g.id ? '✓' : '', sous: autre ? `${T.occupe} : ${d.reglages.postes.find((x) => x.id === autre[0])?.nom || autre[0]}` : '' };
+      })];
+      if (!gens.length) { await ui.dire(T.aucun_candidat); continue; }
+      const k = await ui.liste({ titre: p.nom, items: liste, annulable: true, note: C.direEffets(d, p.effets) || p.description });
+      if (k === null || k === undefined || k < 0) continue;
+      const qui = k === 0 ? '' : gens[k - 1].id;
+      const avant = e.postes?.[p.id] || '';
+      const r = C.nommer(d, e, p.id, qui);
+      if (!r.ok) { await ui.dire(r.raison); continue; }
+      poser(o, r.etat);
+      if (qui !== avant) o.hote?.reagir?.('gestion_poste', { poste: p.id, personnage: qui, avant });
+    }
   }
 
   // Saga 1.13 : le rapport du matin, en lignes de menu : le bilan du stock (rapport_bilan), puis le reste.
@@ -227,10 +314,12 @@
     for (const b of finis) {
       const def = d.batiments.get(b.type);
       for (let k = 0; k < def.logement; k++) maisons.push(entreeDe(b, def));
-      if (Object.keys(def.production).length) for (let k = 0; k < def.ouvriers; k++) travaux.push(entreeDe(b, def));
+      // Saga 1.22 : avec l'affectation « joueur », seulement ceux que le joueur y a mis.
+      const n = d.reglages.affectation === 'joueur' ? Math.min(def.ouvriers, Math.round(Number(b.affectes) || 0)) : def.ouvriers;
+      if (Object.keys(def.production).length) for (let k = 0; k < n; k++) travaux.push(entreeDe(b, def));
     }
     const n = Math.min(Math.max(0, Math.round(Number(e.habitants) || 0)), maisons.length, d.reglages.promeneurs_max);
-    const cle = `${carte.id}|${n}|${finis.map((b) => b.id).join(',')}`;
+    const cle = `${carte.id}|${n}|${finis.map((b) => `${b.id}:${b.affectes ?? ''}`).join(',')}`;
     if (foule && foule.cle === cle) return foule;
     const gens = [];
     for (let i = 0; i < n; i++) {
@@ -568,7 +657,7 @@
 
     finDeJournee(o) {
       const d = defs(o.jeu), avant = etatDe(o);
-      const r = C.finDeJournee(d, avant, o.jour);
+      const r = C.finDeJournee(d, avant, o.jour, effetsDe(o, avant));
       const neuve = (Number(o.jour) || 0) > avant.resolu;
       poser(o, r.etat);
       const lignes = rapport(o, d, r);
@@ -715,6 +804,41 @@
         await o.jouer(o.c.reussi);
         return { ok: true, batiment: type };
       },
+      // Saga 1.22 : nommer quelqu'un à un poste (personnage vide : le libérer). Branches réussi / raté.
+      async gestion_poste(o) {
+        const d = defs(o.jeu);
+        const poste = String(o.c.poste || '');
+        const qui = String(o.c.personnage || '');
+        const avant = etatDe(o).postes?.[poste] || '';
+        const r = C.nommer(d, etatDe(o), poste, qui);
+        const def = d.reglages.postes.find((x) => x.id === poste);
+        if (!r.ok) { if (o.c.annoncer !== false) await o.narrer(r.raison); await o.jouer(o.c.rate); return { ok: false }; }
+        poser(o, r.etat);
+        if (qui !== avant) o.hote?.reagir?.('gestion_poste', { poste, personnage: qui, avant });
+        if (o.c.annoncer !== false) await o.narrer(qui ? `${d.reglages.persos.get(qui) || qui} : ${def.nom}.` : `${def.nom} : ${d.reglages.textes.personne}.`);
+        await o.jouer(o.c.reussi);
+        return { ok: true, poste, personnage: qui };
+      },
+      // Saga 1.22 : le travail (affectation « joueur ») : ouvrir l'écran Organiser, ou mettre en marche ou
+      // arrêter un bâtiment de ce type (le premier arrêté, le dernier en marche). Branches réussi / raté.
+      async gestion_travail(o) {
+        const d = defs(o.jeu);
+        if (o.c.action === 'ecran' || !o.c.action) { await organiser(o); return { ok: true }; }
+        const e = etatDe(o);
+        const type = String(o.c.batiment || '');
+        const marche = o.c.action !== 'arreter';
+        const liste = e.batiments.filter((b) => b.type === type && C.atelier(d, b));
+        const def = d.batiments.get(type);
+        const b = marche ? liste.find((x) => (x.affectes || 0) < def.ouvriers) : [...liste].reverse().find((x) => (x.affectes || 0) > 0);
+        const r = b ? C.travail(d, e, b.id, marche) : { ok: false, raison: liste.length ? `${def?.nom || type} : ${marche ? 'tous tournent déjà' : 'aucun ne tourne'}.` : `Aucun bâtiment ${def?.nom || type} où travailler.` };
+        if (!r.ok) { if (o.c.annoncer !== false) await o.narrer(r.raison); await o.jouer(o.c.rate); return { ok: false }; }
+        poser(o, r.etat);
+        foule = null;
+        o.hote?.rafraichir?.();
+        if (o.c.annoncer !== false) await o.narrer(`${def.nom} : ${marche ? d.reglages.textes.en_marche : d.reglages.textes.a_l_arret}.`);
+        await o.jouer(o.c.reussi);
+        return { ok: true };
+      },
       // Saga 1.5 : poser un bâtiment où le joueur veut, dans une zone constructible de la carte. Sans
       // batiment, le joueur le choisit dans la liste. Branches réussi / raté (raté : annulé, ou impossible).
       async gestion_placer(o) {
@@ -731,6 +855,8 @@
       if (cond.type === 'gestion_chantier') return C.combien(e, String(cond.batiment || '')) > C.combien(e, String(cond.batiment || ''), true);
       if (cond.type === 'gestion_habitants') return (Number(e.habitants) || 0) >= Math.max(0, Number(cond.min) || 0);
       if (cond.type === 'gestion_stock') return (e.stock[String(cond.ressource || '')] || 0) >= Math.max(0, Number(cond.min) || 0);
+      // Saga 1.22 : un poste est occupé (par ce personnage, ou par quelqu'un si personnage est vide).
+      if (cond.type === 'gestion_poste') { const qui = e.postes?.[String(cond.poste || '')] || ''; return cond.personnage ? qui === String(cond.personnage) : Boolean(qui); }
       return undefined;
     },
 
@@ -739,17 +865,21 @@
       const out = d.reglages.menu ? [['domaine', d.reglages.nom, 'home']] : [];
       // Construire depuis le menu de pause : seulement sur une carte qui a une zone constructible.
       if (d.reglages.construire_menu && d.batiments.size && constructible(o.hote?.carte).length) out.push(['construire', 'Construire', 'tools']);
+      // Saga 1.22 : organiser les postes et le travail.
+      if (d.reglages.menu && aOrganiser(d)) out.push(['organiser', d.reglages.textes.organiser, 'organization']);
       return out;
     },
     async agirPause(o, choix) {
       if (choix === 'domaine') await ecran(o);
       if (choix === 'construire') { const type = await choisirBatiment(o); if (type) await placer(o, type); }
+      if (choix === 'organiser') await organiser(o);
     },
 
     pourScript(o) {
       const e = etatDe(o);
       const em = C.emplois(defs(o.jeu), e);
-      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, noms: defs(o.jeu).reglages.habitants_noms.slice(0, em.habitants), logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste })) };
+      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, noms: defs(o.jeu).reglages.habitants_noms.slice(0, em.habitants), logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste, ...(b.affectes !== undefined ? { affectes: b.affectes } : {}) })),
+        postes: { ...(e.postes || {}) }, effets: effetsDe(o, e).map((x) => ({ nom: x.nom, production: x.production, chantiers: x.chantiers, batiments: [...x.batiments] })) };
     },
   });
 })();

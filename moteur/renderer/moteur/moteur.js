@@ -724,7 +724,9 @@ const Moteur = (() => {
     // Un combat (une rencontre, ou les commandes combat_sauvage et combat_dresseur des scripts).
     // Rend l'issue : 'victoire', 'defaite', 'fuite' ou 'capture'. Après une défaite, le joueur se
     // réveille au dernier endroit où il s'est soigné (sinon au départ du jeu), son équipe soignée.
-    async function combattre({ sauvage = null, dresseur = null, groupe = null }) {
+    // Saga 1.22 : amical (un duel, un entraînement) : une défaite ne réveille pas le joueur ailleurs et ne
+    // coûte rien (ni argent, ni stock du domaine) ; c'est la commande qui décide de la suite.
+    async function combattre({ sauvage = null, dresseur = null, groupe = null, amical = false }) {
       enCombat = true;
       document.body.classList.add('en-combat');
       entrees.oublier();
@@ -735,8 +737,8 @@ const Moteur = (() => {
       if (morceau) audio.musique(morceau, { fondu: 0.4 });
       let issue = 'fuite';
       try {
-        if (table.actif) ({ issue } = await table.combattre({ jeu, partie, sauvage, dresseur, groupe, fond: fondCombat() }));
-        else ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, fond: fondCombat() }));
+        if (table.actif) ({ issue } = await table.combattre({ jeu, partie, sauvage, dresseur, groupe, amical, fond: fondCombat() }));
+        else ({ issue } = await Regles.combattre({ jeu, partie, ui: ecranDuJeu(), sauvage, dresseur, groupe, amical, fond: fondCombat() }));
       } catch (err) {
         ecranDuJeu().fermer();
         rappels.message?.(`Erreur pendant le combat : ${err.message}`);
@@ -752,17 +754,20 @@ const Moteur = (() => {
         else audio.musique(avant, { fondu: 0.8 });
       }
       Collection.noterTout(partie); // une évolution en combat : une nouvelle espèce au Pokédex
-      const sorte = dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage';
+      const sorte = amical ? 'amical' : dresseur ? 'dresseur' : groupe ? 'groupe' : 'sauvage';
       // Saga 1.11 : un combat de moins pour les bonus du groupe, puis ce que les modules en font (le butin
       // qui va au stock du domaine…). Dit au joueur une fois revenu sur la carte.
       const dissipes = Bonus.apresCombat(partie);
-      const apres = [...Modules.apresCombat(jeu, partie, hoteModules, issue, sorte), ...dissipes.map((b) => `${b.nom} : l'effet s'est dissipé.`)];
-      if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte });
+      // Un combat amical perdu n'est pas une défaite pour les modules (pas de perte au domaine, pas de fin de
+      // partie de roguelite) : ils reçoivent « defaite_amicale ».
+      const pourModules = amical && issue === 'defaite' ? 'defaite_amicale' : issue;
+      const apres = [...Modules.apresCombat(jeu, partie, hoteModules, pourModules, sorte), ...dissipes.map((b) => `${b.nom} : l'effet s'est dissipé.`)];
+      if (scriptsJs.ecoute('apres_combat')) reagir('apres_combat', { issue, sorte, amical });
       if (sauvage && issue === 'victoire') partie.compteurs.sauvages_battus = (partie.compteurs.sauvages_battus || 0) + 1;
       if (issue === 'defaite' && table.actif) {
         // À la table, le MJ décide de la suite : le groupe reste là où il est tombé.
         dialogue.annoncer('Le groupe est vaincu…', 'Le MJ décide de la suite.');
-      } else if (issue === 'defaite') {
+      } else if (issue === 'defaite' && !amical) {
         for (const c of partie.equipe) Regles.soigner(jeu, c);
         const d = pointDeReveil();
         noir = 1;

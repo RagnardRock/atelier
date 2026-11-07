@@ -34,7 +34,7 @@ const Verificateur = (() => {
       fn(c);
       if (c.type === 'choix') for (const o of c.options || []) parcourir(o?.commandes, fn);
       if (c.type === 'si') { parcourir(c.alors, fn); parcourir(c.sinon, fn); }
-      if (['test', 'sauvegarde', 'test_oppose', 'gestion_construire', 'gestion_placer', 'gestion_repos', 'relation_offrir'].includes(c.type)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
+      if (['test', 'sauvegarde', 'test_oppose', 'gestion_construire', 'gestion_placer', 'gestion_repos', 'gestion_poste', 'gestion_travail', 'relation_offrir'].includes(c.type) || (c.type === 'combat_groupe' && c.amical)) { parcourir(c.reussi, fn); parcourir(c.rate, fn); }
     }
   }
   // Les conditions d'un événement : celles de ses pages, et celles des « si » de ses scripts.
@@ -66,6 +66,8 @@ const Verificateur = (() => {
       ressources: ids('ressources'), batiments: ids('batiments'), // Tafl 1.3 : le module gestion
       ennemis: ids('ennemis'), // Tafl 1.10 : le pack action
       perks: ids('perks'), ameliorations: ids('ameliorations'), // Tafl 1.12 : le module roguelite
+      peuples: ids('peuples'), // Tafl 1.24 : les peuples (module relations)
+      postes: new Set((reglages.modules_reglages?.gestion?.postes || []).map((p) => p.id)), // Tafl 1.24 : les postes (module gestion)
     };
     // Tafl 1.2 : un module activé que ce Tafl ne connaît pas (écrit à la main, ou par un Tafl plus récent).
     // Dit avant tout le reste : même un jeu sans carte doit l'apprendre.
@@ -398,7 +400,7 @@ const Verificateur = (() => {
     // --- 4. Les ids qui n'existent pas ---
     const verifierId = (sorte, id, quoi, ou = {}) => {
       if (!id || connus[sorte].has(id)) return;
-      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment', ennemis: 'd\'ennemi', perks: 'de perk', ameliorations: 'd\'amélioration' };
+      const noms = { personnages: 'de personnage', quetes: 'de quête', objets: 'd\'objet', creatures: 'de créature', dresseurs: 'de dresseur', boutiques: 'de boutique', groupes: 'de groupe de monstres', badges: 'de badge', monstres_jdr: 'de monstre', classes_jdr: 'de classe', origines: 'd\'origine', ressources: 'de ressource', batiments: 'de bâtiment', ennemis: 'd\'ennemi', perks: 'de perk', ameliorations: 'd\'amélioration', peuples: 'de peuple', postes: 'de poste (Réglages › Modules › Gestion)' };
       ajouter('erreur', 'references', `${quoi} : pas ${noms[sorte]} « ${id} » dans les données du jeu.`, ou);
     };
     for (const { carte, ev } of scriptsDe) {
@@ -438,6 +440,10 @@ const Verificateur = (() => {
         // Tafl 1.13 : le module relations.
         if (['relation_parler', 'relation_offrir', 'relation_points'].includes(cmd.type) && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);
         if (cmd.type === 'relation_offrir' && cmd.objet) verifierId('objets', cmd.objet, quoi, ou);
+        // Tafl 1.24 : les peuples, les postes et le travail.
+        if (cmd.type === 'relation_peuple') verifierId('peuples', cmd.peuple, quoi, ou);
+        if (cmd.type === 'gestion_poste') { verifierId('postes', cmd.poste, quoi, ou); verifierId('personnages', cmd.personnage, quoi, ou); }
+        if (cmd.type === 'gestion_travail' && cmd.batiment) verifierId('batiments', cmd.batiment, quoi, ou);
       });
       conditions(ev, (cond) => {
         if (cond.type === 'objet') verifierId('objets', cond.objet, quoi, ou);
@@ -451,6 +457,8 @@ const Verificateur = (() => {
         if (cond.type === 'roguelite_perk') verifierId('perks', cond.perk, quoi, ou);
         if (cond.type === 'roguelite_amelioration') verifierId('ameliorations', cond.amelioration, quoi, ou);
         if (cond.type === 'relation_niveau' || cond.type === 'relation_parle') verifierId('personnages', cond.personnage, quoi, ou);
+        if (cond.type === 'relation_peuple') verifierId('peuples', cond.peuple, quoi, ou);
+        if (cond.type === 'gestion_poste') { verifierId('postes', cond.poste, quoi, ou); verifierId('personnages', cond.personnage, quoi, ou); }
       });
     }
     for (const c of cartes.values()) {
@@ -560,6 +568,18 @@ const Verificateur = (() => {
       verifierId('personnages', r.id, `La relation « ${r.id} » (Données › Relations)`);
       for (const o of [...(r.adore || []), ...(r.aime || []), ...(r.deteste || [])]) verifierId('objets', o, `Les goûts de « ${r.id} » (Données › Relations)`);
     }
+    // Tafl 1.24 : les membres des peuples, les candidats aux postes et les bâtiments des effets.
+    for (const p of liste('peuples')) for (const m of p.membres || []) verifierId('personnages', m, `Le peuple « ${p.nom || p.id} » (Données › Peuples)`);
+    if (gestionActif) {
+      for (const p of gestionR.postes || []) {
+        for (const c of p.candidats || []) verifierId('personnages', c.personnage, `Le poste « ${p.nom || p.id} » (Réglages › Modules › Gestion)`);
+        for (const b of p.effets?.batiments || []) verifierId('batiments', b, `Le poste « ${p.nom || p.id} » (Réglages › Modules › Gestion)`);
+      }
+      for (const m of gestionR.modificateurs || []) for (const b of m.effets?.batiments || []) verifierId('batiments', b, `L'effet « ${m.nom || m.id} » (Réglages › Modules › Gestion)`);
+    }
+    // Tafl 1.24 : les accords dans les textes visent une variable du jeu.
+    if (reglages.accords?.variable && !liste('variables').some((v) => v.id === reglages.accords.variable)) ajouter('erreur', 'references', `Les accords dans les textes (Réglages › Partie) suivent la variable « ${reglages.accords.variable} », qui n'existe pas.`);
+    else if (reglages.accords?.variable && !(reglages.accords.valeurs || []).length) ajouter('attention', 'references', 'Les accords dans les textes (Réglages › Partie) ont une variable mais aucune valeur : la 1re forme sera toujours prise.');
 
     // --- 5. Scripts JS et variables (Tafl 0.31) ---
     // jeu.scripts : ce que Tafl sait des scripts (ScriptsTafl.etat). Sans lui (ou pas encore calculé),

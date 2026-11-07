@@ -11,6 +11,13 @@
 //     paroles: [{ niveau, texte, expression }], merci: { adore, aime, neutre, deteste } }
 // Les réglages (modules_reglages.relations) : voir definitions() ci-dessous.
 //
+// Saga 1.22 : les peuples (donnees/peuples.json) : une relation avec toute une communauté (un village, une
+// nation), à côté de celles avec les personnes. Ses propres niveaux (niveaux_peuples : Hostile, Méfiant,
+// Neutre…), un départ (on peut commencer au milieu, et descendre), ses membres (des personnages du jeu) et
+// une part : le % des points gagnés ou perdus avec un membre qui comptent aussi pour son peuple.
+//   { id, nom, description, couleur, depart, membres: [personnages], part }
+// État : peuples: { id: { points, connu } } (connu : le joueur le connaît, l'écran le montre).
+//
 // L'état (partie.modules.relations) :
 //   { liens: { id: { points, rencontre, parle, cadeau, cadeaux, vu, gouts: { objet: gout } } }, resolu }
 //   parle, cadeau : le dernier jour où le joueur lui a parlé, lui a offert quelque chose (0 : jamais) ;
@@ -31,6 +38,21 @@ const RelationsCalcul = (() => {
     { nom: 'Bon ami', points: 120 }, { nom: 'Proche', points: 200 }, { nom: 'Inséparable', points: 300 },
   ];
   const CADEAUX = { adore: 30, aime: 15, neutre: 5, deteste: 0 };
+  // Saga 1.22 : les niveaux par défaut d'un peuple. On part de Neutre (50 points) : une première rencontre
+  // ratée fait descendre, une alliance se gagne.
+  const NIVEAUX_PEUPLES = [
+    { nom: 'Hostile', points: 0 }, { nom: 'Méfiant', points: 25 }, { nom: 'Neutre', points: 50 },
+    { nom: 'Cordial', points: 100 }, { nom: 'Ami', points: 160 }, { nom: 'Allié', points: 240 },
+  ];
+  const DEPART_PEUPLE = 50;
+  // Des paliers croissants, le premier à 0 (au moins deux ; sinon ceux par défaut).
+  function paliers(l, defaut) {
+    let niveaux = (Array.isArray(l) ? l : []).filter((n) => n && texte(n.nom, 40).trim())
+      .map((n) => ({ nom: texte(n.nom, 40), points: entier(n.points, 0, 0, 99999) })).sort((a, b) => a.points - b.points);
+    if (niveaux.length < 2) niveaux = defaut.map((n) => ({ ...n }));
+    niveaux[0].points = 0;
+    return niveaux.filter((n, i) => i === 0 || n.points > niveaux[i - 1].points);
+  }
 
   // Les mots du module (le catalogue commun/modules.js donne les clés et les défauts ; vide : le défaut).
   function lesTextes(t) {
@@ -61,11 +83,16 @@ const RelationsCalcul = (() => {
     }
     const g = donnees?.reglages?.reglages?.modules_reglages?.relations || {};
     // Les niveaux : des paliers croissants, le premier à 0 (au moins deux).
-    let niveaux = (Array.isArray(g.niveaux) ? g.niveaux : []).filter((n) => n && texte(n.nom, 40).trim())
-      .map((n) => ({ nom: texte(n.nom, 40), points: entier(n.points, 0, 0, 99999) })).sort((a, b) => a.points - b.points);
-    if (niveaux.length < 2) niveaux = NIVEAUX.map((n) => ({ ...n }));
-    niveaux[0].points = 0;
-    niveaux = niveaux.filter((n, i) => i === 0 || n.points > niveaux[i - 1].points);
+    const niveaux = paliers(g.niveaux, NIVEAUX);
+    // Saga 1.22 : ceux des peuples.
+    const niveauxPeuples = paliers(g.niveaux_peuples, NIVEAUX_PEUPLES);
+    const maxPeuples = niveauxPeuples[niveauxPeuples.length - 1].points;
+    const peuples = new Map();
+    for (const x of Array.isArray(donnees?.peuples?.peuples) ? donnees.peuples.peuples : []) {
+      if (!x || typeof x.id !== 'string' || !x.id || peuples.has(x.id)) continue;
+      peuples.set(x.id, { id: x.id, nom: texte(x.nom, 60) || x.id, description: texte(x.description, 500), couleur: texte(x.couleur, 20), icone: texte(x.icone, 2e6),
+        depart: entier(x.depart, Math.min(DEPART_PEUPLE, maxPeuples), 0, maxPeuples), membres: ids(x.membres).slice(0, 200), part: entier(x.part, 0, 0, 100) });
+    }
     const cadeaux = Object.fromEntries(GOUTS.map((k) => [k, entier(g.cadeaux?.[k], CADEAUX[k], -999, 999)]));
     const reglages = {
       nom: texte(g.nom, 40) || 'Relations',
@@ -84,8 +111,9 @@ const RelationsCalcul = (() => {
       // L'affinité en symboles : un plein par niveau atteint, un vide pour chaque niveau qui reste.
       symbole: texte(g.symbole, 4) || '♥', symbole_vide: typeof g.symbole_vide === 'string' ? texte(g.symbole_vide, 4) : '♡',
       textes: lesTextes(g.textes),
+      niveaux_peuples: niveauxPeuples, max_peuples: maxPeuples,
     };
-    return { personnes, reglages };
+    return { personnes, peuples, reglages };
   }
 
   // Le portrait « normal » d'un personnage (sinon le premier), pour les écrans.
@@ -95,7 +123,7 @@ const RelationsCalcul = (() => {
   }
 
   const lienNeuf = (def) => ({ points: def ? def.depart : 0, rencontre: false, parle: 0, cadeau: 0, cadeaux: 0, vu: 0, gouts: {} });
-  const etatNeuf = () => ({ liens: {}, resolu: 0 });
+  const etatNeuf = () => ({ liens: {}, peuples: {}, resolu: 0 });
 
   // Remettre un état d'aplomb : les valeurs dans leurs bornes ; un lien d'un personnage qui n'est plus dans
   // les données est gardé (le jeu peut le remettre), sans être montré.
@@ -109,7 +137,12 @@ const RelationsCalcul = (() => {
       liens[id] = { points: entier(l.points, 0, 0, d.reglages.max), rencontre: l.rencontre === true, parle: entier(l.parle, 0, 0), cadeau: entier(l.cadeau, 0, 0),
         cadeaux: entier(l.cadeaux, 0, 0, 999), vu: entier(l.vu, 0, 0, d.reglages.niveaux.length - 1), gouts };
     }
-    return { liens, resolu: entier(e.resolu, 0, 0) };
+    const peuples = {};
+    for (const [id, p] of Object.entries(e.peuples && typeof e.peuples === 'object' ? e.peuples : {})) {
+      if (!p || typeof p !== 'object') continue;
+      peuples[id] = { points: entier(p.points, 0, 0, d.reglages.max_peuples ?? 99999), connu: p.connu === true };
+    }
+    return { liens, peuples, resolu: entier(e.resolu, 0, 0) };
   }
   const copie = (e) => JSON.parse(JSON.stringify(e));
   // Le lien avec id (créé s'il manque, dans une copie de l'état).
@@ -220,6 +253,50 @@ const RelationsCalcul = (() => {
     return { etat: e, parole: ouvertes[(Math.max(1, entier(jour, 1)) + h) % ouvertes.length], nouvelle: false };
   }
 
+  // --- Saga 1.22 : les peuples ---
+  const relationPeuple = (d, e, id) => {
+    e.peuples = e.peuples || {};
+    if (!e.peuples[id]) e.peuples[id] = { points: d.peuples?.get(id)?.depart ?? Math.min(DEPART_PEUPLE, d.reglages.max_peuples), connu: false };
+    return e.peuples[id];
+  };
+  // Les points d'un peuple (ceux du départ s'il n'a encore rien vécu).
+  const pointsPeuple = (d, e, id) => e?.peuples?.[id]?.points ?? d.peuples?.get(id)?.depart ?? Math.min(DEPART_PEUPLE, d.reglages.max_peuples);
+  function niveauPeuple(d, points) {
+    let n = 0;
+    d.reglages.niveaux_peuples.forEach((x, i) => { if (points >= x.points) n = i; });
+    return n;
+  }
+  const nomNiveauPeuple = (d, n) => d.reglages.niveaux_peuples[Math.max(0, Math.min(d.reglages.niveaux_peuples.length - 1, n))].nom;
+  // Ajouter, retirer ou régler les points d'un peuple ; il devient connu. Rend { etat, avant, apres, change }.
+  function peuple(d, etat, id, n, mode = 'ajouter') {
+    const e = copie(etat);
+    const p = relationPeuple(d, e, id);
+    const pts = p.points;
+    const avant = niveauPeuple(d, pts);
+    const k = mode === 'regler' ? entier(n, 0) : mode === 'retirer' ? pts - Math.abs(entier(n, 0)) : pts + entier(n, 0);
+    p.points = Math.max(0, Math.min(d.reglages.max_peuples, k));
+    p.connu = true;
+    return { etat: e, avant, apres: niveauPeuple(d, p.points), change: p.points - pts };
+  }
+  // Ce qu'un changement d'affinité avec un personnage (gagne : des points, positifs ou négatifs) fait à ses
+  // peuples (part %, arrondi vers zéro). Rend { etat, changes: [{ peuple, avant, apres, change }] }.
+  function repercuter(d, etat, personnage, gagne) {
+    let e = etat;
+    const changes = [];
+    if (!gagne) return { etat: e, changes };
+    for (const p of d.peuples?.values() || []) {
+      if (!p.part || !p.membres.includes(personnage)) continue;
+      const k = Math.trunc((gagne * p.part) / 100);
+      if (!k) continue;
+      const r = peuple(d, e, p.id, k);
+      e = r.etat;
+      changes.push({ peuple: p.id, avant: r.avant, apres: r.apres, change: r.change });
+    }
+    return { etat: e, changes };
+  }
+  // Les peuples à montrer : connus (ou tous, selon le réglage visibles).
+  const peuplesVisibles = (d, etat) => [...(d.peuples?.values() || [])].filter((p) => d.reglages.visibles === 'tous' || etat.peuples?.[p.id]?.connu);
+
   // La nuit du jour `jour` (une fois par jour) : l'oubli, pour ceux qu'on n'a pas vus ce jour-là, sans
   // redescendre sous le palier atteint. Rend { etat }.
   function finDeJournee(d, etat, jour) {
@@ -245,7 +322,7 @@ const RelationsCalcul = (() => {
   // Un texte du jeu avec {nom} et {niveau} remplis.
   const remplir = (t, o = {}) => String(t || '').replace(/\{nom\}/g, o.nom ?? '').replace(/\{niveau\}/g, o.niveau ?? '');
 
-  return { GOUTS, NIVEAUX, CADEAUX, definitions, etatNeuf, lienNeuf, normaliser, niveau, nomNiveau, coeurs, progres, parler, gout, peutOffrir, offrir, points, parole, finDeJournee, visibles, remplir };
+  return { NIVEAUX_PEUPLES, DEPART_PEUPLE, pointsPeuple, niveauPeuple, nomNiveauPeuple, peuple, repercuter, peuplesVisibles, GOUTS, NIVEAUX, CADEAUX, definitions, etatNeuf, lienNeuf, normaliser, niveau, nomNiveau, coeurs, progres, parler, gout, peutOffrir, offrir, points, parole, finDeJournee, visibles, remplir };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = RelationsCalcul;

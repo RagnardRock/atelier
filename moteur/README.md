@@ -302,6 +302,14 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Saga 1.20.1** : le `masque` d'un effet (les couleurs qui passent devant le corps) : sur un bord de hautes herbes, seule l'herbe haute cache le personnage, plus l'herbe rase. La planche « devant » est préparée au chargement (`jeu.devant`).
 - **Saga 1.20.2** : les rives d'eau à masque (moitié eau, moitié berge) : le corps n'est plus coupé par une ligne, c'est l'eau de la tuile qui passe devant lui ; une tuile toute de ces couleurs (le milieu de l'étang) garde la coupe et la ligne d'eau.
 
+## Ce que fait Saga 1.22 : duels, textes accordés, travail, postes et peuples (avec Tafl 1.24)
+
+- **Le combat amical** (`combat_groupe` avec `amical`) : un duel ou un entraînement. Perdu, le joueur reste là, ne perd ni argent ni stock du domaine, et le script continue par la branche « gagné » (`reussi`) ou « perdu ou fui » (`rate`). Le groupe est soigné après (`soigner`, vrai par défaut). Les modules reçoivent `defaite_amicale` au lieu de `defaite`.
+- **Des textes accordés** (`moteur/textes.js`) : `{il|elle}` prend la forme qui va avec la variable des accords (`reglages.accords` : `{ variable, valeurs }`), `{var:id}` montre la valeur d'une variable. Pour accorder les dialogues au héros choisi par le joueur. Une **tenue** du héros peut avoir ses propres **portraits**.
+- **Le joueur organise le travail** (module gestion, `affectation: "joueur"`) : dans l'écran **Organiser** (carnet), il met en marche ou arrête chaque bâtiment ; un bâtiment ne tourne qu'avec tous ses ouvriers. Un nouveau bâtiment prend ses ouvriers s'il en reste de libres. Les habitants qu'on voit marcher vont là où le joueur les a mis.
+- **Les postes** (Intendance, Construction…) : un personnage du jeu nommé à un poste (par le joueur, dans Organiser, parmi les candidats disponibles, ou par la commande `gestion_poste`) donne ses effets au domaine : production en %, vitesse des chantiers en %, pour certains bâtiments ou tous. **Les effets sous condition** (`modificateurs`) : les mêmes effets tant qu'une condition est vraie (chantiers plus lents tant que le bâtisseur n'est pas là, champs bénis). Un chantier ralenti avance d'une part de nuit (`progres`). L'écran du domaine montre les postes et les effets du soir ; la prévision de la nuit en tient compte.
+- **Les peuples** (module relations, `donnees/peuples.json`) : une relation avec toute une communauté, avec ses propres niveaux (Hostile, Méfiant, Neutre, Cordial, Ami, Allié), un départ au milieu (on peut descendre), des membres et une part (les points gagnés avec un membre comptent un peu pour son peuple). Commande et condition `relation_peuple`, moment `relation_peuple_niveau`, section Peuples dans l'écran des relations.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

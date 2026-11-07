@@ -43,6 +43,20 @@
     }
   }
 
+  // Saga 1.22 : ce que les points gagnés (ou perdus) avec un personnage font à ses peuples (leur part), et
+  // l'annonce quand un peuple change de niveau.
+  async function annoncerPeuple(o, d, id, r, dire = true) {
+    if (r.apres === r.avant) return;
+    o.hote?.reagir?.('relation_peuple_niveau', { peuple: id, niveau: r.apres, nom: C.nomNiveauPeuple(d, r.apres), avant: r.avant });
+    if (dire && d.reglages.annoncer && o.narrer) await o.narrer(C.remplir(d.reglages.textes.peuple_change, { nom: d.peuples.get(id)?.nom || id, niveau: C.nomNiveauPeuple(d, r.apres) }));
+  }
+  async function repercuter(o, d, personnage, gagne, dire = true) {
+    const r = C.repercuter(d, etatDe(o), personnage, gagne);
+    if (!r.changes.length) return;
+    poser(o, r.etat);
+    for (const x of r.changes) await annoncerPeuple(o, d, x.peuple, x, dire);
+  }
+
   // Ce qu'on sait de ses goûts, en mots : « adore Miel · aime Fleurs des prés ».
   function goutsConnus(o, d, id, e) {
     const p = d.personnes.get(id);
@@ -73,6 +87,17 @@
         sous: [C.nomNiveau(d, pr.niveau), vu ? T.parle : T.pas_parle, goutsConnus(o, d, p.id, e)].filter(Boolean).join(' · '),
       };
     });
+    // Saga 1.22 : les peuples connus, avec leur niveau et une jauge vers le suivant.
+    const peuples = C.peuplesVisibles(d, e);
+    if (peuples.length) {
+      if (items.length) items.unshift({ texte: T.personnes, section: true });
+      items.push({ texte: T.peuples, section: true });
+      for (const p of peuples) {
+        const pts = C.pointsPeuple(d, e, p.id), n = C.niveauPeuple(d, pts);
+        const bas = d.reglages.niveaux_peuples[n].points, suivant = d.reglages.niveaux_peuples[n + 1];
+        items.push({ texte: p.nom, image: p.icone, detail: C.nomNiveauPeuple(d, n), pv: suivant ? (pts - bas) / Math.max(1, suivant.points - bas) : 1, sous: p.description.slice(0, 90) });
+      }
+    }
     if (!items.length) items.push({ texte: T.vide, ton: 'doux' });
     await ui.liste({ titre: d.reglages.nom, entete: `Jour ${jour}`, items, annulable: true, lecture: true });
   }
@@ -135,6 +160,7 @@
           await direComme(o, id, p.parole?.texte || d.reglages.textes.bonjour, p.parole?.expression || '');
         }
         await annoncer(o, d, id, r);
+        await repercuter(o, d, id, r.gagne);
         o.hote?.rafraichir?.();
         const l = o.etat.liens[id];
         return { points: l.points, niveau: C.niveau(d, l.points), gagne: r.gagne, premiere: r.premiere };
@@ -157,6 +183,7 @@
         const def = d.personnes.get(id);
         await direComme(o, id, def?.merci[r.gout] || T[`merci_${r.gout}`], EXPRESSIONS[r.gout]);
         await annoncer(o, d, id, r);
+        await repercuter(o, d, id, r.gagne);
         o.hote?.rafraichir?.();
         await o.jouer(o.c.reussi);
         const l = o.etat.liens[id];
@@ -170,9 +197,23 @@
         const r = C.points(d, etatDe(o), id, Number(o.c.nombre) || 0, mode);
         poser(o, r.etat);
         await annoncer(o, d, id, r, o.c.annoncer !== false);
+        await repercuter(o, d, id, r.change, o.c.annoncer !== false);
         o.hote?.rafraichir?.();
         const l = o.etat.liens[id];
         return { points: l.points, niveau: C.niveau(d, l.points), change: r.change };
+      },
+      // Saga 1.22 : changer la relation avec un peuple (ajouter, retirer ou régler des points). Il devient
+      // connu (l'écran le montre).
+      async relation_peuple(o) {
+        const d = defs(o.jeu), id = String(o.c.peuple || '');
+        if (!id || !d.peuples.has(id)) return null;
+        const mode = ['retirer', 'regler'].includes(o.c.action) ? o.c.action : 'ajouter';
+        const r = C.peuple(d, etatDe(o), id, Number(o.c.nombre) || 0, mode);
+        poser(o, r.etat);
+        await annoncerPeuple(o, d, id, r, o.c.annoncer !== false);
+        o.hote?.rafraichir?.();
+        const pts = C.pointsPeuple(d, o.etat, id);
+        return { points: pts, niveau: C.niveauPeuple(d, pts), change: r.change };
       },
       async relation_ecran(o) { await ecran(o); return null; },
     },
@@ -180,6 +221,12 @@
     // relation_niveau : l'affinité avec `personnage` a atteint le niveau `min` (un numéro, 0 = le premier),
     // et (si max est donné) pas dépassé `max`. relation_parle : le joueur lui a parlé aujourd'hui.
     condition(o, cond) {
+      const borne = (m) => (m === undefined || m === null || m === '' ? Infinity : Number(m));
+      // Saga 1.22 : relation_peuple : la relation avec `peuple` est au moins au niveau `min` (et au plus `max`).
+      if (cond.type === 'relation_peuple') {
+        const d = defs(o.jeu), n = C.niveauPeuple(d, C.pointsPeuple(d, etatDe(o), String(cond.peuple || '')));
+        return n >= Math.max(0, Number(cond.min) || 0) && n <= borne(cond.max);
+      }
       if (cond.type !== 'relation_niveau' && cond.type !== 'relation_parle') return undefined;
       const d = defs(o.jeu), e = etatDe(o), id = String(cond.personnage || '');
       const l = e.liens[id] || C.lienNeuf(d.personnes.get(id));
@@ -202,7 +249,7 @@
 
     actionsPause(o) {
       const d = defs(o.jeu);
-      return d.reglages.menu && d.personnes.size ? [['relations', d.reglages.nom, 'heart']] : [];
+      return d.reglages.menu && (d.personnes.size || d.peuples.size) ? [['relations', d.reglages.nom, 'heart']] : [];
     },
     async agirPause(o, choix) { if (choix === 'relations') await ecran(o); },
 
@@ -213,6 +260,12 @@
         const l = e.liens[p.id] || C.lienNeuf(p);
         const n = C.niveau(d, l.points);
         out[p.id] = { points: l.points, niveau: n, nom_niveau: C.nomNiveau(d, n), rencontre: l.rencontre, parle_aujourdhui: l.parle === jour };
+      }
+      // Saga 1.22 : saga.modules.relations.peuples.onis → { points, niveau, nom_niveau, connu }
+      out.peuples = {};
+      for (const p of d.peuples.values()) {
+        const pts = C.pointsPeuple(d, e, p.id), n = C.niveauPeuple(d, pts);
+        out.peuples[p.id] = { points: pts, niveau: n, nom_niveau: C.nomNiveauPeuple(d, n), connu: Boolean(e.peuples?.[p.id]?.connu) };
       }
       return out;
     },
