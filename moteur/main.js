@@ -72,6 +72,7 @@ function handle(channel, fn) {
 // --- Réglages (config.json) ---
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_CONFIG = {
+  affichage: 'jeu',      // Saga 1.24 : 'jeu' = le zoom choisi par le jeu dans Tafl, 'perso' = zoom et casesVisibles ci-dessous
   zoom: 0,               // 0 = automatique (le plus grand zoom entier qui montre assez de la carte), sinon ×1 à ×8
   casesVisibles: 11,     // en zoom automatique : combien de cases on voit au moins en hauteur
   courirParDefaut: false, // true : on court sans tenir Maj (Maj fait alors marcher)

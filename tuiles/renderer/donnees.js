@@ -316,7 +316,7 @@ const Donnees = (() => {
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
     ajustement: 'badges', ecart: 0, ajustement_sauvages: 'aucun', ecart_sauvages: -2, evolution_dresseurs: false, evolution_sauvages: false, seuil_amitie: 220, chance_chromatique: 4096,
-    interface: { theme: 'verre', accent: '', menus: menusVides() },
+    interface: { theme: 'verre', accent: '', menus: menusVides(), affichage: { cases_visibles: 11, zoom: 0 } },
     regles: 'pokemon', badges: [],
     // Tafl 1.2 : les modules du jeu (commun/modules.js), et leurs réglages par id de module.
     modules: [], modules_reglages: {},
@@ -429,6 +429,9 @@ const Donnees = (() => {
         theme: pick(r.interface?.theme, THEMES, 'verre'),
         accent: /^#[0-9a-f]{6}$/i.test(r.interface?.accent || '') ? r.interface.accent.toLowerCase() : '',
         menus: normMenus(r.interface?.menus),
+        // Tafl 1.25 (Saga 1.24) : le zoom par défaut du jeu. 0 = automatique (le plus grand zoom entier
+        // qui montre au moins cases_visibles cases en hauteur), sinon un zoom fixe ×1 à ×8.
+        affichage: { cases_visibles: int(r.interface?.affichage?.cases_visibles, 11, 5, 30), zoom: int(r.interface?.affichage?.zoom, 0, 0, 8) },
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
       regles,
@@ -1742,10 +1745,26 @@ const Donnees = (() => {
       section('Style'),
       champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
       champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
+      ...formAffichage(r, ctx),
       ...formMenus(r, ctx),
     ];
   }
   function ongletAmbiance(r, ctx) { return formAmbiance(r, ctx); }
+  // Réglages › Interface › Affichage (Tafl 1.25, lu par Saga 1.24) : combien de cases on voit, par défaut.
+  function formAffichage(r, ctx) {
+    const a = r.interface.affichage;
+    const cases = nombreIn(a, 'cases_visibles', 5, 30, 1, () => ctx.change?.());
+    const ligneCases = champ('Cases visibles', cases, 'en hauteur, au moins');
+    const maj = () => { ligneCases.hidden = a.zoom > 0; };
+    const zoom = sel([['0', 'Automatique'], ...[1, 2, 3, 4, 5, 6, 7, 8].map((z) => [String(z), `Fixe × ${z}`])], a.zoom, (v) => { a.zoom = Number(v); maj(); ctx.change?.(); });
+    maj();
+    return [
+      section('Affichage'),
+      info(`Combien de la carte on voit au départ, dans Saga et dans le jeu exporté. En automatique, Saga prend le plus grand zoom entier qui montre au moins ce nombre de cases en hauteur (le pixel art reste net). Le joueur peut garder ce réglage ou choisir le sien dans les options de Saga.`),
+      champ('Zoom', zoom),
+      ligneCases,
+    ];
+  }
 
 
   // Réglages › Jour et nuit, Musique et sons, Sauvegarde auto (Tafl 0.29, joués par Saga 0.11).

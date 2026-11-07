@@ -256,6 +256,7 @@ input[type=range]::-webkit-slider-thumb {
 .modal-extra { flex: 1; color: var(--muted); font-size: 12px; }
 .modal-info { margin: 0; color: var(--muted); line-height: 1.5; user-select: text; white-space: pre-line; }
 .field { display: flex; align-items: center; gap: 10px; }
+.field.inactif { opacity: 0.45; }
 .field-label { width: 120px; flex-shrink: 0; color: var(--muted); }
 .field input[type=text], .field input:not([type]), .field select, .field textarea { flex: 1; min-width: 0; }
 .field input[type=range] { flex: 1; }
