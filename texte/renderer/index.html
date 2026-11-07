@@ -130,6 +130,18 @@
 
   <!-- La zone de travail : la page du document ouvert, sur un fond, comme dans Word -->
   <main id="zone" hidden>
+    <!-- Sommaire : les titres du document (Affichage › Sommaire, Ctrl+Maj+O) -->
+    <aside id="sommaire" class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Sommaire</span>
+        <div class="panel-actions">
+          <button id="sommaire-deplier" class="icon-button" title="Tout déplier"><i class="codicon codicon-expand-all"></i></button>
+          <button id="sommaire-replier" class="icon-button" title="Tout replier"><i class="codicon codicon-collapse-all"></i></button>
+          <button id="sommaire-fermer" class="icon-button" title="Fermer le sommaire (Ctrl+Maj+O)"><i class="codicon codicon-close"></i></button>
+        </div>
+      </div>
+      <div id="sommaire-liste"></div>
+    </aside>
     <div id="defilement">
       <div id="pages"></div>
       <!-- Petite barre au-dessus d'un média choisi (image, vidéo, son), et sa poignée de taille -->
@@ -157,6 +169,7 @@
   </main>
 
   <footer id="statusbar">
+    <button id="btn-sommaire" class="icon-button" title="Sommaire (Ctrl+Maj+O)"><i class="codicon codicon-list-tree"></i></button>
     <span id="status-pages"></span>
     <span id="status-mots"></span>
     <span id="status-format"></span>
@@ -186,6 +199,7 @@
   <script src="editeur.js"></script>
   <script src="medias.js"></script>
   <script src="recherche.js"></script>
+  <script src="sommaire.js"></script>
   <script src="app.js"></script>
   <script src="update.js"></script>
   <!-- Panneau Claude, commun aux outils d'Atelier (../commun/LISEZMOI.md) -->
