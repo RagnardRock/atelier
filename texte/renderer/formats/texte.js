@@ -36,8 +36,13 @@
       replacement: (_c, n) => {
         const w = Unites.lire(n.style.width);
         const src = n.getAttribute('src') || '';
-        // Une image redimensionnée : <img width>, sinon la syntaxe Markdown classique.
-        return w ? `<img src="${src}" width="${Math.round(w)}" alt="${escapeHtml(n.getAttribute('alt') || '')}">` : `![${(n.getAttribute('alt') || '').replace(/[[\]]/g, '')}](${src.replace(/ /g, '%20')})`;
+        const flotte = Formats.flotteDe(n);
+        // Une image redimensionnée ou flottante : <img>, sinon la syntaxe Markdown classique.
+        if (w || flotte) {
+          const style = flotte ? ` style="float: ${flotte === 'gauche' ? 'left' : 'right'}"` : '';
+          return `<img src="${src}"${w ? ` width="${Math.round(w)}"` : ''}${style} alt="${escapeHtml(n.getAttribute('alt') || '')}">`;
+        }
+        return `![${(n.getAttribute('alt') || '').replace(/[[\]]/g, '')}](${src.replace(/ /g, '%20')})`;
       },
     });
     turndown.keep(['u', 'sub', 'sup', 'mark']);
@@ -105,6 +110,14 @@
       } catch (err) {
         alertes.add(`${Medias.nom(m)} n'a pas pu être rangé à côté du document : ${err.message}`);
       }
+      // Une image flottante : en HTML, le « float » standard (lu par tous les navigateurs).
+      const flotte = Formats.flotteDe(m);
+      m.removeAttribute('data-flotte');
+      m.removeAttribute('data-deplace');
+      if (flotte) m.style.float = flotte === 'gauche' ? 'left' : 'right';
+      // (Chromium recopie parfois la taille du texte sur une image qu'il réinsère : elle ne sert à rien.)
+      m.style.fontSize = '';
+      if (!m.getAttribute('style')) m.removeAttribute('style');
       m.removeAttribute('data-nom');
       m.removeAttribute('contenteditable');
       m.classList.remove('media', 'choisi');
@@ -165,7 +178,7 @@ h3 { font-size: 14pt; color: #2f5496; margin: 0.6em 0 0.3em; } h4, h5, h6 { font
 blockquote { margin: 0.6em 1cm; padding-left: 0.4cm; border-left: 3px solid #a0a0a0; color: #595959; font-style: italic; }
 pre { font-family: Consolas, monospace; font-size: 10pt; background: #f2f2f2; padding: 0.4em 0.6em; white-space: pre-wrap; }
 table { border-collapse: collapse; width: 100%; margin: 0.4em 0 0.8em; } td, th { border: 1px solid #a0a0a0; padding: 4px 7px; vertical-align: top; } td > p:last-child, th > p:last-child { margin-bottom: 0; }
-img, video { max-width: 100%; height: auto; vertical-align: bottom; } audio { width: 320px; max-width: 100%; }
+img, video { max-width: 100%; height: auto; vertical-align: bottom; } img[style*="float: left"] { margin: 0.2em 12px 6px 0; } img[style*="float: right"] { margin: 0.2em 0 6px 12px; } audio { width: 320px; max-width: 100%; }
 a { color: #0563c1; } hr { border: none; border-top: 1px solid #a0a0a0; margin: 0.8em 0; }
 hr.saut-page { border: none; margin: 0; height: 0; page-break-after: always; break-after: page; }
 .tab { white-space: pre; tab-size: 4; } ul, ol { margin: 0 0 0.6em; padding-left: 24px; } li > p { margin: 0; }`;

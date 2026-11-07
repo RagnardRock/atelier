@@ -113,7 +113,7 @@ const Nettoyage = (() => {
     'br', 'hr', 'div', 'section', 'article', 'header', 'footer', 'main', 'figure', 'figcaption', 'center',
     'img', 'video', 'audio', 'source', 'dl', 'dt', 'dd', 'kbd', 'samp', 'var', 'abbr', 'cite', 'q'];
   const ATTRIBUTS = ['style', 'href', 'src', 'alt', 'title', 'width', 'height', 'controls', 'colspan', 'rowspan',
-    'class', 'start', 'type', 'align', 'color', 'face', 'size', 'poster', 'loop', 'data-nom', 'valign', 'bgcolor'];
+    'class', 'start', 'type', 'align', 'color', 'face', 'size', 'poster', 'loop', 'data-nom', 'data-flotte', 'valign', 'bgcolor'];
   // Seulement les propriétés de mise en forme qu'Edda comprend : le reste (position, display…)
   // casserait la page.
   const STYLES = ['color', 'background-color', 'background', 'font-family', 'font-size', 'font-weight', 'font-style',
@@ -164,6 +164,20 @@ const Nettoyage = (() => {
   // <font> devient <span style>, <center> un paragraphe centré, un saut de page (de Word ou d'un
   // site) un <hr class="saut-page">, les médias ont leur adresse complète.
   function normaliser(root, racine) {
+    // Une image flottante : dans la page, son habillage est l'attribut data-flotte (gauche / droite),
+    // pas « float » : Chromium sortirait de son paragraphe une image qui flotte déjà quand on l'insère
+    // ou qu'on la modifie. La règle CSS (style.css) la fait flotter une fois à sa place.
+    for (const img of root.querySelectorAll('img')) {
+      const f = img.style.float || img.getAttribute('align');
+      if (f === 'left' || f === 'right') img.dataset.flotte = f === 'left' ? 'gauche' : 'droite';
+      else if (img.dataset.flotte && !['gauche', 'droite'].includes(img.dataset.flotte)) img.removeAttribute('data-flotte');
+      img.removeAttribute('align');
+      img.removeAttribute('data-deplace'); // (marque d'un déplacement à la souris, voir medias.js)
+      if (img.style.float) {
+        img.style.float = '';
+        if (!img.getAttribute('style')) img.removeAttribute('style');
+      }
+    }
     for (const f of [...root.querySelectorAll('font')]) {
       const span = document.createElement('span');
       if (f.getAttribute('color')) span.style.color = f.getAttribute('color');

@@ -433,6 +433,13 @@ body.claude-ouvert > #onglets-barre, body.claude-ouvert > #ruban, body.claude-ou
 .feuille audio.media { width: 320px; max-width: 100%; vertical-align: middle; }
 .feuille .media { cursor: default; border-radius: 2px; }
 .feuille .media.choisi { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Image flottante : le texte coule autour, à 12 px de l'image */
+/* (seulement à sa place dans un paragraphe : voir Nettoyage dans base.js) */
+.feuille :is(p, li, td, th, h1, h2, h3, h4, h5, h6, blockquote) img.media[data-flotte="gauche"] { float: left; margin: 0.2em 12px 6px 0; }
+.feuille :is(p, li, td, th, h1, h2, h3, h4, h5, h6, blockquote) img.media[data-flotte="droite"] { float: right; margin: 0.2em 0 6px 12px; }
+.feuille img.media.choisi { cursor: move; }
+/* Un saut de page passe sous une image flottante, comme dans Word */
+.feuille hr.saut-page { clear: both; }
 .feuille.vide-demarrage::before { content: "Commence à écrire…"; position: absolute; color: #9a9a9a; pointer-events: none; }
 
 /* Mots trouvés par la recherche (CSS Custom Highlight : rien n'est ajouté dans la page) */
@@ -462,6 +469,10 @@ body.claude-ouvert > #onglets-barre, body.claude-ouvert > #ruban, body.claude-ou
   position: absolute; z-index: 16; width: 12px; height: 12px; border: 2px solid #fff; border-radius: 3px;
   background: var(--accent); cursor: nwse-resize; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
+
+/* Déplacer une image : le trait montre où elle sera posée */
+#media-depot { position: absolute; z-index: 16; width: 2px; background: var(--accent); border-radius: 1px; pointer-events: none; box-shadow: 0 0 6px var(--accent); }
+body.deplace-media, body.deplace-media * { cursor: move !important; }
 
 /* Glisser-déposer */
 #drop-hint { display: none; }
