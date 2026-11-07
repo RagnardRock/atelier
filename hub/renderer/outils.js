@@ -5,6 +5,8 @@
 // Les outils sont rangés par catégorie (Développement, Graphisme…), chaque catégorie se replie d'un clic,
 // et un filtre façon Steam (Tous / Installés / Mises à jour) en haut de la colonne. Le filtre et les
 // catégories repliées sont gardés dans config.json (filtreOutils, categoriesRepliees).
+// L'étoile d'une carte met l'outil en favori (config.json : outilsFavoris) : les favoris passent en tête
+// de leur catégorie, et le filtre « Favoris » ne montre qu'eux.
 // La liste des outils et des catégories est dans hub/outils.js ; tout le travail (registre, GitHub,
 // installeur) se fait dans main.js.
 
@@ -15,6 +17,7 @@ const Outils = (() => {
   let categories = [];
   let filtre = 'tous';
   let repliees = new Set();
+  let favoris = new Set(); // ids des outils en favori
   const enCours = new Map(); // id → { step, percent } pendant un téléchargement / une installation
   // Outils que tu as choisi d'installer dès que leur nouvelle version, en cours de fabrication
   // sur GitHub, sera publiée : id → version attendue.
@@ -64,10 +67,17 @@ const Outils = (() => {
       actions.append(b);
     }
 
+    const fav = favoris.has(o.id);
+    const etoile = el('button', { className: `icon-button etoile${fav ? ' favori' : ''}`, title: fav ? `Retirer ${o.nom} des favoris` : `Mettre ${o.nom} en favori` },
+      el('i', { className: `codicon codicon-${fav ? 'star-full' : 'star-empty'}` }));
+    etoile.setAttribute('aria-pressed', String(fav));
+    etoile.onclick = () => basculerFavori(o.id);
+
     const icone = el('img', { className: 'outil-icone', src: `outils/${o.icone}`, alt: '' });
     // Double-clic sur l'icône : lance l'outil, comme sur le bureau.
     if (o.installe) icone.ondblclick = () => lancer(o);
-    const card = el('div', { className: `outil${o.miseAJour ? ' a-jour-dispo' : ''}${o.installe ? '' : ' absent'}` },
+    const card = el('div', { className: `outil${o.miseAJour ? ' a-jour-dispo' : ''}${o.installe ? '' : ' absent'}${fav ? ' est-favori' : ''}` },
+      etoile,
       icone,
       el('div', { className: 'outil-infos' },
         el('div', { className: 'outil-nom' }, o.nom, el('span', { className: 'glyphe', textContent: o.glyphe })),
@@ -85,10 +95,12 @@ const Outils = (() => {
 
   const FILTRES = {
     tous: () => true,
+    favoris: (o) => favoris.has(o.id),
     installes: (o) => o.installe,
     majs: (o) => o.miseAJour,
   };
   const VIDE = {
+    favoris: 'Aucun favori. Clique l\'étoile d\'un outil pour le mettre en favori.',
     installes: 'Aucun outil installé pour l\'instant. Le filtre « Tous » montre ceux que tu peux installer.',
     majs: 'Aucune mise à jour à faire : tout est à jour.',
   };
@@ -101,11 +113,15 @@ const Outils = (() => {
       b.querySelector('.compte').textContent = n;
       // « Mises à jour » ne se montre que s'il y en a (ou si c'est le filtre choisi).
       if (b.dataset.filtre === 'majs') b.hidden = !n && filtre !== 'majs';
+      // « Favoris » non plus : il apparaît dès la première étoile.
+      if (b.dataset.filtre === 'favoris') b.hidden = !n && filtre !== 'favoris';
     }
     const visibles = outils.filter(FILTRES[filtre] || FILTRES.tous);
     const groupes = [];
     for (const c of categories) {
-      const dedans = visibles.filter((o) => o.categorie === c.id);
+      // Les favoris d'abord, puis l'ordre de hub/outils.js (sort est stable).
+      const dedans = visibles.filter((o) => o.categorie === c.id)
+        .sort((a, b) => Number(favoris.has(b.id)) - Number(favoris.has(a.id)));
       if (!dedans.length) continue;
       const replie = repliees.has(c.id);
       const titre = el('button', { className: 'categorie-titre', title: replie ? 'Déplier' : 'Replier' },
@@ -129,6 +145,13 @@ const Outils = (() => {
     render();
   }
 
+  function basculerFavori(id) {
+    if (favoris.has(id)) favoris.delete(id); else favoris.add(id);
+    window.atelier.writeConfig({ outilsFavoris: [...favoris] });
+    // Dernier favori retiré depuis le filtre « Favoris » : on revient sur « Tous ».
+    if (filtre === 'favoris' && !favoris.size) choisirFiltre('tous'); else render();
+  }
+
   function choisirFiltre(f) {
     filtre = FILTRES[f] ? f : 'tous';
     window.atelier.writeConfig({ filtreOutils: filtre });
@@ -140,6 +163,7 @@ const Outils = (() => {
   function reglages(c) {
     filtre = FILTRES[c.filtreOutils] ? c.filtreOutils : 'tous';
     repliees = new Set(c.categoriesRepliees || []);
+    favoris = new Set(c.outilsFavoris || []);
   }
 
   async function refresh({ refresh = false, github = true, silencieux = false, auto = false } = {}) {
@@ -351,5 +375,5 @@ const Outils = (() => {
     },
   };
 
-  return { refresh, reglages, pourLoki, get liste() { return outils; }, get erreurGithub() { return erreurGithub; } };
+  return { refresh, reglages, pourLoki, get favoris() { return [...favoris]; }, get liste() { return outils; }, get erreurGithub() { return erreurGithub; } };
 })();

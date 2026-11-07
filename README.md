@@ -17,7 +17,7 @@ Un ensemble d'outils pour le travail de tous les jours (web, graphisme, bureauti
 | **Reikna** ᛞ | Tableur : xlsx, xls, ods, CSV, formules en français, graphiques, mise en forme conditionnelle | [`tableur/`](tableur/README.md) | 0.4.3 |
 | **Edda** ᛖ | Traitement de texte : docx, odt, RTF, Markdown, HTML, texte, avec images, vidéos et sons dans la page | [`texte/`](texte/README.md) | 0.5.0 |
 
-Dans Atelier, les outils sont rangés par catégorie (développement, graphisme, bureautique, jeu) avec un filtre Tous / Installés / Mises à jour.
+Dans Atelier, les outils sont rangés par catégorie (développement, graphisme, bureautique, jeu) avec un filtre Tous / Favoris / Installés / Mises à jour (étoile sur chaque carte).
 
 ## Loki, l'assistant commun
 

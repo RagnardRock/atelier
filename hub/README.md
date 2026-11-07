@@ -21,6 +21,8 @@ Une carte par outil, avec sa version installée et la dernière publiée sur Git
 
 **Rangés par catégorie** (depuis Atelier 0.11) : Développement (Rune), Graphisme (Skald, Brokk), Bureautique (Mímir, Kenning, Reikna, Edda), Jeu (Tafl, Saga), et « Autres » pour un outil sans catégorie. Un clic sur le titre d'une catégorie la replie ou la déplie. En haut, un **filtre façon Steam** : **Tous**, **Installés** (seulement ceux qui sont sur ce PC), et **Mises à jour** (n'apparaît que s'il y en a). Le nombre d'outils est écrit à côté. Atelier retient le filtre et les catégories repliées.
 
+**Favoris** (depuis Atelier 0.22) : l'étoile en haut à droite d'une carte (visible au survol) met l'outil en favori. Les favoris passent en tête de leur catégorie, et le filtre **Favoris** (qui apparaît dès le premier favori) ne montre qu'eux. Gardés dans `config.json` (`outilsFavoris`).
+
 Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelier le fait tout seul (réglable).
 
 **Comment Atelier trouve les outils installés.** Les installeurs de Rune, Skald, Brokk et Tafl s'inscrivent dans le registre de Windows, à l'endroit que lit « Paramètres › Applications » (nom, version, dossier). Atelier lit cet endroit ; s'il n'y trouve rien, il regarde `%LOCALAPPDATA%\Programs\<nom>`.
