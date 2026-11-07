@@ -537,7 +537,7 @@ function atelierMd(etat, config, version) {
 function lignePrenom(prenom) {
   return prenom
     ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
-    : 'Tu ne connais pas encore le prénom de la personne : si elle te le donne, dis-lui de l\'écrire dans les réglages d\'Atelier (Ctrl+,), pour que tous les outils le sachent.';
+    : 'Tu ne connais pas encore le prénom de l\'utilisateur : s\'il te le donne, dis-lui de l\'écrire dans les réglages d\'Atelier (Ctrl+,), pour que tous les outils le sachent.';
 }
 
 // Instructions pour Claude, lues par Claude Code au lancement (CLAUDE.md du dossier de travail).

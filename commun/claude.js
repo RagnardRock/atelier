@@ -157,7 +157,7 @@ function ouvrirCanal(log) {
 // --- La personne qui parle à Loki ---
 // Son prénom est demandé au premier lancement d'Atelier, qui le recopie dans
 // %APPDATA%\atelier-commun\utilisateur.json. Les consignes et les descriptions des actions des outils
-// ont été écrites pour Ragna : on y met le vrai prénom (ou « la personne » s'il n'est pas encore donné).
+// ont été écrites pour Ragna : on y met le vrai prénom (ou « l'utilisateur » s'il n'est pas encore donné).
 async function lirePrenom() {
   if (!communDir) return '';
   try {
@@ -174,13 +174,13 @@ function personnaliser(texte, prenom) {
     return t.replace(/\bRagna\b/g, prenom);
   }
   return texte
-    .replace(/(^|[.!?]\s+|^\s*- )Ragna\b/gm, '$1La personne')
-    .replace(/\bRagna\b/g, 'la personne');
+    .replace(/(^|[.!?]\s+|^\s*- )Ragna\b/gm, "$1L'utilisateur")
+    .replace(/\bRagna\b/g, "l'utilisateur");
 }
 function lignePrenom(prenom) {
   return prenom
     ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
-    : 'Tu ne connais pas encore le prénom de la personne : il se donne dans les réglages d\'Atelier (Ctrl+,), et tous les outils le sauront.';
+    : 'Tu ne connais pas encore le prénom de l\'utilisateur : il se donne dans les réglages d\'Atelier (Ctrl+,), et tous les outils le sauront.';
 }
 
 // La fenêtre fait l'action (renderer/claude-actions.js) et renvoie { texte, image } ou { erreur }.

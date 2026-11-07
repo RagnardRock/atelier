@@ -217,16 +217,16 @@ async function lirePrenom() {
 }
 const lignePrenom = (prenom) => (prenom
   ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
-  : 'Tu ne connais pas encore le prénom de la personne : il se donne dans les réglages d\'Atelier (Ctrl+,).');
+  : 'Tu ne connais pas encore le prénom de l\'utilisateur : il se donne dans les réglages d\'Atelier (Ctrl+,).');
 
 // Glissé avant ton premier message de chaque lancement (tu ne le vois pas dans le panneau) :
 // Claude sait ainsi qu'il a une mémoire du projet et des notes à sa disposition.
 function introAtelier(cwd, prenom) {
-  const qui = prenom || 'la personne';
+  const qui = prenom || 'l\'utilisateur';
   return [
     `(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude). Tu travailles dans le projet « ${path.basename(cwd)} ».`,
     lignePrenom(prenom),
-    `${prenom || 'Elle'} utilise aussi Atelier, son hub, dont l'assistant Loki garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :`,
+    `${prenom || 'Il'} utilise aussi Atelier, son hub, dont l'assistant Loki garde une mémoire par projet et voit ses notes. Tu y as accès avec les outils mcp__atelier__ :`,
     'lire_contexte (la mémoire de ce projet : décisions, client, hébergement… ; lis-la avant de répondre à ce premier message,',
     `puis relis-la si ${qui} parle de ce qui a été décidé), lire_notes (ses notes, quand la question s'y rapporte),`,
     `retenir_projet et oublier_projet (garde une info courte et utile plus tard quand ${qui} te la demande ou te l'apprend ;`,
@@ -425,7 +425,7 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
       'Ici, tu tournes sur un modèle local. Réponds en français, simplement et brièvement.',
       `Tu travailles dans le projet « ${path.basename(root)} », dossier ${root}. Les chemins sont relatifs à ce dossier.`,
       'Pour les fichiers : lire_fichier, lister_fichiers, chercher_texte, modifier_fichier (remplace un passage exact), ecrire_fichier.',
-      `Avant de modifier un fichier, lis-le. ${prenom || 'La personne'} valide chaque modification sur une carte Autoriser / Refuser.`,
+      `Avant de modifier un fichier, lis-le. ${prenom || 'L\'utilisateur'} valide chaque modification sur une carte Autoriser / Refuser.`,
       ...(memoire.length ? ['La mémoire du projet (décisions, client, hébergement…) : lire_contexte ; ses notes : lire_notes ; retenir_projet / oublier_projet pour garder une info utile plus tard.'] : []),
     ].join('\n');
     await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(root), ...memoire] });

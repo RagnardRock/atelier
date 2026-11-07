@@ -461,7 +461,7 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
     const permis = await autoriser({ id: idAppel, nomAffiche, entree, famille: outil.famille, lecture: outil.lecture });
     if (!permis) {
       emit({ kind: 'tool-result', id: idAppel, isError: true });
-      return 'La personne a refusé. Ne recommence pas : demande-lui ce qu\'elle préfère.';
+      return 'L\'utilisateur a refusé. Ne recommence pas : demande-lui ce qu\'il préfère.';
     }
     emit({ kind: 'status', text: 'Loki agit…' });
     let resultat;

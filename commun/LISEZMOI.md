@@ -28,7 +28,7 @@ fichiers), et sa propre copie de `mcp-commun.js`.
 **Qui lui parle.** Atelier demande le prénom au premier lancement (modifiable dans ses réglages) et
 l'écrit dans `%APPDATA%\atelier-commun\utilisateur.json`. `claude.js` le lit à chaque message : les
 consignes disent à Loki comment s'appelle la personne, et le « Ragna » écrit dans les consignes et
-les descriptions d'actions des outils est remplacé par ce prénom (ou « la personne » s'il manque).
+les descriptions d'actions des outils est remplacé par ce prénom (ou « l'utilisateur » s'il manque).
 
 À chaque lancement, `claude.js` écrit `claude-consignes.md` (dans le dossier de réglages de l'outil)
 et le donne à Claude Code (`--append-system-prompt-file`) : dans quel outil il est, le projet et sa
