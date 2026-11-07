@@ -468,7 +468,7 @@ async function projetsMd(liste, run) {
 // Les widgets d'Atelier (mêmes clés que WIDGETS dans renderer/app.js, et config.widgets) : ce qu'ils
 // font, et ce que Loki peut y faire. À compléter ici quand un widget arrive ou change.
 const WIDGETS = [
-  ['notes', 'Notes', 'notes rapides en Markdown ; la première ligne est le titre ; épingler une note la garde en haut ; correction d\'orthographe au clic droit.', 'Lire (notes.md), ajouter, modifier, supprimer.'],
+  ['notes', 'Notes', 'notes rapides en Markdown ; la première ligne est le titre ; épingler une note la garde en haut ; correction d\'orthographe au clic droit ; cases à cocher : une ligne « - [ ] tâche » s\'affiche comme une case (« - [x] » = faite, barrée), clic = cocher, bouton ou Ctrl+Shift+L = ligne ↔ tâche, compteur « 2/5 » dans la liste.', 'Lire (notes.md), ajouter, modifier, supprimer ; pour cocher une tâche, modifier la note en remplaçant « - [ ] » par « - [x] » sur sa ligne.'],
   ['projets', 'Projets récents', 'les dossiers du dossier des projets, du plus récent au plus ancien, avec leur état Git ; clic = ouvrir dans l\'outil choisi ; clic droit = choisir l\'outil (Rune, Skald, Tafl…) ou l\'Explorateur ; signet = la mémoire du projet.', 'Lire (projets.md), ouvrir un projet, retenir / oublier des infos.'],
   ['pressePapiers', 'Presse-papiers et couleurs', 'historique de ce que Ragna copie (texte), et une palette de couleurs partagée avec Skald et Rune, avec une pipette.', 'aucun accès (il peut contenir des mots de passe).'],
   ['minuteurs', 'Minuteurs', 'comptes à rebours qui tournent en même temps (raccourcis 5, 15, 25 min, Pomodoro), carillon et notification à la fin, gardés si Atelier se ferme.', 'Lancer un minuteur.'],
