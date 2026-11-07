@@ -44,9 +44,12 @@ Le ruban suit le curseur : le bouton gras s'allume dans du gras, la police et la
 | `Ctrl+=`, `Ctrl+Maj+=` | Indice, exposant |
 | `Ctrl+Espace` | Effacer la mise en forme |
 | `Ctrl+K` | Lien (`Ctrl+clic` sur un lien l'ouvre) |
+| `Ctrl+glisser`, `Ctrl+double-clic` | Ajouter un bout de texte à la sélection (sélection multiple) |
 | `Ctrl+Entrée` | Saut de page |
 | `Tab` | Dans un tableau : case suivante (dans la dernière, une nouvelle ligne) ; dans une liste : un niveau de plus |
 | `Ctrl+molette`, `Ctrl+0` | Zoom, zoom 100 % |
+
+**Sélection multiple**, comme dans Word : choisis un premier bout de texte, puis `Ctrl+glisser` (ou `Ctrl+double-clic` sur un mot) pour en ajouter d'autres. Gras, italique, souligné, barré, indice, exposant, couleur, surlignage, police, taille, alignement, style de paragraphe et « effacer la mise en forme » s'appliquent à tous les bouts d'un coup ; `Suppr` les efface tous ; `Ctrl+C` / `Ctrl+X` copie leurs textes l'un sous l'autre. Pour gras, italique… : si tous les bouts le sont déjà, on l'enlève partout, sinon on le met partout. Un seul `Ctrl+Z` défait l'action sur tous les bouts. Un clic sans `Ctrl`, une frappe ou `Échap` arrête la sélection multiple.
 
 Le clic droit propose les corrections d'orthographe (français, ou français et anglais, dans les Réglages), le copier-coller, et dans un tableau : ajouter ou supprimer des lignes et colonnes, la ligne d'en-tête, la couleur de fond des cases.
 

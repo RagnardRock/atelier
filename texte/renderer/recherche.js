@@ -26,7 +26,8 @@ const Recherche = (() => {
   }
   function fermer() {
     barre.hidden = true;
-    CSS.highlights?.clear();
+    CSS.highlights?.delete('edda-trouve');
+    CSS.highlights?.delete('edda-courant');
     trouves = [];
     Editeur.restaurer();
   }
@@ -67,7 +68,8 @@ const Recherche = (() => {
   }
   function surligner() {
     if (!CSS.highlights) return;
-    CSS.highlights.clear();
+    CSS.highlights.delete('edda-trouve');
+    CSS.highlights.delete('edda-courant');
     if (trouves.length) CSS.highlights.set('edda-trouve', new Highlight(...trouves));
     if (courant >= 0 && trouves[courant]) {
       CSS.highlights.set('edda-courant', new Highlight(trouves[courant]));

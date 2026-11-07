@@ -127,6 +127,195 @@ const Editeur = (() => {
     saut: () => inserer('<hr class="saut-page"><p><br></p>'),
     ligne: () => inserer('<hr><p><br></p>'),
   };
+  // --- Sélection multiple (Ctrl+glisser, Ctrl+double-clic, comme dans Word) ---
+  //
+  // Chromium ne garde qu'une sélection à la fois. Edda garde donc elle-même les plages déjà choisies
+  // (« plages ») et les surligne avec l'API CSS Custom Highlight (rien n'est ajouté dans la page).
+  // La sélection en cours (celle de Chromium) est la dernière plage.
+  //
+  // Une mise en forme sur toutes les plages se fait plage par plage avec execCommand, ce qui donnerait
+  // une étape de Ctrl+Z par plage. Pour n'en garder qu'une : on note le HTML obtenu, on défait ces
+  // étapes, puis on remplace d'un coup la partie de la page concernée par ce HTML (un seul insertHTML).
+  // Si quelque chose ne colle pas (le HTML n'est pas exactement celui attendu), on garde les étapes
+  // séparées : c'est moins pratique, mais rien n'est perdu.
+  let plages = []; // Range[] : les plages ajoutées avec Ctrl, sans la sélection en cours
+  let interne = false; // vrai pendant qu'Edda applique une commande sur les plages
+  const surlignable = typeof Highlight !== 'undefined' && CSS.highlights;
+  function dessinerPlages() {
+    if (!surlignable) return;
+    plages = plages.filter((r) => !r.collapsed && dansPage(r.startContainer));
+    if (plages.length) CSS.highlights.set('edda-plages', new Highlight(...plages));
+    else CSS.highlights.delete('edda-plages');
+  }
+  function viderPlages() {
+    if (!plages.length) return;
+    plages = [];
+    dessinerPlages();
+  }
+  const avantPoint = (n1, o1, n2, o2) => { const r = document.createRange(); r.setStart(n1, o1); return r.comparePoint(n2, o2) > 0; };
+  const sechevauchent = (a, b) => avantPoint(a.startContainer, a.startOffset, b.endContainer, b.endOffset)
+    && avantPoint(b.startContainer, b.startOffset, a.endContainer, a.endOffset);
+  function ajouterPlage(r) {
+    plages = plages.filter((x) => !sechevauchent(x, r));
+    plages.push(r);
+    dessinerPlages();
+  }
+  // Toutes les plages, sélection en cours comprise, dans l'ordre de la page. Une plage refaite par-dessus
+  // une autre la remplace (comme dans Word, on ne peut pas choisir deux fois le même texte).
+  function toutesPlages() {
+    const s = window.getSelection();
+    const active = s.rangeCount && !s.isCollapsed && dansPage(s.anchorNode) ? s.getRangeAt(0).cloneRange()
+      : (selection && !selection.collapsed && dansPage(selection.startContainer) ? selection.cloneRange() : null);
+    const liste = plages.filter((r) => !r.collapsed && dansPage(r.startContainer) && !(active && sechevauchent(r, active)));
+    if (active) liste.push(active);
+    return liste.sort((a, b) => a.compareBoundaryPoints(Range.START_TO_START, b));
+  }
+  const multiple = () => plages.length > 0 && toutesPlages().length > 1;
+
+  // Positions dans le texte de la page (en caractères) : elles ne bougent pas quand on met en forme,
+  // alors que les nœuds, eux, sont souvent refaits par Chromium.
+  function positionTexte(n, o) {
+    const r = document.createRange();
+    r.setStart(page(), 0);
+    r.setEnd(n, o);
+    return r.toString().length;
+  }
+  function pointTexte(i, fin) {
+    const w = document.createTreeWalker(page(), NodeFilter.SHOW_TEXT);
+    let vu = 0;
+    let dernier = null;
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      const l = n.nodeValue.length;
+      // Une fin qui tombe au tout début d'un nœud reste à la fin du précédent ; un début, au début du suivant.
+      if (fin ? i <= vu + l && (l || i === vu) : i < vu + l) return { n, o: i - vu };
+      vu += l;
+      dernier = n;
+    }
+    return dernier ? { n: dernier, o: dernier.nodeValue.length } : { n: page(), o: page().childNodes.length };
+  }
+  function rangeTexte([a, b]) {
+    const d = pointTexte(a, false), f = pointTexte(b, true);
+    const r = document.createRange();
+    r.setStart(d.n, d.o);
+    r.setEnd(f.n, f.o);
+    return r;
+  }
+  // L'enfant direct de la page qui contient un point.
+  function indexHaut(n, o, fin) {
+    const p = page();
+    if (n === p) return Math.max(0, Math.min(p.childNodes.length - 1, fin ? o - 1 : o));
+    while (n.parentNode !== p) n = n.parentNode;
+    return [...p.childNodes].indexOf(n);
+  }
+
+  // Appliquer une action sur chaque plage. `faire(i)` agit sur la sélection, posée sur la plage i.
+  function surPlages(faire, { effacer = false, liste = toutesPlages() } = {}) {
+    const p = page();
+    const positions = liste.map((r) => [positionTexte(r.startContainer, r.startOffset), positionTexte(r.endContainer, r.endOffset)]);
+    const premier = liste[0], dernier = liste[liste.length - 1];
+    const debut = indexHaut(premier.startContainer, premier.startOffset, false);
+    const resteFin = p.childNodes.length - 1 - indexHaut(dernier.endContainer, dernier.endOffset, true);
+    const avant = p.innerHTML;
+    p.focus({ preventScroll: true });
+    const s = window.getSelection();
+    let pas = 0;
+    const compter = (e) => { if (!/^history/.test(e.inputType)) pas++; };
+    const poser = (k) => { s.removeAllRanges(); s.addRange(rangeTexte(positions[k])); memoriser(); };
+    interne = true;
+    p.addEventListener('input', compter, true);
+    try {
+      // Effacer : de la fin vers le début, pour que les positions des plages d'avant restent justes.
+      const ordre = positions.map((_, k) => k);
+      if (effacer) ordre.reverse();
+      for (const k of ordre) { poser(k); faire(k); }
+      const apres = p.innerHTML;
+      if (pas > 1) {
+        for (let k = 0; k < pas; k++) document.execCommand('undo');
+        if (p.innerHTML !== avant) {
+          for (let k = 0; k < pas; k++) document.execCommand('redo');
+        } else {
+          const t = document.createElement('template');
+          t.innerHTML = apres;
+          const n = t.content.childNodes.length;
+          const boite = document.createElement('div');
+          for (const x of [...t.content.childNodes].slice(debut, n - resteFin)) boite.append(x);
+          // Comme pour insererA : une « sentinelle » (paragraphe vide) juste avant la zone, pour que le HTML
+          // remis ne se mêle pas à un titre ou à une liste. La zone finit à l'intérieur de son dernier bloc :
+          // finir juste après lui ferait commencer Chromium dans le bloc suivant.
+          const dernierBloc = p.childNodes[p.childNodes.length - 1 - resteFin];
+          const sentinelle = document.createElement('p');
+          sentinelle.dataset.sentinelle = '';
+          sentinelle.innerHTML = '<br>';
+          p.insertBefore(sentinelle, p.childNodes[debut]);
+          const zone = document.createRange();
+          zone.setStart(sentinelle, 0);
+          if (dernierBloc.nodeType === 3) zone.setEnd(dernierBloc, dernierBloc.nodeValue.length);
+          else zone.setEnd(dernierBloc, dernierBloc.childNodes.length);
+          s.removeAllRanges();
+          s.addRange(zone);
+          document.execCommand('insertHTML', false, boite.innerHTML);
+          if (p.innerHTML !== apres) {
+            // Chromium a retouché le HTML en le remettant : on revient en arrière et on refait plage par plage.
+            document.execCommand('undo');
+            sentinelle.remove();
+            if (p.innerHTML === avant) for (const k of ordre) { poser(k); faire(k); }
+          }
+        }
+      }
+    } finally {
+      p.removeEventListener('input', compter, true);
+      interne = false;
+    }
+    if (effacer) {
+      viderPlages();
+    } else {
+      // Les plages restent choisies (on peut enchaîner gras, puis couleur…), la dernière reste la sélection.
+      const r = positions.map(rangeTexte);
+      s.removeAllRanges();
+      s.addRange(r.pop());
+      plages = r;
+      dessinerPlages();
+    }
+    memoriser();
+    planifier();
+    changement();
+    return true;
+  }
+
+  // Les commandes qui s'appliquent à toutes les plages. Pour gras, italique… comme dans Word : si
+  // toutes les plages le sont déjà, on l'enlève partout ; sinon on le met partout.
+  const BASCULES = ['bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript'];
+  const SUR_PLAGES = [...BASCULES, 'removeFormat', 'police', 'taille', 'plusGrand', 'plusPetit', 'couleur', 'surligner',
+    'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull', 'style'];
+  for (const nom of SUR_PLAGES) {
+    const simple = commandes[nom];
+    commandes[nom] = (...args) => {
+      if (interne || !multiple()) return simple(...args);
+      if (!BASCULES.includes(nom)) return surPlages(() => simple(...args));
+      const liste = toutesPlages();
+      const etats = liste.map((r) => {
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(r);
+        try { return document.queryCommandState(nom); } catch { return false; }
+      });
+      const voulu = !etats.every(Boolean);
+
+      return surPlages((k) => { if (etats[k] !== voulu) simple(...args); }, { liste });
+    };
+  }
+  const effacerPlages = () => surPlages(() => document.execCommand('delete'), { effacer: true });
+  // Copier : les textes des plages, l'un sous l'autre.
+  function copierPlages(e) {
+    if (!multiple()) return false;
+    const liste = toutesPlages();
+    const html = liste.map((r) => { const d = document.createElement('div'); d.append(r.cloneContents()); return d.innerHTML; });
+    e.clipboardData.setData('text/plain', liste.map((r) => r.toString()).join('\n'));
+    e.clipboardData.setData('text/html', html.join('<br>'));
+    e.preventDefault();
+    return true;
+  }
+
   const TAILLES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
   function tailleSuivante(t, sens) {
     const v = Number(t) || 11;
@@ -349,12 +538,28 @@ const Editeur = (() => {
     p.setAttribute('role', 'textbox');
     p.setAttribute('aria-multiline', 'true');
     p.addEventListener('input', (e) => {
+      // Une frappe, un Ctrl+Z, une insertion… : la sélection multiple s'arrête (sauf pendant qu'Edda l'applique).
+      if (!interne) viderPlages();
       // Ctrl+Z après une écriture de Claude : la sentinelle revenue reste cachée (voir insererA).
       if (e.inputType === 'historyUndo') for (const x of p.querySelectorAll(':scope > p[data-sentinelle]')) if (!x.textContent.trim()) x.hidden = true;
       changement();
       verifierVide(p);
     });
     p.addEventListener('paste', coller);
+    p.addEventListener('copy', copierPlages);
+    p.addEventListener('cut', (e) => { if (copierPlages(e)) effacerPlages(); });
+    // Ctrl+clic : la sélection en cours devient une plage gardée, et une nouvelle sélection commence.
+    // Un clic sans Ctrl arrête la sélection multiple.
+    p.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (!(e.ctrlKey || e.metaKey)) { viderPlages(); return; }
+      const s = window.getSelection();
+      if (!s.rangeCount || s.isCollapsed || !dansPage(s.anchorNode)) return;
+      ajouterPlage(s.getRangeAt(0).cloneRange());
+      // Le curseur va là où l'on clique : sinon, Ctrl+glisser dans le texte choisi le déplacerait.
+      const c = document.caretRangeFromPoint(e.clientX, e.clientY);
+      if (c && dansPage(c.startContainer)) { s.removeAllRanges(); s.addRange(c); }
+    }, true);
     p.addEventListener('keydown', clavier);
     p.addEventListener('focus', () => document.execCommand('defaultParagraphSeparator', false, 'p'));
     // Un lien s'ouvre avec Ctrl+clic (comme dans Word) ; un clic simple place le curseur.
@@ -412,6 +617,13 @@ const Editeur = (() => {
   // --- Clavier dans la page ---
   function clavier(e) {
     const s = window.getSelection();
+    if (plages.length && !['Control', 'Shift', 'Alt', 'Meta', 'AltGraph'].includes(e.key)) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && multiple()) { e.preventDefault(); effacerPlages(); return; }
+      // Les raccourcis (Ctrl+G, Ctrl+C…) gardent les plages ; le reste (frappe, flèches, Échap) les arrête.
+      const raccourci = (e.ctrlKey || e.metaKey) && !['a', 'z', 'y'].includes(e.key.toLowerCase());
+      if (!raccourci) viderPlages();
+      if (e.key === 'Escape') return;
+    }
     const n = s.anchorNode;
     if (e.key === 'Tab' && !e.ctrlKey && !e.altKey) {
       const cellule = ancetre(n, 'td, th');
@@ -456,7 +668,9 @@ const Editeur = (() => {
   }
 
   return {
-    activer(d) { doc = d; selection = null; planifier(); },
+    activer(d) { doc = d; selection = null; plages = []; dessinerPlages(); planifier(); },
+    plagesMultiples: () => (multiple() ? toutesPlages().length : 0),
+    viderPlages,
     page,
     doc: () => doc,
     commandes,
