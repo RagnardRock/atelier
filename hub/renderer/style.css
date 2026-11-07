@@ -307,8 +307,8 @@ input[type=range]::-webkit-slider-thumb {
 .outil.a-jour-dispo .outil-version { color: var(--accent); }
 .outil-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .outil-actions .desinstaller:hover { color: var(--error); }
-/* Étoile des favoris : coin haut droit de la carte, discrète tant que la carte n'est pas survolée. */
-.outil > .etoile { position: absolute; top: 6px; right: 6px; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+/* Étoile des favoris : coin haut droit de la carte, toujours visible (plus claire au survol). */
+.outil > .etoile { position: absolute; top: 6px; right: 6px; opacity: 0.55; transition: opacity 0.15s, color 0.15s; }
 .outil:hover > .etoile, .outil > .etoile:focus-visible, .outil > .etoile.favori { opacity: 1; }
 .outil > .etoile.favori { color: #f5c451; }
 .outil > .etoile:hover { color: #f5c451; }

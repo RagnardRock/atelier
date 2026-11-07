@@ -113,8 +113,6 @@ const Outils = (() => {
       b.querySelector('.compte').textContent = n;
       // « Mises à jour » ne se montre que s'il y en a (ou si c'est le filtre choisi).
       if (b.dataset.filtre === 'majs') b.hidden = !n && filtre !== 'majs';
-      // « Favoris » non plus : il apparaît dès la première étoile.
-      if (b.dataset.filtre === 'favoris') b.hidden = !n && filtre !== 'favoris';
     }
     const visibles = outils.filter(FILTRES[filtre] || FILTRES.tous);
     const groupes = [];
