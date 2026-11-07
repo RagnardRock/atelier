@@ -206,8 +206,8 @@
     inserer_media: {
       icone: 'file-media',
       libelle: (a) => `Insère ${nomFichier(String(a.chemin || ''))}`,
-      description: 'Insère une image, une vidéo ou un son (chemin relatif au projet, ou absolu) au curseur, au début ou à la fin du document affiché. Images : png, jpg, gif, webp, svg… ; vidéos : mp4, webm… ; sons : mp3, wav, ogg…',
-      schema: { type: 'object', properties: { chemin: { type: 'string' }, ou: { type: 'string', enum: ['curseur', 'debut', 'fin'] } }, required: ['chemin'] },
+      description: 'Insère une image, une vidéo ou un son (chemin relatif au projet, ou absolu) au curseur, au début ou à la fin du document affiché. Images : png, jpg, gif, webp, svg… ; vidéos : mp4, webm… ; sons : mp3, wav, ogg… habillage (images seulement) : « texte » (par défaut, l\'image est dans la ligne), « gauche » ou « droite » (image flottante, le texte l\'entoure ; à mettre au début du paragraphe qu\'elle accompagne). En html, une image flottante s\'écrit <img style="float: left"> ou float: right.',
+      schema: { type: 'object', properties: { chemin: { type: 'string' }, ou: { type: 'string', enum: ['curseur', 'debut', 'fin'] }, habillage: { type: 'string', enum: ['texte', 'gauche', 'droite'] } }, required: ['chemin'] },
       faire: async (a) => {
         const d = docEcrit();
         const chemin = await cheminDe(a.chemin);
@@ -223,7 +223,7 @@
           window.getSelection().addRange(r);
           Editeur.memoriser();
         }
-        await MediasPage.insererFichiers([chemin]);
+        await MediasPage.insererFichiers([chemin], { flotte: a.habillage === 'gauche' || a.habillage === 'droite' ? a.habillage : null });
         return `Inséré dans ${d.nom}.`;
       },
     },

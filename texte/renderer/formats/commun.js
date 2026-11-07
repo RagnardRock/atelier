@@ -11,7 +11,8 @@
 //                 (suite : un 2e paragraphe dans le même élément de liste, sans puce)
 //       runs    : les morceaux de texte, chacun avec sa mise en forme :
 //                 { t: 'texte', texte, f, lien }, { t: 'br' }, { t: 'tab' },
-//                 { t: 'media', type: 'image' | 'video' | 'audio', src, nom, largeur, f, lien }
+//                 { t: 'media', type: 'image' | 'video' | 'audio', src, nom, largeur, flotte, f, lien }
+//                 (flotte : null = dans le texte, 'gauche' ou 'droite' = image flottante, le texte l'entoure)
 //                 f = { gras, italique, souligne, barre, indice, exposant, couleur, fond, police, taille }
 //                 (couleur et fond en « rrggbb », taille en points)
 //   { type: 'table', lignes: [[{ blocs, colspan, rowspan, entete, fond }]] }
@@ -211,7 +212,7 @@ const Formats = (() => {
         const src = n.getAttribute('src');
         if (!src) return;
         const largeur = Unites.lire(n.style.width) || (n.tagName === 'IMG' && n.naturalWidth) || null;
-        runs.push({ t: 'media', type, src, nom: Medias.nom(n), largeur, ratio: n.tagName === 'IMG' && n.naturalWidth ? n.naturalHeight / n.naturalWidth : null, f, lien });
+        runs.push({ t: 'media', type, src, nom: Medias.nom(n), largeur, flotte: flotteDe(n), ratio: n.tagName === 'IMG' && n.naturalWidth ? n.naturalHeight / n.naturalWidth : null, f, lien });
         return;
       }
       const g = formatDe(n, f);
@@ -309,10 +310,18 @@ const Formats = (() => {
     if (lien) h = `<a href="${escapeHtml(lien)}">${h}</a>`;
     return h;
   }
-  // Le HTML d'un média lu dans un fichier.
-  function htmlMedia(type, src, largeur, nom) {
+  // Une image flottante (le texte coule autour) : 'gauche', 'droite', ou null (dans le texte).
+  function flotteDe(n) {
+    if (Medias.type(n) !== 'image') return null;
+    const d = n.dataset?.flotte;
+    if (d === 'gauche' || d === 'droite') return d;
+    const f = n.style?.float;
+    return f === 'left' ? 'gauche' : f === 'right' ? 'droite' : null;
+  }
+  // Le HTML d'un média lu dans un fichier (flotte : 'gauche' / 'droite', seulement pour une image).
+  function htmlMedia(type, src, largeur, nom, flotte = null) {
     const w = largeur ? ` style="width: ${Math.round(largeur)}px"` : '';
-    const n = nom ? ` data-nom="${escapeHtml(nom)}"` : '';
+    const n = (nom ? ` data-nom="${escapeHtml(nom)}"` : '') + (type === 'image' && (flotte === 'gauche' || flotte === 'droite') ? ` data-flotte="${flotte}"` : '');
     if (type === 'video') return `<video class="media" controls src="${escapeHtml(src)}"${w}${n}></video>`;
     if (type === 'audio') return `<audio class="media" controls src="${escapeHtml(src)}"${n}></audio>`;
     return `<img class="media" src="${escapeHtml(src)}"${w}${n} alt="">`;
@@ -384,6 +393,7 @@ const Formats = (() => {
     attr,
     htmlRun,
     htmlMedia,
+    flotteDe,
     stylePara,
     assemblerListes,
     cheminMedia,

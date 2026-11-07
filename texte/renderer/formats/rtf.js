@@ -410,6 +410,7 @@
 
     async function media(r) {
       if (r.type === 'image') {
+        if (r.flotte) alertes.add('Le RTF garde les images flottantes dans le texte (le texte ne les entoure plus). Enregistre en .docx ou .odt pour les garder flottantes.');
         let img;
         try {
           img = await Medias.imagePourBureautique(r.src, { formats: ['png', 'jpeg'] });

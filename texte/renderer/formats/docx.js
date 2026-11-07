@@ -263,18 +263,22 @@
       }
     }
 
-    // Une image (<w:drawing>) : en ligne (wp:inline) ou flottante (wp:anchor, posée en ligne dans Edda).
+    // Une image (<w:drawing>) : en ligne (wp:inline) ou flottante (wp:anchor). Une image flottante
+    // entourée par le texte (carré, rapproché, au travers) devient une image flottante à gauche ou à
+    // droite dans Edda ; « haut et bas » reste dans le texte ; devant ou derrière le texte aussi
+    // (Edda ne superpose pas une image au texte).
     async function dessin(d, ajouter, lien) {
       const tous = [...d.getElementsByTagName('*')];
       if (tous.some((x) => x.localName === 'txbxContent')) alertes.add('Les zones de texte sont simplifiées : leur texte suit le paragraphe.');
       const blip = tous.find((x) => x.localName === 'blip');
       const extent = tous.find((x) => x.localName === 'extent');
       const largeur = extent ? Unites.emuEnPx(Number(attr(extent, 'cx'))) : null;
-      if (tous.some((x) => x.localName === 'anchor' && x.parentNode === d)) alertes.add('Les images flottantes sont posées dans le texte.');
+      const ancre = enfants(d).find((x) => x.localName === 'anchor');
+      const flotte = ancre ? flotteDocx(ancre, largeur) : null;
       const rid = blip && (attr(blip, 'r:embed') || attr(blip, 'r:link'));
       const src = rid && await image(rid);
       if (src) {
-        const h = htmlMedia('image', src, largeur);
+        const h = htmlMedia('image', src, largeur, null, flotte);
         ajouter(lien ? `<a href="${escapeHtml(lien)}">${h}</a>` : h);
       }
       for (const tx of tous.filter((x) => x.localName === 'txbxContent')) {
@@ -284,6 +288,30 @@
           ajouter(` ${m.filter((x) => x !== '\f').join(' ')}`);
         }
       }
+    }
+
+    // De quel côté flotte une image ancrée (wp:anchor) : 'gauche', 'droite' ou null (dans le texte).
+    function flotteDocx(ancre, largeur) {
+      const fils = enfants(ancre);
+      const habillage = fils.find((x) => /^wrap(Square|Tight|Through|TopAndBottom|None)$/.test(x.localName));
+      if (!habillage || habillage.localName === 'wrapTopAndBottom') return null;
+      if (habillage.localName === 'wrapNone') { alertes.add('Les images posées devant ou derrière le texte sont mises dans le texte.'); return null; }
+      const posH = fils.find((x) => x.localName === 'positionH');
+      const align = enfant(posH, 'align')?.textContent.trim();
+      if (align === 'left' || align === 'inside') return 'gauche';
+      if (align === 'right' || align === 'outside') return 'droite';
+      if (align === 'center') { alertes.add('Une image centrée avec le texte des deux côtés est posée dans le texte.'); return null; }
+      // Une position en EMU : l'image est du côté où tombe son milieu.
+      const decalage = Unites.emuEnPx(Number(enfant(posH, 'posOffset')?.textContent) || 0);
+      const de = attr(posH, 'relativeFrom');
+      const utile = Formats.largeurUtile(miseEnPage);
+      const depart = de === 'page' ? Unites.cmEnPx(miseEnPage.marges.gauche) : 0;
+      const milieu = decalage - depart + (largeur || 0) / 2;
+      // wrapText="left" : le texte n'est qu'à gauche, donc l'image est à droite (et l'inverse).
+      const cote = attr(habillage, 'wrapText');
+      if (cote === 'left') return 'droite';
+      if (cote === 'right') return 'gauche';
+      return milieu > utile / 2 ? 'droite' : 'gauche';
     }
 
     async function tableau(t) {
@@ -449,13 +477,20 @@
         const h = w * (img.hauteur / img.largeur);
         const cx = Unites.pxEnEmu(w), cy = Unites.pxEnEmu(h);
         const n = nDessin++;
-        return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="Image ${n}"/>`
+        // Une image flottante : ancrée au paragraphe, collée à gauche ou à droite de la colonne, le
+        // texte tout autour (habillage « carré »), à 0,32 cm du texte comme dans Edda.
+        const debut = r.flotte
+          ? `<wp:anchor distT="0" distB="57150" distL="${r.flotte === 'droite' ? 114300 : 0}" distR="${r.flotte === 'gauche' ? 114300 : 0}" simplePos="0" relativeHeight="${n + 251658240}" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">`
+            + `<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:align>${r.flotte === 'gauche' ? 'left' : 'right'}</wp:align></wp:positionH>`
+            + `<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapSquare wrapText="bothSides"/>`
+          : `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/>`;
+        return `<w:r><w:drawing>${debut}<wp:docPr id="${n}" name="Image ${n}"/>`
           + '<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>'
           + '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
           + `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${n}" name="${xml(r.nom)}"/><pic:cNvPicPr/></pic:nvPicPr>`
           + `<pic:blipFill><a:blip r:embed="${id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
           + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>`
-          + '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+          + `</a:graphicData></a:graphic></wp:${r.flotte ? 'anchor' : 'inline'}></w:drawing></w:r>`;
       }
       // Vidéo, son : un lien vers le fichier rangé à côté du document.
       let cible;

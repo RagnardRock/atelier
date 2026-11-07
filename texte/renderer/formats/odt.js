@@ -54,6 +54,7 @@
           texte: enfant(s, 'text-properties'),
           para: enfant(s, 'paragraph-properties'),
           cellule: enfant(s, 'table-cell-properties'),
+          graphique: enfant(s, 'graphic-properties'),
           listeStyle: s.getAttributeNS(NS.style, 'list-style-name'),
         };
       }
@@ -108,6 +109,31 @@
       }
       if (profondeur === 0) { p.sautAvant = p.sautAvant && pp?.getAttributeNS(NS.fo, 'break-before') === 'page'; p.sautApres = p.sautApres && pp?.getAttributeNS(NS.fo, 'break-after') === 'page'; }
       return p;
+    }
+    // De quel côté flotte une image (draw:frame) : 'gauche', 'droite' ou null (dans le texte).
+    // Une image comme un caractère, ou sans texte à côté (« aucun »), reste dans le texte ; une image
+    // devant ou derrière le texte (« au travers ») aussi.
+    function flotteOdt(cadre) {
+      if ((cadre.getAttributeNS(NS.text, 'anchor-type') || 'paragraph') === 'as-char') return null;
+      let wrap = null, pos = null;
+      for (let nom = cadre.getAttributeNS(NS.draw, 'style-name'), k = 0; nom && styles[nom] && k < 12; nom = styles[nom].parent, k++) {
+        const g = styles[nom].graphique;
+        wrap ??= g?.getAttributeNS(NS.style, 'wrap') || null;
+        pos ??= g?.getAttributeNS(NS.style, 'horizontal-pos') || null;
+      }
+      if (!wrap || wrap === 'none') return null;
+      if (wrap === 'run-through') { alertes.add('Les images posées devant ou derrière le texte sont mises dans le texte.'); return null; }
+      // wrap = côté où va le texte : « right » = texte à droite, donc l'image est à gauche.
+      if (wrap === 'right') return 'gauche';
+      if (wrap === 'left') return 'droite';
+      if (pos === 'right' || pos === 'outside') return 'droite';
+      if (pos === 'center') { alertes.add('Une image centrée avec le texte des deux côtés est posée dans le texte.'); return null; }
+      if (pos === 'from-left' || pos === 'from-inside') {
+        const x = Unites.lire(cadre.getAttributeNS(NS.svg, 'x')) || 0;
+        const w = Unites.lire(cadre.getAttributeNS(NS.svg, 'width')) || 0;
+        return x + w / 2 > 300 ? 'droite' : 'gauche';
+      }
+      return 'gauche';
     }
     function roleDuStyle(nom, profondeur = 0) {
       const s = styles[nom];
@@ -241,7 +267,7 @@
           const largeur = Unites.lire(c.getAttributeNS(NS.svg, 'width'));
           if (img) {
             const src = await image(img.getAttributeNS(NS.xlink, 'href'));
-            if (src) { const h = htmlMedia('image', src, largeur); ajouter(lien ? `<a href="${escapeHtml(lien)}">${h}</a>` : h); }
+            if (src) { const h = htmlMedia('image', src, largeur, null, flotteOdt(c)); ajouter(lien ? `<a href="${escapeHtml(lien)}">${h}</a>` : h); }
           }
           const tb = enfant(c, 'text-box');
           if (tb) {
@@ -396,7 +422,9 @@
         if (w > largeurMax) w = largeurMax;
         const h = w * (img.hauteur / img.largeur);
         const n = nImage++;
-        return `<draw:frame draw:style-name="fr1" draw:name="Image${n}" text:anchor-type="as-char" svg:width="${cm(w)}" svg:height="${cm(h)}" draw:z-index="${n}"><draw:image xlink:href="${nom}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad" draw:mime-type="${img.mime}"/></draw:frame>`;
+        // Une image flottante : ancrée au paragraphe, à gauche (style fr2) ou à droite (fr3), le texte autour.
+        const cadre = r.flotte ? `draw:style-name="${r.flotte === 'gauche' ? 'fr2' : 'fr3'}" text:anchor-type="paragraph"` : 'draw:style-name="fr1" text:anchor-type="as-char"';
+        return `<draw:frame ${cadre} draw:name="Image${n}" svg:width="${cm(w)}" svg:height="${cm(h)}" draw:z-index="${n}"><draw:image xlink:href="${nom}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad" draw:mime-type="${img.mime}"/></draw:frame>`;
       }
       let cible;
       try {
@@ -499,6 +527,9 @@
     const ligne = 'style:family="paragraph" style:parent-style-name="Standard"><style:paragraph-properties fo:border-bottom="0.5pt solid #a0a0a0" fo:padding-bottom="0.05cm"';
     auto.push(`<style:style style:name="Ligne" ${ligne}/></style:style>`, `<style:style style:name="LigneSaut" ${ligne} fo:break-before="page"/></style:style>`);
     auto.push('<style:style style:name="fr1" style:family="graphic" style:parent-style-name="Graphics"><style:graphic-properties style:vertical-pos="top" style:vertical-rel="baseline"/></style:style>');
+    for (const [nom, cote] of [['fr2', 'left'], ['fr3', 'right']]) {
+      auto.push(`<style:style style:name="${nom}" style:family="graphic" style:parent-style-name="Graphics"><style:graphic-properties style:wrap="${cote === 'left' ? 'right' : 'left'}" style:number-wrapped-paragraphs="no-limit" style:wrap-contour="false" fo:margin-left="${cote === 'right' ? '0.32cm' : '0cm'}" fo:margin-right="${cote === 'left' ? '0.32cm' : '0cm'}" fo:margin-top="0cm" fo:margin-bottom="0.16cm" style:vertical-pos="top" style:vertical-rel="paragraph" style:horizontal-pos="${cote}" style:horizontal-rel="paragraph"/></style:style>`);
+    }
 
     const polices = new Set([ctx.police || 'Calibri', 'Consolas']);
     for (const m of [...corps.matchAll(/style:font-name="([^"]+)"/g), ...auto.join('').matchAll(/style:font-name="([^"]+)"/g)]) polices.add(m[1]);
