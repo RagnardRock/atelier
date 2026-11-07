@@ -30,7 +30,7 @@ const CONSIGNES_LOCALES = [
   '',
   '## Mode local',
   '',
-  'Tu tournes en local sur le PC de Ragna (Ollama), sans Internet.',
+  'Tu tournes en local sur ce PC (Ollama), sans Internet.',
   '- Appelle les outils avec des arguments exacts, un pas à la fois. Lis le résultat avant de continuer.',
   '- Si une demande est longue, fais-la en petites étapes, et dis où tu en es.',
   '- Si tu ne sais pas faire, dis-le simplement : ne devine pas, n\'invente pas de résultat.',
@@ -461,7 +461,7 @@ function creerSession({ log = () => {}, emit, autoriser, dossier }) {
     const permis = await autoriser({ id: idAppel, nomAffiche, entree, famille: outil.famille, lecture: outil.lecture });
     if (!permis) {
       emit({ kind: 'tool-result', id: idAppel, isError: true });
-      return 'Ragna a refusé. Ne recommence pas : demande ce que Ragna préfère.';
+      return 'La personne a refusé. Ne recommence pas : demande-lui ce qu\'elle préfère.';
     }
     emit({ kind: 'status', text: 'Loki agit…' });
     let resultat;

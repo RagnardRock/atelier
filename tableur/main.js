@@ -112,7 +112,7 @@ const CLAUDE_CONSIGNES = [
   '- Pour un graphique : action graphique (puis capture pour vérifier). Pour colorer selon la valeur :',
   '  mise_en_forme_conditionnelle (plutôt que des couleurs fixes, qui ne suivent pas les changements).',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Reikna', role: 'le tableur de Ragna (comme Excel : xlsx, xls, ods, csv)', consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Reikna', role: 'le tableur (comme Excel : xlsx, xls, ods, csv)', consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => modifierConfig((config) => Object.assign(config, changes)));

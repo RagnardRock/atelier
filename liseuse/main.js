@@ -167,7 +167,7 @@ const CLAUDE_CONSIGNES = [
 claude.register({
   handle, log, dataDir: app.getPath('userData'), readConfig,
   writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)),
-  outil: { nom: 'Kenning', role: 'la liseuse d\'eBooks de Ragna (bibliothèque de livres EPUB, MOBI, AZW3, FB2, lecture, surlignages)', consignes: CLAUDE_CONSIGNES },
+  outil: { nom: 'Kenning', role: 'la liseuse d\'eBooks (bibliothèque de livres EPUB, MOBI, AZW3, FB2, lecture, surlignages)', consignes: CLAUDE_CONSIGNES },
 });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath(), dossierDonnees: app.getPath('userData') }));

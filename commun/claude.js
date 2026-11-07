@@ -154,8 +154,43 @@ function ouvrirCanal(log) {
   });
 }
 
+// --- La personne qui parle à Loki ---
+// Son prénom est demandé au premier lancement d'Atelier, qui le recopie dans
+// %APPDATA%\atelier-commun\utilisateur.json. Les consignes et les descriptions des actions des outils
+// ont été écrites pour Ragna : on y met le vrai prénom (ou « la personne » s'il n'est pas encore donné).
+async function lirePrenom() {
+  if (!communDir) return '';
+  try {
+    return String(JSON.parse(await fsp.readFile(path.join(communDir, 'utilisateur.json'), 'utf8')).prenom || '').trim();
+  } catch {
+    return '';
+  }
+}
+function personnaliser(texte, prenom) {
+  if (typeof texte !== 'string' || !texte.includes('Ragna')) return texte;
+  if (prenom) {
+    // « de Alex » → « d'Alex », « que Alex » → « qu'Alex ».
+    const t = /^[aeiouyhàâéèêëîïôûAEIOUYHÀÂÉÈÊËÎÏÔÛ]/.test(prenom) ? texte.replace(/\b([dD])e Ragna\b/g, `$1'${prenom}`).replace(/\b([qQ])ue Ragna\b/g, `$1u'${prenom}`) : texte;
+    return t.replace(/\bRagna\b/g, prenom);
+  }
+  return texte
+    .replace(/(^|[.!?]\s+|^\s*- )Ragna\b/gm, '$1La personne')
+    .replace(/\bRagna\b/g, 'la personne');
+}
+function lignePrenom(prenom) {
+  return prenom
+    ? `La personne qui te parle s'appelle ${prenom} : appelle-la par son prénom (tutoie-la).`
+    : 'Tu ne connais pas encore le prénom de la personne : il se donne dans les réglages d\'Atelier (Ctrl+,), et tous les outils le sauront.';
+}
+
 // La fenêtre fait l'action (renderer/claude-actions.js) et renvoie { texte, image } ou { erreur }.
-function executerAction(nom, args, log) {
+async function executerAction(nom, args, log) {
+  const r = await executerDansFenetre(nom, args, log);
+  if (r && typeof r.texte === 'string') r.texte = personnaliser(r.texte, await lirePrenom());
+  if (r && typeof r.erreur === 'string') r.erreur = personnaliser(r.erreur, await lirePrenom());
+  return r;
+}
+function executerDansFenetre(nom, args, log) {
   if (!actions.some((a) => a.name === nom)) return Promise.resolve({ erreur: `Action inconnue : ${nom}` });
   if (!sender || sender.isDestroyed()) return Promise.resolve({ erreur: 'La fenêtre de l\'outil est fermée' });
   const id = crypto.randomUUID();
@@ -454,7 +489,9 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
     if (actions.length) {
       try {
         const { chemin, jeton } = await ouvrirCanal(log);
-        await fsp.writeFile(actionsFile, JSON.stringify(actions, null, 2), 'utf8');
+        const prenom = await lirePrenom();
+        const pourClaude = actions.map((a) => ({ ...a, description: personnaliser(a.description, prenom) }));
+        await fsp.writeFile(actionsFile, JSON.stringify(pourClaude, null, 2), 'utf8');
         Object.assign(env, { ATELIER_CANAL: chemin, ATELIER_JETON: jeton, ATELIER_ACTIONS: actionsFile });
       } catch (err) {
         log('ERREUR', `Claude : canal des actions impossible à ouvrir : ${err.message}`);
@@ -485,13 +522,15 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
 
   async function texteConsignes(nom, cwd, commandes, local = false) {
     const memoire = await memoireProjet(nom);
+    const prenom = await lirePrenom();
     const texte = [
       `# Tu es dans ${outil.nom}`,
       '',
-      `Tu es Loki, l'assistant intégré à ${outil.nom}, ${outil.role}, un des outils de l'Atelier de Ragna (dans l'Atelier,`,
-      `l'assistant s'appelle Loki ; il est propulsé par Claude). Ragna te parle depuis le panneau Loki de ${outil.nom},`,
+      `Tu es Loki, l'assistant intégré à ${outil.nom}, ${outil.role}, un des outils de l'Atelier (dans l'Atelier,`,
+      `l'assistant s'appelle Loki ; il est propulsé par Claude). On te parle depuis le panneau Loki de ${outil.nom},`,
       'en français : réponds en français, simplement et brièvement.',
-      'Tu n\'es pas ici pour coder : tu aides Ragna à faire son travail dans cet outil.',
+      lignePrenom(prenom),
+      'Tu n\'es pas ici pour coder : tu aides cette personne à faire son travail dans cet outil.',
       '',
       nom
         ? `Le projet en cours est « ${nom} », dans le dossier ${cwd} (ton dossier de travail).`
@@ -520,7 +559,7 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
       ...((local && outil.consignesLocales) || outil.consignes ? ['', `## Dans ${outil.nom}`, '', (local && outil.consignesLocales) || outil.consignes] : []),
       '',
     ].join('\n');
-    return texte;
+    return personnaliser(texte, prenom);
   }
   async function ecrireConsignes(nom, cwd, commandes) {
     await fsp.writeFile(consignesFile, await texteConsignes(nom, cwd, commandes), 'utf8');
@@ -558,8 +597,9 @@ function register({ handle, log, dataDir, readConfig, writeConfig, outil, avantL
       lecture: o.name.startsWith('lire_'),
       faire: async (args) => ({ texte: await outilsCommuns.appeler(o.name, args) }),
     }));
+    const prenom = await lirePrenom();
     const deLOutil = actions.map((a) => ({
-      name: a.name, description: a.description, parameters: a.inputSchema, action: true, lecture: a.lecture, famille: a.famille, affiche: `mcp__atelier__${a.name}`,
+      name: a.name, description: personnaliser(a.description, prenom), parameters: a.inputSchema, action: true, lecture: a.lecture, famille: a.famille, affiche: `mcp__atelier__${a.name}`,
       faire: (args) => executerAction(a.name, args, log),
     }));
     const consignes = (await texteConsignes(nom, cwd, false, true))

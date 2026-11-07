@@ -48,6 +48,7 @@ const App = (() => {
       okLabel: 'Enregistrer',
       width: 480,
       fields: [
+        { key: 'prenom', label: 'Ton prénom', type: 'text', value: config.prenom || '', placeholder: 'Ton prénom' },
         { key: 'accentColor', label: 'Couleur d\'accent', type: 'color', value: config.accentColor },
         { type: 'element', element: swatches },
         { key: 'glass', label: 'Verre dépoli (glassmorphism)', type: 'checkbox', value: config.glass },
@@ -100,10 +101,13 @@ const App = (() => {
     for (const [key] of WIDGETS) { widgets[key] = v[`widget-${key}`]; delete v[`widget-${key}`]; }
     v.claudeSansDemander = {};
     for (const [key] of FAMILLES) { v.claudeSansDemander[key] = v[`sansDemander-${key}`]; delete v[`sansDemander-${key}`]; }
+    v.prenom = v.prenom.trim();
+    if (v.prenom) v.prenomDemande = true;
     const dossierChange = v.dossierProjets !== config.dossierProjets;
     config = await window.atelier.writeConfig({ ...v, widgets: { ...config.widgets, ...widgets } });
     applyWidgets(config);
     if (dossierChange) Projets.refresh();
+    salut();
     window.atelier.reglagesPressePapiers();
     if (await applyTheme(config)) notify('Le flou de Windows 11 sera actif au prochain démarrage d\'Atelier.', 'info', 6000);
   }
@@ -112,14 +116,33 @@ const App = (() => {
     if (e.ctrlKey && !e.altKey && !e.shiftKey && e.key === ',') { e.preventDefault(); openSettings(); }
   });
 
-  // --- Accueil : « Bonsoir Ragna · lundi 20 octobre » ---
+  // --- Accueil : « Bonsoir Alex · lundi 20 octobre » (le prénom vient des réglages) ---
   function salut() {
     const h = new Date().getHours();
     const mot = h < 5 ? 'Bonne nuit' : h < 18 ? 'Bonjour' : 'Bonsoir';
     const jour = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
-    $('#salut').textContent = `${mot} Ragna · ${jour}`;
+    $('#salut').textContent = `${mot}${config.prenom ? ` ${config.prenom}` : ''} · ${jour}`;
   }
   setInterval(salut, 60_000);
+
+  // Au premier lancement : demander le prénom. « Plus tard » redemande au prochain démarrage ; valider
+  // sans prénom ne redemande plus (il reste modifiable dans les réglages).
+  async function demanderPrenom() {
+    if (config.prenom || config.prenomDemande) return;
+    const v = await Dialogs.form({
+      title: 'Bienvenue dans l\'Atelier',
+      okLabel: 'C\'est parti',
+      cancelLabel: 'Plus tard',
+      width: 400,
+      fields: [
+        { type: 'info', text: 'Comment veux-tu qu\'on t\'appelle ? Atelier te dira bonjour, et Loki s\'en souviendra dans tous les outils. Tu pourras le changer dans les réglages (Ctrl+,).' },
+        { key: 'prenom', label: 'Ton prénom', type: 'text', value: '', placeholder: 'Ton prénom' },
+      ],
+    });
+    if (!v) return;
+    config = await window.atelier.writeConfig({ prenom: v.prenom.trim(), prenomDemande: true });
+    salut();
+  }
 
   // Avant une fermeture voulue (mise à jour d'Atelier) : enregistre les notes en attente.
   async function prepareQuit() {
@@ -133,6 +156,7 @@ const App = (() => {
     applyWidgets(config);
     Outils.reglages(config);
     salut();
+    demanderPrenom();
     await Notes.start();
     Projets.refresh();
     await PressePapiers.start();

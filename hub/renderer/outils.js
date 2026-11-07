@@ -318,7 +318,7 @@ const Outils = (() => {
     return o;
   }
   const resultat = (o, r, fait) => {
-    if (!r) return `Ragna a annulé (${o.nom} était peut-être ouvert).`;
+    if (!r) return `L'utilisateur a annulé (${o.nom} était peut-être ouvert).`;
     if (r.erreur) throw new Error(r.erreur);
     return fait(r);
   };
@@ -329,7 +329,7 @@ const Outils = (() => {
       if (attente.has(o.id)) return `Atelier attend déjà ${o.nom} ${attente.get(o.id)} pour l'installer dès sa publication.`;
       if (o.enPreparation && attendre === undefined) {
         return `${o.nom} ${o.enPreparation} est en préparation sur GitHub (prête dans quelques minutes).`
-          + `${o.derniere ? ` La dernière publiée est la ${o.derniere}.` : ''} Demande à Ragna s'il faut l'attendre (attendre: true)`
+          + `${o.derniere ? ` La dernière publiée est la ${o.derniere}.` : ''} Demande à l'utilisateur s'il faut l'attendre (attendre: true)`
           + `${o.derniere && (!o.installe || o.miseAJour) ? ' ou installer la dernière publiée (attendre: false)' : ''}.`;
       }
       if (o.enPreparation && attendre) {

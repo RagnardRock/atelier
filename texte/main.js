@@ -115,7 +115,7 @@ const CLAUDE_CONSIGNES = [
   '  si tu as besoin de couleurs, de polices ou d\'alignements.',
   '- Ragna écrit en français : réponds et rédige en français, sauf demande contraire.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Edda', role: 'le traitement de texte de Ragna (documents Word, LibreOffice, RTF, Markdown, HTML, texte)', consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Edda', role: 'le traitement de texte (documents Word, LibreOffice, RTF, Markdown, HTML, texte)', consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => {
@@ -371,6 +371,14 @@ handle('media:ouvrir', async (_event, src) => {
   if (/^https?:\/\//i.test(s)) return shell.openExternal(s);
   const err = await shell.openPath(s.startsWith('file:') ? fileURLToPath(s) : s);
   if (err) throw new Error(err);
+});
+// Le prénom donné dans Atelier (dossier partagé atelier-commun) : auteur des documents enregistrés.
+handle('utilisateur:prenom', async () => {
+  try {
+    return String(JSON.parse(await fs.readFile(path.join(app.getPath('appData'), 'atelier-commun', 'utilisateur.json'), 'utf8')).prenom || '').trim();
+  } catch {
+    return '';
+  }
 });
 handle('lien:ouvrir', async (_event, url) => {
   if (/^(https?|mailto):/i.test(String(url))) return shell.openExternal(String(url));

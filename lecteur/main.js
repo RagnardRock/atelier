@@ -119,7 +119,7 @@ const CLAUDE_CONSIGNES = [
   '- Pour annoter, remplir un formulaire ou enregistrer, passe aussi par ses actions : Ragna voit tout se faire',
   '  dans le document et peut l\'annuler (Ctrl+Z). Rien n\'est écrit sur le disque tant qu\'on n\'enregistre pas.',
 ].join('\n');
-claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Mímir', role: 'le lecteur de documents de Ragna (PDF avec annotations, signature et formulaires, EPUB, BD, Word, images, textes)', consignes: CLAUDE_CONSIGNES } });
+claude.register({ handle, log, dataDir: app.getPath('userData'), readConfig, writeConfig: (changes) => modifierConfig((config) => Object.assign(config, changes)), outil: { nom: 'Mímir', role: 'le lecteur de documents (PDF avec annotations, signature et formulaires, EPUB, BD, Word, images, textes)', consignes: CLAUDE_CONSIGNES } });
 
 handle('config:read', async () => ({ config: await readConfig(), path: configPath() }));
 handle('config:write', async (_event, changes) => modifierConfig((config) => Object.assign(config, changes)));
