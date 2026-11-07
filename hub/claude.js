@@ -496,7 +496,8 @@ function atelierMd(etat, config, version) {
     '',
     '## Les outils',
     '',
-    'Rangés par catégorie dans la colonne Outils. Un filtre en haut montre Tous / Installés / Mises à jour.',
+    'Rangés par catégorie dans la colonne Outils. Un filtre en haut montre Tous / Favoris / Installés / Mises à jour.',
+    'L\'étoile en haut à droite d\'une carte met l\'outil en favori : les favoris passent en tête de leur catégorie.',
     'Sur chaque carte : Installer, Mettre à jour ou Lancer ; un outil installé a aussi un bouton dossier',
     '(dossier d\'installation) et une corbeille (Désinstaller : réglages et fichiers de l\'utilisateur gardés).',
     'Si une version est en préparation sur GitHub, Atelier propose d\'attendre et de l\'installer dès sa publication.',
@@ -509,7 +510,7 @@ function atelierMd(etat, config, version) {
     const dedans = outils.filter((o) => o.categorie === c.id);
     if (!dedans.length) continue;
     lignes.push(`### ${c.nom}`, '');
-    for (const o of dedans) lignes.push(`- **${o.nom}** ${o.glyphe} (id : ${o.id}) : ${o.description}. ${versionDe(o)}${o.enPreparation ? ` ; ${o.enPreparation} en préparation sur GitHub` : ''}.`);
+    for (const o of dedans) lignes.push(`- **${o.nom}** ${o.glyphe} (id : ${o.id})${config.outilsFavoris?.includes(o.id) ? ' ★ favori' : ''} : ${o.description}. ${versionDe(o)}${o.enPreparation ? ` ; ${o.enPreparation} en préparation sur GitHub` : ''}.`);
     lignes.push('');
   }
   if (!outils.length) lignes.push('(état des outils indisponible)', '');

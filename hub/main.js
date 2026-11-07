@@ -97,6 +97,7 @@ const DEFAULT_CONFIG = {
   // Colonne Outils : le filtre choisi (« tous », « installes », « majs ») et les catégories repliées.
   filtreOutils: 'tous',
   categoriesRepliees: [],
+  outilsFavoris: [], // ids des outils mis en favori (étoile sur la carte)
   // Widget Claude : la commande de Claude Code, le modèle ('' = celui de Claude Code) et le droit de
   // lire les fichiers du dossier des projets (en plus des notes, du calendrier et de l'état des projets).
   claudeCommand: 'claude',
