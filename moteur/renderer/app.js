@@ -251,7 +251,7 @@ function creerSaga() {
     if (!ouvert || ouvert.test || !r.active || autoEnCours) return;
     if (r.minutes && Date.now() - derniereAuto >= r.minutes * 60000) autoAFaire = true;
     // Au plus une toutes les 20 secondes (deux portes coup sur coup ne sauvent qu'une fois).
-    if (!autoAFaire || !moteur.libre || !$('#pause').hidden || !$('#carnet').hidden || Dialogs.isOpen() || Date.now() - derniereAuto < 20000) return;
+    if (!autoAFaire || !moteur.libre || !$('#pause').hidden || Dialogs.isOpen() || Date.now() - derniereAuto < 20000) return;
     autoAFaire = false;
     autoEnCours = true;
     try {
@@ -333,44 +333,162 @@ function creerSaga() {
     minuterieBandeau = setTimeout(() => b.classList.remove('visible'), 2600);
   }
 
-  // --- Pause ---
-  // Saga 1.6.1 : le menu de pause a des pages (« principal », « outils ») : un choix montre
-  // sa page avec data-vue (sans : « principal »).
+  // --- Le menu du jeu (Échap, Start) ---
+  // Saga 1.25 : un seul menu. Avant, Échap ouvrait la pause de Saga et Tab le carnet du joueur ; le carnet
+  // est devenu des pages de ce menu (le sac, les quêtes, les badges, le résumé d'un module), et Tab un
+  // raccourci que le jeu choisit dans Tafl (Réglages › Menus du jeu, menus.tab).
+  // Les pages : « principal », « plus » (choix avec data-vue="plus") et « page » (le contenu d'une page).
   let vuePauseActive = 'principal';
   function vuePause(v) {
     vuePauseActive = v;
     for (const b of $$('.pause-choix')) b.classList.toggle('hors-vue', !(b.dataset.vue || 'principal').split(' ').includes(v));
+    $('#pause-page').hidden = v !== 'page';
+    $('#pause-actions').hidden = v !== 'principal';
     $$('.pause-choix').find((b) => b.offsetParent !== null)?.focus();
   }
   const pauseOuArriere = () => { if (vuePauseActive !== 'principal') vuePause('principal'); else fermerPause(); };
+  const pauseOuverte = () => !$('#pause').hidden;
+  const listeDonnees = (sorte) => ouvert?.jeu.donnees[sorte]?.[sorte] || [];
+  const badgesDuJeu = () => ouvert?.jeu.donnees.reglages?.reglages?.badges || [];
+  // Les résumés des modules (le domaine, les relations) : une page chacun, sauf si le module a déjà un
+  // choix du même nom (son écran, plus complet).
+  const sectionsModules = (actions) => moteur.sectionsCarnet().filter((m) => !actions.some(([, nom]) => nom === m.titre));
   function ouvrirPause(vue = 'principal') {
     if (!ouvert) return;
+    const { jeu } = ouvert;
+    const p = moteur.partie();
     // Les noms des menus et le Pokédex montré ou non : la forme des menus du jeu (Saga 0.6).
     const forme = moteur.formeMenus();
     $('#pause-dex').textContent = forme.dex;
     $('#pause-equipe').textContent = forme.equipe;
     $('.pause-choix[data-action="dex"]').hidden = !forme.dex_visible;
-    $('.pause-choix[data-action="mode"]').hidden = !moteur.peutTable(ouvert.jeu) || Boolean(ouvert.test);
+    // L'argent, le jour et l'heure du jeu : dans le titre du menu (avant, dans le carnet).
+    const quand = [moteur.jourVisible() ? `Jour ${Number(p.jour) || 1}` : '', moteur.heure()].filter(Boolean).join(' · ');
+    $('#pause-heure').textContent = quand;
+    $('#pause-heure').hidden = !quand;
+    $('#pause-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
+    // Les badges seulement si le jeu en a ; les quêtes si le jeu en a ou si une est commencée.
+    $('.pause-choix[data-page="badges"]').hidden = !badgesDuJeu().length;
+    $('.pause-choix[data-page="quetes"]').hidden = !listeDonnees('quetes').length && !Object.keys(p.quetes).length;
+    // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer) et des modules (le
+    // domaine, construire), puis les résumés des modules.
+    const actions = moteur.actionsPause();
+    $('#pause-actions').replaceChildren(
+      ...actions.map(([id, nom, icone]) => {
+        const b = el('button', { className: 'pause-choix', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), el('span', { textContent: nom }));
+        b.dataset.action = 'pack';
+        b.dataset.pack = id;
+        return b;
+      }),
+      ...sectionsModules(actions).map((m, i) => {
+        const b = el('button', { className: 'pause-choix', type: 'button' }, el('i', { className: 'codicon codicon-notebook' }), el('span', { textContent: m.titre }));
+        b.dataset.action = 'page';
+        b.dataset.page = `module:${i}`;
+        return b;
+      }));
+    $('.pause-choix[data-action="mode"]').hidden = !moteur.peutTable(jeu) || Boolean(ouvert.test);
     $('#pause-mode').textContent = moteur.modeTable ? 'Revenir en aventure (seul)' : 'Passer en mode table (MJ)';
     // Saga 1.0 : le multijoueur. Un ami (dans son navigateur) ne l'ouvre pas : c'est l'hôte qui invite.
     $('.pause-choix[data-action="multi"]').hidden = Boolean(joueur) || Boolean(ouvert.test);
     $('#pause-multi').textContent = moteur.multi?.actif ? 'Fermer la partie à plusieurs' : 'Jouer à plusieurs (inviter des amis)…';
-    // Un jeu exporté n'a pas d'outils de créateur : il ne reste que « Recommencer ».
-    $('.pause-choix[data-action="vue"][data-vers="outils"]').lastChild.textContent = joueur ? 'Plus…' : 'Outils du créateur…';
+    // Un jeu exporté n'a pas les outils du créateur (recharger, le dossier, exporter).
+    for (const b of $$('.pause-choix.createur')) b.hidden = Boolean(joueur);
+    if (pauseOuverte()) { vuePause(vue); return; }
     moteur.pause(true);
     moteur.bruit('valider');
     $('#pause').hidden = false;
     vuePause(vue);
   }
   function fermerPause() {
+    if (!pauseOuverte()) return;
     $('#pause').hidden = true;
     moteur.pause(false);
   }
+  // Une page du menu : le sac, les quêtes, les badges ou le résumé d'un module (n° i).
+  function ouvrirPage(page) {
+    if (!ouvert) return;
+    if (!pauseOuverte()) ouvrirPause();
+    const p = moteur.partie();
+    const corps = $('#pause-page-corps');
+    corps.replaceChildren();
+    const nom = (sorte, id) => listeDonnees(sorte).find((x) => x.id === id)?.nom || id;
+    const liste = (lignes, vide) => el('ul', {}, ...(lignes.length ? lignes : [el('li', { className: 'vide', textContent: vide })]));
+    let titre = '';
+    if (page === 'sac') {
+      // Un objet qui sert hors combat (soin, vitamine, menthe, capsule, pierre…) se choisit pour l'utiliser.
+      titre = 'Sac';
+      corps.append(liste(Object.entries(p.sac).map(([id, n]) => {
+        const icone = listeDonnees('objets').find((x) => x.id === id)?.icone;
+        const contenu = [el('span', { className: 'carnet-objet' }, icone ? el('img', { src: icone, alt: '' }) : null, nom('objets', id)),
+          el('span', { className: 'carnet-sac-droite' }, el('span', { className: 'discret', textContent: `×${n}` }))];
+        if (!moteur.objetUtilisable(id)) return el('li', {}, ...contenu);
+        const b = el('button', { className: 'pause-choix pause-ligne', type: 'button', title: 'Utiliser' }, ...contenu);
+        b.dataset.vue = 'page';
+        b.dataset.action = 'utiliser';
+        b.dataset.objet = id;
+        return el('li', { className: 'avec-bouton' }, b);
+      }), 'Le sac est vide.'));
+    } else if (page === 'quetes') {
+      titre = 'Quêtes';
+      const quetes = Object.entries(p.quetes).sort(([, a], [, b]) => (a.etat === 'finie') - (b.etat === 'finie'));
+      corps.append(liste(quetes.map(([id, q]) => {
+        const def = listeDonnees('quetes').find((x) => x.id === id);
+        const etape = def?.etapes?.[q.etape - 1]?.texte;
+        return el('li', { className: q.etat === 'finie' ? 'finie' : '' },
+          el('span', { textContent: `${def?.titre || id}${def?.secondaire ? ' (secondaire)' : ''}` }),
+          el('span', { className: 'discret', textContent: q.etat === 'finie' ? 'terminée' : etape || `étape ${q.etape}` }));
+      }), 'Aucune quête commencée.'));
+    } else if (page === 'badges') {
+      // Les badges du jeu (Tafl 0.16) : ceux reçus en couleur, les autres en ombre.
+      const badges = badgesDuJeu();
+      titre = `Badges · ${p.badges.filter((b) => badges.some((x) => x.id === b)).length}/${badges.length}`;
+      corps.append(el('div', { className: 'carnet-badges' }, ...badges.map((b) => {
+        const recu = p.badges.includes(b.id);
+        return el('div', { className: `carnet-badge${recu ? ' recu' : ''}`, title: recu ? b.nom : '???' },
+          b.icone ? el('img', { src: b.icone, alt: '' }) : el('span', { className: 'carnet-badge-vide', textContent: '★' }));
+      })));
+    } else if (page.startsWith('module:')) {
+      // Saga 1.13 : le résumé d'un module (le stock du domaine en jetons, une ligne de résumé).
+      const m = sectionsModules(moteur.actionsPause())[Number(page.slice(7))];
+      if (!m) return;
+      titre = m.detail ? `${m.titre} · ${m.detail}` : m.titre;
+      if (m.jetons.length) {
+        corps.append(el('div', { className: 'carnet-jetons' }, ...m.jetons.map((j) => el('span', { className: 'carnet-jeton', title: j.texte },
+          j.image ? el('img', { src: j.image, alt: '' }) : el('span', { className: 'menu-pastille', textContent: (j.pastille || j.texte).slice(0, 1).toUpperCase(), style: `--teinte: ${teinte(j.pastille || j.texte)}` }),
+          el('span', { className: 'carnet-jeton-nom', textContent: j.texte }),
+          el('b', { textContent: j.nombre })))));
+      }
+      if (m.lignes.length) corps.append(el('ul', {}, ...m.lignes.map((l) => el('li', { className: 'carnet-resume' }, el('span', { textContent: l.texte }), el('span', { className: 'discret', textContent: l.detail })))));
+      if (!m.jetons.length && !m.lignes.length) corps.append(liste([], 'Rien pour l\'instant.'));
+    }
+    $('#pause-page-titre').textContent = titre;
+    vuePause('page');
+    moteur.bruit('valider');
+  }
+  // Tab (Select à la manette) : le raccourci du jeu (Tafl › Menus du jeu) : une page du menu, l'équipe,
+  // le Pokédex, un choix du pack ou d'un module (Construire…), le menu lui-même, ou rien. Le sac par défaut.
+  function raccourci() {
+    if (!ouvert) return;
+    if (pauseOuverte()) { fermerPause(); return; }
+    if (moteur.enScript || moteur.enCombat) return;
+    const forme = moteur.formeMenus();
+    const t = forme.tab || 'sac';
+    if (t === 'aucun') return;
+    if (t === 'menu') ouvrirPause();
+    else if (t === 'equipe' || (t === 'dex' && forme.dex_visible)) moteur.ouvrirEcran(t);
+    else if (['sac', 'quetes', 'badges'].includes(t)) ouvrirPage(t);
+    else if (moteur.actionsPause().some(([id]) => id === t)) moteur.agirPause(t);
+    else ouvrirPause(); // un choix absent ici (Construire hors d'une zone constructible) : le menu
+  }
   $('#pause').addEventListener('click', async (e) => {
-    const action = e.target.closest('.pause-choix')?.dataset.action;
+    const bouton = e.target.closest('.pause-choix');
+    const action = bouton?.dataset.action;
     if (!action) { if (e.target.id === 'pause') fermerPause(); return; }
     if (action === 'reprendre') fermerPause();
-    else if (action === 'vue') vuePause(e.target.closest('.pause-choix').dataset.vers);
+    else if (action === 'vue') vuePause(bouton.dataset.vers);
+    else if (action === 'page') ouvrirPage(bouton.dataset.page);
+    else if (action === 'pack') { fermerPause(); moteur.agirPause(bouton.dataset.pack); }
+    else if (action === 'utiliser') { fermerPause(); moteur.utiliserObjet(bouton.dataset.objet); }
     else if (action === 'recharger') recharger();
     else if (action === 'recommencer') { fermerPause(); moteur.demarrer(ouvert.jeu, null); }
     else if (action === 'mode') {
@@ -384,149 +502,34 @@ function creerSaga() {
     }
     else if (action === 'multi') { fermerPause(); multijoueur(); }
     else if (action === 'sauvegarder') { fermerPause(); sauvegarder(); }
-    else if (action === 'carnet') ouvrirCarnet();
     else if (action === 'equipe' || action === 'dex') { fermerPause(); moteur.ouvrirEcran(action); }
     else if (action === 'reglages') reglages();
     else if (action === 'dossier') window.saga.montrerJeu(ouvert.dossier).catch((err) => notify(cleanError(err), 'error'));
     else if (action === 'exporter') { fermerPause(); exporter(); }
     else if (action === 'quitter') quitter();
   });
-  // Dans le menu de pause, les flèches passent d'un choix à l'autre.
+  // Dans le menu, les flèches (et les touches du jeu : ZQSD…) passent d'un choix à l'autre ; Action appuie.
   $('#pause').addEventListener('keydown', (e) => {
-    const choix = $$('.pause-choix').filter((b) => b.offsetParent !== null);
+    const choix = $$('.pause-choix').filter((b) => b.offsetParent !== null && !b.disabled);
+    if (!choix.length) return;
     const i = choix.indexOf(document.activeElement);
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      e.stopPropagation();
-      choix[(i + (e.key === 'ArrowDown' ? 1 : -1) + choix.length) % choix.length].focus();
-    }
-  });
-  // Un petit son quand le choix change (clavier ou manette) et quand on valide.
-  $('#pause').addEventListener('focusin', (e) => { if (e.target.closest('.pause-choix') && !$('#pause').hidden) moteur.bruit('curseur'); });
-
-  // --- Le carnet (Tab) : l'équipe, le sac, l'argent et les quêtes ---
-  // La teinte d'une pastille (la même que dans les menus, moteur/menus.js).
-  const teinte = (t) => { let h = 0; for (const c of String(t || '')) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
-  function ouvrirCarnet() {
-    if (!ouvert) return;
-    const { jeu } = ouvert;
-    const p = moteur.partie();
-    const liste = (sorte) => jeu.donnees[sorte]?.[sorte] || [];
-    const nom = (sorte, id) => liste(sorte).find((x) => x.id === id)?.nom || id;
-    const corps = $('#carnet-corps');
-    corps.innerHTML = '';
-    const section = (titre, lignes, vide) => {
-      corps.append(el('h3', { textContent: titre }));
-      const ul = el('ul');
-      for (const l of lignes) ul.append(l);
-      if (!lignes.length) ul.append(el('li', { className: 'vide', textContent: vide }));
-      corps.append(ul);
-    };
-    $('#carnet-titre').textContent = p.nom;
-    // L'heure du jeu (Saga 0.11), s'il a une horloge.
-    // Saga 1.13 : et le jour, si le jeu a un module (le domaine compte en jours).
-    const quand = [moteur.jourVisible() ? `Jour ${Number(p.jour) || 1}` : '', moteur.heure()].filter(Boolean).join(' · ');
-    $('#carnet-heure').textContent = quand;
-    $('#carnet-heure').hidden = !quand;
-    const dex = p.dex || { vus: {}, pris: {} }, forme = moteur.formeMenus();
-    $('#carnet-dex').textContent = `${forme.dex} · ${Regles.dex(jeu).especes.filter((e) => dex.pris[e.id]).length}`;
-    $('#carnet-equipe').textContent = forme.equipe;
-    $('.carnet-bouton[data-ecran="dex"]').hidden = !forme.dex_visible;
-    // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer) et des modules (le
-    // domaine, construire) : depuis Saga 1.6.1, des boutons du carnet, à côté de l'équipe (plus dans la pause).
-    // Saga 1.6.2 : sur leur propre rangée, sous l'en-tête, et ce sont eux qui ont le focus en premier.
-    const actions = moteur.actionsPause();
-    $('#carnet-actions').replaceChildren(...actions.map(([id, nom, icone]) => {
-      const b = el('button', { className: 'carnet-bouton carnet-action', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), nom);
-      b.dataset.pack = id;
-      return b;
-    }));
-    $('#carnet-actions').hidden = !actions.length;
-    $('#carnet-argent').textContent = `${p.argent} ${jeu.donnees.reglages?.reglages?.monnaie || '₽'}`;
-    // L'équipe : sprite, nom, niveau, PV et statut (Saga 0.3).
-    // Un clic sur une créature : son résumé (Saga 0.6).
-    section(forme.equipe, p.equipe.map((c, i) => {
-      const r = Regles.resume(jeu, c), k = r.pv / Math.max(1, r.pvMax);
-      return el('li', { className: 'carnet-creature', title: 'Voir son résumé', onclick: () => { fermerCarnet(); moteur.ouvrirEcran('equipe', i); } },
-        r.image ? el('img', { src: r.image, alt: '' }) : el('span', { className: 'carnet-img' }),
-        el('span', { className: 'carnet-nom', textContent: `${r.nom}${r.statut ? `  ${r.statut}` : ''}` }),
-        el('span', { className: 'carnet-pv' }, el('span', { style: `width: ${Math.round(k * 100)}%`, className: `niveau-${k > 0.5 ? 'haut' : k > 0.2 ? 'moyen' : 'bas'}` })),
-        el('span', { className: 'discret', textContent: `N.${r.niveau} · ${r.pv > 0 ? `${r.pv}/${r.pvMax} PV` : 'K.O.'}` }));
-    }), 'Pas encore de compagnon.');
-    // Les badges du jeu (Tafl 0.16) : ceux reçus en couleur, les autres en ombre.
-    const badges = jeu.donnees.reglages?.reglages?.badges || [];
-    if (badges.length) {
-      corps.append(el('h3', { textContent: `Badges · ${p.badges.filter((b) => badges.some((x) => x.id === b)).length}/${badges.length}` }));
-      corps.append(el('div', { className: 'carnet-badges' }, ...badges.map((b) => {
-        const recu = p.badges.includes(b.id);
-        return el('div', { className: `carnet-badge${recu ? ' recu' : ''}`, title: recu ? b.nom : '???' },
-          b.icone ? el('img', { src: b.icone, alt: '' }) : el('span', { className: 'carnet-badge-vide', textContent: '★' }));
-      })));
-    }
-    // Saga 1.13 : les sections des modules (le résumé du domaine : le stock en jetons, une ligne de résumé).
-    for (const m of moteur.sectionsCarnet()) {
-      corps.append(el('h3', {}, el('span', { textContent: m.titre }), m.detail ? el('span', { className: 'carnet-h3-detail', textContent: m.detail }) : null));
-      if (m.jetons.length) {
-        corps.append(el('div', { className: 'carnet-jetons' }, ...m.jetons.map((j) => el('span', { className: 'carnet-jeton', title: j.texte },
-          j.image ? el('img', { src: j.image, alt: '' }) : el('span', { className: 'menu-pastille', textContent: (j.pastille || j.texte).slice(0, 1).toUpperCase(), style: `--teinte: ${teinte(j.pastille || j.texte)}` }),
-          el('span', { className: 'carnet-jeton-nom', textContent: j.texte }),
-          el('b', { textContent: j.nombre })))));
-      }
-      if (m.lignes.length) corps.append(el('ul', {}, ...m.lignes.map((l) => el('li', { className: 'carnet-resume' }, el('span', { textContent: l.texte }), el('span', { className: 'discret', textContent: l.detail })))));
-    }
-    // Le sac : un objet qui sert hors combat (soin, vitamine, menthe, capsule, pierre…) a son bouton « Utiliser ».
-    // Saga 1.13 : avec l'icône de l'objet, s'il en a une.
-    section('Sac', Object.entries(p.sac).map(([id, n]) => el('li', {},
-      el('span', { className: 'carnet-objet' }, liste('objets').find((x) => x.id === id)?.icone ? el('img', { src: liste('objets').find((x) => x.id === id).icone, alt: '' }) : null, nom('objets', id)),
-      el('span', { className: 'carnet-sac-droite' },
-        moteur.objetUtilisable(id) ? el('button', { className: 'carnet-utiliser', type: 'button', textContent: 'Utiliser', onclick: () => { fermerCarnet(); moteur.utiliserObjet(id); } }) : null,
-        el('span', { className: 'discret', textContent: `×${n}` })))), 'Le sac est vide.');
-    const quetes = Object.entries(p.quetes).sort(([, a], [, b]) => (a.etat === 'finie') - (b.etat === 'finie'));
-    section('Quêtes', quetes.map(([id, q]) => {
-      const def = liste('quetes').find((x) => x.id === id);
-      const etape = def?.etapes?.[q.etape - 1]?.texte;
-      return el('li', { className: q.etat === 'finie' ? 'finie' : '' },
-        el('span', { textContent: `${def?.titre || id}${def?.secondaire ? ' (secondaire)' : ''}` }),
-        el('span', { className: 'discret', textContent: q.etat === 'finie' ? 'terminée' : etape || `étape ${q.etape}` }));
-    }), 'Aucune quête commencée.');
-    fermerPause();
-    moteur.pause(true);
-    $('#carnet').hidden = false;
-    // Saga 1.6.2 : le carnet se mène au clavier : le premier bouton a le focus, les flèches passent de l'un
-    // à l'autre, Action (Espace, Entrée, E) appuie.
-    ($('#carnet-actions .carnet-bouton') || boutonsCarnet()[0])?.focus();
-  }
-  const boutonsCarnet = () => $$('#carnet button').filter((b) => b.offsetParent !== null && !b.disabled && !b.classList.contains('carnet-fermer'));
-  $('#carnet').addEventListener('keydown', (e) => {
-    const liste = boutonsCarnet();
-    if (!liste.length) return;
-    const i = liste.indexOf(document.activeElement);
-    const sens = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key]
-      || (touche('droite', e) || touche('bas', e) ? 1 : touche('gauche', e) || touche('haut', e) ? -1 : 0);
+    const sens = { ArrowDown: 1, ArrowUp: -1 }[e.key] || (touche('bas', e) ? 1 : touche('haut', e) ? -1 : 0);
     if (sens) {
       e.preventDefault();
       e.stopPropagation();
-      const b = liste[i < 0 ? 0 : (i + sens + liste.length) % liste.length];
+      const b = choix[i < 0 ? 0 : (i + sens + choix.length) % choix.length];
       b.focus();
       b.scrollIntoView?.({ block: 'nearest' });
-      moteur.bruit('curseur');
     } else if (touche('action', e) && i >= 0 && e.key !== 'Enter' && e.key !== ' ') {
       e.preventDefault();
       e.stopPropagation();
-      liste[i].click();
+      choix[i].click();
     }
   });
-  function fermerCarnet() {
-    $('#carnet').hidden = true;
-    moteur.pause(false);
-  }
-  $('#carnet').addEventListener('click', (e) => {
-    const pack = e.target.closest('.carnet-bouton')?.dataset.pack;
-    const ecran = e.target.closest('.carnet-bouton')?.dataset.ecran;
-    if (pack) { fermerCarnet(); moteur.agirPause(pack); }
-    else if (ecran) { fermerCarnet(); moteur.ouvrirEcran(ecran); }
-    else if (e.target.id === 'carnet' || e.target.closest('.carnet-fermer')) fermerCarnet();
-  });
+  // Un petit son quand le choix change (clavier ou manette) et quand on valide.
+  $('#pause').addEventListener('focusin', (e) => { if (e.target.closest('.pause-choix') && pauseOuverte()) moteur.bruit('curseur'); });
+  // La teinte d'une pastille (la même que dans les menus, moteur/menus.js).
+  const teinte = (t) => { let h = 0; for (const c of String(t || '')) h = (h * 31 + c.codePointAt(0)) % 360; return h; };
 
   // --- Exporter le jeu (Saga 0.9) : une version web et/ou Windows à envoyer à des testeurs ---
   // Saga relit le jeu sur le disque (ce que Tafl a enregistré), pas la partie en cours.
@@ -608,20 +611,16 @@ function creerSaga() {
     else if (e.key === 'F5' && ouvert) { e.preventDefault(); recharger(); }
     else if (e.key === 'F3' && ouvert) { e.preventDefault(); basculerDebug(); }
     else if (ctrl && e.key.toLowerCase() === 's' && ouvert) { e.preventDefault(); sauvegarder(); }
-    else if (touche('carnet', e) && ouvert) {
-      e.preventDefault();
-      if (!$('#carnet').hidden) fermerCarnet(); else if (!moteur.enScript) ouvrirCarnet();
-    }
+    else if (touche('carnet', e) && ouvert) { e.preventDefault(); raccourci(); }
     else if ((e.key === 'Escape' || touche('pause', e)) && ouvert) {
       e.preventDefault();
-      if (!$('#carnet').hidden) fermerCarnet();
-      else if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas la pause
+      if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas le menu
       else if (moteur.enCombat) return; // ni pendant un combat : Échap y sert à revenir en arrière
-      else if ($('#pause').hidden && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
-      else if ($('#pause').hidden) ouvrirPause(); else pauseOuArriere();
+      else if (!pauseOuverte() && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
+      else if (!pauseOuverte()) ouvrirPause(); else pauseOuArriere();
     }
   });
-  // Les touches de pause et du carnet (Réglages › Commandes, Saga 0.11).
+  // Les touches du menu et du raccourci (Réglages › Commandes, Saga 0.11).
   function touche(commande, e) {
     const liste = Array.isArray(config.touches?.[commande]) ? config.touches[commande] : Moteur.TOUCHES_DEFAUT[commande];
     return liste.includes(e.code);
@@ -629,21 +628,16 @@ function creerSaga() {
   // Le son reprend au premier geste du joueur (si Windows l'avait suspendu).
   for (const t of ['keydown', 'pointerdown']) window.addEventListener(t, () => moteur.reveiller(), { capture: true, passive: true });
 
-  // La manette dans les menus autour du jeu (pad.js) : Start ouvre et ferme la pause, Select le carnet.
+  // La manette dans les menus autour du jeu (pad.js) : Start ouvre et ferme le menu du jeu, Select le raccourci.
   Pad.demarrer({
     boutons: () => ({ ...Moteur.MANETTE_DEFAUT, ...(config.manette || {}) }),
     start: () => {
       if (!ouvert || Dialogs.isOpen()) return;
-      if (!$('#carnet').hidden) fermerCarnet();
-      else if ($('#pause').hidden) { if (!moteur.enScript) ouvrirPause(); } else fermerPause(); // pas pendant un dialogue, comme Échap
+      if (!pauseOuverte()) { if (!moteur.enScript) ouvrirPause(); } else fermerPause(); // pas pendant un dialogue, comme Échap
     },
-    select: () => {
-      if (!ouvert || Dialogs.isOpen()) return;
-      if (!$('#carnet').hidden) fermerCarnet(); else if (!moteur.enScript && $('#pause').hidden) ouvrirCarnet();
-    },
+    select: () => { if (ouvert && !Dialogs.isOpen()) raccourci(); },
     cibles: () => [
       Dialogs.isOpen() ? { racine: $('#modal-root .modal'), fermer: () => Dialogs.close(null) } : null,
-      { racine: $('#carnet'), fermer: fermerCarnet },
       { racine: $('#pause'), fermer: pauseOuArriere },
       { racine: $('#accueil'), fermer: null },
     ],

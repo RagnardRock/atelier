@@ -47,34 +47,33 @@
     <div id="bandeau"><span id="bandeau-nom"></span></div>
     <!-- F3 : où est le joueur, et à quelle vitesse tourne le jeu -->
     <div id="infos" hidden></div>
-    <!-- Échap : le menu de pause -->
+    <!-- Saga 1.25 : le menu du jeu (Échap, Start), le seul : l'équipe, le sac, les quêtes, les options… -->
     <div id="pause" hidden>
       <div class="pause-carte">
-        <div class="pause-titre"><img src="saga.svg" alt=""><span id="pause-jeu"></span></div>
+        <div class="pause-titre"><span id="pause-jeu"></span><span id="pause-heure" hidden></span><span id="pause-argent"></span></div>
         <button class="pause-choix" data-action="reprendre"><i class="codicon codicon-play"></i>Reprendre<kbd>Échap</kbd></button>
-        <button class="pause-choix" data-action="carnet"><i class="codicon codicon-book"></i>Carnet : équipe, sac, quêtes<kbd>Tab</kbd></button>
         <button class="pause-choix" data-action="equipe"><i class="codicon codicon-organization"></i><span id="pause-equipe">Équipe</span></button>
         <button class="pause-choix" data-action="dex"><i class="codicon codicon-library"></i><span id="pause-dex">Pokédex</span></button>
-        <button class="pause-choix" data-action="mode" hidden><i class="codicon codicon-table"></i><span id="pause-mode">Passer en mode table</span></button>
-        <button class="pause-choix" data-action="multi" hidden><i class="codicon codicon-broadcast"></i><span id="pause-multi">Jouer à plusieurs…</span></button>
+        <button class="pause-choix" data-action="page" data-page="sac"><i class="codicon codicon-briefcase"></i>Sac</button>
+        <button class="pause-choix" data-action="page" data-page="quetes"><i class="codicon codicon-checklist"></i>Quêtes</button>
+        <button class="pause-choix" data-action="page" data-page="badges"><i class="codicon codicon-star-full"></i>Badges</button>
+        <!-- Les choix du pack de règles (jets de dés, se reposer) et des modules (le domaine, construire) -->
+        <div id="pause-actions" class="pause-groupe"></div>
         <button class="pause-choix" data-action="sauvegarder"><i class="codicon codicon-save"></i>Sauvegarder<kbd>Ctrl+S</kbd></button>
-        <button class="pause-choix" data-action="vue" data-vers="outils"><i class="codicon codicon-wrench"></i>Outils du créateur…</button>
-        <button class="pause-choix" data-vue="outils" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
-        <button class="pause-choix" data-vue="outils" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
-        <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Options : son, texte, commandes<kbd>Ctrl+,</kbd></button>
-        <button class="pause-choix" data-vue="outils" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
-        <button class="pause-choix" data-vue="outils" data-action="exporter"><i class="codicon codicon-package"></i>Exporter ce jeu (web, Windows)…</button>
-        <button class="pause-choix" data-vue="outils" data-action="vue" data-vers="principal"><i class="codicon codicon-arrow-left"></i>Retour</button>
+        <button class="pause-choix" data-action="reglages"><i class="codicon codicon-gear"></i>Options<kbd>Ctrl+,</kbd></button>
+        <button class="pause-choix" data-action="vue" data-vers="plus"><i class="codicon codicon-ellipsis"></i>Plus…</button>
         <button class="pause-choix" data-action="quitter"><i class="codicon codicon-home"></i><span id="pause-quitter">Changer de jeu</span></button>
-        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11 · Manette : A valider, B retour, Start pause, Select carnet. Les touches se changent dans Options.</p>
-      </div>
-    </div>
-    <!-- Tab : le carnet du joueur -->
-    <div id="carnet" hidden>
-      <div class="carnet-carte">
-        <div class="carnet-tete"><span id="carnet-titre"></span><span id="carnet-heure" hidden></span><span id="carnet-argent"></span><button class="carnet-bouton" data-ecran="equipe" type="button"><i class="codicon codicon-organization"></i><span id="carnet-equipe">Équipe</span></button><button class="carnet-bouton" data-ecran="dex" type="button"><i class="codicon codicon-library"></i><span id="carnet-dex">Pokédex</span></button><button class="icon-button carnet-fermer" title="Fermer (Tab ou Échap)"><i class="codicon codicon-close"></i></button></div>
-        <div id="carnet-actions" hidden></div>
-        <div id="carnet-corps"></div>
+        <!-- « Plus… » : jouer à plusieurs, recommencer et, hors d'un jeu exporté, les outils du créateur -->
+        <button class="pause-choix" data-vue="plus" data-action="mode" hidden><i class="codicon codicon-table"></i><span id="pause-mode">Passer en mode table</span></button>
+        <button class="pause-choix" data-vue="plus" data-action="multi" hidden><i class="codicon codicon-broadcast"></i><span id="pause-multi">Jouer à plusieurs…</span></button>
+        <button class="pause-choix" data-vue="plus" data-action="recommencer"><i class="codicon codicon-debug-restart"></i>Recommencer depuis le départ</button>
+        <button class="pause-choix createur" data-vue="plus" data-action="recharger"><i class="codicon codicon-refresh"></i>Recharger le jeu<kbd>F5</kbd></button>
+        <button class="pause-choix createur" data-vue="plus" data-action="dossier"><i class="codicon codicon-folder"></i>Ouvrir le dossier du jeu</button>
+        <button class="pause-choix createur" data-vue="plus" data-action="exporter"><i class="codicon codicon-package"></i>Exporter ce jeu (web, Windows)…</button>
+        <!-- Une page du menu (le sac, les quêtes, les badges, le résumé d'un module) -->
+        <div id="pause-page" hidden><h3 id="pause-page-titre"></h3><div id="pause-page-corps"></div></div>
+        <button class="pause-choix" data-vue="plus page" data-action="vue" data-vers="principal"><i class="codicon codicon-arrow-left"></i>Retour<kbd>Échap</kbd></button>
+        <p class="pause-aide">Se déplacer : flèches ou ZQSD · Courir : Maj · Parler, ouvrir : Espace, Entrée ou E · Plein écran : F11 · Manette : A valider, B retour, Start ce menu. Les touches se changent dans Options.</p>
       </div>
     </div>
   </main>

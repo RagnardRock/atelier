@@ -263,8 +263,8 @@ const DonneesRelations = (() => {
         champ('Cadeau pas aimé', nombreIn(g.cadeaux, 'deteste', -999, 999), 'points (0 : rien ne se perd)'),
       ]),
       champ('L\'oubli', nombreIn(g, 'oubli', 0, 999), 'points perdus par nuit sans le voir (0 : rien ; jamais sous le niveau atteint)'),
-      champ('Dans le carnet (Tab)', caseA('menu'), 'l\'écran des relations'),
-      champ('Résumé dans le carnet (Tab)', caseA('carnet'), 'chaque personnage rencontré et ses cœurs'),
+      champ('Dans le menu du jeu (Échap)', caseA('menu'), 'l\'écran des relations'),
+      champ('Résumé dans le menu du jeu', caseA('carnet'), 'chaque personnage rencontré et ses cœurs'),
       champ('Dire quand un niveau monte', caseA('annoncer'), '« Brune et toi : Ami ! »'),
       el('div', { className: 'field-grid' }, [
         champ('On voit', sel([['rencontres', 'Ceux à qui le joueur a parlé'], ['tous', 'Tous, dès le début']], g.visibles, (v) => { g.visibles = v; })),
