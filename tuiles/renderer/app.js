@@ -1365,14 +1365,15 @@ const App = (() => {
       title: `Exporter « ${doc.name} »`,
       okLabel: 'Choisir le dossier et exporter',
       fields: [
-        { key: 'web', label: 'Version web (index.html, à ouvrir dans un navigateur ou à mettre sur itch.io)', type: 'checkbox', value: config.exportWeb ?? true },
-        { key: 'exe', label: 'Version Windows (.exe, rien à installer)', type: 'checkbox', value: config.exportExe ?? true },
-        { type: 'info', text: 'Chaque version donne un dossier et un .zip à envoyer. Les testeurs n\'ont besoin ni de Tafl ni de Saga. C\'est Saga qui fabrique l\'export : la version Windows est une copie de Saga qui lance directement ton jeu.' },
+        { key: 'web', label: 'Version web : un seul fichier .html, à ouvrir dans un navigateur', type: 'checkbox', value: config.exportWeb ?? true },
+        { key: 'itch', label: 'Avec un .zip pour la mettre sur itch.io', type: 'checkbox', value: config.exportItch ?? false },
+        { key: 'exe', label: 'Version Windows : un installateur MonJeu-Setup.exe', type: 'checkbox', value: config.exportExe ?? true },
+        { type: 'info', text: 'Chaque version donne un seul fichier à envoyer. Les testeurs n\'ont besoin ni de Tafl ni de Saga. C\'est Saga qui fabrique l\'export (il faut Saga 1.23 ou plus) : la version Windows installe une copie de Saga qui lance directement ton jeu.' },
       ],
     });
     if (!v) return;
-    await window.tafl.writeConfig({ exportWeb: v.web, exportExe: v.exe });
-    const formats = [v.web && 'web', v.exe && 'exe'].filter(Boolean);
+    await window.tafl.writeConfig({ exportWeb: v.web, exportItch: v.itch, exportExe: v.exe });
+    const formats = [v.web && 'web', v.web && v.itch && 'itch', v.exe && 'exe'].filter(Boolean);
     if (!formats.length) return notify('Coche au moins une version.', 'info');
     if ((doc.dirty || !doc.game.folder) && !(await IO.save(doc))) return;
     const attente = notify(`Saga exporte le jeu (${formats.length > 1 ? 'web et Windows' : formats[0] === 'web' ? 'web' : 'Windows'})… La version Windows peut prendre une minute.`, 'info', 600000);
@@ -1383,10 +1384,10 @@ const App = (() => {
       attente.remove();
     }
     if (!r) return;
-    const lignes = [r.web && `• Web : ${r.web.zip}`, r.exe && `• Windows : ${r.exe.zip}`].filter(Boolean);
-    const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nChaque .zip a son dossier à côté, pour essayer avant d'envoyer.`, [
+    const lignes = [r.web && `• Web : ${r.web.fichier || r.web.zip}`, r.web?.itch && `• Pour itch.io : ${r.web.itch}`, r.exe && `• Windows : ${r.exe.fichier || r.exe.zip}`].filter(Boolean);
+    const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nLe .html s\'ouvre d\'un double-clic. L\'installateur met le jeu dans Windows, avec un raccourci sur le Bureau.`, [
       { label: 'Fermer', value: null },
-      { label: 'Montrer dans l\'explorateur', value: (r.web || r.exe).zip, primary: true },
+      { label: 'Montrer dans l\'explorateur', value: (r.exe || r.web).fichier || (r.exe || r.web).zip, primary: true },
     ]);
     if (voir) await window.tafl.revealFile(voir);
   }

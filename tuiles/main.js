@@ -500,8 +500,8 @@ handle('jeu:jouer', async (_event, dossier, depart, test) => {
 handle('jeu:exporter', async (event, dossier, formats) => {
   const root = path.resolve(String(dossier));
   if (!gameFolders.has(root) || !fsSync.existsSync(path.join(root, 'jeu.json'))) throw new Error('Enregistre d\'abord le jeu dans un dossier');
-  formats = ['web', 'exe'].filter((f) => Array.isArray(formats) && formats.includes(f));
-  if (!formats.length) throw new Error('Choisis au moins une version : web ou Windows');
+  formats = ['web', 'itch', 'exe'].filter((f) => Array.isArray(formats) && formats.includes(f));
+  if (!formats.includes('web') && !formats.includes('exe')) throw new Error('Choisis au moins une version : web ou Windows');
   const saga = (!app.isPackaged && sagaDuClone()) || (await sagaInstalle()) || sagaDuClone();
   if (!saga) throw new Error('Saga, le moteur du jeu, n\'est pas installé : installe-le depuis Atelier (c\'est lui qui fabrique l\'export)');
   const win = BrowserWindow.fromWebContents(event.sender);

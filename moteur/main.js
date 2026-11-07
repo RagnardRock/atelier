@@ -248,12 +248,13 @@ handle('sauvegarde:ecrire', async (_event, dossier, donnees, place) => {
 //   Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports --rapport=C:\...\rapport.json
 // (sans fenêtre : Saga exporte, écrit le résultat dans le rapport et se ferme).
 const Exporter = require('./exporter');
-const FORMATS_EXPORT = ['web', 'exe'];
+// itch (Saga 1.23) : en plus de MonJeu.html, un .zip avec index.html pour itch.io.
+const FORMATS_EXPORT = ['web', 'itch', 'exe'];
 const exportes = new Set(); // ce qu'on a le droit de montrer dans l'explorateur
 
 async function exporterJeu(dossier, formats, sortie, progres) {
   formats = FORMATS_EXPORT.filter((f) => formats.includes(f));
-  if (!formats.length) throw new Error('Choisis au moins une version : web ou Windows');
+  if (!formats.includes('web') && !formats.includes('exe')) throw new Error('Choisis au moins une version : web ou Windows');
   const textes = await lireJeu(dossier);
   let titre = '';
   try { titre = String(JSON.parse(textes.jeu).titre || ''); } catch { /* jeu.json abîmé : le nom du dossier */ }
@@ -263,12 +264,12 @@ async function exporterJeu(dossier, formats, sortie, progres) {
   const resultat = { titre, sortie };
   if (formats.includes('web')) {
     const { jeuxRecents, ...configDefaut } = DEFAULT_CONFIG;
-    resultat.web = await Exporter.exporterWeb({ ...commun, configDefaut });
+    resultat.web = await Exporter.exporterWeb({ ...commun, configDefaut, itch: formats.includes('itch') });
   }
   if (formats.includes('exe')) {
     resultat.exe = await Exporter.exporterExe({ ...commun, runtime: path.dirname(process.execPath), exe: path.basename(process.execPath) });
   }
-  for (const r of [resultat.web, resultat.exe]) if (r) { exportes.add(r.dossier); exportes.add(r.zip); }
+  for (const r of [resultat.web, resultat.exe]) if (r) for (const f of [r.fichier, r.zip, r.itch]) if (f) exportes.add(f);
   log('INFO', `Export de « ${titre} » (${formats.join(', ')}) dans ${sortie}`);
   return resultat;
 }

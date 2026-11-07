@@ -127,11 +127,14 @@ Dans Tafl, **Jeu › Test rapide** (`Ctrl+F5`) lance Saga avec un état de dépa
 
 Menu de pause › **Exporter ce jeu (web, Windows)…**, ou depuis Tafl : Jeu › **Exporter le jeu…** (Tafl lance Saga sans fenêtre). On coche une version ou les deux, on choisit un dossier, et Saga y range :
 
-- **`MonJeu-web/` et `MonJeu-web.zip`** : `index.html` + le moteur (`saga/`) + le jeu emballé dans `jeu.js`. On double-clique sur `index.html` (pas besoin d'Internet ni de serveur), ou on envoie le `.zip` sur itch.io (projet « HTML »). Les réglages et la sauvegarde restent dans le navigateur du joueur (localStorage). Le pont `web/saga-web.js` remplace `preload.js`.
-- **`MonJeu/` et `MonJeu-windows.zip`** : `MonJeu.exe`, une copie de Saga (son Electron) avec Saga dans `resources/app` et le jeu dans `resources/jeu`. Rien à installer : on dézippe et on double-clique. Au lancement, Saga voit `resources/jeu` et passe en **mode joueur** : le jeu s'ouvre directement, sans les outils de Saga (pas d'ouverture d'un autre jeu, ni de rechargement F5, de vue F3, de mise à jour, d'export ou d'outils de développement F12), « Quitter le jeu » dans la pause, réglages et sauvegardes dans `%APPDATA%\MonJeu`. Windows peut prévenir que l'exe n'est pas signé (« Informations complémentaires › Exécuter quand même ») : c'est écrit dans le `LISEZMOI.txt` de l'export.
+Depuis Saga 1.23, chaque version donne **un seul fichier** :
+
+- **`MonJeu.html`** : tout le jeu dans une page (le moteur, les styles, les polices, les images, le jeu et les sons en base64). On double-clique dessus (pas besoin d'Internet ni de serveur). Case « Avec un .zip pour itch.io » : en plus, **`MonJeu-itch.zip`** (la même page, nommée `index.html`), à envoyer sur itch.io (projet « HTML »). Les réglages et la sauvegarde restent dans le navigateur du joueur (localStorage). Le pont `web/saga-web.js` remplace `preload.js`.
+- **`MonJeu-Setup.exe`** : un installateur (NSIS, emporté par Saga dans `resources/nsis`, préparé par `build/preparer-nsis.js`). Il installe le jeu pour le joueur seul, sans droits d'administrateur, dans `%LOCALAPPDATA%\Programs\MonJeu`, avec un raccourci sur le Bureau et dans le menu Démarrer, et l'inscrit dans « Applications installées » de Windows pour le désinstaller (les sauvegardes restent). Le jeu installé est une copie de Saga (son Electron) avec Saga dans `resources/app` et le jeu dans `resources/jeu` : au lancement, Saga voit `resources/jeu` et passe en **mode joueur** (le jeu direct, sans les outils de Saga : pas d'ouverture d'un autre jeu, ni de rechargement F5, de vue F3, de mise à jour, d'export ou d'outils de développement F12), « Quitter le jeu » dans la pause, réglages et sauvegardes dans `%APPDATA%\MonJeu`. Windows peut prévenir que l'installateur n'est pas signé (« Informations complémentaires › Exécuter quand même »). Hors Windows, cette version donne un `.zip` du jeu prêt à lancer.
+- Avant Saga 1.23, l'export donnait un dossier et un `.zip` par version : exporter à nouveau range ces anciens dossiers (seulement s'ils viennent de Saga).
 - L'export ne prend que ce que Saga lit (jeu.json, le .tafl, cartes/, donnees/) : ni les fichiers de travail, ni les sauvegardes, ni le chemin du dossier sur ton disque. Exporter à nouveau remplace l'export précédent (seulement s'il vient de Saga).
-- En ligne de commande : `Saga.exe D:\Jeux\MonJeu --exporter=web,exe --sortie=D:\Exports [--rapport=rapport.json]`.
-- Pour l'instant, l'exe garde l'icône de Saga.
+- En ligne de commande : `Saga.exe D:\Jeux\MonJeu --exporter=web,itch,exe --sortie=D:\Exports [--rapport=rapport.json]`.
+- Pour l'instant, le jeu et son installateur gardent l'icône de Saga.
 
 ## Ce que fait Saga 0.11 : l'ambiance et le confort de jeu (avec Tafl 0.29)
 

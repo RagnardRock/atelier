@@ -537,14 +537,15 @@ function creerSaga() {
         title: `Exporter « ${ouvert.jeu.titre} »`,
         okLabel: 'Choisir le dossier et exporter',
         fields: [
-          { key: 'web', label: 'Version web (index.html, à ouvrir dans un navigateur ou à mettre sur itch.io)', type: 'checkbox', value: config.exportWeb ?? true },
-          { key: 'exe', label: `Version ${window.saga.platform === 'win32' ? 'Windows (.exe, rien à installer)' : 'pour ce système (application)'}`, type: 'checkbox', value: config.exportExe ?? true },
-          { type: 'info', text: 'Chaque version donne un dossier et un .zip à envoyer. L\'export reprend le jeu tel qu\'il est enregistré par Tafl. Les testeurs n\'ont besoin ni de Tafl ni de Saga.' },
+          { key: 'web', label: 'Version web : un seul fichier .html, à ouvrir dans un navigateur', type: 'checkbox', value: config.exportWeb ?? true },
+          { key: 'itch', label: 'Avec un .zip pour la mettre sur itch.io', type: 'checkbox', value: config.exportItch ?? false },
+          { key: 'exe', label: `Version ${window.saga.platform === 'win32' ? 'Windows : un installateur MonJeu-Setup.exe' : 'pour ce système (application, en .zip)'}`, type: 'checkbox', value: config.exportExe ?? true },
+          { type: 'info', text: 'Chaque version donne un seul fichier à envoyer. L\'export reprend le jeu tel qu\'il est enregistré par Tafl. Les testeurs n\'ont besoin ni de Tafl ni de Saga.' },
         ],
       });
       if (!v) return;
-      config = await window.saga.writeConfig({ exportWeb: v.web, exportExe: v.exe });
-      const formats = [v.web && 'web', v.exe && 'exe'].filter(Boolean);
+      config = await window.saga.writeConfig({ exportWeb: v.web, exportItch: v.itch, exportExe: v.exe });
+      const formats = [v.web && 'web', v.web && v.itch && 'itch', v.exe && 'exe'].filter(Boolean);
       if (!formats.length) return notify('Coche au moins une version.', 'info');
       attenteExport = notify('Export du jeu…', 'info', 600000);
       let r;
@@ -555,10 +556,10 @@ function creerSaga() {
         attenteExport = null;
       }
       if (!r) return;
-      const lignes = [r.web && `• Web : ${r.web.zip}`, r.exe && `• ${window.saga.platform === 'win32' ? 'Windows' : 'Application'} : ${r.exe.zip}`].filter(Boolean);
-      const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nChaque .zip a son dossier à côté, pour essayer avant d'envoyer.`, [
+      const lignes = [r.web && `• Web : ${r.web.fichier || r.web.zip}`, r.web?.itch && `• Pour itch.io : ${r.web.itch}`, r.exe && `• ${window.saga.platform === 'win32' ? 'Windows' : 'Application'} : ${r.exe.fichier || r.exe.zip}`].filter(Boolean);
+      const voir = await Dialogs.ask('Jeu exporté', `« ${r.titre} » est prêt à envoyer :\n\n${lignes.join('\n')}\n\nLe .html s\'ouvre d\'un double-clic. L\'installateur met le jeu dans Windows, avec un raccourci sur le Bureau.`, [
         { label: 'Fermer', value: null },
-        { label: 'Montrer dans l\'explorateur', value: (r.web || r.exe).zip, primary: true },
+        { label: 'Montrer dans l\'explorateur', value: (r.exe || r.web).fichier || (r.exe || r.web).zip, primary: true },
       ]);
       if (voir) window.saga.montrerExport(voir).catch((err) => notify(cleanError(err), 'error'));
     } catch (err) {

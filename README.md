@@ -10,8 +10,8 @@ Un ensemble d'outils pour le travail de tous les jours (web, graphisme, bureauti
 | **Rune** ᚱ | IDE : Monaco, terminal, serveurs SSH, Git, aperçu Go Live, Vue, Emmet, Prettier | [`ide/`](ide/README.md) | 1.1.0 |
 | **Skald** ᛋ | Retouche d'images et de logos, à la Photoshop (calques, PSD) | [`retouche/`](retouche/README.md) | 1.1.3 |
 | **Brokk** ᛒ | Export d'assets : un PSD ou un logo vers toutes les tailles web d'un projet (favicons, responsive, Open Graph) | [`export/`](export/README.md) | 1.1.0 |
-| **Tafl** ᛏ | Éditeur de jeu : tuiles, cartes, événements, scripts JS, données, packs de règles et modules | [`tuiles/`](tuiles/README.md) | 1.22.2 |
-| **Saga** ᛃ | Moteur qui fait tourner les jeux décrits dans Tafl, avec export web et .exe | [`moteur/`](moteur/README.md) | 1.20.2 |
+| **Tafl** ᛏ | Éditeur de jeu : tuiles, cartes, événements, scripts JS, données, packs de règles et modules | [`tuiles/`](tuiles/README.md) | 1.24.1 |
+| **Saga** ᛃ | Moteur qui fait tourner les jeux décrits dans Tafl, avec export web (un .html) et installateur Windows | [`moteur/`](moteur/README.md) | 1.23.0 |
 | **Mímir** ᛗ | Lecteur de documents : PDF (annoter, signer, remplir les formulaires), EPUB, BD (CBZ/CBR), Word, images, textes | [`lecteur/`](lecteur/README.md) | 0.3.0 |
 | **Kenning** ᚲ | Liseuse d'eBooks avec bibliothèque (couvertures, collections, progression) : EPUB, MOBI, AZW3, FB2, surlignages et notes | [`liseuse/`](liseuse/README.md) | 0.2.0 |
 | **Reikna** ᛞ | Tableur : xlsx, xls, ods, CSV, formules en français, graphiques, mise en forme conditionnelle | [`tableur/`](tableur/README.md) | 0.4.3 |
