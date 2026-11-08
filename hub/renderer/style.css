@@ -266,8 +266,8 @@ input[type=range]::-webkit-slider-thumb {
 /* ---------- Outils ---------- */
 #liste-outils { display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 12px; overflow-y: auto; }
 /* Filtre façon Steam : Tous / Installés / Mises à jour */
-#outils-filtres { display: flex; gap: 6px; padding: 10px 12px 4px; flex-shrink: 0; }
-.filtre { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--plate-border); border-radius: 13px; background: rgba(255, 255, 255, 0.03); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
+#outils-filtres { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 4px; flex-shrink: 0; }
+.filtre { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border: 1px solid var(--plate-border); border-radius: 13px; background: rgba(255, 255, 255, 0.03); color: var(--text); font: inherit; font-size: 12px; white-space: nowrap; flex-shrink: 0; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; }
 .filtre[hidden] { display: none; }
 .filtre:hover { background: var(--hover); color: var(--text-strong); }
 .filtre.actif { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text-strong); }
