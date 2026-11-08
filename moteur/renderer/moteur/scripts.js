@@ -207,6 +207,13 @@ const Scripts = (() => {
         case 'regarder':
           moteur.cine.regarder(c.qui, c.direction, ev);
           break;
+        // Saga 1.27.2 : faire disparaître ou réapparaître un événement, lui changer d'apparence, en pleine scène.
+        case 'apparition':
+          moteur.cine.apparition(c, ev);
+          break;
+        case 'apparence':
+          moteur.cine.apparence(c, ev);
+          break;
         case 'camera': {
           dialogue.fermer();
           const fin = moteur.cine.camera(c, ev);
