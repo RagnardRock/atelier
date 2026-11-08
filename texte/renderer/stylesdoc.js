@@ -6,20 +6,22 @@
 //   perso  : les styles créés (id « perso1 »…), posés dans la page par data-style="perso1" sur un
 //            paragraphe ou un titre (balise : p, h1…h4 ; un style « titre » va dans le sommaire).
 // Valeurs : police (nom, ou null = celle du document), taille (pt), couleur (« rrggbb »), gras,
-// italique, avant / apres (espace au-dessus et en dessous, pt).
+// italique, avant / apres (espace au-dessus et en dessous, pt), alignement (left, center, right, justify ;
+// null = celui du paragraphe), retrait (à gauche, cm).
 //
 // Dans la page, les styles sont une feuille CSS à part (dans <head>, une par document). À
 // l'enregistrement, ils vont dans le fichier : styles Word (styles.xml) et LibreOffice.
 
 const StylesDoc = (() => {
   const DEFAUTS = {
-    h1: { nom: 'Titre 1', balise: 'h1', police: null, taille: 20, couleur: '1f3864', gras: true, italique: false, avant: 16, apres: 8 },
-    h2: { nom: 'Titre 2', balise: 'h2', police: null, taille: 16, couleur: '2f5496', gras: true, italique: false, avant: 11, apres: 6 },
-    h3: { nom: 'Titre 3', balise: 'h3', police: null, taille: 14, couleur: '2f5496', gras: true, italique: false, avant: 8, apres: 4 },
-    h4: { nom: 'Titre 4', balise: 'h4', police: null, taille: 12, couleur: '2f5496', gras: true, italique: false, avant: 6, apres: 3 },
+    h1: { nom: 'Titre 1', balise: 'h1', police: null, taille: 20, couleur: '1f3864', gras: true, italique: false, avant: 16, apres: 8, alignement: null, retrait: null },
+    h2: { nom: 'Titre 2', balise: 'h2', police: null, taille: 16, couleur: '2f5496', gras: true, italique: false, avant: 11, apres: 6, alignement: null, retrait: null },
+    h3: { nom: 'Titre 3', balise: 'h3', police: null, taille: 14, couleur: '2f5496', gras: true, italique: false, avant: 8, apres: 4, alignement: null, retrait: null },
+    h4: { nom: 'Titre 4', balise: 'h4', police: null, taille: 12, couleur: '2f5496', gras: true, italique: false, avant: 6, apres: 3, alignement: null, retrait: null },
   };
   const BALISES = [['p', 'Texte normal'], ['h1', 'Titre 1'], ['h2', 'Titre 2'], ['h3', 'Titre 3'], ['h4', 'Titre 4']];
-  const CHAMPS = ['police', 'taille', 'couleur', 'gras', 'italique', 'avant', 'apres'];
+  const CHAMPS = ['police', 'taille', 'couleur', 'gras', 'italique', 'avant', 'apres', 'alignement', 'retrait'];
+  const ALIGNEMENTS = [['', 'Comme le paragraphe'], ['left', 'À gauche'], ['center', 'Centré'], ['right', 'À droite'], ['justify', 'Justifié']];
 
   const vide = () => ({ base: {}, perso: [] });
   const copie = (s) => structuredClone(s && typeof s === 'object' ? { base: s.base || {}, perso: s.perso || [] } : vide());
@@ -74,6 +76,8 @@ const StylesDoc = (() => {
     if (s.italique !== null && s.italique !== undefined) x.push(`font-style: ${s.italique ? 'italic' : 'normal'}`);
     if (s.avant !== null && s.avant !== undefined) x.push(`margin-top: ${s.avant}pt`);
     if (s.apres !== null && s.apres !== undefined) x.push(`margin-bottom: ${s.apres}pt`);
+    if (/^(left|center|right|justify)$/.test(s.alignement || '')) x.push(`text-align: ${s.alignement}`);
+    if (Number(s.retrait) > 0) x.push(`margin-left: ${Number(s.retrait)}cm`);
     return x.join('; ');
   }
   // La feuille CSS des styles d'un document. portee : le sélecteur de la page (vide pour un export).
@@ -116,8 +120,10 @@ const StylesDoc = (() => {
       italique: cs.fontStyle === 'italic',
       avant: pt(bs.marginTop),
       apres: pt(bs.marginBottom),
+      alignement: { center: 'center', right: 'right', end: 'right', justify: 'justify' }[bs.textAlign] || null,
+      retrait: Math.round(Unites.pxEnCm(parseFloat(bs.marginLeft) || 0) * 10) / 10 || null,
     };
   }
 
-  return { DEFAUTS, BALISES, CHAMPS, liste, get, changer, creer, supprimer, css, appliquer, retirer, depuisEcran, estModifie, copie };
+  return { DEFAUTS, BALISES, CHAMPS, ALIGNEMENTS, liste, get, changer, creer, supprimer, css, appliquer, retirer, depuisEcran, estModifie, copie };
 })();

@@ -387,7 +387,9 @@ const Formats = (() => {
         if (x === undefined || x === null || x === '') continue;
         if (k === 'couleur') x = String(x).toLowerCase();
         if (k === 'police' && policeDoc && x.toLowerCase() === String(policeDoc).toLowerCase()) continue;
-        if ((k === 'taille' || k === 'avant' || k === 'apres') && !(Number(x) >= 0)) continue;
+        if ((k === 'taille' || k === 'avant' || k === 'apres' || k === 'retrait') && !(Number(x) >= 0)) continue;
+        if (k === 'retrait' && !Number(x)) continue;
+        if (k === 'alignement' && !/^(left|center|right|justify)$/.test(x)) continue;
         o[k] = x;
       }
       return o;
