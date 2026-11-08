@@ -31,6 +31,8 @@ const ModulesJeu = (() => {
       donnees: ['ressources', 'batiments'],
       moments: {
         gestion_termine: { nom: 'Un chantier est terminé (pendant la nuit)', infos: { batiment: 'L\'id du type de bâtiment' } },
+        // Saga 1.29 : un bâtiment vient d'être posé (par le joueur ou par un script).
+        gestion_construction: { nom: 'Un bâtiment est posé ou son chantier commence', infos: { batiment: 'L\'id du type de bâtiment', id: 'L\'id de ce bâtiment', par: '« joueur » (menu Construire, Placer un bâtiment) ou « script » (Construire un bâtiment)', etat: '« chantier » ou « fini »' } },
         gestion_arrivee: { nom: 'Des habitants arrivent (pendant la nuit)', infos: { nombre: 'Combien sont arrivés', habitants: 'Combien vivent maintenant au domaine' } },
         gestion_depart: { nom: 'Un habitant part, après trop de nuits de faim', infos: { nombre: 'Combien sont partis', habitants: 'Combien vivent maintenant au domaine' } },
         // Saga 1.22 : les postes.

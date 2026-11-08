@@ -149,6 +149,9 @@ const Moteur = (() => {
     // Les événements (Saga 0.2) : la boîte de dialogue, le script en cours, les pauses des scripts.
     const dialogue = Dialogue.creer(canvas.parentElement, { sons: bruit });
     let scripts = null, enScript = false, autoAFaire = false, reveilAFaire = false;
+    // Saga 1.29 : les relances demandées par un module (« construction »…) : les scènes « auto » de la carte
+    // marquées pour elles (ev.relances) se joueront après le script ou le menu en cours.
+    const relancesAFaire = new Set();
     // Saga 1.17 : la mise en scène des cinématiques (caméra, fondus, secousses, bulles, bandes) et les
     // marches en cours (commande deplacer) : { cible ('joueur' ou un présent), etapes: [dir], duree, attente, resoudre }.
     const cine = Cinema.creer();
@@ -334,6 +337,7 @@ const Moteur = (() => {
       defaite: () => defaiteTempsReel(),
       annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
       reagir: (moment, infos) => { Modules.moment(jeu, partie, hoteModules, moment, infos); if (scriptsJs.ecoute(moment)) reagir(moment, infos); },
+      relancer: (nom) => { if (nom) relancesAFaire.add(String(nom)); },
       // Saga 1.14 : les modules choisissent les ennemis d'une zone (le roguelite : aucun dans une salle vidée).
       rencontres: (zone, liste) => Modules.rencontres(jeu, partie, hoteModules, carte, zone, liste),
       comportement: (nom, etat) => scriptsJs.comportement?.(nom, etat) || null,
@@ -430,6 +434,7 @@ const Moteur = (() => {
       Modules.entrerCarte(jeu, partie, hoteModules, carte, depuis);
       // Les événements « auto » de cette carte se joueront dès la fin du fondu.
       autoAFaire = true;
+      relancesAFaire.clear();
       return true;
     }
 
@@ -1205,6 +1210,18 @@ const Moteur = (() => {
       }
     }
 
+    // Saga 1.29 : les scènes « auto » de la carte marquées pour une relance demandée (ev.relances), une fois
+    // chacune, dans l'ordre de la carte. Leurs conditions (leurs pages) disent si elles ont quelque chose à jouer.
+    async function lancerRelances() {
+      const noms = new Set(relancesAFaire);
+      relancesAFaire.clear();
+      for (const p of presents.filter((q) => q.ev.declenchement === 'auto' && Array.isArray(q.ev.relances) && q.ev.relances.some((n) => noms.has(n)))) {
+        const actuel = presents.find((q) => q.ev === p.ev);
+        if (actuel) await lancer(actuel);
+        if (autoAFaire) return;
+      }
+    }
+
     // Les PNJ qui bougent : « aleatoire » marche au hasard à deux cases au plus de sa place,
     // « tourne » regarde autour de lui.
     function avancerPNJ(dt) {
@@ -1644,6 +1661,7 @@ const Moteur = (() => {
         else if (reactions.length && !fondu && !enScript && !enCombat) lancerReactions();
         else if (autoAFaire && !fondu && !enScript) lancerAuto();
         else if (reveilAFaire && !fondu && !enScript && !enCombat) lancerAuto(true);
+        else if (relancesAFaire.size && !fondu && !enScript && !enCombat) lancerRelances();
       } else entrees.appuis();
       if (table.actif) { table.dessiner(maintenant, dt); return; }
       placerCamera();

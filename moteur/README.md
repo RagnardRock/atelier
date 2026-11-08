@@ -321,6 +321,11 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Quand** : réglé par le jeu (Tafl › Réglages › Interface › Commandes tactiles : au toucher de l'écran, toujours ou jamais ; taille, opacité, bouton du raccourci) ou par le joueur (Options › Commandes tactiles). Au toucher de l'écran (par défaut), elles apparaissent au premier toucher, ou d'emblée sur une tablette, et s'effacent dès qu'on joue au clavier ou à la manette.
 - **Export web** : la page empêche le zoom à deux doigts et occupe tout l'écran (encoche comprise), et peut s'ajouter à l'écran d'accueil.
 
+## Ce que fait Saga 1.29 : réagir quand le joueur construit (avec Tafl 1.31)
+
+- **Qui a construit** (module gestion) : un bâtiment de la commande `gestion_construire` est marqué « construit par un script » (`script` dans l'état), sauf avec `par_joueur` ; ceux que le joueur pose (menu Construire, `gestion_placer`) ne le sont pas. Les conditions `gestion_batiment` et `gestion_chantier` prennent `par` (`joueur`, `script`, ou tous), et `gestion_batiment` peut compter aussi les chantiers (`chantiers`). La maison du héros posée par un script ne compte donc pas pour une quête « construis une maison ».
+- **Réagir tout de suite** : un module peut demander au moteur de relancer des scènes (`hote.relancer(nom)`, MODULES.md) : les événements « Tout seul » de la carte marqués pour cette relance (`relances`) se jouent après le script ou le menu en cours. Le module gestion demande `construction` dès qu'un bâtiment est posé ou commencé, et émet le moment `gestion_construction` (`batiment`, `id`, `par`, `etat`) pour les scripts.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

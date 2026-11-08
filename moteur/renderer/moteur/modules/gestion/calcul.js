@@ -343,7 +343,7 @@ const GestionCalcul = (() => {
       const lieu = typeof b.carte === 'string' && b.carte ? { carte: b.carte, x: entier(b.x, 0, 0, 9999), y: entier(b.y, 0, 0, 9999) } : {};
       const v = entier(b.variante, 0, 0, 99);
       const progres = !fini && Number.isFinite(Number(b.progres)) ? Math.min(0.99, Math.max(0, Math.round(Number(b.progres) * 100) / 100)) : 0;
-      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu, ...(v ? { variante: v } : {}),
+      batiments.push({ id, type: b.type, etat: fini ? 'fini' : 'chantier', reste: fini ? 0 : entier(b.reste, 1, 1, 999), ...lieu, ...(v ? { variante: v } : {}), ...(b.script === true ? { script: true } : {}),
         ...(progres ? { progres } : {}), ...(fini && b.affectes !== undefined && b.affectes !== null ? { affectes: entier(b.affectes, 0, 0, 999) } : {}) });
     }
     const postes = {};
@@ -407,7 +407,10 @@ const GestionCalcul = (() => {
   // Saga 1.6 : la place pour loger des habitants (les bâtiments finis).
   const logement = (d, e) => e.batiments.reduce((t, b) => t + (b.etat === 'fini' ? d.batiments.get(b.type)?.logement || 0 : 0), 0);
   // Combien de bâtiments de ce type (chantiers compris, ou seulement les finis).
-  const combien = (e, type, finis = false) => e.batiments.filter((b) => b.type === type && (!finis || b.etat === 'fini')).length;
+  // Saga 1.29 : par = 'joueur' (posé par le joueur : menu Construire, gestion_placer) ou 'script' (commande
+  // gestion_construire), vide = tous.
+  const deQui = (b, par) => !par || (par === 'script' ? Boolean(b.script) : !b.script);
+  const combien = (e, type, finis = false, par = '') => e.batiments.filter((b) => b.type === type && (!finis || b.etat === 'fini') && deQui(b, par)).length;
 
   // Ajouter (n > 0) ou retirer (n < 0) une ressource. Le stock ne passe jamais sous 0 ni au-dessus de la
   // capacité. Rend { etat, change } : ce qui a vraiment changé.
@@ -455,7 +458,8 @@ const GestionCalcul = (() => {
   // lieu (Saga 1.5) : { carte, x, y } s'il est posé sur une carte (vérifié avant par placement()).
   // variante (Saga 1.18) : son apparence, un indice dans def.variantes (voir variante()).
   // Rend { ok, etat, raison, batiment } (raison : une phrase pour le joueur).
-  function construire(d, e, type, lieu = null, variante = 0) {
+  // script (Saga 1.29) : construit par un script (gestion_construire), pas par le joueur ; gardé dans l'état.
+  function construire(d, e, type, lieu = null, variante = 0, script = false) {
     const def = d.batiments.get(type);
     if (!def) return { ok: false, etat: e, raison: `Ce bâtiment n'existe pas (${type}).` };
     if (def.maximum && combien(e, type) >= def.maximum) return { ok: false, etat: e, raison: def.maximum === 1 ? `${def.nom} : il y en a déjà un.` : `${def.nom} : il y en a déjà ${def.maximum}.` };
@@ -466,6 +470,7 @@ const GestionCalcul = (() => {
     const batiment = { id: `b${etat.prochain}`, type, etat: def.jours > 0 ? 'chantier' : 'fini', reste: def.jours, ...(lieu ? { carte: lieu.carte, x: lieu.x, y: lieu.y } : {}) };
     const k = entier(variante, 0, 0, 99);
     if (k > 0 && k < (def.variantes?.length || 0)) batiment.variante = k;
+    if (script) batiment.script = true;
     while (etat.batiments.some((b) => b.id === batiment.id)) batiment.id = `b${++etat.prochain}`;
     etat.prochain += 1;
     etat.batiments.push(batiment);
