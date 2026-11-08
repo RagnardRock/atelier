@@ -915,7 +915,13 @@ const Moteur = (() => {
         const [dx, dy] = DIRECTIONS[dir];
         const de = caseCine(c), x = de.x + dx, y = de.y + dy;
         if (c === 'joueur') joueur.dir = dir; else c.direction = dir;
-        const ok = Monde.dansCarte(carte, x, y) && (m.traverser || caseLibre(c, x, y));
+        // Saga 1.27.1 : un tampon qui traverse peut sortir de la carte (une calèche qui s'en va), jusqu'à
+        // disparaître tout entier ; les autres restent dans la carte.
+        const f = c !== 'joueur' && m.traverser ? c.forme : null;
+        const dedans = f ? x >= -f.largeur && y >= -f.hauteur && x <= carte.largeur && y <= carte.hauteur : Monde.dansCarte(carte, x, y);
+        const ok = dedans && (m.traverser || caseLibre(c, x, y));
+        // Déjà tout entier hors de la carte : le reste du trajet ne se verrait pas, il s'arrête là.
+        if (f && !dedans) { m.etapes = []; continue; }
         if (!ok) {
           // Quelqu'un barre le chemin : il attend un peu, puis renonce à ce pas.
           m.attente += dt;
@@ -1321,10 +1327,16 @@ const Moteur = (() => {
           if (m) p.vuBouger = maintenant;
           const fixe = p.apparence?.animer === 'mouvement' && !(maintenant - (p.vuBouger ?? -1e9) < 150);
           liste.push({ y: py + (tp.hauteur - 1) * t, dessiner: () => {
+            // Coupé au bord de la carte : en sortant, il disparaît peu à peu (Saga 1.27.1).
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(-cam.x, -cam.y, carte.largeur * t, carte.hauteur * t);
+            ctx.clip();
             for (let j = 0; j < tp.hauteur; j++) for (let i = 0; i < tp.largeur; i++) {
               const n = tp.cases[j * tp.largeur + i];
               if (n >= 0) dessinerTuile(n, px - cam.x + i * t, py - cam.y + j * t, maintenant, fixe);
             }
+            ctx.restore();
           } });
           continue;
         }
