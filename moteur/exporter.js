@@ -194,7 +194,7 @@ async function htmlUnique({ textes, titre, nom, moteur, version, configDefaut, d
   // Une seule page, sans fichiers à côté : les scripts sont dans la page (rien ne vient d'Internet).
   html = html
     .replace(/<meta http-equiv="Content-Security-Policy"[\s\S]*?>/, `<meta http-equiv="Content-Security-Policy"\n        content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src data: blob:; worker-src blob:">`)
-    .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">')
+    .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">\n  <meta name="mobile-web-app-capable" content="yes">\n  <meta name="apple-mobile-web-app-capable" content="yes">')
     .replace(/<title>[^<]*<\/title>/, `<title>${titre.replace(/[<>&]/g, '')}</title>`)
     .replace('<body class="glass">', '<body class="glass joueur web">');
   return html;

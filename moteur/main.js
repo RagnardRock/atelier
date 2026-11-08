@@ -78,6 +78,7 @@ const DEFAULT_CONFIG = {
   courirParDefaut: false, // true : on court sans tenir Maj (Maj fait alors marcher)
   meteo: true,           // montrer la météo des cartes
   effetsSol: true,       // Saga 1.20 : les effets au passage des tuiles (herbes, eau, traces)
+  tactile: 'jeu',        // Saga 1.28 : les commandes tactiles : 'jeu' (le choix du jeu), 'auto', 'toujours', 'jamais'
   // Saga 0.11 : le son, le texte et les commandes du joueur (réglages › Son, Texte, Commandes).
   volumeMusique: 70,     // de 0 à 100
   volumeSons: 80,        // bruitages et fonds sonores, de 0 à 100

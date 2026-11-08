@@ -44,6 +44,8 @@ const Moteur = (() => {
     let course = false;
     let appuis = [];   // les touches appuyées depuis la dernière image : 'action', 'retour', 'haut'…
     let pad = null;    // ce que la manette tient en ce moment : { dir, course, ax, ay }
+    // Saga 1.28 : les commandes à l'écran (tactile.js) : la direction tenue par le doigt, Courir tenu.
+    let doigt = { dir: null, course: false };
     const lacher = (dir) => { const i = tenues.indexOf(dir); if (i >= 0) tenues.splice(i, 1); };
     window.addEventListener('keydown', (e) => {
       if (e.target.closest?.('input, select, textarea, button, .modal')) return;
@@ -101,18 +103,26 @@ const Moteur = (() => {
     return {
       sonder,
       lire() {
-        return { dir: tenues[tenues.length - 1] || pad?.dir || null, course: course || Boolean(pad?.course) };
+        return { dir: tenues[tenues.length - 1] || doigt.dir || pad?.dir || null, course: course || doigt.course || Boolean(pad?.course) };
       },
       // Saga 1.12 (temps réel) : toutes les directions tenues ensemble (haut + droite = la diagonale), ou le stick.
       vecteur() {
         const x = (tenues.includes('droite') ? 1 : 0) - (tenues.includes('gauche') ? 1 : 0);
         const y = (tenues.includes('bas') ? 1 : 0) - (tenues.includes('haut') ? 1 : 0);
         if (x || y) return { x, y };
+        if (doigt.dir) return { x: { gauche: -1, droite: 1 }[doigt.dir] || 0, y: { haut: -1, bas: 1 }[doigt.dir] || 0 };
         return { x: pad?.ax || 0, y: pad?.ay || 0 };
       },
       // Les appuis depuis la dernière fois (chacun n'est rendu qu'une fois).
       appuis() { const a = appuis; appuis = []; return a; },
-      oublier() { tenues.length = 0; course = false; appuis = []; },
+      oublier() { tenues.length = 0; course = false; appuis = []; doigt = { dir: null, course: false }; },
+      // Saga 1.28 : ce que font les commandes tactiles, comme une manette : une direction tenue (ou null),
+      // un appui (action, retour, echap), Courir tenu.
+      tactile: {
+        diriger(dir) { dir = DIRS.includes(dir) ? dir : null; if (dir && dir !== doigt.dir) appuis.push(dir); doigt.dir = dir; },
+        appuyer(quoi) { if (['action', 'retour', 'echap', ...DIRS].includes(quoi)) appuis.push(quoi); },
+        courir(oui) { doigt.course = Boolean(oui); },
+      },
       regler(touches, manette) { cmd = commandes(touches, manette); tenues.length = 0; course = false; },
     };
   }
@@ -1709,6 +1719,8 @@ const Moteur = (() => {
       // L'heure du jeu (Saga 0.11), pour le carnet : « 14 h 05 », ou '' sans horloge.
       heure() { return jeu ? Temps.texte(Temps.heure(jeu, partie)) : ''; },
       reveiller() { audio.reprendre(); },
+      // Saga 1.28 : les commandes à l'écran (tactile.js) passent par ici.
+      tactile: entrees.tactile,
       get enScript() { return enScript; },
       get enCombat() { return enCombat; },
       // La partie en cours, pour la sauvegarder (une copie : la sauvegarde ne bouge plus ensuite).
