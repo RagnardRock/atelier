@@ -491,6 +491,14 @@
   }
 
   // Poser un bâtiment : choisir sa place, le payer, lancer son chantier. → { ok, batiment }
+  // Saga 1.29 : un bâtiment vient d'être posé ou commencé. Le moment gestion_construction (pour les scripts),
+  // puis, après le script ou le menu en cours, les scènes « Tout seul » de la carte marquées « Aussi après
+  // une construction » (leurs conditions disent lesquelles : gestion_batiment avec par = joueur…).
+  function construit(o, b, script) {
+    o.hote?.reagir?.('gestion_construction', { batiment: b.type, id: b.id, par: script ? 'script' : 'joueur', etat: b.etat });
+    o.hote?.relancer?.('construction');
+  }
+
   async function placer(o, type, annoncer = true) {
     const d = defs(o.jeu);
     const dire = async (t) => { if (annoncer) await (o.narrer ? o.narrer(t) : o.hote?.ui?.dire(t)); };
@@ -511,6 +519,7 @@
     if (!r.ok) { await dire(r.raison); return { ok: false, batiment: '' }; }
     poser(o, r.etat);
     o.hote.rafraichir?.();
+    construit(o, r.batiment, false);
     await dire(r.batiment.etat === 'fini' ? `Construction terminée : ${def.nom} !` : `Le chantier commence : ${def.nom} (${def.jours} nuit${def.jours > 1 ? 's' : ''} de travail).`);
     return { ok: true, batiment: r.batiment.id };
   }
@@ -719,10 +728,11 @@
         // seulement pas d'autre bâtiment dessous. Sans carte : aucun lieu (montré par un événement).
         const fixe = o.c.carte ? { carte: String(o.c.carte), x: Math.max(0, Math.round(Number(o.c.x) || 0)), y: Math.max(0, Math.round(Number(o.c.y) || 0)) } : null;
         const place = fixe && d.batiments.has(type) ? C.placement(d, etatDe(o), type, { ...fixe, constructible: () => true, libre: () => true }, fixe.x, fixe.y) : { ok: true };
-        const r = place.ok ? C.construire(d, etatDe(o), type, fixe, C.variante(d, etatDe(o), type)) : { ok: false, raison: place.raison };
+        const r = place.ok ? C.construire(d, etatDe(o), type, fixe, C.variante(d, etatDe(o), type), !o.c.par_joueur) : { ok: false, raison: place.raison };
         if (r.ok) {
           poser(o, r.etat);
           o.hote.rafraichir?.();
+          construit(o, r.batiment, !o.c.par_joueur);
           const def = d.batiments.get(r.batiment.type);
           if (o.c.annoncer !== false) await o.narrer(r.batiment.etat === 'fini' ? `Construction terminée : ${def.nom} !` : `Le chantier commence : ${def.nom} (${def.jours} nuit${def.jours > 1 ? 's' : ''} de travail).`);
           await o.jouer(o.c.reussi);
@@ -851,8 +861,10 @@
 
     condition(o, cond) {
       const e = etatDe(o);
-      if (cond.type === 'gestion_batiment') return C.combien(e, String(cond.batiment || ''), true) >= Math.max(1, Number(cond.min) || 1);
-      if (cond.type === 'gestion_chantier') return C.combien(e, String(cond.batiment || '')) > C.combien(e, String(cond.batiment || ''), true);
+      // Saga 1.29 : par = 'joueur' | 'script' (vide : tous) ; chantiers : compter aussi ceux qui ne sont pas finis.
+      const par = cond.par === 'joueur' || cond.par === 'script' ? cond.par : '';
+      if (cond.type === 'gestion_batiment') return C.combien(e, String(cond.batiment || ''), !cond.chantiers, par) >= Math.max(1, Number(cond.min) || 1);
+      if (cond.type === 'gestion_chantier') return C.combien(e, String(cond.batiment || ''), false, par) > C.combien(e, String(cond.batiment || ''), true, par);
       if (cond.type === 'gestion_habitants') return (Number(e.habitants) || 0) >= Math.max(0, Number(cond.min) || 0);
       if (cond.type === 'gestion_stock') return (e.stock[String(cond.ressource || '')] || 0) >= Math.max(0, Number(cond.min) || 0);
       // Saga 1.22 : un poste est occupé (par ce personnage, ou par quelqu'un si personnage est vide).
@@ -878,7 +890,7 @@
     pourScript(o) {
       const e = etatDe(o);
       const em = C.emplois(defs(o.jeu), e);
-      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, noms: defs(o.jeu).reglages.habitants_noms.slice(0, em.habitants), logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste, ...(b.affectes !== undefined ? { affectes: b.affectes } : {}) })),
+      return { stock: { ...e.stock }, capacite: C.capacite(defs(o.jeu)), habitants: em.habitants, noms: defs(o.jeu).reglages.habitants_noms.slice(0, em.habitants), logement: em.logement, ouvriers: { demandes: em.demandes, libres: em.libres }, batiments: e.batiments.map((b) => ({ id: b.id, type: b.type, etat: b.etat, reste: b.reste, par: b.script ? 'script' : 'joueur', ...(b.affectes !== undefined ? { affectes: b.affectes } : {}) })),
         postes: { ...(e.postes || {}) }, effets: effetsDe(o, e).map((x) => ({ nom: x.nom, production: x.production, chantiers: x.chantiers, batiments: [...x.batiments] })) };
     },
   });

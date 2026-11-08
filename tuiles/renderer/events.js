@@ -1158,6 +1158,12 @@ const Events = (() => {
   // --- Tafl 1.3 (Saga 1.5) : le module « gestion » (Réglages › Règles du jeu › Modules) ---
   // Ses commandes et conditions ne sont proposées que si le jeu l'active (modules : comme packs).
   const MODULE_GESTION = ['gestion'];
+  // Tafl 1.31 (Saga 1.29) : les relances qu'un module demande au moteur (hote.relancer) : les scènes « Tout
+  // seul » cochées pour elle se lancent de nouveau, après le script ou le menu en cours.
+  const RELANCES = {
+    construction: { id: 'construction', modules: MODULE_GESTION, nom: 'Aussi après une construction',
+      aide: '« Tout seul » seulement : la scène se lance aussi juste après que le joueur ou un script pose un bâtiment (menu Construire, commandes Placer ou Construire un bâtiment). Avec la condition « Un bâtiment est construit » (par le joueur, chantiers compris), pour une quête « construis une maison »' },
+  };
   const choixDe = (doc, sorte, actuel, vide) => {
     const list = (doc.data[sorte] || []).map((o) => [o.id, o.nom || o.id]);
     if (actuel && !list.some(([k]) => k === actuel)) list.unshift([actuel, `${actuel} (n'existe plus)`]);
@@ -1185,11 +1191,13 @@ const Events = (() => {
         { key: 'carte', label: 'Où', type: 'select', value: c.carte || '', choices: [['', 'Nulle part (montré par un événement)'], ...doc.maps.map((m) => [m.id, `Sur la carte ${m.name}`])] },
         { key: 'x', label: 'Colonne (x) de la case en haut à gauche', type: 'number', value: c.x || 0, min: 0, max: 255 },
         { key: 'y', label: 'Rangée (y) de la case en haut à gauche', type: 'number', value: c.y || 0, min: 0, max: 255 },
+        // Tafl 1.31 (Saga 1.29) : par défaut, un bâtiment construit par un script ne compte pas comme celui du joueur.
+        { key: 'par_joueur', label: 'Compte comme construit par le joueur', type: 'checkbox', value: Boolean(c.par_joueur) },
         { ...ANNONCER, value: c.annoncer !== false },
         { type: 'info', text: `Son coût est pris tout de suite dans le stock ; le chantier avance d'une nuit chaque fois que le joueur dort. Sur une carte : le bâtiment y apparaît avec son tampon (celui du chantier d'abord), à partir de la case en haut à gauche, et bloque son emprise sauf la porte ; pas besoin de zone constructible. Raté : pas assez de ressources, son maximum est atteint, ou un autre bâtiment occupe la place. ${AIDE_BRANCHES} « Nulle part » : pour le montrer, une page avec la condition « Un bâtiment est construit ».` },
       ],
       depuis: (v, c) => {
-        const out = { type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [] };
+        const out = { type: 'gestion_construire', batiment: v.batiment, annoncer: Boolean(v.annoncer), reussi: c.reussi || [], rate: c.rate || [], ...(v.par_joueur ? { par_joueur: true } : {}) };
         const m = v.carte ? Doc.mapById(App.doc, v.carte) : null;
         if (v.carte) Object.assign(out, { carte: v.carte, x: clamp(Math.round(v.x) || 0, 0, (m?.width || 256) - 1), y: clamp(Math.round(v.y) || 0, 0, (m?.height || 256) - 1) });
         return out;
@@ -1313,16 +1321,22 @@ const Events = (() => {
       champs: (doc, c) => [
         { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) },
         { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 1, max: 999 },
-        { type: 'info', text: 'Seulement les bâtiments finis (pas les chantiers). Une page avec cette condition montre le bâtiment à son emplacement.' },
+        // Tafl 1.31 (Saga 1.29) : qui l'a construit, et compter aussi les chantiers.
+        { key: 'par', label: 'Construit par', type: 'select', value: c.par || '', choices: [['', 'Le joueur ou un script'], ['joueur', 'Le joueur (menu Construire, Placer un bâtiment)'], ['script', 'Un script (commande Construire un bâtiment)']] },
+        { key: 'chantiers', label: 'Compter aussi les chantiers (pas encore finis)', type: 'checkbox', value: Boolean(c.chantiers) },
+        { type: 'info', text: 'Sans « chantiers » : seulement les bâtiments finis. « Le joueur » : ceux qu\'il a posés lui-même (menu Construire, commande Placer un bâtiment), pas ceux d\'un script (la maison du héros construite par la commande Construire un bâtiment). Pour réagir dès la pose : une scène « Tout seul » cochée « Aussi après une construction ». Une page avec cette condition montre le bâtiment à son emplacement.' },
       ],
-      depuis: (v) => ({ type: 'gestion_batiment', batiment: v.batiment, min: clamp(Math.round(v.min) || 1, 1, 999) }),
+      depuis: (v) => ({ type: 'gestion_batiment', batiment: v.batiment, min: clamp(Math.round(v.min) || 1, 1, 999), ...(v.par ? { par: v.par } : {}), ...(v.chantiers ? { chantiers: true } : {}) }),
       valide: (c) => (c.batiment ? null : 'Quel bâtiment ?'),
     },
     gestion_chantier: {
       nom: 'Un chantier est en cours (gestion)', modules: MODULE_GESTION,
       nouveau: (doc) => ({ type: 'gestion_chantier', batiment: doc.data.batiments?.[0]?.id || '' }),
-      champs: (doc, c) => [{ key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) }],
-      depuis: (v) => ({ type: 'gestion_chantier', batiment: v.batiment }),
+      champs: (doc, c) => [
+        { key: 'batiment', label: 'Bâtiment', type: 'select', value: c.batiment, choices: choixBatiments(doc, c.batiment) },
+        { key: 'par', label: 'Commencé par', type: 'select', value: c.par || '', choices: [['', 'Le joueur ou un script'], ['joueur', 'Le joueur (menu Construire, Placer un bâtiment)'], ['script', 'Un script (commande Construire un bâtiment)']] },
+      ],
+      depuis: (v) => ({ type: 'gestion_chantier', batiment: v.batiment, ...(v.par ? { par: v.par } : {}) }),
       valide: (c) => (c.batiment ? null : 'Quel bâtiment ?'),
     },
     gestion_stock: {
@@ -1584,8 +1598,8 @@ const Events = (() => {
     if (c.type === 'jour') return `le jour ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
     if (c.type === 'jours_depuis') return `jours depuis « ${nomVariable(doc, c.variable)} » ${libelle(COMPARAISONS, c.comparaison).replace(/ \(.*\)$/, '')} ${c.valeur}`;
     if (c.type === 'heure') return `de ${c.de} h à ${c.a} h`;
-    if (c.type === 'gestion_batiment') return `${c.min > 1 ? `au moins ${c.min} × ` : ''}« ${nomData(doc, 'batiments', c.batiment)} » construit`;
-    if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours`;
+    if (c.type === 'gestion_batiment') return `${c.min > 1 ? `au moins ${c.min} × ` : ''}« ${nomData(doc, 'batiments', c.batiment)} » ${c.chantiers ? 'construit ou en chantier' : 'construit'}${c.par === 'joueur' ? ' par le joueur' : c.par === 'script' ? ' par un script' : ''}`;
+    if (c.type === 'gestion_chantier') return `chantier de « ${nomData(doc, 'batiments', c.batiment)} » en cours${c.par === 'joueur' ? ' (posé par le joueur)' : c.par === 'script' ? ' (lancé par un script)' : ''}`;
     if (c.type === 'gestion_stock') return `au moins ${c.min} ${nomData(doc, 'ressources', c.ressource)} au stock`;
     if (c.type === 'gestion_habitants') return `au moins ${c.min} habitant${c.min > 1 ? 's' : ''} au domaine`;
     if (c.type === 'gestion_poste') return `${nomPoste(doc, c.poste)} occupé${c.personnage ? ` par ${nomData(doc, 'personnages', c.personnage)}` : ''}`;
@@ -1627,8 +1641,8 @@ const Events = (() => {
       case 'jour': return { type: 'jour', comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 1), 1, 99999) };
       case 'jours_depuis': return { type: 'jours_depuis', variable: str(c.variable), comparaison: pick(c.comparaison, COMPARAISONS, '>='), valeur: clamp(int(c.valeur, 0), 0, 99999) };
       case 'heure': return { type: 'heure', de: clamp(int(c.de, 0), 0, 23), a: clamp(int(c.a, 0), 0, 23) };
-      case 'gestion_batiment': return { type: 'gestion_batiment', batiment: str(c.batiment), min: clamp(int(c.min, 1), 1, 999) };
-      case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment) };
+      case 'gestion_batiment': return { type: 'gestion_batiment', batiment: str(c.batiment), min: clamp(int(c.min, 1), 1, 999), ...(['joueur', 'script'].includes(c.par) ? { par: c.par } : {}), ...(c.chantiers ? { chantiers: true } : {}) };
+      case 'gestion_chantier': return { type: 'gestion_chantier', batiment: str(c.batiment), ...(['joueur', 'script'].includes(c.par) ? { par: c.par } : {}) };
       case 'gestion_stock': return { type: 'gestion_stock', ressource: str(c.ressource), min: clamp(int(c.min, 0), 0, 99999) };
       case 'gestion_habitants': return { type: 'gestion_habitants', min: clamp(int(c.min, 0), 0, 9999) };
       case 'relation_niveau': return { type: 'relation_niveau', personnage: str(c.personnage), min: clamp(int(c.min, 1), 0, 99), ...(c.max !== undefined && c.max !== '' && c.max !== null ? { max: clamp(int(c.max, 99), 0, 99) } : {}) };
@@ -1687,7 +1701,7 @@ const Events = (() => {
       case 'son': return { type: 'son', fichier: Donnees.son(c.fichier) };
       case 'heure': return { type: 'heure', action: c.action === 'regler' ? 'regler' : 'avancer', heures: clamp(int(c.heures, 8), 0, 23) };
       case 'dormir': return { type: 'dormir', texte: str(c.texte), soigner: vrai(c.soigner), heure: c.heure === '' || c.heure === null || c.heure === undefined ? '' : clamp(int(c.heure, 8), 0, 23) };
-      case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), ...(str(c.carte) ? { carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)) } : {}), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
+      case 'gestion_construire': return { type: 'gestion_construire', batiment: str(c.batiment), ...(str(c.carte) ? { carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)) } : {}), ...(c.par_joueur ? { par_joueur: true } : {}), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_placer': return { type: 'gestion_placer', batiment: str(c.batiment), annoncer: vrai(c.annoncer), reussi: normListe(c.reussi), rate: normListe(c.rate) };
       case 'gestion_stock': return { type: 'gestion_stock', action: c.action === 'retirer' ? 'retirer' : 'ajouter', ressource: str(c.ressource), nombre: clamp(int(c.nombre, 1), 1, 99999), annoncer: vrai(c.annoncer) };
       case 'gestion_deposer': return { type: 'gestion_deposer', annoncer: vrai(c.annoncer) };
@@ -1760,6 +1774,9 @@ const Events = (() => {
       pages: (Array.isArray(e?.pages) && e.pages.length ? e.pages : [{}]).map((p) => normPage(p, tileCount)),
       // Tafl 1.16 (Saga 1.16) : un événement « auto » qui se lance aussi au réveil (commande dormir), sur la même carte.
       ...(e?.reveil ? { reveil: true } : {}),
+      // Tafl 1.31 (Saga 1.29) : un événement « auto » qui se lance aussi après une relance d'un module
+      // (« construction » : le joueur ou un script vient de poser un bâtiment, module gestion).
+      ...(Array.isArray(e?.relances) && e.relances.filter((n) => RELANCES[n]).length ? { relances: [...new Set(e.relances.filter((n) => RELANCES[n]))] } : {}),
       ...(pick(e?.type, TYPES, 'pnj') === 'obstacle' ? { obstacle: normObstacle(e?.obstacle) } : {}),
       // Tafl 1.4 (Saga 1.6) : il repousse. Son « déjà fait » s'éteint après ce nombre de nuits (une récolte).
       ...(int(e?.repousse_nuits) > 0 ? { repousse_nuits: clamp(int(e.repousse_nuits), 1, 999) } : {}),
@@ -2272,6 +2289,12 @@ const Events = (() => {
         // Tafl 1.16 (Saga 1.16) : une scène « auto » qui se lance aussi au réveil, sans changer de carte.
         const reveil = el('input', { type: 'checkbox', checked: Boolean(work.reveil) });
         reveil.onchange = () => { if (reveil.checked) work.reveil = true; else delete work.reveil; };
+        // Tafl 1.31 (Saga 1.29) : les relances des modules du jeu (« Aussi après une construction »).
+        const relances = Object.entries(RELANCES).filter(([, r]) => r.modules.some((m) => (doc.data.reglages?.modules || []).includes(m) || (work.relances || []).includes(r.id))).map(([id, r]) => {
+          const box = el('input', { type: 'checkbox', checked: (work.relances || []).includes(id) });
+          box.onchange = () => { const l = (work.relances || []).filter((n) => n !== id); if (box.checked) l.push(id); if (l.length) work.relances = l; else delete work.relances; };
+          return champ(r.nom, box, r.aide);
+        });
         const aide = el('p', { className: 'modal-info' });
         const majAide = () => {
           aide.textContent = {
@@ -2339,6 +2362,7 @@ const Events = (() => {
           section('Déclenchement'),
           champ('Se lance', selectEl(DECLENCHEMENTS, work.declenchement, (v) => { work.declenchement = v; })),
           champ('Aussi au réveil', reveil, '« Tout seul » seulement : la scène se lance aussi quand le joueur se réveille (commande Dormir) sur cette carte, pas seulement quand il y arrive'),
+          ...relances,
           champ('Le joueur peut passer à travers', traversable),
           champ('Repousse après', repousse, 'nuits (0 = jamais) : son « déjà fait » s\'éteint, il revient à sa page 1. Pour une récolte, un buisson, un coffre qui se remplit'),
           ...(typeof Espaces !== 'undefined' && Espaces.packDe(doc) === 'jdr' && typeof DonneesJdr !== 'undefined'
