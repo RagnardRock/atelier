@@ -206,9 +206,11 @@ const Sommaire = (() => {
       const ligne = el('div', {
         className: `sommaire-ligne type-${type}${replisQuiCachent(x, page).length ? ' cache' : ''}${replie ? ' replie' : ''}`,
         title: nom,
-        onmousedown: (e) => e.preventDefault(),
+        // Garder le curseur dans la page ; sauf sur un titre, qu'on peut glisser (le clic y remet le curseur).
+        onmousedown: (e) => { if (!(type === 'titre' && x.parentNode === page)) e.preventDefault(); },
         onclick: () => aller(x),
       }, fleche, el('span', { className: 'sommaire-nom', textContent: nom || (type === 'bloc' ? '(bloc sans titre)' : '(vide)') }));
+      if (type === 'titre' && x.parentNode === page) ligne.draggable = true;
       ligne.style.paddingLeft = `${4 + retrait * 14}px`;
       ligne.titre = x;
       return ligne;
@@ -350,6 +352,192 @@ const Sommaire = (() => {
     }, true);
   }
 
+  // --- Le plan : changer le niveau d'un titre avec ses sous-titres, déplacer une partie ---
+  //
+  // Une « partie » : un titre de la page et tout ce qui le suit jusqu'au prochain titre de niveau ≤.
+  // Tout passe par Editeur.remplacerBlocs (un seul insertHTML) : un seul Ctrl+Z défait le changement.
+  const vrais = (page) => [...page.children].filter((x) => !x.hasAttribute('data-sentinelle'));
+  const partie = (h) => [h, ...section(h)].filter((x) => !x.hasAttribute('data-sentinelle'));
+  const html = (blocs) => blocs.map((x) => x.outerHTML).join('');
+  // Le bloc de la page (enfant direct) qui contient ce nœud.
+  function blocDePage(n, page) {
+    for (let b = n?.nodeType === 3 ? n.parentNode : n; b && b !== page; b = b.parentNode) if (b.parentNode === page) return b;
+    return null;
+  }
+  // Le titre dont dépend un bloc : lui-même, ou le premier titre au-dessus.
+  function titreDe(b) {
+    for (let n = b; n; n = n.previousElementSibling) if (estTitre(n) && !n.hasAttribute('data-sentinelle') && n.textContent.trim()) return n;
+    return null;
+  }
+  // Les titres choisis : celui du curseur, ou ceux de la sélection (chacun avec ses sous-titres).
+  function titresChoisis(page) {
+    if (!Editeur.restaurer()) return [];
+    const r = Editeur.selection();
+    if (!r) return [];
+    const debut = blocDePage(r.startContainer, page) || vrais(page)[0];
+    const fin = blocDePage(r.endContainer, page) || debut;
+    if (!debut) return [];
+    const blocs = vrais(page);
+    const choisis = blocs.slice(blocs.indexOf(debut), blocs.indexOf(fin) + 1).filter((x) => estTitre(x) && x.textContent.trim());
+    if (!choisis.length) { const t = titreDe(debut); if (t) choisis.push(t); }
+    const tous = new Set();
+    for (const t of choisis) for (const x of partie(t)) if (estTitre(x)) tous.add(x);
+    return blocs.filter((x) => tous.has(x));
+  }
+  // Un titre au nouveau niveau, mêmes attributs et même contenu. Un style créé pour un autre niveau
+  // de titre est enlevé (le titre prend l'aspect de son nouveau niveau).
+  function auNiveau(h, n) {
+    const t = document.createElement(`h${n}`);
+    for (const a of h.attributes) t.setAttribute(a.name, a.value);
+    const st = t.dataset.style && StylesDoc.get(doc, t.dataset.style);
+    if (st && st.balise !== `h${n}`) t.removeAttribute('data-style');
+    t.innerHTML = h.innerHTML;
+    return t.outerHTML;
+  }
+  // delta -1 : monter d'un niveau (Titre 2 → Titre 1) ; +1 : descendre (Titre 1 → Titre 2).
+  function decaler(delta) {
+    const page = doc?.page;
+    if (!page) return;
+    const titres = titresChoisis(page);
+    if (!titres.length) { notify('Mets le curseur dans un titre (ou dans son texte) pour changer son niveau.', 'info', 4000); return; }
+    if (titres.some((h) => niveau(h) + delta < 1)) { notify('Un de ces titres est déjà un Titre 1 : il ne peut pas monter plus haut.', 'info', 4000); return; }
+    if (titres.some((h) => niveau(h) + delta > 6)) { notify('Un de ces titres est déjà un Titre 6 : il ne peut pas descendre plus bas.', 'info', 4000); return; }
+    const blocs = vrais(page);
+    const a = blocs.indexOf(titres[0]), b = blocs.indexOf(titres[titres.length - 1]);
+    const zone = blocs.slice(a, b + 1);
+    const changes = new Set(titres);
+    const replies = zone.map((x) => setDe(page).has(x));
+    Editeur.remplacerBlocs(zone[0], zone[zone.length - 1], zone.map((x) => (changes.has(x) ? auNiveau(x, niveau(x) + delta) : x.outerHTML)).join(''));
+    garderReplis(page, a, replies);
+  }
+  // Après un remplacement, les mêmes parties restent repliées (les blocs sont neufs).
+  function garderReplis(page, depuis, replies) {
+    const s = setDe(page);
+    const blocs = vrais(page);
+    replies.forEach((oui, i) => { if (oui && blocs[depuis + i]) s.add(blocs[depuis + i]); });
+    for (const x of [...s]) if (!x.isConnected) s.delete(x);
+    rafraichir(true);
+  }
+  // Mettre une partie juste avant un bloc de la page (null : à la fin du document).
+  function deplacerPartie(h, avant) {
+    const page = doc?.page;
+    if (!page || !estTitre(h) || h.parentNode !== page) return false;
+    const blocs = vrais(page);
+    const S = partie(h);
+    const a = blocs.indexOf(S[0]), b = blocs.indexOf(S[S.length - 1]);
+    let t = avant ? blocs.indexOf(avant) : blocs.length;
+    if (t < 0 || (t >= a && t <= b + 1)) return false; // dans la partie elle-même, ou déjà là
+    let zone, nouvel, cible;
+    if (t < a) { zone = blocs.slice(t, b + 1); nouvel = [...S, ...blocs.slice(t, a)]; cible = 0; }
+    else { zone = blocs.slice(a, t); nouvel = [...blocs.slice(b + 1, t), ...S]; cible = t - b - 1; }
+    const debut = Math.min(a, t);
+    const replies = nouvel.map((x) => setDe(page).has(x));
+    Editeur.remplacerBlocs(zone[0], zone[zone.length - 1], html(nouvel), { cible });
+    garderReplis(page, debut, replies);
+    return true;
+  }
+  // sens -1 : remonter la partie du curseur avant la précédente ; +1 : la descendre après la suivante.
+  function deplacer(sens) {
+    const page = doc?.page;
+    if (!page) return;
+    const h = titresChoisis(page)[0];
+    if (!h) { notify('Mets le curseur dans un titre (ou dans son texte) pour déplacer sa partie.', 'info', 4000); return; }
+    const blocs = vrais(page);
+    const S = partie(h);
+    let ok = false;
+    if (sens < 0) {
+      // Avant le titre précédent de même niveau ou plus haut (ou avant le texte du tout début).
+      let p = null;
+      for (let i = blocs.indexOf(h) - 1; i >= 0; i--) if (estTitre(blocs[i]) && blocs[i].textContent.trim() && niveau(blocs[i]) <= niveau(h)) { p = blocs[i]; break; }
+      const i = blocs.indexOf(h);
+      if (p) ok = deplacerPartie(h, p);
+      else if (i > 0) ok = deplacerPartie(h, blocs[0]);
+    } else {
+      const n = blocs[blocs.indexOf(S[S.length - 1]) + 1];
+      if (n) {
+        // Même niveau : après sa partie ; niveau plus haut : sous ce titre, après son texte d'intro.
+        let fin;
+        if (niveau(n) === niveau(h)) { const Q = partie(n); fin = blocs[blocs.indexOf(Q[Q.length - 1]) + 1] || null; }
+        else { let i = blocs.indexOf(n) + 1; while (blocs[i] && !estTitre(blocs[i])) i++; fin = blocs[i] || null; }
+        ok = deplacerPartie(h, fin);
+      }
+    }
+    if (!ok) notify(sens < 0 ? 'Cette partie est déjà tout en haut.' : 'Cette partie est déjà tout en bas.', 'info', 3000);
+  }
+  // Le menu du plan (clic droit dans le sommaire, menu Format, clic droit dans la page).
+  const ctrlAlt = 'Alt+Maj+';
+  const elementsPlan = () => [
+    { label: 'Monter le titre d\'un niveau', keys: `${ctrlAlt}←`, icone: 'arrow-left', run: () => decaler(-1) },
+    { label: 'Descendre le titre d\'un niveau', keys: `${ctrlAlt}→`, icone: 'arrow-right', run: () => decaler(1) },
+    { label: 'Remonter la partie', keys: `${ctrlAlt}↑`, icone: 'arrow-up', run: () => deplacer(-1) },
+    { label: 'Descendre la partie', keys: `${ctrlAlt}↓`, icone: 'arrow-down', run: () => deplacer(1) },
+  ];
+  document.addEventListener('keydown', (e) => {
+    const page = doc?.page;
+    if (!page || !e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey || Dialogs.isOpen()) return;
+    if (document.activeElement !== page && !liste.contains(document.activeElement)) return;
+    const f = { ArrowLeft: () => decaler(-1), ArrowRight: () => decaler(1), ArrowUp: () => deplacer(-1), ArrowDown: () => deplacer(1) }[e.key];
+    if (!f) return;
+    e.preventDefault();
+    f();
+  }, true);
+  // Clic droit sur un titre du sommaire.
+  liste.addEventListener('contextmenu', (e) => {
+    const l = e.target.closest('.sommaire-ligne');
+    if (!l || !estTitre(l.titre)) return;
+    e.preventDefault();
+    aller(l.titre);
+    Menus.ouvrir(e.clientX, e.clientY, elementsPlan());
+  });
+  // Glisser un titre du sommaire : sa partie part avec lui. Lâché sur la moitié haute d'un titre, elle
+  // va avant lui ; sur la moitié basse, avant le titre suivant (donc dans la partie de celui-ci).
+  let glisse = null;
+  const repere = el('div', { className: 'sommaire-depot', hidden: true });
+  liste.after(repere);
+  function ouDeposer(e) {
+    const lignes = [...liste.querySelectorAll('.sommaire-ligne.type-titre')].filter((l) => l.offsetParent);
+    const l = e.target.closest?.('.sommaire-ligne.type-titre');
+    if (!l || !glisse) return null;
+    const r = l.getBoundingClientRect();
+    const bas = e.clientY > r.top + r.height / 2;
+    const i = lignes.indexOf(l);
+    const suivante = bas ? lignes[i + 1] : l;
+    const page = doc.page;
+    const avant = suivante ? suivante.titre : null;
+    if (avant && avant.parentNode !== page) return null;
+    if (avant && partie(glisse).includes(avant) && avant !== glisse) return null;
+    return { avant, y: bas ? r.bottom : r.top, l };
+  }
+  liste.addEventListener('dragstart', (e) => {
+    const l = e.target.closest('.sommaire-ligne.type-titre');
+    if (!l || l.titre.parentNode !== doc?.page) { e.preventDefault(); return; }
+    glisse = l.titre;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/x-edda-partie', '');
+    l.classList.add('glisse');
+  });
+  liste.addEventListener('dragover', (e) => {
+    const o = ouDeposer(e);
+    repere.hidden = !o;
+    if (!o) return;
+    e.preventDefault();
+    const pr = panneau.getBoundingClientRect();
+    repere.style.top = `${o.y - pr.top - 1}px`;
+  });
+  liste.addEventListener('dragleave', (e) => { if (!liste.contains(e.relatedTarget)) repere.hidden = true; });
+  liste.addEventListener('drop', (e) => {
+    const o = ouDeposer(e);
+    repere.hidden = true;
+    if (!o) return;
+    e.preventDefault();
+    const h = glisse;
+    glisse = null;
+    deplacerPartie(h, o.avant);
+  });
+  // Lâché ailleurs (dans la page) : rien ne se passe (le texte du titre n'est pas collé).
+  document.addEventListener('drop', (e) => { if (glisse && !liste.contains(e.target)) { e.preventDefault(); e.stopPropagation(); } }, true);
+  liste.addEventListener('dragend', () => { glisse = null; repere.hidden = true; for (const x of liste.querySelectorAll('.glisse')) x.classList.remove('glisse'); });
+
   function basculer(oui = !ouvert) {
     ouvert = oui;
     panneau.hidden = !ouvert;
@@ -373,5 +561,8 @@ const Sommaire = (() => {
     montrer,
     sansReplis,
     texte,
+    decaler,
+    deplacer,
+    elementsPlan,
   };
 })();

@@ -547,7 +547,10 @@ body.glass .panel {
 body:not(.glass) { --plate: #18181c; --plate-border: #2b2b30; }
 
 /* ---------- Sommaire et titres repliables (sommaire.js) ---------- */
-#sommaire { width: 240px; flex-shrink: 0; }
+#sommaire { width: 240px; flex-shrink: 0; position: relative; }
+/* Glisser un titre du sommaire : le trait montre où sa partie va */
+.sommaire-depot { position: absolute; left: 10px; right: 10px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; z-index: 2; }
+.sommaire-ligne.glisse { opacity: 0.4; }
 /* Écran étroit : le sommaire passe par-dessus la page au lieu de la pousser */
 #sommaire.flottant { position: absolute; left: 0; top: 0; bottom: 0; z-index: 15; box-shadow: var(--shadow); }
 body:not(.glass) #sommaire.flottant, body.glass #sommaire.flottant { background: rgba(24, 24, 30, 0.96); }

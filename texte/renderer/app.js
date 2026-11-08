@@ -800,6 +800,8 @@ const App = (() => {
         { label: 'Citation', coche: e.style === 'blockquote', run: () => Editeur.commandes.style('blockquote') },
         { label: 'Code', coche: e.style === 'pre', run: () => Editeur.commandes.style('pre') },
         null,
+        ...Sommaire.elementsPlan(),
+        null,
         { label: 'Effacer la mise en forme', keys: `${ctrl}Espace`, icone: 'clear-all', run: Editeur.commandes.removeFormat },
         null,
         { label: 'Mise en page…', icone: 'layout', run: () => ouvrirMiseEnPage() },
@@ -883,6 +885,7 @@ const App = (() => {
       // Styles (comme dans Word) : celui du paragraphe prend la mise en forme de la sélection.
       const st = StylesDoc.get(actif, e.style);
       const depart = Editeur.selection()?.startContainer;
+      if (/^h[1-6]$/.test(e.style || '') || /^h[1-6]$/.test(StylesDoc.get(actif, e.style)?.balise || '')) items.push(null, 'Plan', ...Sommaire.elementsPlan());
       items.push(null, 'Styles');
       if (st) items.push({ label: `Mettre à jour « ${st.nom} » d'après la sélection`, icone: 'sync', run: () => majStyleDepuisSelection(st.id, depart) });
       items.push(
