@@ -169,6 +169,8 @@ const Sommaire = (() => {
       if (estTitre(x)) { if (x.textContent.trim()) res.push({ x, type: 'titre' }); continue; }
       if (estBloc(x)) { res.push({ x, type: 'bloc' }); continue; }
       if (x.querySelector(TITRES) || !x.textContent.trim()) continue;
+      // La ligne-titre d'un bloc déroulant est déjà dans le sommaire (comme bloc) : pas deux fois.
+      if (estBloc(x.parentNode) && x.parentNode.firstElementChild === x) continue;
       res.push({ x, type: 'repere' });
     }
     return res;

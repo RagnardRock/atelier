@@ -668,6 +668,8 @@ const Editeur = (() => {
     if (!b) return;
     if (/^H[1-6]$/.test(b.tagName)) { notify('Un titre est déjà dans le sommaire : le repère sert aux autres paragraphes.', 'info', 4000); return; }
     const marque = ancetre(b, '[data-repere]');
+    const titreBloc = (n) => n?.parentNode?.matches?.('blockquote[data-bloc]') && n.parentNode.firstElementChild === n;
+    if (!marque && titreBloc(b)) { notify('La ligne-titre d\'un bloc déroulant est déjà dans le sommaire.', 'info', 4000); return; }
     const cible = marque || b;
     const copie = cible.cloneNode(true);
     if (marque) copie.removeAttribute('data-repere'); else copie.setAttribute('data-repere', '');
