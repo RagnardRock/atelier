@@ -92,6 +92,11 @@
       const sp = enfant(styles[id].pPr, 'spacing');
       if (attr(sp, 'w:before') !== null && attr(sp, 'w:before') !== undefined) e.avant = Math.round(Number(attr(sp, 'w:before')) / 20 * 2) / 2;
       if (attr(sp, 'w:after') !== null && attr(sp, 'w:after') !== undefined) e.apres = Math.round(Number(attr(sp, 'w:after')) / 20 * 2) / 2;
+      const jc = attr(enfant(styles[id].pPr, 'jc'), 'w:val');
+      if (jc) e.alignement = { left: null, start: null, both: 'justify', distribute: 'justify', center: 'center', right: 'right', end: 'right' }[jc] ?? null;
+      const ind = enfant(styles[id].pPr, 'ind');
+      const g = attr(ind, 'w:left') ?? attr(ind, 'w:start');
+      if (g !== null && g !== undefined) e.retrait = Math.round(Number(g) / 1440 * 2.54 * 10) / 10 || null;
       return e;
     }
     const valeursStyle = (id) => { const r = runDuStyle(id); return { police: r.police || null, taille: r.taille, couleur: r.couleur, gras: r.gras, italique: r.italique, ...espacement(id) }; };
@@ -175,6 +180,13 @@
       const styleId = attr(enfant(pPr, 'pStyle'), 'w:val');
       const role = roleDuStyle(styleId);
       const props = proprietesPara(pPr, paraDuStyle(styleId));
+      // Titre 1 à 4 et styles créés : alignement et retrait du style vont dans les styles du document
+      // (stylesdoc.js), pas sur le paragraphe ; seuls ceux posés à la main sur ce paragraphe restent.
+      if (persoDuStyle(styleId) || /^h[1-4]$/.test(roleDuStyle(styleId))) {
+        const direct = proprietesPara(pPr, {});
+        props.align = direct.align;
+        props.retrait = direct.retrait;
+      }
       const baseRun = { ...runDuStyle(styleId) };
       // Un titre a déjà sa taille et son gras dans Edda : on n'écrit que ce qui diffère.
       if (/^h/.test(role)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; }
@@ -688,7 +700,10 @@
       + (s.italique === null || s.italique === undefined ? '' : s.italique ? '<w:i/><w:iCs/>' : '<w:i w:val="0"/><w:iCs w:val="0"/>')
       + (s.couleur ? `<w:color w:val="${s.couleur.toUpperCase()}"/>` : '')
       + (s.taille ? `<w:sz w:val="${Math.round(s.taille * 2)}"/><w:szCs w:val="${Math.round(s.taille * 2)}"/>` : '');
-    const espace = (s) => (s.avant === null && s.apres === null ? '' : `<w:spacing${s.avant !== null && s.avant !== undefined ? ` w:before="${Math.round(s.avant * 20)}"` : ''}${s.apres !== null && s.apres !== undefined ? ` w:after="${Math.round(s.apres * 20)}"` : ''}/>`);
+    const espace = (s) => (s.avant === null && s.apres === null ? '' : `<w:spacing${s.avant !== null && s.avant !== undefined ? ` w:before="${Math.round(s.avant * 20)}"` : ''}${s.apres !== null && s.apres !== undefined ? ` w:after="${Math.round(s.apres * 20)}"` : ''}/>`)
+      // Retrait à gauche (cm → vingtièmes de point) et alignement.
+      + (Number(s.retrait) > 0 ? `<w:ind w:left="${Math.round(Number(s.retrait) / 2.54 * 1440)}"/>` : '')
+      + (/^(left|center|right|justify)$/.test(s.alignement || '') ? `<w:jc w:val="${s.alignement === 'justify' ? 'both' : s.alignement}"/>` : '');
     const parId = Object.fromEntries((listeStyles || []).map((s) => [s.id, s]));
     const titre = (n, sz, couleur) => {
       const s = parId[`h${n}`] || { taille: sz / 2, couleur, gras: true, avant: n === 1 ? 18 : 12, apres: 6 };

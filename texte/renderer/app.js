@@ -573,7 +573,7 @@ const App = (() => {
     let id = StylesDoc.get(d, idDepart) ? idDepart : 'h1';
     let charge = false;
     const choix = () => StylesDoc.liste(d).map((s) => [s.id, s.perso ? `${s.nom} (créé)` : s.nom]);
-    const valeursDe = (s) => ({ nom: s.nom, balise: s.balise, police: s.police || '', taille: s.taille ?? '', couleur: `#${s.couleur || '1a1a1a'}`, gras: Boolean(s.gras), italique: Boolean(s.italique), avant: s.avant ?? '', apres: s.apres ?? '' });
+    const valeursDe = (s) => ({ nom: s.nom, balise: s.balise, police: s.police || '', taille: s.taille ?? '', couleur: `#${s.couleur || '1a1a1a'}`, gras: Boolean(s.gras), italique: Boolean(s.italique), avant: s.avant ?? '', apres: s.apres ?? '', alignement: s.alignement || '', retrait: s.retrait ?? '' });
     const charger = (api) => {
       charge = true;
       const s = StylesDoc.get(d, id);
@@ -602,6 +602,8 @@ const App = (() => {
         { key: 'italique', label: 'Italique', type: 'checkbox', value: Boolean(s0.italique) },
         { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', value: s0.avant ?? '', min: 0, max: 200, step: 1 },
         { key: 'apres', label: 'Espace en dessous (points)', type: 'number', value: s0.apres ?? '', min: 0, max: 200, step: 1 },
+        { key: 'alignement', label: 'Alignement', type: 'select', value: s0.alignement || '', choices: StylesDoc.ALIGNEMENTS },
+        { key: 'retrait', label: 'Retrait à gauche (cm)', type: 'number', value: s0.retrait ?? '', min: 0, max: 20, step: 0.1 },
         { key: 'modele', label: 'Utiliser ces styles pour les nouveaux documents', type: 'checkbox', value: false },
         { type: 'info', text: 'Les changements se voient tout de suite dans la page. Ils sont enregistrés avec le document (Word, LibreOffice, page web).' },
       ],
@@ -620,7 +622,7 @@ const App = (() => {
         if (v.style !== id) { id = v.style; charger(api); return; }
         const s = StylesDoc.get(d, id);
         const nb = (x) => (x === '' || x === null || Number.isNaN(Number(x)) ? null : Number(x));
-        const valeurs = { police: v.police.trim() || null, taille: nb(v.taille), couleur: v.couleur.replace('#', '').toLowerCase(), gras: v.gras, italique: v.italique, avant: nb(v.avant), apres: nb(v.apres) };
+        const valeurs = { police: v.police.trim() || null, taille: nb(v.taille), couleur: v.couleur.replace('#', '').toLowerCase(), gras: v.gras, italique: v.italique, avant: nb(v.avant), apres: nb(v.apres), alignement: v.alignement || null, retrait: nb(v.retrait) || null };
         if (s.perso) Object.assign(valeurs, { nom: v.nom.trim() || s.nom, balise: v.balise });
         StylesDoc.changer(d, id, valeurs);
         if (s.perso && valeurs.nom !== s.nom) { const o = [...api.inputs.style.input.options].find((x) => x.value === id); if (o) o.text = `${valeurs.nom} (créé)`; majListeStyles(); }

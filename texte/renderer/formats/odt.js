@@ -107,6 +107,10 @@
       const h = s.para?.getAttributeNS(NS.fo, 'margin-top'), b = s.para?.getAttributeNS(NS.fo, 'margin-bottom');
       if (h) e.avant = Math.round(Unites.pxEnPt(Unites.lire(h) || 0) * 2) / 2;
       if (b) e.apres = Math.round(Unites.pxEnPt(Unites.lire(b) || 0) * 2) / 2;
+      const a = s.para?.getAttributeNS(NS.fo, 'text-align');
+      if (a) e.alignement = { center: 'center', end: 'right', right: 'right', justify: 'justify' }[a] || null;
+      const g = s.para?.getAttributeNS(NS.fo, 'margin-left');
+      if (g) e.retrait = Math.round(Unites.pxEnCm(Unites.lire(g) || 0) * 10) / 10 || null;
       return e;
     }
     const valeursStyle = (nom) => { const t = texteDuStyle(nom); return { police: t.police || null, taille: t.taille, couleur: t.couleur, gras: t.gras, italique: t.italique, ...espacement(nom) }; };
@@ -624,6 +628,8 @@
       const p = [];
       if (s.avant !== null && s.avant !== undefined) p.push(`fo:margin-top="${s.avant}pt"`);
       if (s.apres !== null && s.apres !== undefined) p.push(`fo:margin-bottom="${s.apres}pt"`);
+      if (/^(left|center|right|justify)$/.test(s.alignement || '')) p.push(`fo:text-align="${{ left: 'start', center: 'center', right: 'end', justify: 'justify' }[s.alignement]}"`);
+      if (Number(s.retrait) > 0) p.push(`fo:margin-left="${Number(s.retrait)}cm"`);
       return (p.length ? `<style:paragraph-properties ${p.join(' ')}/>` : '') + (t.length ? `<style:text-properties ${t.join(' ')}/>` : '');
     };
     const titre = (n, sz) => `<style:style style:name="Heading_20_${n}" style:display-name="Heading ${n}" style:family="paragraph" style:parent-style-name="Heading" style:next-style-name="Standard" style:default-outline-level="${n}" style:class="text">`
