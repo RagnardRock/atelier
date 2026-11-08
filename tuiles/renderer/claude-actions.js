@@ -92,6 +92,25 @@
     return data;
   }
   // Une image agrandie (pixel art : sans lissage), pour que Claude voie bien les pixels.
+  // Tafl 1.29 : ordre et rangees (à partir de 1) d'une action sprite ou tenue → le sprite remis dans l'ordre.
+  async function remettreEnOrdre(sprite, a) {
+    if (!a.ordre && !a.rangees) return sprite;
+    const liste = (v, n, quoi) => {
+      if (v === undefined) return undefined;
+      if (!Array.isArray(v) || !v.length) throw new Error(`${quoi} : une liste de numéros (à partir de 1).`);
+      return v.map((x) => {
+        const k = Math.round(Number(x));
+        if (!(k >= 1 && k <= n)) throw new Error(`${quoi} : ${x} n'est pas entre 1 et ${n}.`);
+        return k - 1;
+      });
+    };
+    const colonnes = liste(a.ordre, sprite.images, 'ordre');
+    const rangees = liste(a.rangees, 4, 'rangees');
+    if (colonnes && colonnes.length > 8) throw new Error('ordre : 8 images au plus par direction.');
+    if (rangees && rangees.length !== 4) throw new Error('rangees : 4 numéros, pour face, gauche, droite, dos.');
+    return Sprites.reordonnerSprite(sprite, colonnes, rangees);
+  }
+
   function agrandir(canvas, cible = 512) {
     const k = Math.max(1, Math.floor(cible / Math.max(canvas.width, canvas.height)));
     if (k === 1) return canvas;
@@ -1893,8 +1912,8 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     personnage: {
       icone: 'person',
       libelle: (a) => `Personnage : ${String(a.action || '').replace(/_/g, ' ')}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
-      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile ; pack JRPG : classe (id), niveau de départ, equipement {arme, bouclier, casque, armure, accessoire : ids d\'objets portés}), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression), sprite (id, chemin : une planche PNG du projet, 4 rangées face/gauche/droite/dos, images : nombre d\'images par rangée, deviné sinon), retirer_sprite (id), tenue (id du héros, nom de la tenue ; chemin : sa planche PNG, sinon une copie du sprite de base à retoucher ; une tenue du même nom est remplacée), retirer_tenue (id, nom). Les tenues : les autres apparences du héros, que le joueur choisit (commande personnaliser) ou que l\'histoire lui met (commande tenue) ; voir_sprite et dessiner_sprite les touchent avec le champ tenue. Pour voir les portraits : action donnees avec personnage ; pour le sprite : voir_sprite ; pour le dessiner pixel par pixel : dessiner_sprite.',
-      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait', 'sprite', 'retirer_sprite', 'tenue', 'retirer_tenue'] }, images: nombre, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' }, classe: { type: 'string' }, niveau: nombre, equipement: { type: 'object' } }, required: ['action'] },
+      description: 'Les personnages du jeu (Jeu › Données du jeu) : le héros, sa famille, le prof, les rivaux, les habitants récurrents… Les dialogues (commande dire, qui) et l\'apparence des événements s\'y réfèrent par leur id. action : ajouter (nom, id facultatif tiré du nom, description : rôle et personnalité, heros, couleur #rrggbb du nom dans les dialogues, tuile ; pack JRPG : classe (id), niveau de départ, equipement {arme, bouclier, casque, armure, accessoire : ids d\'objets portés}), modifier (id + les champs à changer ; l\'id ne change pas), supprimer (id), portrait (id, expression, chemin : une image PNG du projet ; remplace le portrait de cette expression), retirer_portrait (id, expression), sprite (id, chemin : une planche PNG du projet, 4 rangées face/gauche/droite/dos, images : nombre d\'images par rangée, deviné sinon ; Tafl 1.29 : si la planche suit un autre ordre, ordre = les numéros de ses colonnes (à partir de 1) dans l\'ordre de Tafl, debout puis les pas, par exemple [1, 3, 2] pour une planche « debout, pas 2, pas 1 », et rangees = les numéros de ses rangées pour face, gauche, droite, dos ; sans chemin, ordre et rangees remettent dans l\'ordre le sprite qu\'il a déjà), retirer_sprite (id), tenue (id du héros, nom de la tenue ; chemin : sa planche PNG, sinon une copie du sprite de base à retoucher ; une tenue du même nom est remplacée), retirer_tenue (id, nom). Les tenues : les autres apparences du héros, que le joueur choisit (commande personnaliser) ou que l\'histoire lui met (commande tenue) ; voir_sprite et dessiner_sprite les touchent avec le champ tenue. Pour voir les portraits : action donnees avec personnage ; pour le sprite : voir_sprite ; pour le dessiner pixel par pixel : dessiner_sprite.',
+      schema: { type: 'object', properties: { action: { type: 'string', enum: ['ajouter', 'modifier', 'supprimer', 'portrait', 'retirer_portrait', 'sprite', 'retirer_sprite', 'tenue', 'retirer_tenue'] }, images: nombre, ordre: { type: 'array', items: nombre }, rangees: { type: 'array', items: nombre }, id: { type: 'string' }, nom: { type: 'string' }, description: { type: 'string' }, heros: { type: 'boolean' }, couleur: { type: 'string' }, tuile: nombre, expression: { type: 'string' }, chemin: { type: 'string' }, classe: { type: 'string' }, niveau: nombre, equipement: { type: 'object' } }, required: ['action'] },
       faire: async (a) => {
         const doc = besoinJeu();
         const liste = doc.data.personnages;
@@ -1926,10 +1945,14 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           return `Portrait « ${expression} » retiré.`;
         }
         if (a.action === 'sprite') {
-          if (!a.chemin) throw new Error('chemin : la planche du sprite (PNG), dans le projet.');
-          const f = await window.claude.lireFichier(a.chemin);
-          const png = await Events.imagePortrait(f);
-          const sprite = await Sprites.depuisPlanche(png.png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
+          if (!a.chemin && !(p0.sprite && (a.ordre || a.rangees))) throw new Error('chemin : la planche du sprite (PNG), dans le projet (ou ordre / rangees pour remettre dans l\'ordre son sprite actuel).');
+          let sprite = p0.sprite;
+          if (a.chemin) {
+            const f = await window.claude.lireFichier(a.chemin);
+            const png = await Events.imagePortrait(f);
+            sprite = await Sprites.depuisPlanche(png.png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
+          }
+          sprite = await remettreEnOrdre(sprite, a);
           changerDonnees(doc, 'Sprite (Loki)', (d) => ({ ...d, personnages: d.personnages.map((p) => (p.id === p0.id ? { ...p, sprite } : p)) }));
           return `Sprite de ${p0.nom} : ${sprite.images} image(s) de ${sprite.largeur} × ${sprite.hauteur} px par direction (face, gauche, droite, dos).`;
         }
@@ -1943,6 +1966,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
           if (!a.nom) throw new Error('nom : le nom de la tenue (Sportive, Hiver…).');
           let sprite = p0.sprite ? { ...p0.sprite } : null;
           if (a.chemin) sprite = await Sprites.depuisPlanche((await Events.imagePortrait(await window.claude.lireFichier(a.chemin))).png, a.images ? clamp(Math.round(a.images), 1, 8) : 0);
+          if (sprite) sprite = await remettreEnOrdre(sprite, a);
           const id = Doc.slug(a.nom, 'tenue');
           const tenue = { id, nom: String(a.nom), sprite };
           const autres = (p0.tenues || []).filter((t) => t.id !== id);
