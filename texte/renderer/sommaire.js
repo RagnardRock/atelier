@@ -166,6 +166,8 @@ const Sommaire = (() => {
     const res = [];
     for (const x of page.querySelectorAll(`${TITRES}, [data-repere], blockquote[data-bloc]`)) {
       if (x.hasAttribute('data-sentinelle')) continue;
+      // La ligne-titre d'un bloc déroulant (titre ou repère) est déjà dans le sommaire, comme bloc : pas deux fois.
+      if (estBloc(x.parentNode) && x.parentNode.firstElementChild === x) continue;
       if (estTitre(x)) { if (x.textContent.trim()) res.push({ x, type: 'titre' }); continue; }
       if (estBloc(x)) { res.push({ x, type: 'bloc' }); continue; }
       if (x.querySelector(TITRES) || !x.textContent.trim()) continue;
