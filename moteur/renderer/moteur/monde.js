@@ -179,7 +179,32 @@ const Monde = (() => {
   // L'apparence d'un événement sur une page (Saga 1.16) : celle de la page si elle en a une, sinon la sienne.
   function apparence(ev, page) {
     const a = page?.apparence && typeof page.apparence === 'object' ? page.apparence : ev?.apparence;
-    return { personnage: String(a?.personnage || ''), tuile: Number.isFinite(Number(a?.tuile)) ? Number(a.tuile) : -1 };
+    const out = { personnage: String(a?.personnage || ''), tuile: Number.isFinite(Number(a?.tuile)) ? Number(a.tuile) : -1 };
+    // Saga 1.27 : un tampon de Tafl (un objet de plusieurs tuiles), un autre par direction s'il le faut,
+    // et ses tuiles animées : toujours, ou seulement pendant qu'il bouge.
+    if (typeof a?.tampon === 'string' && a.tampon) {
+      out.tampon = a.tampon;
+      out.tampons = {};
+      for (const d of Object.keys(DIRECTIONS)) if (typeof a.tampons?.[d] === 'string' && a.tampons[d]) out.tampons[d] = a.tampons[d];
+      out.animer = a.animer === 'mouvement' ? 'mouvement' : 'toujours';
+    }
+    return out;
+  }
+
+  // Saga 1.27 : le tampon que montre un événement présent (selon sa direction), ou null.
+  function tamponDe(jeu, p) {
+    const ap = p?.apparence;
+    if (!ap?.tampon || !jeu?.tampons) return null;
+    return jeu.tampons.get(ap.tampons?.[p.direction] || ap.tampon) || jeu.tampons.get(ap.tampon) || null;
+  }
+
+  // La case (x, y) est-elle sous l'événement présent p ? Un événement « tampon » a son coin haut gauche
+  // sur sa case et couvre le rectangle du tampon, sauf ses rangées « dessus » (on passe derrière).
+  function couvre(p, x, y) {
+    const t = p?.forme || null;
+    if (!t) return p.x === x && p.y === y;
+    const haut = Math.min(t.dessus, t.hauteur - 1);
+    return x >= p.x && x < p.x + t.largeur && y >= p.y + haut && y < p.y + t.hauteur;
   }
 
   // Les événements présents sur la carte, avec leur apparence. À refaire après chaque script
@@ -210,9 +235,14 @@ const Monde = (() => {
         attente: 1 + Math.random() * 2,
         tuile: tuile >= 0 ? tuile : -1,
         // Sans tuile mais avec un personnage : son sprite, ou le petit bonhomme à sa couleur.
-        visible: tuile >= 0 || Boolean(perso) || Boolean(obstacle(ev)),
+        visible: tuile >= 0 || Boolean(perso) || Boolean(obstacle(ev)) || Boolean(ap.tampon && jeu.tampons?.get(ap.tampon)),
         bloque: !ev.traversable,
+        apparence: ap,
       });
+      // Saga 1.27 : le rectangle qu'il occupe (son tampon), pour bloquer et pour lui parler.
+      // (selon sa direction : un tampon par direction peut avoir une autre taille).
+      const p = out[out.length - 1];
+      Object.defineProperty(p, 'forme', { enumerable: false, get: () => tamponDe(jeu, p) });
     }
     return out;
   }
@@ -233,7 +263,7 @@ const Monde = (() => {
     const [dx, dy] = DIRECTIONS[dir];
     const tx = x + dx, ty = y + dy;
     if (!dansCarte(carte, tx, ty)) return null;
-    const occupe = (cx, cy) => presents.some((p) => p.bloque && p.x === cx && p.y === cy) || prises.some((c) => c.x === cx && c.y === cy);
+    const occupe = (cx, cy) => presents.some((p) => p.bloque && couvre(p, cx, cy)) || prises.some((c) => c.x === cx && c.y === cy);
     const c = code(carte, tx, ty);
     if (REBORDS[c]) {
       if (REBORDS[c] !== dir) return null;
@@ -252,7 +282,7 @@ const Monde = (() => {
   }
 
   // L'événement présent sur une case (le premier qui y est), ou null.
-  const presentEn = (presents, x, y) => presents.find((p) => p.x === x && p.y === y) || null;
+  const presentEn = (presents, x, y) => presents.find((p) => p.x === x && p.y === y) || presents.find((p) => p.forme && couvre(p, x, y)) || null;
 
   // La direction de (x1, y1) vers (x2, y2), pour un PNJ qui se tourne vers le joueur.
   function directionVers(x1, y1, x2, y2) {
@@ -283,5 +313,5 @@ const Monde = (() => {
     return n;
   }
 
-  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, brancherDegage, degage, codeSol, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, apparence, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers };
+  return { repousser, brancherConditions, brancherBlocage, bloqueParModule, brancherDegage, degage, codeSol, nouvellePartie, variablesDeDepart, comparer, compteur, decrire, obstacle, vraie, pageActive, apparence, evenementsPresents, dansCarte, code, teleporteur, zonesEn, destination, presentEn, directionVers, tamponDe, couvre };
 })();

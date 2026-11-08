@@ -1698,7 +1698,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       action: { type: 'string', enum: ['liste', 'voir', 'ajouter', 'modifier', 'supprimer', 'deplacer'] },
       carte: { type: ['string', 'number'] }, id: { type: 'string' }, x: nombre, y: nombre,
       type: { type: 'string', enum: Events.TYPES.map(([k]) => k) }, nom: { type: 'string' },
-      personnage: { type: 'string' }, tuile: nombre,
+      personnage: { type: 'string' }, tuile: nombre, tampon: { type: 'string' }, tampons: { type: 'object' }, animer: { type: 'string', enum: ['toujours', 'mouvement'] },
       direction: { type: 'string', enum: Doc.DIRECTIONS.map(([k]) => k) },
       deplacement: { type: 'string', enum: Events.DEPLACEMENTS.map(([k]) => k) },
       declenchement: { type: 'string', enum: Events.DECLENCHEMENTS.map(([k]) => k) },
@@ -1728,6 +1728,17 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
       out.apparence.personnage = a.personnage;
     }
     if (a.tuile !== undefined) out.apparence.tuile = Math.round(a.tuile) === -1 ? -1 : tuileNumero(doc, a.tuile);
+    // Tafl 1.28 : un tampon comme apparence.
+    const tamponConnu = (n) => { if (n && !doc.stamps.some((st) => st.name === n)) throw new Error(`Pas de tampon « ${n} » : ${doc.stamps.map((st) => st.name).join(', ') || 'aucun'}.`); return n; };
+    if (a.tampon !== undefined) {
+      if (a.tampon) out.apparence.tampon = tamponConnu(String(a.tampon));
+      else { delete out.apparence.tampon; delete out.apparence.tampons; delete out.apparence.animer; }
+    }
+    if (a.tampons !== undefined && out.apparence.tampon) {
+      const t = Object.fromEntries(Object.entries(a.tampons || {}).filter(([d, n]) => ['haut', 'bas', 'gauche', 'droite'].includes(d) && n).map(([d, n]) => [d, tamponConnu(String(n))]));
+      if (Object.keys(t).length) out.apparence.tampons = t; else delete out.apparence.tampons;
+    }
+    if (a.animer !== undefined && out.apparence.tampon) { if (a.animer === 'mouvement') out.apparence.animer = 'mouvement'; else delete out.apparence.animer; }
     for (const k of ['direction', 'deplacement', 'declenchement']) if (a[k] !== undefined) out[k] = a[k];
     if (a.traversable !== undefined) out.traversable = Boolean(a.traversable);
     if (a.reveil !== undefined) { if (a.reveil) out.reveil = true; else delete out.reveil; }
@@ -1831,7 +1842,7 @@ Tu vois ensuite la tuile, une mosaïque 3 × 3 et un regard critique.`,
     evenement: {
       icone: 'person',
       libelle: (a) => `Événement : ${a.action}${a.nom ? ` « ${a.nom} »` : a.id ? ` ${a.id}` : ''}`,
-      description: `Les événements d'une carte (carte : id, nom ou numéro, sinon celle affichée) : personnages, panneaux, coffres, objets au sol, déclencheurs (case invisible), un par case. action : liste (tous les événements du jeu, ou de carte), voir (id, ou x et y : son script et son JSON), ajouter (type, x, y, nom, personnage, tuile, direction, deplacement, declenchement, traversable, repousse_nuits (Saga 1.6 : son « déjà fait » s'éteint après ce nombre de nuits, la commande dormir ; une récolte qui repousse), pages ; sans pages, le modèle du type : un coffre a déjà sa page « vide »), modifier (id + les champs à changer ; pages remplace tout le script), supprimer (id), deplacer (id, vers_x, vers_y). type : ${Events.TYPES.map(([k, l]) => `${k} (${l})`).join(', ')}. deplacement : ${Events.DEPLACEMENTS.map(([k]) => k).join(', ')}. declenchement : parler (touche A), toucher (marcher dessus ou contre), auto (à l'arrivée sur la carte). obstacle (type obstacle, à la place des CS, Saga 0.7) : { sorte : couper (arbre qui disparaît), briser (rocher qui disparaît), pousser (rocher qu'on pousse d'une case en marchant contre lui), objet : l'objet du sac qu'il faut (hache, marteau, gants-de-force par défaut), message : ce que Saga dit en le regardant ("" = phrase par défaut), repousse : il revient quand le joueur quitte la carte } ; donne-lui une tuile ; sa page 1 se joue juste après le passage (souvent vide) ; un rocher poussé sur un déclencheur traversable le lance (énigme). pages : [{ conditions: [...], cache: false, commandes: [...] }] ; le moteur joue la DERNIÈRE page dont toutes les conditions sont vraies (page 1 sans condition = d'habitude ; cache: true = l'événement est absent sur cette page). ${CMDS_AIDE}`,
+      description: `Les événements d'une carte (carte : id, nom ou numéro, sinon celle affichée) : personnages, panneaux, coffres, objets au sol, déclencheurs (case invisible), un par case. action : liste (tous les événements du jeu, ou de carte), voir (id, ou x et y : son script et son JSON), ajouter (type, x, y, nom, personnage, tuile, tampon (Tafl 1.28 : le nom d'un tampon qu'il montre, son coin haut gauche sur sa case, il couvre et bloque tout le rectangle sauf les rangées « dessus » ; "" = aucun ; bouge avec la commande deplacer, traverser conseillé pour un grand objet), tampons ({ haut, bas, gauche, droite } : un autre tampon selon la direction), animer (toujours ou mouvement : ses tuiles animées ne bougent que pendant qu'il se déplace), direction, deplacement, declenchement, traversable, repousse_nuits (Saga 1.6 : son « déjà fait » s'éteint après ce nombre de nuits, la commande dormir ; une récolte qui repousse), pages ; sans pages, le modèle du type : un coffre a déjà sa page « vide »), modifier (id + les champs à changer ; pages remplace tout le script), supprimer (id), deplacer (id, vers_x, vers_y). type : ${Events.TYPES.map(([k, l]) => `${k} (${l})`).join(', ')}. deplacement : ${Events.DEPLACEMENTS.map(([k]) => k).join(', ')}. declenchement : parler (touche A), toucher (marcher dessus ou contre), auto (à l'arrivée sur la carte). obstacle (type obstacle, à la place des CS, Saga 0.7) : { sorte : couper (arbre qui disparaît), briser (rocher qui disparaît), pousser (rocher qu'on pousse d'une case en marchant contre lui), objet : l'objet du sac qu'il faut (hache, marteau, gants-de-force par défaut), message : ce que Saga dit en le regardant ("" = phrase par défaut), repousse : il revient quand le joueur quitte la carte } ; donne-lui une tuile ; sa page 1 se joue juste après le passage (souvent vide) ; un rocher poussé sur un déclencheur traversable le lance (énigme). pages : [{ conditions: [...], cache: false, commandes: [...] }] ; le moteur joue la DERNIÈRE page dont toutes les conditions sont vraies (page 1 sans condition = d'habitude ; cache: true = l'événement est absent sur cette page). ${CMDS_AIDE}`,
       schema: evenementSchema,
       faire: (a) => {
         const doc = besoinJeu();

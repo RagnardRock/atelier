@@ -162,7 +162,7 @@ const Moteur = (() => {
       get joueur() { return joueur ? { x: joueur.x, y: joueur.y, direction: joueur.dir } : null; },
       // Saga 1.19 : sol vrai : seules comptent les tuiles du premier calque (une zone au décor effaçable).
       libre: (x, y, sol = false) => Boolean(carte && Monde.dansCarte(carte, x, y) && ((c) => c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c])(sol ? Monde.codeSol(carte, x, y) : Monde.code(carte, x, y))
-        && !presents.some((p) => p.x === x && p.y === y && (p.visible || p.bloque)) && !(joueur && joueur.x === x && joueur.y === y)),
+        && !presents.some((p) => Monde.couvre(p, x, y) && (p.visible || p.bloque)) && !(joueur && joueur.x === x && joueur.y === y)),
       // Saga 1.5 : viser un rectangle de cases (poser un bâtiment) : les flèches le déplacent, Action
       // valide (si valide(x, y) le permet), Retour annule. → { x, y } ou null.
       viser: (o = {}) => viser(o),
@@ -196,7 +196,7 @@ const Moteur = (() => {
       nomsStats: () => (jeu ? Regles.statsBonus(jeu) : {}),
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
         largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
-        libre: (x, y) => { const c = Monde.code(carte, x, y); return c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c] && !Monde.bloqueParModule(carte, x, y) && !presents.some((p) => p.x === x && p.y === y && p.bloque); },
+        libre: (x, y) => { const c = Monde.code(carte, x, y); return c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c] && !Monde.bloqueParModule(carte, x, y) && !presents.some((p) => Monde.couvre(p, x, y) && p.bloque); },
         cout: typeof o.cout === 'function' ? o.cout : undefined, coutMin: o.coutMin,
       }) : null),
     };
@@ -305,7 +305,7 @@ const Moteur = (() => {
         const c = Monde.code(carte, x, y);
         if (Jeu.REBORDS[c] || Monde.bloqueParModule(carte, x, y)) return true;
         if (c === Jeu.PASSAGE.bloque && !Monde.zonesEn(carte, x, y).some((z) => z.objetRequis && (partie.sac[z.objetRequis] || 0) > 0)) return true;
-        return presents.some((p) => p.bloque && p.x === x && p.y === y);
+        return presents.some((p) => p.bloque && Monde.couvre(p, x, y));
       },
       surCase: (x, y, dir, pousse) => { joueur.x = x; joueur.y = y; joueur.dir = dir; return pousse ? null : surCase(); },
       agir: (x, y, dir) => {
@@ -858,7 +858,7 @@ const Moteur = (() => {
       const code = Monde.code(carte, x, y);
       if (code === Jeu.PASSAGE.bloque || Jeu.REBORDS[code] || Monde.bloqueParModule(carte, x, y)) return false;
       if (c !== 'joueur' && joueur.x === x && joueur.y === y) return false;
-      return !presents.some((p) => p !== c && p.bloque && p.x === x && p.y === y);
+      return !presents.some((p) => p !== c && p.bloque && Monde.couvre(p, x, y));
     };
     // Le chemin jusqu'à une case (le plus court) ; s'arrête à côté si la case est prise par quelqu'un.
     function etapesVers(c, arrivee) {
@@ -1219,10 +1219,11 @@ const Moteur = (() => {
       ctx.globalCompositeOperation = 'source-over';
     }
 
-    function dessinerTuile(n, x, y, maintenant) {
+    // fixe : true, une tuile animée reste sur sa première image (Saga 1.27 : un tampon arrêté).
+    function dessinerTuile(n, x, y, maintenant, fixe = false) {
       const tuile = jeu.tuiles[n];
       if (!tuile) return;
-      const img = tuile.images.length > 1 ? tuile.images[Math.floor(maintenant / tuile.duree) % tuile.images.length] : tuile.images[0];
+      const img = tuile.images.length > 1 && !fixe ? tuile.images[Math.floor(maintenant / tuile.duree) % tuile.images.length] : tuile.images[0];
       ctx.drawImage(jeu.planche, img.sx, img.sy, jeu.taille, jeu.taille, x, y, jeu.taille, jeu.taille);
     }
 
@@ -1312,6 +1313,21 @@ const Moteur = (() => {
         const m = p.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
         const px = m ? Math.round(m.de.x + (p.x * t - m.de.x) * k) : p.x * t;
         const py = m ? Math.round(m.de.y + (p.y * t - m.de.y) * k) : p.y * t;
+        // Saga 1.27 : un tampon (coin haut gauche sur sa case), rangé par sa rangée du bas : le joueur
+        // passe derrière ses rangées du haut et devant lui quand il est plus bas.
+        const tp = p.tuile < 0 ? p.forme : null;
+        if (tp) {
+          // Entre deux pas, il reste « en mouvement » un court instant (pas d'à-coup sur l'animation).
+          if (m) p.vuBouger = maintenant;
+          const fixe = p.apparence?.animer === 'mouvement' && !(maintenant - (p.vuBouger ?? -1e9) < 150);
+          liste.push({ y: py + (tp.hauteur - 1) * t, dessiner: () => {
+            for (let j = 0; j < tp.hauteur; j++) for (let i = 0; i < tp.largeur; i++) {
+              const n = tp.cases[j * tp.largeur + i];
+              if (n >= 0) dessinerTuile(n, px - cam.x + i * t, py - cam.y + j * t, maintenant, fixe);
+            }
+          } });
+          continue;
+        }
         // Un obstacle sans tuile ni personnage (Saga 0.7) : un petit arbre ou un rocher dessiné.
         if (p.tuile < 0 && !p.perso && Monde.obstacle(p.ev)) { liste.push({ y: py, dessiner: () => dessinerObstacle(Monde.obstacle(p.ev).sorte, px - cam.x, py - cam.y) }); continue; }
         liste.push({ y: py, dessiner: () => dessinerCorps({

@@ -1690,23 +1690,35 @@ const Events = (() => {
     }
   }
   // Tafl 1.16 (Saga 1.16) : une page peut avoir sa propre apparence (absente : celle de l'événement).
+  // L'apparence d'un événement ou d'une page. Tafl 1.28 (Saga 1.27) : tampon (le nom d'un tampon : il le
+  // montre, son coin haut gauche sur la case de l'événement), tampons ({ haut, bas, gauche, droite } :
+  // un autre tampon quand il regarde par là), animer ('mouvement' : ses tuiles animées ne bougent que
+  // pendant qu'il se déplace ; absent : toujours).
+  function normApparence(a, tileCount = Infinity) {
+    const t = int(a?.tuile, -1);
+    const out = { personnage: str(a?.personnage), tuile: t >= 0 && t < tileCount ? t : -1 };
+    if (str(a?.tampon)) {
+      out.tampon = str(a.tampon);
+      const parDir = {};
+      for (const [d] of Doc.DIRECTIONS) if (str(a?.tampons?.[d])) parDir[d] = str(a.tampons[d]);
+      if (Object.keys(parDir).length) out.tampons = parDir;
+      if (a?.animer === 'mouvement') out.animer = 'mouvement';
+    }
+    return out;
+  }
   const normPage = (p, tileCount = Infinity) => {
     const out = { conditions: (Array.isArray(p?.conditions) ? p.conditions : []).map(normCondition).filter(Boolean), cache: Boolean(p?.cache), commandes: normListe(p?.commandes) };
-    if (p?.apparence && typeof p.apparence === 'object') {
-      const t = int(p.apparence.tuile, -1);
-      out.apparence = { personnage: str(p.apparence.personnage), tuile: t >= 0 && t < tileCount ? t : -1 };
-    }
+    if (p?.apparence && typeof p.apparence === 'object') out.apparence = normApparence(p.apparence, tileCount);
     return out;
   };
   function normEvent(e, fallbackId, width, height, tileCount = Infinity) {
-    const tuile = int(e?.apparence?.tuile, -1);
     return {
       id: str(e?.id) || fallbackId,
       nom: str(e?.nom),
       type: pick(e?.type, TYPES, 'pnj'),
       x: clamp(int(e?.x), 0, width - 1),
       y: clamp(int(e?.y), 0, height - 1),
-      apparence: { personnage: str(e?.apparence?.personnage), tuile: tuile >= 0 && tuile < tileCount ? tuile : -1 },
+      apparence: normApparence(e?.apparence, tileCount),
       direction: pick(e?.direction, Doc.DIRECTIONS, 'bas'),
       deplacement: pick(e?.deplacement, DEPLACEMENTS, 'fixe'),
       traversable: Boolean(e?.traversable),
@@ -1900,7 +1912,7 @@ const Events = (() => {
     });
     return lignes.join('\n');
   }
-  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.obstacle ? ` [${ev.obstacle.sorte}, objet ${ev.obstacle.objet || 'aucun'}${ev.obstacle.repousse ? ', repousse' : ''}]` : ''}${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}${ev.repousse_nuits ? `, repousse après ${ev.repousse_nuits} nuit(s)` : ''}, ${ev.pages.length} page(s)`;
+  const decrire = (doc, ev) => `${ev.id} « ${ev.nom || libelle(TYPES, ev.type)} » ${ev.type} (${ev.x}, ${ev.y})${ev.obstacle ? ` [${ev.obstacle.sorte}, objet ${ev.obstacle.objet || 'aucun'}${ev.obstacle.repousse ? ', repousse' : ''}]` : ''}${ev.apparence.personnage ? `, personnage ${ev.apparence.personnage}` : ''}${ev.apparence.tuile >= 0 ? `, tuile ${ev.apparence.tuile}` : ''}${ev.apparence.tampon ? `, tampon ${ev.apparence.tampon}` : ''}, ${ev.declenchement}${ev.traversable ? ', traversable' : ''}${ev.repousse_nuits ? `, repousse après ${ev.repousse_nuits} nuit(s)` : ''}, ${ev.pages.length} page(s)`;
 
   // --- Un événement neuf, selon son type ---
   function create(doc, type, x, y, id) {
@@ -2126,6 +2138,44 @@ const Events = (() => {
     return s;
   }
   const section = (text, ...extra) => el('div', { className: 'editor-section' }, [el('span', { textContent: text }), ...extra]);
+  // Tafl 1.28 (Saga 1.27) : un tampon comme apparence (un objet de plusieurs tuiles qui peut bouger).
+  // get() : l'apparence en cours ; set(a) : la remplace. Renvoie un bloc qui se redessine tout seul.
+  function blocTampon(doc, get, set) {
+    const bloc = el('div', { className: 'apparence-tampon' });
+    const choix = (actuel, vide) => {
+      const list = [['', vide], ...doc.stamps.map((st) => [st.name, `${st.name} (${st.w} × ${st.h})`])];
+      if (actuel && !doc.stamps.some((st) => st.name === actuel)) list.push([actuel, `${actuel} (n'existe plus)`]);
+      return list;
+    };
+    const maj = (patch) => {
+      const a = { ...get(), ...patch };
+      for (const k of Object.keys(a)) if (a[k] === undefined) delete a[k];
+      set(a);
+      dessiner();
+    };
+    function dessiner() {
+      bloc.replaceChildren();
+      const a = get();
+      bloc.append(champ('Tampon', selectEl(choix(a.tampon || '', doc.stamps.length ? 'Aucun' : 'Aucun (crée-en avec l\'outil Tampon)'), a.tampon || '', (v) => maj(v ? { tampon: v } : { tampon: undefined, tampons: undefined, animer: undefined })),
+        'Un objet de plusieurs tuiles : son coin haut gauche est sur la case de l\'événement. Passe avant la tuile et le personnage'));
+      if (!a.tampon) return;
+      const parDir = el('input', { type: 'checkbox', checked: Boolean(a.tampons) });
+      parDir.onchange = () => maj({ tampons: parDir.checked ? {} : undefined });
+      bloc.append(champ('Un tampon par direction', parDir, 'Il change de tampon quand il se tourne (sinon, toujours le même)'));
+      if (a.tampons) {
+        for (const [d, nomDir] of Doc.DIRECTIONS) {
+          bloc.append(champ(nomDir, selectEl(choix(a.tampons[d] || '', 'Le même'), a.tampons[d] || '', (v) => {
+            const t = { ...get().tampons };
+            if (v) t[d] = v; else delete t[d];
+            maj({ tampons: t });
+          })));
+        }
+      }
+      bloc.append(champ('Tuiles animées', selectEl([['toujours', 'Toujours'], ['mouvement', 'Quand il bouge']], a.animer || 'toujours', (v) => maj({ animer: v === 'mouvement' ? 'mouvement' : undefined }))));
+    }
+    dessiner();
+    return bloc;
+  }
   const petitBouton = (ic, title, run) => {
     const b = el('button', { className: 'icon-button', title }, [icon(ic)]);
     b.onclick = (e) => { e.stopPropagation(); run(e); };
@@ -2249,6 +2299,7 @@ const Events = (() => {
           section('Apparence'),
           champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits et son sprite'),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
+          blocTampon(doc, () => work.apparence, (a) => { work.apparence = a; }),
           champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
           champ('Bouge', selectEl(DEPLACEMENTS, work.deplacement, (v) => { work.deplacement = v; })),
           section('Déclenchement'),
@@ -2327,6 +2378,7 @@ const Events = (() => {
           blocAp.append(
             champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((x) => [x.id, x.nom])], p.apparence.personnage, (v) => { p.apparence = { ...p.apparence, personnage: v }; renderPage(); }), 'Sur cette page : son sprite, et c\'est lui qui parle pour « @evenement »'),
             champ('Tuile', selectEl(choixTuiles(doc), p.apparence.tuile, (v) => { p.apparence = { ...p.apparence, tuile: Number(v) }; }), 'Passe avant le sprite du personnage'),
+            blocTampon(doc, () => p.apparence, (a) => { p.apparence = a; }),
           );
         };
         autre.onchange = () => {
