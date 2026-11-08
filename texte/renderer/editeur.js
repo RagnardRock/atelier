@@ -852,6 +852,7 @@ const Editeur = (() => {
     remplacerNoeud,
     remplacerTout,
     insererA,
+    remplacerBlocs,
     restaurer,
     memoriser,
     etat,
