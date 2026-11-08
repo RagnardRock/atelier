@@ -755,8 +755,22 @@ const Stage = (() => {
       const perso = ev.apparence.tuile >= 0 ? null : Events.perso(doc, ev.apparence.personnage);
       const tile = ev.apparence.tuile >= 0 ? ev.apparence.tuile : perso?.tuile ?? -1;
       ctx.globalAlpha = moving ? 0.7 : 1;
+      // Tafl 1.28 : un tampon (son coin haut gauche sur la case), comme dans le jeu, avec un cadre pointillé.
+      const ap = ev.apparence;
+      const st = ap.tampon ? doc.stamps.find((o) => o.name === (ap.tampons?.[ev.direction] || ap.tampon)) || doc.stamps.find((o) => o.name === ap.tampon) : null;
+      if (st) {
+        for (let j = 0; j < st.h; j++) for (let i = 0; i < st.w; i++) {
+          const n = st.cells[j * st.w + i];
+          if (n >= 0 && canvases[n]) ctx.drawImage(canvases[n], px + i * cell, py + j * cell, cell, cell);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(px + 0.5, py + 0.5, st.w * cell - 1, st.h * cell - 1);
+        ctx.setLineDash([]);
+      }
       // Tafl 0.12 : un personnage avec un sprite est dessiné comme dans le jeu, tourné vers sa direction.
-      if (perso?.sprite && Sprites.dessinerSurCase(ctx, perso.sprite, ev.direction, px, py, cell, doc.tileSize, render)) { /* dessiné */ }
+      else if (perso?.sprite && Sprites.dessinerSurCase(ctx, perso.sprite, ev.direction, px, py, cell, doc.tileSize, render)) { /* dessiné */ }
       else if (tile >= 0 && canvases[tile]) ctx.drawImage(canvases[tile], px, py, cell, cell);
       else eventSymbol(ev.type, px, py, cell, color);
       ctx.globalAlpha = 1;

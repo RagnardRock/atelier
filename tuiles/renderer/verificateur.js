@@ -409,6 +409,15 @@ const Verificateur = (() => {
       verifierId('personnages', ev.apparence?.personnage, quoi, ou);
       // Tafl 1.16 : une page peut avoir sa propre apparence.
       (ev.pages || []).forEach((pg, k) => { if (pg?.apparence?.personnage) verifierId('personnages', pg.apparence.personnage, `${quoi} (page ${k + 1})`, ou); });
+      // Tafl 1.28 : un tampon comme apparence (par son nom).
+      if (Array.isArray(jeu.tampons)) {
+        const tampons = new Set(jeu.tampons);
+        const voirTampons = (a, ici) => {
+          for (const n of [a?.tampon, ...Object.values(a?.tampons || {})]) if (n && !tampons.has(n)) ajouter('erreur', 'references', `${ici} montre le tampon « ${n} », qui n'existe pas (les tampons se créent dans l'éditeur de cartes).`, ou);
+        };
+        voirTampons(ev.apparence, quoi);
+        (ev.pages || []).forEach((pg, k) => voirTampons(pg?.apparence, `${quoi} (page ${k + 1})`));
+      }
       if (obstacle(ev)) verifierId('objets', ev.obstacle.objet, quoi, ou);
       commandes(ev, (cmd) => {
         if (cmd.type === 'dire' && cmd.qui && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);

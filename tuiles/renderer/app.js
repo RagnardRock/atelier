@@ -1177,7 +1177,21 @@ const App = (() => {
     const name = v.name.trim() || st.name;
     const dessus = clamp(Math.round(v.dessus) || 0, 0, st.h);
     if (name === st.name && dessus === st.dessus) return;
-    Doc.change(doc, 'Réglages du tampon', () => { doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o)); });
+    Doc.change(doc, 'Réglages du tampon', () => {
+      doc.stamps = doc.stamps.map((o, k) => (k === i ? { ...o, name, dessus } : o));
+      // Tafl 1.28 : les événements qui montrent ce tampon suivent son nouveau nom.
+      if (name !== st.name) for (const map of doc.maps) {
+        const suivre = (a) => {
+          if (!a?.tampon) return a;
+          const out = { ...a, tampon: a.tampon === st.name ? name : a.tampon };
+          if (a.tampons) out.tampons = Object.fromEntries(Object.entries(a.tampons).map(([d, n]) => [d, n === st.name ? name : n]));
+          return out;
+        };
+        if (map.events.some((ev) => JSON.stringify([ev.apparence, ev.pages.map((pg) => pg.apparence)]).includes(JSON.stringify(st.name)))) {
+          map.events = map.events.map((ev) => ({ ...ev, apparence: suivre(ev.apparence), pages: ev.pages.map((pg) => (pg.apparence ? { ...pg, apparence: suivre(pg.apparence) } : pg)) }));
+        }
+      }
+    });
   }
   function deleteStamp(i = api.options.stamp) {
     const doc = api.doc;
