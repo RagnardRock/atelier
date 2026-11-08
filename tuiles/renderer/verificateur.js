@@ -441,10 +441,15 @@ const Verificateur = (() => {
         if (cmd.type === 'gestion_stock') verifierId('ressources', cmd.ressource, quoi, ou);
         // Tafl 1.17 : les cinématiques parlent d'événements de la même carte (ou du héros, ou de l'événement lui-même).
         for (const k of ['qui', 'vers', 'direction']) {
-          if (!['deplacer', 'regarder', 'camera', 'bulle'].includes(cmd.type)) break;
+          if (!['deplacer', 'regarder', 'camera', 'bulle', 'apparition', 'apparence'].includes(cmd.type)) break;
           const v = cmd[k];
           if (!v || v.startsWith('@') || v === 'case' || ['haut', 'bas', 'gauche', 'droite'].includes(v) || (k === 'vers' && cmd.type === 'deplacer' && cmd.mode !== 'vers') || (k === 'vers' && cmd.type === 'camera' && cmd.action === 'revenir')) continue;
           if (!(carte.evenements || []).some((e) => e.id === v)) ajouter('erreur', 'references', `${quoi} : la cinématique parle de l'événement « ${v} », qui n'est pas sur cette carte.`, ou);
+        }
+        // Tafl 1.29.1 : « Changer l'apparence » vers un personnage ou un tampon qui existe.
+        if (cmd.type === 'apparence' && cmd.action !== 'revenir') {
+          if (cmd.personnage) verifierId('personnages', cmd.personnage, quoi, ou);
+          if (cmd.tampon && Array.isArray(jeu.tampons) && !jeu.tampons.includes(cmd.tampon)) ajouter('erreur', 'references', `${quoi} : « Changer l'apparence » montre le tampon « ${cmd.tampon} », qui n'existe pas.`, ou);
         }
         // Tafl 1.13 : le module relations.
         if (['relation_parler', 'relation_offrir', 'relation_points'].includes(cmd.type) && cmd.qui !== '@evenement') verifierId('personnages', cmd.qui, quoi, ou);

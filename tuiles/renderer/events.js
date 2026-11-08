@@ -502,6 +502,37 @@ const Events = (() => {
       depuis: (v) => ({ type: 'bulle', qui: v.qui, bulle: pick(v.bulle, BULLES, 'exclamation'), duree: clamp(Math.round(v.duree) || 1000, 100, 20000), attendre: Boolean(v.attendre) }),
       resume: (doc, c) => `${libelle(BULLES, c.bulle).split(' ')[0]} au-dessus ${deActeur(doc, c.qui)}`,
     },
+    // Tafl 1.29.1 (Saga 1.27.2) : en pleine scène, un événement disparaît, revient ou change d'apparence ;
+    // c'est gardé dans la partie (pas besoin d'interrupteur ni de page).
+    apparition: {
+      nom: 'Faire disparaître ou réapparaître', icone: 'eye-closed', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'apparition', qui: '@evenement', action: 'disparaitre' }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: choixActeurs(doc, c.qui).filter(([k]) => k !== '@joueur') },
+        { key: 'action', label: 'Il', type: 'select', value: c.action, choices: [['disparaitre', 'Disparaît'], ['reapparaitre', 'Réapparaît']] },
+        { type: 'info', text: 'Tout de suite, même au milieu de la scène (un personnage qui monte dans une calèche). C\'est gardé dans la partie : il reste absent jusqu\'à « Réapparaît ».' },
+      ],
+      depuis: (v) => ({ type: 'apparition', qui: v.qui, action: v.action === 'reapparaitre' ? 'reapparaitre' : 'disparaitre' }),
+      resume: (doc, c) => `${nomActeur(doc, c.qui)} ${c.action === 'reapparaitre' ? 'réapparaît' : 'disparaît'}`,
+    },
+    apparence: {
+      nom: 'Changer l\'apparence', icone: 'person', groupe: 'Cinématique',
+      nouveau: () => ({ type: 'apparence', qui: '@evenement', action: 'changer', personnage: '', tuile: -1, tampon: '', animer: 'toujours' }),
+      champs: (doc, c) => [
+        { key: 'qui', label: 'Qui', type: 'select', value: c.qui, choices: choixActeurs(doc, c.qui).filter(([k]) => k !== '@joueur') },
+        { key: 'action', label: 'Son apparence', type: 'select', value: c.action, choices: [['changer', 'Devient…'], ['revenir', 'Redevient la sienne']] },
+        { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: [['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])] },
+        { key: 'tuile', label: 'Tuile', type: 'select', value: String(c.tuile ?? -1), choices: choixTuiles(doc) },
+        { key: 'tampon', label: 'Tampon', type: 'select', value: c.tampon || '', choices: [['', 'Aucun'], ...doc.stamps.map((st) => [st.name, `${st.name} (${st.w} × ${st.h})`])] },
+        { key: 'animer', label: 'Tuiles animées', type: 'select', value: c.animer || 'toujours', choices: [['toujours', 'Toujours'], ['mouvement', 'Quand il bouge']] },
+        { type: 'info', text: 'Tout de suite, en pleine scène. Le tampon passe avant la tuile, la tuile avant le personnage ; rien de choisi : il devient invisible (il est toujours là). Gardé dans la partie jusqu\'à « Redevient la sienne ».' },
+      ],
+      onInput: (v, f) => { for (const k of ['personnage', 'tuile', 'tampon', 'animer']) f.inputs[k].row.hidden = v.action === 'revenir' || (k === 'animer' && !v.tampon); },
+      depuis: (v) => (v.action === 'revenir' ? { type: 'apparence', qui: v.qui, action: 'revenir' }
+        : { type: 'apparence', qui: v.qui, action: 'changer', personnage: v.personnage || '', tuile: Number(v.tuile) >= 0 ? Number(v.tuile) : -1, tampon: v.tampon || '', animer: v.tampon && v.animer === 'mouvement' ? 'mouvement' : 'toujours' }),
+      resume: (doc, c) => (c.action === 'revenir' ? `${nomActeur(doc, c.qui)} reprend son apparence`
+        : `${nomActeur(doc, c.qui)} devient ${c.tampon ? `le tampon ${c.tampon}` : c.tuile >= 0 ? `la tuile ${c.tuile}` : c.personnage ? (doc.data.personnages.find((p) => p.id === c.personnage)?.nom || c.personnage) : 'invisible'}`),
+    },
     cinema: {
       nom: 'Bandes de cinéma', icone: 'screen-full', groupe: 'Cinématique',
       nouveau: () => ({ type: 'cinema', action: 'montrer' }),
@@ -1629,6 +1660,9 @@ const Events = (() => {
       case 'secouer': return { type: 'secouer', force: clamp(int(c.force, 4), 1, 10), duree: clamp(int(c.duree, 500), 0, 20000), attendre: c.attendre !== false };
       case 'bulle': return { type: 'bulle', qui: str(c.qui) || '@evenement', bulle: pick(c.bulle, BULLES, 'exclamation'), duree: clamp(int(c.duree, 1000), 100, 20000), attendre: c.attendre !== false };
       case 'cinema': return { type: 'cinema', action: c.action === 'cacher' ? 'cacher' : 'montrer' };
+      case 'apparition': return { type: 'apparition', qui: str(c.qui) || '@evenement', action: c.action === 'reapparaitre' ? 'reapparaitre' : 'disparaitre' };
+      case 'apparence': return c.action === 'revenir' ? { type: 'apparence', qui: str(c.qui) || '@evenement', action: 'revenir' }
+        : { type: 'apparence', qui: str(c.qui) || '@evenement', action: 'changer', personnage: str(c.personnage), tuile: int(c.tuile, -1) >= 0 ? int(c.tuile, -1) : -1, tampon: str(c.tampon), animer: str(c.tampon) && c.animer === 'mouvement' ? 'mouvement' : 'toujours' };
       case 'teleporter': return { type: 'teleporter', carte: str(c.carte), x: Math.max(0, int(c.x)), y: Math.max(0, int(c.y)), direction: pick(c.direction, Doc.DIRECTIONS, 'bas') };
       case 'quete': return { type: 'quete', quete: str(c.quete), action: pick(c.action, [['commencer'], ['etape'], ['finir']], 'commencer'), etape: Math.max(1, int(c.etape, 1)) };
       case 'composer_equipe': return { type: 'composer_equipe', nombre: clamp(int(c.nombre, 6), 1, 6), niveau: clamp(int(c.niveau, 50), 1, 100), titre: str(c.titre).slice(0, 60), garder: c.garder !== false, pour: c.pour === 'adversaire' ? 'adversaire' : 'soi' };

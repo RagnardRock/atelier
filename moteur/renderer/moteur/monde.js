@@ -15,6 +15,7 @@ const Monde = (() => {
       nom: jeu.heros?.nom || 'Héros', // {joueur} dans les dialogues
       interrupteurs: {},   // id → true (les absents sont éteints)
       locaux: {},          // "carte/ev-1" → true
+      retouches: {},       // Saga 1.27.2 : "carte/ev-1" → { cache: true } ou { apparence: {…} } (commandes apparition, apparence)
       repousses: {},       // "carte/ev-1" → nuits passées depuis la récolte (Saga 1.6, événements avec repousse_nuits)
       quetes: {},          // id → { etat: 'en_cours' | 'finie', etape }
       compteurs: { captures: 0, dresseurs_battus: 0, sauvages_battus: 0, evolutions: 0, badges: 0, pas: 0 },
@@ -217,8 +218,11 @@ const Monde = (() => {
       if (obstacleFranchi(ev, partie, carte)) continue;
       const page = pageActive(ev, partie, carte);
       if (!page || page.cache) continue;
+      // Saga 1.27.2 : un script l'a fait disparaître, ou lui a donné une autre apparence (gardé dans la partie).
+      const retouche = partie.retouches?.[`${carte.id}/${ev.id}`];
+      if (retouche?.cache) continue;
       // Saga 1.16 : une page peut avoir sa propre apparence (sinon, celle de l'événement).
-      const ap = apparence(ev, page);
+      const ap = retouche?.apparence ? apparence({ apparence: retouche.apparence }, null) : apparence(ev, page);
       const perso = jeu.personnages.get(ap.personnage || '') || null;
       // Ce qu'on montre (FORMAT.md, apparence) : la tuile de l'événement, sinon le sprite du
       // personnage (Tafl 0.12), sinon sa tuile, sinon le petit bonhomme de Saga.

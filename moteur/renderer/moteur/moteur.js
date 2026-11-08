@@ -949,7 +949,54 @@ const Moteur = (() => {
       cine.fin();
     }
     // Ce que les scripts reçoivent (scripts.js › commandes deplacer, regarder, camera, fondu, secouer, bulle, cinema).
+    // Saga 1.27.2 : refaire la liste des présents au milieu d'un script (un événement qui disparaît, revient
+    // ou change d'apparence), sans casser ce qui est en cours : ceux qui marchent gardent leur pas et leur trajet.
+    function rafraichirEnScene() {
+      const avant = presents;
+      presents = Monde.evenementsPresents(jeu, carte, partie, avant);
+      for (const p of presents) {
+        const a = avant.find((q) => q.ev === p.ev);
+        if (a) { p.mouvement = a.mouvement; p.pas = a.pas; p.vuBouger = a.vuBouger; p.attente = a.attente; }
+      }
+      for (const m of marches) {
+        if (m.cible === 'joueur') continue;
+        const nouveau = presents.find((p) => p.ev === m.cible.ev);
+        if (nouveau) m.cible = nouveau; else { m.etapes = []; m.fini = true; }
+      }
+      for (const m of marches.filter((x) => x.fini)) m.resoudre(true);
+      marches = marches.filter((x) => !x.fini);
+    }
+    // L'événement que vise une commande (« @evenement » ou un id de la carte), même absent pour l'instant.
+    const evenementVise = (qui, ev) => (!qui || qui === '@evenement' ? ev : carte.evenements.find((e) => e.id === qui)) || null;
     const hoteCine = {
+      // Saga 1.27.2 : commande apparition : il disparaît (ou revient) tout de suite, et c'est gardé dans la partie.
+      apparition: (c, ev) => {
+        const cible = evenementVise(c.qui, ev);
+        if (!cible) return;
+        const cle = `${carte.id}/${cible.id}`;
+        partie.retouches ??= {};
+        const r = { ...(partie.retouches[cle] || {}) };
+        if (c.action === 'reapparaitre') delete r.cache; else r.cache = true;
+        if (Object.keys(r).length) partie.retouches[cle] = r; else delete partie.retouches[cle];
+        rafraichirEnScene();
+      },
+      // Saga 1.27.2 : commande apparence : une autre apparence (personnage, tuile, tampon, ou rien), ou la sienne
+      // à nouveau (action « revenir »). Gardée dans la partie.
+      apparence: (c, ev) => {
+        const cible = evenementVise(c.qui, ev);
+        if (!cible) return;
+        const cle = `${carte.id}/${cible.id}`;
+        partie.retouches ??= {};
+        const r = { ...(partie.retouches[cle] || {}) };
+        if (c.action === 'revenir') delete r.apparence;
+        else {
+          const a = { personnage: String(c.personnage || ''), tuile: Number.isFinite(Number(c.tuile)) ? Number(c.tuile) : -1 };
+          if (c.tampon) { a.tampon = String(c.tampon); if (c.tampons && typeof c.tampons === 'object') a.tampons = c.tampons; if (c.animer === 'mouvement') a.animer = 'mouvement'; }
+          r.apparence = a;
+        }
+        if (Object.keys(r).length) partie.retouches[cle] = r; else delete partie.retouches[cle];
+        rafraichirEnScene();
+      },
       deplacer: deplacerCine,
       regarder: (qui, direction, ev) => {
         const c = cibleCine(qui, ev);

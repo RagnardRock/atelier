@@ -67,7 +67,7 @@ const ApercuScene = (() => {
         const pg = e.id === ev.id ? page : e.pages[0];
         if (!pg || pg.cache) { if (e.id !== ev.id) continue; }
         const ap = pg?.apparence || e.apparence;
-        acteurs.push({ id: e.id, nom: e.nom, x: e.x, y: e.y, dir: e.direction || 'bas', perso: perso(ap.personnage), tuile: ap.tuile, bloque: !e.traversable, mouvement: null, pas: 0, cache: Boolean(pg?.cache) });
+        acteurs.push({ id: e.id, nom: e.nom, x: e.x, y: e.y, dir: e.direction || 'bas', perso: perso(ap.personnage), tuile: ap.tuile, tampon: ap.tampon || '', tampons: ap.tampons || null, bloque: !e.traversable, mouvement: null, pas: 0, cache: Boolean(pg?.cache) });
       }
       const heros = doc.data.personnages.find((p) => p.heros) || null;
       const d = doc.depart?.carte === map.id ? doc.depart : { x: ev.x, y: Math.min(map.height - 1, ev.y + 2), direction: 'haut' };
@@ -138,7 +138,14 @@ const ApercuScene = (() => {
       if (a.cache) return;
       const p = pixels(a), x = Math.round(p.x - cam.x), y = Math.round(p.y - cam.y);
       const m = a.mouvement, image = m && m.t < m.duree / 2 && a.perso?.sprite ? 1 + (a.pas % Math.max(1, a.perso.sprite.images - 1)) : 0;
+      // Tafl 1.28 : un tampon, son coin haut gauche sur sa case.
+      const st = a.tampon ? doc.stamps.find((o) => o.name === (a.tampons?.[a.dir] || a.tampon)) || doc.stamps.find((o) => o.name === a.tampon) : null;
+      if (st) {
+        for (let j = 0; j < st.h; j++) for (let i = 0; i < st.w; i++) { const n = st.cells[j * st.w + i]; if (n >= 0 && tuiles[n]) g.drawImage(tuiles[n], x + i * cell, y + j * cell, cell, cell); }
+        return;
+      }
       if (a.tuile >= 0 && tuiles[a.tuile]) { g.drawImage(tuiles[a.tuile], x, y, cell, cell); return; }
+      if (a.vide) return; // Tafl 1.29.1 : « Changer l'apparence » sans rien : invisible
       g.fillStyle = 'rgba(0,0,0,0.22)';
       g.beginPath(); g.ellipse(x + cell / 2, y + cell - 4, cell * 0.3, cell * 0.1, 0, 0, Math.PI * 2); g.fill();
       if (a.perso?.sprite && Sprites.dessinerSurCase(g, a.perso.sprite, a.dir, x, y, cell, s, () => {}, image)) return;
@@ -276,6 +283,20 @@ const ApercuScene = (() => {
           marches = marches.filter((x) => x.a !== a);
           const fin = new Promise((r) => marches.push({ a, etapes, duree: VITESSES[c.vitesse] || VITESSES.normale, traverser: c.traverser, attente: 0, r }));
           if (c.attendre !== false) await fin;
+          break;
+        }
+        // Tafl 1.29.1 : disparaître, réapparaître, changer d'apparence, tout de suite.
+        case 'apparition': {
+          const a = acteur(c.qui || '@evenement');
+          if (a && !a.heros) a.cache = c.action !== 'reapparaitre';
+          break;
+        }
+        case 'apparence': {
+          const a = acteur(c.qui || '@evenement');
+          if (!a || a.heros) break;
+          if (!a.origine) a.origine = { perso: a.perso, tuile: a.tuile, tampon: a.tampon, tampons: a.tampons, vide: a.vide };
+          if (c.action === 'revenir') Object.assign(a, a.origine);
+          else Object.assign(a, { perso: perso(c.personnage), tuile: Number(c.tuile) >= 0 ? Number(c.tuile) : -1, tampon: c.tampon || '', tampons: null, vide: !c.personnage && !(Number(c.tuile) >= 0) && !c.tampon });
           break;
         }
         case 'regarder': {
