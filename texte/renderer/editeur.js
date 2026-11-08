@@ -600,20 +600,64 @@ const Editeur = (() => {
 
   // --- Coller ---
   // Poser (ou retirer) data-style sur les paragraphes et titres de la sélection.
+  // La mise en forme posée à la main qui couvre tout un paragraphe (couleur, taille, police sur
+  // tout son texte) passe au style, comme dans Word : sinon elle cacherait celle du style. Celle d'un
+  // mot ou deux reste (c'est voulu).
+  const PROPRIETES = [['couleur', 'color', 'color'], ['taille', 'font-size', 'size'], ['police', 'font-family', 'face']];
+  function sansMiseEnFormeDuStyle(b, st) {
+    const textes = [];
+    const tw = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
+    for (let t = tw.nextNode(); t; t = tw.nextNode()) if (t.data.trim()) textes.push(t);
+    if (!textes.length) return false;
+    let change = false;
+    for (const [champ, css, attr] of PROPRIETES) {
+      if (st[champ] === null || st[champ] === undefined || st[champ] === '') continue;
+      const porte = (n) => n.style?.getPropertyValue(css) || (n.tagName === 'FONT' && n.hasAttribute(attr));
+      const couvert = textes.every((t) => { for (let n = t.parentNode; n && n !== b; n = n.parentNode) if (porte(n)) return true; return false; });
+      if (!couvert) continue;
+      for (const n of b.querySelectorAll('*')) {
+        if (n.style?.getPropertyValue(css)) { n.style.removeProperty(css); if (!n.getAttribute('style')) n.removeAttribute('style'); change = true; }
+        if (n.tagName === 'FONT' && n.hasAttribute(attr)) { n.removeAttribute(attr); change = true; }
+      }
+    }
+    // Les span devenus vides de sens disparaissent (leur texte reste).
+    for (const n of [...b.querySelectorAll('span:not([style]):not([class]):not([data-style]), font:not([color]):not([face]):not([size])')]) n.replaceWith(...n.childNodes);
+    return change;
+  }
   function marquerStyle(id) {
     const s = window.getSelection();
     if (!s.rangeCount || !page()) return;
     const r = s.getRangeAt(0);
-    const blocs = [...page().querySelectorAll('p, h1, h2, h3, h4, h5, h6')].filter((b) => r.intersectsNode(b));
+    const blocs = [...page().querySelectorAll('p, h1, h2, h3, h4, h5, h6')].filter((b) => r.intersectsNode(b) && !b.hasAttribute('data-sentinelle'));
     const courant = blocCourant();
     if (courant && /^(P|H[1-6])$/.test(courant.tagName) && !blocs.includes(courant)) blocs.push(courant);
-    let change = false;
-    for (const b of blocs) {
-      if (id && b.dataset.style !== id) { b.dataset.style = id; change = true; }
-      if (!id && b.hasAttribute('data-style')) { b.removeAttribute('data-style'); change = true; }
+    if (!blocs.length) return;
+    // Les blocs tels qu'ils doivent être : la marque du style créé, sans la mise en forme qui le cache.
+    const copies = blocs.map((b) => {
+      const c = b.cloneNode(true);
+      if (id) c.dataset.style = id; else c.removeAttribute('data-style');
+      const st = StylesDoc.get(doc, id || c.tagName.toLowerCase());
+      if (st) sansMiseEnFormeDuStyle(c, st);
+      return c;
+    });
+    if (copies.every((c, i) => c.outerHTML === blocs[i].outerHTML)) return;
+    // Des paragraphes voisins (le cas courant) : un seul remplacement, annulable d'un Ctrl+Z.
+    const parent = blocs[0].parentNode;
+    const voisins = blocs.every((b) => b.parentNode === parent) && blocs.every((b, i) => {
+      if (!i) return true;
+      let n = blocs[i - 1].nextElementSibling;
+      while (n && n.hasAttribute('data-sentinelle')) n = n.nextElementSibling;
+      return n === b;
+    });
+    if (voisins) {
+      remplacerBlocs(blocs[0], blocs[blocs.length - 1], copies.map((c) => c.outerHTML).join(''), { cible: blocs.length - 1 });
+      return;
     }
-    if (change) { changement(); planifier(); }
+    blocs.forEach((b, i) => { if (b.outerHTML !== copies[i].outerHTML) b.replaceWith(copies[i]); });
+    changement();
+    planifier();
   }
+
 
   // --- Repères et blocs déroulants (voir sommaire.js) ---
   //

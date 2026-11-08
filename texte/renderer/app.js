@@ -544,6 +544,8 @@ const App = (() => {
     if (!v) return;
     StylesDoc.changer(actif, id, v);
     stylesModifies();
+    // Le paragraphe choisi prend le style : sa mise en forme posée à la main passe dans le style.
+    Editeur.commandes.style(id);
     notify(`« ${StylesDoc.get(actif, id).nom} » a pris la mise en forme de la sélection.`, 'success', 3000);
   }
   async function nouveauStyleDepuisSelection(noeud, styleActuel) {
