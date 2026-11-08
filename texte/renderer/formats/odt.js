@@ -92,6 +92,25 @@
       }
       return f;
     }
+    // Un style créé dans Edda (Edda_perso1…) dans la parenté d'un style de paragraphe.
+    function persoDuStyle(nom, profondeur = 0) {
+      if (!nom || !styles[nom] || profondeur > 12) return null;
+      const m = String(nom).match(/^Edda_(perso\d+)$/);
+      return m ? m[1] : persoDuStyle(styles[nom].parent, profondeur + 1);
+    }
+    // Espace au-dessus / en dessous (pt), avec les styles dont il hérite.
+    function espacement(nom, profondeur = 0) {
+      const s = styles[nom];
+      // (Pas l'espace par défaut des paragraphes : seulement celui des titres et des styles.)
+      if (!s || profondeur > 12 || /^__defaut_|^Standard$/.test(nom)) return {};
+      const e = { ...espacement(s.parent, profondeur + 1) };
+      const h = s.para?.getAttributeNS(NS.fo, 'margin-top'), b = s.para?.getAttributeNS(NS.fo, 'margin-bottom');
+      if (h) e.avant = Math.round(Unites.pxEnPt(Unites.lire(h) || 0) * 2) / 2;
+      if (b) e.apres = Math.round(Unites.pxEnPt(Unites.lire(b) || 0) * 2) / 2;
+      return e;
+    }
+    const valeursStyle = (nom) => { const t = texteDuStyle(nom); return { police: t.police || null, taille: t.taille, couleur: t.couleur, gras: t.gras, italique: t.italique, ...espacement(nom) }; };
+
     function paraDuStyle(nom, profondeur = 0) {
       const s = styles[nom];
       if (!s || profondeur > 12) return {};
@@ -216,6 +235,9 @@
       const props = paraDuStyle(nomStyle);
       const base = texteDuStyle(nomStyle);
       if (/^h/.test(role)) { delete base.taille; delete base.gras; delete base.couleur; delete base.police; }
+      // Un style créé dans Edda : sa mise en forme vient du style (data-style), pas du texte.
+      const perso = persoDuStyle(nomStyle);
+      if (perso) { delete base.taille; delete base.gras; delete base.couleur; delete base.police; delete base.italique; }
       for (const k of ['police', 'taille']) if (base[k] && base[k] === normal[k]) delete base[k];
       let liste = listeCtx && !listeCtx.suite ? { type: listeCtx.type, niveau: listeCtx.niveau, id: listeCtx.id, debut: 1 } : null;
       // Un paragraphe à puce sans <text:list> (style de paragraphe avec un style de liste) : rare, on le traite comme une liste.
@@ -224,6 +246,7 @@
       await enLigne(p, base, null, morceaux);
       const tag = role === 'citation' ? 'blockquote' : role === 'code' ? 'pre' : role === 'normal' ? 'p' : role;
       let attrs = stylePara({ align: props.align, retrait: listeCtx || tag === 'blockquote' || tag === 'pre' ? 0 : props.retrait, premiere: props.premiere });
+      if (perso && /^(p|h[1-6])$/.test(tag)) attrs += ` data-style="${perso}"`;
       // Les signets d'Edda (repères, blocs déroulants : voir Formats.signetsVersPage).
       const avant = [], apres = [];
       for (const b of enfants(p)) {
@@ -332,7 +355,16 @@
       }
       if (m && (enfant(m, 'header') || enfant(m, 'footer'))) alertes.add('Les en-têtes et pieds de page ne sont pas affichés (ils restent dans le fichier d\'origine).');
     }
-    return { html: Formats.signetsVersPage(String(html)), miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
+    // Les styles du fichier : Titre 1 à 4 et les styles créés dans Edda.
+    const titres = {};
+    for (let n = 1; n <= 4; n++) if (styles[`Heading_20_${n}`]) titres[`h${n}`] = valeursStyle(`Heading_20_${n}`);
+    const perso = Object.keys(styles).filter((k) => /^Edda_perso\d+$/.test(k)).map((k) => {
+      const parent = styles[k].parent || '';
+      const m = String(parent).match(/^Heading_20_(\d)$/);
+      return { id: k.slice(5), nom: styles[k].affiche, balise: m ? `h${m[1]}` : 'p', ...valeursStyle(k) };
+    });
+    const stylesDocument = Formats.stylesLus(titres, perso, normal.police);
+    return { html: Formats.signetsVersPage(String(html)), styles: stylesDocument, miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
 
   // ======================================================================
@@ -373,7 +405,7 @@
 
     const STYLE_NOM = { normal: 'Standard', h1: 'Heading_20_1', h2: 'Heading_20_2', h3: 'Heading_20_3', h4: 'Heading_20_4', h5: 'Heading_20_5', h6: 'Heading_20_6', citation: 'Quotations', code: 'Preformatted_20_Text' };
     function stylePar(b, { sautAvant } = {}) {
-      const parent = STYLE_NOM[b.style] || 'Standard';
+      const parent = b.stylePerso && (ctx.listeStyles || []).some((s) => s.id === b.stylePerso) ? `Edda_${b.stylePerso}` : STYLE_NOM[b.style] || 'Standard';
       const props = [];
       if (b.align && b.align !== 'left') props.push(`fo:text-align="${{ center: 'center', right: 'end', justify: 'justify' }[b.align]}"`);
       if (b.retrait && !b.liste) props.push(`fo:margin-left="${cm(b.retrait)}"`);
@@ -580,12 +612,31 @@
     const { largeur, hauteur } = Formats.dimensions(mp);
     const police = xml(ctx.police || 'Calibri');
     const taille = ctx.taille || 11;
-    const titre = (n, sz) => `<style:style style:name="Heading_20_${n}" style:display-name="Heading ${n}" style:family="paragraph" style:parent-style-name="Heading" style:next-style-name="Standard" style:default-outline-level="${n}" style:class="text"><style:text-properties fo:font-size="${sz}pt" fo:font-weight="bold" fo:color="${n === 1 ? '#1f3864' : '#2f5496'}"/></style:style>`;
+    // Les styles du document (voir stylesdoc.js) : Titre 1 à 4 et les styles créés (Edda_perso1…).
+    const parId = Object.fromEntries((ctx.listeStyles || StylesDoc.liste({})).map((s) => [s.id, s]));
+    const proprietes = (s) => {
+      const t = [];
+      if (s.police) t.push(`fo:font-family="'${xml(s.police)}'"`);
+      if (s.taille) t.push(`fo:font-size="${s.taille}pt"`);
+      if (s.gras !== null && s.gras !== undefined) t.push(`fo:font-weight="${s.gras ? 'bold' : 'normal'}"`);
+      if (s.italique !== null && s.italique !== undefined) t.push(`fo:font-style="${s.italique ? 'italic' : 'normal'}"`);
+      if (s.couleur) t.push(`fo:color="#${s.couleur}"`);
+      const p = [];
+      if (s.avant !== null && s.avant !== undefined) p.push(`fo:margin-top="${s.avant}pt"`);
+      if (s.apres !== null && s.apres !== undefined) p.push(`fo:margin-bottom="${s.apres}pt"`);
+      return (p.length ? `<style:paragraph-properties ${p.join(' ')}/>` : '') + (t.length ? `<style:text-properties ${t.join(' ')}/>` : '');
+    };
+    const titre = (n, sz) => `<style:style style:name="Heading_20_${n}" style:display-name="Heading ${n}" style:family="paragraph" style:parent-style-name="Heading" style:next-style-name="Standard" style:default-outline-level="${n}" style:class="text">`
+      + (parId[`h${n}`] ? proprietes(parId[`h${n}`]) : `<style:text-properties fo:font-size="${sz}pt" fo:font-weight="bold" fo:color="${n === 1 ? '#1f3864' : '#2f5496'}"/>`) + '</style:style>';
+    const persos = Object.values(parId).filter((s) => s.perso).map((s) => {
+      const parent = /^h[1-6]$/.test(s.balise) ? `Heading_20_${s.balise[1]}` : 'Standard';
+      return `<style:style style:name="Edda_${s.id}" style:display-name="${xml(s.nom)}" style:family="paragraph" style:parent-style-name="${parent}" style:class="text"${/^h/.test(s.balise) ? ` style:default-outline-level="${s.balise[1]}"` : ''}>${proprietes(s)}</style:style>`;
+    }).join('');
     return `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-styles ${DECL} office:version="1.3">${fontFaces}<office:styles>`
       + `<style:default-style style:family="paragraph"><style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0.28cm" fo:line-height="115%"/><style:text-properties style:font-name="${police}" fo:font-size="${taille}pt" fo:language="fr" fo:country="FR"/></style:default-style>`
       + '<style:style style:name="Standard" style:family="paragraph" style:class="text"/>'
       + '<style:style style:name="Heading" style:family="paragraph" style:parent-style-name="Standard" style:next-style-name="Standard" style:class="text"><style:paragraph-properties fo:margin-top="0.42cm" fo:margin-bottom="0.21cm" fo:keep-with-next="always"/></style:style>'
-      + titre(1, 20) + titre(2, 16) + titre(3, 14) + titre(4, 12) + titre(5, 11) + titre(6, 11)
+      + titre(1, 20) + titre(2, 16) + titre(3, 14) + titre(4, 12) + titre(5, 11) + titre(6, 11) + persos
       + '<style:style style:name="Quotations" style:display-name="Quotations" style:family="paragraph" style:parent-style-name="Standard" style:class="html"><style:paragraph-properties fo:margin-left="1cm" fo:margin-right="1cm" fo:padding-left="0.2cm" fo:border-left="1.5pt solid #a0a0a0"/><style:text-properties fo:font-style="italic" fo:color="#595959"/></style:style>'
       + '<style:style style:name="Preformatted_20_Text" style:display-name="Preformatted Text" style:family="paragraph" style:parent-style-name="Standard" style:class="html"><style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0cm" fo:background-color="#f2f2f2"/><style:text-properties style:font-name="Consolas" fo:font-size="10pt"/></style:style>'
       + '<style:style style:name="Graphics" style:family="graphic"/>'

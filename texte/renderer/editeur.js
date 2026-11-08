@@ -101,11 +101,15 @@ const Editeur = (() => {
     outdent: () => exec('outdent'),
     removeFormat: () => { exec('removeFormat'); exec('unlink'); },
     // Style du paragraphe : p, h1…h6, blockquote, pre
-    style: (bloc) => {
+    style: (id) => {
+      // Un style créé (data-style) : sa balise (p, h1…h4), puis la marque sur les paragraphes choisis.
+      const perso = /^perso\d+$/.test(id) ? StylesDoc.get(doc, id) : null;
+      const bloc = perso ? perso.balise : id;
       // Une citation se retire en repassant en texte normal.
       const actuel = blocCourant();
       if (bloc === 'p' && ancetre(actuel, 'blockquote:not([data-bloc])')) exec('formatBlock', 'p');
       exec('formatBlock', bloc);
+      marquerStyle(perso ? perso.id : null);
     },
     police: (nom) => { if (nom) exec('fontName', nom); },
     // Taille en points. execCommand ne connaît que 7 tailles : on pose la plus grande, puis on la
@@ -385,6 +389,7 @@ const Editeur = (() => {
     const bloc = blocCourant();
     let style = 'p';
     for (let n = bloc; n && n !== p; n = n.parentNode) {
+      if (n.dataset?.style && /^(P|H[1-6])$/.test(n.tagName)) { style = n.dataset.style; break; }
       if (/^H[1-6]$/.test(n.tagName)) { style = n.tagName.toLowerCase(); break; }
       if (n.tagName === 'PRE') { style = 'pre'; break; }
       if (n.tagName === 'BLOCKQUOTE' && !n.getAttribute('style') && !n.hasAttribute('data-bloc')) { style = 'blockquote'; break; }
@@ -594,6 +599,22 @@ const Editeur = (() => {
   }
 
   // --- Coller ---
+  // Poser (ou retirer) data-style sur les paragraphes et titres de la sélection.
+  function marquerStyle(id) {
+    const s = window.getSelection();
+    if (!s.rangeCount || !page()) return;
+    const r = s.getRangeAt(0);
+    const blocs = [...page().querySelectorAll('p, h1, h2, h3, h4, h5, h6')].filter((b) => r.intersectsNode(b));
+    const courant = blocCourant();
+    if (courant && /^(P|H[1-6])$/.test(courant.tagName) && !blocs.includes(courant)) blocs.push(courant);
+    let change = false;
+    for (const b of blocs) {
+      if (id && b.dataset.style !== id) { b.dataset.style = id; change = true; }
+      if (!id && b.hasAttribute('data-style')) { b.removeAttribute('data-style'); change = true; }
+    }
+    if (change) { changement(); planifier(); }
+  }
+
   // --- Repères et blocs déroulants (voir sommaire.js) ---
   //
   // Un repère : un paragraphe marqué data-repere, qui apparaît dans le sommaire.

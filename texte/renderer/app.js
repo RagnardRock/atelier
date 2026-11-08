@@ -93,9 +93,11 @@ const App = (() => {
   // ======================================================================
   const nouvelId = () => `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
-  function creerDocument({ nom, chemin = null, format = null, html = '', miseEnPage, police, taille, dossierUrl = null, encodage = null, dateFichier = null }) {
+  function creerDocument({ nom, chemin = null, format = null, html = '', miseEnPage, police, taille, dossierUrl = null, encodage = null, dateFichier = null, styles = undefined }) {
     const d = {
       id: nouvelId(), nom, chemin, format, dossierUrl, encodage, dateFichier, modifie: false,
+      // Les styles (Titre 1 à 4 modifiés, styles créés) : ceux du fichier, ou le modèle des réglages.
+      styles: StylesDoc.copie(styles === undefined ? config.stylesParDefaut : styles),
       miseEnPage: miseEnPage ? structuredClone(miseEnPage) : structuredClone(Formats.MISE_EN_PAGE),
       police: police || config.police, taille: taille || config.taille,
     };
@@ -104,6 +106,7 @@ const App = (() => {
     page.innerHTML = html && html.trim() ? html : '<p><br></p>';
     page.hidden = true;
     pages.append(page);
+    StylesDoc.appliquer(d);
     Editeur.verifierVide(page);
     docs.push(d);
     appliquerZoom();
@@ -126,6 +129,7 @@ const App = (() => {
     actif = d;
     Editeur.activer(d);
     Sommaire.activer(d);
+    majListeStyles();
     afficher();
     rendreOnglets();
     majStatut();
@@ -218,6 +222,7 @@ const App = (() => {
     const d = creerDocument({
       nom: info.nom, chemin: info.chemin, format: format.id, html, dossierUrl: info.dossierUrl,
       miseEnPage: r.miseEnPage, police: r.police, taille: r.taille, encodage: r.encodage || null, dateFichier: info.modifie,
+      styles: r.styles || null,
     });
     if (vide) retirer(vide);
     activer(d);
@@ -245,6 +250,9 @@ const App = (() => {
       miseEnPage: d.miseEnPage,
       police: d.police,
       taille: d.taille,
+      styles: d.styles,
+      cssStyles: StylesDoc.css(d),
+      listeStyles: StylesDoc.liste(d),
       titre: base,
       encodage: d.encodage,
       dossierMedias: `${base}-medias`,
@@ -309,6 +317,7 @@ const App = (() => {
     if (i < 0) return;
     docs.splice(i, 1);
     d.page.remove();
+    StylesDoc.retirer(d);
     if (actif === d) { actif = null; if (docs.length) activer(docs[Math.min(i, docs.length - 1)]); }
     signaler();
     rendreOnglets();
@@ -351,7 +360,7 @@ const App = (() => {
     for (const m of copie.querySelectorAll('.choisi')) m.classList.remove('choisi');
     // Une vidéo n'a pas d'image fixe à imprimer : on montre son nom.
     for (const v of copie.querySelectorAll('video, audio')) v.replaceWith(Object.assign(document.createElement('span'), { textContent: `[${v.tagName === 'VIDEO' ? 'Vidéo' : 'Son'} : ${Medias.nom(v)}]` }));
-    return Formats.documentHtml({ titre: d.nom.replace(/\.[^.]+$/, ''), miseEnPage: d.miseEnPage, police: d.police, taille: d.taille }, copie.innerHTML, { ecran: false });
+    return Formats.documentHtml({ titre: d.nom.replace(/\.[^.]+$/, ''), miseEnPage: d.miseEnPage, police: d.police, taille: d.taille, cssStyles: StylesDoc.css(d) }, copie.innerHTML, { ecran: false });
   }
   async function exporterPdf(d = actif) {
     if (!d) return;
@@ -503,7 +512,148 @@ const App = (() => {
   const choixStyle = $('#choix-style');
   const choixPolice = $('#choix-police');
   const choixTaille = $('#choix-taille');
+  // Les polices : toutes celles installées sur l'ordinateur (lues au démarrage), sinon une liste courante.
+  async function remplirPolices(relire = false, enPlus = []) {
+    const installees = await window.edda.polices(relire).catch(() => []);
+    const noms = [...new Set([...(installees.length ? installees : POLICES), ...enPlus])].sort((a, b) => a.localeCompare(b, 'fr'));
+    $('#liste-polices').replaceChildren(...noms.map((p) => el('option', { value: p })));
+  }
   for (const p of POLICES) $('#liste-polices').append(el('option', { value: p }));
+  remplirPolices();
+  async function installerPolice() {
+    const res = await window.edda.installerPolices().catch((err) => { notify(cleanError(err), 'error'); return []; });
+    if (!res.length) return;
+    // Utilisable tout de suite (sans redémarrer Edda).
+    for (const p of res) {
+      try { const f = new FontFace(p.famille, p.octets); await f.load(); document.fonts.add(f); } catch { /* police illisible pour Chromium */ }
+    }
+    await remplirPolices(true, res.map((p) => p.famille));
+    notify(`Police installée : ${res.map((p) => p.famille).join(', ')}. Elle est dans la liste des polices${res.length > 1 ? '' : ''} (et dans les autres logiciels).`, 'success', 6000);
+  }
+
+  // ======================================================================
+  // Styles (voir stylesdoc.js)
+  // ======================================================================
+  function stylesModifies(d = actif) {
+    majListeStyles();
+    if (!d.modifie) { d.modifie = true; signaler(); rendreOnglets(); majTitre(); }
+    majStatut();
+  }
+  function majStyleDepuisSelection(id, noeud) {
+    const v = StylesDoc.depuisEcran(noeud, actif.page);
+    if (!v) return;
+    StylesDoc.changer(actif, id, v);
+    stylesModifies();
+    notify(`« ${StylesDoc.get(actif, id).nom} » a pris la mise en forme de la sélection.`, 'success', 3000);
+  }
+  async function nouveauStyleDepuisSelection(noeud, styleActuel) {
+    const v = StylesDoc.depuisEcran(noeud, actif.page);
+    if (!v) return;
+    const balise = StylesDoc.get(actif, styleActuel)?.balise || (/^h[1-4]$/.test(styleActuel) ? styleActuel : 'p');
+    const r = await Dialogs.form({
+      title: 'Nouveau style',
+      fields: [
+        { key: 'nom', label: 'Nom du style', type: 'text', value: '' , placeholder: 'Par exemple : Titre de chapitre' },
+        { key: 'balise', label: 'Sorte de paragraphe', type: 'select', value: balise, choices: StylesDoc.BALISES },
+        { type: 'info', text: 'Un style « Titre » apparaît dans le sommaire et peut se replier. Il prend la mise en forme du texte choisi ; tu pourras la changer dans Format › Styles.' },
+      ],
+      okLabel: 'Créer',
+    });
+    if (!r) return;
+    const s = StylesDoc.creer(actif, { ...v, nom: r.nom.trim() || undefined, balise: r.balise });
+    stylesModifies();
+    Editeur.commandes.style(s.id);
+  }
+
+  // La fenêtre des styles : choisir un style, changer sa police, sa taille, sa couleur…
+  async function ouvrirStyles(idDepart) {
+    const d = actif;
+    if (!d) return;
+    const avant = StylesDoc.copie(d.styles);
+    let id = StylesDoc.get(d, idDepart) ? idDepart : 'h1';
+    let charge = false;
+    const choix = () => StylesDoc.liste(d).map((s) => [s.id, s.perso ? `${s.nom} (créé)` : s.nom]);
+    const valeursDe = (s) => ({ nom: s.nom, balise: s.balise, police: s.police || '', taille: s.taille ?? '', couleur: `#${s.couleur || '1a1a1a'}`, gras: Boolean(s.gras), italique: Boolean(s.italique), avant: s.avant ?? '', apres: s.apres ?? '' });
+    const charger = (api) => {
+      charge = true;
+      const s = StylesDoc.get(d, id);
+      for (const [k, v] of Object.entries(valeursDe(s))) api.setValue(k, v);
+      api.inputs.nom.input.closest('label').hidden = !s.perso;
+      api.inputs.balise.input.closest('label').hidden = !s.perso;
+      charge = false;
+    };
+    const remplirChoix = (api) => {
+      const sel = api.inputs.style.input;
+      sel.replaceChildren(...choix().map(([v, l]) => new Option(l, v)));
+      sel.value = id;
+    };
+    const s0 = StylesDoc.get(d, id);
+    const r = await Dialogs.form({
+      title: `Styles de ${d.nom}`,
+      width: 460,
+      fields: [
+        { key: 'style', label: 'Style', type: 'select', value: id, choices: choix() },
+        { key: 'nom', label: 'Nom', type: 'text', value: s0.nom, hidden: !s0.perso },
+        { key: 'balise', label: 'Sorte de paragraphe', type: 'select', value: s0.balise, choices: StylesDoc.BALISES, hidden: !s0.perso },
+        { key: 'police', label: 'Police', type: 'text', value: s0.police || '', list: 'liste-polices', placeholder: 'Celle du document' },
+        { key: 'taille', label: 'Taille (points)', type: 'number', value: s0.taille ?? '', min: 1, max: 400, step: 0.5 },
+        { key: 'couleur', label: 'Couleur', type: 'color', value: `#${s0.couleur || '1a1a1a'}` },
+        { key: 'gras', label: 'Gras', type: 'checkbox', value: Boolean(s0.gras) },
+        { key: 'italique', label: 'Italique', type: 'checkbox', value: Boolean(s0.italique) },
+        { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', value: s0.avant ?? '', min: 0, max: 200, step: 1 },
+        { key: 'apres', label: 'Espace en dessous (points)', type: 'number', value: s0.apres ?? '', min: 0, max: 200, step: 1 },
+        { key: 'modele', label: 'Utiliser ces styles pour les nouveaux documents', type: 'checkbox', value: false },
+        { type: 'info', text: 'Les changements se voient tout de suite dans la page. Ils sont enregistrés avec le document (Word, LibreOffice, page web).' },
+      ],
+      buttons: [
+        { label: 'Nouveau style', run: (api) => { const s = StylesDoc.creer(d, { ...StylesDoc.get(d, id), nom: undefined }); id = s.id; remplirChoix(api); charger(api); majListeStyles(); } },
+        { label: 'Supprimer', run: (api) => {
+          const s = StylesDoc.get(d, id);
+          if (!s.perso) { StylesDoc.changer(d, id, Object.fromEntries(StylesDoc.CHAMPS.map((k) => [k, StylesDoc.DEFAUTS[id][k]]))); notify(`${s.nom} est revenu à son style d'origine.`, 'info', 3000); charger(api); return; }
+          for (const n of d.page.querySelectorAll(`[data-style="${s.id}"]`)) n.removeAttribute('data-style');
+          StylesDoc.supprimer(d, id);
+          id = 'h1'; remplirChoix(api); charger(api); majListeStyles();
+        } },
+      ],
+      onInput: (v, api) => {
+        if (!api || charge) return;
+        if (v.style !== id) { id = v.style; charger(api); return; }
+        const s = StylesDoc.get(d, id);
+        const nb = (x) => (x === '' || x === null || Number.isNaN(Number(x)) ? null : Number(x));
+        const valeurs = { police: v.police.trim() || null, taille: nb(v.taille), couleur: v.couleur.replace('#', '').toLowerCase(), gras: v.gras, italique: v.italique, avant: nb(v.avant), apres: nb(v.apres) };
+        if (s.perso) Object.assign(valeurs, { nom: v.nom.trim() || s.nom, balise: v.balise });
+        StylesDoc.changer(d, id, valeurs);
+        if (s.perso && valeurs.nom !== s.nom) { const o = [...api.inputs.style.input.options].find((x) => x.value === id); if (o) o.text = `${valeurs.nom} (créé)`; majListeStyles(); }
+      },
+    });
+    if (!r) { d.styles = avant; StylesDoc.appliquer(d); majListeStyles(); return; }
+    // Un style créé qui change de sorte (texte normal ↔ titre) : ses paragraphes changent de balise.
+    for (const s of StylesDoc.liste(d).filter((x) => x.perso)) {
+      for (const n of [...d.page.querySelectorAll(`[data-style="${s.id}"]`)]) {
+        if (n.tagName.toLowerCase() === s.balise) continue;
+        const neuf = document.createElement(s.balise);
+        for (const a of n.attributes) neuf.setAttribute(a.name, a.value);
+        neuf.append(...n.childNodes);
+        n.replaceWith(neuf);
+      }
+    }
+    if (JSON.stringify(avant) !== JSON.stringify(d.styles)) stylesModifies(d);
+    if (r.modele) {
+      config = await window.edda.writeConfig({ stylesParDefaut: StylesDoc.copie(d.styles) });
+      notify('Les nouveaux documents auront ces styles.', 'success', 3000);
+    }
+  }
+
+  // La liste des styles du ruban : les styles de base, puis ceux créés dans le document.
+  function majListeStyles() {
+    for (const o of [...choixStyle.querySelectorAll('option[data-perso]')]) o.remove();
+    if (!actif) return;
+    for (const s of StylesDoc.liste(actif).filter((x) => x.perso)) {
+      const o = new Option(s.nom, s.id);
+      o.dataset.perso = '';
+      choixStyle.add(o);
+    }
+  }
   for (const t of Editeur.TAILLES) $('#liste-tailles').append(el('option', { value: String(t).replace('.', ',') }));
   let couleurTexte = 'e03c3c';
   let couleurSurligner = 'ffff00';
@@ -653,6 +803,8 @@ const App = (() => {
         { label: 'Effacer la mise en forme', keys: `${ctrl}Espace`, icone: 'clear-all', run: Editeur.commandes.removeFormat },
         null,
         { label: 'Mise en page…', icone: 'layout', run: () => ouvrirMiseEnPage() },
+        { label: 'Styles…', icone: 'symbol-color', run: () => ouvrirStyles(), desactive: !actif },
+        { label: 'Installer une police…', icone: 'text-size', run: installerPolice },
       ];
     },
     affichage: () => [
@@ -728,6 +880,15 @@ const App = (() => {
           { label: 'Supprimer le tableau', icone: 'trash', run: () => Editeur.modifierTableau('supprimerTableau') });
       }
       items.push(null, { label: 'Effacer la mise en forme', icone: 'clear-all', run: Editeur.commandes.removeFormat });
+      // Styles (comme dans Word) : celui du paragraphe prend la mise en forme de la sélection.
+      const st = StylesDoc.get(actif, e.style);
+      const depart = Editeur.selection()?.startContainer;
+      items.push(null, 'Styles');
+      if (st) items.push({ label: `Mettre à jour « ${st.nom} » d'après la sélection`, icone: 'sync', run: () => majStyleDepuisSelection(st.id, depart) });
+      items.push(
+        { label: 'Nouveau style d\'après la sélection…', icone: 'add', run: () => nouveauStyleDepuisSelection(depart, e.style) },
+        { label: 'Modifier les styles…', icone: 'symbol-color', run: () => ouvrirStyles(st?.id) },
+      );
     }
     Menus.ouvrir(p.x, p.y, items);
   });

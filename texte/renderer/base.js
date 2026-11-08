@@ -114,7 +114,7 @@ const Nettoyage = (() => {
     'img', 'video', 'audio', 'source', 'dl', 'dt', 'dd', 'kbd', 'samp', 'var', 'abbr', 'cite', 'q', 'details', 'summary'];
   const ATTRIBUTS = ['style', 'href', 'src', 'alt', 'title', 'width', 'height', 'controls', 'colspan', 'rowspan',
     'class', 'start', 'type', 'align', 'color', 'face', 'size', 'poster', 'loop', 'data-nom', 'data-flotte', 'valign', 'bgcolor',
-    'data-repere', 'data-bloc', 'open'];
+    'data-repere', 'data-bloc', 'open', 'data-style'];
   // Seulement les propriétés de mise en forme qu'Edda comprend : le reste (position, display…)
   // casserait la page.
   const STYLES = ['color', 'background-color', 'background', 'font-family', 'font-size', 'font-weight', 'font-style',
@@ -190,6 +190,8 @@ const Nettoyage = (() => {
     for (const n of root.querySelectorAll('[data-repere]')) n.setAttribute('data-repere', '');
     for (const n of root.querySelectorAll('[data-bloc]')) { if (n.tagName !== 'BLOCKQUOTE') n.removeAttribute('data-bloc'); else n.setAttribute('data-bloc', ''); }
     for (const n of root.querySelectorAll('[open]')) n.removeAttribute('open');
+    // Un style créé dans Edda (data-style="perso1") : seulement sur un paragraphe ou un titre.
+    for (const n of root.querySelectorAll('[data-style]')) if (!/^(P|H[1-6])$/.test(n.tagName) || !/^perso\d+$/.test(n.dataset.style)) n.removeAttribute('data-style');
     // Une image flottante : dans la page, son habillage est l'attribut data-flotte (gauche / droite),
     // pas « float » : Chromium sortirait de son paragraphe une image qui flotte déjà quand on l'insère
     // ou qu'on la modifie. La règle CSS (style.css) la fait flotter une fois à sa place.
