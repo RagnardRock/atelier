@@ -101,6 +101,27 @@ const Sprites = (() => {
     return { largeur: w / n, hauteur: h / 4, images: n, planche: c.toDataURL('image/png') };
   }
 
+  // Tafl 1.29 : remettre une planche dans l'ordre, quand elle ne suit pas celui de Tafl (par exemple
+  // debout, pas 2, pas 1 ; ou les directions dans un autre ordre). colonnes[k] : la colonne de la
+  // planche (à partir de 0) qui devient l'image k (0 = debout, puis les pas) ; rangees[r] : la rangée
+  // de la planche qui devient la direction r (bas, gauche, droite, haut). Une même colonne peut
+  // servir deux fois (une planche à 2 images : debout, pas, et on reprend debout comme 2e pas).
+  // images : [rangée][colonne] (des canvas), comme decouper ; rend un nouveau tableau de copies.
+  const ordreSimple = (n) => Array.from({ length: n }, (_, i) => i);
+  function reordonner(images, colonnes, rangees = ordreSimple(4)) {
+    const n = images[0].length;
+    const col = (colonnes?.length ? colonnes : ordreSimple(n)).map((c) => clamp(Math.round(c) || 0, 0, n - 1));
+    return DIRECTIONS.map((_, r) => {
+      const rang = images[clamp(Math.round(rangees?.[r] ?? r) || 0, 0, 3)];
+      return col.map((c) => copie(rang[c]));
+    });
+  }
+  // La même chose sur un sprite des données : rend un nouveau sprite (sa planche réécrite dans l'ordre).
+  async function reordonnerSprite(sprite, colonnes, rangees) {
+    const images = reordonner(await decouper(sprite), colonnes, rangees);
+    return { ...sprite, images: images[0].length, planche: assembler(images, sprite.largeur, sprite.hauteur) };
+  }
+
   // L'image à montrer : debout (0), ou, pendant un pas, l'image de marche du pas.
   // pas = combien de pas il a déjà faits (pour alterner pied gauche / pied droit).
   const imageDeMarche = (images, pas) => (images > 1 ? 1 + (pas % (images - 1)) : 0);
@@ -130,6 +151,10 @@ const Sprites = (() => {
     let dir = 0, k = 0, outil = 'crayon', couleur = palette[0] || '#000000';
     const historique = [];
     let enregistrer = null; // pour regrouper les coups de crayon : on réécrit la planche au lâcher
+    // Tafl 1.29 : la remise en ordre en cours (juste après un import, ou par « Ordre des images… »),
+    // sinon null. colonnes[k] : la colonne de la planche montrée en image k ; rangees[r] : la rangée
+    // montrée en direction r.
+    let ordre = null;
 
     function ecrire() {
       p.sprite = { largeur: p.sprite.largeur, hauteur: p.sprite.hauteur, images: images[0].length, planche: assembler(images, p.sprite.largeur, p.sprite.hauteur) };
@@ -150,7 +175,7 @@ const Sprites = (() => {
         return;
       }
       k = Math.min(k, images[0].length - 1);
-      renderPlein();
+      if (ordre) renderOrdre(); else renderPlein();
     }
 
     // Pas encore de sprite : en créer un vide, ou importer une planche.
@@ -199,9 +224,120 @@ const Sprites = (() => {
         if (images) memoriser();
         p.sprite = await depuisPlanche(png);
         change?.();
-        notify(`Planche importée : ${p.sprite.images} image(s) de ${p.sprite.largeur} × ${p.sprite.hauteur} px par direction.`);
+        notify(`Planche importée : ${p.sprite.images} image(s) de ${p.sprite.largeur} × ${p.sprite.hauteur} px par direction. Vérifie l'ordre des images.`);
+        // On vérifie l'ordre tout de suite : une planche d'ailleurs n'a pas toujours celui de Tafl.
+        ordre = { colonnes: ordreSimple(p.sprite.images), rangees: ordreSimple(4), importe: true };
         render();
       } catch (err) { notify(cleanError(err), 'error'); }
+    }
+
+    // Tafl 1.29 : remettre la planche dans l'ordre de Tafl. La grille montre le résultat (chaque
+    // rangée, une direction ; chaque colonne, debout puis les pas) : les flèches déplacent une
+    // colonne ou une rangée, un menu choisit quelle colonne de la planche va à cette place, et chaque
+    // direction marche à côté, comme dans le jeu. Rien ne change tant qu'on n'a pas validé.
+    function renderOrdre() {
+      boite.replaceChildren();
+      const { largeur, hauteur } = p.sprite;
+      const n = images[0].length;
+      const { colonnes, rangees } = ordre;
+      const nomCol = (j) => (j === 0 ? 'debout' : `pas ${j}`);
+      const resultat = () => reordonner(images, colonnes, rangees);
+      const vues = resultat();
+      const echanger = (liste, a, b) => { [liste[a], liste[b]] = [liste[b], liste[a]]; renderOrdre(); };
+      const fleche = (ic, titre, actif, run) => {
+        const b = el('button', { className: 'icon-button', title: titre, type: 'button' }, [icon(ic)]);
+        b.disabled = !actif;
+        b.onclick = (e) => { e.preventDefault(); run(); };
+        return b;
+      };
+      const zoomCase = Math.max(2, Math.min(4, Math.floor(64 / Math.max(largeur, hauteur))));
+
+      const grille = el('div', { className: 'sprite-grille sprite-ordre', style: `grid-template-columns: auto repeat(${n}, auto) auto` });
+      // L'en-tête de chaque colonne : sa place, la colonne de la planche qu'elle prend, et les flèches.
+      grille.append(el('span'), ...colonnes.map((c, j) => {
+        const choix = el('select', { title: `La colonne de la planche qui va en « ${nomCol(j)} »` });
+        for (let i = 0; i < n; i++) choix.add(new Option(`colonne ${i + 1}`, String(i)));
+        choix.value = String(c);
+        choix.onchange = () => { colonnes[j] = Number(choix.value); renderOrdre(); };
+        return el('div', { className: 'sprite-ordre-tete' }, [
+          el('span', { className: 'sprite-col', textContent: nomCol(j) }),
+          choix,
+          el('div', { className: 'sprite-ordre-fleches' }, [
+            fleche('arrow-left', 'Mettre cette image une place plus tôt', j > 0, () => echanger(colonnes, j, j - 1)),
+            fleche('arrow-right', 'Mettre cette image une place plus tard', j < n - 1, () => echanger(colonnes, j, j + 1)),
+          ]),
+        ]);
+      }), el('span', { className: 'sprite-col', textContent: 'la marche' }));
+      const apercus = [];
+      DIRECTIONS.forEach((d, r) => {
+        const choix = el('select', { title: `La rangée de la planche qui va en « ${NOMS[d]} »` });
+        for (let i = 0; i < 4; i++) choix.add(new Option(`rangée ${i + 1}`, String(i)));
+        choix.value = String(rangees[r]);
+        choix.onchange = () => { rangees[r] = Number(choix.value); renderOrdre(); };
+        grille.append(el('div', { className: 'sprite-ordre-rang' }, [
+          el('span', { className: 'sprite-rang', textContent: NOMS[d] }),
+          choix,
+          el('div', { className: 'sprite-ordre-fleches' }, [
+            fleche('arrow-up', 'Monter cette rangée', r > 0, () => echanger(rangees, r, r - 1)),
+            fleche('arrow-down', 'Descendre cette rangée', r < 3, () => echanger(rangees, r, r + 1)),
+          ]),
+        ]));
+        vues[r].forEach((im, j) => {
+          const c = toile(largeur, hauteur);
+          c.getContext('2d').drawImage(im, 0, 0);
+          c.style.width = `${largeur * zoomCase}px`;
+          c.style.height = `${hauteur * zoomCase}px`;
+          grille.append(el('div', { className: 'sprite-case checker', title: `${NOMS[d]}, ${nomCol(j)} : rangée ${rangees[r] + 1}, colonne ${colonnes[j] + 1} de la planche` }, [c]));
+        });
+        const a = toile(largeur, hauteur);
+        a.className = 'sprite-apercu checker';
+        a.style.width = `${largeur * zoomCase}px`;
+        a.style.height = `${hauteur * zoomCase}px`;
+        apercus.push(a);
+        grille.append(a);
+      });
+      // Les 4 directions marchent en même temps, comme dans le jeu (voir l'aperçu de renderPlein).
+      let t0 = null;
+      const animer = (t) => {
+        if (!grille.isConnected) return;
+        if (t0 === null) t0 = t;
+        const pas = Math.floor((t - t0) / 260);
+        const j = ((t - t0) % 260) < 130 ? imageDeMarche(n, pas) : 0;
+        apercus.forEach((a, r) => {
+          const g = a.getContext('2d');
+          g.clearRect(0, 0, a.width, a.height);
+          g.drawImage(vues[r][j], 0, 0);
+        });
+        requestAnimationFrame(animer);
+      };
+      requestAnimationFrame(animer);
+
+      const bouton = (ic, texte, run, primaire = false) => {
+        const b = el('button', { className: `button${primaire ? ' primary' : ''}`, type: 'button' }, [icon(ic), el('span', { textContent: texte })]);
+        b.onclick = (e) => { e.preventDefault(); run(); };
+        return b;
+      };
+      const pareil = colonnes.every((c, j) => c === j) && rangees.every((x, r) => x === r);
+      const valider = bouton('check', 'Valider cet ordre', () => {
+        if (!pareil) {
+          memoriser();
+          images = resultat();
+          ecrire();
+          notify('Planche remise dans l\'ordre.');
+        }
+        ordre = null;
+        renderPlein();
+      }, true);
+      boite.append(
+        el('p', { className: 'modal-info', textContent: `${ordre.importe ? 'Planche importée. ' : ''}Vérifie l'ordre : chaque rangée est une direction (face, gauche, droite, dos), et dans chaque rangée vient l'image debout puis les pas. Si la planche suit un autre ordre (debout, pas 2, pas 1…), déplace les colonnes ou les rangées avec les flèches, ou choisis dans les menus quelle colonne ou quelle rangée de la planche va à chaque place. À droite, chaque direction marche comme dans le jeu.` }),
+        grille,
+        el('div', { className: 'sprite-actions' }, [
+          valider,
+          bouton('discard', 'Comme la planche', () => { ordre.colonnes = ordreSimple(n); ordre.rangees = ordreSimple(4); renderOrdre(); }),
+          ...(n === 3 ? [bouton('arrow-swap', 'Échanger les deux pas', () => echanger(colonnes, 1, 2))] : []),
+          bouton('close', ordre.importe ? 'Garder tel quel' : 'Annuler', () => { ordre = null; renderPlein(); }),
+        ]),
+      );
     }
 
     function renderPlein() {
@@ -398,6 +534,10 @@ const Sprites = (() => {
         el('span', { className: 'unit', textContent: `${largeur} × ${hauteur} px` }),
         nb,
         bouton('folder-opened', 'Importer une planche…', importerPlanche),
+        bouton('list-ordered', 'Ordre des images…', () => {
+          ordre = { colonnes: ordreSimple(n), rangees: ordreSimple(4), importe: false };
+          renderOrdre();
+        }),
         bouton('desktop-download', 'Exporter la planche…', async () => {
           const path = await window.tafl.saveDialog({ defaultName: `${p.id}-sprite.png`, format: 'png' });
           if (!path) return;
@@ -451,5 +591,5 @@ const Sprites = (() => {
     return boite;
   }
 
-  return { DIRECTIONS, NOMS, norm, charger, decouper, assembler, vide, depuisPlanche, imageDeMarche, dessinerSurCase, editeur, miroir, copie };
+  return { DIRECTIONS, NOMS, norm, charger, decouper, assembler, vide, depuisPlanche, reordonner, reordonnerSprite, imageDeMarche, dessinerSurCase, editeur, miroir, copie };
 })();
