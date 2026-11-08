@@ -78,8 +78,16 @@ const ApercuScene = (() => {
       const m = a.mouvement, k = m ? Math.min(1, m.t / m.duree) : 1;
       return m ? { x: (m.de.x + (a.x - m.de.x) * k) * cell, y: (m.de.y + (a.y - m.de.y) * k) * cell } : { x: a.x * cell, y: a.y * cell };
     };
+    // Tafl 1.29.2 : le tampon qu'un acteur montre (selon sa direction), et les cases qu'il couvre, comme dans Saga.
+    const formeDe = (a) => (a.tampon ? doc.stamps.find((o) => o.name === (a.tampons?.[a.dir] || a.tampon)) || doc.stamps.find((o) => o.name === a.tampon) || null : null);
+    const couvre = (b, x, y) => {
+      const st = formeDe(b);
+      if (!st) return b.x === x && b.y === y;
+      const haut = Math.min(st.dessus || 0, st.h - 1);
+      return x >= b.x && x < b.x + st.w && y >= b.y + haut && y < b.y + st.h;
+    };
     const libre = (a, x, y) => x >= 0 && y >= 0 && x < map.width && y < map.height && passage[y * map.width + x] !== BLOQUE
-      && !acteurs.some((b) => b !== a && !b.cache && b.bloque && b.x === x && b.y === y);
+      && !acteurs.some((b) => b !== a && !b.cache && b.bloque && couvre(b, x, y));
 
     // --- La mise en scène ---
     let camera = null; // { de, vers, t, duree, retour }
@@ -102,7 +110,11 @@ const ApercuScene = (() => {
         if (!m.etapes.length) { m.fini = true; continue; }
         const dir = m.etapes[0], [dx, dy] = DIRS[dir];
         a.dir = dir;
-        if (!(m.traverser ? a.x + dx >= 0 && a.y + dy >= 0 && a.x + dx < map.width && a.y + dy < map.height : libre(a, a.x + dx, a.y + dy))) {
+        // Comme Saga 1.27.1 : un tampon qui traverse peut sortir de la carte, puis son trajet s'arrête.
+        const x = a.x + dx, y = a.y + dy, st = m.traverser ? formeDe(a) : null;
+        const dedans = st ? x >= -st.w && y >= -st.h && x <= map.width && y <= map.height : x >= 0 && y >= 0 && x < map.width && y < map.height;
+        if (st && !dedans) { m.etapes = []; continue; }
+        if (!(m.traverser ? dedans : libre(a, x, y))) {
           m.attente += dt;
           if (m.attente > 1.5) { m.etapes.shift(); m.attente = 0; }
           continue;
@@ -139,9 +151,13 @@ const ApercuScene = (() => {
       const p = pixels(a), x = Math.round(p.x - cam.x), y = Math.round(p.y - cam.y);
       const m = a.mouvement, image = m && m.t < m.duree / 2 && a.perso?.sprite ? 1 + (a.pas % Math.max(1, a.perso.sprite.images - 1)) : 0;
       // Tafl 1.28 : un tampon, son coin haut gauche sur sa case.
-      const st = a.tampon ? doc.stamps.find((o) => o.name === (a.tampons?.[a.dir] || a.tampon)) || doc.stamps.find((o) => o.name === a.tampon) : null;
+      const st = formeDe(a);
       if (st) {
+        // Coupé au bord de la carte, comme dans Saga.
+        g.save();
+        g.beginPath(); g.rect(-cam.x, -cam.y, map.width * cell, map.height * cell); g.clip();
         for (let j = 0; j < st.h; j++) for (let i = 0; i < st.w; i++) { const n = st.cells[j * st.w + i]; if (n >= 0 && tuiles[n]) g.drawImage(tuiles[n], x + i * cell, y + j * cell, cell, cell); }
+        g.restore();
         return;
       }
       if (a.tuile >= 0 && tuiles[a.tuile]) { g.drawImage(tuiles[a.tuile], x, y, cell, cell); return; }
@@ -170,7 +186,9 @@ const ApercuScene = (() => {
       g.fillStyle = '#000';
       g.fillRect(0, 0, VW, VH);
       g.drawImage(sol, -cam.x, -cam.y);
-      for (const a of [...acteurs].sort((p, q) => pixels(p).y - pixels(q).y)) dessinerActeur(a, cam);
+      // Rangés par leur rangée du bas (un tampon : sa dernière rangée).
+      const basDe = (a) => pixels(a).y + ((formeDe(a)?.h || 1) - 1) * cell;
+      for (const a of [...acteurs].sort((p, q) => basDe(p) - basDe(q))) dessinerActeur(a, cam);
       g.drawImage(toits, -cam.x, -cam.y);
       for (const b of bulles) {
         const a = acteur(b.qui);
