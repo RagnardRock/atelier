@@ -718,12 +718,12 @@ function createWindow(config) {
     });
   });
   win.webContents.on('before-input-event', (event, input) => {
-    // F12 = outils de développement, Ctrl+Maj+R = recharger l'interface (Ctrl+R reste libre :
-    // dans un traitement de texte, on s'attend à ce que ce soit « aligner à droite »).
+    // F12 = outils de développement, Ctrl+F5 = recharger l'interface (Ctrl+R est « aligner à droite »
+    // et Ctrl+Maj+R « repère dans le sommaire », comme dans la page).
     if (input.type === 'keyDown' && input.key === 'F12') {
       event.preventDefault();
       win.webContents.toggleDevTools();
-    } else if (input.type === 'keyDown' && input.control && !input.alt && input.shift && input.key.toLowerCase() === 'r') {
+    } else if (input.type === 'keyDown' && input.control && !input.alt && !input.shift && input.key === 'F5') {
       event.preventDefault();
       if (!modifies) win.webContents.reload();
     }
