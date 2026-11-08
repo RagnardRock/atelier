@@ -312,11 +312,20 @@ const Donnees = (() => {
     ...(R ? R.NORMES : {}),
     ...(A ? A.NORMES : {}),
   };
+  // Tafl 1.30 (Saga 1.28) : les commandes tactiles (la croix et les boutons à l'écran).
+  const MODES_TACTILE = [['auto', 'Au toucher de l\'écran'], ['toujours', 'Toujours'], ['jamais', 'Jamais']];
+  const tactileVide = () => ({ mode: 'auto', taille: 100, opacite: 60, carnet: true });
+  const normTactile = (t) => ({
+    mode: pick(t?.mode, MODES_TACTILE, 'auto'),
+    taille: int(t?.taille, 100, 60, 160),
+    opacite: int(t?.opacite, 60, 20, 100),
+    carnet: t?.carnet !== false,
+  });
   const reglagesVides = () => ({
     monnaie: 'Pokédollars', argent_depart: 3000, equipe_max: 6,
     plafonds: [{ badges: 0, niveau: 15 }, { badges: 1, niveau: 20 }, { badges: 2, niveau: 25 }, { badges: 3, niveau: 30 }, { badges: 4, niveau: 35 }, { badges: 5, niveau: 40 }, { badges: 6, niveau: 45 }, { badges: 7, niveau: 50 }, { badges: 8, niveau: 100 }],
     ajustement: 'badges', ecart: 0, ajustement_sauvages: 'aucun', ecart_sauvages: -2, evolution_dresseurs: false, evolution_sauvages: false, seuil_amitie: 220, chance_chromatique: 4096,
-    interface: { theme: 'verre', accent: '', menus: menusVides(), affichage: { cases_visibles: 11, zoom: 0 } },
+    interface: { theme: 'verre', accent: '', menus: menusVides(), affichage: { cases_visibles: 11, zoom: 0 }, tactile: tactileVide() },
     regles: 'pokemon', badges: [],
     // Tafl 1.2 : les modules du jeu (commun/modules.js), et leurs réglages par id de module.
     modules: [], modules_reglages: {},
@@ -457,6 +466,7 @@ const Donnees = (() => {
         // Tafl 1.25 (Saga 1.24) : le zoom par défaut du jeu. 0 = automatique (le plus grand zoom entier
         // qui montre au moins cases_visibles cases en hauteur), sinon un zoom fixe ×1 à ×8.
         affichage: { cases_visibles: int(r.interface?.affichage?.cases_visibles, 11, 5, 30), zoom: int(r.interface?.affichage?.zoom, 0, 0, 8) },
+        tactile: normTactile(r.interface?.tactile),
       },
       // Un pack inconnu (écrit à la main, ou par un Tafl plus récent) est gardé tel quel.
       regles,
@@ -1787,6 +1797,7 @@ const Donnees = (() => {
       champ('Thème', sel(THEMES, r.interface.theme, (v) => { r.interface.theme = v; ctx.change?.(); })),
       champ('Couleur d\'accent', couleurAccent(r, ctx), 'les noms dans les dialogues, les curseurs, la barre d\'XP'),
       ...formAffichage(r, ctx),
+      ...formTactile(r, ctx),
       ...formMenus(r, ctx),
     ];
   }
@@ -1807,6 +1818,25 @@ const Donnees = (() => {
     ];
   }
 
+  // Réglages › Interface › Commandes tactiles (Tafl 1.30, lues par Saga 1.28) : la croix et les boutons
+  // qu'on voit sur une tablette ou un téléphone (le jeu exporté en web).
+  function formTactile(r, ctx) {
+    const t = r.interface.tactile;
+    const lignes = el('div', { className: 'field-grid' }, [
+      champ('Taille', nombreIn(t, 'taille', 60, 160, 10, () => ctx.change?.()), '%'),
+      champ('Opacité', nombreIn(t, 'opacite', 20, 100, 5, () => ctx.change?.()), '%'),
+    ]);
+    const carnet = champ('Bouton du raccourci', ctx.coche(t, 'carnet'), 'à côté du menu : ce qu\'ouvre Tab (Select)');
+    const maj = () => { lignes.hidden = t.mode === 'jamais'; carnet.hidden = t.mode === 'jamais'; };
+    maj();
+    return [
+      section('Commandes tactiles'),
+      info('Pour jouer au doigt sur une tablette ou un téléphone (le jeu exporté en web) : une croix à gauche, A (Action) et B (Retour, et Courir tant qu\'on le tient) à droite, le menu du jeu en haut à droite. Au toucher de l\'écran, elles apparaissent quand le joueur touche l\'écran et s\'effacent dès qu\'il reprend le clavier ou la manette. Le joueur peut aussi choisir dans les options de Saga.'),
+      champ('Montrer', sel(MODES_TACTILE, t.mode, (v) => { t.mode = v; maj(); ctx.change?.(); })),
+      lignes,
+      carnet,
+    ];
+  }
 
   // Réglages › Jour et nuit, Musique et sons, Sauvegarde auto (Tafl 0.29, joués par Saga 0.11).
   function formAmbiance(r, ctx) {

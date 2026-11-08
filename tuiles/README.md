@@ -385,6 +385,8 @@ Pas encore : Flux Kontext (déjà dans tes modèles) pour **retoucher** une tuil
 
 Jeu › **Exporter le jeu (web, Windows)…** (aussi dans Fichier) : Tafl enregistre le jeu, puis demande à Saga (installé, ou celui du clone) d'en faire une **version web** (un seul fichier `MonJeu.html`, à ouvrir dans un navigateur ; case en plus pour un `.zip` à mettre sur itch.io) et/ou une **version Windows** (un installateur `MonJeu-Setup.exe`, depuis Tafl 1.24.1 et Saga 1.23). Un seul fichier par version, à envoyer aux testeurs, qui n'ont besoin ni de Tafl ni de Saga. Voir le README de Saga pour le détail.
 
+Depuis Tafl 1.30 (Saga 1.28), la version web se joue aussi **au doigt** sur tablette ou téléphone : Jeu › Réglages › Interface › **Commandes tactiles** dit quand montrer la croix et les boutons (au toucher de l'écran, toujours, jamais), leur taille, leur opacité, et s'il y a un bouton du raccourci.
+
 ## Copier-coller, annuler partout, scripts en blocs (Tafl 0.28)
 
 - **Outil Sélection (R)**, en mode Carte : glisse un rectangle. `Ctrl+C` le copie, `Ctrl+X` le coupe, `Suppr` le vide, `Ctrl+A` prend toute la carte, `Échap` désélectionne. Glisser l'intérieur de la sélection la **déplace**.

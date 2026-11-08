@@ -76,6 +76,8 @@ function creerSaga() {
         { key: 'theme', label: 'Interface en jeu', type: 'select', value: config.theme || 'jeu', choices: [['jeu', 'Celle choisie par le jeu'], ['verre', 'Verre (sombre, flou)'], ['pixel', 'Pixel (rétro)']] },
         titre('Commandes'),
         { key: 'courirParDefaut', label: 'Courir sans tenir la touche Courir (elle fait alors marcher)', type: 'checkbox', value: config.courirParDefaut },
+        // Saga 1.28 : la croix et les boutons à l'écran (tactile.js).
+        { key: 'tactile', label: 'Commandes tactiles', type: 'select', value: ['auto', 'toujours', 'jamais'].includes(config.tactile) ? config.tactile : 'jeu', choices: [['jeu', 'Celles choisies par le jeu'], ['auto', 'Au toucher de l\'écran'], ['toujours', 'Toujours'], ['jamais', 'Jamais']] },
         { type: 'element', element: commandes.element },
       ],
       onInput: (vals, api) => {
@@ -647,6 +649,22 @@ function creerSaga() {
       { racine: $('#pause'), fermer: pauseOuArriere },
       { racine: $('#accueil'), fermer: null },
     ],
+  });
+
+  // Saga 1.28 : les commandes tactiles (tactile.js), par-dessus la scène.
+  Tactile.demarrer({
+    parent: $('#scene'),
+    moteur: () => moteur,
+    etat: () => {
+      if (!ouvert || $('#scene').hidden || Dialogs.isOpen() || pauseOuverte() || moteur.table?.actif) return 'cache';
+      if (CarteMonde.ouverte) return 'carte';
+      return moteur.enCombat ? 'combat' : moteur.enScript ? 'script' : 'libre';
+    },
+    menu: () => { if (ouvert && !Dialogs.isOpen() && !pauseOuverte() && !moteur.enScript && !moteur.enCombat) ouvrirPause(); },
+    carnet: () => { if (ouvert && !Dialogs.isOpen()) raccourci(); },
+    fermerCarte: () => CarteMonde.fermer(),
+    reglageJeu: () => ouvert?.jeu?.donnees?.reglages?.reglages?.interface?.tactile,
+    reglageJoueur: () => config.tactile,
   });
 
   $('#accueil-ouvrir').onclick = ouvrir;

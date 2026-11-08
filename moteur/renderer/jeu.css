@@ -1050,3 +1050,50 @@ body.mon-tour .joueurs-jets { right: calc(min(300px, 100% - 24px) + 24px); }
 .carte-monde-vue { position: relative; flex: 1; min-height: 160px; margin: 0 2px 8px; border-radius: 10px; overflow: hidden; }
 .carte-monde-vue canvas { position: absolute; inset: 0; display: block; cursor: grab; touch-action: none; }
 #scene[data-theme="pixel"] .carte-monde-vue { border-radius: 0; }
+
+/* Saga 1.28 : les commandes tactiles (tactile.js), par-dessus la scène. La croix à gauche, A et B à
+   droite, le menu en haut à droite. --tactile-taille (0,6 à 1,6) et --tactile-opacite viennent du jeu
+   (Tafl › Réglages › Interface) ou des options du joueur. */
+#tactile { position: absolute; inset: 0; z-index: 11; pointer-events: none; --t: var(--tactile-taille, 1); --marge: calc(18px * var(--t)); }
+#tactile[hidden], #tactile [hidden] { display: none !important; }
+#tactile .tactile-croix, #tactile .tactile-bouton {
+  pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent; opacity: var(--tactile-opacite, 0.6);
+}
+.tactile-croix {
+  position: absolute; left: calc(var(--marge) + env(safe-area-inset-left, 0px)); bottom: calc(var(--marge) + env(safe-area-inset-bottom, 0px));
+  width: calc(150px * var(--t)); height: calc(150px * var(--t)); border-radius: 50%;
+  background: rgba(14, 14, 22, 0.55); border: 2px solid rgba(255, 255, 255, 0.28); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tactile-fleche { position: absolute; width: 34%; height: 34%; display: grid; place-items: center; border-radius: 10px; }
+.tactile-fleche::before { content: ''; border: calc(11px * var(--t)) solid transparent; }
+.tactile-fleche.haut { left: 33%; top: 4%; }
+.tactile-fleche.haut::before { border-bottom-color: rgba(255, 255, 255, 0.85); border-top-width: 0; }
+.tactile-fleche.bas { left: 33%; bottom: 4%; }
+.tactile-fleche.bas::before { border-top-color: rgba(255, 255, 255, 0.85); border-bottom-width: 0; }
+.tactile-fleche.gauche { top: 33%; left: 4%; }
+.tactile-fleche.gauche::before { border-right-color: rgba(255, 255, 255, 0.85); border-left-width: 0; }
+.tactile-fleche.droite { top: 33%; right: 4%; }
+.tactile-fleche.droite::before { border-left-color: rgba(255, 255, 255, 0.85); border-right-width: 0; }
+.tactile-fleche.appuye { background: color-mix(in srgb, var(--accent, #7bd88f) 45%, transparent); }
+.tactile-boutons {
+  position: absolute; right: calc(var(--marge) + env(safe-area-inset-right, 0px)); bottom: calc(var(--marge) + env(safe-area-inset-bottom, 0px));
+  width: calc(170px * var(--t)); height: calc(150px * var(--t)); pointer-events: none;
+}
+.tactile-bouton {
+  display: grid; place-items: center; padding: 0; margin: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(14, 14, 22, 0.55); border: 2px solid rgba(255, 255, 255, 0.3); color: #fff;
+  font: 700 calc(22px * var(--t)) / 1 system-ui, sans-serif; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.tactile-bouton.appuye { background: color-mix(in srgb, var(--accent, #7bd88f) 55%, rgba(14, 14, 22, 0.55)); transform: scale(0.94); }
+.tactile-a { position: absolute; right: 0; top: 0; width: calc(84px * var(--t)); height: calc(84px * var(--t)); }
+.tactile-b { position: absolute; left: 0; bottom: 0; width: calc(68px * var(--t)); height: calc(68px * var(--t)); font-size: calc(19px * var(--t)); }
+.tactile-haut {
+  position: absolute; right: calc(var(--marge) + env(safe-area-inset-right, 0px)); top: calc(12px + env(safe-area-inset-top, 0px));
+  display: flex; gap: 10px; pointer-events: none;
+}
+.tactile-haut .tactile-bouton { width: calc(48px * var(--t)); height: calc(48px * var(--t)); border-radius: 14px; font-size: calc(20px * var(--t)); font-weight: 400; }
+/* En combat, le bas de l'écran est aux choix du combat : on remonte la croix et les boutons. */
+#tactile[data-etat="combat"] .tactile-croix, #tactile[data-etat="combat"] .tactile-boutons { bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+/* Les annonces (en haut à droite) passent sous les boutons du haut. */
+body.tactile .annonces { top: calc(24px + 48px * var(--tactile-taille, 1)); }
