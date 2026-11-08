@@ -19,6 +19,7 @@
 //   Un paragraphe peut aussi avoir signetsDebut / signetsFin : des noms de signets qui commencent
 //   avant son texte ou finissent après (repères et blocs déroulants d'Edda : edda_repere_N, edda_bloc_N ;
 //   à l'ouverture, Formats.signetsVersPage les remet en place).
+//   stylePerso : l'id d'un style créé dans Edda (« perso1 », voir stylesdoc.js), ou null.
 //   { type: 'saut' }   un saut de page
 //   { type: 'ligne' }  un trait horizontal
 //
@@ -174,6 +175,8 @@ const Formats = (() => {
     function enfantCtx(n, ctx) {
       const c = { ...ctx, liste: ctx.liste };
       const s = n.style;
+      // Un style créé dans Edda (data-style) vaut pour ce paragraphe ou ce titre.
+      if (/^(P|H[1-6])$/.test(n.tagName)) c.stylePerso = n.dataset?.style || null;
       if (/^H[1-6]$/.test(n.tagName)) c.style = n.tagName.toLowerCase();
       else if (n.tagName === 'P' || n.tagName === 'DIV') c.style = ctx.style === 'code' || ctx.style === 'citation' || /^h/.test(ctx.style) ? ctx.style : 'normal';
       else if (n.tagName === 'PRE') { c.style = 'code'; c.pre = true; }
@@ -209,7 +212,7 @@ const Formats = (() => {
       const vide = !runs.length;
       // Un nœud texte fait seulement d'espaces entre deux blocs : pas un paragraphe.
       if (vide && noeuds.every((n) => n.nodeType === 3)) return null;
-      return { type: 'p', style: ctx.style || 'normal', align: ctx.align || null, retrait: ctx.retrait || 0, liste: ctx.liste ? { ...ctx.liste, suite } : null, runs };
+      return { type: 'p', style: ctx.style || 'normal', stylePerso: ctx.stylePerso || null, align: ctx.align || null, retrait: ctx.retrait || 0, liste: ctx.liste ? { ...ctx.liste, suite } : null, runs };
     }
 
     function enLigne(n, f, lien, runs, pre) {
@@ -372,6 +375,33 @@ const Formats = (() => {
   // (seulement si elles sont au même niveau ; sinon, le texte reste tel quel).
   const MARQUE = /^edda:(debut|fin):(edda_(repere|bloc)_\w+)$/;
   const marque = (debutOuFin, nom) => (/^edda_(repere|bloc)_\w+$/.test(nom) ? `<!--edda:${debutOuFin}:${nom}-->` : '');
+  // Les styles lus dans un fichier → d.styles (voir stylesdoc.js). titres : { h1: valeurs… } ;
+  // perso : [{ id, nom, balise, valeurs… }]. On ne garde, pour Titre 1 à 4, que ce qui diffère
+  // des styles de base d'Edda. policeDoc : la police du document (pas besoin de la répéter).
+  function stylesLus(titres, perso, policeDoc) {
+    const D = StylesDoc.DEFAUTS;
+    const propre = (v) => {
+      const o = {};
+      for (const k of StylesDoc.CHAMPS) {
+        let x = v[k];
+        if (x === undefined || x === null || x === '') continue;
+        if (k === 'couleur') x = String(x).toLowerCase();
+        if (k === 'police' && policeDoc && x.toLowerCase() === String(policeDoc).toLowerCase()) continue;
+        if ((k === 'taille' || k === 'avant' || k === 'apres') && !(Number(x) >= 0)) continue;
+        o[k] = x;
+      }
+      return o;
+    };
+    const base = {};
+    for (const [id, v] of Object.entries(titres || {})) {
+      if (!D[id]) continue;
+      const o = Object.fromEntries(Object.entries(propre(v)).filter(([k, x]) => x !== D[id][k]));
+      if (Object.keys(o).length) base[id] = o;
+    }
+    const liste = (perso || []).filter((p) => /^perso\d+$/.test(p.id)).map((p) => ({ id: p.id, nom: p.nom || p.id, balise: /^h[1-4]$/.test(p.balise) ? p.balise : 'p', ...Object.fromEntries(StylesDoc.CHAMPS.map((k) => [k, null])), ...propre(p) }));
+    return Object.keys(base).length || liste.length ? { base, perso: liste } : null;
+  }
+
   function signetsVersPage(html) {
     if (!html.includes('<!--edda:')) return html;
     const t = document.createElement('template');
@@ -462,5 +492,6 @@ const Formats = (() => {
     cheminMedia,
     signetsVersPage,
     marque,
+    stylesLus,
   };
 })();

@@ -167,7 +167,10 @@
     const miseEnPage = lireMiseEnPageCss(doc);
     const police = doc.body?.style?.fontFamily ? doc.body.style.fontFamily.split(',')[0].replace(/['"]/g, '').trim() : null;
     const taille = taillePt(doc.body?.style?.fontSize);
-    return { html: doc.body ? doc.body.innerHTML : texte, titre, miseEnPage, police, taille, alertes };
+    // Les styles d'Edda (Titre 1 à 4 modifiés, styles créés), gardés en JSON dans la page.
+    let styles = null;
+    try { const m = doc.querySelector('meta[name="edda-styles"]')?.content; if (ecritParEdda && m) { const j = JSON.parse(m); styles = Formats.stylesLus(Object.fromEntries(Object.entries(j.base || {}).map(([k, v]) => [k, { ...StylesDoc.DEFAUTS[k], ...v }])), j.perso || [], null); } } catch { /* styles illisibles : ceux d'Edda */ }
+    return { html: doc.body ? doc.body.innerHTML : texte, titre, miseEnPage, police, taille, alertes, styles };
   }
   function lireMiseEnPageCss(doc) {
     const css = [...doc.querySelectorAll('style')].map((s) => s.textContent).join('\n');
@@ -190,7 +193,7 @@
   }
 
   // Le CSS d'une page enregistrée par Edda (aussi utilisé pour imprimer et faire le PDF).
-  function cssDocument({ miseEnPage, police, taille }, { ecran = true } = {}) {
+  function cssDocument({ miseEnPage, police, taille, cssStyles = '' }, { ecran = true } = {}) {
     const mp = miseEnPage || Formats.MISE_EN_PAGE;
     const { largeur } = Formats.dimensions(mp);
     const f = /\s/.test(police) ? `'${police}'` : police;
@@ -209,7 +212,8 @@ table { border-collapse: collapse; width: 100%; margin: 0.4em 0 0.8em; } td, th 
 img, video { max-width: 100%; height: auto; vertical-align: bottom; } img[style*="float: left"] { margin: 0.2em 12px 6px 0; } img[style*="float: right"] { margin: 0.2em 0 6px 12px; } audio { width: 320px; max-width: 100%; }
 a { color: #0563c1; } hr { border: none; border-top: 1px solid #a0a0a0; margin: 0.8em 0; }
 hr.saut-page { border: none; margin: 0; height: 0; page-break-after: always; break-after: page; }
-.tab { white-space: pre; tab-size: 4; } ul, ol { margin: 0 0 0.6em; padding-left: 24px; } li > p { margin: 0; }`;
+.tab { white-space: pre; tab-size: 4; } ul, ol { margin: 0 0 0.6em; padding-left: 24px; } li > p { margin: 0; }
+${cssStyles}`;
   }
 
   function documentHtml(ctx, corps, { ecran = true } = {}) {
@@ -219,7 +223,7 @@ hr.saut-page { border: none; margin: 0; height: 0; page-break-after: always; bre
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Edda">
-<title>${escapeHtml(ctx.titre || 'Document')}</title>
+${ctx.styles && StylesDoc.estModifie(ctx) ? `<meta name="edda-styles" content="${escapeHtml(JSON.stringify(ctx.styles))}">\n` : ''}<title>${escapeHtml(ctx.titre || 'Document')}</title>
 <style>
 ${cssDocument(ctx, { ecran })}
 </style>

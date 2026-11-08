@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('edda', {
   onDossierExterne: (callback) => ipcRenderer.on('dossier:externe', (_event, dossier) => callback(dossier)),
   // Médias insérés dans la page
   choisirMedias: (type) => ipcRenderer.invoke('media:choisir', type),
+  polices: (relire) => ipcRenderer.invoke('polices:liste', relire),
+  installerPolices: () => ipcRenderer.invoke('polices:installer'),
   decrireMedia: (chemin) => ipcRenderer.invoke('media:decrire', chemin),
   lireMedia: (src) => ipcRenderer.invoke('media:lire', src),
   rangerMedia: (document, src) => ipcRenderer.invoke('media:ranger', document, src),

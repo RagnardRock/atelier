@@ -79,6 +79,23 @@
       if (/code|html preformatted|preformatted|plain text/.test(nom)) return 'code';
       return roleDuStyle(styles[id].parent, profondeur + 1);
     }
+    // Un style créé dans Edda (EddaPerso1…) dans la parenté d'un style de paragraphe.
+    function persoDuStyle(id, profondeur = 0) {
+      if (!id || !styles[id] || profondeur > 10) return null;
+      const m = String(id).match(/^Edda(perso\d+)$/);
+      return m ? m[1] : persoDuStyle(styles[id].parent, profondeur + 1);
+    }
+    // Espace au-dessus / en dessous d'un style (pt), avec ceux dont il hérite.
+    function espacement(id, profondeur = 0) {
+      if (!id || !styles[id] || profondeur > 10) return {};
+      const e = { ...espacement(styles[id].parent, profondeur + 1) };
+      const sp = enfant(styles[id].pPr, 'spacing');
+      if (attr(sp, 'w:before') !== null && attr(sp, 'w:before') !== undefined) e.avant = Math.round(Number(attr(sp, 'w:before')) / 20 * 2) / 2;
+      if (attr(sp, 'w:after') !== null && attr(sp, 'w:after') !== undefined) e.apres = Math.round(Number(attr(sp, 'w:after')) / 20 * 2) / 2;
+      return e;
+    }
+    const valeursStyle = (id) => { const r = runDuStyle(id); return { police: r.police || null, taille: r.taille, couleur: r.couleur, gras: r.gras, italique: r.italique, ...espacement(id) }; };
+
     // Normal : la police et la taille du document.
     const normal = { ...defautRun, ...runDuStyle(Object.keys(styles).find((k) => styles[k].type === 'paragraph' && /^normal$/i.test(styles[k].nom)) || 'Normal') };
 
@@ -161,6 +178,8 @@
       const baseRun = { ...runDuStyle(styleId) };
       // Un titre a déjà sa taille et son gras dans Edda : on n'écrit que ce qui diffère.
       if (/^h/.test(role)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; }
+      // Un style créé dans Edda : sa mise en forme vient du style (data-style), pas du texte.
+      if (persoDuStyle(styleId)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; delete baseRun.italique; }
       let liste = null;
       const numPr = enfant(pPr, 'numPr') || props.numPr;
       if (numPr) {
@@ -174,6 +193,8 @@
       const tag = role === 'citation' ? 'blockquote' : role === 'code' ? 'pre' : role === 'normal' ? 'p' : role;
       const retrait = liste ? Math.max(0, (props.retrait || 0) - 24 * (liste.niveau + 1)) : props.retrait;
       let attrs = stylePara({ align: props.align, retrait: liste || tag === 'blockquote' || tag === 'pre' ? 0 : retrait, premiere: props.premiere });
+      const perso = persoDuStyle(styleId);
+      if (perso && /^(p|h[1-6])$/.test(tag)) attrs += ` data-style="${perso}"`;
       // Les signets d'Edda posés dans ce paragraphe : un repère le marque, un bloc déroulant
       // commence avant lui ou finit après lui.
       const avant = [], apres = [];
@@ -366,7 +387,16 @@
       return `${h}</table>`;
     }
 
-    return { html: Formats.signetsVersPage(html), miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
+    // Les styles du fichier : Titre 1 à 4 (tels que Word les montre) et les styles créés dans Edda.
+    const titres = {};
+    for (let n = 1; n <= 4; n++) {
+      const id = Object.keys(styles).find((k) => styles[k].type === 'paragraph' && (new RegExp(`^(Heading|Titre)${n}$`, 'i').test(k) || new RegExp(`^(heading|titre) ${n}$`, 'i').test(styles[k].nom)));
+      if (id) titres[`h${n}`] = valeursStyle(id);
+    }
+    const perso = Object.keys(styles).filter((k) => /^Eddaperso\d+$/.test(k)).map((k) => ({ id: k.slice(4), nom: styles[k].nom, balise: roleDuStyle(k).replace(/^normal$|^citation$|^code$/, 'p'), ...valeursStyle(k) }));
+    const stylesDoc = Formats.stylesLus(titres, perso, normal.police);
+
+    return { html: Formats.signetsVersPage(html), styles: stylesDoc, miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
 
   function proprietesRun(rPr, base) {
@@ -551,7 +581,8 @@
       if (b.type === 'ligne') return '<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="A0A0A0"/></w:pBdr></w:pPr></w:p>';
       if (b.type === 'table') return tableXml(b);
       let ppr = '';
-      if (STYLE_ID[b.style]) ppr += `<w:pStyle w:val="${STYLE_ID[b.style]}"/>`;
+      if (b.stylePerso && (ctx.listeStyles || []).some((s) => s.id === b.stylePerso)) ppr += `<w:pStyle w:val="Edda${b.stylePerso}"/>`;
+      else if (STYLE_ID[b.style]) ppr += `<w:pStyle w:val="${STYLE_ID[b.style]}"/>`;
       if (b.liste && !b.liste.suite) {
         const { numId } = numDe(b.liste);
         ppr += `<w:numPr><w:ilvl w:val="${Math.min(8, b.liste.niveau)}"/><w:numId w:val="${numId}"/></w:numPr>`;
@@ -636,7 +667,7 @@
       + rels.map((r) => `<Relationship Id="${r.id}" Type="${types[r.type]}" Target="${xml(r.cible)}"${r.externe ? ' TargetMode="External"' : ''}/>`).join('')
       + '</Relationships>');
     zip.file('word/document.xml', documentXml);
-    zip.file('word/styles.xml', stylesXml(ctx.police || 'Calibri', ctx.taille || 11));
+    zip.file('word/styles.xml', stylesXml(ctx.police || 'Calibri', ctx.taille || 11, ctx.listeStyles || StylesDoc.liste({})));
     zip.file('word/numbering.xml', numerotationXml([...numsListe.values()]));
     zip.file('word/settings.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:settings xmlns:w="${W}"><w:defaultTabStop w:val="709"/><w:compat><w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/></w:compat></w:settings>`);
     const maintenant = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
@@ -650,16 +681,33 @@
     return { bytes, alertes: [...alertes] };
   }
 
-  function stylesXml(police, taille) {
-    const titre = (n, sz, couleur) => `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>`
-      + `<w:pPr><w:keepNext/><w:keepLines/><w:spacing w:before="${n === 1 ? 360 : 240}" w:after="120"/><w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr><w:b/><w:bCs/><w:color w:val="${couleur}"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr></w:style>`;
+  // listeStyles : les styles du document (voir stylesdoc.js) : Titre 1 à 4 et les styles créés.
+  function stylesXml(police, taille, listeStyles) {
+    const rPrStyle = (s) => (s.police ? `<w:rFonts w:ascii="${xml(s.police)}" w:hAnsi="${xml(s.police)}" w:cs="${xml(s.police)}" w:eastAsia="${xml(s.police)}"/>` : '')
+      + (s.gras === null || s.gras === undefined ? '' : s.gras ? '<w:b/><w:bCs/>' : '<w:b w:val="0"/><w:bCs w:val="0"/>')
+      + (s.italique === null || s.italique === undefined ? '' : s.italique ? '<w:i/><w:iCs/>' : '<w:i w:val="0"/><w:iCs w:val="0"/>')
+      + (s.couleur ? `<w:color w:val="${s.couleur.toUpperCase()}"/>` : '')
+      + (s.taille ? `<w:sz w:val="${Math.round(s.taille * 2)}"/><w:szCs w:val="${Math.round(s.taille * 2)}"/>` : '');
+    const espace = (s) => (s.avant === null && s.apres === null ? '' : `<w:spacing${s.avant !== null && s.avant !== undefined ? ` w:before="${Math.round(s.avant * 20)}"` : ''}${s.apres !== null && s.apres !== undefined ? ` w:after="${Math.round(s.apres * 20)}"` : ''}/>`);
+    const parId = Object.fromEntries((listeStyles || []).map((s) => [s.id, s]));
+    const titre = (n, sz, couleur) => {
+      const s = parId[`h${n}`] || { taille: sz / 2, couleur, gras: true, avant: n === 1 ? 18 : 12, apres: 6 };
+      return `<w:style w:type="paragraph" w:styleId="Heading${n}"><w:name w:val="heading ${n}"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:uiPriority w:val="9"/><w:qFormat/>`
+        + `<w:pPr><w:keepNext/><w:keepLines/>${espace(s)}<w:outlineLvl w:val="${n - 1}"/></w:pPr><w:rPr>${rPrStyle(s)}</w:rPr></w:style>`;
+    };
+    // Les styles créés dans Edda : EddaPerso1…, basés sur Normal ou sur le titre de leur niveau.
+    const persos = (listeStyles || []).filter((s) => s.perso).map((s) => {
+      const base = /^h[1-6]$/.test(s.balise) ? `Heading${s.balise[1]}` : 'Normal';
+      return `<w:style w:type="paragraph" w:customStyle="1" w:styleId="Edda${s.id}"><w:name w:val="${xml(s.nom)}"/><w:basedOn w:val="${base}"/><w:next w:val="Normal"/><w:qFormat/>`
+        + `<w:pPr>${espace(s)}</w:pPr><w:rPr>${rPrStyle(s)}</w:rPr></w:style>`;
+    }).join('');
     const p = xml(police);
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
       + `<w:styles xmlns:w="${W}">`
       + `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${p}" w:hAnsi="${p}" w:cs="${p}" w:eastAsia="${p}"/><w:sz w:val="${taille * 2}"/><w:szCs w:val="${taille * 2}"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>`
       + '<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
       + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
-      + titre(1, 40, '1F3864') + titre(2, 32, '2F5496') + titre(3, 28, '2F5496') + titre(4, 24, '2F5496') + titre(5, 22, '2F5496') + titre(6, 22, '595959')
+      + titre(1, 40, '1F3864') + titre(2, 32, '2F5496') + titre(3, 28, '2F5496') + titre(4, 24, '2F5496') + titre(5, 22, '2F5496') + titre(6, 22, '595959') + persos
       + '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:ind w:left="567" w:right="567"/><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="A0A0A0"/></w:pBdr></w:pPr><w:rPr><w:i/><w:color w:val="595959"/></w:rPr></w:style>'
       + '<w:style w:type="paragraph" w:customStyle="1" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/><w:sz w:val="20"/></w:rPr></w:style>'
       + '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:ind w:left="720"/><w:contextualSpacing/></w:pPr></w:style>'

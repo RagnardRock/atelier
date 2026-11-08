@@ -67,6 +67,7 @@ const DEFAULT_CONFIG = {
   page: 'claire', // la feuille : 'claire' (blanche, comme Word) ou 'sombre'
   police: 'Calibri', // police et taille des nouveaux documents
   taille: 11,
+  stylesParDefaut: null, // styles (Titre 1 à 4 et styles créés) des nouveaux documents
   zoom: 100,
   sommaire: true, // le panneau Sommaire (à gauche de la page) est ouvert
   orthographe: true,
@@ -374,6 +375,80 @@ handle('media:ouvrir', async (_event, src) => {
   if (err) throw new Error(err);
 });
 // Le prénom donné dans Atelier (dossier partagé atelier-commun) : auteur des documents enregistrés.
+// --- Polices ---
+// La liste des polices installées (Windows : celles du système et de l'utilisateur), lue une fois.
+let policesListe = null;
+function listerPolices() {
+  return new Promise((resolve) => {
+    const fin = (out) => resolve([...new Set(String(out || '').split(/\r?\n/).map((x) => x.split(',')[0].trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr')));
+    if (process.platform === 'win32') {
+      const ps = '[Console]::OutputEncoding=[Text.Encoding]::UTF8; Add-Type -AssemblyName System.Drawing; (New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }';
+      execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { windowsHide: true, timeout: 30000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => fin(err ? '' : out));
+    } else execFile('fc-list', [':', 'family'], { timeout: 30000, maxBuffer: 4 * 1024 * 1024 }, (err, out) => fin(err ? '' : out));
+  });
+}
+handle('polices:liste', async (_event, relire) => {
+  if (!policesListe || relire) policesListe = listerPolices();
+  return policesListe;
+});
+
+// Le nom de famille d'une police (table « name » d'un .ttf / .otf / .ttc).
+function familleDePolice(b) {
+  try {
+    let base = 0;
+    if (b.toString('latin1', 0, 4) === 'ttcf') base = b.readUInt32BE(12);
+    const n = b.readUInt16BE(base + 4);
+    for (let i = 0; i < n; i++) {
+      const r = base + 12 + i * 16;
+      if (b.toString('latin1', r, r + 4) !== 'name') continue;
+      const t = b.readUInt32BE(r + 8);
+      const nb = b.readUInt16BE(t + 2), chaines = t + b.readUInt16BE(t + 4);
+      const trouves = [];
+      for (let k = 0; k < nb; k++) {
+        const e = t + 6 + k * 12;
+        const plateforme = b.readUInt16BE(e), langue = b.readUInt16BE(e + 4), id = b.readUInt16BE(e + 6);
+        const lg = b.readUInt16BE(e + 8), off = chaines + b.readUInt16BE(e + 10);
+        if (id !== 1 && id !== 16) continue;
+        let texte = '';
+        if (plateforme === 3 || plateforme === 0) { for (let j = 0; j + 1 < lg; j += 2) texte += String.fromCharCode(b.readUInt16BE(off + j)); } else texte = b.toString('latin1', off, off + lg);
+        trouves.push({ id, texte, score: (id === 16 ? 2 : 0) + (plateforme === 3 && langue === 0x409 ? 1 : 0) });
+      }
+      trouves.sort((x, y) => y.score - x.score);
+      return trouves[0]?.texte.trim() || null;
+    }
+  } catch { /* fichier illisible */ }
+  return null;
+}
+// Installer des polices pour l'utilisateur (sans droits d'administrateur) : Windows les range dans
+// %LOCALAPPDATA%\Microsoft\Windows\Fonts et les inscrit dans le registre de l'utilisateur.
+handle('polices:installer', async (event) => {
+  const res = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: 'Installer une police', properties: ['openFile', 'multiSelections'],
+    filters: [{ name: 'Polices', extensions: ['ttf', 'otf', 'ttc'] }],
+  });
+  if (res.canceled) return [];
+  const installees = [];
+  for (const f of res.filePaths) {
+    const octets = await fs.readFile(f);
+    const famille = familleDePolice(octets) || path.basename(f, path.extname(f));
+    let dossier;
+    if (process.platform === 'win32') dossier = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Microsoft', 'Windows', 'Fonts');
+    else if (process.platform === 'darwin') dossier = path.join(os.homedir(), 'Library', 'Fonts');
+    else dossier = path.join(os.homedir(), '.local', 'share', 'fonts');
+    await fs.mkdir(dossier, { recursive: true });
+    const dest = path.join(dossier, path.basename(f));
+    await fs.copyFile(f, dest);
+    if (process.platform === 'win32') {
+      const type = path.extname(f).toLowerCase() === '.otf' ? 'OpenType' : 'TrueType';
+      await new Promise((ok) => execFile('reg.exe', ['add', 'HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Fonts', '/v', `${famille} (${type})`, '/t', 'REG_SZ', '/d', dest, '/f'], { windowsHide: true }, () => ok()));
+    }
+    log('info', `Police installée : ${famille} (${dest})`);
+    installees.push({ famille, octets: new Uint8Array(octets) });
+  }
+  policesListe = null;
+  return installees;
+});
+
 handle('utilisateur:prenom', async () => {
   try {
     return String(JSON.parse(await fs.readFile(path.join(app.getPath('appData'), 'atelier-commun', 'utilisateur.json'), 'utf8')).prenom || '').trim();
