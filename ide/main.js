@@ -226,10 +226,20 @@ handle('folder:recents', async () => existingRecents());
 // Dossier passé en ligne de commande : « Rune.exe D:\Projets\mon-site » (c'est ainsi qu'Atelier ouvre
 // un projet dans Rune). Il rejoint les récents, puis l'interface l'ouvre au démarrage à la place du
 // dernier dossier. On ne le donne qu'une fois : Ctrl+R ne le rouvre pas.
-let startupFolder = process.argv.slice(app.isPackaged ? 1 : 2)
+// Un fichier passé ainsi (« Ouvrir avec › Rune » dans l'Explorateur, sur un .toml par exemple) :
+// on ouvre son dossier, puis l'interface ouvre le fichier dans un onglet.
+const startupArg = process.argv.slice(app.isPackaged ? 1 : 2)
   .filter((a) => !a.startsWith('-') && a !== '.')
   .map((a) => path.resolve(a))
-  .find((a) => a !== app.getAppPath() && fsSync.existsSync(a) && fsSync.statSync(a).isDirectory()) || null;
+  .find((a) => a !== app.getAppPath() && fsSync.existsSync(a)) || null;
+const startupIsFile = !!startupArg && fsSync.statSync(startupArg).isFile();
+let startupFolder = startupArg && (startupIsFile ? path.dirname(startupArg) : startupArg);
+let startupFile = startupIsFile ? startupArg : null;
+handle('file:startup', async () => {
+  const file = startupFile;
+  startupFile = null;
+  return file;
+});
 handle('folder:startup', async () => {
   const folder = startupFolder;
   startupFolder = null;

@@ -58,6 +58,7 @@ async function start() {
   document.body.classList.add(`platform-${window.atelier.platform}`);
   defineThemes();
   registerComponentLanguages();
+  registerConfigLanguages(); // .toml, .conf, .cfg, .env (toml.js)
   formatter.init(); // Prettier pour Maj+Alt+F (format.js)
   vueTools.init(); // Volar pour les fichiers .vue (vue.js)
   state.configPath = await window.atelier.getConfigPath();
@@ -118,6 +119,9 @@ async function start() {
   renderRecents(recents);
   if (startup) {
     await openRecent(startup);
+    // « Ouvrir avec › Rune » sur un fichier : son dossier s'ouvre, puis le fichier lui-même.
+    const startupFile = await window.atelier.startupFile().catch(() => null);
+    if (startupFile && state.root) await openFile(startupFile, baseName(startupFile), { preview: false });
   } else if (state.config.reopenLastFolder && recents.length > 0) {
     await openRecent(recents[0]);
   }

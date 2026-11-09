@@ -20,6 +20,7 @@ const FILE_TYPES = [
   { ext: ['zip', 'rar', '7z', 'gz', 'tar'], icon: 'file-zip', color: '#a1887f' },
   { ext: ['sh', 'bat', 'cmd', 'ps1'], icon: 'terminal', color: '#4caf50' },
   { ext: ['txt', 'log'], icon: 'file-text', color: '#9e9e9e' },
+  { ext: ['toml', 'ini', 'conf', 'cfg', 'yaml', 'yml'], icon: 'settings', color: '#9c7bd6' },
   { ext: ['env', 'gitignore', 'gitattributes', 'editorconfig'], icon: 'gear', color: '#9e9e9e' },
 ];
 
