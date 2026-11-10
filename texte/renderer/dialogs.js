@@ -2,7 +2,8 @@
 // construit chaque fenêtre à partir d'une liste de champs, Dialogs.ask pose une petite question.
 //
 // Un champ : { key, label, type, value, ... } avec type parmi
-//   number, range (curseur + nombre), select, checkbox, color, text, textarea, info (texte seul).
+//   number, range (curseur + nombre), select, checkbox, color, couleur (le sélecteur d'Edda, avec ses
+//   palettes), text, textarea, info (texte seul), element (un contenu libre).
 
 const Dialogs = (() => {
   const root = $('#modal-root');
@@ -42,6 +43,31 @@ const Dialogs = (() => {
           input = document.createElement('select');
           for (const [value, label] of f.choices) input.add(new Option(label, value));
           input.value = f.value;
+        } else if (f.type === 'couleur') {
+          // Le sélecteur de couleur d'Edda (palettes, couleurs récentes, « automatique ») : voir couleurs.js.
+          // La valeur : « rrggbb », ou '' (automatique / aucune).
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.value = f.value ?? '';
+          const bouton = document.createElement('button');
+          bouton.type = 'button';
+          bouton.className = 'button champ-couleur';
+          const pastille = document.createElement('span');
+          pastille.className = 'pastille-mini';
+          const texte = document.createElement('span');
+          bouton.append(pastille, texte, Object.assign(document.createElement('i'), { className: 'codicon codicon-chevron-down' }));
+          const montrer = () => {
+            pastille.classList.toggle('auto', !input.value);
+            pastille.style.background = input.value ? `#${input.value}` : '';
+            texte.textContent = input.value ? `#${input.value}` : (f.aucune || 'Automatique');
+          };
+          input.montrer = montrer;
+          montrer();
+          bouton.onclick = (e) => {
+            e.preventDefault();
+            Couleurs.ouvrir(bouton, { titre: f.label, aucune: f.aucune || 'Automatique', valeur: input.value || null, choisir: (c) => { input.value = c || ''; montrer(); input.dispatchEvent(new Event('input', { bubbles: true })); } });
+          };
+          row.append(bouton);
         } else if (f.type === 'textarea') {
           input = document.createElement('textarea');
           input.value = f.value ?? '';
@@ -55,7 +81,7 @@ const Dialogs = (() => {
           else input.value = f.value ?? '';
         }
         input.name = f.key;
-        row.appendChild(input);
+        if (f.type === 'couleur') row.insertBefore(input, row.lastChild); else row.appendChild(input);
         if (f.type === 'range') {
           // Le nombre à côté du curseur se modifie aussi au clavier.
           const number = document.createElement('input');
@@ -79,12 +105,13 @@ const Dialogs = (() => {
         const out = {};
         for (const [key, { input, field }] of Object.entries(inputs)) {
           if (field.type === 'checkbox') out[key] = input.checked;
-          else if (field.type === 'number' || field.type === 'range') out[key] = Number(input.value);
+          // Un nombre laissé vide reste vide ('') : « rien de choisi », pas 0.
+          else if (field.type === 'number' || field.type === 'range') out[key] = input.value === '' ? '' : Number(input.value);
           else out[key] = input.value;
         }
         return out;
       };
-      const api = { inputs, values, card, body, setValue(key, v) { const i = inputs[key]; if (!i) return; if (i.field.type === 'checkbox') i.input.checked = v; else i.input.value = v; i.input.dispatchEvent(new Event('input', { bubbles: true })); } };
+      const api = { inputs, values, card, body, setValue(key, v) { const i = inputs[key]; if (!i) return; if (i.field.type === 'checkbox') i.input.checked = v; else i.input.value = v; i.input.montrer?.(); i.input.dispatchEvent(new Event('input', { bubbles: true })); } };
 
       const footer = card.querySelector('footer');
       for (const b of buttons) {

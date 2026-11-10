@@ -169,7 +169,7 @@
     const taille = taillePt(doc.body?.style?.fontSize);
     // Les styles d'Edda (Titre 1 à 4 modifiés, styles créés), gardés en JSON dans la page.
     let styles = null;
-    try { const m = doc.querySelector('meta[name="edda-styles"]')?.content; if (ecritParEdda && m) { const j = JSON.parse(m); styles = Formats.stylesLus(Object.fromEntries(Object.entries(j.base || {}).map(([k, v]) => [k, { ...StylesDoc.DEFAUTS[k], ...v }])), j.perso || [], null); } } catch { /* styles illisibles : ceux d'Edda */ }
+    try { const m = doc.querySelector('meta[name="edda-styles"]')?.content; if (ecritParEdda && m) { const j = JSON.parse(m); styles = Formats.stylesLus(Object.fromEntries(Object.entries(j.base || {}).map(([k, v]) => [k, { ...StylesDoc.DEFAUTS[k], ...v }])), j.perso || [], null, j.menu || null); } } catch { /* styles illisibles : ceux d'Edda */ }
     return { html: doc.body ? doc.body.innerHTML : texte, titre, miseEnPage, police, taille, alertes, styles };
   }
   function lireMiseEnPageCss(doc) {

@@ -99,10 +99,21 @@
       if (g !== null && g !== undefined) e.retrait = Math.round(Number(g) / 1440 * 2.54 * 10) / 10 || null;
       return e;
     }
-    const valeursStyle = (id) => { const r = runDuStyle(id); return { police: r.police || null, taille: r.taille, couleur: r.couleur, gras: r.gras, italique: r.italique, ...espacement(id) }; };
+    const valeursStyle = (id) => { const r = runDuStyle(id); return { police: r.police || null, taille: r.taille, ...('couleur' in r ? { couleur: r.couleur } : {}), gras: r.gras, italique: r.italique, souligne: r.souligne, ...espacement(id) }; };
 
     // Normal : la police et la taille du document.
-    const normal = { ...defautRun, ...runDuStyle(Object.keys(styles).find((k) => styles[k].type === 'paragraph' && /^normal$/i.test(styles[k].nom)) || 'Normal') };
+    const idNormal = Object.keys(styles).find((k) => styles[k].type === 'paragraph' && /^normal$/i.test(styles[k].nom)) || 'Normal';
+    const normal = { ...defautRun, ...runDuStyle(idNormal) };
+    // Le style Texte normal d'Edda : sa couleur, son gras, son italique et son souligné (ceux du
+    // fichier). Ses espaces, son alignement et son retrait seulement si Edda l'a écrit (ceux de Word
+    // sont déjà ceux du texte de base d'Edda).
+    const ecritParEdda = /<Application>Edda<\/Application>/.test((await texte('docProps/app.xml')) || '');
+    const styleNormal = { couleur: normal.couleur || null, gras: normal.gras || null, italique: normal.italique || null, souligne: normal.souligne || null, ...(ecritParEdda ? espacement(idNormal) : {}) };
+    // Un mot qui a la mise en forme de Texte normal l'a déjà par le style : pas besoin de la répéter.
+    const commeNormal = (f) => {
+      if (styleNormal.couleur && f.couleur === styleNormal.couleur) delete f.couleur;
+      for (const k of ['gras', 'italique', 'souligne']) if (styleNormal[k] && f[k] === true) delete f[k];
+    };
 
     // Listes : numId → niveau → 'ul' | 'ol'
     const numeros = {};
@@ -190,8 +201,9 @@
       const baseRun = { ...runDuStyle(styleId) };
       // Un titre a déjà sa taille et son gras dans Edda : on n'écrit que ce qui diffère.
       if (/^h/.test(role)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; }
+      if (/^h[1-4]$/.test(role)) { delete baseRun.italique; delete baseRun.souligne; }
       // Un style créé dans Edda : sa mise en forme vient du style (data-style), pas du texte.
-      if (persoDuStyle(styleId)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; delete baseRun.italique; }
+      if (persoDuStyle(styleId)) { delete baseRun.taille; delete baseRun.gras; delete baseRun.couleur; delete baseRun.police; delete baseRun.italique; delete baseRun.souligne; }
       let liste = null;
       const numPr = enfant(pPr, 'numPr') || props.numPr;
       if (numPr) {
@@ -272,6 +284,7 @@
       // Ce que Normal donne déjà à tout le document n'a pas besoin d'être répété sur chaque mot.
       if (f.police && f.police === normal.police) delete f.police;
       if (f.taille && f.taille === normal.taille) delete f.taille;
+      commeNormal(f);
       const ajouter = (h) => { morceaux[morceaux.length - 1] += h; };
       for (const c of enfants(r)) {
         switch (c.localName) {
@@ -406,7 +419,17 @@
       if (id) titres[`h${n}`] = valeursStyle(id);
     }
     const perso = Object.keys(styles).filter((k) => /^Eddaperso\d+$/.test(k)).map((k) => ({ id: k.slice(4), nom: styles[k].nom, balise: roleDuStyle(k).replace(/^normal$|^citation$|^code$/, 'p'), ...valeursStyle(k) }));
-    const stylesDoc = Formats.stylesLus(titres, perso, normal.police);
+    titres.p = styleNormal;
+    // L'ordre de la liste des styles (rangée dans Edda) : une propriété du document.
+    let menu = null;
+    const custom = await texte('docProps/custom.xml');
+    if (custom) {
+      for (const pr of lireXml(custom).getElementsByTagName('*')) {
+        if (pr.localName !== 'property' || pr.getAttribute('name') !== 'EddaMenuStyles') continue;
+        try { menu = JSON.parse(pr.textContent); } catch { /* illisible : l'ordre d'Edda */ }
+      }
+    }
+    const stylesDoc = Formats.stylesLus(titres, perso, normal.police, menu);
 
     return { html: Formats.signetsVersPage(html), styles: stylesDoc, miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
@@ -652,6 +675,13 @@
       + `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">`
       + `<w:body>${corps}${sectPr}</w:body></w:document>`;
 
+    // L'ordre de la liste des styles d'Edda : une propriété personnalisée du document (Word la garde).
+    const menuStyles = ctx.styles?.menu ? JSON.stringify(ctx.styles.menu) : null;
+    if (menuStyles) {
+      zip.file('docProps/custom.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">'
+        + `<property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="EddaMenuStyles"><vt:lpwstr>${xml(menuStyles)}</vt:lpwstr></property></Properties>`);
+    }
     zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
       + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
       + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
@@ -663,12 +693,14 @@
       + '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'
       + '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>'
       + '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>'
+      + (menuStyles ? '<Override PartName="/docProps/custom.xml" ContentType="application/vnd.openxmlformats-officedocument.custom-properties+xml"/>' : '')
       + '</Types>');
     zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
       + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
       + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
       + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>'
       + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>'
+      + (menuStyles ? '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties" Target="docProps/custom.xml"/>' : '')
       + '</Relationships>');
     const types = { image: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image', hyperlink: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink' };
     zip.file('word/_rels/document.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
@@ -698,7 +730,8 @@
     const rPrStyle = (s) => (s.police ? `<w:rFonts w:ascii="${xml(s.police)}" w:hAnsi="${xml(s.police)}" w:cs="${xml(s.police)}" w:eastAsia="${xml(s.police)}"/>` : '')
       + (s.gras === null || s.gras === undefined ? '' : s.gras ? '<w:b/><w:bCs/>' : '<w:b w:val="0"/><w:bCs w:val="0"/>')
       + (s.italique === null || s.italique === undefined ? '' : s.italique ? '<w:i/><w:iCs/>' : '<w:i w:val="0"/><w:iCs w:val="0"/>')
-      + (s.couleur ? `<w:color w:val="${s.couleur.toUpperCase()}"/>` : '')
+      + (s.couleur ? `<w:color w:val="${s.couleur.toUpperCase()}"/>` : s.couleur === null && /^h\d$/.test(s.id || '') && !s.perso ? '<w:color w:val="auto"/>' : '')
+      + (s.souligne === null || s.souligne === undefined ? '' : s.souligne ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>')
       + (s.taille ? `<w:sz w:val="${Math.round(s.taille * 2)}"/><w:szCs w:val="${Math.round(s.taille * 2)}"/>` : '');
     const espace = (s) => (s.avant === null && s.apres === null ? '' : `<w:spacing${s.avant !== null && s.avant !== undefined ? ` w:before="${Math.round(s.avant * 20)}"` : ''}${s.apres !== null && s.apres !== undefined ? ` w:after="${Math.round(s.apres * 20)}"` : ''}/>`)
       // Retrait à gauche (cm → vingtièmes de point) et alignement.
@@ -717,11 +750,14 @@
         + `<w:pPr>${espace(s)}</w:pPr><w:rPr>${rPrStyle(s)}</w:rPr></w:style>`;
     }).join('');
     const p = xml(police);
+    // Texte normal (le style par défaut) : sa police et sa taille sont celles du document (docDefaults).
+    const n = parId.p ? { ...parId.p, police: null, taille: null } : null;
+    const normalXml = n ? `${espace(n) ? `<w:pPr>${espace(n)}</w:pPr>` : ''}${rPrStyle(n) ? `<w:rPr>${rPrStyle(n)}</w:rPr>` : ''}` : '';
     return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
       + `<w:styles xmlns:w="${W}">`
       + `<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="${p}" w:hAnsi="${p}" w:cs="${p}" w:eastAsia="${p}"/><w:sz w:val="${taille * 2}"/><w:szCs w:val="${taille * 2}"/><w:lang w:val="fr-FR"/></w:rPr></w:rPrDefault>`
       + '<w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>'
-      + '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>'
+      + `<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/>${normalXml}</w:style>`
       + titre(1, 40, '1F3864') + titre(2, 32, '2F5496') + titre(3, 28, '2F5496') + titre(4, 24, '2F5496') + titre(5, 22, '2F5496') + titre(6, 22, '595959') + persos
       + '<w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:ind w:left="567" w:right="567"/><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="A0A0A0"/></w:pBdr></w:pPr><w:rPr><w:i/><w:color w:val="595959"/></w:rPr></w:style>'
       + '<w:style w:type="paragraph" w:customStyle="1" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/><w:shd w:val="clear" w:color="auto" w:fill="F2F2F2"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:cs="Consolas"/><w:sz w:val="20"/></w:rPr></w:style>'

@@ -26,10 +26,17 @@ const App = (() => {
   const POLICES = ['Aptos', 'Arial', 'Book Antiqua', 'Calibri', 'Cambria', 'Candara', 'Century Gothic', 'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel',
     'Courier New', 'Franklin Gothic Medium', 'Garamond', 'Georgia', 'Lucida Sans', 'Palatino Linotype', 'Segoe UI', 'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'];
 
+  // La page blanche ou sombre : le noir et le blanc posés à la main s'y adaptent (voir couleurs.js).
+  function pageSombre(sombre) {
+    for (const d of docs) { d.page.classList.toggle('sombre', sombre); Couleurs.adapterPage(d); }
+  }
+  // Le sélecteur de couleur lit et garde les palettes de l'utilisateur dans les réglages.
+  Couleurs.configurer({ lire: () => config || {}, ecrire: async (changes) => { config = await window.edda.writeConfig(changes); } });
+
   async function applyTheme(c) {
     document.documentElement.style.setProperty('--accent', c.accentColor);
     document.body.classList.toggle('glass', Boolean(c.glass));
-    for (const d of docs) d.page.classList.toggle('sombre', c.page === 'sombre');
+    pageSombre(c.page === 'sombre');
     appliquerZoom();
     const { blur, needsRestart } = await window.edda.setWindowTheme({ glass: c.glass, blur: c.windowBlur });
     document.body.classList.toggle('window-blur', blur);
@@ -52,6 +59,7 @@ const App = (() => {
         { key: 'glass', label: 'Verre dépoli (glassmorphism)', type: 'checkbox', value: config.glass },
         { key: 'windowBlur', label: blurOk ? 'Flou de Windows 11 derrière la fenêtre' : 'Flou de Windows 11 (non disponible ici)', type: 'checkbox', value: config.windowBlur },
         { key: 'page', label: 'Page', type: 'select', value: config.page, choices: [['claire', 'Blanche, comme sur papier'], ['sombre', 'Sombre (pour écrire le soir)']] },
+        { type: 'info', text: 'Sur la page sombre, le texte noir s\'affiche en blanc et les couleurs trop foncées sont éclaircies (et l\'inverse sur la page blanche). Le fichier garde les vraies couleurs.' },
         { key: 'police', label: 'Police des nouveaux documents', type: 'text', value: config.police, list: 'liste-polices' },
         { key: 'taille', label: 'Taille (points)', type: 'number', value: config.taille, min: 6, max: 72, step: 0.5 },
         { key: 'formatParDefaut', label: 'Enregistrer en', type: 'select', value: config.formatParDefaut, choices: Object.values(Formats.liste).map((f) => [f.id, `${f.nom} (.${f.extensions[0]})`]) },
@@ -74,7 +82,7 @@ const App = (() => {
         // Aperçu immédiat de la couleur, du verre et de la page.
         document.documentElement.style.setProperty('--accent', values.accentColor);
         document.body.classList.toggle('glass', values.glass);
-        for (const d of docs) d.page.classList.toggle('sombre', values.page === 'sombre');
+        pageSombre(values.page === 'sombre');
       },
     });
     if (!v) return applyTheme(config);
@@ -107,6 +115,7 @@ const App = (() => {
     page.hidden = true;
     pages.append(page);
     StylesDoc.appliquer(d);
+    Couleurs.adapterPage(d);
     Editeur.verifierVide(page);
     docs.push(d);
     appliquerZoom();
@@ -172,6 +181,9 @@ const App = (() => {
 
   // Un document modifié : l'onglet a un point, et la fenêtre demandera avant de se fermer.
   let signalTimer = 0;
+  // Les couleurs posées à la main, adaptées à la page (un peu après la frappe).
+  let couleursTimer = 0;
+  Editeur.surChangement((d) => { clearTimeout(couleursTimer); couleursTimer = setTimeout(() => Couleurs.adapterPage(d), 250); });
   Editeur.surChangement((d) => {
     if (!d.modifie) {
       d.modifie = true;
@@ -318,6 +330,7 @@ const App = (() => {
     docs.splice(i, 1);
     d.page.remove();
     StylesDoc.retirer(d);
+    Couleurs.retirerPage(d);
     if (actif === d) { actif = null; if (docs.length) activer(docs[Math.min(i, docs.length - 1)]); }
     signaler();
     rendreOnglets();
@@ -540,7 +553,7 @@ const App = (() => {
     majStatut();
   }
   function majStyleDepuisSelection(id, noeud) {
-    const v = StylesDoc.depuisEcran(noeud, actif.page);
+    const v = StylesDoc.depuisEcran(noeud, actif.page, actif);
     if (!v) return;
     StylesDoc.changer(actif, id, v);
     stylesModifies();
@@ -549,7 +562,7 @@ const App = (() => {
     notify(`« ${StylesDoc.get(actif, id).nom} » a pris la mise en forme de la sélection.`, 'success', 3000);
   }
   async function nouveauStyleDepuisSelection(noeud, styleActuel) {
-    const v = StylesDoc.depuisEcran(noeud, actif.page);
+    const v = StylesDoc.depuisEcran(noeud, actif.page, actif);
     if (!v) return;
     const balise = StylesDoc.get(actif, styleActuel)?.balise || (/^h[1-4]$/.test(styleActuel) ? styleActuel : 'p');
     const r = await Dialogs.form({
@@ -568,20 +581,36 @@ const App = (() => {
   }
 
   // La fenêtre des styles : choisir un style, changer sa police, sa taille, sa couleur…
+  // Texte normal est le style par défaut : celui de tout texte nouveau. Sa police et sa taille sont
+  // celles du document (les mêmes que dans Format › Mise en page).
   async function ouvrirStyles(idDepart) {
     const d = actif;
     if (!d) return;
     const avant = StylesDoc.copie(d.styles);
-    let id = StylesDoc.get(d, idDepart) ? idDepart : 'h1';
+    const policeAvant = d.police, tailleAvant = d.taille;
+    let id = StylesDoc.get(d, idDepart) ? idDepart : 'p';
     let charge = false;
-    const choix = () => StylesDoc.liste(d).map((s) => [s.id, s.perso ? `${s.nom} (créé)` : s.nom]);
-    const valeursDe = (s) => ({ nom: s.nom, balise: s.balise, police: s.police || '', taille: s.taille ?? '', couleur: `#${s.couleur || '1a1a1a'}`, gras: Boolean(s.gras), italique: Boolean(s.italique), avant: s.avant ?? '', apres: s.apres ?? '', alignement: s.alignement || '', retrait: s.retrait ?? '' });
+    const choix = () => StylesDoc.liste(d).map((s) => [s.id, s.perso ? `${s.nom} (créé)` : s.id === 'p' ? 'Texte normal (style par défaut)' : s.nom]);
+    const valeursDe = (s) => ({
+      nom: s.nom, balise: s.balise,
+      police: s.id === 'p' ? d.police : s.police || '', taille: s.id === 'p' ? d.taille : s.taille ?? '',
+      couleur: s.couleur || '', gras: Boolean(s.gras), italique: Boolean(s.italique), souligne: Boolean(s.souligne),
+      avant: s.avant ?? '', apres: s.apres ?? '', alignement: s.alignement || '', retrait: s.retrait ?? '',
+    });
+    const aide = el('p', { className: 'modal-info' });
+    const montrerAide = () => {
+      aide.textContent = id === 'p'
+        ? 'Texte normal : le style de tout texte nouveau. Les titres et les styles créés en héritent ce qu\'ils ne changent pas (police, couleur…).'
+        : 'Couleur « Automatique » : celle du texte, qui suit la page blanche ou sombre.';
+    };
     const charger = (api) => {
       charge = true;
       const s = StylesDoc.get(d, id);
       for (const [k, v] of Object.entries(valeursDe(s))) api.setValue(k, v);
       api.inputs.nom.input.closest('label').hidden = !s.perso;
       api.inputs.balise.input.closest('label').hidden = !s.perso;
+      api.inputs.police.input.placeholder = s.id === 'p' ? 'Calibri' : 'Celle du texte normal';
+      montrerAide();
       charge = false;
     };
     const remplirChoix = (api) => {
@@ -590,33 +619,43 @@ const App = (() => {
       sel.value = id;
     };
     const s0 = StylesDoc.get(d, id);
+    const v0 = valeursDe(s0);
+    montrerAide();
     const r = await Dialogs.form({
       title: `Styles de ${d.nom}`,
-      width: 460,
+      width: 480,
       fields: [
         { key: 'style', label: 'Style', type: 'select', value: id, choices: choix() },
         { key: 'nom', label: 'Nom', type: 'text', value: s0.nom, hidden: !s0.perso },
         { key: 'balise', label: 'Sorte de paragraphe', type: 'select', value: s0.balise, choices: StylesDoc.BALISES, hidden: !s0.perso },
-        { key: 'police', label: 'Police', type: 'text', value: s0.police || '', list: 'liste-polices', placeholder: 'Celle du document' },
-        { key: 'taille', label: 'Taille (points)', type: 'number', value: s0.taille ?? '', min: 1, max: 400, step: 0.5 },
-        { key: 'couleur', label: 'Couleur', type: 'color', value: `#${s0.couleur || '1a1a1a'}` },
-        { key: 'gras', label: 'Gras', type: 'checkbox', value: Boolean(s0.gras) },
-        { key: 'italique', label: 'Italique', type: 'checkbox', value: Boolean(s0.italique) },
-        { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', value: s0.avant ?? '', min: 0, max: 200, step: 1 },
-        { key: 'apres', label: 'Espace en dessous (points)', type: 'number', value: s0.apres ?? '', min: 0, max: 200, step: 1 },
-        { key: 'alignement', label: 'Alignement', type: 'select', value: s0.alignement || '', choices: StylesDoc.ALIGNEMENTS },
-        { key: 'retrait', label: 'Retrait à gauche (cm)', type: 'number', value: s0.retrait ?? '', min: 0, max: 20, step: 0.1 },
+        { key: 'police', label: 'Police', type: 'text', value: v0.police, list: 'liste-polices', placeholder: id === 'p' ? 'Calibri' : 'Celle du texte normal' },
+        { key: 'taille', label: 'Taille (points)', type: 'number', value: v0.taille, min: 1, max: 400, step: 0.5 },
+        { key: 'couleur', label: 'Couleur', type: 'couleur', value: v0.couleur, aucune: 'Automatique' },
+        { key: 'gras', label: 'Gras', type: 'checkbox', value: v0.gras },
+        { key: 'italique', label: 'Italique', type: 'checkbox', value: v0.italique },
+        { key: 'souligne', label: 'Souligné', type: 'checkbox', value: v0.souligne },
+        { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', value: v0.avant, min: 0, max: 200, step: 1 },
+        { key: 'apres', label: 'Espace en dessous (points)', type: 'number', value: v0.apres, min: 0, max: 200, step: 1 },
+        { key: 'alignement', label: 'Alignement', type: 'select', value: v0.alignement, choices: StylesDoc.ALIGNEMENTS },
+        { key: 'retrait', label: 'Retrait à gauche (cm)', type: 'number', value: v0.retrait, min: 0, max: 20, step: 0.1 },
+        { type: 'element', element: aide },
         { key: 'modele', label: 'Utiliser ces styles pour les nouveaux documents', type: 'checkbox', value: false },
         { type: 'info', text: 'Les changements se voient tout de suite dans la page. Ils sont enregistrés avec le document (Word, LibreOffice, page web).' },
       ],
       buttons: [
-        { label: 'Nouveau style', run: (api) => { const s = StylesDoc.creer(d, { ...StylesDoc.get(d, id), nom: undefined }); id = s.id; remplirChoix(api); charger(api); majListeStyles(); } },
+        { label: 'Nouveau style', run: (api) => { const s = StylesDoc.creer(d, { ...StylesDoc.get(d, id), nom: undefined, ...(id === 'p' ? { balise: 'p' } : {}) }); id = s.id; remplirChoix(api); charger(api); majListeStyles(); } },
         { label: 'Supprimer', run: (api) => {
           const s = StylesDoc.get(d, id);
-          if (!s.perso) { StylesDoc.changer(d, id, Object.fromEntries(StylesDoc.CHAMPS.map((k) => [k, StylesDoc.DEFAUTS[id][k]]))); notify(`${s.nom} est revenu à son style d'origine.`, 'info', 3000); charger(api); return; }
+          if (!s.perso) {
+            StylesDoc.changer(d, id, Object.fromEntries(StylesDoc.CHAMPS.map((k) => [k, StylesDoc.DEFAUTS[id][k]])));
+            if (id === 'p') { d.police = policeAvant; d.taille = tailleAvant; Editeur.appliquerMiseEnPage(d); }
+            notify(`${s.nom} est revenu à son style d'origine.`, 'info', 3000);
+            charger(api);
+            return;
+          }
           for (const n of d.page.querySelectorAll(`[data-style="${s.id}"]`)) n.removeAttribute('data-style');
           StylesDoc.supprimer(d, id);
-          id = 'h1'; remplirChoix(api); charger(api); majListeStyles();
+          id = 'p'; remplirChoix(api); charger(api); majListeStyles();
         } },
       ],
       onInput: (v, api) => {
@@ -624,13 +663,24 @@ const App = (() => {
         if (v.style !== id) { id = v.style; charger(api); return; }
         const s = StylesDoc.get(d, id);
         const nb = (x) => (x === '' || x === null || Number.isNaN(Number(x)) ? null : Number(x));
-        const valeurs = { police: v.police.trim() || null, taille: nb(v.taille), couleur: v.couleur.replace('#', '').toLowerCase(), gras: v.gras, italique: v.italique, avant: nb(v.avant), apres: nb(v.apres), alignement: v.alignement || null, retrait: nb(v.retrait) || null };
+        const valeurs = { police: v.police.trim() || null, taille: nb(v.taille), couleur: v.couleur ? v.couleur.toLowerCase() : null, gras: v.gras, italique: v.italique, souligne: v.souligne, avant: nb(v.avant), apres: nb(v.apres), alignement: v.alignement || null, retrait: nb(v.retrait) || null };
+        if (id === 'p') {
+          // Texte normal : la police et la taille du document ; « non gras » = rien de posé.
+          if (valeurs.police && valeurs.police !== d.police) d.police = valeurs.police;
+          if (valeurs.taille && valeurs.taille >= 6 && valeurs.taille <= 72 && valeurs.taille !== d.taille) d.taille = valeurs.taille;
+          Editeur.appliquerMiseEnPage(d);
+          for (const k of ['gras', 'italique', 'souligne']) if (!valeurs[k]) valeurs[k] = null;
+        }
         if (s.perso) Object.assign(valeurs, { nom: v.nom.trim() || s.nom, balise: v.balise });
         StylesDoc.changer(d, id, valeurs);
         if (s.perso && valeurs.nom !== s.nom) { const o = [...api.inputs.style.input.options].find((x) => x.value === id); if (o) o.text = `${valeurs.nom} (créé)`; majListeStyles(); }
       },
     });
-    if (!r) { d.styles = avant; StylesDoc.appliquer(d); majListeStyles(); return; }
+    if (!r) {
+      d.styles = avant; StylesDoc.appliquer(d); majListeStyles();
+      if (d.police !== policeAvant || d.taille !== tailleAvant) { d.police = policeAvant; d.taille = tailleAvant; Editeur.appliquerMiseEnPage(d); }
+      return;
+    }
     // Un style créé qui change de sorte (texte normal ↔ titre) : ses paragraphes changent de balise.
     for (const s of StylesDoc.liste(d).filter((x) => x.perso)) {
       for (const n of [...d.page.querySelectorAll(`[data-style="${s.id}"]`)]) {
@@ -641,21 +691,77 @@ const App = (() => {
         n.replaceWith(neuf);
       }
     }
-    if (JSON.stringify(avant) !== JSON.stringify(d.styles)) stylesModifies(d);
+    if (JSON.stringify(avant) !== JSON.stringify(d.styles) || d.police !== policeAvant || d.taille !== tailleAvant) stylesModifies(d);
     if (r.modele) {
-      config = await window.edda.writeConfig({ stylesParDefaut: StylesDoc.copie(d.styles) });
-      notify('Les nouveaux documents auront ces styles.', 'success', 3000);
+      config = await window.edda.writeConfig({ stylesParDefaut: StylesDoc.copie(d.styles), police: d.police, taille: d.taille });
+      notify('Les nouveaux documents auront ces styles (et la police du texte normal).', 'success', 3500);
     }
   }
 
-  // La liste des styles du ruban : les styles de base, puis ceux créés dans le document.
+  // La liste des styles du ruban, dans l'ordre choisi (Organiser la liste…). Un style caché reste dans
+  // la liste (invisible) : quand le curseur est dans un paragraphe de ce style, son nom s'affiche.
+  const ORGANISER = '__organiser';
   function majListeStyles() {
-    for (const o of [...choixStyle.querySelectorAll('option[data-perso]')]) o.remove();
-    if (!actif) return;
-    for (const s of StylesDoc.liste(actif).filter((x) => x.perso)) {
-      const o = new Option(s.nom, s.id);
-      o.dataset.perso = '';
-      choixStyle.add(o);
+    const items = actif ? StylesDoc.menu(actif) : StylesDoc.menu(null);
+    const options = items.map((x) => { const o = new Option(x.nom, x.id); o.hidden = x.cache; return o; });
+    const trait = new Option('──────────', ''); trait.disabled = true;
+    choixStyle.replaceChildren(...options, trait, new Option('Organiser la liste…', ORGANISER));
+    choixStyle.value = Editeur.etat?.()?.style || 'p';
+  }
+
+  // Ranger la liste des styles : glisser une ligne pour changer l'ordre, l'œil pour cacher un style.
+  async function organiserStyles(d = actif) {
+    if (!d) return;
+    const items = StylesDoc.menu(d);
+    const liste = el('div', { className: 'organiser-styles' });
+    let tire = null;
+    const ligne = (x) => {
+      const oeil = el('button', { type: 'button', className: 'icon-button', title: 'Montrer ou cacher dans la liste' });
+      const poignee = el('i', { className: 'codicon codicon-gripper poignee', title: 'Glisser pour déplacer' });
+      const haut = el('button', { type: 'button', className: 'icon-button', title: 'Monter' }, el('i', { className: 'codicon codicon-arrow-up' }));
+      const bas = el('button', { type: 'button', className: 'icon-button', title: 'Descendre' }, el('i', { className: 'codicon codicon-arrow-down' }));
+      const r = el('div', { className: 'organiser-ligne', draggable: true }, poignee, el('span', { className: 'nom', textContent: x.perso ? `${x.nom} (créé)` : x.nom }), haut, bas, oeil);
+      r.dataset.id = x.id;
+      const montrer = () => { r.classList.toggle('cache', x.cache); oeil.replaceChildren(el('i', { className: `codicon codicon-${x.cache ? 'eye-closed' : 'eye'}` })); };
+      oeil.onclick = () => {
+        if (!x.cache && items.filter((y) => !y.cache).length <= 1) { notify('Il faut au moins un style dans la liste.', 'info', 2500); return; }
+        x.cache = !x.cache; montrer();
+      };
+      haut.onclick = () => { if (r.previousElementSibling) r.previousElementSibling.before(r); };
+      bas.onclick = () => { if (r.nextElementSibling) r.nextElementSibling.after(r); };
+      r.ondragstart = (e) => { tire = r; r.classList.add('tire'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', x.id); };
+      r.ondragend = () => { r.classList.remove('tire'); tire = null; };
+      r.ondragover = (e) => {
+        if (!tire || tire === r) return;
+        e.preventDefault();
+        const b = r.getBoundingClientRect();
+        if (e.clientY < b.top + b.height / 2) r.before(tire); else r.after(tire);
+      };
+      montrer();
+      return r;
+    };
+    liste.append(...items.map(ligne));
+    const r = await Dialogs.form({
+      title: 'Organiser la liste des styles',
+      width: 420,
+      fields: [
+        { type: 'info', text: 'L\'ordre et les styles montrés dans la liste du ruban. Un style caché reste utilisable (Format, clic droit, raccourcis).' },
+        { type: 'element', element: liste },
+        { key: 'modele', label: 'Utiliser cet ordre pour les nouveaux documents', type: 'checkbox', value: false },
+      ],
+      buttons: [{ label: 'Ordre d\'origine', run: () => { const parDefaut = StylesDoc.menu({ styles: { ...d.styles, menu: null } }); for (const x of items) x.cache = false; liste.replaceChildren(...parDefaut.map((y) => ligne(items.find((z) => z.id === y.id)))); } }],
+    });
+    if (!r) return;
+    const ordre = [...liste.children].map((n) => n.dataset.id);
+    const caches = items.filter((x) => x.cache).map((x) => x.id);
+    const avant = JSON.stringify(d.styles.menu || null);
+    StylesDoc.changerMenu(d, ordre, caches);
+    if (JSON.stringify(d.styles.menu || null) !== avant) stylesModifies(d);
+    if (r.modele) {
+      const modele = StylesDoc.copie(config.stylesParDefaut);
+      if (d.styles.menu) modele.menu = d.styles.menu; else delete modele.menu;
+      config = await window.edda.writeConfig({ stylesParDefaut: modele });
+      notify('Les nouveaux documents auront cette liste de styles.', 'success', 3000);
     }
   }
   for (const t of Editeur.TAILLES) $('#liste-tailles').append(el('option', { value: String(t).replace('.', ',') }));
@@ -688,11 +794,14 @@ const App = (() => {
     b.onclick = () => {
       const quoi = b.dataset.menuCouleur;
       Menus.palette(b, quoi === 'couleur'
-        ? { titre: 'Couleur du texte', aucune: 'Automatique', choisir: (c) => { if (c) { couleurTexte = c; $('#trait-couleur').style.background = `#${c}`; } Editeur.commandes.couleur(c); } }
-        : { titre: 'Surligner', aucune: 'Aucun surlignage', choisir: (c) => { if (c) { couleurSurligner = c; $('#trait-surligner').style.background = `#${c}`; } Editeur.commandes.surligner(c); } });
+        ? { titre: 'Couleur du texte', aucune: 'Automatique (suit la page)', valeur: couleurTexte, choisir: (c) => { if (c) { couleurTexte = c; $('#trait-couleur').style.background = `#${c}`; } Editeur.commandes.couleur(c); } }
+        : { titre: 'Surligner', aucune: 'Aucun surlignage', valeur: couleurSurligner, choisir: (c) => { if (c) { couleurSurligner = c; $('#trait-surligner').style.background = `#${c}`; } Editeur.commandes.surligner(c); } });
     };
   }
-  choixStyle.onchange = () => Editeur.commandes.style(choixStyle.value);
+  choixStyle.onchange = () => {
+    if (choixStyle.value === ORGANISER) { choixStyle.value = Editeur.etat().style || 'p'; organiserStyles(); return; }
+    Editeur.commandes.style(choixStyle.value);
+  };
   const validerPolice = () => { if (choixPolice.value.trim()) Editeur.commandes.police(choixPolice.value.trim()); };
   choixPolice.addEventListener('change', validerPolice);
   choixPolice.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); validerPolice(); Editeur.restaurer(); } });
@@ -809,7 +918,8 @@ const App = (() => {
         { label: 'Effacer la mise en forme', keys: `${ctrl}Espace`, icone: 'clear-all', run: Editeur.commandes.removeFormat },
         null,
         { label: 'Mise en page…', icone: 'layout', run: () => ouvrirMiseEnPage() },
-        { label: 'Styles…', icone: 'symbol-color', run: () => ouvrirStyles(), desactive: !actif },
+        { label: 'Styles…', icone: 'symbol-color', run: () => ouvrirStyles(Editeur.etat().style), desactive: !actif },
+        { label: 'Organiser la liste des styles…', icone: 'list-ordered', run: () => organiserStyles(), desactive: !actif },
         { label: 'Installer une police…', icone: 'text-size', run: installerPolice },
       ];
     },

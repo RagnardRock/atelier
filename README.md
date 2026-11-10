@@ -15,7 +15,7 @@ Un ensemble d'outils pour le travail de tous les jours (web, graphisme, bureauti
 | **Mímir** ᛗ | Lecteur de documents : PDF (annoter, signer, remplir les formulaires), EPUB, BD (CBZ/CBR), Word, images, textes | [`lecteur/`](lecteur/README.md) | 0.3.0 |
 | **Kenning** ᚲ | Liseuse d'eBooks avec bibliothèque (couvertures, collections, progression) : EPUB, MOBI, AZW3, FB2, surlignages et notes | [`liseuse/`](liseuse/README.md) | 0.2.0 |
 | **Reikna** ᛞ | Tableur : xlsx, xls, ods, CSV, formules en français, graphiques, mise en forme conditionnelle | [`tableur/`](tableur/README.md) | 0.4.3 |
-| **Edda** ᛖ | Traitement de texte : docx, odt, RTF, Markdown, HTML, texte, avec images, vidéos et sons dans la page | [`texte/`](texte/README.md) | 0.5.0 |
+| **Edda** ᛖ | Traitement de texte : docx, odt, RTF, Markdown, HTML, texte, avec images, vidéos et sons dans la page | [`texte/`](texte/README.md) | 0.6.0 |
 
 Dans Atelier, les outils sont rangés par catégorie (développement, graphisme, bureautique, jeu) avec un filtre Tous / Favoris / Installés / Mises à jour (étoile sur chaque carte).
 
