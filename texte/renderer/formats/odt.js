@@ -83,6 +83,7 @@
         if (st('text-underline-style')) f.souligne = st('text-underline-style') !== 'none';
         if (st('text-line-through-style')) f.barre = st('text-line-through-style') !== 'none';
         if (g('color')) f.couleur = couleurHex(g('color'));
+        if (st('use-window-font-color') === 'true') f.couleur = null; // couleur automatique
         if (g('background-color')) f.fond = couleurHex(g('background-color'));
         if (g('font-size') && !/%$/.test(g('font-size'))) f.taille = taillePt(g('font-size'));
         const p = police(tp);
@@ -113,7 +114,7 @@
       if (g) e.retrait = Math.round(Unites.pxEnCm(Unites.lire(g) || 0) * 10) / 10 || null;
       return e;
     }
-    const valeursStyle = (nom) => { const t = texteDuStyle(nom); return { police: t.police || null, taille: t.taille, couleur: t.couleur, gras: t.gras, italique: t.italique, ...espacement(nom) }; };
+    const valeursStyle = (nom) => { const t = texteDuStyle(nom); return { police: t.police || null, taille: t.taille, ...('couleur' in t ? { couleur: t.couleur } : {}), gras: t.gras, italique: t.italique, souligne: t.souligne, ...espacement(nom) }; };
 
     function paraDuStyle(nom, profondeur = 0) {
       const s = styles[nom];
@@ -171,6 +172,31 @@
       return roleDuStyle(s.parent, profondeur + 1);
     }
     const normal = { ...texteDuStyle('__defaut_paragraph'), ...texteDuStyle('Standard') };
+    // Le style Texte normal d'Edda : la couleur, le gras, l'italique et le souligné de « Standard » ;
+    // ses espaces, son alignement et son retrait seulement si Edda a écrit le fichier.
+    const metaXml = zip.file('meta.xml') ? await zip.file('meta.xml').async('string') : '';
+    const ecritParEdda = /<meta:generator>Edda/.test(metaXml);
+    const espStandard = () => {
+      const p = styles.Standard?.para;
+      if (!p) return {};
+      const e = {};
+      const h = p.getAttributeNS(NS.fo, 'margin-top'), b = p.getAttributeNS(NS.fo, 'margin-bottom');
+      if (h) e.avant = Math.round(Unites.pxEnPt(Unites.lire(h) || 0) * 2) / 2;
+      if (b) e.apres = Math.round(Unites.pxEnPt(Unites.lire(b) || 0) * 2) / 2;
+      const a = p.getAttributeNS(NS.fo, 'text-align');
+      if (a) e.alignement = { center: 'center', end: 'right', right: 'right', justify: 'justify' }[a] || null;
+      const g = p.getAttributeNS(NS.fo, 'margin-left');
+      if (g) e.retrait = Math.round(Unites.pxEnCm(Unites.lire(g) || 0) * 10) / 10 || null;
+      return e;
+    };
+    const styleNormal = { couleur: normal.couleur || null, gras: normal.gras || null, italique: normal.italique || null, souligne: normal.souligne || null, ...(ecritParEdda ? espStandard() : {}) };
+    // Ce que Texte normal donne déjà n'a pas besoin d'être répété sur chaque mot.
+    const sansNormal = (f) => {
+      const x = { ...f };
+      if (styleNormal.couleur && x.couleur === styleNormal.couleur) delete x.couleur;
+      for (const k of ['gras', 'italique', 'souligne']) if (styleNormal[k] && x[k] === true) delete x[k];
+      return x;
+    };
     const listeDuStyle = (nom, profondeur = 0) => {
       const s = styles[nom];
       if (!s || profondeur > 12) return null;
@@ -239,9 +265,10 @@
       const props = paraDuStyle(nomStyle);
       const base = texteDuStyle(nomStyle);
       if (/^h/.test(role)) { delete base.taille; delete base.gras; delete base.couleur; delete base.police; }
+      if (/^h[1-4]$/.test(role)) { delete base.italique; delete base.souligne; }
       // Un style créé dans Edda : sa mise en forme vient du style (data-style), pas du texte.
       const perso = persoDuStyle(nomStyle);
-      if (perso) { delete base.taille; delete base.gras; delete base.couleur; delete base.police; delete base.italique; }
+      if (perso) { delete base.taille; delete base.gras; delete base.couleur; delete base.police; delete base.italique; delete base.souligne; }
       for (const k of ['police', 'taille']) if (base[k] && base[k] === normal[k]) delete base[k];
       let liste = listeCtx && !listeCtx.suite ? { type: listeCtx.type, niveau: listeCtx.niveau, id: listeCtx.id, debut: 1 } : null;
       // Un paragraphe à puce sans <text:list> (style de paragraphe avec un style de liste) : rare, on le traite comme une liste.
@@ -274,7 +301,7 @@
     async function enLigne(n, f, lien, morceaux) {
       const ajouter = (h) => { morceaux[morceaux.length - 1] += h; };
       for (const c of n.childNodes) {
-        if (c.nodeType === 3) { ajouter(htmlRun(c.nodeValue, f, lien)); continue; }
+        if (c.nodeType === 3) { ajouter(htmlRun(c.nodeValue, sansNormal(f), lien)); continue; }
         if (c.nodeType !== 1) continue;
         const nom = c.localName;
         if (c.namespaceURI === NS.text) {
@@ -367,7 +394,11 @@
       const m = String(parent).match(/^Heading_20_(\d)$/);
       return { id: k.slice(5), nom: styles[k].affiche, balise: m ? `h${m[1]}` : 'p', ...valeursStyle(k) };
     });
-    const stylesDocument = Formats.stylesLus(titres, perso, normal.police);
+    titres.p = styleNormal;
+    let menu = null;
+    const m = metaXml.match(/<meta:user-defined meta:name="EddaMenuStyles"[^>]*>([^<]*)<\/meta:user-defined>/);
+    if (m) { try { menu = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&amp;/g, '&')); } catch { /* illisible */ } }
+    const stylesDocument = Formats.stylesLus(titres, perso, normal.police, menu);
     return { html: Formats.signetsVersPage(String(html)), styles: stylesDocument, miseEnPage, police: normal.police || null, taille: normal.taille || null, alertes: [...alertes] };
   }
 
@@ -589,7 +620,7 @@
     zip.file('mimetype', 'application/vnd.oasis.opendocument.text', { compression: 'STORE' });
     zip.file('content.xml', content);
     zip.file('styles.xml', stylesXml(ctx, fontFaces));
-    zip.file('meta.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-meta ${DECL} office:version="1.3"><office:meta><meta:generator>Edda</meta:generator><dc:title>${xml(ctx.titre || '')}</dc:title><meta:initial-creator>${xml(ctx.auteur || '')}</meta:initial-creator><dc:date>${new Date().toISOString()}</dc:date></office:meta></office:document-meta>`);
+    zip.file('meta.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-meta ${DECL} office:version="1.3"><office:meta><meta:generator>Edda</meta:generator><dc:title>${xml(ctx.titre || '')}</dc:title><meta:initial-creator>${xml(ctx.auteur || '')}</meta:initial-creator><dc:date>${new Date().toISOString()}</dc:date>${ctx.styles?.menu ? `<meta:user-defined meta:name="EddaMenuStyles">${xml(JSON.stringify(ctx.styles.menu))}</meta:user-defined>` : ''}</office:meta></office:document-meta>`);
     for (const im of images) zip.file(im.nom, im.bytes);
     zip.file('META-INF/manifest.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3">'
       + '<manifest:file-entry manifest:full-path="/" manifest:version="1.3" manifest:media-type="application/vnd.oasis.opendocument.text"/>'
@@ -625,6 +656,8 @@
       if (s.gras !== null && s.gras !== undefined) t.push(`fo:font-weight="${s.gras ? 'bold' : 'normal'}"`);
       if (s.italique !== null && s.italique !== undefined) t.push(`fo:font-style="${s.italique ? 'italic' : 'normal'}"`);
       if (s.couleur) t.push(`fo:color="#${s.couleur}"`);
+      else if (s.couleur === null && /^h\d$/.test(s.id || '') && !s.perso) t.push('style:use-window-font-color="true"');
+      if (s.souligne !== null && s.souligne !== undefined) t.push(s.souligne ? 'style:text-underline-style="solid" style:text-underline-width="auto" style:text-underline-color="font-color"' : 'style:text-underline-style="none"');
       const p = [];
       if (s.avant !== null && s.avant !== undefined) p.push(`fo:margin-top="${s.avant}pt"`);
       if (s.apres !== null && s.apres !== undefined) p.push(`fo:margin-bottom="${s.apres}pt"`);
@@ -640,7 +673,7 @@
     }).join('');
     return `<?xml version="1.0" encoding="UTF-8"?>\n<office:document-styles ${DECL} office:version="1.3">${fontFaces}<office:styles>`
       + `<style:default-style style:family="paragraph"><style:paragraph-properties fo:margin-top="0cm" fo:margin-bottom="0.28cm" fo:line-height="115%"/><style:text-properties style:font-name="${police}" fo:font-size="${taille}pt" fo:language="fr" fo:country="FR"/></style:default-style>`
-      + '<style:style style:name="Standard" style:family="paragraph" style:class="text"/>'
+      + `<style:style style:name="Standard" style:family="paragraph" style:class="text">${parId.p ? proprietes({ ...parId.p, police: null, taille: null }) : ''}</style:style>`
       + '<style:style style:name="Heading" style:family="paragraph" style:parent-style-name="Standard" style:next-style-name="Standard" style:class="text"><style:paragraph-properties fo:margin-top="0.42cm" fo:margin-bottom="0.21cm" fo:keep-with-next="always"/></style:style>'
       + titre(1, 20) + titre(2, 16) + titre(3, 14) + titre(4, 12) + titre(5, 11) + titre(6, 11) + persos
       + '<style:style style:name="Quotations" style:display-name="Quotations" style:family="paragraph" style:parent-style-name="Standard" style:class="html"><style:paragraph-properties fo:margin-left="1cm" fo:margin-right="1cm" fo:padding-left="0.2cm" fo:border-left="1.5pt solid #a0a0a0"/><style:text-properties fo:font-style="italic" fo:color="#595959"/></style:style>'

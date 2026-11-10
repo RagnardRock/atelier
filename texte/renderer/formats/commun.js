@@ -378,12 +378,15 @@ const Formats = (() => {
   // Les styles lus dans un fichier → d.styles (voir stylesdoc.js). titres : { h1: valeurs… } ;
   // perso : [{ id, nom, balise, valeurs… }]. On ne garde, pour Titre 1 à 4, que ce qui diffère
   // des styles de base d'Edda. policeDoc : la police du document (pas besoin de la répéter).
-  function stylesLus(titres, perso, policeDoc) {
+  // titres : { p (Texte normal), h1…h4 : valeurs lues }, perso : les styles créés, menu : l'ordre de
+  // la liste du ruban ({ ordre, caches }). Une couleur lue « auto » (null) reste null : automatique.
+  function stylesLus(titres, perso, policeDoc, menu = null) {
     const D = StylesDoc.DEFAUTS;
     const propre = (v) => {
       const o = {};
       for (const k of StylesDoc.CHAMPS) {
         let x = v[k];
+        if (k === 'couleur' && x === null && Object.prototype.hasOwnProperty.call(v, 'couleur')) { o.couleur = null; continue; }
         if (x === undefined || x === null || x === '') continue;
         if (k === 'couleur') x = String(x).toLowerCase();
         if (k === 'police' && policeDoc && x.toLowerCase() === String(policeDoc).toLowerCase()) continue;
@@ -397,11 +400,12 @@ const Formats = (() => {
     const base = {};
     for (const [id, v] of Object.entries(titres || {})) {
       if (!D[id]) continue;
-      const o = Object.fromEntries(Object.entries(propre(v)).filter(([k, x]) => x !== D[id][k]));
+      const o = Object.fromEntries(Object.entries(propre(v)).filter(([k, x]) => x !== D[id][k] && !(id === 'p' && (k === 'police' || k === 'taille'))));
       if (Object.keys(o).length) base[id] = o;
     }
     const liste = (perso || []).filter((p) => /^perso\d+$/.test(p.id)).map((p) => ({ id: p.id, nom: p.nom || p.id, balise: /^h[1-4]$/.test(p.balise) ? p.balise : 'p', ...Object.fromEntries(StylesDoc.CHAMPS.map((k) => [k, null])), ...propre(p) }));
-    return Object.keys(base).length || liste.length ? { base, perso: liste } : null;
+    const m = menu && Array.isArray(menu.ordre) ? { ordre: menu.ordre.filter((x) => typeof x === 'string'), caches: (Array.isArray(menu.caches) ? menu.caches : []).filter((x) => typeof x === 'string') } : null;
+    return Object.keys(base).length || liste.length || m ? { base, perso: liste, ...(m ? { menu: m } : {}) } : null;
   }
 
   function signetsVersPage(html) {
