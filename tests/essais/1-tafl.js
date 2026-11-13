@@ -68,4 +68,20 @@ module.exports = [
       sansErreur(erreurs, 'dans les conditions');
     },
   },
+  {
+    nom: 'Tafl : remettre dans l\'ordre les images d\'une planche de sprite (Tafl 1.29)',
+    async faire(ctx) {
+      const { page, erreurs } = await ouvrirTafl(ctx.navigateur, ctx);
+      // Une planche de 4 rangées × 3 images : chaque image est remplie d'une couleur qui dit d'où elle vient
+      // (rouge = rangée, vert = colonne). On échange les deux pas (colonnes 1 et 2), et les rangées haut et bas.
+      const vu = await page.evaluate(() => {
+        const image = (r, c) => { const t = document.createElement('canvas'); t.width = t.height = 2; const g = t.getContext('2d'); g.fillStyle = `rgb(${r * 60}, ${c * 60}, 0)`; g.fillRect(0, 0, 2, 2); return t; };
+        const images = [0, 1, 2, 3].map((r) => [0, 1, 2].map((c) => image(r, c)));
+        const out = Sprites.reordonner(images, [0, 2, 1], [3, 1, 2, 0]);
+        return out.map((rang) => rang.map((t) => { const [r, v] = t.getContext('2d').getImageData(0, 0, 1, 1).data; return `${r / 60}${v / 60}`; }).join(' '));
+      });
+      egal(vu, ['30 32 31', '10 12 11', '20 22 21', '00 02 01'], 'planche remise en ordre (rangée+colonne d\'origine)');
+      sansErreur(erreurs, 'en remettant les images en ordre');
+    },
+  },
 ];
