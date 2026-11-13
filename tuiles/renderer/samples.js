@@ -100,7 +100,13 @@ const Samples = (() => {
     // Pour essayer l'éditeur de jeu : l'eau et les murs bloquent le joueur, les hautes herbes et la mare
     // sont des zones, et le joueur part du croisement des chemins.
     const zone = (id, name, type, z, objet = '') => ({ id, name, type, x: clamp(z.x, 0, W - 1), y: clamp(z.y, 0, H - 1), w: Math.max(1, Math.min(z.w, W - z.x)), h: Math.max(1, Math.min(z.h, H - z.y)), objet });
-    if (herbes.y + herbes.h <= H && mare.x >= 0 && W >= 9) doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', herbes), zone('zone-2', 'Mare', 'eau', mare, 'planche-de-surf')];
+    if (herbes.y + herbes.h <= H && mare.x >= 0 && W >= 9) {
+      doc.map.zones = [zone('zone-1', 'Herbes hautes', 'herbes', herbes), zone('zone-2', 'Mare', 'eau', mare, 'planche-de-surf')];
+      // Tafl 1.32 : l'objet que demande la mare existe dans les données (sinon le vérificateur signale une erreur).
+      if (doc.data && Array.isArray(doc.data.objets) && !doc.data.objets.some((o) => o.id === 'planche-de-surf')) {
+        doc.data.objets.push({ id: 'planche-de-surf', nom: 'Planche de surf', categorie: 'cle', prix: 0, description: 'Pour aller sur l\'eau.', effet: { type: 'aucun' } });
+      }
+    }
     doc.depart = { carte: doc.map.id, x: clamp(midX, 0, W - 1), y: clamp(midY, 0, H - 1), direction: 'bas' };
     // Deux événements pour essayer les scripts (Tafl 0.7) : le panneau au croisement, et un habitant.
     if (W >= 6 && midY >= 1) {
