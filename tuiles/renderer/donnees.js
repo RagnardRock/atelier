@@ -1319,11 +1319,9 @@ const Donnees = (() => {
           const b2 = el('button', { className: `chip cond-chip${a.condition ? ' on' : ''}`, textContent: a.condition ? Events.resumeCondition({ ...doc, data: work }, a.condition) : 'Toujours' });
           b2.onclick = async (e) => {
             e.preventDefault();
-            const choix = await Events.choisir([
-              { label: 'Toujours en vente', value: 'aucune' },
-              null,
-              ...Object.entries(Events.CONDITIONS).filter(([k2]) => k2 !== 'local').map(([k2, d2]) => ({ label: `Débloqué si : ${d2.nom}`, value: k2 })),
-            ], e.clientX, e.clientY);
+            const choix = await Events.choisirCondition({ ...doc, data: work }, e.clientX, e.clientY, {
+              sauf: ['local'], titre: 'Débloqué si…', avant: [{ label: 'Toujours en vente', value: 'aucune', icon: 'check' }],
+            });
             if (!choix) return;
             if (choix === 'aucune') { a.condition = null; rendre(); return; }
             const c = await Events.formCondition({ ...doc, data: work }, a.condition?.type === choix ? a.condition : Events.CONDITIONS[choix].nouveau({ ...doc, data: work }));

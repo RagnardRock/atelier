@@ -200,7 +200,7 @@ const DonneesGestion = (() => {
         const puce = el('button', { className: 'chip cond-chip on', textContent: b.condition ? Events.resumeCondition(doc, b.condition) : '(choisir)' });
         puce.onclick = async (e) => {
           e.preventDefault();
-          const type = await Events.choisir(Object.entries(Events.CONDITIONS).filter(([k]) => k !== 'local').map(([k, d]) => ({ label: `Débloqué si : ${d.nom}`, value: k })), e.clientX, e.clientY);
+          const type = await Events.choisirCondition(doc, e.clientX, e.clientY, { sauf: ['local'], titre: 'Débloqué si…' });
           if (!type) return;
           const c = await Events.formCondition(doc, b.condition?.type === type ? b.condition : Events.CONDITIONS[type].nouveau(doc));
           if (c) { b.condition = c; rendre(); }
@@ -528,7 +528,7 @@ const DonneesGestion = (() => {
       const puce = el('button', { className: `chip cond-chip${o[cle] ? ' on' : ''}`, textContent: o[cle] ? `si ${(() => { try { return Events.resumeCondition(doc, o[cle]); } catch { return o[cle].type; } })()}` : vide });
       puce.onclick = async (e) => {
         e.preventDefault();
-        const type = await Events.choisir(Object.entries(Events.CONDITIONS).filter(([k]) => k !== 'local').map(([k, d]) => ({ label: `Si : ${d.nom}`, value: k })), e.clientX, e.clientY);
+        const type = await Events.choisirCondition(doc, e.clientX, e.clientY, { sauf: ['local'], titre: 'Si…' });
         if (!type) return;
         const c = await Events.formCondition(doc, o[cle]?.type === type ? o[cle] : Events.CONDITIONS[type].nouveau(doc));
         if (c) { o[cle] = c; rendre(); }

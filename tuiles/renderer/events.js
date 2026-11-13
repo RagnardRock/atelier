@@ -2047,12 +2047,48 @@ const Events = (() => {
     return items;
   }
 
+  // Tafl 1.32 : la couleur de chaque famille (les blocs du script, la liste « Ajouter une commande »).
+  const COULEURS = {
+    Dialogue: '#5ec8ff', Logique: '#b9a8ff', 'Objets et créatures': '#ffd040', Histoire: '#ff9e4a',
+    Héros: '#ff7aa8', Progression: '#7bd88f', Services: '#4ad6c4', Déplacements: '#d27bff',
+    Ambiance: '#7f9cff', Scripts: '#a3e635', 'Dés et règles': '#f0c75e', Cinématique: '#ff6b6b',
+    Gestion: '#c9a26b', Relations: '#e879f9', Roguelite: '#f97316', Temps: '#7f9cff', 'Le joueur': '#ffd040',
+  };
+  // Les conditions n'ont pas de groupe écrit : on le déduit (module, pack, ou sa famille).
+  const GROUPES_CONDITIONS = {
+    interrupteur: 'Logique', local: 'Logique', variable: 'Logique',
+    quete: 'Histoire', compteur: 'Histoire',
+    moment: 'Temps', jour: 'Temps', jours_depuis: 'Temps', heure: 'Temps',
+    objet: 'Le joueur', argent: 'Le joueur', badge: 'Le joueur', bonus: 'Le joueur', membre: 'Le joueur',
+  };
+  const NOMS_MODULES = { gestion: 'Gestion', relations: 'Relations', roguelite: 'Roguelite' };
+  function groupeCondition(k, d) {
+    if (d.groupe) return d.groupe;
+    if (d.modules?.length) return NOMS_MODULES[d.modules[0]] || d.modules[0];
+    if (GROUPES_CONDITIONS[k]) return GROUPES_CONDITIONS[k];
+    if (d.packs?.includes('jdr')) return 'Dés et règles';
+    return 'Autres';
+  }
+  // Choisir une commande à ajouter : recherche, familles titrées, dernières choisies en haut.
+  function choisirCommande(doc, x, y) {
+    const items = Object.entries(COMMANDES).filter(([, d]) => duPack(doc, d))
+      .map(([k, d]) => ({ label: d.nom, value: k, icon: d.icone, groupe: d.groupe, couleur: COULEURS[d.groupe] }));
+    return Choisir.ouvrir(items, x, y, { titre: 'Chercher une commande', recents: 'commandes' });
+  }
+  // Choisir une condition (sauf : celles à laisser de côté ici, par exemple « déjà fait » hors d'un événement).
+  // avant : des choix en plus, tout en haut (« Toujours en vente »).
+  function choisirCondition(doc, x, y, { sauf = [], titre = 'Chercher une condition', avant = [] } = {}) {
+    const items = [...avant, ...Object.entries(CONDITIONS).filter(([k, d]) => duPack(doc, d) && !sauf.includes(k))
+      .map(([k, d]) => { const g = groupeCondition(k, d); return { label: d.nom, value: k, groupe: g, couleur: COULEURS[g] }; })];
+    return Choisir.ouvrir(items, x, y, { titre, recents: 'conditions' });
+  }
+
   // Une commande neuve de ce type, remplie dans sa fenêtre (null si on annule). Un « si » demande
   // d'abord sa condition, dans un menu ouvert en (x, y).
   async function nouvelleCommande(doc, type, ev, x, y) {
     if (!COMMANDES[type]) return null;
     if (type === 'si') {
-      const ct = await choisir(menuConditions(doc), x, y);
+      const ct = await choisirCondition(doc, x, y);
       const cond = ct && await formCondition(doc, CONDITIONS[ct].nouveau(doc));
       return cond ? { type: 'si', condition: cond, alors: [], sinon: [] } : null;
     }
@@ -2415,7 +2451,8 @@ const Events = (() => {
         const addCond = el('button', { className: 'cmd-add', textContent: '+ Condition' });
         addCond.onclick = async (e) => {
           const r = addCond.getBoundingClientRect();
-          const type = await choisir(menuConditions(doc), r.left, r.bottom + 4);
+          const type = await choisirCondition(doc, r.left, r.bottom + 4);
+          if (!type) return;
           const c = await formCondition(doc, CONDITIONS[type].nouveau(doc));
           if (c) { p.conditions.push(c); renderPage(); }
           e.stopPropagation();
@@ -2500,7 +2537,8 @@ const Events = (() => {
         const add = el('button', { className: 'cmd-add', style: { marginLeft: `${8 + n * 22}px` }, textContent: '+ Ajouter une commande' });
         add.onclick = async () => {
           const r = add.getBoundingClientRect();
-          const type = await choisir(menuCommandes(doc), r.left, r.bottom + 4);
+          const type = await choisirCommande(doc, r.left, r.bottom + 4);
+          if (!type) return;
           const c = await nouvelleCommande(doc, type, work, r.left, r.bottom + 4);
           if (c) { liste.push(c); renderPage(); }
         };
@@ -2997,6 +3035,6 @@ const Events = (() => {
     create, nextId, ident, normEvent, normEvents, normPage, emptyData, normData, verifierPages, interrupteursManquants, valeurVariable,
     STATS_BONUS, statsBonus, texte, decrire, resumeCommande, resumeCondition, utilisations, portrait, perso, imagePortrait,
     editEvent, editData, isOpen, pageOuverte, handleKey, fenetre, occuper: (c) => { courant = c; }, normCondition, parcourirJeu, choisir, formCondition, listes, ONGLETS,
-    formCommande, nouvelleCommande, menuCommandes, duPack, parcourir, branches, nomQui, quiReel, suivi,
+    formCommande, nouvelleCommande, menuCommandes, choisirCommande, choisirCondition, COULEURS, duPack, parcourir, branches, nomQui, quiReel, suivi,
   };
 })();

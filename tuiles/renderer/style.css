@@ -1560,3 +1560,49 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .fiche-editeur .unit.erreur { color: #ff8a7a; }
 @media (max-width: 1100px) { .fiche-editeur-corps { grid-template-columns: minmax(0, 1fr); } .fiche-apercu { position: static; } }
 .mini-table .ligne2:has(> .fiche-sans-champs) { display: none; }
+
+/* Tafl 1.32 : choisir dans une longue liste (« + Ajouter une commande », « + Condition ») :
+   une case de recherche, les familles titrées, les derniers choisis en haut. */
+.choisir {
+  position: fixed;
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: calc(100vw - 16px);
+  max-height: min(520px, calc(100vh - 16px));
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(30, 31, 40, 0.94);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow: var(--shadow);
+  animation: pop 0.1s ease-out;
+}
+.choisir-champ { flex-shrink: 0; width: 100%; height: 30px; margin-bottom: 4px; }
+.choisir-liste { overflow-y: auto; min-height: 0; }
+.choisir-groupe { margin: 8px 8px 3px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.choisir-groupe:first-child { margin-top: 3px; }
+.choisir-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.choisir-item .codicon { color: var(--bloc); font-size: 14px; flex-shrink: 0; }
+.choisir-puce { width: 7px; height: 7px; margin: 0 3px; border-radius: 50%; background: var(--bloc); flex-shrink: 0; }
+.choisir-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.choisir-item.actif { background: var(--accent); color: var(--accent-text); }
+.choisir-item.actif .codicon { color: inherit; }
+.choisir-item.actif .choisir-puce { background: currentColor; }
+.choisir-vide { padding: 10px; color: var(--muted); font-size: 12px; }
+.flow-palette-cherche { width: 100%; height: 26px; margin-bottom: 4px; font-size: 12px; }
+.flow-palette-item[hidden], .flow-palette-groupe[hidden] { display: none; }

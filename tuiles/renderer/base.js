@@ -125,5 +125,126 @@ const Menus = (() => {
   window.addEventListener('pointerdown', (e) => { if (current && !dedans(e.target) && e.target !== current.button && !current.button?.contains(e.target)) close(); }, true);
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   window.addEventListener('blur', close);
-  return { open, close, isOpen: () => Boolean(current) };
+  // Tafl 1.32 : la liste à chercher (Choisir) compte comme un menu ouvert (Échap la ferme, elle seule).
+  return { open, close, isOpen: () => Boolean(current) || Choisir.isOpen() };
+})();
+
+// --- Choisir dans une longue liste (Tafl 1.32) ---
+// Une petite fenêtre flottante avec une case de recherche, des groupes titrés et, en haut, les
+// derniers choisis. Sert à « + Ajouter une commande » et « + Condition » : on tape quelques
+// lettres (« dorm », « bâtiment »…), les flèches choisissent, Entrée valide, Échap ferme.
+// items : [{ label, value, icon, groupe, couleur, mots (mots de plus pour la recherche) }].
+// options : { titre, recents (clé : les derniers choix sont retenus sous ce nom), max (5) }.
+// Rend la valeur choisie, ou null si on ferme sans choisir.
+const Choisir = (() => {
+  let courant = null; // { fermer(valeur) }
+  // « Bâtiment » se trouve en tapant « batiment » : on compare sans accents ni majuscules.
+  const plat = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const CLE = (nom) => `tafl.recents.${nom}`;
+  function lireRecents(nom) {
+    try { const l = JSON.parse(localStorage.getItem(CLE(nom)) || '[]'); return Array.isArray(l) ? l.filter((v) => typeof v === 'string') : []; } catch { return []; }
+  }
+  function retenir(nom, valeur) {
+    try { localStorage.setItem(CLE(nom), JSON.stringify([valeur, ...lireRecents(nom).filter((v) => v !== valeur)].slice(0, 12))); } catch { /* sans stockage, pas de récents */ }
+  }
+
+  function ouvrir(items, x, y, options = {}) {
+    courant?.fermer(null);
+    return new Promise((resolve) => {
+      const tous = items.filter(Boolean).map((it) => ({ ...it, cle: plat(`${it.label} ${it.groupe || ''} ${it.value} ${it.mots || ''}`.replace(/_/g, ' ')) }));
+      const recents = options.recents ? lireRecents(options.recents).map((v) => tous.find((it) => it.value === v)).filter(Boolean).slice(0, options.max ?? 5) : [];
+      const boite = el('div', { className: 'choisir' });
+      const champ = el('input', { type: 'search', className: 'choisir-champ', placeholder: `${options.titre || 'Chercher'} (${tous.length})…`, spellcheck: false });
+      const liste = el('div', { className: 'choisir-liste' });
+      const vide = el('div', { className: 'choisir-vide', textContent: 'Rien ne correspond.' });
+      boite.append(champ, liste);
+      let lignes = []; // [{ item, node }] dans l'ordre affiché
+      let actif = 0;
+
+      function marquer(i, defiler = true) {
+        if (!lignes.length) return;
+        actif = (i + lignes.length) % lignes.length;
+        lignes.forEach((l, j) => l.node.classList.toggle('actif', j === actif));
+        if (defiler) lignes[actif].node.scrollIntoView({ block: 'nearest' });
+      }
+      function ligne(it) {
+        const node = el('button', { type: 'button', className: 'choisir-item', title: it.label, style: { '--bloc': it.couleur || 'var(--muted)' } }, [
+          it.icon ? icon(it.icon) : el('span', { className: 'choisir-puce' }),
+          el('span', { className: 'choisir-label', textContent: it.label }),
+        ]);
+        const n = lignes.length;
+        node.onmouseenter = () => marquer(n, false);
+        node.onmousedown = (e) => e.preventDefault(); // la case de recherche garde le clavier
+        node.onclick = () => fermer(it.value);
+        lignes.push({ item: it, node });
+        return node;
+      }
+      function titreGroupe(nom, couleur) {
+        return el('div', { className: 'choisir-groupe', textContent: nom, style: { color: couleur || '' } });
+      }
+      function remplir() {
+        const mots = plat(champ.value).split(/\s+/).filter(Boolean);
+        lignes = [];
+        liste.replaceChildren();
+        if (!mots.length && recents.length) {
+          liste.append(titreGroupe('Derniers choisis'));
+          for (const it of recents) liste.append(ligne(it));
+        }
+        const trouves = tous.filter((it) => mots.every((m) => it.cle.includes(m)));
+        // Les groupes dans l'ordre de leur première apparition (une commande ajoutée plus loin
+        // dans la liste rejoint quand même son groupe).
+        const groupes = new Map();
+        for (const it of trouves) {
+          const g = it.groupe || '';
+          if (!groupes.has(g)) groupes.set(g, []);
+          groupes.get(g).push(it);
+        }
+        for (const [g, l] of groupes) {
+          if (g) liste.append(titreGroupe(g, l[0].couleur));
+          for (const it of l) liste.append(ligne(it));
+        }
+        if (!trouves.length) liste.append(vide);
+        // Avec une recherche, la première trouvée est prête (Entrée) ; sans, le premier récent.
+        marquer(mots.length && recents.length ? lignes.findIndex((l) => trouves.includes(l.item)) : 0);
+        liste.scrollTop = 0;
+      }
+
+      function fermer(valeur) {
+        if (courant !== moi) return;
+        courant = null;
+        boite.remove();
+        window.removeEventListener('pointerdown', dehors, true);
+        window.removeEventListener('blur', surFlou);
+        if (valeur != null && options.recents) retenir(options.recents, valeur);
+        resolve(valeur ?? null);
+      }
+      const moi = { fermer };
+      const dehors = (e) => { if (!boite.contains(e.target)) fermer(null); };
+      const surFlou = () => fermer(null);
+      champ.addEventListener('input', remplir);
+      champ.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); marquer(actif + 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); marquer(actif - 1); }
+        else if (e.key === 'PageDown') { e.preventDefault(); marquer(Math.min(lignes.length - 1, actif + 8)); }
+        else if (e.key === 'PageUp') { e.preventDefault(); marquer(Math.max(0, actif - 8)); }
+        else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); if (lignes[actif]) fermer(lignes[actif].item.value); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fermer(null); }
+        else if (e.key === 'Tab') e.preventDefault();
+      });
+
+      courant = moi;
+      Menus.close();
+      document.body.append(boite);
+      remplir();
+      // Elle reste dans la fenêtre, même ouverte près du bord (en bas : elle monte au-dessus).
+      const r = boite.getBoundingClientRect();
+      boite.style.left = `${Math.max(8, Math.min(x, innerWidth - r.width - 8))}px`;
+      boite.style.top = `${Math.max(8, y + r.height > innerHeight - 8 ? Math.max(8, innerHeight - r.height - 8) : y)}px`;
+      champ.focus();
+      // Le clic qui l'a ouverte ne la referme pas.
+      setTimeout(() => { if (courant === moi) { window.addEventListener('pointerdown', dehors, true); window.addEventListener('blur', surFlou); } });
+    });
+  }
+
+  return { ouvrir, isOpen: () => Boolean(courant), close: () => courant?.fermer(null) };
 })();
