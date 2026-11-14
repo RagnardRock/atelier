@@ -9,6 +9,8 @@
 // (Réglages › Règles du JDR › Création).
 
 const JdrCreation = (() => {
+  // « de Thorgrim », « d'Aventurier » (Saga 1.29.1).
+  const dElision = (n) => `${/^[aeiouyàâéèêëîïôûh]/i.test(String(n)) ? 'd\'' : 'de '}${n}`;
   const B = JdrBase, P = JdrPerso, D = JdrDes, T = JdrTests;
   const METHODES = { standard: 'Tableau standard (15, 14, 13, 12, 10, 8)', points: 'Achat de points (27 points)', des: 'Lancer 4d6 (on garde les 3 meilleurs)' };
 
@@ -75,7 +77,7 @@ const JdrCreation = (() => {
     let i = 0;
     while (max > 0) {
       i = await ui.liste({
-        titre: `Compétences de ${c.nom || 'ton personnage'}`, entete: `${choisis.size} / ${max}`, depart: i, annulable: false, large: true,
+        titre: `Compétences ${dElision(c.nom || 'ton personnage')}`, entete: `${choisis.size} / ${max}`, depart: i, annulable: false, large: true,
         note: deOrigine.length ? `Déjà maîtrisées grâce à ton origine : ${deOrigine.map((id) => B.nomCompetence(jeu, id)).join(', ')}.` : '',
         items: [...parmi.map((id) => ({ texte: `${choisis.has(id) ? '✔ ' : '   '}${B.nomCompetence(jeu, id)}`, detail: B.courtCarac(jeu, P.caracDe(jeu, id)), desactive: choisis.size >= max && !choisis.has(id) })),
           { texte: 'Valider', detail: choisis.size < max ? `encore ${max - choisis.size} à choisir` : '', desactive: choisis.size < max }],

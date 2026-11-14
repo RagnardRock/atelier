@@ -1,0 +1,11 @@
+{
+  "name": "atelier-essais",
+  "private": true,
+  "description": "Les essais automatiques de Tafl et Saga (voir README.md)",
+  "scripts": {
+    "essais": "node lancer.js"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

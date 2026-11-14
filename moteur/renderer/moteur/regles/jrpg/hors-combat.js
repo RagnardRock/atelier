@@ -5,6 +5,8 @@
 // l'index choisi ou null (voir menus.js).
 
 const JrpgHorsCombat = (() => {
+  // « de Thorgrim », « d'Aventurier » (Saga 1.29.1).
+  const dElision = (n) => `${/^[aeiouyàâéèêëîïôûh]/i.test(String(n)) ? 'd\'' : 'de '}${n}`;
   const H = JrpgHeros;
   const UTILES = ['soin', 'soin_pm', 'rappel', 'soin_statut', 'repousse'];
   const utilisable = (o) => Boolean(o && UTILES.includes(o.effet?.type));
@@ -113,7 +115,7 @@ const JrpgHorsCombat = (() => {
     for (;;) {
       const comps = H.competences(jeu, c).map((id) => H.trouver(jeu, 'attaques', id));
       const i = await ui.liste({
-        titre: `Compétences de ${H.nom(jeu, c)}`, entete: `${c.pm}/${H.pmMax(jeu, c)} PM`,
+        titre: `Compétences ${dElision(H.nom(jeu, c))}`, entete: `${c.pm}/${H.pmMax(jeu, c)} PM`,
         items: comps.map((x) => ({ texte: x.nom, detail: `${Number(x.cout_pm) || 0} PM${horsCombat(x) ? '' : ' · en combat'}`, desactive: !horsCombat(x) || c.pv <= 0 || (Number(x.cout_pm) || 0) > c.pm })),
         note: comps.length ? '' : 'Pas encore de compétence.',
       });

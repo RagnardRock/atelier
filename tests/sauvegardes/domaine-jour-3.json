@@ -1,0 +1,128 @@
+{
+ "version": 1,
+ "nom": "Fermier",
+ "interrupteurs": {},
+ "locaux": {
+  "clairiere/brune": true
+ },
+ "retouches": {},
+ "repousses": {},
+ "quetes": {},
+ "compteurs": {
+  "captures": 0,
+  "dresseurs_battus": 0,
+  "sauvages_battus": 0,
+  "evolutions": 0,
+  "badges": 0,
+  "pas": 6
+ },
+ "sac": {},
+ "equipe": [
+  {
+   "creature": "fermier",
+   "heros": true,
+   "surnom": "",
+   "classe": "jardinier",
+   "niveau": 1,
+   "xp": 0,
+   "pv": 36,
+   "pm": 6,
+   "statut": "",
+   "equipement": {
+    "arme": "",
+    "bouclier": "",
+    "casque": "",
+    "armure": "",
+    "accessoire": ""
+   },
+   "competences": []
+  }
+ ],
+ "boites": [
+  {
+   "nom": "Réserve 1",
+   "creatures": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  }
+ ],
+ "dex": {
+  "vus": {},
+  "pris": {}
+ },
+ "argent": 0,
+ "badges": [],
+ "tenue": "",
+ "dernierSoin": {
+  "carte": "clairiere",
+  "x": 15,
+  "y": 15,
+  "direction": "droite"
+ },
+ "repousse": 0,
+ "partis": {},
+ "temps": 421.3500000000007,
+ "musique": null,
+ "variables": {},
+ "graine": 132681972,
+ "modules": {
+  "gestion": {
+   "stock": {
+    "bois": 6,
+    "ble": 3
+   },
+   "batiments": [
+    {
+     "id": "b1",
+     "type": "maison",
+     "etat": "fini",
+     "reste": 0,
+     "carte": "clairiere",
+     "x": 7,
+     "y": 9
+    }
+   ],
+   "habitants": 2,
+   "faim": 0,
+   "prochain": 2,
+   "resolu": 2
+  },
+  "relations": {
+   "liens": {
+    "brune": {
+     "points": 10,
+     "rencontre": true,
+     "parle": 1,
+     "cadeau": 0,
+     "cadeaux": 0,
+     "vu": 0,
+     "gouts": {}
+    }
+   },
+   "peuples": {},
+   "resolu": 2
+  }
+ },
+ "jour": 3,
+ "bonus": [],
+ "position": {
+  "carte": "clairiere",
+  "x": 15,
+  "y": 15,
+  "direction": "droite"
+ },
+ "visites": {
+  "clairiere": true
+ }
+}

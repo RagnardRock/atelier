@@ -167,6 +167,9 @@ const Moteur = (() => {
     const hoteModules = {
       reagir: (moment, infos = {}) => reagir(String(moment), infos && typeof infos === 'object' ? infos : {}),
       rafraichir: () => { if (jeu && carte) presents = Monde.evenementsPresents(jeu, carte, partie, presents); },
+      // Saga 1.29 (corrigé en 1.29.1 : il n'était prêté qu'au temps réel, et le module gestion ne le trouvait pas) :
+      // après le script ou le menu en cours, jouer les scènes « Tout seul » de la carte marquées pour cette relance.
+      relancer: (nom) => { if (nom) relancesAFaire.add(String(nom)); },
       message: (t) => rappels.message?.(String(t)),
       get ui() { return scripts?.ui || null; },
       // Saga 1.5 : la carte du joueur et sa case, et si une case est libre pour y poser quelque chose

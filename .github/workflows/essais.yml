@@ -1,0 +1,50 @@
+# Les essais automatiques de Tafl et Saga (tests/README.md) : à chaque pull request qui touche Tafl,
+# Saga ou les fichiers communs, un robot crée les jeux modèles, les joue dans Saga et vérifie le résultat.
+# Une PR rouge = quelque chose qui marchait ne marche plus. Les captures des essais ratés sont dans
+# la rubrique « Artifacts » de cette page.
+name: Essais Tafl et Saga
+
+on:
+  pull_request:
+    paths: ['tuiles/**', 'moteur/**', 'commun/**', 'tests/**', '.github/workflows/essais.yml']
+  push:
+    branches: [main]
+    paths: ['tuiles/**', 'moteur/**', 'commun/**', 'tests/**', '.github/workflows/essais.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: essais-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  essais:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Saga : ses modules (les icônes, pour l'export web), sans télécharger Electron.
+      - name: Préparer Saga
+        working-directory: moteur
+        run: npm ci --ignore-scripts && node ../commun/copier.js
+      - name: Préparer Tafl
+        working-directory: tuiles
+        run: node ../commun/copier.js
+      - name: Préparer le robot (Playwright et Chromium)
+        working-directory: tests
+        run: npm install --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Lancer les essais
+        working-directory: tests
+        run: node lancer.js
+      - name: Garder les captures des essais ratés
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captures-essais-rates
+          path: tests/resultats/
+          if-no-files-found: ignore

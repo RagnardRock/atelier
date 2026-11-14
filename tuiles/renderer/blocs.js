@@ -13,11 +13,7 @@
 
 const Blocs = (() => {
   // La couleur de chaque famille de commandes (les groupes du menu « Ajouter une commande »).
-  const COULEURS = {
-    Dialogue: '#5ec8ff', Logique: '#b9a8ff', 'Objets et créatures': '#ffd040', Histoire: '#ff9e4a',
-    Héros: '#ff7aa8', Progression: '#7bd88f', Services: '#4ad6c4', Déplacements: '#d27bff',
-    Ambiance: '#7f9cff', Scripts: '#a3e635', 'Dés et règles': '#f0c75e', Cinématique: '#ff6b6b',
-  };
+  const COULEURS = Events.COULEURS; // Tafl 1.32 : rangées dans events.js (partagées avec la liste des commandes)
   const couleur = (type) => COULEURS[Events.COMMANDES[type]?.groupe] || '#9aa0ac';
   const SANS_APERCU = 'Clique sur un dialogue ou un choix pour voir sa boîte telle qu\'elle sera dans Saga.';
 
@@ -80,7 +76,8 @@ const Blocs = (() => {
       plus.onclick = async (e) => {
         e.stopPropagation();
         const r = plus.getBoundingClientRect();
-        const type = await Events.choisir(Events.menuCommandes(doc), r.right + 4, r.top);
+        const type = await Events.choisirCommande(doc, r.right + 4, r.top);
+        if (!type) return;
         await ajouter(type, cmds, index, r.right + 4, r.top);
       };
       t.append(plus);
@@ -190,32 +187,61 @@ const Blocs = (() => {
   // La palette : toutes les commandes du pack de règles du jeu, par famille, à glisser dans le script.
   function palette(o) {
     const box = el('div', { className: 'flow-palette' });
-    let groupe = null;
+    // Tafl 1.32 : chercher dans la palette (« dorm », « bâtiment »…), sans accents ni majuscules.
+    const plat = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const cherche = el('input', { type: 'search', className: 'flow-palette-cherche', placeholder: 'Chercher…', value: o.etat.filtre || '', spellcheck: false });
+    box.append(cherche);
+    // Les familles dans l'ordre de leur première commande : une commande ajoutée plus loin rejoint sa famille.
+    const familles = new Map();
     for (const [type, d] of Object.entries(Events.COMMANDES)) {
       if (!Events.duPack(o.doc, d)) continue;
-      if (d.groupe !== groupe) {
-        groupe = d.groupe;
-        box.append(el('div', { className: 'flow-palette-groupe', textContent: groupe, style: { color: COULEURS[groupe] || '' } }));
-      }
-      const item = el('div', { className: 'flow-palette-item', draggable: true, title: `${d.nom} : glisse-la sur un trait du script, ou clique pour l'ajouter à la fin`, style: { '--bloc': couleur(type) } }, [icon(d.icone), el('span', { textContent: d.nom.replace(/\s*\(.*\)$/, '') })]);
-      item.addEventListener('dragstart', (e) => {
-        glisse = { type };
-        e.dataTransfer.effectAllowed = 'copy';
-        e.dataTransfer.setData('text/plain', type);
-      });
-      item.addEventListener('dragend', () => { glisse = null; });
-      // Un clic : à la suite du bloc choisi (dans sa liste), sinon à la fin du script.
-      item.onclick = async () => {
-        const r = item.getBoundingClientRect();
-        const c = await Events.nouvelleCommande(o.doc, type, o.ev, r.right + 4, r.top);
-        if (!c) return;
-        const ou = trouver(o.page.commandes, o.etat.choisi);
-        if (ou) ou.liste.splice(ou.i + 1, 0, c); else o.page.commandes.push(c);
-        o.etat.choisi = c;
-        o.redessiner();
-      };
-      box.append(item);
+      if (!familles.has(d.groupe)) familles.set(d.groupe, []);
+      familles.get(d.groupe).push([type, d]);
     }
+    const blocsFamilles = [];
+    for (const [groupe, liste] of familles) {
+      const titre = el('div', { className: 'flow-palette-groupe', textContent: groupe, style: { color: COULEURS[groupe] || '' } });
+      box.append(titre);
+      const items = [];
+      for (const [type, d] of liste) {
+        const item = el('div', { className: 'flow-palette-item', draggable: true, title: `${d.nom} : glisse-la sur un trait du script, ou clique pour l'ajouter à la fin`, style: { '--bloc': couleur(type) } }, [icon(d.icone), el('span', { textContent: d.nom.replace(/\s*\(.*\)$/, '') })]);
+        item.addEventListener('dragstart', (e) => {
+          glisse = { type };
+          e.dataTransfer.effectAllowed = 'copy';
+          e.dataTransfer.setData('text/plain', type);
+        });
+        item.addEventListener('dragend', () => { glisse = null; });
+        // Un clic : à la suite du bloc choisi (dans sa liste), sinon à la fin du script.
+        item.onclick = async () => {
+          const r = item.getBoundingClientRect();
+          const c = await Events.nouvelleCommande(o.doc, type, o.ev, r.right + 4, r.top);
+          if (!c) return;
+          const ou = trouver(o.page.commandes, o.etat.choisi);
+          if (ou) ou.liste.splice(ou.i + 1, 0, c); else o.page.commandes.push(c);
+          o.etat.choisi = c;
+          o.redessiner();
+        };
+        box.append(item);
+        items.push({ node: item, cle: plat(`${d.nom} ${groupe} ${type.replace(/_/g, ' ')}`) });
+      }
+      blocsFamilles.push({ titre, items });
+    }
+    function filtrer() {
+      o.etat.filtre = cherche.value;
+      const mots = plat(cherche.value).split(/\s+/).filter(Boolean);
+      for (const f of blocsFamilles) {
+        let n = 0;
+        for (const it of f.items) { const ok = mots.every((m) => it.cle.includes(m)); it.node.hidden = !ok; if (ok) n++; }
+        f.titre.hidden = !n;
+      }
+    }
+    cherche.addEventListener('input', filtrer);
+    // Entrée ajoute la première trouvée ; Échap vide la recherche (puis ferme la fenêtre, la fois d'après).
+    cherche.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); blocsFamilles.flatMap((f) => f.items).find((it) => !it.node.hidden)?.node.click(); }
+      else if (e.key === 'Escape' && cherche.value) { e.preventDefault(); e.stopPropagation(); cherche.value = ''; filtrer(); }
+    });
+    filtrer();
     return box;
   }
 

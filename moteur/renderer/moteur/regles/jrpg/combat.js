@@ -12,6 +12,8 @@
 // peut les remplacer (règles maison, Saga 0.12) : on les appelle toujours par Maison.formule.
 
 const JrpgCombat = (() => {
+  // « de Thorgrim », « d'Aventurier » (Saga 1.29.1).
+  const dElision = (n) => `${/^[aeiouyàâéèêëîïôûh]/i.test(String(n)) ? 'd\'' : 'de '}${n}`;
   const H = JrpgHeros;
   const hasard = (n) => Math.floor(Math.random() * n);
   const chance = (p) => Math.random() * 100 < p;
@@ -360,7 +362,7 @@ const JrpgCombat = (() => {
           ordres[k] = { type: 'attaque', comp: ATTAQUE, cible: c };
         } else if (choix === 'competences') {
           const comps = connues.map((id) => trouver('attaques', id));
-          const i = await ui.liste(`Compétences de ${nom(u)}`, comps.map((c) => ({
+          const i = await ui.liste(`Compétences ${dElision(nom(u))}`, comps.map((c) => ({
             texte: c.nom, detail: `${Number(c.cout_pm) || 0} PM${c.type ? ` · ${trouver('types', c.type)?.nom || c.type}` : ''}`,
             desactive: (Number(c.cout_pm) || 0) > pm(u) || (u.statuts.silence && c.categorie === 'speciale'),
             couleur: trouver('types', c.type)?.couleur || '',
