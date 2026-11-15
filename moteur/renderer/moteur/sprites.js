@@ -3,23 +3,36 @@
 // dessiné avec : voir dessinerSprite, plus bas. Sinon, Saga dessine le personnage de base
 // (../commun/perso-base.js, Saga 1.31) : 32 × 32 px dans un style à la RPG Maker, à la couleur du
 // personnage (sa `couleur` dans personnages.json), 4 directions, 3 images de marche, une respiration quand
-// il est debout, et en temps réel ses animations (coup d'épée, coup reçu, chute). En tuiles de 16 px, il
-// fait deux cases de haut ; il est agrandi pour les tuiles de 64 px et plus.
+// il est debout, et en temps réel ses animations (coup d'épée, coup reçu, chute). Il fait une case : réduit
+// de moitié en tuiles de 16 px, agrandi pour les tuiles de 64 px et plus.
 
 const Sprites = (() => {
   const ORDRE = ['bas', 'gauche', 'droite', 'haut'];
 
-  // Les planches du personnage de base, par couleur et par agrandissement (1 pour des tuiles de 16 px).
+  // Les planches du personnage de base, par couleur et par taille de case : dessinées en 32 px (agrandies
+  // pour les cases de 64 px et plus), réduites pour les cases plus petites (16 px : de moitié).
   const cache = new Map();
   const echelleDe = (taille) => Math.max(1, Math.round((taille || 16) / 32));
+  function reduire(toile, f) {
+    if (f >= 1) return toile;
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(toile.width * f));
+    c.height = Math.max(1, Math.round(toile.height * f));
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true;
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(toile, 0, 0, c.width, c.height);
+    return c;
+  }
   function base(couleur, taille = 16) {
     const c = /^#[0-9a-f]{6}$/i.test(couleur || '') ? couleur.toLowerCase() : '#d94a4a';
-    const e = echelleDe(taille), cle = `${c}/${e}`;
+    const e = echelleDe(taille), f = Math.min(1, (taille || 16) / 32), cle = `${c}/${e}/${f}`;
     if (!cache.has(cle)) {
       const p = PersoBase.planches(c, {}, e);
       const anims = {};
-      for (const [nom, a] of Object.entries(p.animations)) anims[nom] = { img: a.toile, largeur: a.largeur, hauteur: a.hauteur, images: a.images, duree: a.duree, base: true };
-      cache.set(cle, { sprite: { img: p.marche.toile, largeur: p.marche.largeur, hauteur: p.marche.hauteur, images: 3, base: true }, animations: anims, echelle: e });
+      const taillee = (n) => Math.max(1, Math.round(n * f));
+      for (const [nom, a] of Object.entries(p.animations)) anims[nom] = { img: reduire(a.toile, f), largeur: taillee(a.largeur), hauteur: taillee(a.hauteur), images: a.images, duree: a.duree, base: true };
+      cache.set(cle, { sprite: { img: reduire(p.marche.toile, f), largeur: taillee(p.marche.largeur), hauteur: taillee(p.marche.hauteur), images: 3, base: true }, animations: anims, echelle: e * f });
       if (cache.size > 96) cache.delete(cache.keys().next().value);
     }
     return cache.get(cle);
@@ -42,7 +55,7 @@ const Sprites = (() => {
   // bas de la case, centré. pas : 0 debout (il respire, chacun à son rythme), 1 et 2 les deux pieds.
   function dessiner(ctx, couleur, direction, pas, x, y, taille) {
     const b = base(couleur, taille), r = Math.max(0, ORDRE.indexOf(direction));
-    const k = taille >= 32 ? taille / (32 * b.echelle) : 1;
+    const k = taille / (32 * b.echelle);
     let img = b.sprite.img, col = Math.min(2, Math.max(0, pas)), s = b.sprite;
     if (!pas) {
       // Debout : la respiration (l'animation repos), décalée selon la couleur pour que tous ne respirent pas ensemble.

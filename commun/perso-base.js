@@ -1,19 +1,21 @@
 // Le personnage de base (Saga 1.31, Tafl 1.34) : celui que Saga dessine quand un personnage n'a ni
 // sprite ni tuile, et que Tafl propose comme point de départ d'un sprite (« Partir du personnage de base »).
 //
-// Dans un style à la RPG Maker (le choix de Ragna) : une image de 32 × 32 px, une grosse tête aux grands
-// yeux, des cheveux en mèches ombrées, un contour doux (la couleur voisine très assombrie, pas du noir).
-// Planche de marche au format habituel de Saga : 4 rangées (face, gauche, droite, dos) × 3 images
-// (debout, pas, autre pas).
+// Dans un style à la RPG Maker (le choix de Ragna, d'après une planche libre de droits qu'il aime) : une
+// image de 32 × 32 px, une grosse tête aux cheveux en mèches, des yeux de 3 × 5 px (cils, pupille, iris en
+// bas) écartés de 5 px, ni bouche ni nez, un contour doux (la couleur voisine très assombrie, pas du noir).
+// Planche de marche au format de Saga : 4 rangées (face, gauche, droite, dos) × 3 images (debout, pas,
+// autre pas). Pendant un pas, tout le corps monte d'un pixel, une jambe avance et l'autre recule.
 //
-// Tout se fabrique ici à partir de petits modèles qui se lisent comme des images (une lettre = un pixel),
-// posés les uns sur les autres selon la pose (debout, pas, repos, coup d'épée, coup reçu, chute).
-// Rien ne dépend du navigateur sauf `toile()` : Tafl et Saga en tirent leurs planches.
+// Tout se fabrique ici à partir de modèles qui se lisent comme des images (une lettre = un pixel), retouchés
+// selon la pose (debout, pas, repos, coup d'épée, coup reçu, chute). Rien ne dépend du navigateur sauf
+// `toile()` : Tafl et Saga en tirent leurs planches.
 //
-//   H cheveux (ombrés tout seuls : l lumière, w reflet, h ombre et séparation des mèches)
-//   S peau  s son ombre  K cils et contour de l'œil  I iris  Y reflet de l'œil  m bouche
-//   T veste  U sa lumière  t son ombre  A manche  x pli entre le bras et le buste  W chemise
-//   G ceinture  g boucle  P pantalon  p son ombre (jambe du fond)  B chaussures  b semelle  q chaussure du fond
+//   H cheveux  h leur ombre  l leur lumière  o les traits entre les mèches
+//   S peau  s son ombre  r ombre profonde (oreille, menton)  e trait brun  K cils et traits du visage
+//   Y blanc de l'œil  J pupille  N blanc de l'œil dans l'ombre  W reflet  I iris  i bas de l'iris
+//   T veste  U sa lumière  t son ombre  A manche  x pli entre le bras et le buste  W col de chemise
+//   G ceinture  P pantalon  p son ombre (jambe du fond)  B chaussures  b semelle  q chaussure du fond
 
 const PersoBase = (() => {
   const L = 32, H = 32;          // une image (marche et animations)
@@ -22,7 +24,6 @@ const PersoBase = (() => {
   const COIFFURES = ['courts', 'longs'];
 
   // ---------- Outils ----------
-  const sym = (g) => g + [...g].reverse().join('');
   const vide = (w = L, h = H) => Array.from({ length: h }, () => '.'.repeat(w));
   const miroir = (lignes) => lignes.map((l) => [...l].reverse().join(''));
   // Écrit un bout de rangée (les '.' ne remplacent rien).
@@ -32,8 +33,16 @@ const PersoBase = (() => {
     [...s].forEach((ch, k) => { if (ch !== '.' && c + k >= 0 && c + k < a.length) a[c + k] = ch; });
     lignes[r] = a.join('');
   }
-  // Décale de dy rangées tout ce qui est au-dessus de la rangée `jusque` (le haut du corps qui respire).
-  function decaler(lignes, dy, jusque = 25) {
+  // Remplace, dans un rectangle, les lettres de `quoi` par `par` ('.' : effacer).
+  function remplacer(lignes, r0, r1, c0, c1, quoi, par) {
+    for (let r = r0; r <= r1; r++) {
+      const a = [...lignes[r]];
+      for (let c = c0; c <= c1; c++) if (quoi.includes(a[c])) a[c] = par;
+      lignes[r] = a.join('');
+    }
+  }
+  // Décale de dy rangées tout ce qui est au-dessus de la rangée `jusque` (exclue) : dy < 0 monte.
+  function decaler(lignes, dy, jusque = lignes.length) {
     if (!dy) return lignes;
     const haut = lignes.slice(0, jusque), bas = lignes.slice(jusque), w = lignes[0].length;
     const blanc = () => '.'.repeat(w);
@@ -41,177 +50,185 @@ const PersoBase = (() => {
     return [...out, ...bas];
   }
 
-  // ---------- Les têtes (rangées 1 à 18) ----------
-  // Face et dos : la moitié gauche, recopiée en miroir. Les retouches cassent un peu la symétrie.
+  // ---------- Le haut du corps, debout (la tête et le buste ; les jambes se dessinent selon la pose) ----------
   const FACE = [
-    '..........h.....',
-    '.........hH..h..',
-    '.......h.HHhhHh.',
-    '......hHhHHHhHHH',
-    '.....hHHHHHhHHHH',
-    '.....HHHHHhHHHHH',
-    '....hHHHHhHHHHhH',
-    '....HHHHhHHHHhHH',
-    '....HHHhHHHHhHHH',
-    '....HHhHHHHhHHhH',
-    '....hHHHHhSHHhSH',
-    '....HHHhSSSSHSSS',
-    '....HhSSKKKKSSSS',
-    '....h.SSKIIYSSSS',
-    '......SSKIIISSSS',
-    '......sSSSSSSSSS',
-    '.......sSSSSSSSS',
-    '.........ssSSSSS',
-  ].map(sym);
-  const DOS = [
-    '..........h.....',
-    '.........hH..h..',
-    '.......h.HHhhHh.',
-    '......hHhHHHhHHH',
-    '.....hHHHHHhHHHH',
-    '.....HHHHHhHHHHH',
-    '....hHHHHhHHHHhH',
-    '....HHHHhHHHHhHH',
-    '....HHHhHHHHhHHH',
-    '....HHhHHHHhHHHH',
-    '....hHhHHHHhHHHH',
-    '....HhHHHHhHHHHH',
-    '....HhHHHHhHHHHh',
-    '....hHHHHhHHHHhH',
-    '.....HHHhHHHHhHH',
-    '......sHhHHHHhHH',
-    '.......shHHHhHHh',
-    '.........sssssss',
-  ].map(sym);
-  // De profil (vers la droite).
-  const PROFIL = [
-    '...........h....................',
-    '..........hH..h..h..............',
-    '........h.HHhhHhHH..............',
-    '.......hHhHHHHHHHHHh............',
-    '......hHHHHHHHHHHHHHH...........',
-    '.....hHHHHHHHHHHHHHHHH..........',
-    '.....HHHHHHHHHHHHHHHHHh.........',
-    '....hHHHHHHHHHHHHHhHHHHh........',
-    '....HHHHHHHHHHHHHhHHHhHH........',
-    '....HHHHHHHHHHHHhHSShSSh........',
-    '....hHHHHHHHHHHHSSSSSSSS........',
-    '.....HHHHHHHHHHSSSSSSSSSS.......',
-    '.....HHHHHHHHHSSSSSKKKSSS.......',
-    '.....hHHHHsSHHSSSSSKIYSSSS......',
-    '......HHHssSHSSSSSSKIISSSS......',
-    '......hHHHHHSSSSSSSSSSSSs.......',
-    '.......hHHhSSSSSSSSSSSs.........',
-    '.........hssSSSSSSSss...........',
+    '................................', // 0
+    '...........hh..hHh..............',
+    '.........hhHHhhHHHh..hh.........',
+    '........hHHHlHHHllHhhHHh........',
+    '.......hHHllHHHlllHHHHHHh.......',
+    '......hHHlllHHHHHHHHHHHHHh......', // 5
+    '.....hHHHHHHHHHHHHHHHHHHHh......',
+    '.....hHHHHHHHHoHHHHHHHHHHHh.....',
+    '....hHHHoHHHHHHoHHHHHHoHHHh.....',
+    '....hHHoHHHHHHHoHHHHHHHoHHHh....',
+    '....hHHHHHHHHHHHHHHHHHHHHHHh....', // 10
+    '....hHHHHHHHhsHHHHsHHHHhHHHh....',
+    '....hHHHHHhsssHHsssHhssHHHHh....',
+    '....hhHHHhsKKKSSSSKKKs..hHHh....',
+    '.....hHHHrsYJYSSSSYJYsrHrHHh....',
+    '......hKHrsYJNSSSSNJYsrHK.h.....', // 15
+    '........KrsWIISSSSIIWsrK........',
+    '..........rsiiSSSSiisr..........',
+    '.........TKrsSSSSSSsrKT.........',
+    '........UUxTWssssssWTxUU........',
+    '........UAxTTWWWWWWTTxAU........', // 20
+    '........AAxTTTWWWWTTTxAA........',
+    '........AAxtTTTTTTTTtxAA........',
+    '.......SSxGGGGGGGGGGGGxSS.......',
+    '.......ss.tTTTTTTTTTTt.ss.......',
+    '..........tTTTTTTTTTTt..........', // 25
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '................................', // 30
+    '................................',
   ];
-  // Les retouches de chaque coiffure : [rangée, colonne, texte], par direction ('.' seul : effacer).
-  const RETOUCHES = {
-    courts: {
-      bas: [[16, 15, 'mm'], [2, 17, 'H'], [1, 18, '.']],
-      haut: [[2, 17, 'H'], [1, 18, '.']],
-      droite: [],
-    },
-    // Les longs : des mèches qui tombent sur les épaules (de face) et dans le dos.
-    longs: {
-      bas: [[16, 15, 'mm'], [2, 17, 'H'], [1, 18, '.'],
-        [14, 4, 'HH'], [15, 4, 'HHh'], [16, 4, 'HHh'], [17, 5, 'HHh'], [18, 5, 'HHh'], [19, 6, 'Hh'], [20, 6, 'Hh'],
-        [14, 26, 'HH'], [15, 25, 'hHH'], [16, 25, 'hHH'], [17, 24, 'hHH'], [18, 24, 'hHH'], [19, 24, 'hH'], [20, 24, 'hH']],
-      haut: [[2, 17, 'H'], [1, 18, '.'], [15, 5, 'HHHHHHHHHHHHHHHHHHHHHH'], [16, 6, 'HHHhHHHHHHHHHHHHhHHH'], [17, 7, 'HHHhHHHHHHHHHhHHH'],
-        [18, 7, 'hHHHHhHHHHHhHHHHh'], [19, 8, 'HHHHhHHHHhHHHHH'], [20, 9, 'hHHHHHhHHHHHh'], [21, 10, 'hhHHHHHHHhh']],
-      droite: [[14, 6, 'HHH'], [15, 5, 'HHHHH'], [16, 5, 'HHHHHH'], [17, 6, 'HHHHH'], [18, 7, 'HHHH'], [19, 8, 'HHh'], [20, 9, 'Hh']],
-    },
+  const DOS = [
+    '................................', // 0
+    '..............hHh..hh...........',
+    '.........hh..hHHHhhHHh..........',
+    '........hHHhhHHllHHHHhh.........',
+    '.......hHHHHHHlllHHHHHHh........',
+    '......hHHHHHHHHHHHHHHHHHh.......', // 5
+    '.....hHHHHHHHHHHHHHHHHHHHh......',
+    '.....hHHHHHHHHoHHHHHHHHHHh......',
+    '....hHHHHHHHHoHHHHHHoHHHHHh.....',
+    '....hHHoHHHHHoHHHHHHoHHHHHh.....',
+    '....hHHoHHHHHHHHHHHHHoHHHHHh....', // 10
+    '....hHHHHHHHHHHHHHHHHHHHHHHh....',
+    '....hHHHHHHoHHHHHoHHHHHHHHHh....',
+    '....hHHoHHHHoHHHHoHHHHHoHHHh....',
+    '.....hHHHHHHHHHHHHHHHHHHHHh.....',
+    '.....hHHHHHHHHHHHHHHHHHHHh......', // 15
+    '......hhHHHHHHHHHHHHHHHhh.......',
+    '........hhhHHHHHHHHHHhh.........',
+    '.........TTssssssssssTT.........',
+    '........UUxTTTTTTTTTTxUU........',
+    '........UAxTTTTTTTTTTxAU........', // 20
+    '........AAxTTTTTTTTTTxAA........',
+    '........AAxtTTTTTTTTtxAA........',
+    '.......SSxGGGGGGGGGGGGxSS.......',
+    '.......ss.tTTTTTTTTTTt.ss.......',
+    '..........tTTTTTTTTTTt..........', // 25
+    '................................',
+    '................................',
+    '................................',
+    '................................',
+    '................................', // 30
+    '................................',
+  ];
+  const PROFIL = [
+    '................................', // 0
+    '..............hh.hHh............',
+    '...........hhHHHhHHHHh..........',
+    '.........hHHHHlllHHHHHhh........',
+    '........hHHHHllllHHHHHHHh.......',
+    '.......hHHHHHHHHHHHHHHHHHh......', // 5
+    '......hHHHHHHHHHHHHHHHHHHHh.....',
+    '.....hHHHHHHHHHHHHHHHHHoHHh.....',
+    '.....hHHoHHHHHHHHHHHHHoHHHHh....',
+    '....hHHHHoHHHHHHHHHHHorHHHh.....',
+    '....hHHHHHoHHHHHHHHHhHHrHHh.....', // 10
+    '....hHHHHHHHHHHHHHHHHsHHHh......',
+    '.....hHHHHHHHHHHHhSHSssHK.......',
+    '.....hHHoHHHKK...SKHKSssK.......',
+    '.....hHHHoHKSsK.SSYJYSSsK.......',
+    '......hHHHHKSes.SSWJNSSsK.......', // 15
+    '......hHHHHKseS.SSWIISSrK.......',
+    '.......hHHHhKrsSSSSiiSseK.......',
+    '........hHh..rrsSSSSSsrK........',
+    '.........h..eerrsssrreK.........',
+    '..............xxxxxxxx..........', // 20
+    '.............UTTTWWTt...........',
+    '............UTTTAAATt...........',
+    '............UTTAAAATt...........',
+    '............tTTAAAAtt...........',
+    '............GGGSSGGGG...........', // 25
+    '............tTTTTTTTt...........',
+    '................................',
+    '................................',
+    '................................',
+    '................................', // 30
+    '................................',
+  ];
+
+  // Les cheveux longs : des mèches en plus, sur les épaules (de face), dans le dos, derrière l'oreille.
+  const LONGS = {
+    bas: [[13, 4, 'hH'], [14, 4, 'hHH'], [15, 4, 'hHHh'], [16, 5, 'hHHh'], [17, 5, 'hHHh'], [18, 6, 'hHh'], [19, 6, 'hH'], [20, 6, 'hh'],
+      [13, 26, 'Hh'], [14, 25, 'HHh'], [15, 24, 'hHHh'], [16, 23, 'hHHh'], [17, 23, 'hHHh'], [18, 23, 'hHh'], [19, 24, 'Hh'], [20, 24, 'hh']],
+    haut: [[17, 7, 'hHHHHHHHHHHHHHHHHh'], [18, 7, 'hHHoHHHHHHHHoHHHHh'], [19, 8, 'hHHHHHHHHHHHHHHh'], [20, 8, 'hHHHoHHHHoHHHHHh'], [21, 9, 'hhHHHHHHHHHHhh'], [22, 11, 'hhhhhhhhhh']],
+    droite: [[16, 6, 'HHHHHh'], [17, 6, 'hHHHHh'], [18, 7, 'hHHHh'], [19, 7, 'hHHh'], [20, 8, 'hHh'], [21, 8, 'hh']],
   };
 
-  // ---------- Les corps (rangées 19 à 24 ; jambes 25 à 30) ----------
-  const BUSTE_FACE = [
-    '..........xUTTWW',
-    '..........xUTTTW',
-    '..........xUTTTW',
-    '..........xtTTTW',
-    '..........xttTTW',
-    '..........GGGGgG',
-  ].map(sym);
-  const BUSTE_DOS = [
-    '..........xUTTTT',
-    '..........xUTTTT',
-    '..........xUTTTT',
-    '..........xtTTTT',
-    '..........xttTTT',
-    '..........GGGGGG',
-  ].map(sym);
-  const BUSTE_PROFIL = [
-    '...........UTTTTTTTt............',
-    '..........UTTTTTTTTTt...........',
-    '..........UTTTTTTTTTt...........',
-    '..........tTTTTTTTTtt...........',
-    '..........ttTTTTTTTtt...........',
-    '...........GGGGGGGGG............',
-  ];
-
-  // Un bras de face/dos (2 px de large) à la colonne col : d = -1 en arrière (plus court), 0, +1 en avant.
-  function brasFace(l, col, d, dos) {
-    const n = 4 + d;
-    poser(l, 19, col, 'UA');
-    for (let k = 1; k < n; k++) poser(l, 19 + k, col, 'AA');
-    poser(l, 19 + n, col, dos ? 'Ss' : 'SS');
-    if (d >= 0) poser(l, 20 + n, col, 'ss');
-  }
-  // Les jambes de face/dos : la jambe levée est plus courte de deux rangées.
-  function jambesFace(l, leveeG, leveeD, dos) {
-    const jambe = (c, levee) => {
-      const n = levee ? 2 : 4;
-      for (let k = 0; k < n; k++) poser(l, 25 + k, c, k === n - 1 ? 'PPPp' : 'PPPP');
-      const cb = c - (c < 16 ? 1 : 0);
-      poser(l, 25 + n, cb, dos ? 'BBBBB' : 'BBBBb');
-      if (!levee) poser(l, 30, cb, 'bbbbb');
+  // ---------- Les jambes et les bras selon la pose ----------
+  // De face/dos : chaque jambe a une longueur (3 debout ; 4 la jambe qui avance, 2 celle qui recule), à
+  // partir de la rangée `haut` ; les pieds viennent dessous (2 rangées).
+  function jambesFace(l, haut, gauche, droite, dos) {
+    const jambe = (c, n, cb, fond) => {
+      for (let k = 0; k < n; k++) poser(l, haut + k, c, k === n - 1 ? (fond ? 'pPPP' : 'PPPp') : (fond ? 'pPPPP' : 'PPPPp').slice(fond ? 0 : 0, 5));
+      poser(l, haut + n, cb, dos ? 'BBBBB' : fond ? 'bBBBB' : 'BBBBb');
+      poser(l, haut + n + 1, cb, 'bbbbb');
     };
-    jambe(11, leveeG);
-    jambe(17, leveeD);
-    poser(l, 25, 15, 'pp');
+    jambe(10, gauche, 9, false);
+    jambe(17, droite, 18, true);
   }
-  // De profil : écart 0 debout, 1/-1 les deux pas (la jambe du fond est plus sombre).
-  function jambesProfil(l, ecart) {
+  // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas (la jambe du fond est plus sombre).
+  function jambesProfil(l, haut, ecart) {
     if (!ecart) {
-      for (let r = 25; r <= 28; r++) poser(l, r, 13, 'PPPPPp');
-      poser(l, 29, 13, 'BBBBBBB');
-      poser(l, 30, 13, 'bbbbbbbb');
+      poser(l, haut, 13, 'PPPPPPp');
+      poser(l, haut + 1, 13, 'PPPPPp');
+      poser(l, haut + 2, 13, 'BBBBBBB');
+      poser(l, haut + 3, 13, 'bbbbbbb');
       return;
     }
     const jambe = (sens, sombre) => {
       const P = sombre ? 'p' : 'P', B = sombre ? 'q' : 'B';
       if (sens > 0) {
-        poser(l, 25, 14, P.repeat(5)); poser(l, 26, 15, P.repeat(5)); poser(l, 27, 16, P.repeat(4)); poser(l, 28, 17, P.repeat(4));
-        poser(l, 29, 17, B.repeat(6)); poser(l, 30, 17, 'b'.repeat(6));
+        poser(l, haut, 15, P.repeat(5)); poser(l, haut + 1, 16, P.repeat(5)); poser(l, haut + 2, 17, P.repeat(4));
+        poser(l, haut + 3, 18, B.repeat(5)); poser(l, haut + 4, 18, 'b'.repeat(5));
       } else {
-        poser(l, 25, 12, P.repeat(5)); poser(l, 26, 11, P.repeat(5)); poser(l, 27, 10, P.repeat(4)); poser(l, 28, 9, P.repeat(4));
-        poser(l, 29, 8, B.repeat(5)); poser(l, 30, 8, 'b'.repeat(5));
+        poser(l, haut, 12, P.repeat(5)); poser(l, haut + 1, 11, P.repeat(5)); poser(l, haut + 2, 10, P.repeat(4));
+        poser(l, haut + 3, 8, B.repeat(5)); poser(l, haut + 4, 8, 'b'.repeat(5));
       }
     };
     const fond = ecart > 0 ? -1 : 1;
     jambe(fond, true);
     jambe(-fond, false);
   }
-  // Le bras de profil, devant le buste : avance de -1 (en arrière) à +1 (en avant).
-  function brasProfil(l, avance) {
-    poser(l, 19, 14, 'AAA');
-    poser(l, 20, 14 + avance, 'AAA');
-    poser(l, 21, 14 + avance, 'AAA');
-    poser(l, 22, 14 + 2 * avance, 'AAA');
-    poser(l, 23, 14 + 2 * avance, 'SSs');
+  // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
+  function brasProfil(l, haut, dx) {
+    remplacer(l, haut, haut + 3, 12, 22, 'AS', 'T');
+    remplacer(l, haut + 4, haut + 4, 12, 22, 'S', 'G');
+    poser(l, haut + 1, 15 + Math.max(0, dx), 'AAA');
+    poser(l, haut + 2, 15 + dx, 'AAAA');
+    poser(l, haut + 3, 15 + dx, 'AAAA');
+    poser(l, haut + 4, 16 + dx, 'SS');
+  }
+  // De face/dos, la main qui avance descend d'un pixel (la manche s'allonge), celle qui recule remonte.
+  // haut : la rangée des épaules (19 debout) ; la main est 4 rangées plus bas.
+  function mains(l, haut, avanceG, avanceD) {
+    const main = (cBras, cMain, d) => {
+      if (!d) return;
+      remplacer(l, haut + 4, haut + 5, cMain, cMain + 1, 'Ss', '.');
+      if (d > 0) poser(l, haut + 4, cBras, 'AA');
+      poser(l, haut + 4 + d, cMain, 'SS');
+      poser(l, haut + 5 + d, cMain, 'ss');
+    };
+    main(8, 7, avanceG);
+    main(22, 23, avanceD);
   }
 
-  // Ombre les cheveux (H) : ombre en bas et à droite, lumière sur le bord du haut, un reflet en bande
-  // sur le dessus de la tête.
-  function ombrer(l, dir) {
+  // Ombre les cheveux (H) : ombre en bas et à droite, lumière sur le bord du haut.
+  function ombrer(l) {
     const n = l.length, w = l[0].length, at = (r, c) => (r >= 0 && r < n && c >= 0 && c < w ? l[r][c] : '.');
-    const est = (ch) => 'Hhlw'.includes(ch);
+    const est = (ch) => 'Hhlo'.includes(ch);
     const out = l.map((s) => [...s]);
     for (let r = 0; r < n; r++) for (let c = 0; c < w; c++) {
       if (l[r][c] !== 'H') continue;
-      const haut = !est(at(r - 1, c)), bas = !est(at(r + 1, c)) || !est(at(r + 2, c)), droite = !est(at(r, c + 1));
-      if (bas || droite) out[r][c] = 'h';
-      else if (haut && r < 9) out[r][c] = 'l';
-      else if (r >= 3 && r <= 5 && c >= 9 && c <= 14 && dir !== 'haut') out[r][c] = r === 4 && c >= 10 && c <= 12 ? 'w' : 'l';
+      if (!est(at(r + 1, c)) && r > 6) out[r][c] = 'h';
+      else if (!est(at(r - 1, c)) && r < 8) out[r][c] = 'l';
     }
     return out.map((a) => a.join(''));
   }
@@ -220,33 +237,31 @@ const PersoBase = (() => {
   // o : { dir, coiffure, pas: 0 | 1 | 2, respire: 0 | 1, cligne }
   function pose(o) {
     const dir = o.dir === 'gauche' ? 'droite' : o.dir;
-    const coiffure = RETOUCHES[o.coiffure] ? o.coiffure : 'courts';
-    const l = vide();
-    if (dir === 'droite') {
-      const e = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
-      jambesProfil(l, e);
-      BUSTE_PROFIL.forEach((s, k) => poser(l, 19 + k, 0, s));
-      brasProfil(l, e);
-      PROFIL.forEach((s, k) => poser(l, 1 + k, 0, s));
-    } else {
-      const dos = dir === 'haut';
-      jambesFace(l, o.pas === 2, o.pas === 1, dos);
-      const g = o.pas === 1 ? -1 : o.pas === 2 ? 1 : 0;
-      (dos ? BUSTE_DOS : BUSTE_FACE).forEach((s, k) => poser(l, 19 + k, 0, s));
-      brasFace(l, 8, dos ? -g : g, dos);
-      brasFace(l, 22, dos ? g : -g, dos);
-      (dos ? DOS : FACE).forEach((s, k) => poser(l, 1 + k, 0, s));
-    }
-    for (const [r, c, s] of RETOUCHES[coiffure][dir]) {
-      if (s === '.') { const a = [...l[r]]; a[c] = '.'; l[r] = a.join(''); } else poser(l, r, c, s);
-    }
-    let out = ombrer(l, dir);
+    // Pendant un pas, tout le corps monte d'un pixel.
+    const monte = o.pas ? 1 : 0;
+    let l = (dir === 'droite' ? PROFIL : dir === 'haut' ? DOS : FACE).slice();
+    if (o.coiffure === 'longs') for (const [r, c, s] of LONGS[dir]) poser(l, r, c, s);
+    l = ombrer(l);
     if (o.cligne && dir !== 'haut') {
       // Les yeux fermés : la peau à la place de l'œil, et un trait de cils en bas.
-      out = out.map((s, r) => (r === 13 ? s.replace(/K/g, 'S') : r === 14 ? s.replace(/[IYK]/g, 'S') : r === 15 ? s.replace(/[IYK]/g, 'K') : s));
+      l = l.map((s, r) => (r === 13 || r === 14 || r === 15 ? s.replace(/[KYJNWI]/g, (ch, c) => (dir === 'bas' && (c < 9 || c > 22) ? ch : r === 15 ? 'K' : 'S')) : r === 16 ? s.replace(/[YJNWI]/g, 'S') : r === 17 ? s.replace(/i/g, 'S') : s));
     }
-    out = decaler(out, o.respire || 0);
-    return o.dir === 'gauche' ? miroir(out) : out;
+    // Le haut du corps : il respire (descend d'un pixel), ou monte pendant un pas.
+    l = decaler(l, (o.respire || 0) - monte);
+    if (dir === 'droite') {
+      const e = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
+      brasProfil(l, 21 - monte + (o.respire || 0), e * 2);
+      jambesProfil(l, 27 - monte, e);
+    } else {
+      const dos = dir === 'haut';
+      // Le pas 1 avance la jambe gauche de l'écran, le pas 2 la droite.
+      const g = o.pas === 1 ? 4 : o.pas === 2 ? 2 : 3, d = o.pas === 1 ? 2 : o.pas === 2 ? 4 : 3;
+      jambesFace(l, 26 - monte, g, d, dos);
+      // Les bras balancent à l'opposé des jambes.
+      const a = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
+      mains(l, 19 - monte + (o.respire || 0), dos ? a : -a, dos ? -a : a);
+    }
+    return o.dir === 'gauche' ? miroir(l) : l;
   }
 
   // ---------- Les couleurs ----------
@@ -281,9 +296,9 @@ const PersoBase = (() => {
   // Un petit nombre tiré de la couleur : chaque personnage garde toujours la même coiffure, les mêmes
   // cheveux et les mêmes yeux, sans qu'on ait rien à choisir.
   function graine(c) { let n = 7; for (const ch of c) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return n; }
-  const CHEVEUX = ['#7a5c4a', '#3a3038', '#c48a48', '#8a4a32', '#d8c078', '#5a4a6a'];
-  const PEAUX = ['#f8d4b0', '#efc29a', '#c8926a', '#f9dfc6'];
-  const YEUX = ['#7a4a2a', '#3a6aa0', '#4a7a3a', '#6a4a8a'];
+  const CHEVEUX = ['#8f7772', '#4a3c44', '#c89050', '#9a5236', '#dcc480', '#6a5a7a'];
+  const PEAUX = ['#ffe1af', '#f6cc9a', '#cf9a6c', '#ffe8cc'];
+  const YEUX = ['#964f00', '#2e6ab0', '#3e7a30', '#6a3e8a'];
 
   // Les réglages d'un personnage de base : couleur (sa veste), et ce qu'on peut forcer.
   function reglages(couleur, o = {}) {
@@ -300,10 +315,11 @@ const PersoBase = (() => {
     const veste = rampe(r.couleur), cheveux = r.cheveux, peau = r.peau;
     const pant = rampe('#3e4660');
     return {
-      H: cheveux, h: melange(cheveux, '#2a1a2a', 0.35), l: melange(cheveux, '#fff0d0', 0.3), w: melange(cheveux, '#ffffff', 0.55),
-      S: peau, s: melange(peau, '#b05a4a', 0.28), K: '#3a2a28', I: r.yeux, Y: '#ffffff', m: melange(peau, '#c0504a', 0.45),
-      T: veste.base, U: veste.lumiere, t: veste.ombre, A: melange(veste.base, veste.ombre, 0.6), x: melange(veste.base, '#1a1020', 0.6), W: '#f2efe6',
-      G: '#4a3630', g: '#d8b050', P: pant.base, p: pant.ombre,
+      H: cheveux, h: melange(cheveux, '#24141c', 0.28), o: melange(cheveux, '#1a0e14', 0.5), l: melange(cheveux, '#fff4e0', 0.32),
+      S: peau, s: melange(peau, '#c8763c', 0.22), r: melange(peau, '#a8482a', 0.38), e: melange(peau, '#5a3010', 0.5), K: '#4a3a24',
+      Y: '#dcdcdc', J: '#2e1e22', N: '#928a8c', W: '#ffffff', I: melange(r.yeux, '#000000', 0.25), i: r.yeux,
+      T: veste.base, U: veste.lumiere, t: veste.ombre, A: melange(veste.base, veste.ombre, 0.6), x: melange(veste.base, '#1a1020', 0.6),
+      G: '#4a3630', P: pant.base, p: pant.ombre,
       B: '#5a3a30', b: '#3a2620', q: '#3a2a26',
     };
   }
@@ -336,29 +352,30 @@ const PersoBase = (() => {
   }
 
   // ---------- Les animations ----------
-  // Le coup d'épée : 0 l'élan (le bras levé, le corps recule), 1 la frappe (le bras tendu, le corps avance),
+  // Le coup d'épée : 0 l'élan (le bras ramené, le corps recule), 1 la frappe (le bras tendu, le corps avance),
   // 2 la fin du geste, 3 le retour. Rend { lignes, dx, dy }.
   function poseCoup(o, k) {
     const dir = o.dir === 'gauche' ? 'droite' : o.dir;
     const l = pose({ ...o, dir, pas: 0 });
-    // On efface le bras qui frappe (la veste reprend sa place), puis on le redessine dans la pose.
-    const efface = (r, c, n, par) => { const a = [...l[r]]; for (let i = 0; i < n; i++) if ('AUSs'.includes(a[c + i])) a[c + i] = par; l[r] = a.join(''); };
     if (dir === 'droite') {
-      for (let r = 19; r <= 23; r++) efface(r, 12, 6, 'T');
-      if (k === 0) { poser(l, 19, 11, 'AAA'); poser(l, 20, 10, 'AAA'); poser(l, 21, 9, 'SS'); }
-      else if (k === 1) { poser(l, 19, 15, 'AAAAAA'); poser(l, 20, 15, 'AAAAAA'); poser(l, 19, 21, 'SS'); poser(l, 20, 21, 'Ss'); }
-      else if (k === 2) { poser(l, 20, 15, 'AAAAA'); poser(l, 21, 16, 'AAAA'); poser(l, 21, 20, 'SS'); poser(l, 22, 20, 'ss'); }
-      else { poser(l, 19, 14, 'AAA'); poser(l, 20, 15, 'AAA'); poser(l, 21, 15, 'AAA'); poser(l, 22, 16, 'SS'); }
+      // Le bras : ramené en arrière, puis tendu devant (à hauteur de poitrine), puis qui retombe.
+      remplacer(l, 21, 24, 12, 22, 'AS', 'T');
+      remplacer(l, 25, 25, 12, 22, 'S', 'G');
+      if (k === 0) { poser(l, 22, 11, 'AAA'); poser(l, 23, 10, 'AAA'); poser(l, 24, 9, 'SS'); }
+      else if (k === 1) { poser(l, 22, 16, 'AAAAAA'); poser(l, 23, 16, 'AAAAAA'); poser(l, 22, 22, 'SS'); poser(l, 23, 22, 'Ss'); }
+      else if (k === 2) { poser(l, 23, 16, 'AAAAA'); poser(l, 24, 17, 'AAAA'); poser(l, 24, 21, 'SS'); poser(l, 25, 21, 'ss'); }
+      else { poser(l, 22, 15, 'AAA'); poser(l, 23, 15, 'AAAA'); poser(l, 24, 16, 'AAA'); poser(l, 25, 17, 'SS'); }
       // Pendant la frappe, les pieds s'écartent (une petite fente).
-      if (k === 1 || k === 2) { for (let r = 25; r <= 30; r++) l[r] = '.'.repeat(L); jambesProfil(l, 1); }
+      if (k === 1 || k === 2) { remplacer(l, 27, 30, 0, L - 1, 'PpBbq', '.'); jambesProfil(l, 26, 1); }
     } else {
-      // De face : le bras droit du personnage (à gauche de l'écran) ; de dos, à droite de l'écran.
-      const col = dir === 'bas' ? 8 : 22;
-      for (let r = 19; r <= 25; r++) { const a = [...l[r]]; if ('AUSs'.includes(a[col])) a[col] = '.'; if ('AUSs'.includes(a[col + 1])) a[col + 1] = '.'; l[r] = a.join(''); }
-      if (k === 0) { poser(l, 14, col, 'SS'); for (let r = 15; r <= 18; r++) poser(l, r, col, 'AA'); poser(l, 19, col, 'UA'); }
-      else if (k === 1) { for (let r = 19; r <= 24; r++) poser(l, r, col, 'AA'); poser(l, 25, col, 'SS'); poser(l, 26, col, 'ss'); }
-      else if (k === 2) { for (let r = 19; r <= 23; r++) poser(l, r, col, 'AA'); poser(l, 24, col, 'SS'); poser(l, 25, col, 'ss'); }
-      else { poser(l, 19, col, 'UA'); for (let r = 20; r <= 22; r++) poser(l, r, col, 'AA'); poser(l, 23, col, 'SS'); poser(l, 24, col, 'ss'); }
+      // De face : le bras droit du personnage (à gauche de l'écran) ; de dos, celui de droite.
+      const cb = dir === 'bas' ? 8 : 22, cm = dir === 'bas' ? 7 : 23;
+      remplacer(l, 19, 24, Math.min(cb, cm), Math.max(cb, cm) + 1, 'AUSs', '.');
+      if (dir === 'bas') remplacer(l, 19, 22, 10, 10, 'x', 'T'); else remplacer(l, 19, 22, 21, 21, 'x', 'T');
+      if (k === 0) { poser(l, 19, cb, 'UA'); poser(l, 18, cm, 'AA'); poser(l, 17, cm, 'SS'); }
+      else if (k === 1) { for (let r = 19; r <= 24; r++) poser(l, r, cb, 'AA'); poser(l, 25, cm, 'SS'); poser(l, 26, cm, 'ss'); }
+      else if (k === 2) { for (let r = 19; r <= 23; r++) poser(l, r, cb, 'AA'); poser(l, 24, cm, 'SS'); poser(l, 25, cm, 'ss'); }
+      else { poser(l, 19, cb, 'UA'); for (let r = 20; r <= 22; r++) poser(l, r, cb, 'AA'); poser(l, 23, cm, 'SS'); poser(l, 24, cm, 'ss'); }
     }
     const d = { bas: [0, 1], haut: [0, -1], droite: [1, 0] }[dir];
     const recul = k === 0 ? -1 : k === 1 || k === 2 ? 1 : 0;
@@ -382,7 +399,7 @@ const PersoBase = (() => {
       const l = pose({ ...o, pas: 0, cligne: true });
       const blanc = '.'.repeat(L);
       // Fléchir : les pieds restent, des rangées des jambes disparaissent et le haut descend.
-      const lignes = k === 0 ? [blanc, blanc, ...l.slice(0, 25), ...l.slice(27)] : [blanc, blanc, blanc, blanc, ...l.slice(0, 25), ...l.slice(29)];
+      const lignes = k === 0 ? [blanc, ...l.slice(0, 26), ...l.slice(27)] : [blanc, blanc, ...l.slice(0, 26), ...l.slice(28)];
       return { lignes, dx: 0, dy: 0 };
     }
     // Allongé : le personnage de dos (les cheveux, le dos, les jambes), tourné d'un quart de tour, la tête
