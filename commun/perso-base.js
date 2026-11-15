@@ -177,19 +177,22 @@ const PersoBase = (() => {
   // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas. Sur un pas, la jambe qui avance est en
   // diagonale jusqu'au sol, celle de derrière se lève (pied plus haut, plus sombre).
   function jambesProfil(l, haut, ecart) {
-    // Comme sur le modèle, les jambes restent droites (verticales) : 3 rangées de 4 px puis le pied, la pointe
-    // d'un pixel vers l'avant. Debout, une seule jambe sous le corps. Sur un pas, les deux jambes s'écartent
-    // (l'une devant, l'autre derrière) : celle proche de la caméra, claire, va jusqu'au sol et garde toujours
-    // la même taille ; celle du fond, plus sombre, est levée d'une rangée.
-    const jambe = (c, proche) => {
-      const n = proche ? 3 : 2;
-      for (let k = 0; k < n; k++) poser(l, haut + k, c, proche ? 'PPPp' : 'pppp');
-      poser(l, haut + n, c + 1, proche ? 'BBBB' : 'qqqq');
+    if (!ecart) {
+      for (let k = 0; k < 3; k++) poser(l, haut + k, 14, 'PPPp');
+      poser(l, haut + 3, 15, 'BBBB');
+      return;
+    }
+    // ecart 1 : la jambe proche de la caméra avance ; -1 : elle recule. Les deux jambes ont toujours la même
+    // forme (3 rangées de 4 px en diagonale, puis le pied, pointe vers l'avant) : seule leur couleur change,
+    // claire pour la jambe proche, sombre pour celle du fond (dessinée d'abord, derrière).
+    const jambe = (sens, proche) => {
+      const P = proche ? 'P' : 'p', B = proche ? 'B' : 'q';
+      const c0 = sens > 0 ? 15 : 12;
+      for (let k = 0; k < 3; k++) poser(l, haut + k, c0 + sens * k, P.repeat(4));
+      poser(l, haut + 3, c0 + sens * 2 + 1, B.repeat(4));
     };
-    if (!ecart) { jambe(14, true); return; }
-    const devant = 17, derriere = 11;
-    jambe(ecart > 0 ? derriere : devant, false);
-    jambe(ecart > 0 ? devant : derriere, true);
+    jambe(-ecart, false);
+    jambe(ecart, true);
   }
   // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
   function brasProfil(l, haut, dx) {
