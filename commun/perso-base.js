@@ -177,19 +177,15 @@ const PersoBase = (() => {
   // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas. Sur un pas, la jambe qui avance est en
   // diagonale jusqu'au sol, celle de derrière se lève (pied plus haut, plus sombre).
   function jambesProfil(l, haut, ecart) {
-    if (!ecart) {
-      for (let k = 0; k < 3; k++) poser(l, haut + k, 14, 'PPPp');
-      poser(l, haut + 3, 15, 'BBBB');
-      return;
-    }
-    // ecart 1 : la jambe proche de la caméra avance ; -1 : elle recule. Elle reste claire et de la même taille
-    // dans les deux cas (jusqu'au sol) ; celle du fond est plus sombre, et se lève quand elle recule.
+    // Une jambe a toujours la même forme : 3 rangées de 4 px, puis le pied (4 px, décalé d'un pixel vers
+    // l'avant). Sur un pas, elle penche seulement (chaque rangée décalée d'un pixel), sans changer de forme.
+    // La jambe proche de la caméra est claire, celle du fond plus sombre (dessinée d'abord, derrière).
     const jambe = (sens, proche) => {
-      const P = proche ? 'P' : 'p', B = proche ? 'B' : 'q';
-      if (sens > 0) { poser(l, haut, 15, P.repeat(4)); poser(l, haut + 1, 16, P.repeat(4)); poser(l, haut + 2, 17, P.repeat(4)); poser(l, haut + 3, 18, B.repeat(4)); }
-      else if (proche) { poser(l, haut, 12, P.repeat(4)); poser(l, haut + 1, 11, P.repeat(4)); poser(l, haut + 2, 10, P.repeat(4)); poser(l, haut + 3, 10, B.repeat(4)); }
-      else { poser(l, haut, 12, P.repeat(4)); poser(l, haut + 1, 11, P.repeat(4)); poser(l, haut + 2, 10, B.repeat(4)); }
+      const P = proche ? 'PPPp' : 'pppp';
+      for (let k = 0; k < 3; k++) poser(l, haut + k, 14 + sens * k, P);
+      poser(l, haut + 3, 15 + sens * 2, proche ? 'BBBB' : 'qqqq');
     };
+    if (!ecart) { jambe(0, true); return; }
     jambe(-ecart, false);
     jambe(ecart, true);
   }
