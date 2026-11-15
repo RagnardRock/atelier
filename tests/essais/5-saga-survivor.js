@@ -157,4 +157,29 @@ module.exports = [
     },
     duree: 150000,
   },
+  {
+    nom: 'Saga : survivor, le bouton action ne donne pas de coup d\'épée dans l\'arène (Saga 1.30.1)',
+    async faire(ctx) {
+      const ouvert = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'survivor'), { ctx });
+      const { page, erreurs, saga } = ouvert;
+      await saga.attendreLibre();
+      // Au camp (pas de partie) : le bouton action donne bien un coup d'épée.
+      await page.mouse.click(640, 300);
+      await page.waitForTimeout(600);
+      const coup = () => page.waitForFunction(() => App.moteur.tempsReel?.enCoup, null, { timeout: 600 }).then(() => true, () => false);
+      await page.keyboard.down('Space');
+      const auCamp = await coup();
+      await page.keyboard.up('Space');
+      vrai(auCamp, 'au camp, pas de coup d\'épée (l\'essai ne voit rien)');
+      await page.waitForTimeout(500);
+      // Dans l'arène : plus de coup d'épée, seules les armes frappent.
+      await auPortail(page, saga);
+      await page.waitForTimeout(300);
+      await page.keyboard.down('Space');
+      const enArene = await coup();
+      await page.keyboard.up('Space');
+      vrai(!enArene, 'le héros donne encore des coups d\'épée dans l\'arène');
+      sansErreur(erreurs, 'en appuyant sur action');
+    },
+  },
 ];

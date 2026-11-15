@@ -352,6 +352,8 @@ const Moteur = (() => {
         return false;
       },
       corps: (o, maintenant) => dessinerCorps(o, maintenant),
+      // Saga 1.30.1 : un module peut retirer le coup d'épée (le survivor : les armes frappent toutes seules).
+      sansCoup: () => Modules.sansCoup(jeu, partie, carte),
       bruit,
       defaite: () => defaiteTempsReel(),
       annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
