@@ -182,17 +182,16 @@ const PersoBase = (() => {
       poser(l, haut + 3, 15, 'BBBB');
       return;
     }
-    // ecart 1 : la jambe proche de la caméra avance ; -1 : elle recule. Les deux jambes ont toujours la même
-    // forme (3 rangées de 4 px en diagonale, puis le pied, pointe vers l'avant) : seule leur couleur change,
-    // claire pour la jambe proche, sombre pour celle du fond (dessinée d'abord, derrière).
-    const jambe = (sens, proche) => {
-      const P = proche ? 'P' : 'p', B = proche ? 'B' : 'q';
-      const c0 = sens > 0 ? 15 : 12;
-      for (let k = 0; k < 3; k++) poser(l, haut + k, c0 + sens * k, P.repeat(4));
-      poser(l, haut + 3, c0 + sens * 2 + 1, B.repeat(4));
-    };
-    jambe(-ecart, false);
-    jambe(ecart, true);
+    // Calé sur le modèle. ecart 1 : la jambe proche de la caméra (claire) est devant, penchée vers l'avant,
+    // et celle du fond (sombre, fine, levée) derrière. ecart -1 : la jambe proche est derrière, presque droite
+    // sous le corps, et celle du fond devant, levée. Le pied touche le sol au même endroit que debout.
+    if (ecart > 0) {
+      poser(l, haut, 12, 'ppp'); poser(l, haut + 1, 12, 'qq');
+      poser(l, haut, 16, 'PPPp'); poser(l, haut + 1, 17, 'PPPPp'); poser(l, haut + 2, 18, 'BBBB');
+    } else {
+      poser(l, haut, 19, 'pp'); poser(l, haut + 1, 19, 'qqq');
+      poser(l, haut, 12, 'PPPp'); poser(l, haut + 1, 12, 'PPPPp'); poser(l, haut + 2, 12, 'BBBB');
+    }
   }
   // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
   function brasProfil(l, haut, dx) {
