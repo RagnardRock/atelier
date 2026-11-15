@@ -22,6 +22,8 @@
 //                                         nombre, image, pastille }] }] : ses sections dans le carnet (touche Tab)
 //   apresCombat(o)                      (Saga 1.11) un combat vient de finir (o.issue, o.sorte) ; → [lignes à dire]
 //   bloque(o, x, y)                     → true si la case (x, y) de o.carte est bloquée par le module
+//   sansCoup(o)                         (Saga 1.30.1) → true : en temps réel, le bouton action ne donne plus de coup
+//                                         d'épée (il sert encore à parler, ouvrir un coffre). Appelé à chaque appui.
 //   degage(o, x, y)                     (Saga 1.19) → true si le module dégage le décor de cette case : seul le
 //                                         premier calque de la carte y est dessiné et compte pour le passage
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
@@ -197,6 +199,14 @@ const Modules = (() => {
       for (const m of actifs(jeu)) {
         if (typeof m.bloque !== 'function') continue;
         try { if (m.bloque(objet(m, jeu, partie, null, { carte }), x, y) === true) return true; } catch (err) { dire(m.id, 'bloque', err); }
+      }
+      return false;
+    },
+    // Saga 1.30.1 : un module retire le coup d'épée du héros (le bouton action sert encore à parler, ouvrir).
+    sansCoup(jeu, partie, carte) {
+      for (const m of actifs(jeu)) {
+        if (typeof m.sansCoup !== 'function') continue;
+        try { if (m.sansCoup(objet(m, jeu, partie, null, { carte })) === true) return true; } catch (err) { dire(m.id, 'sansCoup', err); }
       }
       return false;
     },

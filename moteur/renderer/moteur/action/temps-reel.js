@@ -219,7 +219,7 @@ const TempsReel = (() => {
         const c = caseDe(h), [dx, dy] = DIRS[h.dir];
         // D'abord ce qu'il y a devant (parler, ouvrir un coffre) ; sinon, un coup d'épée.
         if (!hote.agir(c.x + dx, c.y + dy, h.dir)) {
-          if (h.recharge <= 0) { h.coup = { t: 0, touches: new Set() }; hote.bruit('epee'); }
+          if (h.recharge <= 0 && !hote.sansCoup?.()) { h.coup = { t: 0, touches: new Set() }; hote.bruit('epee'); }
         }
       }
       let { x: vx, y: vy } = vecteur || { x: 0, y: 0 };
@@ -660,6 +660,8 @@ const TempsReel = (() => {
       // Saga 1.30 (le module survivor) : le corps du héros en pixels de la carte, et un coup venu d'ailleurs
       // (un ennemi de la horde) : l'ennemi `def` du pack frappe le héros depuis (x, y), moins `reduction`.
       corpsHeros: () => (heros ? enMonde(heros, heros.b.corps) : null),
+      // Saga 1.30.1 : le héros est en train de donner un coup d'épée (pour les essais).
+      get enCoup() { return Boolean(heros?.coup); },
       toucherPar(def, depuis, reduction = 0) {
         if (!heros || !def || heros.invincible > 0) return false;
         appliquer(R().coupDeLEnnemi(jeu(), partie(), def), (n) => blesserHeros(Math.max(1, n - Math.max(0, Math.round(reduction))), depuis));

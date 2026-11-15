@@ -543,6 +543,8 @@
         if (k === 1) await this.commandes.survivor_arreter(o);
       }
     },
+    // Pendant une partie, pas de coup d'épée : seules les armes du survivor frappent.
+    sansCoup() { return Boolean(run); },
     carnet(o) {
       const e = o.etat, d = defs(o.jeu);
       const lignes = [...d.arenes.values()].map((a) => ({ texte: a.nom, detail: `record ${C.chrono(e.record[a.id] || 0)}${e.victoires[a.id] ? ` · ${e.victoires[a.id]} victoire${e.victoires[a.id] > 1 ? 's' : ''}` : ''}` }));
