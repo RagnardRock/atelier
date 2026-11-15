@@ -38,7 +38,7 @@ const Personnaliser = (() => {
         carte.append(el('div', { className: 'perso-titre', textContent: demanderNom && demanderTenue ? 'Qui es-tu ?' : demanderNom ? 'Comment t\'appelles-tu ?' : 'Quelle tenue ?' }));
 
         // L'aperçu : le héros qui marche vers nous, dans la tenue choisie.
-        const apercu = el('canvas', { className: 'perso-apercu', width: 48, height: 72 });
+        const apercu = el('canvas', { className: 'perso-apercu', width: 64, height: 72 });
         const ctx = apercu.getContext('2d');
         ctx.imageSmoothingEnabled = false;
         const sprite = () => tenues.find((t) => t.id === choix.tenue)?.sprite || tenues[0]?.sprite || null;
@@ -70,11 +70,12 @@ const Personnaliser = (() => {
           ctx.clearRect(0, 0, apercu.width, apercu.height);
           const pas = Math.floor((maintenant - t0) / 260);
           const s = sprite();
-          // 16 px de case, dessinée 2 fois plus grande ; les pieds en bas du canvas.
+          // Dessiné 2 fois plus grand, les pieds en bas du canvas : un sprite sur une case de 16 px, le
+          // personnage de base (32 px) sur une case de 32.
           ctx.save();
           ctx.scale(2, 2);
-          if (s) Sprites.dessinerSprite(ctx, s, 'bas', pas % 2 ? pas : 0, 4, 18, 16);
-          else Sprites.dessiner(ctx, '#d94a4a', 'bas', pas % 2 ? 1 + (pas >> 1) % 2 : 0, 4, 18, 16);
+          if (s) Sprites.dessinerSprite(ctx, s, 'bas', pas % 2 ? pas : 0, 8, 18, 16);
+          else Sprites.dessiner(ctx, '#d94a4a', 'bas', pas % 2 ? 1 + (pas >> 1) % 2 : 0, 0, 4, 32);
           ctx.restore();
         };
         boucle = requestAnimationFrame(dessiner);
