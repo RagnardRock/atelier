@@ -1376,6 +1376,103 @@ perk verrouillé), `monnaie` (`valeur` % de monnaie en plus).
 `run` pendant une partie (`graine`, `etage`, `salles` avec leurs liens et ce qui est vu ou vidé, `salle`,
 `perks`, `retour`, `gains`). Une défaite finit la partie : le joueur se réveille au point de retour.
 
+### Le module survivor (Tafl 1.33, Saga 1.30)
+
+`"survivor"` dans `reglages.modules` : survivre à des vagues d'ennemis, façon « Vampire Survivors ».
+Une **arène** est une carte : dès que le joueur y arrive, une partie commence. Le héros ne fait que se
+déplacer ; ses **armes** frappent toutes seules. Les ennemis arrivent par centaines, juste hors de l'écran,
+selon les **vagues** réglées sur un chrono. Chaque ennemi vaincu laisse une gemme d'expérience ; à chaque
+niveau, le joueur choisit une arme ou un **passif** parmi trois (`choix`). Il gagne s'il tient jusqu'au bout
+du chrono (ou s'il bat ensuite le boss final) ; il perd quand il n'a plus de vie. Dans les deux cas, il
+revient au lieu de retour de l'arène, sinon là d'où il venait.
+
+Il faut le pack **action** (le temps réel) : le héros, ses cœurs, les coups qu'il reçoit et sa défaite sont
+ceux du temps réel. Les ennemis sont ceux de `ennemis.json` (le pack action) ; la horde n'en lit que
+`pv`, `defense`, `vitesse`, `xp`, `poids`, `boss`, `personnage` et `couleur`, et les coups qu'elle donne
+passent par le pack (`attaque` contre la défense du héros). La partie en cours n'est pas sauvegardée.
+
+#### `donnees/arenes.json`
+
+```json
+{ "arenes": [ { "id": "champ", "nom": "Le champ maudit", "carte": "champ", "duree": 5, "fin": "boss",
+  "boss_final": "gardien", "renfort": 12, "depart": { "x": 24, "y": 20 },
+  "retour": { "carte": "camp", "x": 7, "y": 6, "direction": "bas" },
+  "vagues": [ { "ennemi": "slime", "de": 0, "a": 0, "par_minute": 60, "groupe": 3, "max": 0 } ],
+  "boss": [ { "ennemi": "squelette", "minute": 2, "nombre": 1 } ] } ] }
+```
+
+| Champ | Sens |
+|---|---|
+| `carte` | la carte de l'arène |
+| `duree` | 1 à 120 minutes |
+| `fin` | `temps` : gagner au bout du chrono ; `boss` : puis vaincre `boss_final` (vide : le premier ennemi `boss`) |
+| `renfort` | % de PV en plus pour les ennemis, à chaque minute |
+| `depart` | la case d'arrivée de la commande `survivor_lancer` (`null` : le milieu de la carte) |
+| `retour` | où revenir à la fin (`null` : là d'où vient le joueur) |
+| `vagues` | `de`, `a` (minutes ; `a` 0 : jusqu'à la fin), `par_minute`, `groupe` (ils arrivent par paquets), `max` (jamais plus à la fois pour cette ligne ; 0 : seulement `ennemis_max`) |
+| `boss` | à la `minute` dite, `nombre` boss : plus grands, une barre de vie, et un coffre (un choix de plus). Un ennemi qui n'est pas `boss` devient un champion (×10 PV et expérience) |
+
+#### `donnees/armes.json`
+
+```json
+{ "armes": [ { "id": "dague", "nom": "Dague", "description": "…", "icone": "", "sorte": "projectile",
+  "couleur": "#e8eef8", "degats": 6, "recharge": 1, "nombre": 1, "vitesse": 10, "portee": 9, "taille": 1,
+  "percee": 1, "duree": 0, "poids": 10, "verrouillee": false,
+  "niveaux": [ { "texte": "Une dague de plus.", "nombre": 1 } ] } ] }
+```
+
+| Champ | Sens |
+|---|---|
+| `sorte` | `projectile` (vers l'ennemi le plus proche), `direction` (droit devant le héros), `orbite` (tourne autour du héros pendant `duree` s, toutes les `recharge` s), `aura` (autour du héros), `eclair` (`nombre` ennemis au hasard à l'écran), `fouet` (sur le côté ; `nombre` 2 : des deux côtés), `onde` (un cercle qui part du héros) |
+| `degats`, `recharge` | par coup, et les secondes entre deux attaques |
+| `nombre`, `vitesse`, `portee`, `taille`, `percee`, `duree` | projectiles (ou haches, éclairs), cases/s, cases, × la taille normale, ennemis traversés en plus, secondes |
+| `poids` | plus grand : proposée plus souvent ; `verrouillee` : jamais proposée (sauf comme arme de départ) |
+| `niveaux` | le niveau 2, 3… : chacun ajoute `degats`, `nombre`, `percee`, `duree`, `portee` ; `recharge` en % de moins, `taille` et `vitesse` en % de plus ; `texte` : ce que lit le joueur |
+
+Sans arme dans `armes.json`, Saga prend cinq armes et huit passifs d'exemple.
+
+#### `donnees/passifs.json`
+
+```json
+{ "passifs": [ { "id": "epinard", "nom": "Épinard", "description": "Dégâts +10 % par niveau.", "icone": "",
+  "effet": "puissance", "valeur": 10, "niveau_max": 5, "poids": 10 } ] }
+```
+
+`effet` (`valeur` par niveau) : `puissance` (% de dégâts), `recharge` (% de moins), `zone` (% de taille),
+`vitesse_proj` (%), `duree` (%), `nombre` (projectiles en plus), `aimant` (% du rayon de ramassage),
+`vitesse` (% de vitesse du héros, par les bonus du groupe), `armure` (dégâts reçus en moins par coup),
+`regen` (PV rendus toutes les 10 s), `croissance` (% d'expérience).
+
+#### Dans `reglages.json` : `modules_reglages.survivor`
+
+| Champ | Défaut | Sens |
+|---|---|---|
+| `arme_depart` | la première | l'arme du début de chaque partie |
+| `choix` | 3 | ce qu'on propose à chaque niveau (1 à 5) |
+| `armes_max`, `passifs_max` | 6, 6 | en même temps, au plus |
+| `xp_base`, `xp_pas` | 5, 8 | l'expérience pour le niveau 2, puis en plus à chaque niveau |
+| `aimant` | 1,5 | les gemmes viennent d'aussi loin (cases) |
+| `ennemis_max` | 300 | jamais plus d'ennemis à la fois (10 à 1500) |
+| `coeur_chance` | 1 | % de chance qu'un ennemi laisse un cœur |
+| `soin_choix` | 4 | PV d'un cœur ramassé, ou du repas proposé quand il n'y a plus rien à prendre |
+| `degats_visibles` | `true` | les dégâts s'envolent au-dessus des ennemis |
+| `texte_victoire`, `texte_defaite` | | les titres de la fin (vide : ceux de Saga) |
+
+#### Commandes et conditions
+
+| Commande | Champs | Ce qu'elle fait |
+|---|---|---|
+| `survivor_lancer` | `arene` | emmène le joueur dans l'arène (la partie commence à l'arrivée) ; il reviendra ici |
+| `survivor_arreter` | | finit la partie (abandon) et ramène au lieu de retour |
+
+Conditions : `survivor_en_partie` (`valeur`), `survivor_record` (`arene`, `minutes` : tenu au moins tant),
+`survivor_victoires` (`arene` ou `""` pour le total, `min`).
+
+#### Ce que le moteur garde dans une sauvegarde
+
+`modules.survivor` : `parties`, `victoires` (`{ arene: n }`), `record` (`{ arene: secondes }`), `tues`,
+`niveau_max`, `retour` (là d'où vient le joueur).
+
 ## Test rapide
 
 (Tafl 0.27, joué par Saga 0.10.) Jeu › Test rapide lance le moteur avec un **état de départ** : une partie neuve, puis cet état posé par-dessus. Tafl le passe en ligne de commande, dans un fichier : `Saga.exe <dossier> --test=<fichier.json>`. Les états enregistrés vont dans `jeu.json`, champ `tests` (une liste).
@@ -1455,3 +1552,4 @@ const pageActive = (ev, vraie) => [...ev.pages].reverse().find((p) => p.conditio
 - **Version 1, ajouts de Tafl 1.27** : `reglages.carte_monde` (la carte du monde en jeu et ses repères), `"carte"` pour `interface.menus.tab`, `visites` dans la partie (Saga 1.26). Toute carte extérieure a désormais sa place `monde` dans le dossier de jeu. Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.30** : `interface.tactile` dans les réglages (`mode`, `taille`, `opacite`, `carnet` : les commandes tactiles de Saga 1.28). Des champs en plus, donc la version reste 1.
 - **Version 1, ajouts de Tafl 1.31** : `relances` dans les événements ; pour le module gestion, `par` et `chantiers` dans la condition `gestion_batiment`, `par` dans `gestion_chantier`, `par_joueur` dans la commande `gestion_construire`, `script` dans les bâtiments de son état, le moment `gestion_construction` (Saga 1.29). Des champs en plus, donc la version reste 1.
+- **Version 1, ajouts de Tafl 1.33** : le module `survivor` (Saga 1.30) : `donnees/arenes.json`, `armes.json` et `passifs.json`, `modules_reglages.survivor`, les commandes `survivor_lancer` et `survivor_arreter`, les conditions `survivor_en_partie`, `survivor_record` et `survivor_victoires`. Des champs en plus, donc la version reste 1.

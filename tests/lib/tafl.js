@@ -58,7 +58,7 @@ function suivreErreurs(page) {
 
 // Les modèles de jeu de Fichier › Nouveau jeu › Partir de (app.js newDocument).
 const MODELES = {
-  domaine: 'ExempleDomaine', jdr: 'ExempleJdr', arene: 'ExempleArene', donjon: 'ExempleDonjon', roguelite: 'ExempleRoguelite',
+  domaine: 'ExempleDomaine', jdr: 'ExempleJdr', arene: 'ExempleArene', donjon: 'ExempleDonjon', roguelite: 'ExempleRoguelite', survivor: 'ExempleSurvivor',
 };
 
 // Crée dans Tafl un jeu à partir d'un modèle, comme Fichier › Nouveau jeu (sans l'enregistrer).
@@ -66,7 +66,7 @@ async function nouveauJeu(page, modele, { modules } = {}) {
   await page.evaluate(async ({ global, modules }) => {
     const doc = Doc.create({ name: 'Essai', tileSize: 16, palette: [], mapWidth: 20, mapHeight: 15, mapName: 'Bourg' });
     // Les modèles sont des const du script de Tafl (pas des propriétés de window).
-    const modeles = { ExempleDomaine, ExempleJdr, ExempleArene, ExempleDonjon, ExempleRoguelite };
+    const modeles = { ExempleDomaine, ExempleJdr, ExempleArene, ExempleDonjon, ExempleRoguelite, ExempleSurvivor };
     if (global) modeles[global].remplir(doc); else Samples.fill(doc);
     if (modules) doc.data.reglages.modules = modules;
     doc.game = { folder: null, fichiers: [] };

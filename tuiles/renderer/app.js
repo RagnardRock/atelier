@@ -1573,7 +1573,7 @@ const App = (() => {
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
         { key: 'samples', label: 'Commencer avec les tuiles d\'exemple (sols, eau animée, bords, murs, objets, une maison et une boutique) et un petit village', type: 'checkbox', value: true },
         // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
-        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien'], ['roguelite', 'Le petit roguelite (temps réel + module roguelite) : un camp, des salles tirées au hasard, des perks et des améliorations']] }] : []),
+        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien'], ['roguelite', 'Le petit roguelite (temps réel + module roguelite) : un camp, des salles tirées au hasard, des perks et des améliorations'], ['survivor', 'Le petit survivor (temps réel + module survivor) : une arène, des hordes, des armes qui frappent toutes seules, un choix à chaque niveau']] }] : []),
         ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
       ],
     });
@@ -1585,6 +1585,7 @@ const App = (() => {
     else if (game && v.modele === 'domaine') ExempleDomaine.remplir(doc);
     else if (game && v.modele === 'donjon') ExempleDonjon.remplir(doc);
     else if (game && v.modele === 'roguelite') ExempleRoguelite.remplir(doc);
+    else if (game && v.modele === 'survivor') ExempleSurvivor.remplir(doc);
     else if (v.samples) Samples.fill(doc);
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut

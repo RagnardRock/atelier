@@ -20,7 +20,7 @@
 //                                          (Tafl les montre ; vide dans le jeu : le défaut)
 //   }
 //
-// Le premier module est « gestion » (Saga 1.5, Tafl 1.3) ; puis « roguelite » (Saga 1.14, Tafl 1.12) et « relations » (Saga 1.15, Tafl 1.13).
+// Le premier module est « gestion » (Saga 1.5, Tafl 1.3) ; puis « roguelite » (Saga 1.14, Tafl 1.12), « relations » (Saga 1.15, Tafl 1.13) et « survivor » (Saga 1.30, Tafl 1.33).
 
 const ModulesJeu = (() => {
   const CATALOGUE = {
@@ -169,6 +169,28 @@ const ModulesJeu = (() => {
         roguelite_amelioration: { nom: 'Une amélioration est achetée' },
         roguelite_monnaie: { nom: 'Assez de monnaie du roguelite' },
         roguelite_perk: { nom: 'Le joueur a un perk' },
+      },
+    },
+    // Saga 1.30, Tafl 1.33 : moteur/renderer/moteur/modules/survivor/.
+    survivor: {
+      nom: 'Survivor',
+      description: 'Survivre à des vagues d\'ennemis, façon « Vampire Survivors » : dans une arène (une carte), le héros ne fait que bouger, ses armes frappent toutes seules, les ennemis arrivent par centaines au fil d\'un chrono, et chaque niveau gagné fait choisir une arme ou un passif parmi trois. Il faut le pack action (le temps réel). Les arènes, les armes et les passifs sont des données du jeu.',
+      donnees: ['arenes', 'armes', 'passifs'],
+      moments: {
+        survivor_debut: { nom: 'Une partie de survivor commence (le joueur arrive dans l\'arène)', infos: { arene: 'L\'id de l\'arène' } },
+        survivor_niveau: { nom: 'Le joueur monte de niveau pendant une partie', infos: { niveau: 'Son nouveau niveau' } },
+        survivor_choix: { nom: 'Le joueur prend une arme ou un passif', infos: { sorte: '« arme » ou « passif »', id: 'Son id', niveau: 'Son niveau maintenant' } },
+        survivor_boss: { nom: 'Un boss de l\'arène est vaincu', infos: { ennemi: 'L\'id de l\'ennemi', temps: 'Les secondes passées' } },
+        survivor_fin: { nom: 'La partie de survivor se termine', infos: { arene: 'L\'id de l\'arène', issue: '« victoire », « defaite » ou « abandon »', temps: 'Les secondes tenues', niveau: 'Le niveau atteint', tues: 'Les ennemis vaincus' } },
+      },
+      commandes: {
+        survivor_lancer: { nom: 'Aller dans une arène (la partie commence)' },
+        survivor_arreter: { nom: 'Quitter l\'arène (abandonner)' },
+      },
+      conditions: {
+        survivor_en_partie: { nom: 'Une partie de survivor est en cours' },
+        survivor_record: { nom: 'Le record d\'une arène' },
+        survivor_victoires: { nom: 'Des arènes gagnées' },
       },
     },
   };
