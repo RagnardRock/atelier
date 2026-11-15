@@ -183,15 +183,15 @@ const PersoBase = (() => {
       return;
     }
     // ecart 1 : la jambe proche de la caméra avance ; -1 : elle recule. Elle reste claire et de la même taille
-    // dans les deux cas (jusqu'au sol). Celle du fond, plus sombre et plus courte, est levée. Le pas est court :
-    // les jambes restent presque sous le corps, comme sur le modèle.
-    if (ecart > 0) {
-      poser(l, haut, 12, 'ppp'); poser(l, haut + 1, 11, 'ppp'); poser(l, haut + 2, 11, 'qqq');
-      poser(l, haut, 14, 'PPPP'); poser(l, haut + 1, 15, 'PPPP'); poser(l, haut + 2, 16, 'PPPP'); poser(l, haut + 3, 17, 'BBBB');
-    } else {
-      poser(l, haut, 16, 'ppp'); poser(l, haut + 1, 17, 'ppp'); poser(l, haut + 2, 18, 'qqq');
-      poser(l, haut, 13, 'PPPP'); poser(l, haut + 1, 12, 'PPPP'); poser(l, haut + 2, 12, 'PPPP'); poser(l, haut + 3, 12, 'BBBB');
-    }
+    // dans les deux cas (jusqu'au sol) ; celle du fond est plus sombre, et se lève quand elle recule.
+    const jambe = (sens, proche) => {
+      const P = proche ? 'P' : 'p', B = proche ? 'B' : 'q';
+      if (sens > 0) { poser(l, haut, 15, P.repeat(4)); poser(l, haut + 1, 16, P.repeat(4)); poser(l, haut + 2, 17, P.repeat(4)); poser(l, haut + 3, 18, B.repeat(4)); }
+      else if (proche) { poser(l, haut, 12, P.repeat(4)); poser(l, haut + 1, 11, P.repeat(4)); poser(l, haut + 2, 10, P.repeat(4)); poser(l, haut + 3, 10, B.repeat(4)); }
+      else { poser(l, haut, 12, P.repeat(4)); poser(l, haut + 1, 11, P.repeat(4)); poser(l, haut + 2, 10, B.repeat(4)); }
+    };
+    jambe(-ecart, false);
+    jambe(ecart, true);
   }
   // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
   function brasProfil(l, haut, dx) {
