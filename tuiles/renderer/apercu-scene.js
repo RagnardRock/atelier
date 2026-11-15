@@ -168,8 +168,9 @@ const ApercuScene = (() => {
       if (a.perso?.tuile >= 0 && tuiles[a.perso.tuile]) { g.drawImage(tuiles[a.perso.tuile], x, y, cell, cell); return; }
       // Tafl 1.34 : le personnage de base de Saga (../commun/perso-base.js), comme dans le jeu.
       const pb = plancheBase(a.perso?.couleur || (a.heros ? '#d94a4a' : '#5ec8ff'));
-      const r = Math.max(0, ['bas', 'gauche', 'droite', 'haut'].indexOf(a.dir)), k = cell / 16;
-      g.drawImage(pb, Math.min(2, Math.max(0, image | 0)) * 16, r * 24, 16, 24, x, y + cell - 24 * k, cell, 24 * k);
+      // 32 × 32 : deux cases de haut en tuiles de 16 px (comme dans Saga), une case à partir de 32 px.
+      const r = Math.max(0, ['bas', 'gauche', 'droite', 'haut'].indexOf(a.dir)), d = s >= 32 ? cell : 32 * (cell / s);
+      g.drawImage(pb, Math.min(2, Math.max(0, image | 0)) * 32, r * 32, 32, 32, x + (cell - d) / 2, y + cell - d, d, d);
     }
     const planchesBase = new Map();
     function plancheBase(couleur) {
