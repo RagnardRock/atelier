@@ -1463,6 +1463,55 @@ const Events = (() => {
       valide: (c) => (c.perk ? null : 'Quel perk ?'),
     },
   });
+  // --- Tafl 1.33 (Saga 1.30) : le module « survivor » (Réglages › Règles du jeu › Modules) ---
+  const MODULE_SURVIVOR = ['survivor'];
+  const choixArenes = (doc, actuel) => choixDe(doc, 'arenes', actuel, 'Aucune arène : crée-les dans Données › Arènes');
+  Object.assign(COMMANDES, {
+    survivor_lancer: {
+      nom: 'Aller dans une arène (survivor)', icone: 'flame', groupe: 'Survivor', modules: MODULE_SURVIVOR,
+      nouveau: (doc) => ({ type: 'survivor_lancer', arene: doc.data.arenes?.[0]?.id || '' }),
+      champs: (doc, c) => [
+        { key: 'arene', label: 'Arène', type: 'select', value: c.arene, choices: choixArenes(doc, c.arene) },
+        { type: 'info', text: 'Emmène le joueur sur la carte de l\'arène (sa case de départ, sinon le milieu) : la partie commence à l\'arrivée. À la fin (victoire, défaite ou abandon), il revient ici, sauf si l\'arène a son propre lieu de retour. Un simple téléporteur vers la carte de l\'arène marche aussi.' },
+      ],
+      depuis: (v) => ({ type: 'survivor_lancer', arene: v.arene }),
+      valide: (c) => (c.arene ? null : 'Quelle arène ?'),
+      resume: (doc, c) => `Aller dans l'arène « ${nomData(doc, 'arenes', c.arene)} »`,
+    },
+    survivor_arreter: {
+      nom: 'Quitter l\'arène (abandonner, survivor)', icone: 'close', groupe: 'Survivor', modules: MODULE_SURVIVOR,
+      nouveau: () => ({ type: 'survivor_arreter' }),
+      champs: () => [{ type: 'info', text: 'La partie s\'arrête (elle compte comme abandonnée) et le joueur revient au lieu de retour. Le menu du jeu (Échap) le propose aussi pendant une partie.' }],
+      resume: () => 'Quitter l\'arène',
+    },
+  });
+  Object.assign(CONDITIONS, {
+    survivor_en_partie: {
+      nom: 'Une partie de survivor est en cours', modules: MODULE_SURVIVOR,
+      nouveau: () => ({ type: 'survivor_en_partie', valeur: true }),
+      champs: (doc, c) => [{ key: 'valeur', label: 'Quand', type: 'select', value: c.valeur === false ? 'non' : 'oui', choices: [['oui', 'Pendant une partie'], ['non', 'Hors partie']] }],
+      depuis: (v) => ({ type: 'survivor_en_partie', valeur: v.valeur !== 'non' }),
+    },
+    survivor_record: {
+      nom: 'Le record d\'une arène (survivor)', modules: MODULE_SURVIVOR,
+      nouveau: (doc) => ({ type: 'survivor_record', arene: doc.data.arenes?.[0]?.id || '', minutes: 5 }),
+      champs: (doc, c) => [
+        { key: 'arene', label: 'Arène', type: 'select', value: c.arene, choices: choixArenes(doc, c.arene) },
+        { key: 'minutes', label: 'Tenu au moins', type: 'number', value: c.minutes, min: 0, max: 120, unit: 'minutes' },
+      ],
+      depuis: (v) => ({ type: 'survivor_record', arene: v.arene, minutes: clamp(Number(v.minutes) || 0, 0, 120) }),
+      valide: (c) => (c.arene ? null : 'Quelle arène ?'),
+    },
+    survivor_victoires: {
+      nom: 'Des arènes gagnées (survivor)', modules: MODULE_SURVIVOR,
+      nouveau: () => ({ type: 'survivor_victoires', arene: '', min: 1 }),
+      champs: (doc, c) => [
+        { key: 'arene', label: 'Arène', type: 'select', value: c.arene || '', choices: [['', 'N\'importe laquelle (le total)'], ...choixDe(doc, 'arenes', c.arene, '').filter(([k]) => k)] },
+        { key: 'min', label: 'Au moins', type: 'number', value: c.min, min: 1, max: 9999, unit: 'victoires' },
+      ],
+      depuis: (v) => ({ type: 'survivor_victoires', arene: v.arene || '', min: clamp(Math.round(v.min) || 1, 1, 9999) }),
+    },
+  });
   // --- Tafl 1.13 (Saga 1.15) : le module « relations » (l'affinité avec les personnages) ---
   const MODULE_RELATIONS = ['relations'];
   // Les personnages qui ont une relation (Données › Relations), et « l'événement lui-même ».
@@ -1610,6 +1659,9 @@ const Events = (() => {
     if (c.type === 'roguelite_amelioration') return `« ${nomData(doc, 'ameliorations', c.amelioration)} » niveau ${c.min} ou plus`;
     if (c.type === 'roguelite_monnaie') return `au moins ${c.min} ${doc.data.reglages?.modules_reglages?.roguelite?.monnaie || 'Éclats'}`;
     if (c.type === 'roguelite_perk') return `a le perk « ${nomData(doc, 'perks', c.perk)} »`;
+    if (c.type === 'survivor_en_partie') return c.valeur === false ? 'hors partie de survivor' : 'pendant une partie de survivor';
+    if (c.type === 'survivor_record') return `record de « ${nomData(doc, 'arenes', c.arene)} » : au moins ${c.minutes} min`;
+    if (c.type === 'survivor_victoires') return `au moins ${c.min} victoire${c.min > 1 ? 's' : ''}${c.arene ? ` dans « ${nomData(doc, 'arenes', c.arene)} »` : ' en arène'}`;
     if (c.type === 'relation_niveau') return `${nomData(doc, 'personnages', c.personnage)} : au moins ${nomNiveauRelation(doc, c.min)}`;
     if (c.type === 'relation_parle') return `déjà parlé à ${nomData(doc, 'personnages', c.personnage)} aujourd'hui`;
     return `condition inconnue (${c.type})`;

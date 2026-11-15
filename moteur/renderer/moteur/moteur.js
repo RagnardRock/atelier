@@ -210,6 +210,22 @@ const Moteur = (() => {
       },
       annoncer: (titre, texte = '') => dialogue?.annoncer(String(titre), String(texte || '')),
       nomsStats: () => (jeu ? Regles.statsBonus(jeu) : {}),
+      // Saga 1.30 (le module survivor) : jouer un écran comme un script (une montée de niveau : le monde
+      // s'arrête pendant le choix), et ce que le temps réel prête : le corps du héros (en pixels de la carte),
+      // sa direction, s'il est libre de bouger, et le coup d'un ennemi du pack qui le touche depuis (x, y).
+      scene: (faire) => horsScript(() => faire(scripts.ui), 'Écran d\'un module'),
+      get tempsReel() {
+        if (!tempsReel) return null;
+        return {
+          heros: () => rt.corpsHeros(),
+          direction: () => rt.caseHeros?.dir || 'bas',
+          get libre() { return !enPause && !fondu && !enScript && !enCombat && !visee && !menus.ouvert; },
+          toucher: (ennemi, x, y, reduction = 0) => {
+            const def = typeof ActionRegles !== 'undefined' ? ActionRegles.ennemi(jeu, String(ennemi)) : null;
+            return def ? rt.toucherPar(def, { x: Number(x) || 0, y: Number(y) || 0 }, Number(reduction) || 0) : false;
+          },
+        };
+      },
       chemin: (depart, arrivee, o = {}) => (carte ? Chemins.trouver({
         largeur: carte.largeur, hauteur: carte.hauteur, depart, arrivee, max: o.max,
         libre: (x, y) => { const c = Monde.code(carte, x, y); return c !== Jeu.PASSAGE.bloque && !Jeu.REBORDS[c] && !Monde.bloqueParModule(carte, x, y) && !presents.some((p) => Monde.couvre(p, x, y) && p.bloque); },
@@ -1547,6 +1563,8 @@ const Moteur = (() => {
       Modules.dessiner(jeu, partie, {
         ctx, carte, profondeur, maintenant, taille: jeu.taille, cam: { x: cam.x, y: cam.y }, largeur: W, hauteur: H,
         tuile: (n, cx, cy) => dessinerTuile(Number(n), Math.round(cx * jeu.taille - cam.x), Math.round(cy * jeu.taille - cam.y), maintenant),
+        // Saga 1.30 : un personnage (comme un figurant), en pixels de l'écran : { perso, couleur, direction, pas, x, y }.
+        corps: (c) => dessinerCorps({ perso: c?.perso || null, couleur: c?.couleur || '#9b59d0', direction: c?.direction || 'bas', pas: c?.pas || 0, x: Math.round(Number(c?.x) || 0), y: Math.round(Number(c?.y) || 0), ombre: c?.ombre ?? 1 }, maintenant),
         // Saga 1.5 : la visée en cours (hote.viser) : { x, y, largeur, hauteur, ok }, ou null.
         visee: visee ? { x: visee.x, y: visee.y, largeur: visee.largeur, hauteur: visee.hauteur, ok: viseeValide() } : null,
       });
@@ -1587,6 +1605,10 @@ const Moteur = (() => {
       if (options.meteo) ambiance.dessinerMeteo(ctx);
       // Saga 1.12 : les nombres des coups, les cœurs et l'argent du temps réel, par-dessus la nuit.
       if (tempsReel) rt.dessinerDessus(ctx, cam, W);
+      // Saga 1.30 : ce que les modules mettent par-dessus tout (le chrono et la jauge du survivor).
+      Modules.ecran(jeu, partie, { ctx, carte, maintenant, taille: jeu.taille, cam: { x: cam.x, y: cam.y }, largeur: W, hauteur: H, enPause, hote: hoteModules });
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
       if (debug) { dessinerDebug(); if (tempsReel) rt.dessinerDebug(ctx, cam); }
       // Saga 1.17 : la mise en scène (bulles, fondu des cinématiques, bandes de cinéma).
       cine.dessiner(ctx, W, H, cam, jeu.taille);

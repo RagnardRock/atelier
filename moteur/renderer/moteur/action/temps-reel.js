@@ -657,6 +657,14 @@ const TempsReel = (() => {
       // Une case occupée par un ennemi vivant (pour qu'un PNJ ne marche pas dessus).
       occupe: (x, y) => ennemis.some((e) => !e.mort && caseDe(e).x === x && caseDe(e).y === y),
       oublierHeros() { if (heros) { heros.coup = null; heros.recul = null; } },
+      // Saga 1.30 (le module survivor) : le corps du héros en pixels de la carte, et un coup venu d'ailleurs
+      // (un ennemi de la horde) : l'ennemi `def` du pack frappe le héros depuis (x, y), moins `reduction`.
+      corpsHeros: () => (heros ? enMonde(heros, heros.b.corps) : null),
+      toucherPar(def, depuis, reduction = 0) {
+        if (!heros || !def || heros.invincible > 0) return false;
+        appliquer(R().coupDeLEnnemi(jeu(), partie(), def), (n) => blesserHeros(Math.max(1, n - Math.max(0, Math.round(reduction))), depuis));
+        return true;
+      },
       soignerHeros() { if (heros) { heros.invincible = 0; heros.recul = null; heros.coup = null; } },
     };
   }

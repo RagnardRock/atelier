@@ -27,6 +27,8 @@
 //   teleporteur(o, x, y)                → { carte, x, y, direction } si marcher sur (x, y) de o.carte y
 //                                         emmène (Saga 1.6.1 : la porte d'un bâtiment posé), sinon null
 //   dessiner(o)                         dessine sur la carte, à la profondeur o.profondeur ('sol' | 'dessus')
+//                                         Saga 1.30 : o.corps({ perso, couleur, direction, pas, x, y }) dessine un personnage
+//   ecran(o)                            (Saga 1.30) dessine par-dessus tout (après la lumière et la météo) : un compteur
 //   avancer(o)                          (Saga 1.9) à chaque image, sur la carte du joueur (o.carte), o.dt secondes
 //                                         plus tard : faire marcher ses figurants. Pas pendant un combat ni en pause.
 //   figurants(o)                        (Saga 1.9) → [{ x, y, direction, pas, personnage, couleur }] : des passants
@@ -60,6 +62,8 @@
 //            d'ennemis du temps réel restent sur la carte, teleporter(carte, x, y, direction) → promesse (après le
 //            fondu), oublierCopies(prefixe) (oublier ce que la partie retient des copies « base@prefixe… »),
 //            annoncer(titre, texte)
+//            Saga 1.30 : scene(async (ui) => …) (jouer un écran comme un script : le monde s'arrête), tempsReel
+//            (null sans le temps réel, sinon { heros(), direction(), libre, toucher(ennemi, x, y, reduction) })
 
 const Modules = (() => {
   const INSCRITS = new Map(); // id → module
@@ -244,6 +248,11 @@ const Modules = (() => {
     // Dessiner sur la carte. o : { ctx, carte, cam, taille, maintenant, profondeur, tuile(n, cx, cy) }.
     dessiner(jeu, partie, o) {
       chacun(jeu, 'dessiner', (m) => m.dessiner(objet(m, jeu, partie, null, o)));
+    },
+    // Saga 1.30 : dessiner par-dessus tout (après la nuit et la météo) : un compteur, une jauge. Mêmes champs
+    // que dessiner, sans profondeur ; les coordonnées sont celles de l'écran (en pixels du jeu).
+    ecran(jeu, partie, o) {
+      chacun(jeu, 'ecran', (m) => m.ecran(objet(m, jeu, partie, null, o)));
     },
     // La commande d'événement `type` d'un module actif, ou null. Elle reçoit o + { c, jouer, narrer, ui }.
     commande(jeu, type) {
