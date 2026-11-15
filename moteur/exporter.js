@@ -273,7 +273,7 @@ async function preparerJeuWindows({ textes, titre, nom, dossier, moteur, version
   }
   // commun/ manque dans le clone si npm install n'a pas tourné : on prend celui d'atelier/.
   if (!(await fs.stat(path.join(app, 'commun')).catch(() => null))) {
-    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js'].includes(r));
+    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js'].includes(r));
   }
   const pkg = JSON.parse(await fs.readFile(path.join(moteur, 'package.json'), 'utf8'));
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({

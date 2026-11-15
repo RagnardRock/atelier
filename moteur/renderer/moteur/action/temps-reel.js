@@ -475,17 +475,22 @@ const TempsReel = (() => {
       if (heros) out.push({ y: heros.py, heros: true, dessiner: (ctx, o = {}) => dessinerEntite(ctx, heros, o.perso || heros.perso, '#d94a4a', cam, maintenant) });
       return out;
     }
-    function animation(perso, nom) { return perso?.animations?.[nom] || null; }
+    // Saga 1.31 : sans sprite ni tuile, le personnage de base a ses propres animations (perso-base.js).
+    function animation(perso, nom, couleur) {
+      if (perso?.animations?.[nom]) return perso.animations[nom];
+      if (perso?.sprite || perso?.tuile >= 0) return null;
+      return Sprites.animationBase(perso?.couleur || couleur, nom, t);
+    }
     function dessinerEntite(ctx, e, perso, couleur, cam, maintenant) {
       const x = Math.round(e.px) - cam.x, y = Math.round(e.py) - cam.y;
       // Invincible : il clignote (sauf pendant sa mort).
       if (!e.mort && e.invincible > 0 && Math.floor(e.invincible * 16) % 2) return;
       ctx.save();
       let anim = null, temps = 0, boucle = true;
-      if (e.mort) { anim = animation(perso, 'mort'); temps = e.mort.t; boucle = false; if (!anim) { ctx.globalAlpha = Math.max(0, 1 - e.mort.t / DUREE_MORT); } }
-      else if (e.coup) { anim = animation(perso, 'attaque'); temps = e.coup.t; boucle = false; }
-      else if (e.recul) { anim = animation(perso, 'coup'); temps = e.recul.t; boucle = false; }
-      else if (!e.bouge) { anim = animation(perso, 'repos'); temps = horloge; }
+      if (e.mort) { anim = animation(perso, 'mort', couleur); temps = e.mort.t; boucle = false; if (!anim) { ctx.globalAlpha = Math.max(0, 1 - e.mort.t / DUREE_MORT); } }
+      else if (e.coup) { anim = animation(perso, 'attaque', couleur); temps = e.coup.t; boucle = false; }
+      else if (e.recul) { anim = animation(perso, 'coup', couleur); temps = e.recul.t; boucle = false; }
+      else if (!e.bouge) { anim = animation(perso, 'repos', couleur); temps = horloge; }
       // Un ennemi qui prépare son coup sans animation : il recule un peu puis bondit.
       let ox = 0, oy = 0;
       if (e.coup && !anim && e !== heros) {
@@ -509,7 +514,8 @@ const TempsReel = (() => {
         hote.corps({ perso, couleur, direction: e.dir, pas, x: x + ox, y: y + oy, cle: e.mort ? null : cle }, maintenant, ctx);
       }
       ctx.restore();
-      if (e === heros && e.coup && !anim) dessinerEpee(ctx, cam);
+      // Le personnage de base (ou une attaque marquée « lame », Tafl 1.34) frappe du bras : la lame reste celle que Saga dessine.
+      if (e === heros && e.coup && (!anim || anim.base || anim.lame)) dessinerEpee(ctx, cam);
       // La vie d'un ennemi blessé, en petite barre au-dessus de lui.
       if (e !== heros && !e.mort && e.pv < e.def.pv) {
         const l = Math.round(t * 0.8), k = Math.max(0, e.pv / e.def.pv);

@@ -335,7 +335,7 @@ const Jeu = (() => {
       for (const nom of ['repos', 'attaque', 'coup', 'mort', 'nage']) {
         try {
           const a = await chargerSprite(anims[nom]);
-          if (a) p.animations[nom] = { ...a, duree: Math.max(16, Math.min(2000, nombre(anims[nom].duree, 80))) };
+          if (a) p.animations[nom] = { ...a, duree: Math.max(16, Math.min(2000, nombre(anims[nom].duree, 80))), lame: anims[nom].lame === true };
         } catch (err) { problemes.push(`l'animation « ${nom} » de ${p.nom || p.id} : ${err.message}`); }
       }
       // Les tenues du héros (Tafl 0.16) : chacune son sprite, au même format.

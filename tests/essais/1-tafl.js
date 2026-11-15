@@ -84,4 +84,24 @@ module.exports = [
       sansErreur(erreurs, 'en remettant les images en ordre');
     },
   },
+  {
+    nom: 'Tafl : partir du personnage de base de Saga (Tafl 1.34)',
+    async faire(ctx) {
+      const { page, erreurs } = await ouvrirTafl(ctx.navigateur, ctx);
+      // En tuiles de 16 px : une marche de 16 × 24 (3 images), et les 4 animations du temps réel en 24 × 24 ;
+      // en tuiles de 32 px, tout est deux fois plus grand.
+      const vu = await page.evaluate(() => [16, 32].map((t) => {
+        const b = Sprites.persoBase('#3a9ad9', 'casquette', t);
+        const ok = (s) => Sprites.norm(s, t) !== null;
+        return {
+          marche: `${b.sprite.largeur}x${b.sprite.hauteur}x${b.sprite.images}`, valide: ok(b.sprite) && Object.values(b.animations).every(ok),
+          animations: Object.entries(b.animations).map(([k, a]) => `${k}:${a.largeur}x${a.hauteur}x${a.images}`).join(' '),
+          lame: b.animations.attaque.lame === true,
+        };
+      }));
+      egal(vu[0], { marche: '16x24x3', valide: true, animations: 'repos:24x24x4 attaque:24x24x4 coup:24x24x3 mort:24x24x6', lame: true }, 'en tuiles de 16 px');
+      egal(vu[1].marche, '32x48x3', 'en tuiles de 32 px');
+      sansErreur(erreurs, 'en fabriquant le personnage de base');
+    },
+  },
 ];

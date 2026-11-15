@@ -627,7 +627,7 @@ const Verificateur = (() => {
       });
     }
     if (!jrpg && liste('personnages').length && !liste('personnages').some((p) => p.heros)) {
-      ajouter('attention', 'references', 'Aucun personnage n\'est le héros (case « C\'est le héros » dans Personnages) : Saga dessine un petit bonhomme.');
+      ajouter('attention', 'references', 'Aucun personnage n\'est le héros (case « C\'est le héros » dans Personnages) : Saga dessine le personnage de base.');
     }
     return resultat(problemes);
   }

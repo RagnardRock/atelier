@@ -145,7 +145,32 @@ const Sprites = (() => {
   // --- L'éditeur, dans la fiche du personnage (Jeu › Données du jeu › Personnages) ---
   // p : le personnage (modifié sur place : p.sprite) ; palette : les couleurs du jeu de tuiles ;
   // tuile() : le canvas de sa tuile (ou null), pour partir de lui quand on crée le sprite.
-  function editeur(p, { tileSize, palette, change, tuile }) {
+  // Tafl 1.34 : le personnage de base de Saga (../commun/perso-base.js), en planches PNG prêtes à retoucher :
+  // { sprite, animations: { repos, attaque, coup, mort } }. coiffure : '' (tirée de la couleur), casquette,
+  // courts ou longs. Agrandi pour des tuiles de 32 ou 48 px.
+  const COIFFURES = [['', 'Au hasard (selon sa couleur)'], ['casquette', 'Casquette'], ['courts', 'Cheveux courts'], ['longs', 'Cheveux longs']];
+  function persoBase(couleur, coiffure, tileSize = 16) {
+    const pl = PersoBase.planches(couleur, coiffure ? { coiffure } : {}, Math.max(1, Math.round(tileSize / 16)));
+    const m = pl.marche;
+    const animations = {};
+    for (const [nom, a] of Object.entries(pl.animations)) {
+      animations[nom] = { largeur: a.largeur, hauteur: a.hauteur, images: a.images, planche: a.toile.toDataURL('image/png'), duree: a.duree };
+      // Son coup se donne du bras : Saga dessine la lame par-dessus (comme sans animation).
+      if (nom === 'attaque') animations[nom].lame = true;
+    }
+    return { sprite: { largeur: m.largeur, hauteur: m.hauteur, images: m.images, planche: m.toile.toDataURL('image/png') }, animations };
+  }
+  // Le choix de la coiffure et le bouton, pour l'éditeur vide (sprite ou animation).
+  function blocBase(p, nom, faire) {
+    const coiffure = el('select');
+    for (const [v, t] of COIFFURES) coiffure.add(new Option(t, v));
+    const b = el('button', { className: 'button', type: 'button' }, [icon('person'), el('span', { textContent: nom })]);
+    b.onclick = (e) => { e.preventDefault(); faire(coiffure.value); };
+    return el('div', { className: 'sprite-actions' }, [b, coiffure]);
+  }
+
+  // base : (coiffure) => void, pour « Partir du personnage de base » (Tafl 1.34), ou rien.
+  function editeur(p, { tileSize, palette, change, tuile, base }) {
     const boite = el('div', { className: 'sprite-editeur' });
     let images = null; // [direction][k] : des canvas
     let dir = 0, k = 0, outil = 'crayon', couleur = palette[0] || '#000000';
@@ -208,6 +233,10 @@ const Sprites = (() => {
         el('label', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Taille d\'une image' }), hauteur]),
         el('label', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Images par direction' }), nb]),
         el('div', { className: 'sprite-actions' }, [creer, importer]),
+        ...(base && typeof PersoBase !== 'undefined' ? [
+          el('p', { className: 'modal-info', textContent: 'Ou pars du personnage de base de Saga (dans le style des tuiles « val », à la couleur du personnage), puis retouche-le.' }),
+          blocBase(p, 'Partir du personnage de base', (coiffure) => { base(coiffure); render(); }),
+        ] : []),
       );
     }
 
@@ -547,7 +576,7 @@ const Sprites = (() => {
           if (ok !== false) notify('Planche exportée : retouche-la dans Skald ou Photoshop, puis réimporte-la.');
         }),
         bouton('trash', 'Retirer le sprite', async () => {
-          const go = await Dialogs.ask('Retirer le sprite', `Retirer le sprite de ${p.nom} ? Sur la carte, il reprendra sa tuile (ou le petit bonhomme de Saga).`, [
+          const go = await Dialogs.ask('Retirer le sprite', `Retirer le sprite de ${p.nom} ? Sur la carte, il reprendra sa tuile (ou le personnage de base de Saga).`, [
             { label: 'Annuler', value: false },
             { label: 'Retirer', value: true, primary: true },
           ]);
@@ -591,5 +620,5 @@ const Sprites = (() => {
     return boite;
   }
 
-  return { DIRECTIONS, NOMS, norm, charger, decouper, assembler, vide, depuisPlanche, reordonner, reordonnerSprite, imageDeMarche, dessinerSurCase, editeur, miroir, copie };
+  return { DIRECTIONS, NOMS, norm, charger, decouper, assembler, vide, depuisPlanche, reordonner, reordonnerSprite, imageDeMarche, dessinerSurCase, editeur, miroir, copie, persoBase, blocBase };
 })();

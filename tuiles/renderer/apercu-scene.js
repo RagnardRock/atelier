@@ -149,7 +149,7 @@ const ApercuScene = (() => {
     function dessinerActeur(a, cam) {
       if (a.cache) return;
       const p = pixels(a), x = Math.round(p.x - cam.x), y = Math.round(p.y - cam.y);
-      const m = a.mouvement, image = m && m.t < m.duree / 2 && a.perso?.sprite ? 1 + (a.pas % Math.max(1, a.perso.sprite.images - 1)) : 0;
+      const m = a.mouvement, image = m && m.t < m.duree / 2 ? 1 + (a.pas % Math.max(1, (a.perso?.sprite?.images ?? 3) - 1)) : 0;
       // Tafl 1.28 : un tampon, son coin haut gauche sur sa case.
       const st = formeDe(a);
       if (st) {
@@ -166,12 +166,15 @@ const ApercuScene = (() => {
       g.beginPath(); g.ellipse(x + cell / 2, y + cell - 4, cell * 0.3, cell * 0.1, 0, 0, Math.PI * 2); g.fill();
       if (a.perso?.sprite && Sprites.dessinerSurCase(g, a.perso.sprite, a.dir, x, y, cell, s, () => {}, image)) return;
       if (a.perso?.tuile >= 0 && tuiles[a.perso.tuile]) { g.drawImage(tuiles[a.perso.tuile], x, y, cell, cell); return; }
-      // Le petit bonhomme de Saga, en plus simple : un rond à la couleur du personnage.
-      g.fillStyle = a.perso?.couleur || (a.heros ? '#5ec8ff' : '#c9a0ff');
-      g.beginPath(); g.arc(x + cell / 2, y + cell * 0.55, cell * 0.32, 0, Math.PI * 2); g.fill();
-      g.fillStyle = '#fff';
-      const [dx, dy] = DIRS[a.dir] || [0, 1];
-      g.beginPath(); g.arc(x + cell / 2 + dx * cell * 0.14, y + cell * 0.5 + dy * cell * 0.1, cell * 0.07, 0, Math.PI * 2); g.fill();
+      // Tafl 1.34 : le personnage de base de Saga (../commun/perso-base.js), comme dans le jeu.
+      const pb = plancheBase(a.perso?.couleur || (a.heros ? '#d94a4a' : '#5ec8ff'));
+      const r = Math.max(0, ['bas', 'gauche', 'droite', 'haut'].indexOf(a.dir)), k = cell / 16;
+      g.drawImage(pb, Math.min(2, Math.max(0, image | 0)) * 16, r * 24, 16, 24, x, y + cell - 24 * k, cell, 24 * k);
+    }
+    const planchesBase = new Map();
+    function plancheBase(couleur) {
+      if (!planchesBase.has(couleur)) planchesBase.set(couleur, PersoBase.planches(couleur).marche.toile);
+      return planchesBase.get(couleur);
     }
 
     function dessiner() {
