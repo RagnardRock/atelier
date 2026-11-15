@@ -169,9 +169,7 @@ const PersoBase = (() => {
   function jambesFace(l, haut, gauche, droite, dos) {
     const jambe = (c, n, fond) => {
       for (let k = 0; k < n; k++) poser(l, haut + k, c, fond ? 'pPP' : 'PPp');
-      // La jambe qui avance (plus longue) montre un pied un peu plus large, vers l'extérieur.
-      const large = n > 3 || (n === 3 && (gauche !== droite));
-      poser(l, haut + n, fond ? c : c - (large ? 1 : 0), dos ? (large ? 'BBBB' : 'BBB') : fond ? (large ? 'bBBB' : 'bBB') : (large ? 'BBBb' : 'BBb'));
+      poser(l, haut + n, c, dos ? 'BBB' : fond ? 'bBB' : 'BBb');
     };
     jambe(11, gauche, false);
     jambe(18, droite, true);
@@ -187,7 +185,7 @@ const PersoBase = (() => {
     // La jambe de derrière (ecart -1 : celle de gauche de l'écran recule). Les jambes gardent 4 px d'épaisseur.
     const fond = ecart > 0;
     const P = fond ? 'p' : 'P';
-    poser(l, haut, 11, P.repeat(4)); poser(l, haut + 1, 10, P.repeat(4)); poser(l, haut + 2, 8, (fond ? 'q' : 'B').repeat(4));
+    poser(l, haut, 12, P.repeat(4)); poser(l, haut + 1, 11, P.repeat(4)); poser(l, haut + 2, 10, (fond ? 'q' : 'B').repeat(4));
     const Q = fond ? 'P' : 'p';
     poser(l, haut, 15, Q.repeat(4)); poser(l, haut + 1, 16, Q.repeat(4)); poser(l, haut + 2, 17, Q.repeat(4)); poser(l, haut + 3, 18, (fond ? 'B' : 'q').repeat(4));
   }
