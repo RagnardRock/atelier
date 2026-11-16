@@ -177,20 +177,22 @@ const PersoBase = (() => {
   // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas. Sur un pas, la jambe qui avance est en
   // diagonale jusqu'au sol, celle de derrière se lève (pied plus haut, plus sombre).
   function jambesProfil(l, haut, ecart) {
+    // Le pied a la même largeur que la jambe, juste en dessous.
     if (!ecart) {
-      for (let k = 0; k < 3; k++) poser(l, haut + k, 14, 'PPPp');
-      poser(l, haut + 3, 15, 'BBBB');
+      for (let k = 0; k < 4; k++) poser(l, haut + k, 14, 'PPPp');
+      poser(l, haut + 4, 14, 'BBBB');
       return;
     }
     // Calé sur le modèle. ecart 1 : la jambe proche de la caméra (claire) est devant, penchée vers l'avant,
     // et celle du fond (sombre, fine, levée) derrière. ecart -1 : la jambe proche est derrière, presque droite
     // sous le corps, et celle du fond devant, levée. Le pied touche le sol au même endroit que debout.
     if (ecart > 0) {
-      poser(l, haut, 12, 'ppp'); poser(l, haut + 1, 12, 'qq');
-      poser(l, haut, 16, 'PPPp'); poser(l, haut + 1, 17, 'PPPPp'); poser(l, haut + 2, 18, 'BBBB');
+      poser(l, haut, 12, 'ppp'); poser(l, haut + 1, 12, 'ppp'); poser(l, haut + 2, 12, 'qqq');
+      poser(l, haut, 16, 'PPPp'); poser(l, haut + 1, 17, 'PPPp'); poser(l, haut + 2, 17, 'PPPp'); poser(l, haut + 3, 17, 'BBBB');
     } else {
-      poser(l, haut, 19, 'pp'); poser(l, haut + 1, 19, 'qqq');
-      poser(l, haut, 12, 'PPPp'); poser(l, haut + 1, 12, 'PPPPp'); poser(l, haut + 2, 12, 'BBBB');
+      poser(l, haut, 19, 'ppp'); poser(l, haut + 1, 19, 'ppp'); poser(l, haut + 2, 19, 'qqq');
+      for (let k = 0; k < 3; k++) poser(l, haut + k, 12, 'PPPp');
+      poser(l, haut + 3, 12, 'BBBB');
     }
   }
   // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
@@ -249,7 +251,7 @@ const PersoBase = (() => {
     } else {
       const dos = dir === 'haut';
       // Le pas 1 avance la jambe gauche de l'écran, le pas 2 la droite ; l'autre se plie.
-      const g = o.pas === 2 ? 1 : 3, d = o.pas === 1 ? 1 : 3;
+      const g = o.pas === 2 ? 2 : 4, d = o.pas === 1 ? 2 : 4;
       jambesFace(l, 26 + plie, g, d, dos);
       // Les bras balancent à l'opposé des jambes.
       const a = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
@@ -360,7 +362,7 @@ const PersoBase = (() => {
       else if (k === 2) { poser(l, 23, 16, 'AAAAA'); poser(l, 24, 17, 'AAAA'); poser(l, 24, 21, 'SS'); poser(l, 25, 21, 'ss'); }
       else { poser(l, 22, 15, 'AAA'); poser(l, 23, 15, 'AAAA'); poser(l, 24, 17, 'SS'); }
       // Pendant la frappe, les pieds s'écartent (une petite fente).
-      if (k === 1 || k === 2) { remplacer(l, 26, 30, 0, L - 1, 'PpBbq', '.'); jambesProfil(l, 26, 1); }
+      if (k === 1 || k === 2) { remplacer(l, 26, 31, 0, L - 1, 'PpBbq', '.'); jambesProfil(l, 27, 1); }
     } else {
       // De face : le bras droit du personnage (à gauche de l'écran) ; de dos, celui de droite.
       const cb = dir === 'bas' ? 8 : 22, cm = dir === 'bas' ? 7 : 23;
