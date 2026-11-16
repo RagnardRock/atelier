@@ -128,8 +128,10 @@ const TableDocuments = (() => {
     if (d.image) {
       const img = el('img', { className: 'doc-image', alt: d.titre || '' });
       Promise.resolve(image).then((u) => { if (u) img.src = u; }).catch(() => {});
-      img.onclick = () => carte.classList.toggle('zoom');
-      carte.append(el('div', { className: 'doc-image-cadre' }, img));
+      const cadre = el('div', { className: 'doc-image-cadre', title: 'Molette ou double-clic : zoomer · glisser : se déplacer' }, img);
+      carte.append(cadre);
+      // Saga 1.37.1 : un vrai zoom (molette, double-clic, pincer, glisser).
+      if (typeof ZoomImage !== 'undefined') img.addEventListener('load', () => { if (!cadre.zoom) cadre.zoom = ZoomImage.brancher(cadre, img); });
     }
     if (d.texte) carte.append(el('div', { className: 'doc-texte', textContent: d.texte }));
     if (pied) carte.append(pied);

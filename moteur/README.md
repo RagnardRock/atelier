@@ -392,6 +392,8 @@ Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les ong
 
 ## Saga 1.37.1
 
+- Documents : un vrai zoom des images (molette ou double-clic au PC, pincer ou double toucher au téléphone, glisser pour se déplacer), sans barres de défilement ; l'image prend toute la visionneuse, même petite.
+- Panneau du MJ : un document supprimé disparaît tout de suite (un bouton cliqué gardait le focus et bloquait le dessin du panneau).
 - Compagnon : un réglage « Secousse : oui / non » à côté de « Animation » (gardé dans le téléphone) pour ne plus lancer les dés en secouant.
 
 ## Ce que fait Saga 1.37 : les documents du MJ

@@ -519,9 +519,12 @@
     const fermer = el('button', { className: 'icone-bouton', type: 'button', title: 'Fermer' }, icone('close'));
     const v = el('div', { className: 'visionneuse' },
       el('div', { className: 'vis-tete verre' }, icone(d.image ? 'file-media' : 'note'), el('b', { textContent: d.titre || 'Document' }), fermer),
-      el('div', { className: 'vis-corps' },
-        d.image ? el('img', { src: urlDoc(d), alt: d.titre || '' }) : null,
-        d.texte ? el('div', { className: `vis-texte verre${d.image ? '' : ' lettre'}`, textContent: d.texte }) : null));
+      d.image ? el('div', { className: 'vis-cadre' }, el('img', { src: urlDoc(d), alt: d.titre || '' })) : null,
+      d.texte ? el('div', { className: `vis-corps${d.image ? ' sous' : ''}` }, el('div', { className: `vis-texte verre${d.image ? '' : ' lettre'}`, textContent: d.texte })) : null,
+      d.image ? el('p', { className: 'vis-aide', textContent: 'Pince ou touche deux fois pour zoomer' }) : null);
+    // Saga 1.37.1 : pincer, double toucher, glisser (la page, elle, ne zoome pas).
+    const img = v.querySelector('.vis-cadre img');
+    if (img && typeof ZoomImage !== 'undefined') img.addEventListener('load', () => ZoomImage.brancher(img.parentElement, img), { once: true });
     v.dataset.id = d.id;
     fermer.onclick = () => { v.remove(); if (onglet === 'documents') { docSig = ''; pageDocuments(); } };
     document.body.append(v);

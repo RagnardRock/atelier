@@ -125,6 +125,14 @@ module.exports = [
         await ami.waitForSelector('.doc-visionneuse .doc-image', { timeout: 6000 });
         await ami.waitForFunction(() => document.querySelector('.doc-visionneuse .doc-image')?.naturalWidth > 0, null, { timeout: 6000 });
         await capture(ami, '3-ami-carte-montree');
+        // Le zoom (Saga 1.37.1) : la molette agrandit vers le pointeur, le double-clic revient.
+        const boite = await ami.locator('.doc-image-cadre').boundingBox();
+        await ami.mouse.move(boite.x + boite.width * 0.7, boite.y + boite.height * 0.3);
+        for (let i = 0; i < 4; i++) await ami.mouse.wheel(0, -120);
+        await ami.waitForFunction(() => /scale\(/.test(document.querySelector('.doc-image').style.transform));
+        await capture(ami, '3b-ami-carte-zoom');
+        await ami.mouse.dblclick(boite.x + boite.width / 2, boite.y + boite.height / 2);
+        await ami.waitForFunction(() => !document.querySelector('.doc-image').style.transform);
         await ami.keyboard.press('Escape');
         // L'onglet Docs de Lou : ses deux documents.
         await onglet(ami, 'Docs');
@@ -203,10 +211,22 @@ module.exports = [
         await tel2.locator('.docs .doc', { hasText: 'Carte de la crypte' }).click();
         await tel2.waitForFunction(() => document.querySelector('.visionneuse img')?.naturalWidth > 0, null, { timeout: 5000 });
         await capture(tel2, '9-tel-lou-carte');
+        // Double toucher : zoom sur le téléphone.
+        const cadreTel = await tel2.locator('.vis-cadre').boundingBox();
+        await tel2.waitForSelector('.vis-cadre.zoom-cadre');
+        // (deux touchers rapprochés, envoyés d'un coup : deux tap() de Playwright peuvent être trop espacés)
+        await tel2.evaluate(([x, y]) => {
+          const c = document.querySelector('.vis-cadre');
+          for (let i = 0; i < 2; i++) for (const t of ['pointerdown', 'pointerup']) c.dispatchEvent(new PointerEvent(t, { pointerId: 7 + i, pointerType: 'touch', clientX: x, clientY: y, bubbles: true }));
+        }, [cadreTel.x + cadreTel.width / 2, cadreTel.y + cadreTel.height / 2]);
+        await tel2.waitForFunction(() => /scale\(/.test(document.querySelector('.vis-cadre img').style.transform), null, { timeout: 3000 });
         await tel2.locator('.vis-tete .icone-bouton').click();
 
         // --- Le MJ reprend la lettre : elle disparaît chez Lou ---
-        await page.evaluate((id) => App.moteur.table.docAgir({ type: 'doc_retirer', id }), lettre);
+        // (par le bouton du panneau : il se redessine tout de suite, Saga 1.37.1)
+        await onglet(page, 'Docs');
+        await page.locator('.volet-docs .doc-ligne', { hasText: 'Lettre du baron' }).locator('.table-bouton[title^="Supprimer"]').click();
+        await page.waitForFunction(() => ![...document.querySelectorAll('.volet-docs .doc-ligne')].some((l) => l.textContent.includes('Lettre du baron')), null, { timeout: 3000 });
         await tel2.waitForFunction(() => document.querySelectorAll('.docs .doc').length === 3, null, { timeout: 5000 });
         await ami.waitForFunction(() => document.querySelectorAll('.volet-documents .doc-ligne').length === 3, null, { timeout: 5000 });
         egal(await statut(lettre, mia.jeton), 404, 'la lettre retirée n\'est plus servie');
