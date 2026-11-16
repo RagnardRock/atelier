@@ -1613,3 +1613,24 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .mecanique-formule .unit.erreur { color: #ff8a8a; }
 .mecanique-table { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
 .mecaniques-modeles { gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+
+/* ---------- Tafl 1.42 : l'audit de l'interface ---------- */
+/* Sur une seule colonne (écran normal), les tuiles restent visibles : les listes au-dessus (cartes,
+   calques, tampons, événements) et la palette rétrécissent et défilent, les tuiles gardent un bon tiers de la
+   hauteur. Plus rien ne passe sous la barre d'état. */
+#sidepanel:not(.deux-colonnes) { overflow-y: auto; }
+#sidepanel:not(.deux-colonnes) #maps-panel, #sidepanel:not(.deux-colonnes) #layers-panel,
+#sidepanel:not(.deux-colonnes) #stamps-panel, #sidepanel:not(.deux-colonnes) #events-panel { flex: 0 1 auto; }
+#sidepanel:not(.deux-colonnes) #maps-panel { min-height: 90px; }
+#sidepanel:not(.deux-colonnes) #layers-panel { min-height: 130px; }
+#sidepanel:not(.deux-colonnes) #stamps-panel { min-height: 80px; }
+#sidepanel:not(.deux-colonnes) #events-panel { min-height: 72px; }
+#sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 0 36%; }
+#sidepanel:not(.deux-colonnes) #color-panel { flex: 0 1 auto; min-height: 96px; }
+#sidepanel:not(.deux-colonnes) #color-panel #palette { overflow-y: auto; min-height: 0; }
+#sidepanel:not(.deux-colonnes) #frames-panel, #sidepanel:not(.deux-colonnes) #preview-panel { flex: 0 1 auto; min-height: 34px; }
+.panel.folded { min-height: 0 !important; }
+/* La barre d'état ne parle de tuile et de zoom que là où on dessine. */
+body.espace-page #status-tile, body.espace-page #status-zoom { display: none; }
+/* Test rapide : l'aide sous le groupe ne pousse plus le reste vers le bas. */
+.test-main .editor-hint { flex: 0 0 auto; }
