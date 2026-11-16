@@ -39,12 +39,17 @@ const Plateau = (() => {
       canvas.style.height = `${r.height}px`;
     }
     // Le plus grand zoom entier qui montre toute la carte (au moins 1), centrée.
+    // Saga 1.35 : le plateau passe sous des panneaux en verre ; api.marges() dit la place qu'ils prennent
+    // (en px CSS : { g, d, h, b }), et la carte se cadre dans ce qui reste.
     function cadrer(carte, jeu) {
       taille();
       const t = jeu.taille;
-      camera.z = Math.max(1, Math.min(8, Math.floor(Math.min(L / (carte.largeur * t), H / (carte.hauteur * t)))));
-      camera.x = (carte.largeur * t - L / camera.z) / 2;
-      camera.y = (carte.hauteur * t - H / camera.z) / 2;
+      const m = api.marges?.() || {};
+      const g = (m.g || 0) * dpr, d = (m.d || 0) * dpr, hh = (m.h || 0) * dpr, b = (m.b || 0) * dpr;
+      const LL = Math.max(1, L - g - d), HH = Math.max(1, H - hh - b);
+      camera.z = Math.max(1, Math.min(8, Math.floor(Math.min(LL / (carte.largeur * t), HH / (carte.hauteur * t)))));
+      camera.x = (carte.largeur * t - LL / camera.z) / 2 - g / camera.z;
+      camera.y = (carte.hauteur * t - HH / camera.z) / 2 - hh / camera.z;
       cadree = carte.id;
     }
     function zoomer(k, px, py) {
@@ -336,7 +341,8 @@ const Plateau = (() => {
       }
     }
 
-    return { taille, dessiner, cadrer, zoomer, glisser, caseSous, pointDe, pionSous, flotter, eclat, secouer, camera, oublier() { cadree = ''; } };
+    const api = { taille, dessiner, cadrer, zoomer, glisser, caseSous, pointDe, pionSous, flotter, eclat, secouer, camera, oublier() { cadree = ''; }, marges: null };
+    return api;
   }
 
   return { creer };

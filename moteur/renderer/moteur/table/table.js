@@ -36,7 +36,17 @@ const TableMode = (() => {
       placer: (g) => agir({ type: 'gabarit', ...g }),
       ping: (c) => agir({ type: 'ping', x: c.x, y: c.y }),
       effacer: () => agir({ type: 'gabarit_retirer' }),
+      // Saga 1.35 : le pinceau du brouillard et le tapis de dés, dans le rail du MJ.
+      extras: [
+        { icone: 'lightbulb', titre: 'Révéler au pinceau (B) : glisse sur le plateau pour montrer des cases aux joueurs', touche: 'B', faire: () => { api.pinceau = pinceau === 'reveler' ? null : 'reveler'; panneau?.dessiner(); }, actif: () => pinceau === 'reveler' },
+        { icone: 'circle-slash', titre: 'Cacher au pinceau (N)', touche: 'N', faire: () => { api.pinceau = pinceau === 'cacher' ? null : 'cacher'; panneau?.dessiner(); }, actif: () => pinceau === 'cacher' },
+        { icone: 'symbol-event', titre: 'Le tapis de dés (D) : composer un jet, lancer au bouton ou en glissant', touche: 'D', faire: () => ouvrirTapis(), actif: () => Boolean(h.tapis?.()?.ouvert) },
+      ],
     });
+    // Saga 1.35 : le tapis de dés du MJ (ses jets passent par la commande, comme le chat).
+    function ouvrirTapis() {
+      h.tapis?.()?.basculer({ lancer: (f, secret) => commande(f.startsWith('/') ? f : `${secret ? '/gr' : '/r'} ${f}`, { mj: true }, 'MJ', 'hote') });
+    }
     let actif = false;
     let selection = null, survol = null, picker = null, pinceau = null, apercu = null;
     let combat = null;     // { tour, ordre, actif, reste, heros: [pion], ennemis: [pion] }
@@ -188,7 +198,7 @@ const TableMode = (() => {
       });
       // Un deuxième démarrage (une nouvelle partie, F5) remplace le panneau au lieu d'en empiler un autre.
       panneau?.fermer();
-      panneau = TablePanneau.creer({ conteneur: colonne, table: api });
+      panneau = TablePanneau.creer({ conteneur: colonne, scene, boite, table: api });
       plateau.oublier();
       brancherMulti();
     }
@@ -341,7 +351,13 @@ const TableMode = (() => {
         if (glisse.bouge) { plateau.glisser(dx, dy); glisse.x = e.clientX; glisse.y = e.clientY; }
       }
     });
-    window.addEventListener('keydown', (e) => { if (actif && !ficheMj && !e.ctrlKey && !e.metaKey) outils.touche(e); });
+    window.addEventListener('keydown', (e) => {
+      if (!actif || ficheMj || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.target?.matches?.('input, select, textarea')) return;
+      // Saga 1.35 : 1 à 9 lancent les macros de la barre du bas.
+      if (/^[1-9]$/.test(e.key) && panneau?.macro(Number(e.key) - 1)) { e.preventDefault(); return; }
+      outils.touche(e);
+    });
     window.addEventListener('mouseup', (e) => {
       if (actif && outils.occupe) { outils.lacher(); return; }
       const g = glisse;
@@ -1043,6 +1059,13 @@ const TableMode = (() => {
       vue: () => derniereVue,
       choisirCase, afficherAide, annulerPicker,
       cadrer: () => plateau.oublier(),
+      // Saga 1.35 : le zoom (les boutons en bas du plateau), le tapis de dés.
+      zoomer: (k) => { const r = canvas.getBoundingClientRect(); const m = plateau.marges?.() || {}; plateau.zoomer(k, ((m.g || 0) + r.width - (m.d || 0)) / 2, ((m.h || 0) + r.height - (m.b || 0)) / 2); },
+      get zoom() { return plateau.camera.z; },
+      ouvrirTapis,
+      tapis: () => h.tapis?.(),
+      set marges(f) { plateau.marges = f; },
+      redessinerOutils: () => outils.rafraichir(),
       pointDe: (x, y) => { const r = canvas.getBoundingClientRect(); const q = plateau.pointDe(x, y, jeu()); return { x: r.left + q.px, y: r.top + q.py }; },
       musique: (c) => h.musique(c), son: (c) => h.son(c), message: (t) => h.message(t), des: (o) => h.des(o),
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),

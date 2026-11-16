@@ -71,8 +71,134 @@ const EcranDes = (() => {
       if (duree > 0) await new Promise((r) => setTimeout(r, Math.min(450, duree)));
     }
 
+    // --- Saga 1.35 : le tapis de la table (mode table) : des dés en verre qui roulent au milieu du plateau ---
+    // Ouvert par un jet (il se referme seul) ou par le MJ / le joueur (touche D, le rail) : on y compose un
+    // jet (les dés, une formule), on lance au bouton ou en glissant sur le tapis ; c'est la partie qui tire,
+    // les dés s'arrêtent sur ses valeurs.
+    const tapis = (() => {
+      const boite = el('div', { className: 'des-tapis', hidden: true });
+      const tete = el('div', { className: 'des-tapis-tete' });
+      const totalEl = el('b', { className: 'des-tapis-total' });
+      const toile = el('canvas');
+      const fermer = el('button', { className: 'des-tapis-fermer', type: 'button', title: 'Fermer (Échap)' }, el('i', { className: 'codicon codicon-close' }));
+      const compo = el('div', { className: 'des-tapis-compo' });
+      boite.append(el('div', { className: 'des-tapis-haut' }, tete, totalEl), toile, compo, fermer);
+      conteneur.append(boite);
+      let plateau = null, ouvertParMoi = false, attendu = null, lanceur = null, fin = 0, choix = {};
+      const anime = () => { try { return localStorage.getItem('saga:des-animes') !== '0'; } catch { return true; } };
+      function preparer() {
+        boite.hidden = false;
+        // Ouvert par un jet (pas à la main) : il laisse passer les clics vers le plateau.
+        boite.classList.toggle('passif', !ouvertParMoi);
+        if (!plateau) plateau = PlateauDes.creer(toile, { accent: getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#ffb347', finir: () => fini?.() });
+        plateau.anime = anime();
+      }
+      let fini = null;
+      function cacher() { clearTimeout(fin); boite.hidden = true; ouvertParMoi = false; attendu = null; plateau?.vider(); }
+      fermer.onclick = cacher;
+      // La composition : les dés (un clic : +1, clic droit : −1), la formule, Lancer, Secret.
+      const formule = el('input', { className: 'des-tapis-formule', type: 'text', placeholder: '1d20+@for', spellcheck: false, autocomplete: 'off' });
+      const secret = el('input', { type: 'checkbox' });
+      function dessinerCompo() {
+        compo.replaceChildren();
+        if (!lanceur) return;
+        const puces = el('div', { className: 'des-tapis-puces' }, ...['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'].map((t) => {
+          const b = el('button', { type: 'button', className: `des-tapis-puce${choix[t] ? ' on' : ''}` }, t === 'd100' ? 'd%' : t, choix[t] ? el('i', { textContent: String(choix[t]) }) : null);
+          b.onclick = () => { choix[t] = (choix[t] || 0) + 1; ecrire(); };
+          b.oncontextmenu = (e) => { e.preventDefault(); if (choix[t]) choix[t]--; ecrire(); };
+          return b;
+        }));
+        const lancer = el('button', { type: 'button', className: 'des-tapis-lancer' }, el('i', { className: 'codicon codicon-play' }), 'Lancer');
+        lancer.onclick = () => jeter({});
+        compo.append(puces, el('div', { className: 'des-tapis-ligne' }, formule, el('label', { className: 'des-tapis-secret', title: lanceur.secretTitre || 'Un jet que seul le MJ voit' }, secret, el('span', { textContent: 'Secret' })), lancer));
+      }
+      function ecrire() {
+        formule.value = Object.entries(choix).filter(([, n]) => n > 0).map(([t, n]) => `${n}${t}`).join('+');
+        dessinerCompo();
+      }
+      formule.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); jeter({}); } e.stopPropagation(); };
+      function jeter(main) {
+        const f = formule.value.trim();
+        if (!f || !lanceur) return;
+        const types = PlateauDes.types(f);
+        if (!types.length && !/^\/m\b/i.test(f)) return;
+        preparer();
+        clearTimeout(fin);
+        tete.replaceChildren(el('span', { textContent: f }));
+        totalEl.textContent = '';
+        if (types.length) plateau.lancer(types, main);
+        attendu = { types, depuis: performance.now() };
+        lanceur.lancer(f, secret.checked);
+        choix = {};
+        dessinerCompo();
+      }
+      // Glisser sur le tapis : la main qui jette.
+      let glisse = null;
+      toile.addEventListener('pointerdown', (e) => { if (!lanceur) return; glisse = { x: e.offsetX, y: e.offsetY, t: performance.now() }; toile.setPointerCapture(e.pointerId); });
+      toile.addEventListener('pointerup', (e) => {
+        if (!glisse) return;
+        const dt = Math.max(16, performance.now() - glisse.t) / 1000;
+        const vx = (e.offsetX - glisse.x) / dt, vy = (e.offsetY - glisse.y) / dt;
+        const g = glisse;
+        glisse = null;
+        if (Math.hypot(e.offsetX - g.x, e.offsetY - g.y) > 30) jeter({ x: g.x, y: g.y, vx, vy });
+      });
+      boite.addEventListener('keydown', (e) => { if (e.key === 'Escape') { cacher(); e.stopPropagation(); } });
+
+      return {
+        get ouvert() { return !boite.hidden; },
+        // Le lanceur : { lancer(formule, secret), formule: dernière formule }. Rester ouvert jusqu'à Fermer.
+        ouvrir(l) {
+          lanceur = l || lanceur;
+          ouvertParMoi = true;
+          preparer();
+          boite.classList.remove('passif');
+          if (!formule.value && l?.formule) formule.value = l.formule;
+          tete.replaceChildren(el('span', { textContent: 'Choisis des dés, ou écris une formule (@for, @pb…) · glisse sur le tapis pour lancer' }));
+          totalEl.textContent = '';
+          dessinerCompo();
+          setTimeout(() => formule.focus(), 30);
+        },
+        basculer(l) { if (!boite.hidden && ouvertParMoi) cacher(); else this.ouvrir(l); },
+        cacher,
+        // Un jet de la partie : les dés s'arrêtent sur ses valeurs (ceux qu'on a jetés, s'ils vont avec).
+        montrer({ lignes }) {
+          const des = lignes.flatMap((l) => l.des.map((d) => ({ t: `d${d.faces}`, v: d.valeur })));
+          preparer();
+          clearTimeout(fin);
+          const types = des.map((d) => (PlateauDes.FACES[d.t] ? d.t : 'd6'));
+          const deja = attendu && performance.now() - attendu.depuis < 6000 && attendu.types.join() === types.join() && plateau.des.length === types.length;
+          attendu = null;
+          if (!deja && types.length) plateau.lancer(types, {});
+          const d = lignes[lignes.length - 1];
+          tete.replaceChildren(...lignes.map((l) => el('div', { className: `des-tapis-ligne-jet${l.cache ? ' cache' : ''}` },
+            l.cache ? el('i', { className: 'codicon codicon-eye-closed' }) : null,
+            el('span', { textContent: [l.qui, l.quoi && l.quoi !== 'Jet' ? l.quoi : '', l.formule].filter(Boolean).join(' · ') }),
+            lignes.length > 1 ? el('b', { textContent: ` = ${l.total}` }) : null,
+            l.resultat ? el('span', { className: `des-resultat ${l.resultat}`, textContent: RESULTATS[l.resultat] || l.resultat }) : null)));
+          totalEl.textContent = '';
+          return new Promise((resoudre) => {
+            const montrerTotal = () => {
+              fini = null;
+              totalEl.textContent = String(d.total);
+              totalEl.animate?.([{ transform: 'scale(1.35)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 220, easing: 'ease-out' });
+              if (!ouvertParMoi) fin = setTimeout(cacher, RESTE + 1200);
+              resoudre();
+            };
+            fini = montrerTotal;
+            setTimeout(() => plateau.poser(des.map((x) => x.v)), deja ? 0 : (plateau.anime ? 420 : 0));
+            // Sans animation (ou plus de 10 dés), poser() suffit : le total tout de suite.
+            setTimeout(() => { if (fini === montrerTotal) montrerTotal(); }, plateau.anime && types.length <= PlateauDes.MAX_ANIMES ? 4500 : 60);
+          });
+        },
+      };
+    })();
+    const tapisActif = () => document.body.classList.contains('mode-table') && (() => { try { return localStorage.getItem('saga:des-tapis') !== '0'; } catch { return true; } })();
+    const montrerClassique = montrer;
+
     return {
-      montrer,
+      montrer: (o) => (tapisActif() && o?.lignes?.length ? tapis.montrer(o) : montrerClassique(o)),
+      tapis,
       vitesse(v) { vitesse = DUREES[v] !== undefined ? v : 'normale'; },
       cacher() { clearTimeout(minuterie); racine.hidden = true; },
     };

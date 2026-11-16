@@ -1,21 +1,52 @@
 // Le mode table (Saga 0.14) : le panneau du MJ, à droite du plateau. Rien ici n'est montré aux joueurs.
 //
-//   Table      voir comme (MJ, les joueurs, un joueur), ouvrir l'écran des joueurs, pause
-//   Amis       le multijoueur (Saga 1.0) : qui est connecté et quel héros chacun joue
-//   Pièces     qui voit chaque pièce, le brouillard, le pinceau (révéler ou cacher des cases à la main)
-//   Pions      les héros et les monstres de la carte : leurs PV, qui les voit
-//   Rencontres poser une rencontre sur la table, lancer le combat
-//   Jets       un jet de dés, caché ou non ; le journal, avec « Révéler » sur les jets cachés
-//   Musique    les musiques et les sons du dossier sons/ du jeu
+// Saga 1.35 : un panneau en verre à onglets, par-dessus le plateau (qui prend tout l'écran), et
+// l'habillage autour (table/interface.js : la barre du haut, l'initiative, le pion choisi, les macros).
+//
+//   Chat      les jets de dés et la discussion avec les amis, mêlés ; une ligne pour écrire (/r, /gr, /m)
+//   Combat    la boîte du combat (le menu du tour, les messages) et l'ordre d'initiative ; lancer un combat
+//   Pions     les héros et les monstres de la carte : leurs PV, qui les voit, la fiche d'un héros
+//   Scène     la campagne (son nom, le fond des téléphones), le brouillard, les rencontres, la musique, les dés
+//   Joueurs   le multijoueur : ouvrir la partie, qui est là, quel héros chacun joue, les téléphones
 
 const TablePanneau = (() => {
-  function creer({ conteneur, table: T }) {
+  const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['combat', 'Combat', 'flame'], ['pions', 'Pions', 'person'], ['scene', 'Scène', 'map'], ['joueurs', 'Joueurs', 'organization']];
+  const lire = (k, d) => { try { const v = localStorage.getItem(`saga:table:${k}`); return v == null ? d : v; } catch { return d; } };
+  const ecrire = (k, v) => { try { localStorage.setItem(`saga:table:${k}`, String(v)); } catch { /* stockage refusé */ } };
+
+  function creer({ conteneur, scene, boite, table: T }) {
+    // Le panneau : ses onglets, un volet par onglet (le combat garde la boîte de table.js).
     const racine = el('div', { className: 'table-panneau' });
-    conteneur.append(racine);
+    const onglets = el('nav', { className: 'table-onglets' });
+    const volets = {};
+    for (const [id] of ONGLETS) volets[id] = el('div', { className: `table-volet volet-${id}`, hidden: true });
+    const combatHaut = el('div', { className: 'table-combat-haut' });
+    if (boite) volets.combat.append(boite);
+    volets.combat.append(combatHaut);
+    const poignee = el('div', { className: 'table-poignee', title: 'Glisser : élargir ou réduire le panneau' });
+    racine.append(onglets, ...Object.values(volets));
+    conteneur.append(poignee, racine);
+    let onglet = lire('onglet', 'chat');
+    if (!volets[onglet]) onglet = 'chat';
+    const interfaceMj = scene ? TableInterface.creer({ scene, table: T }) : null;
+    T.marges = () => interfaceMj?.marges() || {};
+
+    // La largeur du panneau, réglable et retenue.
+    let largeur = Math.max(280, Math.min(560, Number(lire('largeur', 340)) || 340));
+    const appliquerLargeur = () => document.body.style.setProperty('--table-panneau', `${largeur}px`);
+    appliquerLargeur();
+    poignee.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const x0 = e.clientX, l0 = largeur;
+      const bouger = (m) => { largeur = Math.max(280, Math.min(560, l0 + (x0 - m.clientX))); appliquerLargeur(); };
+      const finir = () => { window.removeEventListener('pointermove', bouger); window.removeEventListener('pointerup', finir); ecrire('largeur', largeur); T.cadrer(); };
+      window.addEventListener('pointermove', bouger);
+      window.addEventListener('pointerup', finir);
+    });
+
     let sons = [];
     window.saga.listeSons?.().then((l) => { sons = Array.isArray(l) ? l : []; dessiner(); }).catch(() => {});
-    const ouverts = new Set(['table', 'pieces', 'pions', 'jets']);
-    let jet = { formule: '1d20', quoi: '', cache: true };
+    const ouverts = new Set(['campagne', 'pieces', 'rencontres']);
     let enAttente = false;
 
     const select = (valeur, options, change) => {
@@ -37,6 +68,95 @@ const TablePanneau = (() => {
       s.append(t);
       if (ouverts.has(id)) s.append(el('div', { className: 'table-section-corps' }, ...contenu()));
       return s;
+    }
+
+    // --- Les onglets (avec ce qui attend : des messages non lus, un combat en cours) ---
+    let nonLus = 0, combatVu = false;
+    function choisir(id) {
+      onglet = id;
+      ecrire('onglet', id);
+      if (id === 'chat') nonLus = 0;
+      dessiner();
+      if (id === 'chat') setTimeout(() => { fil.scrollTop = fil.scrollHeight; }, 0);
+    }
+    document.addEventListener('saga:table-onglet', (e) => { if (volets[e.detail]) choisir(e.detail); });
+    function dessinerOnglets() {
+      onglets.replaceChildren(...ONGLETS.map(([id, nom, ic]) => {
+        const pastille = id === 'chat' && nonLus ? String(nonLus) : id === 'combat' && T.combat ? '!' : '';
+        const b = el('button', { type: 'button', className: `table-onglet${onglet === id ? ' on' : ''}`, title: nom },
+          el('i', { className: `codicon codicon-${ic}` }), el('span', { textContent: nom }), pastille ? el('b', { className: 'table-pastille', textContent: pastille }) : null);
+        b.onclick = () => choisir(id);
+        return b;
+      }));
+      for (const [id, v] of Object.entries(volets)) v.hidden = id !== onglet;
+    }
+
+    // --- Chat : les jets et la discussion, mêlés dans l'ordre où ils arrivent ---
+    const fil = el('div', { className: 'table-fil' });
+    const champ = el('input', { className: 'table-ecrire-champ', type: 'text', maxLength: 300, placeholder: 'Écrire… /r 1d20+3 · /gr secret · /m macro', spellcheck: false });
+    const pourQui = el('select', { className: 'table-select table-pour', title: 'À qui (la discussion)' });
+    const envoyer = el('button', { className: 'table-envoyer', type: 'submit', title: 'Envoyer (Entrée)' }, el('i', { className: 'codicon codicon-send' }));
+    const desB = el('button', { className: 'table-bouton', type: 'button', title: 'Le tapis de dés (D)' }, el('i', { className: 'codicon codicon-symbol-event' }));
+    desB.onclick = () => T.ouvrirTapis();
+    const formulaire = el('form', { className: 'table-ecrire' }, desB, champ, envoyer);
+    formulaire.onsubmit = (e) => {
+      e.preventDefault();
+      const t = champ.value.trim();
+      if (!t) return;
+      const multi = T.multi?.();
+      if (t.startsWith('/')) T.commande(t);
+      else if (multi?.actif) multi.dire(t, pourQui.value || 'tous');
+      else T.message('Personne à qui parler : ouvre la partie aux amis (onglet Joueurs). Pour un jet : /r 1d20+3');
+      champ.value = '';
+    };
+    champ.onkeydown = (e) => e.stopPropagation();
+    volets.chat.append(fil, el('div', { className: 'table-ecrire-zone' }, pourQui, formulaire));
+    let signatureFil = '';
+    const heureDe = (t) => {
+      if (!t) return '';
+      const s = Math.round((Date.now() - t) / 1000);
+      return s < 45 ? 'maintenant' : s < 3600 ? `il y a ${Math.round(s / 60)} min` : new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    };
+    function carteJet(l) {
+      const res = l.resultat ? el('span', { className: `table-jet-res ${l.resultat}`, textContent: JdrDes.RESULTATS[l.resultat] || l.resultat }) : null;
+      const b = el('div', { className: `table-jet${l.cache ? ' cache' : ''}` },
+        el('div', { className: 'table-jet-tete' },
+          l.cache ? el('i', { className: 'codicon codicon-eye-closed' }) : null,
+          el('span', { textContent: [l.qui, l.quoi && l.quoi !== 'Jet' ? l.quoi : ''].filter(Boolean).join(' · ') + (l.cache ? ' (secret)' : '') }),
+          el('small', { textContent: l.cache ? 'MJ seulement' : heureDe(l.heure) })),
+        el('div', { className: 'table-jet-corps' },
+          el('span', { className: 'table-jet-des' },
+            ...l.des.map((d) => el('span', { className: `table-de d${d.faces}${d.garde ? '' : ' ecarte'}${d.garde && d.valeur === d.faces ? ' max' : ''}${d.garde && d.valeur === 1 && d.faces === 20 ? ' min' : ''}`, title: `d${d.faces}`, textContent: String(d.valeur) })),
+            l.bonus ? el('span', { className: 'table-jet-bonus', textContent: `${l.bonus > 0 ? '+' : '−'}${Math.abs(l.bonus)}` }) : null),
+          el('span', { className: 'table-jet-fin' }, el('b', { className: 'table-jet-total', textContent: String(l.total) }), res,
+            l.cache ? btn('eye', 'Révéler', () => { l.cache = false; dessinerFil(true); }, { classe: 'petit', titre: 'Montrer ce jet aux joueurs' }) : null)));
+      return b;
+    }
+    function dessinerFil(force = false) {
+      const partie = T.partie();
+      const multi = T.multi?.();
+      const jets = (partie?.jdr?.journal || []).slice(-40);
+      const chat = multi?.actif ? (multi.lignes || []).filter((x) => !x.jet).slice(-60) : [];
+      const sig = JSON.stringify([jets.map((l) => [l.n, l.cache]), chat.map((x) => x.n), Math.floor(Date.now() / 30000)]);
+      if (!force && sig === signatureFil) return;
+      // Les nouveautés depuis la dernière fois (pour la pastille de l'onglet).
+      const derJ = jets.at(-1)?.n || 0, derC = chat.at(-1)?.n || 0;
+      const nouveaux = signatureFil ? jets.filter((l) => l.n > (dessinerFil.j || 0)).length + chat.filter((x) => x.n > (dessinerFil.c || 0)).length : 0;
+      dessinerFil.j = derJ; dessinerFil.c = derC;
+      signatureFil = sig;
+      if (onglet !== 'chat' && nouveaux) nonLus += nouveaux;
+      const bas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 40;
+      const items = [...jets.map((l) => ({ t: l.heure || 0, n: l.n, el: () => carteJet(l) })),
+        ...chat.map((x) => ({ t: x.t || 0, n: x.n, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
+        .sort((a, b) => a.t - b.t);
+      fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+3 pour lancer, /gr pour un jet que toi seul vois, ou ouvre le tapis de dés (D).' })]));
+      if (bas || force) fil.scrollTop = fil.scrollHeight;
+      // À qui parler : tous, ou un ami.
+      const options = [['tous', 'À tous'], ...(multi?.actif ? multi.joueurs.filter((j) => !j.hote).map((j) => [j.id, `→ ${j.nom}`]) : [])];
+      const avant = pourQui.value || 'tous';
+      pourQui.replaceChildren(...options.map(([v, t]) => el('option', { value: v, textContent: t })));
+      pourQui.value = options.some(([v]) => v === avant) ? avant : 'tous';
+      pourQui.hidden = options.length < 2;
     }
 
     // Saga 1.34 : le nom de la campagne et le fond des compagnons (gardés dans la sauvegarde).
@@ -77,161 +197,164 @@ const TablePanneau = (() => {
     function dessiner() {
       const jeu = T.jeu(), partie = T.partie(), carte = T.carte();
       if (!jeu || !partie?.table || !carte) return;
-      const haut = racine.scrollTop;
-      racine.innerHTML = '';
-      const vis = T.VISIBILITES();
-      racine.append(el('div', { className: 'table-panneau-tete' }, el('span', { className: 'table-panneau-rune', textContent: 'ᛃ' }), el('span', { textContent: 'Mode table · MJ' }), el('small', { textContent: carte.nom })));
+      // Un combat commence : son onglet s'ouvre.
+      if (T.combat && !combatVu && onglet !== 'combat') { onglet = 'combat'; }
+      combatVu = Boolean(T.combat);
+      dessinerOnglets();
+      dessinerFil();
+      interfaceMj?.maj();
+      const v = volets[onglet];
+      const haut = v.scrollTop;
+      if (onglet === 'combat') dessinerCombat(jeu, partie);
+      else if (onglet === 'pions') v.replaceChildren(...voletPions(jeu, partie, carte));
+      else if (onglet === 'scene') v.replaceChildren(...voletScene(jeu, partie, carte));
+      else if (onglet === 'joueurs') dessinerJoueurs(jeu, partie);
+      v.scrollTop = haut;
+    }
 
-      racine.append(section('table', 'Table', () => {
-        const roles = [['mj', 'Moi, le MJ (tout)'], ['joueurs', 'Les joueurs (écran partagé)'], ...partie.equipe.filter((c) => c.jdr).map((c) => [`perso:${c.creature}`, `Le joueur de ${JdrPerso.nom(jeu, c)}`])];
-        const actuel = !T.apercu ? 'mj' : T.apercu.perso ? `perso:${T.apercu.perso}` : 'joueurs';
-        return [
-          el('label', { className: 'table-ligne' }, el('span', { textContent: 'Voir comme' }), select(actuel, roles, (v) => { T.apercu = v === 'mj' ? null : { mj: false, perso: v.startsWith('perso:') ? v.slice(6) : null }; dessiner(); })),
-          el('div', { className: 'table-boutons' },
-            btn('screen-full', 'Écran des joueurs', () => window.saga.tableOuvrir?.(), { titre: 'Ouvrir la fenêtre des joueurs (à mettre sur la télé ou un 2e écran). Elle ne reçoit que ce que les joueurs ont le droit de voir.' }),
-            btn(partie.table.pause ? 'debug-continue' : 'debug-pause', partie.table.pause ? 'Reprendre' : 'Pause', () => { T.agir({ type: 'pause', valeur: !partie.table.pause }); dessiner(); }, { classe: partie.table.pause ? 'actif' : '' }),
-            btn('screen-normal', 'Recadrer', () => T.cadrer(), { titre: 'Remontrer toute la carte (molette : zoom, clic droit glissé : se déplacer)' })),
-          ...campagne(partie),
-        ];
-      }));
-
-      // Saga 1.0 : les amis connectés, et le héros de chacun.
-      const multi = T.multi?.();
-      if (multi?.actif) {
-        racine.append(section('amis', `Amis (${multi.joueurs.filter((j) => j.connecte && !j.hote).length})`, () => {
-          const out = [];
-          const i = multi.infos;
-          if (i.ouvert) out.push(el('p', { className: 'table-note', textContent: `Ils ouvrent ${i.adresses[0] ? `http://${i.adresses[0]}:${i.port}` : `le port ${i.port}`} et entrent le code ${i.code}.` }));
-          const heros = partie.equipe.filter((c) => c?.jdr).map((c) => [T.cleDe(c), JdrPerso.nom(jeu, c)]);
-          for (const j of multi.joueurs) {
-            if (j.hote) continue;
-            out.push(el('div', { className: `table-ligne ami${j.connecte ? '' : ' absent'}` },
-              el('i', { className: `codicon codicon-${j.connecte ? 'person' : 'debug-disconnect'}` }),
-              el('span', { className: 'table-nom', textContent: j.nom }),
-              select(T.cleRole(j.nom), [['', 'Sans héros'], ...heros.map(([id, nom]) => [id, nom])], (v) => T.donnerRole(j.nom, v))));
-          }
-          if (multi.joueurs.length <= 1) out.push(el('p', { className: 'table-note', textContent: 'Personne encore. Donne l\'adresse et le code à tes amis : ils jouent depuis leur navigateur, sans rien installer.' }));
-          out.push(el('p', { className: 'table-note', textContent: 'Un ami sans héros en prend un libre ou crée le sien depuis son écran (il est gardé dans la sauvegarde). Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat (ton menu reste ouvert : la première réponse compte). Un spectateur ne voit que l\'écran partagé.' }));
-          return out;
-        }));
+    // --- Combat : la boîte (table.js), l'ordre d'initiative, lancer une rencontre ---
+    function dessinerCombat(jeu, partie) {
+      const out = [];
+      if (T.combat) {
+        if (!T.combat.ordre?.length) out.push(el('p', { className: 'table-note', textContent: 'L\'initiative se lance…' }));
+        else out.push(el('div', { className: 'table-sous-titre', textContent: `Initiative · tour ${T.combat.tour || 1}` }));
+        for (const o of T.combat.ordre || []) {
+          const l = el('div', { className: `table-ligne ordre${T.combat.actif === o.id ? ' actif' : ''}` }, el('span', { className: 'table-init', textContent: String(o.init ?? '') }), el('span', { className: 'table-nom', textContent: o.nom }));
+          l.onclick = () => { T.selection = o.id; rafraichir(); };
+          out.push(l);
+        }
+      } else {
+        out.push(el('p', { className: 'table-note', textContent: 'Pas de combat. Pose une rencontre (onglet Scène) et lance-la, ou lance-la d\'ici : les monstres qui manquent arrivent près du groupe.' }));
+        out.push(...rencontres(jeu));
       }
+      combatHaut.replaceChildren(...out);
+    }
 
+    // --- Pions ---
+    function voletPions(jeu, partie, carte) {
+      const vis = T.VISIBILITES();
+      const out = [];
+      const pions = TableEtat.pionsSur(partie.table, carte.id).filter((p) => !p.vaincu);
+      for (const p of pions) {
+        const c = p.sorte === 'heros' ? TableEtat.membreDe(partie, p) : null;
+        const nom = c ? JdrPerso.nom(jeu, c) : p.nom;
+        const pv = c ? Math.max(0, c.pv) : p.pv, max = c ? JdrPerso.pvMax(jeu, c) : p.pvMax;
+        const pc = max ? Math.max(0, Math.min(100, (pv / max) * 100)) : 0;
+        const ligne = el('div', { className: `table-carte-pion ${p.sorte}${T.selection === p.id ? ' choisi' : ''}${T.combat?.actif === p.id ? ' actif' : ''}` },
+          el('span', { className: 'table-rond', textContent: (nom || '?').charAt(0).toUpperCase() }),
+          el('div', { className: 'table-carte-corps' },
+            el('div', { className: 'table-ligne' }, el('span', { className: 'table-nom', textContent: nom }), el('small', { className: 'table-pv', textContent: `${pv}/${max} PV` })),
+            el('div', { className: `table-jauge${pc < 40 ? ' basse' : ''}` }, el('i', { style: `width:${pc}%` }))));
+        ligne.onclick = (e) => { if (e.target.closest('select, button')) return; T.selection = T.selection === p.id ? null : p.id; dessiner(); };
+        if (p.sorte !== 'heros') ligne.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
+        // Saga 1.21.3 : la fiche du héros (et les champs du jeu, que le MJ peut tous changer).
+        if (c) ligne.append(btn('account', '', () => T.ouvrirFiche(c), { titre: `La fiche de ${nom}` }));
+        out.push(ligne);
+      }
+      if (!pions.length) out.push(el('p', { className: 'table-note', textContent: 'Aucun pion sur cette carte.' }));
+      out.push(el('p', { className: 'table-note', textContent: 'Clique un pion puis une case pour le déplacer. Clic droit : qui le voit, ses marques. En bas à gauche : ses PV (+ et −).' }));
+      return out;
+    }
+
+    // --- Scène ---
+    function rencontres(jeu) {
+      const groupes = jeu.donnees.groupes?.groupes || [];
+      if (!groupes.length) return [el('p', { className: 'table-note', textContent: 'Aucune rencontre dans ce jeu (Tafl › Données › Rencontres).' })];
+      let choisi = groupes[0].id;
+      const s = select(choisi, groupes.map((g) => [g.id, g.nom || g.id]), (v) => { choisi = v; });
+      return [
+        el('label', { className: 'table-ligne' }, s),
+        el('div', { className: 'table-boutons' },
+          btn('add', 'Poser sur la table', async () => {
+            if (enAttente) return;
+            enAttente = true;
+            T.afficherAide?.('');
+            T.message('Clique la case où poser la rencontre.');
+            const c = await T.choisirCase(null);
+            enAttente = false;
+            if (c) T.agir({ type: 'groupe', groupe: choisi, x: c.x, y: c.y });
+          }, { titre: 'Les monstres arrivent cachés ou non selon la rencontre (Visible par, dans Tafl). Clic droit sur un pion pour changer.' }),
+          btn('flame', 'Lancer le combat', () => { if (T.combat || T.occupe()) return; T.lancerCombat(choisi); }, { titre: 'Les pions de cette rencontre déjà posés combattent ; ceux qui manquent arrivent près du groupe.' })),
+      ];
+    }
+    function voletScene(jeu, partie, carte) {
+      const vis = T.VISIBILITES();
+      const out = [];
+      out.push(section('campagne', 'Campagne', () => [...campagne(partie),
+        el('div', { className: 'table-boutons' }, btn('screen-normal', 'Recadrer la carte', () => T.cadrer(), { titre: 'Remontrer toute la carte (molette : zoom, clic droit glissé : se déplacer)' }))]));
       const ps = TableEtat.pieces(carte);
-      racine.append(section('pieces', `Pièces et brouillard${ps.length ? ` (${ps.length})` : ''}`, () => {
-        const out = [];
+      out.push(section('pieces', `Pièces et brouillard${ps.length ? ` (${ps.length})` : ''}`, () => {
+        const o = [];
         const b = TableEtat.brouillard(partie.table, carte);
-        out.push(el('label', { className: 'table-ligne' }, el('span', { textContent: 'Brouillard' }), select(b ? 'oui' : 'non', [['oui', 'Oui, sur cette carte'], ['non', 'Non, tout se voit']], (v) => T.agir({ type: 'brouillard', valeur: v === 'oui' }))));
-        if (!ps.length) out.push(el('p', { className: 'table-note', textContent: 'Pas de pièce sur cette carte : dans Tafl, une zone cochée « pièce » se révèle d\'un clic ici.' }));
+        o.push(el('label', { className: 'table-ligne' }, el('span', { textContent: 'Brouillard' }), select(b ? 'oui' : 'non', [['oui', 'Oui, sur cette carte'], ['non', 'Non, tout se voit']], (v) => T.agir({ type: 'brouillard', valeur: v === 'oui' }))));
+        if (!ps.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de pièce sur cette carte : dans Tafl, une zone cochée « pièce » se révèle d\'un clic ici.' }));
         for (const z of ps) {
           const v = TableEtat.visibilitePiece(partie.table, carte, z);
-          out.push(el('div', { className: 'table-ligne piece' },
+          o.push(el('div', { className: 'table-ligne piece' },
             btn(v === 'tous' ? 'eye' : 'eye-closed', '', () => T.agir({ type: 'piece', piece: z.id, visible: v === 'tous' ? 'mj' : 'tous' }), { titre: v === 'tous' ? 'Cacher cette pièce aux joueurs' : 'Révéler cette pièce aux joueurs', classe: v === 'tous' ? 'actif' : '' }),
             el('span', { className: 'table-nom', textContent: z.nom || z.id }),
             select(v, vis, (nv) => T.agir({ type: 'piece', piece: z.id, visible: nv }))));
         }
-        out.push(el('div', { className: 'table-boutons' },
-          btn('lightbulb', 'Révéler au pinceau', () => { T.pinceau = T.pinceau === 'reveler' ? null : 'reveler'; dessiner(); }, { classe: T.pinceau === 'reveler' ? 'actif' : '', titre: 'Clique ou glisse sur le plateau pour montrer des cases aux joueurs' }),
-          btn('circle-slash', 'Cacher au pinceau', () => { T.pinceau = T.pinceau === 'cacher' ? null : 'cacher'; dessiner(); }, { classe: T.pinceau === 'cacher' ? 'actif' : '' }),
+        o.push(el('div', { className: 'table-boutons' },
+          btn('lightbulb', 'Révéler au pinceau', () => { T.pinceau = T.pinceau === 'reveler' ? null : 'reveler'; T.redessinerOutils?.(); dessiner(); }, { classe: T.pinceau === 'reveler' ? 'actif' : '', titre: 'Clique ou glisse sur le plateau pour montrer des cases aux joueurs (B)' }),
+          btn('circle-slash', 'Cacher au pinceau', () => { T.pinceau = T.pinceau === 'cacher' ? null : 'cacher'; T.redessinerOutils?.(); dessiner(); }, { classe: T.pinceau === 'cacher' ? 'actif' : '', titre: 'N' }),
           btn('discard', 'Tout recacher', () => T.agir({ type: 'tout_cacher' }), { titre: 'Remettre le brouillard partout sur cette carte (les pièces reprennent leur réglage de Tafl)' })));
-        return out;
+        return o;
       }));
-
-      const pions = TableEtat.pionsSur(partie.table, carte.id).filter((p) => !p.vaincu);
-      racine.append(section('pions', `Pions (${pions.length})`, () => {
-        const out = [];
-        for (const p of pions) {
-          const c = p.sorte === 'heros' ? TableEtat.membreDe(partie, p) : null;
-          const nom = c ? JdrPerso.nom(jeu, c) : p.nom;
-          const pv = c ? `${Math.max(0, c.pv)}/${JdrPerso.pvMax(jeu, c)}` : `${p.pv}/${p.pvMax}`;
-          const ligne = el('div', { className: `table-ligne pion${T.selection === p.id ? ' choisi' : ''}${T.combat?.actif === p.id ? ' actif' : ''}` },
-            el('i', { className: `codicon codicon-${p.sorte === 'heros' ? 'person' : 'flame'}` }),
-            el('span', { className: 'table-nom', textContent: nom }),
-            el('small', { className: 'table-pv', textContent: `${pv} PV` }));
-          ligne.onclick = (e) => { if (e.target.closest('select, button')) return; T.selection = T.selection === p.id ? null : p.id; dessiner(); };
-          if (p.sorte !== 'heros') ligne.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
-          // Saga 1.21.3 : la fiche du héros (et les champs du jeu, que le MJ peut tous changer).
-          if (c) ligne.append(btn('account', '', () => T.ouvrirFiche(c), { titre: `La fiche de ${nom}` }));
-          out.push(ligne);
+      out.push(section('rencontres', 'Rencontres', () => rencontres(jeu)));
+      out.push(section('musique', 'Musique et sons', () => {
+        const o = [el('div', { className: 'table-boutons' }, btn('mute', 'Silence', () => T.musique('aucune')), btn('home', 'Celle de la carte', () => T.musique('')))];
+        if (!sons.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));
+        for (const x of sons) {
+          o.push(el('div', { className: 'table-ligne son' },
+            el('span', { className: 'table-nom', textContent: x.replace(/^sons\//, '') }),
+            btn('play', '', () => T.musique(x), { titre: 'Jouer en musique (en boucle)' }),
+            btn('megaphone', '', () => T.son(x), { titre: 'Jouer une fois (un bruitage)' })));
         }
-        if (T.combat?.ordre?.length) {
-          out.push(el('div', { className: 'table-sous-titre', textContent: `Initiative · tour ${T.combat.tour || 1}` }));
-          for (const o of T.combat.ordre) out.push(el('div', { className: `table-ligne ordre${T.combat.actif === o.id ? ' actif' : ''}` }, el('span', { className: 'table-init', textContent: String(o.init ?? '') }), el('span', { className: 'table-nom', textContent: o.nom })));
-        } else out.push(el('p', { className: 'table-note', textContent: 'Clique un pion puis une case pour le déplacer. Clic droit : qui le voit.' }));
-        return out;
+        return o;
       }));
-
-      const groupes = jeu.donnees.groupes?.groupes || [];
-      racine.append(section('rencontres', 'Rencontres', () => {
-        if (!groupes.length) return [el('p', { className: 'table-note', textContent: 'Aucune rencontre dans ce jeu (Tafl › Données › Rencontres).' })];
-        let choisi = groupes[0].id;
-        const s = select(choisi, groupes.map((g) => [g.id, g.nom || g.id]), (v) => { choisi = v; });
-        return [
-          el('label', { className: 'table-ligne' }, s),
-          el('div', { className: 'table-boutons' },
-            btn('add', 'Poser sur la table', async () => {
-              if (enAttente) return;
-              enAttente = true;
-              T.afficherAide?.('');
-              T.message('Clique la case où poser la rencontre.');
-              const c = await T.choisirCase(null);
-              enAttente = false;
-              if (c) T.agir({ type: 'groupe', groupe: choisi, x: c.x, y: c.y });
-            }, { titre: 'Les monstres arrivent cachés ou non selon la rencontre (Visible par, dans Tafl). Clic droit sur un pion pour changer.' }),
-            btn('flame', 'Lancer le combat', () => { if (T.combat || T.occupe()) return; T.lancerCombat(choisi); }, { titre: 'Les pions de cette rencontre déjà posés combattent ; ceux qui manquent arrivent près du groupe.' })),
-        ];
-      }));
-
-      racine.append(section('jets', 'Jets de dés', () => {
-        const formule = el('input', { className: 'table-champ', value: jet.formule, placeholder: '1d20+3', spellcheck: false });
-        const quoi = el('input', { className: 'table-champ', value: jet.quoi, placeholder: 'Pour quoi ? (Perception…)' });
-        const cache = el('input', { type: 'checkbox', checked: jet.cache });
-        formule.oninput = () => { jet.formule = formule.value; };
-        quoi.oninput = () => { jet.quoi = quoi.value; };
-        cache.onchange = () => { jet.cache = cache.checked; };
-        const lancer = () => {
-          const r = JdrDes.lancer(partie, jet.formule || '1d20');
-          if (!r.des.length && !r.bonus) { T.message(`Formule de dés incomprise : « ${jet.formule} »`); return; }
-          const l = JdrDes.noter(partie, { qui: 'MJ', quoi: jet.quoi || 'Jet', formule: r.formule, des: r.des, bonus: r.bonus, total: r.total, cache: jet.cache });
-          T.des({ titre: `${jet.quoi || 'Jet'}${jet.cache ? ' (caché)' : ''}`, lignes: [l] });
-          dessiner();
+      out.push(section('des', 'Dés', () => {
+        const tapis = (() => { try { return localStorage.getItem('saga:des-tapis') !== '0'; } catch { return true; } })();
+        const anime = (() => { try { return localStorage.getItem('saga:des-animes') !== '0'; } catch { return true; } })();
+        const coche = (val, texte, change) => {
+          const c = el('input', { type: 'checkbox', checked: val });
+          c.onchange = () => { change(c.checked); dessiner(); };
+          return el('label', { className: 'table-ligne coche' }, c, el('span', { textContent: texte }));
         };
-        formule.onkeydown = (e) => { if (e.key === 'Enter') lancer(); };
-        const lignes = (partie.jdr?.journal || []).slice(-14).reverse();
         return [
-          el('div', { className: 'table-ligne' }, formule, btn('debug-start', 'Lancer', lancer)),
-          el('div', { className: 'table-ligne' }, quoi),
-          el('label', { className: 'table-ligne coche' }, cache, el('span', { textContent: 'Caché aux joueurs' })),
-          // Saga 1.32 : les macros du MJ (une formule gardée, en un clic ; « /gr … » pour un jet caché).
-          el('div', { className: 'table-boutons table-macros' },
-            ...(partie.table.macros || []).map((m, k) => {
-              const b = btn('symbol-event', m.nom, () => T.commande(`/m ${m.nom}`), { titre: `${m.formule} · clic droit : oublier cette macro`, classe: 'petit' });
-              b.oncontextmenu = (e) => { e.preventDefault(); T.agir({ type: 'macro_retirer', k }); dessiner(); };
-              return b;
-            }),
-            btn('add', 'Garder en macro', () => {
-              if (!jet.formule) { T.message('Écris d\'abord une formule.'); return; }
-              T.agir({ type: 'macro_ajouter', nom: jet.quoi || jet.formule, formule: `${jet.cache ? '/gr ' : ''}${jet.formule}` });
-              dessiner();
-            }, { classe: 'petit', titre: 'Garder cette formule (et son « pour quoi ») comme macro du MJ. Dans le chat : /m nom.' })),
-          el('div', { className: 'table-journal' }, ...lignes.map((l) => el('div', { className: `table-jet${l.cache ? ' cache' : ''}` },
-            el('div', { className: 'table-jet-tete' }, el('b', { textContent: l.qui }), el('span', { textContent: ` ${l.quoi}` }), el('span', { className: 'table-jet-total', textContent: String(l.total) })),
-            el('div', { className: 'table-jet-detail', textContent: `${JdrDes.detail(l)}${l.resultat ? ` · ${JdrDes.RESULTATS[l.resultat] || l.resultat}` : ''}` }),
-            l.cache ? btn('eye', 'Révéler', () => { l.cache = false; dessiner(); }, { classe: 'petit', titre: 'Montrer ce jet aux joueurs' }) : null))),
+          coche(tapis, 'Les jets roulent au milieu du plateau', (v) => { try { localStorage.setItem('saga:des-tapis', v ? '1' : '0'); } catch { /* */ } }),
+          coche(anime, 'Animer les dés (sinon : posés tout de suite)', (v) => { try { localStorage.setItem('saga:des-animes', v ? '1' : '0'); } catch { /* */ } }),
+          el('p', { className: 'table-note', textContent: 'Au-delà de 10 dés, le résultat s\'affiche directement. Le tapis s\'ouvre aussi à la main (D) pour composer un jet.' }),
         ];
       }));
+      return out;
+    }
 
-      racine.append(section('musique', 'Musique et sons', () => {
-        const out = [el('div', { className: 'table-boutons' }, btn('mute', 'Silence', () => T.musique('aucune')), btn('home', 'Celle de la carte', () => T.musique('')))];
-        if (!sons.length) out.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));
-        for (const s of sons) {
-          out.push(el('div', { className: 'table-ligne son' },
-            el('span', { className: 'table-nom', textContent: s.replace(/^sons\//, '') }),
-            btn('play', '', () => T.musique(s), { titre: 'Jouer en musique (en boucle)' }),
-            btn('megaphone', '', () => T.son(s), { titre: 'Jouer une fois (un bruitage)' })));
+    // --- Joueurs : le multijoueur (le panneau de multi.js vient ici, sans sa discussion, qui est dans Chat) ---
+    function dessinerJoueurs(jeu, partie) {
+      const v = volets.joueurs;
+      const multi = T.multi?.();
+      const amis = el('div', { className: 'table-amis' });
+      if (multi?.actif) {
+        const heros = partie.equipe.filter((c) => c?.jdr).map((c) => [T.cleDe(c), JdrPerso.nom(jeu, c)]);
+        const autres = multi.joueurs.filter((j) => !j.hote);
+        if (autres.length) amis.append(el('div', { className: 'table-sous-titre', textContent: 'Qui joue quel héros' }));
+        for (const j of autres) {
+          amis.append(el('div', { className: `table-ligne ami${j.connecte ? '' : ' absent'}` },
+            el('i', { className: `codicon codicon-${j.connecte ? 'person' : 'debug-disconnect'}` }),
+            el('span', { className: 'table-nom', textContent: j.nom }),
+            select(T.cleRole(j.nom), [['', 'Sans héros'], ...heros.map(([id, nom]) => [id, nom])], (val) => T.donnerRole(j.nom, val))));
         }
-        return out;
-      }));
-      racine.scrollTop = haut;
+        amis.append(el('p', { className: 'table-note', textContent: 'Un ami sans héros en prend un libre ou crée le sien depuis son écran. Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat.' }));
+        if (multi.element && multi.element.parentElement !== v) { multi.ouvrirPanneau?.(); v.append(multi.element); }
+        v.replaceChildren(...[multi.element, amis].filter(Boolean));
+        multi.element.hidden = false;
+      } else {
+        v.replaceChildren(el('div', { className: 'table-vide-joueurs' },
+          el('i', { className: 'codicon codicon-organization' }),
+          el('p', { textContent: 'Tes amis rejoignent depuis leur navigateur (PC, tablette, téléphone), sans rien installer. Chacun reçoit seulement ce que son héros a le droit de voir.' }),
+          btn('broadcast', 'Ouvrir la partie aux joueurs', () => document.dispatchEvent(new CustomEvent('saga:multijoueur')), { classe: 'accent' })));
+      }
     }
 
     // Le panneau se redessine quand la table change, pas à chaque image (au plus 5 fois par seconde).
@@ -240,8 +363,22 @@ const TablePanneau = (() => {
       if (prevu) return;
       prevu = setTimeout(() => { prevu = 0; if (!racine.matches(':focus-within')) dessiner(); else setTimeout(rafraichir, 400); }, 200);
     }
+    // Le chat arrive aussi sans que la table change.
+    T.multi?.()?.sur?.((sorte) => { if (sorte === 'chat' || sorte === 'joueurs') rafraichir(); });
+    const minuterie = setInterval(() => dessinerFil(), 1000);
     dessiner();
-    return { rafraichir, dessiner, fermer() { clearTimeout(prevu); racine.remove(); } };
+    return {
+      rafraichir, dessiner,
+      macro: (i) => interfaceMj?.macro(i) || false,
+      fermer() {
+        clearTimeout(prevu); clearInterval(minuterie);
+        // Le panneau du multijoueur retourne sur la scène.
+        const m = T.multi?.();
+        if (m?.element && racine.contains(m.element)) scene?.append(m.element);
+        interfaceMj?.fermer();
+        poignee.remove(); racine.remove();
+      },
+    };
   }
   return { creer };
 })();
