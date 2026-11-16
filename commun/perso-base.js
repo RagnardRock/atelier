@@ -202,13 +202,14 @@ const PersoBase = (() => {
   // suit à moitié. La main fait 3 × 2 px.
   function brasProfil(l, haut, dx) {
     const a = Math.sign(dx) * Math.min(1, Math.abs(dx));
-    poser(l, haut, 13, 'UUA');
-    poser(l, haut + 1, 13, 'UAAA'); poser(l, haut + 1, 17, 'x');
-    poser(l, haut + 2, 13 + a, 'AAAA'); poser(l, haut + 2, 17 + a, 'x');
-    poser(l, haut + 3, 13 + dx, 'AAA');
-    poser(l, haut + 4, 13 + dx, 'SSS');
-    poser(l, haut + 5, 13 + dx, 'sss');
+    // L'épaule commence sous le col (une rangée plus bas) et plus en arrière.
+    poser(l, haut + 1, 12, 'UUA'); poser(l, haut + 1, 15, 'x');
+    poser(l, haut + 2, 12 + a, 'UAAA'); poser(l, haut + 2, 16 + a, 'x');
+    poser(l, haut + 3, 12 + dx, 'AAA');
+    poser(l, haut + 4, 12 + dx, 'SSS');
+    poser(l, haut + 5, 12 + dx, 'sss');
   }
+
   // De face/dos, la main qui avance descend d'un pixel (la manche s'allonge), celle qui recule remonte.
   // haut : la rangée des épaules (19 debout) ; la main est 4 rangées plus bas.
   function mains(l, haut, avanceG, avanceD) {
@@ -361,7 +362,7 @@ const PersoBase = (() => {
     const l = pose({ ...o, dir, pas: 0, sansBras: dir === 'droite' });
     if (dir === 'droite') {
       // Le bras : ramené en arrière, puis tendu devant (à hauteur de poitrine), puis qui retombe.
-      poser(l, 20, 13, 'UUA');
+      poser(l, 21, 12, 'UUA');
       if (k === 0) { poser(l, 21, 12, 'AAAA'); poser(l, 22, 10, 'AAAA'); poser(l, 23, 8, 'AAA'); poser(l, 23, 6, 'SS'); poser(l, 24, 6, 'ss'); }
       else if (k === 1) { poser(l, 21, 14, 'AAAAAAA'); poser(l, 22, 14, 'AAAAAAA'); poser(l, 21, 21, 'SSS'); poser(l, 22, 21, 'sss'); }
       else if (k === 2) { poser(l, 21, 13, 'AAAA'); poser(l, 22, 15, 'AAAAA'); poser(l, 23, 17, 'AAA'); poser(l, 23, 20, 'SSS'); poser(l, 24, 20, 'sss'); }
