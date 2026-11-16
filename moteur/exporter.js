@@ -248,7 +248,7 @@ const MARQUE_WEB = 'saga-export-web.txt';
 // resources/jeu et passe en « mode joueur » (le jeu direct, sans menus de Saga).
 const MARQUE_EXE = 'LISEZMOI.txt';
 // Ce qu'on prend de l'application Saga pour en faire celle du jeu.
-const FICHIERS_APP = ['main.js', 'preload.js', 'exporter.js', 'reseau.js', 'internet.js', 'relais-client.js', 'web/saga-reseau.js', 'renderer', 'commun', 'build/icon.ico', 'build/icon.png',
+const FICHIERS_APP = ['main.js', 'preload.js', 'exporter.js', 'reseau.js', 'internet.js', 'relais-client.js', 'web/saga-reseau.js', 'compagnon', 'renderer', 'commun', 'build/icon.ico', 'build/icon.png',
   'node_modules/@vscode/codicons/dist/codicon.css', 'node_modules/@vscode/codicons/dist/codicon.ttf'];
 
 // Le jeu prêt à lancer, dans `dossier` (Electron + resources/app + resources/jeu).

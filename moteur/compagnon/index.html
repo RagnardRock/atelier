@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0916">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'">
+  <!-- Saga 1.34 : le compagnon. Le serveur de la partie remplit cette balise (l'adresse, le titre). -->
+  <meta name="compagnon" content="{}">
+  <title>Compagnon · Saga</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icone.svg">
+  <link rel="apple-touch-icon" href="icone.svg">
+  <link rel="stylesheet" href="../codicons/codicon.css">
+  <link rel="stylesheet" href="compagnon.css">
+</head>
+<body>
+  <div class="fond" id="fond"></div>
+  <main id="app"></main>
+  <script src="../commun/fiche-perso.js"></script>
+  <script src="des.js"></script>
+  <script src="compagnon.js"></script>
+</body>
+</html>

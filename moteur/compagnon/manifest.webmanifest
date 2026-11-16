@@ -1,0 +1,13 @@
+{
+  "name": "Compagnon Saga",
+  "short_name": "Compagnon",
+  "description": "Dés, macros et fiche pour les parties de jeu de rôle Saga.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0916",
+  "theme_color": "#0b0916",
+  "lang": "fr",
+  "icons": [{ "src": "icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

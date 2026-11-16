@@ -224,6 +224,31 @@ const Multi = (() => {
     }
     const expulser = (id) => window.saga.reseauExpulser?.(id).then(rafraichir);
 
+    // --- Saga 1.34 : le compagnon (relier son téléphone par un QR code) ---
+    async function compagnon() {
+      let r = null;
+      try { r = ami ? await window.saga.reseau.compagnon() : await window.saga.reseauCompagnon(); } catch (err) { message(String(err?.message || err)); return; }
+      if (!r) { message('Ouvre d\'abord la partie.'); return; }
+      const boite = el('div', { className: 'multi-qr' });
+      if (typeof qrcode === 'function') {
+        const q = qrcode(0, 'M');
+        q.addData(r.url);
+        q.make();
+        boite.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+      }
+      const local = /^http:\/\/(192\.168|10\.|172\.)/.test(r.url);
+      await Dialogs.form({
+        title: 'Relier mon téléphone', okLabel: 'Fermer', cancelLabel: '', width: 380,
+        fields: [
+          { type: 'info', text: 'Scanne ce code avec l\'appareil photo du téléphone : il devient ton compagnon (tes dés, tes macros, ta fiche). Le code sert une fois, pendant 5 minutes.' },
+          { type: 'element', element: boite },
+          { type: 'element', element: el('code', { className: 'multi-adresse multi-qr-lien', textContent: r.url.replace(/#.*$/, '') }) },
+          local ? { type: 'info', text: 'Le téléphone doit être sur le même Wi-Fi. Par un relais (https), tu peux aussi lancer les dés en secouant le téléphone.' } : null,
+        ].filter(Boolean),
+      });
+    }
+    const couperCompagnons = (id) => (ami ? window.saga.reseau.couperCompagnon() : window.saga.reseauCompagnonCouper?.(id)).then(() => (ami ? null : rafraichir()));
+
     // --- Le panneau ---
     function dessiner() {
       if (ami) racine.hidden = false;
@@ -262,12 +287,22 @@ const Multi = (() => {
         }
         racine.append(att);
       }
+      // Saga 1.34 : relier son téléphone (le compagnon).
+      if (ami || infos.ouvert) {
+        const b = el('button', { className: 'multi-bouton multi-compagnon', type: 'button', title: 'Un QR code à scanner : ton téléphone lance tes dés, tes macros et montre ta fiche' },
+          el('i', { className: 'codicon codicon-device-mobile' }), el('span', { textContent: 'Relier mon téléphone' }));
+        b.onclick = compagnon;
+        racine.append(b);
+      }
       const l = el('div', { className: 'multi-joueurs' });
       for (const j of joueurs) {
+        const tel = j.compagnons ? el('button', { className: 'multi-mini multi-tel', type: 'button', title: (!ami || j.id === moi?.id) ? 'Téléphone relié : cliquer pour le couper' : 'Téléphone relié' },
+          el('i', { className: 'codicon codicon-device-mobile' }), j.compagnons > 1 ? el('small', { textContent: String(j.compagnons) }) : null) : null;
+        if (tel) { if (!ami || j.id === moi?.id) tel.onclick = () => couperCompagnons(j.id); else tel.disabled = true; }
         const ligne = el('div', { className: `multi-joueur${j.connecte ? '' : ' absent'}${j.id === moi?.id ? ' moi' : ''}` },
           el('i', { className: `codicon codicon-${j.hote ? 'star-full' : 'person'}` }),
           el('span', { className: 'multi-nom', textContent: j.nom }),
-          j.connecte ? null : el('small', { textContent: 'déconnecté' }));
+          j.connecte ? null : el('small', { textContent: 'déconnecté' }), tel);
         if (!ami && !j.hote) {
           const b = el('button', { className: 'multi-mini', type: 'button', title: 'Retirer de la partie' }, el('i', { className: 'codicon codicon-close' }));
           b.onclick = () => expulser(j.id);
@@ -314,7 +349,7 @@ const Multi = (() => {
 
     brancher();
     const api = {
-      ouvrir, fermer, rafraichir, dessiner, dire, pair, bouger, sur, expulser, internet, accepter,
+      ouvrir, fermer, rafraichir, dessiner, dire, pair, bouger, sur, expulser, internet, accepter, compagnon,
       get ami() { return ami; },
       get moi() { return moi; },
       get joueurs() { return joueurs; },

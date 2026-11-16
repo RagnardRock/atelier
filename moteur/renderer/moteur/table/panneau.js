@@ -39,6 +39,41 @@ const TablePanneau = (() => {
       return s;
     }
 
+    // Saga 1.34 : le nom de la campagne et le fond des compagnons (gardés dans la sauvegarde).
+    function campagne(partie) {
+      const t = partie.table;
+      const nom = el('input', { className: 'table-champ', type: 'text', maxLength: 60, value: t.campagne?.nom || '', placeholder: T.jeu()?.titre || 'Nom de la campagne' });
+      nom.onchange = () => { t.campagne = { ...(t.campagne || {}), nom: nom.value.trim().slice(0, 60) }; };
+      const choisir = () => {
+        const f = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+        f.onchange = () => { if (f.files[0]) reduireImage(f.files[0]).then((url) => { t.campagne = { ...(t.campagne || {}), fond: url }; dessiner(); }).catch(() => {}); };
+        f.click();
+      };
+      return [
+        el('label', { className: 'table-ligne' }, el('span', { textContent: 'Campagne' }), nom),
+        el('div', { className: 'table-ligne' }, el('span', { textContent: 'Fond des téléphones' }),
+          el('div', { className: 'table-boutons' },
+            btn('file-media', t.campagne?.fond ? 'Changer' : 'Choisir…', choisir, { titre: 'L\'image derrière le compagnon (le téléphone des joueurs). Sinon, celle du jeu (Tafl).' }),
+            t.campagne?.fond ? btn('trash', '', () => { t.campagne = { ...t.campagne, fond: '' }; dessiner(); }, { titre: 'Revenir au fond du jeu' }) : null)),
+      ];
+    }
+    // Une image choisie, réduite (1600 px au plus) et en JPEG : légère dans la sauvegarde et sur le réseau.
+    function reduireImage(fichier) {
+      return new Promise((resoudre, rejeter) => {
+        const url = URL.createObjectURL(fichier);
+        const img = new Image();
+        img.onload = () => {
+          const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = el('canvas', { width: Math.round(img.width * k), height: Math.round(img.height * k) });
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          URL.revokeObjectURL(url);
+          resoudre(c.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); rejeter(new Error('image illisible')); };
+        img.src = url;
+      });
+    }
+
     function dessiner() {
       const jeu = T.jeu(), partie = T.partie(), carte = T.carte();
       if (!jeu || !partie?.table || !carte) return;
@@ -56,6 +91,7 @@ const TablePanneau = (() => {
             btn('screen-full', 'Écran des joueurs', () => window.saga.tableOuvrir?.(), { titre: 'Ouvrir la fenêtre des joueurs (à mettre sur la télé ou un 2e écran). Elle ne reçoit que ce que les joueurs ont le droit de voir.' }),
             btn(partie.table.pause ? 'debug-continue' : 'debug-pause', partie.table.pause ? 'Reprendre' : 'Pause', () => { T.agir({ type: 'pause', valeur: !partie.table.pause }); dessiner(); }, { classe: partie.table.pause ? 'actif' : '' }),
             btn('screen-normal', 'Recadrer', () => T.cadrer(), { titre: 'Remontrer toute la carte (molette : zoom, clic droit glissé : se déplacer)' })),
+          ...campagne(partie),
         ];
       }));
 

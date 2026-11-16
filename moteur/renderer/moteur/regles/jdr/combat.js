@@ -62,6 +62,17 @@ const JdrCombat = (() => {
     const vus = {};
     for (const u of monstres) if (parNom[u.nom] > 1) { vus[u.nom] = (vus[u.nom] || 0) + 1; u.nom = `${u.nom} ${LETTRES[vus[u.nom] - 1]}`; }
     if (grille) grille.placer({ heros, monstres });
+    // Saga 1.34 : le MJ change les PV d'un monstre à la main (son téléphone, sa table) pendant le combat.
+    grille?.brancher?.({
+      pvMonstre(i, v) {
+        const u = monstres[i];
+        if (!u || u.pv <= 0) return false;
+        u.pv = Math.max(0, Math.min(u.pvMax, Math.round(Number(v) || 0)));
+        maj(u);
+        if (u.pv <= 0) { u.etats = []; u.concentration = null; partie.dex.pris[u.m.id] = true; grille.vaincu(u); }
+        return true;
+      },
+    });
 
     // --- Lire un combattant ---
     const estHeros = (u) => u.camp === 'heros';

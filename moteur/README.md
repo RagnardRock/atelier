@@ -345,6 +345,27 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - Une coupure : Saga revient dans la même salle (le relais la garde 90 s), sinon le lien change et le panneau montre le nouveau.
 - **1.33.1** : la page des amis chargeait sans `perso-base.js` (« PersoBase is not defined », depuis Saga 1.31, en local aussi) ; tous les `../commun/*.js` d'`index.html` sont maintenant servis. Un voile « Connexion à la partie… » cache l'accueil du logiciel tant que l'interface arrive.
 
+## Ce que fait Saga 1.34 : le compagnon (le téléphone à côté du PC)
+
+Une petite page web pour le téléphone (`compagnon/`), en plus de Saga sur le PC, pour le mode table :
+- **Relier** : dans le panneau multijoueur, « Relier mon téléphone » montre un QR code. Le téléphone le scanne
+  et devient la même personne (le MJ, ou ce joueur) : même vue, mêmes droits, pas de place en plus. Le code sert
+  une fois, 5 minutes ; 3 téléphones au plus par personne. Une icône de téléphone dans la liste des joueurs
+  coupe le lien (le MJ peut couper celui de n'importe qui).
+- **Dés** : choisir les dés (toucher : +1, appui long : −1) ou taper une formule, puis Lancer, glisser sur le
+  tapis, ou secouer le téléphone (par https : un relais). Le jet part comme `/r` (ou `/gr` en secret) : c'est
+  Saga qui tire, et les dés du téléphone s'arrêtent sur ses valeurs. Animation désactivable ; plus de 10 dés :
+  résultat direct.
+- **Macros** : les siennes en tuiles (toucher : lancer, appui long : modifier).
+- **Fiche** (joueur) : la fiche du jeu (celle de Tafl si le jeu en a une), avec ses boutons de jets.
+- **Pions** (MJ) : les PV de chacun, −5 / −1 / +1 / +5, monstres compris, même en plein combat.
+- **Campagne** : le MJ la nomme (panneau Table, sinon le titre du jeu) et choisit le fond des téléphones
+  (sinon celui du jeu, Tafl › Réglages › Fiche des personnages). Le téléphone garde toutes les parties reliées.
+- Installable (PWA : « Ajouter à l'écran d'accueil »), sans règles dedans : il montre ce que la partie envoie.
+
+Pour l'instant le lien vaut le temps de la partie ouverte dans Saga ; les documents du MJ et la salle de
+campagne permanente (consulter hors séance) viendront ensuite.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

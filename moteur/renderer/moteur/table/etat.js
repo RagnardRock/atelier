@@ -57,6 +57,8 @@ const TableEtat = (() => {
     t.pause = Boolean(t.pause);
     // Saga 1.32 : les macros du MJ ([{ nom, formule }]).
     t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
+    // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
+    t.campagne = t.campagne && typeof t.campagne === 'object' ? { nom: String(t.campagne.nom || '').slice(0, 60), fond: /^data:image\/(png|jpeg|webp);base64,/.test(String(t.campagne.fond || '')) ? t.campagne.fond : '' } : { nom: '', fond: '' };
     partie.table = t;
     return t;
   }
@@ -227,7 +229,17 @@ const TableEtat = (() => {
     };
     // Saga 1.32 : les macros (celles de mon héros, ou celles du MJ).
     if (mj) out.macros = table.macros;
-    else { const c = partie.equipe.find((q) => q?.jdr && estMien(role, q)); if (c) out.macros = Array.isArray(c.macros) ? c.macros : []; }
+    else {
+      const c = partie.equipe.find((q) => q?.jdr && estMien(role, q));
+      // Saga 1.34 : chaque macro du héros porte aussi sa formule calculée (« 1d20+@force » → « 1d20+3 »).
+      if (c) {
+        const refs = typeof TableOutils !== 'undefined' ? TableOutils.refsHeros(jeu, c) : null;
+        out.macros = (Array.isArray(c.macros) ? c.macros : []).map((m) => {
+          const r = refs && /@/.test(m.formule) ? TableOutils.remplacer(m.formule, refs) : null;
+          return r?.formule ? { ...m, calcul: r.formule } : m;
+        });
+      }
+    }
     // Saga 1.0 : le joueur d'un héros reçoit sa fiche (lui seul), pour la lire et lancer ses jets.
     if (!mj && role.perso && ctx.ficheDe) out.fiche = ctx.ficheDe(role);
     if (!mj && role.heros) out.moi = role.heros;

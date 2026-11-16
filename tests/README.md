@@ -31,6 +31,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/8-relais.js` : le relais de Saga 1.33 (`relais/relais.js` sur 127.0.0.1) : mauvaise clé refusée,
   un ami ouvre le lien d'invitation, attend l'accord du MJ, se connecte et envoie une demande.
 
+- `essais/9-compagnon.js` : le compagnon de Saga 1.34 sur un téléphone simulé (Pixel 7) : le QR du MJ, le
+  téléphone relié, un jet dont les dés s'arrêtent sur ceux de Saga, une macro, les PV d'un pion, le fond, puis le téléphone d'un joueur (macros calculées, fiche, dés), le lien coupé.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```
