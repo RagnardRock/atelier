@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Tafl et Saga — Mode d'emploi</title>
+<!-- Le mode d'emploi de Tafl et Saga. Une page A4 = un <section class="page">. node docs/manuel/generer.js en fait le PDF.
+     Les captures sont dans captures/ (node docs/manuel/captures.js les refait). Pour une nouveauté : ajouter ou compléter
+     une page, et si besoin une scène dans captures.js. Le sommaire et les numéros de page se calculent tout seuls. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="manuel.css">
+</head>
+<body>
+
+<!-- ============================================================ COUVERTURE -->
+<section class="page couverture">
+  <div class="halo h1"></div><div class="halo h2"></div>
+  <div class="couv-runes"><span class="rune tafl">ᛏ</span><span class="rune saga">ᛃ</span></div>
+  <p class="kicker">Atelier · mode d'emploi</p>
+  <h1 class="couv-titre">Tafl <span>&amp;</span> Saga</h1>
+  <p class="couv-sous">Créer un jeu en pixel art, puis le jouer : seul, à plusieurs, ou autour d'une table de jeu de rôle.</p>
+  <figure class="couv-image"><img src="captures/tafl-cartes.jpg" alt=""></figure>
+  <div class="couv-pied">
+    <div><b>Tafl</b> <span class="version" data-version="tafl"></span><br>l'éditeur : tuiles, cartes, événements, données</div>
+    <div><b>Saga</b> <span class="version" data-version="saga"></span><br>le moteur : jouer, mode table, compagnon</div>
+    <div class="date" data-date></div>
+  </div>
+</section>
+
+<!-- ============================================================ SOMMAIRE -->
+<section class="page" data-titre="Sommaire" data-sans-sommaire>
+  <p class="kicker">Sommaire</p>
+  <h1>Ce que contient ce guide</h1>
+  <div id="sommaire"></div>
+</section>
+
+<!-- ============================================================ INTRODUCTION -->
+<section class="page" data-titre="Bienvenue">
+  <p class="kicker">Introduction</p>
+  <h1 data-sommaire="Bienvenue : deux outils, un jeu">Deux outils, un jeu</h1>
+  <p class="chapo"><b class="t">Tafl</b> décrit le jeu, <b class="s">Saga</b> le fait tourner. Tout ce que tu crées dans Tafl est enregistré dans un <b>dossier de jeu</b> ; Saga le lit sans jamais le modifier.</p>
+  <div class="flux">
+    <div class="flux-etape t"><span class="rune">ᛏ</span><b>Tafl</b><small>tuiles, cartes, événements, données, réglages</small></div>
+    <div class="flux-fleche">→</div>
+    <div class="flux-etape"><span class="ic">▤</span><b>Dossier de jeu</b><small>jeu.json, tuiles.tafl, cartes/, donnees/, scripts/, sons/</small></div>
+    <div class="flux-fleche">→</div>
+    <div class="flux-etape s"><span class="rune">ᛃ</span><b>Saga</b><small>jouer, tester, jouer à plusieurs, mode table</small></div>
+    <div class="flux-fleche">→</div>
+    <div class="flux-etape"><span class="ic">⇪</span><b>Export</b><small>MonJeu.html et MonJeu-Setup.exe</small></div>
+  </div>
+  <div class="grid2">
+    <div class="carte">
+      <h3>Installer</h3>
+      <p>Depuis <b>Atelier</b>, colonne Outils : bouton <b>Installer</b> sur les cartes de Tafl et de Saga. Les deux sont nécessaires : Tafl lance Saga quand tu joues.</p>
+      <p>Les fichiers <code>.tafl</code> s'ouvrent d'un double-clic dans Tafl.</p>
+    </div>
+    <div class="carte">
+      <h3>Mettre à jour</h3>
+      <p>Le bouton <b>nuage</b> en haut à droite de chaque outil, ou Atelier, qui signale les nouvelles versions. L'outil se ferme, s'installe et se relance ; Tafl propose d'enregistrer avant.</p>
+    </div>
+    <div class="carte">
+      <h3>Où sont mes fichiers ?</h3>
+      <p><b>Le jeu</b> : le dossier choisi au premier <kbd>Ctrl+S</kbd>.<br><b>Réglages de Tafl</b> : <code>%APPDATA%\atelier-tuiles</code>.<br><b>Sauvegardes de Saga</b> : <code>%APPDATA%\atelier-moteur\sauvegardes</code> (jamais dans le jeu).</p>
+    </div>
+    <div class="carte">
+      <h3>Loki, l'assistant</h3>
+      <p>Le panneau <b>Loki</b> (bouton étincelle, <kbd>Ctrl+Maj+K</kbd>) voit le jeu et peut agir dedans : dessiner, poser des cartes, écrire des scripts. Chaque action demande <b>Autoriser / Refuser</b> et s'annule avec <kbd>Ctrl+Z</kbd>.</p>
+    </div>
+  </div>
+  <div class="note"><b>Comment lire ce guide.</b> La première partie suit la création d'un jeu dans Tafl, de la tuile à l'export. La deuxième montre Saga côté joueur, puis le mode table (jeu de rôle avec un MJ), le jeu à plusieurs et le compagnon sur téléphone. Les captures sont faites avec les modèles de jeu de Tafl, en tuiles de 32 px.</div>
+</section>
+
+<!-- ============================================================ PARTIE TAFL -->
+<section class="page partie tafl" data-titre="Tafl">
+  <div class="halo h1"></div>
+  <p class="kicker">Partie 1</p>
+  <div class="partie-rune">ᛏ</div>
+  <h1 class="partie-titre" data-sommaire="Partie 1 · Tafl, l'éditeur" data-niveau="partie">Tafl</h1>
+  <p class="partie-sous">L'éditeur du jeu : on y dessine les tuiles, on construit les cartes, on écrit l'histoire et on règle les règles.</p>
+  <ol class="partie-liste">
+    <li>Premiers pas et espaces de travail</li>
+    <li>Dessiner les tuiles</li>
+    <li>Construire les cartes</li>
+    <li>Événements, scripts en blocs et scripts JS</li>
+    <li>Données, packs de règles et modules</li>
+    <li>Jouer, vérifier, tester, exporter</li>
+  </ol>
+</section>
+
+<section class="page" data-titre="Tafl · Premiers pas">
+  <p class="kicker">Tafl · 1</p>
+  <h1 data-sommaire="Premiers pas : créer un jeu">Créer un jeu</h1>
+  <div class="grid2 haut">
+    <div>
+      <p>Sans jeu ouvert, Tafl montre l'écran de bienvenue : <b>Nouveau jeu</b>, nouveau jeu de tuiles, ouvrir, importer une planche, et les jeux récents.</p>
+      <p><b>Fichier › Nouveau jeu</b> (<kbd>Ctrl+Maj+J</kbd>) demande le titre, la taille des tuiles, la palette, la première carte et un <b>modèle de départ</b>. Au premier <kbd>Ctrl+S</kbd>, Tafl demande le dossier du jeu et y écrit tous ses fichiers.</p>
+      <p>Pour rouvrir un jeu : <b>Fichier › Ouvrir</b> puis son <code>jeu.json</code>, ou les récents de l'accueil.</p>
+      <div class="note petite"><b>Taille des tuiles.</b> 16 px façon Pokémon GBA, 32 px façon RPG Maker (celle des personnages de base de Saga), ou 8, 24, 48, 64. Elle se change plus tard : menu Tuile › Taille des tuiles du jeu.</div>
+    </div>
+    <figure class="fig"><img src="captures/tafl-nouveau-jeu.jpg" alt=""><figcaption>La fenêtre Nouveau jeu.</figcaption></figure>
+  </div>
+  <h2>Les modèles de départ</h2>
+  <table class="tableau">
+    <tr><th>Modèle</th><th>Pack et modules</th><th>Ce qu'il montre</th></tr>
+    <tr><td><b>Un jeu vide</b></td><td>Pokémon</td><td>Les tuiles d'exemple (sols, eau animée, bords, maisons) et un petit village.</td></tr>
+    <tr><td><b>La crypte de Brumeval</b></td><td>JDR (D&amp;D 5e)</td><td>Une aventure de table : un village, une crypte, trois rencontres, quatre héros prétirés.</td></tr>
+    <tr><td><b>L'arène de duel</b></td><td>Pokémon, à deux</td><td>Chacun compose six créatures, puis on s'affronte.</td></tr>
+    <tr><td><b>Le petit domaine</b></td><td>JRPG + gestion + relations</td><td>Bâtir, récolter, dormir, des habitants qui arrivent et se promènent.</td></tr>
+    <tr><td><b>Le petit donjon</b></td><td>Action (temps réel)</td><td>Une forêt, des slimes, des chauves-souris, une crypte et son gardien.</td></tr>
+    <tr><td><b>Le petit roguelite</b></td><td>Action + roguelite</td><td>Un camp, des salles tirées au hasard, des perks, des améliorations.</td></tr>
+    <tr><td><b>Le petit survivor</b></td><td>Action + survivor</td><td>Une arène, des hordes, des armes qui frappent seules, un choix à chaque niveau.</td></tr>
+  </table>
+</section>
+
+<section class="page" data-titre="Tafl · Espaces">
+  <p class="kicker">Tafl · 1</p>
+  <h1 data-sommaire="Les espaces de travail">Les espaces de travail</h1>
+  <p class="chapo">L'interface est rangée en six <b>espaces</b>, des onglets en haut de la fenêtre. <kbd>Alt+1</kbd> à <kbd>Alt+6</kbd> y vont directement, <kbd>Ctrl+Tab</kbd> passe au suivant.</p>
+  <figure class="fig"><img src="captures/tafl-accueil.jpg" alt=""><figcaption>L'accueil d'un jeu : chiffres, carte du monde (un clic ouvre la carte), vérificateur, raccourcis.</figcaption></figure>
+  <table class="tableau compact">
+    <tr><th>Espace</th><th>Touche</th><th>Pour quoi faire</th></tr>
+    <tr><td><b>Accueil</b></td><td><kbd>Alt+1</kbd></td><td>Le résumé du jeu, la carte du monde, le vérificateur, les jeux récents, les dernières modifications.</td></tr>
+    <tr><td><b>Tuiles</b></td><td><kbd>Alt+2</kbd></td><td>Dessiner les tuiles pixel par pixel, la palette, les animations.</td></tr>
+    <tr><td><b>Cartes</b></td><td><kbd>Alt+3</kbd></td><td>Poser les tuiles et les tampons, le passage, les zones, les téléporteurs, les événements.</td></tr>
+    <tr><td><b>Événements</b></td><td><kbd>Alt+4</kbd></td><td>Tous les événements du jeu par carte, leurs pages et leurs scripts ; les scripts JS.</td></tr>
+    <tr><td><b>Données</b></td><td><kbd>Alt+5</kbd></td><td>Personnages, quêtes, objets, et les données du pack de règles du jeu.</td></tr>
+    <tr><td><b>Jeu</b></td><td><kbd>Alt+6</kbd></td><td>Jouer, test rapide, exporter, réglages, carte monde, vérificateur complet, mode d'emploi.</td></tr>
+  </table>
+</section>
+
+<section class="page" data-titre="Tafl · Les bases">
+  <p class="kicker">Tafl · 1</p>
+  <h2 class="premier">Chercher partout, menus, panneaux</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/tafl-recherche.jpg" alt=""><figcaption><kbd>Ctrl+K</kbd> « maison » : une carte, des événements, une donnée, un tampon.</figcaption></figure>
+    <div>
+      <p><kbd>Ctrl+K</kbd> trouve un espace, une carte, un événement (même par une phrase de dialogue), une donnée, une tuile, un tampon ou une commande des menus. <kbd>↑</kbd> <kbd>↓</kbd> puis <kbd>Entrée</kbd>.</p>
+      <p>Les menus classiques (Fichier, Édition, Tuile, Carte, Jeu, Générer, Affichage) sont derrière <b>☰</b>. <kbd>Ctrl+B</kbd> cache les panneaux de droite ; leur largeur se règle en glissant leur bord, un clic sur un titre replie un panneau.</p>
+    </div>
+  </div>
+  <div class="note petite"><b>Appliquer.</b> Dans Événements et Données, on travaille sur une copie : <b>Appliquer</b> (<kbd>Ctrl+Entrée</kbd>) la met dans le jeu, <b>Annuler les changements</b> la jette. Rien ne se perd : elle s'applique aussi seule en changeant d'espace, en enregistrant ou en jouant.</div>
+  <div class="grid3">
+    <div class="carte"><h3>Annuler</h3><p><kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> pour tout : dessin, carte, palette, données, et même dans les fenêtres avant de valider.</p></div>
+    <div class="carte"><h3>Historique</h3><p><kbd>Ctrl+H</kbd> (bouton horloge) : la liste des dernières actions. Un clic ramène le jeu à cette étape.</p></div>
+    <div class="carte"><h3>Réglages de Tafl</h3><p><kbd>Ctrl+,</kbd> : accent, verre, grilles, annulations, taille du texte et des vignettes, colonnes de panneaux, Loki.</p></div>
+  </div>
+  <h2>Le dossier de jeu</h2>
+  <pre class="arbo">MonJeu/
+  jeu.json        titre, cartes, départ du joueur, états de test
+  tuiles.tafl     les tuiles et les tampons, partagés par toutes les cartes
+  cartes/*.json   une carte par fichier, avec ses événements
+  donnees/*.json  personnages, quêtes, objets, monstres, réglages…
+  scripts/*.js    les scripts JS du jeu
+  sons/           musiques et bruitages
+  FORMAT.md       la description de ces fichiers</pre>
+</section>
+
+<section class="page" data-titre="Tafl · Tuiles">
+  <p class="kicker">Tafl · 2</p>
+  <h1 data-sommaire="Dessiner les tuiles">Dessiner les tuiles</h1>
+  <figure class="fig"><img src="captures/tafl-tuiles.jpg" alt=""><figcaption>L'espace Tuiles : la tuile très agrandie, la palette, la liste des tuiles, l'animation et l'aperçu 3 × 3.</figcaption></figure>
+  <table class="tableau compact">
+    <tr><th>Outil</th><th>Touche</th><th>Sur une tuile</th><th>Sur une carte</th></tr>
+    <tr><td>Crayon</td><td><kbd>B</kbd></td><td>Clic : couleur principale, clic droit : secondaire. Maj+clic : ligne droite. Alt+clic : pipette.</td><td>Pose la tuile choisie ; clic droit efface.</td></tr>
+    <tr><td>Gomme</td><td><kbd>E</kbd></td><td>Rend transparent.</td><td>Vide les cases du calque.</td></tr>
+    <tr><td>Pot</td><td><kbd>G</kbd></td><td>Remplit la zone de même couleur.</td><td>Remplit la zone de cases identiques.</td></tr>
+    <tr><td>Pipette</td><td><kbd>I</kbd></td><td>Prend une couleur.</td><td>Reprend la tuile d'une case.</td></tr>
+    <tr><td>Ligne · Rectangle</td><td><kbd>L</kbd> <kbd>U</kbd></td><td>Ligne, rectangle plein ou contour.</td><td>Ligne ou rectangle de tuiles.</td></tr>
+    <tr><td>Décalage</td><td><kbd>M</kbd></td><td>Fait glisser la tuile en boucle pour voir les raccords.</td><td></td></tr>
+  </table>
+  <p class="petit">Molette : zoom. Espace ou bouton du milieu : déplacer la vue. <kbd>Ctrl+0</kbd> : ajuster. <kbd>X</kbd> : échanger les couleurs. <kbd>Tab</kbd> : passer de Tuiles à Cartes.</p>
+</section>
+
+<section class="page" data-titre="Tafl · Tuiles">
+  <p class="kicker">Tafl · 2</p>
+  <div class="grid2 haut">
+    <div>
+      <h2 class="premier">Mosaïque et miroirs</h2>
+      <p><b>Mosaïque</b> (<kbd>Ctrl+M</kbd>) répète la tuile tout autour : un trait qui sort d'un côté revient de l'autre. Indispensable pour l'herbe, l'eau, les chemins. <b>Miroir ↔ / ↕</b> dessine aussi de l'autre côté.</p>
+      <h2>La palette</h2>
+      <p>Clic : couleur principale, clic droit : secondaire. <b>Double-clic</b> pour modifier une couleur : elle change <b>dans toutes les tuiles</b>, comme dans les vieux jeux. « Changer… » propose d'autres palettes (Nature, Game Boy, PICO-8, Sweetie 16, Brume…).</p>
+    </div>
+    <figure class="fig"><img src="captures/tafl-mosaique.jpg" alt=""><figcaption>La mosaïque : on voit tout de suite les raccords.</figcaption></figure>
+  </div>
+  <div class="grid2">
+    <div class="carte"><h3>La liste des tuiles</h3><p>Clic : choisir, double-clic (<kbd>F2</kbd>) : renommer, glisser : ranger. <kbd>Ctrl+clic</kbd> et <kbd>Maj+clic</kbd> en choisissent plusieurs. <b>Catégories</b> (<kbd>Ctrl+G</kbd>) repliables, recherche (<kbd>Ctrl+F</kbd>), tri par nom, couleur ou utilisation, fusion des doublons, ménage des tuiles inutilisées. La carte suit toujours.</p></div>
+    <div class="carte"><h3>Animation</h3><p>Jusqu'à 16 images par tuile (eau, torches, fleurs). <kbd>+</kbd> ajoute une copie à retoucher, <kbd>,</kbd> et <kbd>;</kbd> changent d'image, <kbd>P</kbd> lance la lecture. Pelure d'oignon, durée par image, export et import en bande PNG, et <b>assembler</b> plusieurs tuiles en une animation.</p></div>
+    <div class="carte"><h3>Passage et lumière</h3><p>Clic droit sur une tuile : <b>Passage</b> (laisse passer / bloque, partout où elle est posée) et <b>Lumière</b> (couleur, portée, force, vacille) pour un lampadaire ou une fenêtre la nuit.</p></div>
+    <div class="carte"><h3>Recettes</h3><p>Tuile › <b>Ajouter depuis une recette…</b> : une trentaine de tuiles prêtes (herbe, sable, eau, plage, hautes herbes, sapin, maison, boutique…) dans un style vif, à la couleur du jeu.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Tuiles">
+  <p class="kicker">Tafl · 2</p>
+  <div class="grid2 haut">
+    <div>
+      <h2 class="premier">L'effet au passage</h2>
+      <p>Clic droit sur une tuile › <b>Effet au passage…</b> : ce qui arrive à celui qui marche dessus dans Saga.</p>
+      <ul>
+        <li>Le bas du corps caché (hautes herbes, eau), la touffe qui frémit, le corps qui tangue.</li>
+        <li>Des particules à chaque pas : feuilles, gouttes, poussière, flocons, bulles ; des ondes ; des traces qui s'effacent.</li>
+        <li>Un bruit de pas, une vitesse.</li>
+        <li>Des <b>préréglages</b> : hautes herbes, eau profonde, peu profonde, sable, neige, boue, feuilles mortes, chemin.</li>
+      </ul>
+      <p>Une petite vague sous la vignette signale les tuiles qui en ont un.</p>
+    </div>
+    <figure class="fig"><img src="captures/tafl-effet-passage.jpg" alt=""><figcaption>La fenêtre Effet au passage.</figcaption></figure>
+  </div>
+  <h2>Importer des planches</h2>
+  <p><kbd>Ctrl+I</kbd>, ou glisser un PNG sur la fenêtre. L'image est découpée en tuiles, avec un aperçu en direct :</p>
+  <ul class="deux-colonnes">
+    <li><b>Fond peint</b> (damier, couleur unie) rendu transparent tout seul, ou Alt+clic sur le fond.</li>
+    <li><b>Taille, marge, espacement</b> des tuiles de la planche.</li>
+    <li><b>Zone</b> : glisser sur l'aperçu pour n'en prendre qu'une partie.</li>
+    <li><b>Tampons</b> : chaque objet de plusieurs tuiles (arbre, maison, fontaine) devient un tampon prêt à poser.</li>
+    <li><b>Une fois chaque tuile identique</b>, ignorer les cases vides, refaire une capture d'écran en carte.</li>
+    <li><b>Planche nommée</b> : Fichier › Exporter la planche nommée (PNG + noms) ; réimportée ailleurs, elle garde noms, passage, catégories et tampons.</li>
+  </ul>
+  <h2>Exporter</h2>
+  <p><kbd>Ctrl+E</kbd> : la planche en PNG (pour Tiled, Godot, Phaser, RPG Maker…). Aussi : les tuiles séparées, la carte pour Tiled (<code>.tmj</code>, <kbd>Ctrl+Maj+E</kbd>), la carte en image.</p>
+  <div class="note petite"><b>Générer avec ComfyUI.</b> Menu Générer (<kbd>Ctrl+Maj+G</kbd>) : Tafl fait dessiner des tuiles par ComfyUI sur ta carte graphique, sans fenêtre. Description, style, sol qui se répète ou objet détouré, jusqu'à 4 variantes, ramenées à la palette du jeu. L'installation se fait depuis Générer › Installation et réglages de ComfyUI.</div>
+</section>
+
+<section class="page" data-titre="Tafl · Cartes">
+  <p class="kicker">Tafl · 3</p>
+  <h1 data-sommaire="Construire les cartes">Construire les cartes</h1>
+  <figure class="fig"><img src="captures/tafl-cartes.jpg" alt=""><figcaption>L'espace Cartes : le rail d'outils à gauche, à droite les cartes, les calques, les tampons, les événements et les tuiles.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Les cartes</h3><p>Une par lieu : une ville, une route, l'intérieur d'une maison. <b>+</b> en crée une ; clic droit pour dupliquer, renommer, redimensionner (jusqu'à 256 × 256), ranger dans un <b>groupe</b> ou marquer comme <b>intérieur</b>. L'étiquette « départ » montre où commence le joueur.</p></div>
+    <div class="carte"><h3>Les calques</h3><p>Autant qu'on veut (Sol, Décor, Au-dessus par défaut). Double-clic pour régler : <b>profondeur</b> (sous le joueur, à son niveau, au-dessus : il passe derrière les toits), opacité, <b>mode de fusion</b> (ombres, lueurs, teintes), <b>parallaxe</b>.</p></div>
+    <div class="carte"><h3>Les tampons</h3><p>Outil Tampon (<kbd>S</kbd>) : clic pour poser un objet entier, glisser pour en aligner, clic droit pour l'effacer. <kbd>Maj</kbd>+glisser sur la carte crée un tampon. Les rangées du haut (cime, toit) vont seules sur le calque Au-dessus.</p></div>
+    <div class="carte"><h3>Sélection et copier-coller</h3><p>Outil Sélection (<kbd>R</kbd>) : <kbd>Ctrl+C</kbd>, <kbd>Ctrl+X</kbd>, <kbd>Suppr</kbd>, glisser pour déplacer, <kbd>Ctrl+V</kbd> même dans une autre carte. On peut emporter tous les calques, le passage, les zones, les événements.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Cartes">
+  <p class="kicker">Tafl · 3</p>
+  <div class="grid2 haut">
+    <div>
+      <h2 class="premier">Le passage</h2>
+      <p>Où le joueur peut marcher, en deux temps :</p>
+      <ul>
+        <li><b>Par tuile</b> : menu Tuile › Passage. Partout où un arbre est posé, sa case bloque.</li>
+        <li><b>Case par case</b> : la ligne <b>Passage</b> en haut des calques, puis le crayon : <b>Libre</b>, <b>Bloqué</b>, ou un <b>rebord</b> ↓ ↑ ← → qu'on saute dans un seul sens.</li>
+      </ul>
+      <p>Rouge : bloqué, vert : libre peint, flèche jaune : rebord.</p>
+    </div>
+    <figure class="fig"><img src="captures/tafl-passage.jpg" alt=""><figcaption>La carte avec la ligne Passage choisie.</figcaption></figure>
+  </div>
+  <table class="tableau">
+    <tr><th>Outil</th><th>Touche</th><th>Ce qu'il pose</th></tr>
+    <tr><td><b>Zone</b></td><td><kbd>Z</kbd></td><td>Un rectangle : hautes herbes, eau, grotte, constructible… avec ses <b>rencontres</b> (créatures, monstres ou ennemis) et un <b>objet requis</b> pour y entrer (la planche de surf pour l'eau, à la place des CS).</td></tr>
+    <tr><td><b>Téléporteur</b></td><td><kbd>T</kbd></td><td>Une porte, un escalier, un bord de route : la carte et la case d'arrivée. « Créer aussi le retour » pose celui qui ramène.</td></tr>
+    <tr><td><b>Événement</b></td><td><kbd>N</kbd></td><td>Un personnage, un panneau, un coffre, un objet au sol, un obstacle ou un déclencheur invisible.</td></tr>
+    <tr><td><b>Départ</b></td><td><kbd>J</kbd></td><td>La case où commence le jeu, et la direction du joueur.</td></tr>
+  </table>
+  <h2>Scènes image (mode table)</h2>
+  <p>Carte › <b>Nouvelle scène</b> (ou Image de fond) pose une image (une battlemap, un lieu, une ambiance) sous une grille dont on choisit la largeur. Le MJ y emmène le groupe pendant une séance (voir la partie Saga).</p>
+
+</section>
+
+<section class="page" data-titre="Tafl · Carte monde">
+  <p class="kicker">Tafl · 3</p>
+  <h2 class="premier">La carte monde</h2>
+  <figure class="fig moyenne petite-fig"><img src="captures/tafl-carte-monde.jpg" alt=""><figcaption>La carte monde (<kbd>Ctrl+Maj+M</kbd>) : les cartes extérieures posées ensemble, d'après leurs téléporteurs.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Placer les cartes</h3><p>Tafl les place seul d'après les téléporteurs. Glisser une carte pour la déplacer ; <b>Replacer tout seul</b> recommence. Point vert : un passage aligné ; pointillés orange : les deux bouts ne se touchent pas ; bord rouge : deux cartes qui se chevauchent. Les intérieurs n'y sont pas.</p></div>
+    <div class="carte"><h3>La carte en jeu</h3><p>Onglet <b>Carte en jeu</b> : la carte que le joueur ouvre avec <kbd>M</kbd> dans Saga (les lieux visités, où il est, des repères). <b>Exporter en image</b> donne toute la région en un PNG.</p></div>
+  </div>
+  <h2>L'ambiance d'une carte</h2>
+  <div class="grid2 haut">
+    <p>Panneau Cartes › <b>…</b> › Ambiance : météo (pluie, orage, neige, brouillard, feuilles, lucioles), <b>teinte</b> de toute la carte, musique (ou « celle d'avant continue »), fond sonore en boucle, et « suit le jour et la nuit ». Les fichiers sont dans le dossier <code>sons/</code> du jeu ; ▶ pour écouter, + pour en ajouter.</p>
+    <figure class="fig"><img src="captures/tafl-ambiance.jpg" alt=""><figcaption>La fenêtre Ambiance d'une carte.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Événements">
+  <p class="kicker">Tafl · 4</p>
+  <h1 data-sommaire="Événements et scripts">Les événements</h1>
+  <figure class="fig"><img src="captures/tafl-evenements.jpg" alt=""><figcaption>L'espace Événements : la liste par carte, ce qu'est l'événement à gauche, ses pages et son script à droite.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Ce qu'il est</h3><p>Nom, type, case, <b>apparence</b> (un personnage, une tuile ou un tampon), direction, s'il bouge, comment il se lance : <b>on lui parle</b>, <b>on le touche</b>, ou <b>tout seul</b> (aussi au réveil, ou après une construction). Une lumière, une repousse après N nuits.</p></div>
+    <div class="carte"><h3>Ses pages</h3><p>Chaque page a des <b>conditions</b> et un <b>script</b>. Le jeu joue la <b>dernière page dont toutes les conditions sont vraies</b> : la page 1 sans condition, c'est d'habitude ; les suivantes prennent le relais quand l'histoire avance. Une page peut rendre l'événement absent, ou lui donner une autre apparence.</p></div>
+  </div>
+  <p class="petit">Conditions courantes : un interrupteur, « déjà fait », une quête, un objet, l'argent, un badge, une variable, un compteur (captures, dresseurs battus…), le moment ou l'heure, le jour, un bâtiment construit, l'affinité avec un personnage.</p>
+</section>
+
+<section class="page" data-titre="Tafl · Scripts">
+  <p class="kicker">Tafl · 4</p>
+  <h2 class="premier">Le script en blocs</h2>
+  <p>Chaque commande est un bloc coloré par famille, reliés de haut en bas. Un <b>choix</b> s'ouvre en une branche par réponse, un <b>si</b> en deux branches. Glisser une commande de la palette de gauche pour l'ajouter, glisser un bloc sur un trait pour le déplacer, double-clic pour modifier. La recherche de la palette trouve une commande ou une condition, même sans accents. Le bouton <b>Liste</b> montre le même script en lignes.</p>
+  <figure class="fig"><img src="captures/tafl-apercu-dialogue.jpg" alt=""><figcaption>Un clic sur un dialogue : l'aperçu montre la boîte telle qu'elle sera dans Saga (thème Verre ou Pixel).</figcaption></figure>
+  <table class="tableau compact">
+    <tr><th>Famille</th><th>Commandes</th></tr>
+    <tr><td>Dialogue</td><td>Dialogue (qui parle, expression, texte ; <code>{joueur}</code>, <code>{il|elle}</code>, <code>{var:id}</code>), choix, note.</td></tr>
+    <tr><td>Logique</td><td>Si… sinon, interrupteurs, variables, attendre, arrêter le script.</td></tr>
+    <tr><td>Objets et combats</td><td>Donner ou retirer un objet, de l'argent, une créature ; combats (sauvage, dresseur, groupe de monstres, amical).</td></tr>
+    <tr><td>Déplacements</td><td>Téléporter, aller au départ, ressortir d'un bâtiment.</td></tr>
+    <tr><td>Progression</td><td>Quêtes (commencer, étape, finir), badges, tenue du héros, personnaliser le héros.</td></tr>
+    <tr><td>Services</td><td>Soigner, boutique, écran des EV, PC, composer son équipe.</td></tr>
+    <tr><td>Ambiance</td><td>Musique, son, changer l'heure, dormir.</td></tr>
+    <tr><td>Cinématique</td><td>Déplacer ou tourner un personnage, caméra, fondu, secouer l'écran, bulle (! ? ♥ …), bandes de cinéma. Le bouton <b>Aperçu de la scène</b> la joue sur la carte.</td></tr>
+  </table>
+</section>
+
+<section class="page" data-titre="Tafl · Scripts JS">
+  <p class="kicker">Tafl · 4</p>
+  <h2 class="premier">Les scripts JS</h2>
+  <p>Quand les blocs ne suffisent pas (des dés, des calculs, une règle maison), un jeu peut avoir ses scripts JavaScript : espace <b>Événements</b>, section <b>Scripts JS</b>, bouton <b>+</b> (des modèles adaptés au pack). Chaque script est un fichier <code>scripts/&lt;nom&gt;.js</code>.</p>
+  <figure class="fig"><img src="captures/tafl-script-js.jpg" alt=""><figcaption>L'éditeur de script (celui de Rune) : complétion de toute l'API et des ids du jeu, erreurs soulignées, bouton Essayer.</figcaption></figure>
+  <div class="grid3">
+    <div class="carte"><h3><code>commande()</code></h3><p>Une nouvelle commande pour le bloc <b>Script JS</b>, avec un formulaire pour ses réglages.</p></div>
+    <div class="carte"><h3><code>formule()</code></h3><p>Remplace une formule du pack (dégâts, capture, fuite, XP) : les <b>règles maison</b>, à couper une par une dans Réglages.</p></div>
+    <div class="carte"><h3><code>quand()</code></h3><p>Réagit à un moment : nouvelle partie, arrivée sur une carte, après un combat, chaque pas, le matin…</p></div>
+  </div>
+  <p class="petit"><b>Essayer</b> (<kbd>Ctrl+Entrée</kbd>) joue le script sur une fausse partie et raconte ce qu'il fait. Un script tourne dans une boîte fermée (sans fichiers ni réseau), il est arrêté s'il boucle, et une erreur ne casse jamais le jeu. Les dés passent par <code>des.lancer('2d6+3')</code>. Toute l'aide est dans <code>SCRIPTS.md</code>, copié dans chaque jeu.</p>
+</section>
+
+<section class="page" data-titre="Tafl · Données">
+  <p class="kicker">Tafl · 5</p>
+  <h1 data-sommaire="Données, packs de règles et modules">Les données du jeu</h1>
+  <figure class="fig"><img src="captures/tafl-donnees.jpg" alt=""><figcaption>L'espace Données (<kbd>Alt+5</kbd>) : les onglets suivent le pack de règles et les modules du jeu.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Personnages</h3><p>Nom, description (pour toi et pour Loki), le <b>héros</b> (un seul), la couleur de son nom, ses <b>portraits</b> par expression (un fichier <code>maman-triste.png</code> devient l'expression « triste »), ses <b>tenues</b> et son <b>sprite</b>.</p></div>
+    <div class="carte"><h3>Histoire</h3><p><b>Quêtes</b> (étapes, suite, personnages croisés, principale ou secondaire), <b>interrupteurs</b> (les faits que retient l'histoire) et <b>variables</b> (un nombre ou un texte). Chaque fiche dit où elle est utilisée.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Sprites">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Le sprite d'un personnage</h2>
+  <figure class="fig"><img src="captures/tafl-sprite.jpg" alt=""><figcaption>Un sprite parti du personnage de base de Saga : 4 directions, la marche, l'aperçu qui marche.</figcaption></figure>
+  <ul class="deux-colonnes">
+    <li><b>Créer le sprite</b> : la taille d'une image et le nombre d'images par direction (debout, pied gauche, pied droit).</li>
+    <li><b>Partir du personnage de base</b> : le bonhomme de Saga à la couleur du personnage, à retoucher.</li>
+    <li><b>Dessiner</b> image par image : clic crayon, clic droit gomme, Alt+clic pipette, le seau.</li>
+    <li><b>Droite = gauche en miroir</b>, copier l'image debout, remettre les images dans l'ordre.</li>
+    <li><b>Importer une planche</b> (4 rangées : face, gauche, droite, dos) faite dans Skald ou Photoshop.</li>
+    <li>Pour le temps réel : les <b>animations</b> repos, attaque, coup reçu, mort, et la <b>nage</b>.</li>
+  </ul>
+</section>
+
+<section class="page" data-titre="Tafl · Règles">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Le pack de règles</h2>
+  <p>Un jeu a <b>un</b> pack de règles : comment on se bat et comment on progresse. Il se choisit dans <b>Données › Réglages › Règles du jeu</b> ; les onglets des données suivent.</p>
+  <table class="tableau">
+    <tr><th>Pack</th><th>Le jeu</th><th>Ses données</th></tr>
+    <tr><td><b>Pokémon</b></td><td>Créatures à capturer, combats au tour par tour avec les vraies formules, badges, dresseurs, PC, Pokédex.</td><td>Types et leur table, talents, attaques, créatures, dresseurs, boutiques. <b>Importer les données officielles</b> (PokeAPI, en français) remplit tout d'un coup.</td></tr>
+    <tr><td><b>JRPG classique</b></td><td>Un groupe de héros (classes, PV, PM, équipement) contre des groupes de monstres.</td><td>Éléments, compétences, classes, monstres, groupes de monstres.</td></tr>
+    <tr><td><b>JDR (D&amp;D 5e)</b></td><td>Création de personnages, tests au d20, sorts, combats à l'initiative ; seul ou en <b>mode table</b> avec un MJ.</td><td>Classes, races, sorts, monstres, rencontres, fiche des personnages, mécaniques.</td></tr>
+    <tr><td><b>Action</b></td><td>Temps réel façon Zelda : on bouge librement, on frappe à l'épée, les ennemis sont sur la carte.</td><td>Ennemis (vie, vitesse, vue, comportement, butin), animations des personnages.</td></tr>
+  </table>
+  <h2>Les modules</h2>
+  <p>En plus du pack, un jeu peut activer des <b>modules</b> (Réglages › Règles du jeu › Modules). Leurs onglets, commandes et conditions n'apparaissent que s'ils sont actifs.</p>
+  <table class="tableau compact">
+    <tr><td><b>Gestion</b></td><td>Un domaine : stock, ressources, bâtiments (coût, chantier, production), habitants, postes, placement libre dans une zone constructible.</td></tr>
+    <tr><td><b>Relations</b></td><td>L'affinité avec les personnages : paroles par niveau, cadeaux selon les goûts, peuples.</td></tr>
+    <tr><td><b>Roguelite</b></td><td>Un donjon assemblé au hasard à partir de salles modèles ; perks de la partie et améliorations permanentes.</td></tr>
+    <tr><td><b>Survivor</b></td><td>Une arène, des hordes, des armes qui frappent seules, un choix d'arme ou de passif à chaque niveau.</td></tr>
+  </table>
+</section>
+
+<section class="page" data-titre="Tafl · Pokémon">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Le pack Pokémon dans Tafl</h2>
+  <p><b>Importer les données officielles</b> (en bas de la colonne d'onglets de Données) : types et leur table, talents, attaques, les 1025 créatures, les objets, en français, depuis PokeAPI, avec les images si tu veux. Il faut Internet, une minute environ. Tes créatures et objets à toi se créent à côté (<b>+</b>) ; réimporter n'y touche jamais.</p>
+  <div class="grid2">
+    <div class="carte"><h3>Types · Attaques</h3><p>La table des types en entier (un clic : ×1, ×2, ×½, ×0). Les attaques : type, catégorie, puissance, précision, PP, priorité, statut infligé, changements de stats, drain, soin, effets de combat (vent arrière, protection, météo…).</p></div>
+    <div class="carte"><h3>Créatures</h3><p>Sprites face et dos, stats de base, EV donnés, faiblesses calculées, talents, capture, croissance, <b>évolutions</b> (niveau, objet, échange, amitié, quête), attaques par niveau, par CT et œufs.</p></div>
+    <div class="carte"><h3>Objets</h3><p>Soins, balles, vitamines, <b>capsules</b> (IV au max), <b>menthes</b> (nature), pierres, repousse, objets qui <b>ouvrent un passage</b> (à la place des CS), objets <b>tenus</b> en combat (Orbe Vie, Restes, baies…).</p></div>
+    <div class="carte"><h3>Dresseurs</h3><p>Classe, portrait, argent, équipe de 6 (niveau, nature, objet, attaques), niveau qui <b>suit la progression</b> du joueur, et ses trois dialogues.</p></div>
+    <div class="carte"><h3>Boutiques</h3><p>Objets et <b>créatures</b> à vendre, leur prix et <b>ce qui débloque</b> chaque article (10 captures, un badge, une quête…), grisé avant ou caché, rachat des objets.</p></div>
+    <div class="carte"><h3>Réglages du pack</h3><p>Monnaie, argent de départ, taille de l'équipe, <b>badges</b> et niveau maximum selon les badges, niveau des sauvages, amitié, chromatiques, natures, <b>menus du jeu</b> (équipe, Pokédex, PC et ses boîtes).</p></div>
+  </div>
+  <h2>Le héros et son histoire</h2>
+  <ul>
+    <li><b>Tenues</b> (fiche du héros) : chaque tenue a son sprite et ses portraits. La commande <b>Personnaliser le héros</b> ouvre l'écran où le joueur tape son nom et choisit sa tenue.</li>
+    <li><b>Obstacles</b> (type d'événement) : un arbre à couper, un rocher à briser ou à pousser, avec l'objet qu'il faut ; un rocher poussé sur un déclencheur fait une énigme.</li>
+    <li><b>Zones</b> : rencontres sauvages (créatures, niveaux, chance) et objet requis pour entrer.</li>
+    <li><b>Composer son équipe</b> (Arène de duel) : le joueur choisit lui-même jusqu'à six créatures, ou en compose une pour son adversaire.</li>
+  </ul>
+</section>
+
+<section class="page" data-titre="Tafl · Modules">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Les modules dans Tafl</h2>
+  <div class="carte"><h3>Gestion (le domaine)</h3>
+    <p><b>Ressources</b> (nom, icône, objet du sac) et <b>bâtiments</b> : coût, nuits de chantier, production et consommation par nuit, logement, ouvriers, repos (soin et bonus au groupe), nombre maximum, menu Construire (toujours, une fois débloqué, ou seulement par un événement).</p>
+    <p><b>Sur la carte</b> : le tampon du bâtiment et de son chantier, des <b>variantes</b> tirées au hasard, le passage case par case (Bloque, Libre, Porte) et l'intérieur, propre à chaque bâtiment ou partagé. Une zone <b>Constructible</b> dit où le joueur peut bâtir ; son décor compte ou s'efface.</p>
+    <p><b>Réglages</b> : stock de départ, habitants (arrivées, repas, faim, habitants nommés, qu'on voit marcher, sentiers creusés par leurs pas, horaires de la journée), qui décide du travail, <b>postes</b> (Intendance, Construction…) et effets sous condition, butin au stock, écrans du domaine et leurs mots.</p>
+    <p><b>Commandes</b> : construire (n'importe où ou à un emplacement fixe), placer un bâtiment, stock, habitants, se reposer, nommer à un poste, organiser le travail, ressortir d'un bâtiment.</p>
+  </div>
+  <div class="grid2" style="margin-top:4mm">
+    <div class="carte"><h3>Relations</h3><p>Niveaux d'affinité et leurs paliers, ce que rapportent une conversation et un cadeau. Dans <b>Données › Relations</b>, une fiche par personnage : ses goûts, ses paroles à chaque niveau, ses réponses aux cadeaux. <b>Peuples</b> : une relation avec toute une communauté.</p></div>
+    <div class="carte"><h3>Roguelite</h3><p>Étages et salles, trésors, boutiques, repos, graine, renfort par étage, monnaie, mini-carte. Une carte devient une <b>salle de donjon</b> (menu … de la carte) : départ, combat, trésor, boutique, repos, boss. <b>Perks</b> (rareté, effets) et <b>améliorations</b> permanentes.</p></div>
+    <div class="carte"><h3>Survivor</h3><p>Une arène, des vagues d'ennemis, des armes qui frappent seules, des passifs, un boss final. Le modèle « Le petit survivor » en montre un complet.</p></div>
+    <div class="carte"><h3>Pour tous les jeux</h3><p><b>Dormir</b> (passer au jour suivant), ce qui <b>repousse</b> après N nuits (baies, arbres coupés), les jours écoulés depuis un jour noté, les <b>bonus du groupe</b>, les combats amicaux.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Réglages du jeu">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Les réglages du jeu</h2>
+  <figure class="fig"><img src="captures/tafl-reglages-regles.jpg" alt=""><figcaption>Données › Réglages, onglet Règles du jeu : le pack, ses réglages et les modules.</figcaption></figure>
+  <table class="tableau compact">
+    <tr><th>Onglet</th><th>Ce qu'on y règle</th></tr>
+    <tr><td><b>Règles du jeu</b></td><td>Pack, modules, règles maison (scripts), et les réglages du pack (monnaie, taille de l'équipe, niveau maximum selon les badges, ajustement des dresseurs…).</td></tr>
+    <tr><td><b>Partie</b></td><td>Argent de départ, accords dans les textes (<code>{il|elle}</code>), multijoueur (échanges, duels, PV visibles).</td></tr>
+    <tr><td><b>Interface</b></td><td>Thème <b>Verre</b> ou <b>Pixel</b>, couleur d'accent, menus du jeu et raccourci Tab, commandes tactiles.</td></tr>
+    <tr><td><b>Ambiance</b></td><td>Jour et nuit (horloge du jeu ou heure du PC), musiques et bruitages, sauvegarde auto, écran du réveil.</td></tr>
+    <tr><td><b>Fiche des personnages</b> · <b>Mécaniques</b></td><td>Pack JDR : la fiche de ton système et son fonctionnement (page suivante).</td></tr>
+  </table>
+</section>
+
+<section class="page" data-titre="Tafl · JDR">
+  <p class="kicker">Tafl · 5</p>
+  <h2 class="premier">Préparer une partie de JDR</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/tafl-perso-jdr.jpg" alt=""><figcaption>Un héros prétiré : race, classe, caractéristiques, compétences, équipement.</figcaption></figure>
+    <figure class="fig"><img src="captures/tafl-monstres.jpg" alt=""><figcaption>Les monstres : CA, PV, attaques, et leur <b>jeton</b> (le sprite d'un personnage).</figcaption></figure>
+  </div>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/tafl-fiche.jpg" alt=""><figcaption>Fiche des personnages : les champs de ton système (santé mentale, points de destin, carnet…), lus aussi par les formules et le compagnon.</figcaption></figure>
+    <figure class="fig"><img src="captures/essai-tafl-1-tafl-mecaniques.jpg" alt=""><figcaption>Mécaniques : le modèle « Armure et blessures », défense, paliers, tables.</figcaption></figure>
+  </div>
+  <p><b>Les mécaniques, sans code</b> : système de résolution (d20 + bonus, d100 sous un score, réserve de d6, 2d6 à paliers), formule de défense, armure, paliers de santé et leur malus, blessures tirées sur une table, jets pour tenir, parade, localisation, initiative, repos et niveaux, états, ressources (mana, munitions, stress), relances, critiques. Deux modèles pour commencer : « D&amp;D 5e » et « Armure et blessures ».</p>
+</section>
+
+<section class="page" data-titre="Tafl · Jouer et tester">
+  <p class="kicker">Tafl · 6</p>
+  <h1 data-sommaire="Jouer, vérifier, tester, exporter">Jouer, vérifier, tester</h1>
+  <figure class="fig"><img src="captures/tafl-jeu.jpg" alt=""><figcaption>L'espace Jeu : jouer, test rapide, exporter, réglages, carte monde, et le vérificateur à droite.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Jouer</h3><p><b>Jouer</b> (<kbd>F5</kbd>) enregistre puis lance le jeu dans Saga depuis le départ. <kbd>Maj+F5</kbd> : depuis la case sous la souris. Saga déjà ouvert recharge le jeu.</p></div>
+    <div class="carte"><h3>Vérifier</h3><p><kbd>Ctrl+Maj+V</kbd> : téléporteurs cassés, cartes et personnages inaccessibles, quêtes impossibles, ids inconnus, erreurs de scripts. Un clic sur une ligne montre la case.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Tafl · Test rapide et export">
+  <p class="kicker">Tafl · 6</p>
+  <h2 class="premier">Le test rapide</h2>
+  <figure class="fig"><img src="captures/tafl-test-rapide.jpg" alt=""><figcaption>Test rapide (<kbd>Ctrl+F5</kbd>) : l'endroit, l'équipe, les objets, l'argent, les badges, les interrupteurs, l'avancée des quêtes, l'heure.</figcaption></figure>
+  <p>Donne un nom à l'état (« Avant l'arène 2 ») et <b>Enregistrer l'état</b> pour le relancer d'un double-clic. Saga démarre une partie neuve marquée <b>Test</b>, sauvegardée à part : ta vraie partie n'est jamais écrasée.</p>
+  <h2>Exporter le jeu</h2>
+  <p><b>Jeu › Exporter le jeu…</b> : Tafl enregistre, puis Saga fabrique un seul fichier par version, à envoyer aux testeurs (ils n'ont besoin ni de Tafl ni de Saga) :</p>
+  <ul>
+    <li><b>MonJeu.html</b> : tout le jeu dans une page, à ouvrir d'un double-clic, jouable au doigt sur tablette. Option : un <code>.zip</code> pour itch.io.</li>
+    <li><b>MonJeu-Setup.exe</b> : un installateur Windows, sans droits d'administrateur, avec raccourcis. Windows peut prévenir qu'il n'est pas signé : « Informations complémentaires › Exécuter quand même ».</li>
+  </ul>
+  <div class="note petite"><b>Mode d'emploi.</b> Ce guide s'ouvre depuis l'espace Jeu de Tafl, bouton <b>Mode d'emploi</b>.</div>
+</section>
+
+<section class="page" data-titre="Tafl · Loki">
+  <p class="kicker">Tafl · 6</p>
+  <h2 class="premier">Loki dans Tafl</h2>
+  <p>Le panneau <b>Loki</b> (bouton étincelle, <kbd>Ctrl+Maj+K</kbd>) travaille dans le jeu avec les mêmes fonctions que les menus. Il fonctionne avec ton compte Claude (Claude Code installé sur le PC) ou avec un modèle local (Ollama).</p>
+  <div class="grid2">
+    <div class="carte"><h3>Il regarde</h3><p>La planche, une tuile agrandie, la carte et ses calques (en texte compressé, l'image sur demande), le catalogue des tuiles par nom, les données, les scripts.</p></div>
+    <div class="carte"><h3>Il agit (avec ta permission)</h3><p>Dessiner une tuile ou un objet en pixel art, animer, nommer une planche, poser toute une ville d'un coup (<code>plan_carte</code>), créer cartes, téléporteurs, personnages, quêtes, événements avec leur script, remplir les données, écrire et essayer des scripts JS, lancer le vérificateur.</p></div>
+  </div>
+  <div class="note"><b>Économiser.</b> Nommer une planche importée une fois (Loki lit ensuite le catalogue au lieu des images), écrire un plan puis le poser en un appel, une carte après l'autre. Le compteur sous chaque réponse conseille une nouvelle conversation au-delà de 80 000 jetons.</div>
+  <h2>Raccourcis de Tafl</h2>
+  <table class="tableau compact raccourcis">
+    <tr><td><kbd>Alt+1…6</kbd></td><td>Espaces</td><td><kbd>Ctrl+K</kbd></td><td>Chercher partout</td></tr>
+    <tr><td><kbd>Tab</kbd></td><td>Tuiles ↔ Cartes</td><td><kbd>Ctrl+B</kbd></td><td>Cacher les panneaux</td></tr>
+    <tr><td><kbd>Ctrl+S</kbd></td><td>Enregistrer</td><td><kbd>Ctrl+H</kbd></td><td>Historique</td></tr>
+    <tr><td><kbd>Ctrl+Z</kbd> <kbd>Ctrl+Y</kbd></td><td>Annuler, rétablir</td><td><kbd>Ctrl+I</kbd></td><td>Importer une planche</td></tr>
+    <tr><td><kbd>F5</kbd> <kbd>Maj+F5</kbd></td><td>Jouer (d'ici)</td><td><kbd>Ctrl+F5</kbd></td><td>Test rapide</td></tr>
+    <tr><td><kbd>Ctrl+Maj+V</kbd></td><td>Vérifier le jeu</td><td><kbd>Ctrl+Maj+M</kbd></td><td>Carte monde</td></tr>
+    <tr><td><kbd>Ctrl+Maj+D</kbd></td><td>Données</td><td><kbd>Ctrl+Maj+G</kbd></td><td>Générer (ComfyUI)</td></tr>
+    <tr><td><kbd>B E G I L U M</kbd></td><td>Outils de dessin</td><td><kbd>R S Z T N J</kbd></td><td>Sélection, tampon, zone, téléporteur, événement, départ</td></tr>
+    <tr><td><kbd>Ctrl+M</kbd></td><td>Mosaïque</td><td><kbd>P</kbd></td><td>Lire les animations</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ PARTIE SAGA -->
+<section class="page partie saga" data-titre="Saga">
+  <div class="halo h2"></div>
+  <p class="kicker">Partie 2</p>
+  <div class="partie-rune">ᛃ</div>
+  <h1 class="partie-titre" data-sommaire="Partie 2 · Saga, le moteur" data-niveau="partie">Saga</h1>
+  <p class="partie-sous">Le moteur qui fait tourner les jeux de Tafl : seul, à plusieurs, ou autour d'une table de jeu de rôle avec un MJ.</p>
+  <ol class="partie-liste">
+    <li>Jouer : commandes, menus, sauvegarde</li>
+    <li>Combats, temps réel et domaine</li>
+    <li>Le mode table (MJ et joueurs)</li>
+    <li>Jouer à plusieurs, campagne et compagnon</li>
+  </ol>
+</section>
+
+<section class="page" data-titre="Saga · Jouer">
+  <p class="kicker">Saga · 1</p>
+  <h1 data-sommaire="Jouer : commandes et menus">Jouer</h1>
+  <figure class="fig"><img src="captures/saga-domaine.jpg" alt=""><figcaption>Le petit domaine dans Saga : le nom de la carte en haut à gauche, le héros au départ.</figcaption></figure>
+  <table class="tableau compact">
+    <tr><th>Touche</th><th>Ce qu'elle fait</th></tr>
+    <tr><td><kbd>Flèches</kbd> ou <kbd>ZQSD</kbd></td><td>Se déplacer. Une touche à peine touchée tourne le héros sans avancer. <kbd>Maj</kbd> tenue : courir.</td></tr>
+    <tr><td><kbd>Espace</kbd> <kbd>Entrée</kbd> <kbd>E</kbd></td><td><b>Action</b> : parler, ouvrir un coffre, lire un panneau, faire avancer un dialogue, valider.</td></tr>
+    <tr><td><kbd>Échap</kbd></td><td>Le <b>menu du jeu</b> ; en combat, revenir en arrière.</td></tr>
+    <tr><td><kbd>Tab</kbd> · <kbd>M</kbd></td><td>Le raccourci choisi par le jeu (le sac par défaut) · la carte du monde.</td></tr>
+    <tr><td><kbd>Ctrl+S</kbd> · <kbd>Ctrl+,</kbd></td><td>Sauvegarder · Options.</td></tr>
+    <tr><td><kbd>F5</kbd> · <kbd>F3</kbd> · <kbd>F11</kbd></td><td>Recharger le jeu sans bouger (après un Ctrl+S dans Tafl) · voir le passage, les zones et les événements · plein écran.</td></tr>
+  </table>
+  <p class="petit">Une <b>manette</b> marche partout (A action, B retour et courir, Start menu, Select raccourci). Sur tablette ou téléphone, une <b>croix tactile</b> et les boutons A et B apparaissent au premier toucher. Les touches se changent dans Options › Commandes.</p>
+  <p class="petit">Le <b>jour et la nuit</b>, la météo, la musique, les lumières et les effets au passage suivent les réglages du jeu faits dans Tafl.</p>
+</section>
+
+<section class="page" data-titre="Saga · Menus">
+  <p class="kicker">Saga · 1</p>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/saga-dialogue.jpg" alt=""><figcaption>Un dialogue : le nom dans sa couleur, le texte qui s'écrit. Action l'affiche d'un coup puis passe à la suite.</figcaption></figure>
+    <figure class="fig"><img src="captures/saga-menu.jpg" alt=""><figcaption>Le menu du jeu (Échap), au thème du jeu, avec l'argent et l'heure.</figcaption></figure>
+  </div>
+  <div class="grid2">
+    <div class="carte"><h3>Le menu du jeu</h3><p>Reprendre, l'équipe ou le groupe, le Pokédex ou le bestiaire, le sac, les quêtes, les badges, la carte, les écrans des modules (domaine, construire, relations), sauvegarder, options. <b>Plus…</b> : mode table, jouer à plusieurs, recommencer, outils du créateur.</p></div>
+    <div class="carte"><h3>Sauvegarder</h3><p><kbd>Ctrl+S</kbd> ou le menu. À l'ouverture, Saga propose <b>Continuer</b> ou <b>Nouvelle partie</b>. La sauvegarde auto (si le jeu l'active) est gardée à part et ne remplace jamais la tienne.</p></div>
+  </div>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/saga-options.jpg" alt=""><figcaption>Options : son, vitesse du texte, affichage, zoom, météo, effets au passage, commandes.</figcaption></figure>
+    <figure class="fig"><img src="captures/saga-carte-monde.jpg" alt=""><figcaption>La carte du monde (M) : les lieux visités et où tu es. La molette zoome.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Combats">
+  <p class="kicker">Saga · 2</p>
+  <h1 data-sommaire="Combats, temps réel et domaine">Les combats</h1>
+  <figure class="fig"><img src="captures/saga-combat-jrpg-menu.jpg" alt=""><figcaption>Un combat du pack JRPG : le groupe à droite, les monstres à gauche, le menu du héros dont c'est le tour.</figcaption></figure>
+  <div class="grid2">
+    <div class="carte"><h3>Pack Pokémon</h3><p>Rencontres dans les hautes herbes, dresseurs, les vraies formules (IV, EV, natures, types, critiques, statuts, météo, objets tenus), capture avec les secousses, XP et évolution en combat (arrêtable), plafond de niveau selon les badges. Hors combat : équipe, résumé, Pokédex, PC, boutiques, écran des EV.</p></div>
+    <div class="carte"><h3>Pack JRPG</h3><p>Attaquer, compétences (PM), objets, défendre, fuir ; éléments, statuts, équipement par classe, bonus du groupe. Le journal du combat s'ouvre avec <kbd>J</kbd>. Un combat amical (un duel) ne coûte rien si on perd.</p></div>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Temps réel">
+  <p class="kicker">Saga · 2</p>
+  <h2 class="premier">Le temps réel</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/saga-donjon.jpg" alt=""><figcaption>Le petit donjon : les cœurs en haut à gauche, des slimes et des chauves-souris dans la forêt.</figcaption></figure>
+    <div>
+      <p><b>Pack Action</b> : le héros se déplace librement et frappe à l'épée (Action). Les ennemis patrouillent, suivent, gardent leur place ou fuient, et trouvent le plus court chemin. Recul, invincibilité après un coup, butin, cœurs, XP. <kbd>F3</kbd> montre les boîtes de coup et les chemins.</p>
+      <p><b>Roguelite</b> : un donjon neuf à chaque partie, portes fermées tant qu'il reste des ennemis, mini-carte, perks de la partie, monnaie gardée pour les améliorations du camp.</p>
+    </div>
+  </div>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/survivor-4-foule.jpg" alt=""><figcaption>Survivor : la horde, le minuteur, le niveau et les armes en bas.</figcaption></figure>
+    <figure class="fig"><img src="captures/survivor-3-niveau.jpg" alt=""><figcaption>Un niveau gagné : choisir une arme ou un passif parmi trois.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Domaine">
+  <p class="kicker">Saga · 2</p>
+  <h2 class="premier">Le domaine (modules gestion et relations)</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/saga-construire.jpg" alt=""><figcaption>Menu du jeu › Construire : le coût à droite, ce que le bâtiment apporte dessous.</figcaption></figure>
+    <figure class="fig"><img src="captures/saga-visee.jpg" alt=""><figcaption>La visée : les flèches déplacent le bâtiment (vert s'il tient), Action le pose dans la zone constructible.</figcaption></figure>
+  </div>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/saga-ecran-domaine.jpg" alt=""><figcaption>L'écran du domaine : le stock, les habitants, les bâtiments et ce que la nuit va changer.</figcaption></figure>
+    <figure class="fig"><img src="captures/saga-matin.jpg" alt=""><figcaption>Après une nuit : la maison est finie, le rapport du matin dit ce qui a bougé.</figcaption></figure>
+  </div>
+  <p><b>Dormir</b> passe au jour suivant : les chantiers avancent, les bâtiments produisent, les habitants arrivent, mangent et travaillent (on les voit marcher, et leurs pas creusent des sentiers). <b>Relations</b> : parler à un personnage une fois par jour et lui offrir ce qu'il aime fait monter l'affinité et débloque ses paroles ; l'écran des relations montre les cœurs et ce qu'on a appris de ses goûts.</p>
+</section>
+
+<!-- ============================================================ MODE TABLE -->
+<section class="page" data-titre="Saga · JDR en solo">
+  <p class="kicker">Saga · 3</p>
+  <h1 data-sommaire="Le JDR : seul ou en mode table">Le jeu de rôle</h1>
+  <p class="chapo">Un jeu au pack JDR demande d'abord comment jouer : <b>Seul (aventure)</b>, où Saga mène la partie, ou <b>Mode table (MJ)</b>, pour une séance avec des amis.</p>
+  <div class="grid2 haut">
+    <div>
+      <p><b>Seul</b> : on compose d'abord le groupe, avec les héros prétirés du jeu ou en créant un personnage (origine, classe, caractéristiques).</p>
+      <p><b>Mode table</b> : le MJ ouvre la table (page suivante), puis la partie aux joueurs ; chacun choisit ou crée son héros depuis son écran.</p>
+    </div>
+    <figure class="fig"><img src="captures/saga-jdr-groupe.jpg" alt=""><figcaption>Composer le groupe : un prétiré, ou « Créer un nouveau personnage ».</figcaption></figure>
+  </div>
+  <figure class="fig"><img src="captures/saga-jdr-carte.jpg" alt=""><figcaption>La crypte de Brumeval, seul : le groupe explore, parle aux PNJ, fait des tests et se bat au tour par tour.</figcaption></figure>
+  <p>Seul, les <b>tests</b> (persuasion, discrétion…) se lancent depuis les dialogues, les rencontres déclenchent un combat à l'initiative, et le menu du jeu donne la fiche de chaque héros, les sorts et les jets de dés.</p>
+</section>
+
+<section class="page" data-titre="Saga · Mode table">
+  <p class="kicker">Saga · 3</p>
+  <h1>Le mode table</h1>
+  <p class="chapo">Pour une vraie séance de jeu de rôle avec un MJ (pack JDR) : le plateau prend tout l'écran, les panneaux en verre flottent dessus. On l'ouvre au lancement (« Mode table (MJ) ») ou par Menu du jeu › Plus.</p>
+  <figure class="fig"><img src="captures/table-2-mj-chat.jpg" alt=""><figcaption>La table du MJ : la barre du haut, le rail d'outils à gauche, le panneau à onglets à droite, le pion choisi et les macros en bas.</figcaption></figure>
+  <div class="grid3">
+    <div class="carte"><h3>En haut</h3><p>La campagne et la carte, l'état (combat, tour), <b>Voir comme</b> (la vue d'un joueur), l'<b>écran des joueurs</b> (pour une télé), pause, compagnon.</p></div>
+    <div class="carte"><h3>À droite</h3><p><b>Chat</b> (jets en cartes, discussion, phrases du combat), <b>Pions</b>, <b>Scène</b>, <b>Docs</b>, <b>Joueurs</b>. Sa largeur se règle en glissant son bord.</p></div>
+    <div class="carte"><h3>En bas</h3><p>Le pion choisi et ses PV (+ et −, Maj : par 5), la barre des <b>macros</b> (touches 1 à 9).</p></div>
+  </div>
+  <p class="petit"><b>Le MJ commence sans héros</b> : les joueurs choisissent ou créent le leur ; le MJ peut en préparer un avec « Préparer un héros » (onglet Pions).</p>
+</section>
+
+<section class="page" data-titre="Saga · Outils de séance">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Les outils de la séance</h2>
+  <table class="tableau compact">
+    <tr><th>Outil</th><th>Touche</th><th>Ce qu'il fait</th></tr>
+    <tr><td>Déplacer</td><td><kbd>V</kbd></td><td>Prendre et poser les pions.</td></tr>
+    <tr><td>Règle</td><td><kbd>R</kbd> ou Maj+glisser</td><td>La distance en cases et en mètres, avec la règle des diagonales du jeu.</td></tr>
+    <tr><td>Gabarit</td><td><kbd>G</kbd></td><td>Cercle, cône, ligne, cube, en mètres et en couleur, vus de tous. Clic droit dessus : l'effacer.</td></tr>
+    <tr><td>Ping</td><td><kbd>P</kbd> ou Alt+clic</td><td>Des ondes à ta couleur, avec ton nom, chez tout le monde.</td></tr>
+    <tr><td>Brouillard</td><td><kbd>B</kbd> <kbd>N</kbd></td><td>Le pinceau qui cache ou révèle les pièces.</td></tr>
+    <tr><td>Feutre · Notes</td><td><kbd>F</kbd> <kbd>T</kbd></td><td>Dessiner et écrire sur le plateau : sur le <b>calque du MJ</b> (lui seul) ou pour tous.</td></tr>
+    <tr><td>Tapis de dés</td><td><kbd>D</kbd></td><td>Composer un jet en touchant les dés ou en écrivant une formule, puis Lancer ou glisser.</td></tr>
+  </table>
+  <figure class="fig"><img src="captures/table-1-mj-tapis.jpg" alt=""><figcaption>Le tapis de dés : les dés roulent au milieu du plateau et s'arrêtent sur les valeurs tirées par la partie.</figcaption></figure>
+  <div class="note petite"><b>Les dés dans le chat.</b> <code>/r 2d6+3 Épée longue</code> lance pour tous, <code>/gr d20</code> lance en secret (le MJ et toi). Les <code>@</code> lisent la fiche du héros : <code>@for</code>, <code>@dex</code>, <code>@maitrise</code>, <code>@niveau</code>, ou tout champ chiffré de la fiche. <code>/m nom</code> lance une macro.</div>
+</section>
+
+<section class="page" data-titre="Saga · Pions et scènes">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Pions, scènes et jetons</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/table-3-mj-pions.jpg" alt=""><figcaption>Onglet Pions : chaque pion, ses PV, ses marques, son jeton.</figcaption></figure>
+    <figure class="fig"><img src="captures/table-4-mj-scene.jpg" alt=""><figcaption>Onglet Scène : campagne, brouillard, rencontres, musique, dés.</figcaption></figure>
+  </div>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/scene-2-scene-image.jpg" alt=""><figcaption>Une scène image : une battlemap sous une grille, où le MJ emmène le groupe (Scène › Cartes et scènes › Y aller).</figcaption></figure>
+    <div>
+      <p><b>Jetons</b> : un pion prend une <b>image</b> importée pendant la séance (recadrée dans un rond) ou un <b>personnage du jeu</b> (son sprite, qui se tourne).</p>
+      <p><b>Marques</b> : clic droit sur un pion pour poser un état ou une couleur (le MJ sur tous, un joueur sur son héros).</p>
+      <p><b>Rencontres</b> : cocher celles qui commencent et <b>Lancer le combat</b> ; « Lancer sans poser » démarre une rencontre pas encore posée.</p>
+      <p><b>Voir comme</b> montre la table telle qu'un joueur la voit ; l'<b>écran des joueurs</b> ouvre une vue dépouillée pour une télé (brouillard, initiative, tapis de dés, documents montrés).</p>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Initiative et calque">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Le calque du MJ et l'initiative à la main</h2>
+  <figure class="fig"><img src="captures/calque-1-calque-mj.jpg" alt=""><figcaption>Le feutre et les notes : sur le calque du MJ (en pointillés, jamais envoyé) ou pour tous.</figcaption></figure>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/calque-2-initiative.jpg" alt=""><figcaption>Scène › Initiative à la main : pour mener un combat sans le moteur.</figcaption></figure>
+    <div>
+      <p><b>Jeter pour tous</b> : les héros en public, les monstres en secret, avec la formule des Mécaniques. Ajouter un pion ou une ligne libre (« Le piège »), changer un chiffre, monter, descendre, trier.</p>
+      <p><b>Suivant</b> (aussi en haut du plateau) passe au suivant et ouvre un nouveau tour après le dernier. Les joueurs voient l'ordre en haut de leur écran, sans les chiffres.</p>
+    </div>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Combat à la table">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Un combat à la table</h2>
+  <figure class="fig"><img src="captures/table-9-mj-combat.jpg" alt=""><figcaption>En combat : l'ordre d'initiative dans la bande du haut, le menu du tour à côté du plateau, le chat toujours visible.</figcaption></figure>
+  <p>Le moteur mène le combat : initiative, tours, attaques, sorts, sauvegardes, états, et toutes les mécaniques du jeu (paliers, blessures, parade, localisation…). Le MJ joue les monstres, ou les laisse en <b>Auto</b>. <kbd>Échap</kbd> annule un choix, ou ouvre le menu du jeu s'il n'y a rien à annuler.</p>
+  <div class="note petite"><b>Bonus à cocher.</b> Le MJ met sur la fiche d'un héros des bonus comme « Contre les droïdes +2 » ; le joueur coche ceux qui comptent avant de lancer, et ils s'ajoutent à ce jet.</div>
+</section>
+
+<section class="page" data-titre="Saga · Documents">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Les documents du MJ</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/docs-5-mj-docs.jpg" alt=""><figcaption>Onglet Docs : des images et des textes, en brouillon jusqu'à ce que le MJ les donne.</figcaption></figure>
+    <figure class="fig"><img src="captures/docs-2-ami-lettre.jpg" alt=""><figcaption>Chez un joueur : la lettre qu'on vient de lui donner.</figcaption></figure>
+  </div>
+  <p>Une image (PNG, JPEG, WebP) ou un texte (une lettre, un indice), avec un titre. Le MJ le donne à un joueur, à plusieurs ou à tous, et peut l'<b>ouvrir sur leur écran</b>. <b>Montrer</b> (l'œil) l'ouvre en grand chez ceux qui l'ont, et sur l'écran des joueurs. Une image n'est envoyée qu'à ceux à qui elle a été donnée. Le téléphone du MJ peut prendre une photo et l'envoyer.</p>
+  <h2>Ce que voit un joueur</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/table-6-ami-chat.jpg" alt=""><figcaption>Un joueur dans son navigateur : la même table, ses onglets Chat, Journal, Fiche, Joueurs.</figcaption></figure>
+    <figure class="fig"><img src="captures/table-7-ami-fiche.jpg" alt=""><figcaption>Sa fiche, avec ses boutons de jets et ses macros calculées.</figcaption></figure>
+  </div>
+  <p class="petit">Un joueur choisit ou crée son héros depuis son écran, déplace son pion, lit sa fiche, lance ses jets et ses macros ; dans un dialogue du groupe, chacun vote sa réponse.</p>
+</section>
+
+<!-- ============================================================ À PLUSIEURS -->
+<section class="page" data-titre="Saga · À plusieurs">
+  <p class="kicker">Saga · 4</p>
+  <h1 data-sommaire="Jouer à plusieurs, campagne et compagnon">Jouer à plusieurs</h1>
+  <p class="chapo">Les amis rejoignent depuis leur navigateur (PC, tablette, téléphone), avec un code et leur prénom : rien à installer. L'hôte accepte chaque nouveau joueur.</p>
+  <table class="tableau">
+    <tr><th>Comment</th><th>Pour qui</th><th>Ce qu'il faut</th></tr>
+    <tr><td><b>Réseau de la maison</b></td><td>Les amis dans la même pièce.</td><td>Menu du jeu › Plus › Jouer à plusieurs : une adresse <code>http://192.168.x.x:7777</code> et un code.</td></tr>
+    <tr><td><b>Ouvrir sur Internet</b></td><td>Des amis à distance.</td><td>La box ouvre un port (UPnP) le temps de la partie ; sinon Saga explique la redirection à la main.</td></tr>
+    <tr><td><b>Par un relais</b></td><td>À distance, sans toucher à la box.</td><td>Un relais sur un serveur (dossier <code>relais/</code>), réglé dans Multijoueur › Réglages du relais. Saga donne un <b>lien d'invitation</b>.</td></tr>
+  </table>
+  <div class="grid2">
+    <div class="carte"><h3>Monde partagé (Pokémon, JRPG…)</h3><p>Chacun joue sa partie dans le jeu de l'hôte, et on se voit marcher sur les mêmes cartes. Face à face : <b>échanger</b> (créature, objet, argent) ou <b>défier</b> (duel amical, rien n'est perdu). Discussion à tous ou en privé.</p></div>
+    <div class="carte"><h3>Partie de table (JDR)</h3><p>Chacun reçoit la vue de <b>son rôle</b> : MJ, joueur ou spectateur. Ce qui est caché ne quitte jamais la machine du MJ. Un joueur déplace son héros, lit sa fiche, lance ses jets ; c'est l'hôte qui tire les dés.</p></div>
+  </div>
+  <h2>La salle de campagne</h2>
+  <p>Ouverte par un relais, une partie de JDR garde <b>le même lien et le même code</b> d'une séance à l'autre. Entre deux séances, chaque joueur garde sur son téléphone une copie <b>chiffrée</b> de sa fiche, de ses macros, de son journal et de ses documents (le relais ne la lit pas). Il peut <b>proposer des changements</b> à sa fiche ; à la séance suivante, le MJ les accepte ou les refuse dans l'onglet Joueurs.</p>
+</section>
+
+<section class="page" data-titre="Saga · Campagne">
+  <p class="kicker">Saga · 4</p>
+  <h2 class="premier">L'onglet Joueurs</h2>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/campagne-1-mj-campagne.jpg" alt=""><figcaption>La campagne ouverte par le relais : le lien et le code des amis, la liste des joueurs et de leurs téléphones.</figcaption></figure>
+    <figure class="fig"><img src="captures/campagne-5-mj-propositions.jpg" alt=""><figcaption>Les changements proposés hors séance : ✓ accepter, ✕ refuser, ou tout accepter.</figcaption></figure>
+  </div>
+  <p>« Déposer maintenant » envoie les copies des joueurs au relais (aussi en fermant la partie, et toutes les 10 minutes si quelque chose a changé). <b>Couper un téléphone</b> change la clé du joueur et efface sa copie.</p>
+  <h2>Le compagnon, sur téléphone</h2>
+  <p>Une petite appli web pour le téléphone, à côté du PC : dans le panneau multijoueur, <b>Relier mon téléphone</b> montre un QR code. Le téléphone le scanne et devient la même personne (le MJ ou ce joueur). On peut aussi rejoindre depuis le compagnon avec son prénom et le code, sans QR. Il s'installe comme une appli (« Installer l'appli »).</p>
+  <div class="grid3 telephones">
+    <figure class="fig tel"><img src="captures/compagnon-2-des.jpg" alt=""><figcaption>Dés : toucher les dés, Lancer, glisser ou secouer.</figcaption></figure>
+    <figure class="fig tel"><img src="captures/compagnon-4-pions.jpg" alt=""><figcaption>Pions (MJ) : les PV de chacun, même en combat.</figcaption></figure>
+    <figure class="fig tel"><img src="captures/compagnon-6-fiche-joueur.jpg" alt=""><figcaption>Fiche (joueur) : la fiche du jeu et ses jets.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page" data-titre="Saga · Compagnon">
+  <p class="kicker">Saga · 4</p>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/compagnon-1-qr.jpg" alt=""><figcaption>Relier mon téléphone : un QR valable une fois, 5 minutes ; 3 téléphones par personne.</figcaption></figure>
+    <div>
+      <h2 class="premier">Ce que fait le compagnon</h2>
+      <ul>
+        <li><b>Dés</b> : le jet part dans la partie (en secret si coché) et les dés du téléphone s'arrêtent sur les valeurs de Saga.</li>
+        <li><b>Macros</b> : en tuiles ; toucher : lancer, appui long : modifier.</li>
+        <li><b>Fiche</b> (joueur) et <b>Pions</b> (MJ).</li>
+        <li><b>Documents</b> : vibration et « Nouveau » quand un document arrive ; plein écran, zoom au doigt.</li>
+        <li><b>Hors séance</b> : la copie de sa fiche et de ses documents ; il repasse en direct tout seul quand le MJ relance.</li>
+        <li><b>Sur PC</b> : Compagnon › « Ouvrir sur ce PC » dans la page de jeu d'un ami ; entre deux séances, le lien de la partie y mène.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="grid3 telephones">
+    <figure class="fig tel"><img src="captures/compagnon-5-macros-joueur.jpg" alt=""><figcaption>Les macros d'un joueur, calculées avec sa fiche.</figcaption></figure>
+    <figure class="fig tel"><img src="captures/campagne-2-tel-hors-seance-fiche.jpg" alt=""><figcaption>Hors séance : la fiche, gardée sur le téléphone.</figcaption></figure>
+    <figure class="fig tel"><img src="captures/docs-8-tel-lou-docs.jpg" alt=""><figcaption>Les documents reçus.</figcaption></figure>
+  </div>
+</section>
+
+<section class="page" data-titre="Annexe">
+  <p class="kicker">Annexe</p>
+  <h1 data-sommaire="Annexe : aide-mémoire">Aide-mémoire</h1>
+  <h2>Saga</h2>
+  <table class="tableau compact raccourcis">
+    <tr><td><kbd>Flèches</kbd> <kbd>ZQSD</kbd></td><td>Se déplacer</td><td><kbd>Maj</kbd></td><td>Courir</td></tr>
+    <tr><td><kbd>Espace</kbd> <kbd>Entrée</kbd> <kbd>E</kbd></td><td>Action</td><td><kbd>Échap</kbd></td><td>Menu du jeu, retour</td></tr>
+    <tr><td><kbd>Tab</kbd></td><td>Raccourci du jeu</td><td><kbd>M</kbd></td><td>Carte du monde</td></tr>
+    <tr><td><kbd>Ctrl+S</kbd></td><td>Sauvegarder</td><td><kbd>Ctrl+,</kbd></td><td>Options</td></tr>
+    <tr><td><kbd>F5</kbd></td><td>Recharger le jeu</td><td><kbd>F3</kbd></td><td>Passage, zones, événements</td></tr>
+    <tr><td><kbd>F11</kbd></td><td>Plein écran</td><td><kbd>Ctrl+O</kbd></td><td>Ouvrir un autre jeu</td></tr>
+    <tr><td><kbd>J</kbd></td><td>Journal du combat</td><td></td><td></td></tr>
+  </table>
+  <h2>Mode table</h2>
+  <table class="tableau compact raccourcis">
+    <tr><td><kbd>V</kbd></td><td>Déplacer</td><td><kbd>R</kbd></td><td>Règle</td></tr>
+    <tr><td><kbd>G</kbd></td><td>Gabarit</td><td><kbd>P</kbd> · Alt+clic</td><td>Ping</td></tr>
+    <tr><td><kbd>B</kbd> <kbd>N</kbd></td><td>Brouillard</td><td><kbd>F</kbd> <kbd>T</kbd></td><td>Feutre, notes</td></tr>
+    <tr><td><kbd>D</kbd></td><td>Tapis de dés</td><td><kbd>1</kbd> … <kbd>9</kbd></td><td>Macros</td></tr>
+    <tr><td><code>/r 1d20+@dex</code></td><td>Jet pour tous</td><td><code>/gr d20</code></td><td>Jet secret</td></tr>
+    <tr><td><code>/m nom</code></td><td>Lancer une macro</td><td>Clic droit (pion)</td><td>Marques, jeton</td></tr>
+  </table>
+  <h2>Pour aller plus loin</h2>
+  <div class="grid2">
+    <div class="carte"><h3>Dans chaque dossier de jeu</h3><p><code>FORMAT.md</code> décrit tous les fichiers du jeu ; <code>SCRIPTS.md</code> toute l'API des scripts JS.</p></div>
+    <div class="carte"><h3>Dans le dépôt Atelier</h3><p><code>tuiles/README.md</code> et <code>moteur/README.md</code> : toutes les nouveautés version par version. <code>relais/README.md</code> : installer un relais.</p></div>
+  </div>
+  <p class="fin">ᛏ · ᛃ</p>
+</section>
+
+<script src="manuel.js"></script>
+</body>
+</html>

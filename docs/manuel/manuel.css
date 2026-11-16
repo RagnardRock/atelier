@@ -1,0 +1,174 @@
+/* Le mode d'emploi : des pages A4 sombres, en verre, aux couleurs de Tafl (vert) et Saga (ambre). */
+@page { size: A4; margin: 0; }
+:root {
+  --fond: #111418;
+  --fond2: #171b21;
+  --verre: rgba(255, 255, 255, 0.045);
+  --bord: rgba(255, 255, 255, 0.09);
+  --texte: #e6e9ee;
+  --doux: #9aa3ae;
+  --tafl: #7bd88f;
+  --saga: #f2a33a;
+  --ciel: #6cb6ff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #0b0d10; }
+body {
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+  color: var(--texte);
+  font-size: 10pt;
+  line-height: 1.5;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.page {
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  padding: 16mm 16mm 20mm;
+  overflow: hidden;
+  page-break-after: always;
+  break-after: page;
+  background:
+    radial-gradient(120mm 90mm at 100% 0%, rgba(123, 216, 143, 0.07), transparent 70%),
+    radial-gradient(140mm 100mm at 0% 100%, rgba(108, 182, 255, 0.05), transparent 70%),
+    var(--fond);
+}
+@media screen { .page { margin: 10mm auto; box-shadow: 0 10px 40px rgba(0,0,0,.5); } }
+.page:last-of-type { page-break-after: auto; break-after: auto; }
+
+/* Le pied de chaque page (ajouté par manuel.js). */
+.pied {
+  position: absolute; left: 16mm; right: 16mm; bottom: 9mm;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 7.5pt; color: var(--doux); letter-spacing: .02em;
+  border-top: 1px solid var(--bord); padding-top: 2.5mm;
+}
+.pied b { color: var(--texte); font-weight: 600; }
+.pied .num { font-variant-numeric: tabular-nums; }
+
+/* Titres */
+.kicker { margin: 0 0 1.5mm; font-size: 8pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--tafl); }
+.page[data-titre^="Saga"] .kicker, .page.saga .kicker { color: var(--saga); }
+h1 { margin: 0 0 4mm; font-size: 24pt; line-height: 1.15; font-weight: 800; letter-spacing: -.02em; }
+h2 { margin: 6mm 0 2.5mm; font-size: 13.5pt; font-weight: 700; letter-spacing: -.01em; }
+h2.premier { margin-top: 0; }
+h3 { margin: 0 0 1.5mm; font-size: 10.5pt; font-weight: 700; }
+p { margin: 0 0 2.5mm; }
+.chapo { font-size: 11.5pt; color: #cfd5dc; margin-bottom: 5mm; }
+.petit { font-size: 8.8pt; color: #c4cad2; }
+b.t { color: var(--tafl); } b.s { color: var(--saga); }
+ul { margin: 0 0 3mm; padding-left: 5mm; }
+li { margin-bottom: 1.2mm; }
+li::marker { color: var(--tafl); }
+.page[data-titre^="Saga"] li::marker { color: var(--saga); }
+.deux-colonnes { columns: 2; column-gap: 8mm; }
+.deux-colonnes li { break-inside: avoid; }
+code, pre, kbd { font-family: 'JetBrains Mono', Consolas, monospace; }
+code { font-size: 8.5pt; background: rgba(255,255,255,.07); border: 1px solid var(--bord); border-radius: 4px; padding: .3mm 1.2mm; }
+kbd {
+  display: inline-block; font-size: 7.6pt; line-height: 1.3; padding: .2mm 1.4mm;
+  border-radius: 4px; border: 1px solid rgba(255,255,255,.18); border-bottom-width: 2px;
+  background: rgba(255,255,255,.06); color: #f2f4f7; white-space: nowrap;
+}
+pre.arbo {
+  margin: 0; padding: 4mm 5mm; font-size: 8.4pt; line-height: 1.6; color: #cfe8d4;
+  background: var(--verre); border: 1px solid var(--bord); border-radius: 10px;
+}
+
+/* Cartes en verre, notes */
+.carte, .note {
+  background: linear-gradient(160deg, rgba(255,255,255,.06), rgba(255,255,255,.025));
+  border: 1px solid var(--bord); border-radius: 12px; padding: 3.5mm 4mm;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.carte p { margin: 0; font-size: 9pt; color: #cdd3da; }
+.carte p + p { margin-top: 1.5mm; }
+.note { border-left: 3px solid var(--tafl); margin: 4mm 0; font-size: 9.2pt; color: #d3d8de; }
+.page[data-titre^="Saga"] .note { border-left-color: var(--saga); }
+.note.petite { font-size: 8.6pt; padding: 3mm 4mm; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4mm; margin-bottom: 4mm; }
+.grid2.haut { align-items: start; }
+
+/* Figures */
+.fig { margin: 0 0 4mm; }
+.fig img {
+  display: block; width: 100%; height: auto; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 6px 22px rgba(0,0,0,.45);
+}
+.fig figcaption { margin-top: 1.8mm; font-size: 8pt; color: var(--doux); line-height: 1.4; }
+.fig.moyenne img { width: 80%; margin: 0 auto; }
+.fig.petite-fig img { width: 60%; }
+.fig.moyenne figcaption { text-align: center; }
+.telephones { gap: 6mm; }
+.fig.tel img { width: 82%; margin: 0 auto; border-radius: 14px; }
+.fig.tel figcaption { text-align: center; }
+
+/* Tableaux */
+.tableau { width: 100%; border-collapse: separate; border-spacing: 0; margin: 0 0 4mm; font-size: 8.8pt; border: 1px solid var(--bord); border-radius: 10px; overflow: hidden; }
+.tableau th { text-align: left; font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: var(--doux); font-weight: 700; background: rgba(255,255,255,.05); padding: 2mm 3mm; }
+.tableau td { padding: 2mm 3mm; border-top: 1px solid var(--bord); vertical-align: top; color: #d5dae0; }
+.tableau tr:first-child td { border-top: 0; }
+.tableau.compact td, .tableau.compact th { padding: 1.5mm 3mm; }
+.tableau td:first-child { white-space: nowrap; }
+.raccourcis td:nth-child(odd) { width: 1%; white-space: nowrap; }
+.raccourcis td:nth-child(3) { border-left: 1px solid var(--bord); }
+
+/* Le flux Tafl → Saga */
+.flux { display: flex; align-items: stretch; gap: 2mm; margin: 2mm 0 6mm; }
+.flux-etape { flex: 1; text-align: center; padding: 4mm 2mm; border-radius: 12px; background: var(--verre); border: 1px solid var(--bord); }
+.flux-etape b { display: block; font-size: 10.5pt; margin-top: 1mm; }
+.flux-etape small { display: block; color: var(--doux); font-size: 7.5pt; line-height: 1.35; margin-top: 1mm; }
+.flux-etape .rune, .flux-etape .ic { font-size: 18pt; line-height: 1; }
+.flux-etape.t { border-color: rgba(123,216,143,.45); } .flux-etape.t .rune { color: var(--tafl); }
+.flux-etape.s { border-color: rgba(242,163,58,.45); } .flux-etape.s .rune { color: var(--saga); }
+.flux-fleche { align-self: center; color: var(--doux); font-size: 14pt; }
+
+/* Couverture */
+.couverture { padding: 26mm 20mm; background: radial-gradient(160mm 120mm at 85% 10%, rgba(123,216,143,.18), transparent 65%), radial-gradient(160mm 120mm at 10% 95%, rgba(242,163,58,.16), transparent 65%), #0d1014; }
+.halo { position: absolute; border-radius: 50%; filter: blur(30px); opacity: .5; pointer-events: none; }
+.couverture .h1 { width: 70mm; height: 70mm; right: -10mm; top: 30mm; background: rgba(123,216,143,.15); }
+.couverture .h2 { width: 80mm; height: 80mm; left: -20mm; bottom: 20mm; background: rgba(242,163,58,.12); }
+.couv-runes { display: flex; gap: 4mm; margin-bottom: 8mm; }
+.rune { font-size: 22pt; font-weight: 700; }
+.couv-runes .rune { width: 16mm; height: 16mm; display: grid; place-items: center; border-radius: 12px; color: #0d1014; }
+.couv-runes .rune.tafl { background: linear-gradient(135deg, #b5f07a, #5cc0f0); }
+.couv-runes .rune.saga { background: linear-gradient(135deg, #f7c560, #e86a4a); }
+.couv-titre { font-size: 54pt; letter-spacing: -.04em; margin: 2mm 0 4mm; }
+.couv-titre span { color: var(--doux); font-weight: 400; }
+.couv-sous { font-size: 14pt; color: #cbd2da; max-width: 150mm; margin-bottom: 12mm; }
+.couv-image { margin: 0; }
+.couv-image img { width: 100%; border-radius: 14px; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.couv-pied { position: absolute; left: 20mm; right: 20mm; bottom: 20mm; display: grid; grid-template-columns: 1fr 1fr auto; gap: 8mm; font-size: 9pt; color: var(--doux); border-top: 1px solid var(--bord); padding-top: 5mm; }
+.couv-pied b { color: var(--texte); font-size: 11pt; }
+.version { font-family: 'JetBrains Mono', monospace; font-size: 8pt; color: var(--texte); background: var(--verre); border: 1px solid var(--bord); border-radius: 20px; padding: .3mm 2mm; margin-left: 1mm; }
+.couv-pied .date { align-self: end; }
+
+/* Pages de partie */
+.partie { padding-top: 70mm; }
+.partie .h1 { width: 120mm; height: 120mm; right: -30mm; top: -20mm; background: rgba(123,216,143,.16); }
+.partie .h2 { width: 120mm; height: 120mm; right: -30mm; top: -20mm; background: rgba(242,163,58,.16); }
+.partie-rune { font-size: 70pt; line-height: 1; font-weight: 700; margin-bottom: 6mm; }
+.partie.tafl .partie-rune { color: var(--tafl); }
+.partie.saga .partie-rune { color: var(--saga); }
+.partie.saga .kicker { color: var(--saga); }
+.partie-titre { font-size: 48pt; margin-bottom: 4mm; }
+.partie-sous { font-size: 13pt; color: #cbd2da; max-width: 140mm; }
+.partie-liste { margin-top: 14mm; padding: 0; list-style: none; counter-reset: n; }
+.partie-liste li { counter-increment: n; font-size: 12pt; padding: 3mm 0; border-top: 1px solid var(--bord); display: flex; gap: 5mm; }
+.partie-liste li::before { content: counter(n, decimal-leading-zero); font-family: 'JetBrains Mono', monospace; color: var(--doux); }
+
+/* Sommaire */
+#sommaire { margin-top: 6mm; }
+.som-ligne { display: flex; align-items: baseline; gap: 3mm; padding: 2.4mm 0; font-size: 11pt; border-bottom: 1px solid rgba(255,255,255,.05); }
+.som-ligne .points { flex: 1; border-bottom: 1px dotted rgba(255,255,255,.18); transform: translateY(-1mm); }
+.som-ligne .n { font-family: 'JetBrains Mono', monospace; color: var(--doux); font-size: 9.5pt; }
+.som-ligne.partie { margin-top: 5mm; font-weight: 800; font-size: 13pt; border-bottom: 0; }
+.som-ligne.partie.tafl { color: var(--tafl); } .som-ligne.partie.saga { color: var(--saga); }
+.som-ligne:not(.partie) { padding-left: 6mm; }
+
+.fin { text-align: center; color: var(--doux); font-size: 16pt; letter-spacing: .4em; margin-top: 8mm; }
