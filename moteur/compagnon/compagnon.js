@@ -548,11 +548,24 @@
   let ficheSignature = '';
   function pageFiche() {
     const f = vue?.fiche;
-    const s = JSON.stringify([f, vue?.combat ? 1 : 0, vue?.creation ? 1 : 0, horsLigne, copie?.t, enAttente()]);
+    const s = JSON.stringify([f, vue?.combat ? 1 : 0, vue?.creation ? 1 : 0, horsLigne, copie?.t, enAttente(), f ? 0 : (vue?.libres || []).map((x) => x.id)]);
     if (s === ficheSignature && pageEl.firstChild) return;
     ficheSignature = s;
     pageEl.innerHTML = '';
-    if (!f) { pageEl.append(el('div', { className: 'vide verre', textContent: 'Pas encore de héros : choisis-en un (ou crée le tien) sur l\'écran du PC.' })); return; }
+    if (!f) {
+      // Saga 1.38.1 : un héros libre se prend d'ici (en créer un se fait sur l'écran de jeu, ou le MJ le prépare).
+      const libres = !horsLigne && !vue?.creation ? (vue?.libres || []) : [];
+      if (!libres.length) { pageEl.append(el('div', { className: 'vide verre', textContent: 'Pas encore de héros : ton MJ t\'en donne un, ou choisis-le (ou crée le tien) sur l\'écran de jeu.' })); return; }
+      const l = el('div', { className: 'libres verre' }, el('div', { className: 'libres-titre', textContent: 'Quel héros joues-tu ?' }));
+      for (const h of libres) {
+        const b = el('button', { className: 'libre', type: 'button' }, el('b', { textContent: h.nom }), el('small', { textContent: h.detail || '' }));
+        b.onclick = () => { vibrer(15); demander({ type: 'prendre', heros: h.id }); b.disabled = true; toast(`Tu joues ${h.nom}.`); };
+        l.append(b);
+      }
+      l.append(el('p', { className: 'note', textContent: 'Pour créer un nouveau héros : l\'écran de jeu (PC ou navigateur), ou ton MJ le prépare pour toi.' }));
+      pageEl.append(l);
+      return;
+    }
     const jet = (sorte, id, quoi) => { vibrer(15); demander({ type: 'jet', sorte, id, quoi }); toast(`${quoi || 'Jet'}…`); };
     // La fiche du jeu (Tafl › Réglages › Fiche des personnages) : la même que sur le PC.
     if (f.modele && typeof FichePerso !== 'undefined') {
@@ -795,6 +808,10 @@
       }
       boite.append(l);
     }
+    // Saga 1.38.1 : rejoindre la partie de ce lien depuis le compagnon (prénom et code), sans QR ni PC.
+    if (!liaison()) boite.append(formRejoindre());
+    // Et ouvrir une autre partie (son lien) : sur le même relais, c'est la même appli.
+    boite.append(formAutreLien());
     if (depuisMenu && liaison()) {
       const retour = el('button', { className: 'btn', type: 'button' }, 'Revenir à la partie');
       retour.onclick = () => dessiner();
@@ -803,6 +820,56 @@
       boite.append(retour, quitter);
     }
     app.append(boite);
+  }
+
+  function formRejoindre() {
+    const nom = el('input', { type: 'text', placeholder: 'Ton prénom', maxLength: 24, autocomplete: 'given-name', value: lire('prenom', '') });
+    const code = el('input', { type: 'text', placeholder: 'Le code de la partie', maxLength: 12, autocapitalize: 'characters', autocomplete: 'off' });
+    const etat = el('p', { className: 'rejoindre-etat' });
+    const ok = el('button', { className: 'btn', type: 'submit' }, icone('plug'), 'Rejoindre la partie');
+    const f = el('form', { className: 'rejoindre' }, el('div', { className: 'rejoindre-titre', textContent: 'Ou rejoins la partie d\'ici' }), nom, code, ok, etat);
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      if (!nom.value.trim() || !code.value.trim()) { etat.textContent = 'Écris ton prénom et le code que ton MJ t\'a donné.'; return; }
+      ok.disabled = true;
+      ecrire('prenom', nom.value.trim());
+      try { await rejoindreIci(nom.value.trim(), code.value.trim(), (t) => { etat.textContent = t; }); } catch (err) { etat.textContent = err.message; ok.disabled = false; }
+    };
+    return f;
+  }
+  async function poster(chemin, corps, jetonAmi = '') {
+    const r = await fetch(`${racine}${chemin}${jetonAmi ? `?jeton=${encodeURIComponent(jetonAmi)}` : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(jetonAmi ? { 'X-Jeton': jetonAmi } : {}) }, body: JSON.stringify(corps || {}) });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 503) throw new Error('La séance n\'est pas ouverte : réessaie quand ton MJ la lance.');
+    if (!r.ok && r.status !== 202) throw new Error(d.erreur || `erreur ${r.status}`);
+    return { statut: r.status, ...d };
+  }
+  // Comme un ami de la page de jeu : une place dans la partie (sur Internet, le MJ l'accepte), puis un code
+  // de liaison pour ce téléphone, aussitôt utilisé.
+  async function rejoindreIci(nom, code, dire) {
+    dire('Je demande au MJ…');
+    let d = await poster('/rejoindre', { nom, code });
+    while (d.statut === 202) {
+      dire('En attente : ton MJ doit accepter ta demande.');
+      await new Promise((r) => setTimeout(r, 2000));
+      d = await poster('/rejoindre', { nom, code, jeton: d.jeton });
+    }
+    const l = await poster('/compagnon/lien', {}, d.jeton);
+    if (!(await relier(l.code))) throw new Error('La liaison n\'a pas marché : réessaie.');
+    dessiner();
+    ecouter();
+  }
+  function formAutreLien() {
+    const lien = el('input', { type: 'url', placeholder: 'Le lien d\'une autre partie', autocomplete: 'off' });
+    const f = el('form', { className: 'rejoindre autre' }, lien, el('button', { className: 'btn2', type: 'submit' }, icone('link-external'), 'Ouvrir'));
+    f.onsubmit = (e) => {
+      e.preventDefault();
+      let u = null;
+      try { u = new URL(lien.value.trim()); } catch { lien.value = ''; lien.placeholder = 'Ce n\'est pas un lien'; return; }
+      const chemin = u.pathname.replace(/\/(compagnon\/?)?(index\.html)?$/, '');
+      location.href = `${u.origin}${chemin}/compagnon/`;
+    };
+    return f;
   }
 
   // --- Le départ ---

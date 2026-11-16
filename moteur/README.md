@@ -390,6 +390,17 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.39 : le compagnon sans QR, et sur PC
+
+- **Rejoindre depuis le compagnon** : sur l'accueil, son prénom et le code de la partie ; le MJ accepte (sur
+  Internet), et le téléphone est relié sans QR ni PC. Un héros libre se choisit ensuite dans l'onglet Fiche.
+- **Une seule appli** installée pour toutes les campagnes d'un même relais : on passe de l'une à l'autre depuis
+  l'accueil (ou en collant le lien d'une autre partie).
+- **Le compagnon sur PC** : Compagnon › « Ouvrir sur ce PC » dans la page de jeu d'un ami. Entre deux séances, le
+  lien de la partie mène au compagnon (le relais redirige), qui montre la copie hors séance.
+- Hors ligne, les icônes du compagnon viennent aussi du cache.
+- L'aventure d'exemple de Tafl a deux champs que le joueur peut changer (Points de destin, Carnet).
+
 ## Ce que fait Saga 1.38 : la salle de campagne
 
 - **Un lien et un code qui ne changent plus** : une partie de JdR ouverte par un relais (version 2) garde sa

@@ -10,7 +10,7 @@ const path = require('node:path');
 const { devices } = require('playwright');
 const { RACINE, suivreErreurs } = require('../lib/tafl');
 const { jeuDuModele } = require('../lib/saga');
-const { egal, vrai } = require('../lib/verifier');
+const { egal, vrai, sansErreur } = require('../lib/verifier');
 
 const MOTEUR = path.join(RACINE, 'moteur');
 const CAPTURES = process.env.CAPTURES || '';
@@ -161,6 +161,17 @@ module.exports = [
         await page.waitForFunction(() => App.moteur.table.table().campagne.telephones.length === 1 && App.moteur.table.table().campagne.cles.lou);
         egal(await page.evaluate(() => App.moteur.table.table().campagne.telephones[0].nom), 'Lou', 'le téléphone de Lou est gardé dans la campagne');
 
+        // Saga 1.38.1 : Lou ouvre aussi son compagnon dans un onglet de son PC (Compagnon › Ouvrir sur ce PC).
+        await ami.evaluate(() => document.querySelector('.ti-bouton[title^="Un QR code"]')?.click());
+        await ami.waitForSelector('.multi-qr-pc button');
+        const [pc] = await Promise.all([c2.waitForEvent('page'), ami.locator('.multi-qr-pc button').click()]);
+        ctx.pages.push(pc);
+        const erreursPc = suivreErreurs(pc);
+        await pc.waitForFunction(() => window.Compagnon?.vue?.fiche && window.Compagnon.liaison?.boite, null, { timeout: 15000 });
+        await pc.evaluate(() => navigator.serviceWorker.ready);
+        await page.waitForFunction(() => App.moteur.table.table().campagne.telephones.length === 2);
+        await ami.keyboard.press('Escape');
+
         // Le MJ donne à Lou une carte (une image) et une lettre.
         const image = await page.evaluate(() => {
           const c = document.createElement('canvas'); c.width = 900; c.height = 600;
@@ -209,6 +220,22 @@ module.exports = [
         vrai(await tel.evaluate(() => document.querySelector('.docs .doc img').src.startsWith('data:image/jpeg')), 'l\'image vient de la copie');
         await capture(tel, '3-tel-hors-seance-docs');
 
+        // Sur le PC de Lou : le lien de la partie mène au compagnon, qui montre la copie hors séance.
+        const redir = await fetch(lien1, { redirect: 'manual' });
+        egal(redir.status, 302, 'entre deux séances, la page de la partie redirige');
+        vrai((redir.headers.get('location') || '').endsWith(`/p/${camp.id}/compagnon/`), 'vers le compagnon');
+        await pc.close();
+        const pc2 = await c2.newPage();
+        ctx.pages.push(pc2);
+        await pc2.goto(lien1);
+        await pc2.waitForFunction(() => window.Compagnon?.horsLigne && window.Compagnon.copie, null, { timeout: 10000 });
+        await pc2.evaluate(() => Compagnon.aller('fiche'));
+        await pc2.waitForSelector('.fiche .fp-champ.jauge');
+        vrai((await pc2.locator('.fiche').textContent()).includes('Points de destin'), 'sur le PC aussi, la fiche se lit hors séance');
+        vrai(await pc2.evaluate(() => document.fonts.ready.then(() => [...document.fonts].some((f) => /codicon/.test(f.family) && f.status === 'loaded'))), 'les icônes aussi, depuis le cache');
+        await capture(pc2, '7-pc-hors-seance');
+        sansErreur(erreursPc, 'compagnon du PC');
+
         // Lou dépense un point de destin et note quelque chose, hors séance : deux propositions pour le MJ.
         await tel.evaluate(() => Compagnon.aller('fiche'));
         await tel.locator('.fp-champ.jauge .fp-bouton', { hasText: '−' }).click();
@@ -252,13 +279,41 @@ module.exports = [
         await tel.waitForSelector('.tete .etat-co.oui');
         await capture(tel, '6-tel-retour-en-direct');
 
+        // Saga 1.38.1 : Mia, sans PC, rejoint depuis le compagnon (prénom et code), puis prend un héros libre.
+        const manifeste = await (await fetch(`${lien1}compagnon/manifest.webmanifest`)).json();
+        egal([manifeste.scope, manifeste.id], ['/p/', '/p/compagnon'], 'une seule appli pour les campagnes du relais');
+        const cmia = await ctx.navigateur.newContext({ ...devices['Pixel 7'] });
+        const mia = await cmia.newPage();
+        ctx.pages.push(mia);
+        const erreursMia = suivreErreurs(mia);
+        await mia.goto(`${lien1}compagnon/`);
+        await mia.waitForSelector('form.rejoindre:not(.autre) input');
+        await mia.locator('form.rejoindre:not(.autre) input').first().fill('Mia');
+        await mia.locator('form.rejoindre:not(.autre) input').nth(1).fill(reseau.infos().code);
+        await mia.locator('form.rejoindre:not(.autre) button[type=submit]').click();
+        for (let i = 0; i < 80 && !reseau.infos().attente.length; i++) await mia.waitForTimeout(100);
+        vrai((await mia.locator('.rejoindre-etat').textContent()).includes('MJ'), 'le téléphone attend l\'accord du MJ');
+        reseau.accepter(reseau.infos().attente[0].id, true);
+        await mia.waitForFunction(() => window.Compagnon?.liaison?.boite && window.Compagnon.vue, null, { timeout: 15000 });
+        await mia.evaluate(() => Compagnon.aller('fiche'));
+        await mia.waitForSelector('.libres .libre');
+        await capture(mia, '8-tel-choisir-heros');
+        await mia.locator('.libres .libre', { hasText: 'Elaria' }).click();
+        await mia.waitForFunction(() => window.Compagnon.vue?.fiche, null, { timeout: 8000 });
+        egal(await page.evaluate(() => { const T = App.moteur.table; const c = T.partie().equipe.find((x) => /Elaria/.test(x.nom || x.creature)); return T.cleRole('Mia') === T.cleDe(c); }), true, 'Mia joue Elaria, choisie sur son téléphone');
+        sansErreur(erreursMia, 'compagnon de Mia');
+
         // Couper le téléphone (onglet Joueurs) : il est délié, sa boîte est vidée sur le relais.
         await onglet(page, 'Joueurs');
         await page.locator('.table-telephones .table-bouton').first().click();
         await tel.waitForFunction(() => !window.Compagnon?.liaison, null, { timeout: 8000 });
         await Promise.all(retirees);
         vrai(!fs.existsSync(fichierCopie), 'la boîte de Lou est vidée');
-        egal(await page.evaluate(() => [App.moteur.table.table().campagne.telephones.length, Boolean(App.moteur.table.table().campagne.cles.lou)]), [0, false], 'plus de téléphone ni de clé pour Lou');
+        // Le compagnon du PC de Lou reste relié ; l'ancienne clé est oubliée (une nouvelle, avec une nouvelle boîte,
+        // lui sera donnée quand il revient en séance).
+        const apres = await page.evaluate(() => { const c = App.moteur.table.table().campagne; return [c.telephones.length, c.cles.lou?.boite || '']; });
+        egal(apres[0], 2, 'il reste le compagnon du PC de Lou et le téléphone de Mia');
+        vrai(apres[1] !== boite, 'l\'ancienne clé de Lou ne sert plus');
 
         // L'état de la campagne, pour la pastille « en direct » de l'accueil du compagnon.
         const etat = await fetch(`${adresseRelais}/campagne/${camp.id}/etat`).then((r) => r.json());

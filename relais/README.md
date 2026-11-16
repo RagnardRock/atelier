@@ -81,6 +81,8 @@ son téléphone une copie de sa fiche et de ses documents, et peut proposer des 
 - Les copies sont **chiffrées par Saga** (AES-256-GCM, une clé par joueur, donnée à ses seuls téléphones) ;
   les propositions sont chiffrées par le téléphone. Le relais ne lit ni les fiches ni les documents.
 - Le MJ n'a pas de copie : ce qu'il sait ne quitte jamais son PC.
+- Entre deux séances, le lien de la partie mène au compagnon (`/p/<campagne>/compagnon/`) : un compagnon déjà
+  ouvert sur cet appareil (téléphone ou PC) s'ouvre de son cache et montre la copie (Saga 1.39).
 - Limites : 12 Mo par copie, 40 joueurs, 60 propositions de 32 Ko, 20 Mo par campagne. Une campagne
   oubliée depuis 400 jours est effacée.
 

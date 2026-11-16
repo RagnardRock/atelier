@@ -48,6 +48,8 @@ la page de l'essai (rubrique **Artifacts**).
   temporaire) : le même lien et le même code d'une séance à l'autre, la copie déposée chiffrée (le relais ne lit
   pas la fiche), le mauvais secret refusé, le téléphone hors séance (fiche, documents, même rouvert), deux
   changements proposés puis acceptés par le MJ, le téléphone qui repasse en direct, un téléphone coupé.
+  Saga 1.39 : le compagnon ouvert sur le PC de l'ami (le lien de la partie y mène hors séance, icônes comprises),
+  un téléphone qui rejoint sans QR (prénom et code) et prend un héros libre, le manifeste commun au relais.
   Les essais du mode table vérifient aussi que le MJ commence sans héros.
 
 ## Les lancer sur un PC (pour un développeur)
