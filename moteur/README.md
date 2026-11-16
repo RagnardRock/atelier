@@ -390,6 +390,14 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.47 : des scripts à la table (avec Tafl 1.41)
+
+- **Les scripts JS du jeu réagissent au mode table** : un message du chat (`table_chat`), un jet (`table_jet`), le
+  tour de quelqu'un (`table_tour`). Ils agissent comme le MJ avec `saga.table` : écrire dans le chat, changer des
+  PV, poser une marque (tuiles/SCRIPTS.md).
+- **Tafl 1.41** : le modèle de script « Réactions à la table » (pour un JDR) : `!soin` dans le chat, une marque
+  rouge à mi-PV, un critique annoncé.
+
 ## Ce que fait Saga 1.46 : la musique chez les amis, et un mode table plus sobre (avec Tafl 1.40)
 
 - **La musique et les bruitages du MJ** s'entendent chez les amis, dans leur navigateur. Chacun a son bouton de son et

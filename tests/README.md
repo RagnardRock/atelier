@@ -73,6 +73,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/18-saga-musique-partagee.js` : Saga 1.46 : la musique et un bruitage du MJ demandés par le navigateur d'un ami,
   son bouton de son retenu, le MJ qui garde le son pour lui ; le menu du MJ sans bestiaire, sac, quêtes ni jets de dés.
 
+- `essais/19-saga-scripts-table.js` : Saga 1.47 : le modèle « Réactions à la table » de Tafl dans un jeu ; « !soin » dans le
+  chat du MJ rend des PV et le chat le dit ; à son tour, un héros à moins de la moitié de ses PV reçoit la marque rouge.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

@@ -127,6 +127,28 @@ quand('apres_combat', async (saga, infos) => {
   if (n % 10 === 0) await saga.annoncer('Bravo !', \`\${n} combats gagnés\`);
 });
 ` },
+      ...(pack === 'jdr' ? [{ id: 'table', nom: 'Réactions à la table', aide: 'Mode table : !soin dans le chat, une marque rouge à mi-PV, un critique annoncé.', nomFichier: 'table', code: `// Des réactions au mode table de Saga (chat, jets, tours), comme les scripts d'une table virtuelle.
+// Ce qu'un script fait ici, il le fait comme le MJ.
+
+// « !soin Thorgrim 5 » dans le chat (le MJ seulement) : rend 5 PV au pion nommé.
+quand('table_chat', async (saga, infos) => {
+  const m = infos.texte.match(/^!soin\\s+(.+?)\\s+(\\d+)$/);
+  if (!m || !infos.mj) return;
+  if (await saga.table.pv(m[1], Number(m[2]))) await saga.table.dire(\`\${m[1]} récupère \${m[2]} PV.\`);
+});
+
+// À chaque tour : celui qui joue, marqué en rouge s'il a perdu la moitié de ses PV.
+quand('table_tour', async (saga, infos) => {
+  const p = saga.table.pions.find((x) => x.id === infos.pion);
+  if (!p || !p.pvMax) return;
+  await saga.table.marque(p.id, 'c-rouge', p.pv <= p.pvMax / 2);
+});
+
+// Un 20 naturel ? (le total dit tout : ici, un jet de d20 seul.)
+quand('table_jet', async (saga, infos) => {
+  if (infos.formule === '1d20' && infos.total === 20 && !infos.cache) await saga.table.dire(\`Critique pour \${infos.qui} !\`);
+});
+` }] : []),
       { id: 'vide', nom: 'Script vide', aide: 'Juste un commentaire pour commencer.', nomFichier: 'script', code: `// Mon script. Trois choses possibles :
 //   commande('nom', async (saga, params) => { … })   une commande pour le bloc « Script JS »
 //   formule('degats', (valeurs, des) => …)            une règle maison du pack de règles
@@ -196,7 +218,7 @@ quand('apres_combat', async (saga, infos) => {
       '}',
       '/** Les moments du jeu qu\'on peut écouter avec quand(), et ce que chacun reçoit. */',
       'interface Moments {',
-      ...Object.entries(BacASable.MOMENTS).map(([nom, m]) => `  ${doc1(m.nom)}\n  ${nom}: { ${Object.entries(m.infos).map(([k, aide]) => `${doc1(aide)} readonly ${k}: ${k === 'x' || k === 'y' ? 'number' : 'string'};`).join(' ')} };`),
+      ...Object.entries(BacASable.MOMENTS).map(([nom, m]) => `  ${doc1(m.nom)}\n  ${nom}: { ${Object.entries(m.infos).map(([k, aide]) => `${doc1(aide)} readonly ${k}: ${['x', 'y', 'total', 'tour'].includes(k) ? 'number' : ['mj', 'cache'].includes(k) ? 'boolean' : 'string'};`).join(' ')} };`),
       '}',
       `interface Jet { readonly formule: string; readonly des: ReadonlyArray<{ readonly faces: number; readonly valeur: number; readonly signe: 1 | -1 }>; readonly bonus: number; readonly total: number; }`,
       '/** Les dés et le hasard. Toujours eux, jamais Math.random (qui utilise d\'ailleurs la même graine) : mêmes jets, même résultat. */',
@@ -245,7 +267,8 @@ quand('apres_combat', async (saga, infos) => {
           `  ${doc1('Met ou enlève un état (empoisonne, a_terre…) au groupe (pack JDR).')}\n  etat(etat: string, action?: 'ajouter' | 'retirer', qui?: 'tous' | 'premier' | 'choix'): Promise<void>;`,
           `  ${doc1('La fiche du membre i du groupe (0 = le premier), ou null (pack JDR) : nom, classe, niveau, pv, pvMax, ca, caracteristiques, modificateurs, sauvegardes, competences (les bonus), etats, sorts…')}\n  fiche(i?: number): Fiche | null;`,
           `  ${doc1('Toutes les fiches du groupe (pack JDR).')}\n  readonly fiches: Fiche[];`,
-          `  ${doc1('Un combat contre une rencontre (un groupe de monstres). Rend l\'issue ; perdu, le script de l\'événement s\'arrête.')}\n  combattre(o: { groupe: IdGroupe }): Promise<Issue>;`]
+          `  ${doc1('Un combat contre une rencontre (un groupe de monstres). Rend l\'issue ; perdu, le script de l\'événement s\'arrête.')}\n  combattre(o: { groupe: IdGroupe }): Promise<Issue>;`,
+          `  ${doc1('Le mode table (Saga 1.47) : les pions de la carte, qui joue, et ce qu\'un script fait comme le MJ. pion : son id ou son nom.')}\n  readonly table: { readonly pions: { id: string; nom: string; sorte: 'heros' | 'monstre' | 'pnj'; x: number; y: number; pv: number; pvMax: number; marques: string[]; vaincu: boolean }[]; readonly actif: { pion: string; nom: string } | null; dire(texte: string, pour?: 'tous' | 'mj'): Promise<boolean>; pv(pion: string, n: number, regler?: boolean): Promise<boolean>; marque(pion: string, marque: string, mettre?: boolean): Promise<boolean> };`]
         : packDe(doc) === 'jrpg'
         ? [`  ${doc1('Un personnage rejoint ou quitte le groupe (pack JRPG).')}\n  groupe(personnage: IdPersonnage, action?: 'rejoindre' | 'quitter', niveau?: number): Promise<void>;`,
           `  ${doc1('Un combat contre un groupe de monstres. Rend l\'issue ; perdu, le script de l\'événement s\'arrête.')}\n  combattre(o: { groupe: IdGroupe }): Promise<Issue>;`]

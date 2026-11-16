@@ -313,6 +313,7 @@ const TableMode = (() => {
       const qui = c ? JdrPerso.nom(jeu(), c) : r.mj ? 'MJ' : nom;
       const l = JdrDes.noter(partie(), { qui, quoi: quoi || 'Jet', formule: res.formule, des: res.des, bonus: res.bonus, total: res.total, cache: Boolean(cache), voit: cache && !r.mj ? r.heros || '' : '' });
       h.des({ titre: `${qui} · ${quoi || 'Jet'}${cache ? ' (secret)' : ''}`, lignes: [l] });
+      h.reagir?.('table_jet', { qui, quoi: quoi || 'Jet', formule: res.formule, total: res.total, cache: Boolean(cache) });
       // Le chat aussi le dit (un jet secret : au MJ, et à celui qui l'a lancé).
       const m = h.multi?.();
       if (m?.actif) window.saga.reseauDire?.(`🎲 ${quoi || 'Jet'} : ${JdrDes.detail(l)}`, cache ? (client && client !== 'hote' ? client : 'hote') : 'tous', { nom: qui });
@@ -561,7 +562,10 @@ const TableMode = (() => {
         panneau?.rafraichir();
       },
       ordre(liste) { combat.ordre = liste.map(({ u, nom, init }) => ({ id: pionDe(u)?.id || '', nom, init })); },
-      actif(u, tour, reste) { combat.tour = tour; combat.actif = pionDe(u)?.id || ''; combat.reste = u.camp === 'heros' ? reste : null; panneau?.rafraichir(); },
+      actif(u, tour, reste) {
+        combat.tour = tour; combat.actif = pionDe(u)?.id || ''; combat.reste = u.camp === 'heros' ? reste : null; panneau?.rafraichir();
+        h.reagir?.('table_tour', { nom: u.nom || nomPion(pionDe(u)), pion: combat.actif, tour: Number(tour) || 1 });
+      },
       vaincu(u) { const p = pionDe(u); if (p) p.vaincu = true; },
       // Saga 1.44 : qui agit maintenant, parmi ceux qui n'ont pas joué ce tour : le premier dans l'ordre que le MJ
       // a réglé (glissé, « agir maintenant ») ; en ordre libre, le MJ le choisit dans la boîte du combat.
@@ -1143,6 +1147,49 @@ const TableMode = (() => {
       }
     }
     let ecouteMulti = false;
+    // --- Saga 1.47 : les scripts JS du jeu à la table (BacASable.MOMENTS › table_*, saga.table) ---
+    // Les jets et ce que dit un script arrivent marqués « jet » : un script ne se répond pas à lui-même.
+    function chatPourScripts(l) {
+      if (!l || l.jet || !l.de) return;
+      h.reagir?.('table_chat', { nom: String(l.nom || ''), texte: String(l.texte || ''), mj: l.de === 'hote' });
+    }
+    const pionPour = (cle) => {
+      const k = String(cle || '').trim().toLowerCase();
+      const l = table().pions.filter((p) => p.carte === carte()?.id);
+      return l.find((p) => p.id.toLowerCase() === k) || l.find((p) => nomPion(p).toLowerCase() === k) || null;
+    };
+    function pourScript() {
+      const l = table().pions.filter((p) => p.carte === carte()?.id);
+      const pv = (p) => {
+        const c = p.sorte === 'heros' ? E.membreDe(partie(), p) : null;
+        return c ? [Math.max(0, c.pv), JdrPerso.pvMax(jeu(), c)] : [Number(p.pv) || 0, Number(p.pvMax) || 0];
+      };
+      const actifId = combat ? combat.actif : table().initiative?.liste?.find((x) => x.id === table().initiative.actif)?.pion || '';
+      return {
+        pions: l.map((p) => { const [v, max] = pv(p); return { id: p.id, nom: nomPion(p), sorte: p.sorte, x: p.x, y: p.y, pv: v, pvMax: max, marques: [...(p.marques || [])], vaincu: Boolean(p.vaincu) }; }),
+        actif: actifId ? { pion: actifId, nom: nomPion(pion(actifId)) } : null,
+      };
+    }
+    // Les commandes des scripts : elles agissent comme le MJ. Rend { ok } (un objet : le script le reçoit).
+    function commandeScript(c) {
+      if (!actif) return { ok: false };
+      if (c.type === 'table_dire') {
+        const t = String(c.texte || '').trim().slice(0, 400);
+        if (!t) return { ok: false };
+        const m = h.multi?.();
+        if (m?.actif && window.saga.reseauDire) {
+          window.saga.reseauDire(t, c.pour === 'mj' ? 'hote' : 'tous', { nom: 'Script' });
+        } else if (c.pour === 'mj') h.message(t);
+        else noterRecit({ texte: t });
+        return { ok: true };
+      }
+      const p = pionPour(c.pion);
+      if (!p) { h.message(`Script : pas de pion « ${c.pion} » sur cette carte.`); return { ok: false }; }
+      if (c.type === 'table_pv') return { ok: changerPv(p.id, { delta: c.delta, valeur: c.valeur }) };
+      if (c.type === 'table_marque') return { ok: agir({ type: 'marque', pion: p.id, id: String(c.marque || ''), valeur: c.mettre !== false }).ok };
+      return { ok: false };
+    }
+
     function brancherMulti() {
       const m = h.multi?.();
       if (!m) return;
@@ -1151,6 +1198,8 @@ const TableMode = (() => {
         // Les demandes des amis (déplacer, parler, lancer un jet, répondre en combat) arrivent par le réseau.
         m.sur((sorte, d) => {
           if (sorte === 'demande') recevoir(d);
+          // Saga 1.47 : un message du chat, pour les scripts (pas les jets, ni ce qu'un script vient de dire).
+          else if (sorte === 'chat') chatPourScripts(d);
           // Quelqu'un arrive (un ami, un téléphone) : chacun reçoit sa vue à nouveau.
           else if (sorte === 'joueurs') { envoyes.clear(); arrivees(d); }
         });
@@ -1326,7 +1375,10 @@ const TableMode = (() => {
       // Passer au suivant (ou revenir) : le récit dit à qui c'est.
       passerInitiative(sens = 1) {
         const res = agir({ type: sens < 0 ? 'init_precedent' : 'init_suivant' });
-        if (res.ok && res.tourDe) noterRecit({ texte: `Au tour de ${res.tourDe.nom} (tour ${table().initiative.tour}).` });
+        if (res.ok && res.tourDe) {
+          noterRecit({ texte: `Au tour de ${res.tourDe.nom} (tour ${table().initiative.tour}).` });
+          h.reagir?.('table_tour', { nom: res.tourDe.nom, pion: res.tourDe.pion || '', tour: Number(table().initiative.tour) || 1 });
+        }
         return res;
       },
       // Saga 1.42 : le MJ emmène le groupe sur une autre carte ou une scène image (onglet Scène › Cartes).
@@ -1364,6 +1416,8 @@ const TableMode = (() => {
       // Saga 1.32 : une formule ou une commande du MJ (le panneau, ses macros).
       commande: (texte) => commande(texte, { mj: true }, 'MJ', 'hote'),
       changerPv,
+      // Saga 1.47 : les scripts JS du jeu (saga.table).
+      pourScript, commandeScript,
       outils,
       occupe: () => h.occupe(),
       // Saga 1.37 : les documents (le volet Documents du MJ, son téléphone).
