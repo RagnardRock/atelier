@@ -156,6 +156,10 @@ const BacASable = (() => {
     ennemi_vaincu: { nom: 'Un ennemi est vaincu (temps réel)', infos: { ennemi: 'L\'id de l\'ennemi', x: 'Sa case', y: 'Sa case' } },
     heros_touche: { nom: 'Le héros est touché (temps réel)', infos: { degats: 'Les PV perdus', pv: 'Les PV qui lui restent' } },
     defaite: { nom: 'Le héros n\'a plus de vie (temps réel), avant son réveil', infos: {} },
+    // Saga 1.47 : le mode table (pack JDR), pour réagir comme une API de table virtuelle.
+    table_chat: { nom: 'Un message dans le chat de la table', infos: { nom: 'Qui l\'a écrit', texte: 'Le message', mj: 'true si c\'est le MJ' } },
+    table_jet: { nom: 'Un jet de dés à la table (chat, macro, tapis)', infos: { qui: 'Qui a lancé', quoi: 'Le nom du jet', formule: 'La formule', total: 'Le total', cache: 'true si secret' } },
+    table_tour: { nom: 'C\'est au tour de quelqu\'un (initiative ou combat)', infos: { nom: 'Son nom', pion: 'L\'id de son pion (\'\' sans pion)', tour: 'Le numéro du tour' } },
   };
 
   // Les réglages qu'une commande de script peut demander dans Tafl (bloc Script).
@@ -358,6 +362,14 @@ const BacASable = (() => {
         musique: (fichier) => cmd({ type: 'musique', fichier: String(fichier ?? '') }),
         son: (fichier) => cmd({ type: 'son', fichier: String(fichier ?? '') }),
         heure: (heures, action = 'regler') => cmd({ type: 'heure', action, heures: Number(heures) || 0 }),
+        // Saga 1.47 : le mode table. pion : son id ou son nom.
+        table: Object.freeze({
+          get pions() { return courant.table?.pions || []; },
+          get actif() { return courant.table?.actif || null; },
+          dire: (texte, pour = 'tous') => cmd({ type: 'table_dire', texte: String(texte ?? ''), pour: pour === 'mj' ? 'mj' : 'tous' }).then((r) => Boolean(r && r.ok)),
+          pv: (pion, n, regler = false) => cmd({ type: 'table_pv', pion: String(pion ?? ''), [regler ? 'valeur' : 'delta']: Number(n) || 0 }).then((r) => Boolean(r && r.ok)),
+          marque: (pion, marque, mettre = true) => cmd({ type: 'table_marque', pion: String(pion ?? ''), marque: String(marque ?? ''), mettre: Boolean(mettre) }).then((r) => Boolean(r && r.ok)),
+        }),
         // N'importe quelle commande des scripts en blocs (FORMAT.md › Commandes).
         commande: (c) => cmd(c && typeof c === 'object' ? { ...c } : {}),
         // Arrêter le script de l'événement ici (comme le bloc « Arrêter le script ici »).

@@ -339,6 +339,8 @@ const Moteur = (() => {
         son: (chemin) => audio.fichier(chemin),
         // Saga 1.46 : le morceau qui joue (les amis l'entendent aussi).
         morceau: () => audio.morceau,
+        // Saga 1.47 : les moments de la table pour les scripts JS (tout de suite, même en combat).
+        reagir: (moment, infos) => { if (scriptsJs.ecoute(moment)) scriptsJs.quand(moment, infos); },
         message: (t) => rappels.message?.(t),
         bruit,
       },
@@ -584,6 +586,8 @@ const Moteur = (() => {
         },
         // Saga 0.12 : le bloc Script (une commande écrite en JavaScript par le jeu).
         scriptsJs: () => scriptsJs,
+        // Saga 1.47 : les commandes de la table pour les scripts (table_dire, table_pv, table_marque).
+        table: () => table,
         // Saga 0.13 : le plateau de dés (pack JDR).
         des: (o) => ecranDes.montrer(o),
         signaler,
@@ -604,6 +608,7 @@ const Moteur = (() => {
         choisir: (options) => dialogue.choisir(options),
         annoncer: (titre, texte) => dialogue.annoncer(titre, texte),
         signaler,
+        table: () => (table.actif ? table.pourScript() : null),
       });
       if (!partieGardee) reagir('nouvelle_partie');
       // Le mode table : seulement pour un jeu du pack JDR.

@@ -52,7 +52,8 @@ const ScriptsJs = (() => {
   //                  BacASable.FIN si le script doit s'arrêter (combat perdu, commande « fin »)
   //   choisir(options) → n° de la réponse ; annoncer(titre, texte)
   //   signaler(texte) : une erreur à montrer (en test) ou à noter (jeu exporté)
-  function creer({ jeu, partie, lieu, jouer, choisir, annoncer, signaler }) {
+  // table() : Saga 1.47, ce que le mode table donne à lire (null hors du mode table).
+  function creer({ jeu, partie, lieu, jouer, choisir, annoncer, signaler, table = () => null }) {
     Maison.utiliser(null);
     if (!jeu.scripts?.length) return AUCUN;
     const reglages = jeu.donnees.reglages?.reglages?.scripts || {};
@@ -72,7 +73,7 @@ const ScriptsJs = (() => {
           const ev = a.contexte?.ev || null;
           // Saga 0.13 : les fiches des membres, déjà calculées par le pack (saga.fiche).
           // Saga 1.4 : ce que les modules du jeu donnent à lire (saga.modules).
-          return { partie: copie(), fiches: Regles.pourScript(jeu, partie()), modules: typeof Modules !== 'undefined' ? Modules.pourScript(jeu, partie()) : {}, ...lieu(ev), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
+          return { partie: copie(), fiches: Regles.pourScript(jeu, partie()), modules: typeof Modules !== 'undefined' ? Modules.pourScript(jeu, partie()) : {}, ...lieu(ev), table: table(), evenement: ev ? { id: ev.id, nom: ev.nom || ev.id, x: ev.x, y: ev.y } : null };
         },
         graine: (n) => { if (partie()) partie().graine = n; },
         console: (c) => {

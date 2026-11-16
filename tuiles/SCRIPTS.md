@@ -160,9 +160,34 @@ quand('apres_combat', async (saga, infos) => {
 | `ennemi_vaincu` | (Saga 1.12, temps réel) un ennemi est vaincu | `ennemi` (son id), `x`, `y` |
 | `heros_touche` | (Saga 1.12, temps réel) le héros perd des PV | `degats`, `pv` (ce qui reste) |
 | `defaite` | (Saga 1.12, temps réel) le héros n'a plus de vie, avant son réveil | |
+| `table_chat` | (Saga 1.47, mode table) un message dans le chat de la table (pas les jets) | `nom`, `texte`, `mj` (`true` : le MJ) |
+| `table_jet` | (Saga 1.47, mode table) un jet de dés du chat, d'une macro ou du tapis | `qui`, `quoi`, `formule`, `total`, `cache` |
+| `table_tour` | (Saga 1.47, mode table) c'est au tour de quelqu'un (initiative à la main ou combat) | `nom`, `pion` (son id, `''` sans pion), `tour` |
 
 Les réactions se jouent quand le joueur est libre (pas pendant un dialogue), dans l'ordre des
 fichiers. Plusieurs scripts peuvent écouter le même moment.
+
+Les moments `table_*` se jouent tout de suite, même en combat. Le script agit alors comme le MJ, avec
+`saga.table` (pack JDR, mode table de Saga 1.47) :
+
+```js
+// « !soin Thorgrim 5 » dans le chat du MJ : 5 PV pour ce pion, et le chat le dit.
+quand('table_chat', async (saga, infos) => {
+  const m = infos.texte.match(/^!soin\s+(.+?)\s+(\d+)$/);
+  if (m && infos.mj && await saga.table.pv(m[1], Number(m[2]))) await saga.table.dire(`${m[1]} récupère ${m[2]} PV.`);
+});
+```
+
+| | |
+|---|---|
+| `saga.table.pions` | les pions de la carte : `id`, `nom`, `sorte`, `x`, `y`, `pv`, `pvMax`, `marques`, `vaincu` |
+| `saga.table.actif` | celui qui joue (`{ pion, nom }`), ou `null` |
+| `await saga.table.dire(texte, 'tous'/'mj')` | écrire dans le chat (signé « Script ») |
+| `await saga.table.pv(pion, n, regler)` | ajouter `n` PV (négatif : en retirer) ; avec `regler` : les mettre à `n` |
+| `await saga.table.marque(pion, marque, mettre)` | poser ou enlever une marque : un état du jeu (`empoisonne`…) ou une couleur (`c-rouge`, `c-bleu`…) |
+
+`pion` : son id ou son nom. Chacune rend `true` si c'est fait. Dans Tafl, le modèle de script « Réactions à la
+table » en donne un exemple.
 
 Les **modules** du jeu (Réglages › Règles du jeu › Modules, Saga 1.4) peuvent annoncer leurs propres
 moments : ils sont listés dans la documentation de chaque module, et le vérificateur de Tafl les

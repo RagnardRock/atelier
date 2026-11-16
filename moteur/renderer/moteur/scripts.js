@@ -416,6 +416,8 @@ const Scripts = (() => {
           break;
         }
         default: {
+          // Saga 1.47 : une commande du mode table (table_dire, table_pv, table_marque), pour les scripts JS.
+          if (String(c.type || '').startsWith('table_')) return moteur.table?.()?.commandeScript?.(c) ?? { ok: false };
           // Saga 0.13 : une commande du pack de règles du jeu (test, sauvegarde, repos… pour le pack JDR).
           // Elle rend un résultat simple, que reçoit un script JS (saga.test…).
           const f = Regles.commande(jeu, c.type);
