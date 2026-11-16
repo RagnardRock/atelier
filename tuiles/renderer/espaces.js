@@ -457,6 +457,7 @@ const Espaces = (() => {
       carte('export', 'Exporter le jeu', 'Une version web (index.html) et une version Windows (.exe) dans un zip, prêtes à partager.', bouton('Exporter…', 'export', () => App.exporterJeu()));
       carte('law', `Pack de règles : ${nomPack(doc)}`, 'Il décide des combats, des statistiques et des données du jeu. Il se change dans Données › Réglages, avec l\'interface de Saga, le jour et la nuit, les sons…', bouton('Réglages du jeu…', 'settings-gear', () => aller('donnees', { tab: 'reglages' })));
       carte('globe', 'Carte monde', 'Les villes et les routes ensemble, placées selon leurs téléporteurs.', bouton('Ouvrir la carte monde…', 'globe', () => App.openWorld(), false, 'Ctrl+Maj+M'));
+      carte('book', 'Mode d\'emploi', 'Le guide de Tafl et Saga, avec captures : créer un jeu, le jouer, le mode table, le compagnon.', bouton('Ouvrir le mode d\'emploi', 'book', () => window.tafl.ouvrirManuel()));
       carte('edit', 'Titre et dossier', `« ${doc.name} »${doc.game.folder ? ` · ${doc.game.folder}` : ' · pas encore enregistré'}`, bouton('Renommer…', 'edit', () => App.renameGame()), doc.game.folder ? bouton('Afficher le dossier', 'folder-opened', () => window.tafl.revealFile(doc.path)) : null);
     }
     const colonnes = [panneau('Tester et publier', null, cartes, 'jeu-gauche')];

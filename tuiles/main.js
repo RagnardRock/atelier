@@ -379,6 +379,32 @@ handle('scripts:aide', async () => {
   if (err) throw new Error(err);
 });
 
+// --- Tafl 1.37.1 : le mode d'emploi de Tafl et Saga (docs/manuel du dépôt), ouvert avec le lecteur de PDF ---
+// Depuis le clone : le PDF du dépôt. Installé : la dernière version sur GitHub, gardée dans userData (et
+// retéléchargée seulement si elle a changé) ; sans Internet, la copie gardée.
+const MANUEL_URL = 'https://raw.githubusercontent.com/RagnardRock/atelier/main/docs/manuel/mode-emploi-tafl-saga.pdf';
+handle('aide:manuel', async () => {
+  const duClone = path.join(__dirname, '..', 'docs', 'manuel', 'mode-emploi-tafl-saga.pdf');
+  let fichier = !app.isPackaged && fsSync.existsSync(duClone) ? duClone : null;
+  if (!fichier) {
+    fichier = path.join(app.getPath('userData'), 'mode-emploi-tafl-saga.pdf');
+    const etiquette = path.join(app.getPath('userData'), 'mode-emploi.etag');
+    const etag = await fs.readFile(etiquette, 'utf8').catch(() => '');
+    try {
+      const r = await net.fetch(MANUEL_URL, { headers: etag && fsSync.existsSync(fichier) ? { 'If-None-Match': etag } : {} });
+      if (r.ok) {
+        await fs.writeFile(fichier, Buffer.from(await r.arrayBuffer()));
+        await fs.writeFile(etiquette, r.headers.get('etag') || '');
+      } else if (r.status !== 304) throw new Error(`GitHub répond ${r.status}`);
+    } catch (err) {
+      log('ERREUR', `mode d'emploi : ${err.message}`);
+      if (!fsSync.existsSync(fichier)) throw new Error('Impossible de télécharger le mode d\'emploi (pas de connexion ?).');
+    }
+  }
+  const err = await shell.openPath(fichier);
+  if (err) throw new Error(err);
+});
+
 // --- Tafl 0.22 : générer des tuiles avec ComfyUI, caché (voir comfy.js) ---
 const comfy = require('./comfy').creer({ log, dossierTafl: app.getPath('userData') });
 const comfyConfig = async () => ({ ...DEFAULT_CONFIG.comfy, ...((await readConfig()).comfy || {}) });
