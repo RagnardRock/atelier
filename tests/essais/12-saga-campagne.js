@@ -305,6 +305,13 @@ module.exports = [
         await mia.locator('.libres .libre', { hasText: 'Elaria' }).click();
         await mia.waitForFunction(() => window.Compagnon.vue?.fiche, null, { timeout: 8000 });
         egal(await page.evaluate(() => { const T = App.moteur.table; const c = T.partie().equipe.find((x) => /Elaria/.test(x.nom || x.creature)); return T.cleRole('Mia') === T.cleDe(c); }), true, 'Mia joue Elaria, choisie sur son téléphone');
+        // Saga 1.40 : le navigateur propose d'installer l'appli : un bandeau « Installer l'appli », qui lance son invite.
+        await mia.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => { window.invite = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); window.dispatchEvent(e); });
+        await mia.waitForSelector('.bandeau-rejoindre button.btn:has-text("Installer")');
+        await capture(mia, '9-tel-installer');
+        await mia.locator('.bandeau-rejoindre button.btn:has-text("Installer")').click();
+        vrai(await mia.evaluate(() => window.invite === true), 'le bouton lance l\'installation du navigateur');
+        await mia.waitForFunction(() => !document.querySelector('.bandeau-rejoindre'));
         sansErreur(erreursMia, 'compagnon de Mia');
 
         // Couper le téléphone (onglet Joueurs) : il est délié, sa boîte est vidée sur le relais.

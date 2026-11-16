@@ -390,6 +390,10 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Saga 1.40 : installer le compagnon
+
+- Le compagnon propose de s'installer comme une appli : un bandeau « Installer l'appli » (un toucher sur Android et sur PC ; sur iPhone, le pas-à-pas Partager › Sur l'écran d'accueil), aussi sur l'accueil. La croix le range pour de bon. Le navigateur exige ce geste : un QR code ne peut pas installer l'appli tout seul.
+
 ## Saga 1.39.1
 
 - Compagnon : un téléphone de la campagne rejoint la séance lui-même (« Rejoindre la séance », le MJ accepte), sans passer par le PC.
