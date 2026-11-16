@@ -178,3 +178,5 @@ h3 { margin: 4px 4px 0; font-size: 11.5px; text-transform: uppercase; letter-spa
 .libre { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--bord); background: rgba(255, 255, 255, .07); text-align: left; }
 .libre small { color: var(--doux); }
 .libre:disabled { opacity: .5; }
+.bandeau-rejoindre { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
+.bandeau-rejoindre span { font-size: 13px; color: var(--doux); }

@@ -340,7 +340,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
       if (!r) { l.push(Date.now()); essais.set(ip, l); return fin(res, 403, { erreur: 'Ce QR code a déjà servi ou a expiré : demandes-en un nouveau.' }); }
       return fin(res, 200, r);
     }
-    if (p === '/compagnon/flux' || p === '/compagnon/action' || p === '/compagnon/quitter' || p === '/compagnon/fond' || p === '/compagnon/document') {
+    if (p === '/compagnon/flux' || p === '/compagnon/action' || p === '/compagnon/quitter' || p === '/compagnon/fond' || p === '/compagnon/document' || p === '/compagnon/rejoindre') {
       const j = req.headers['x-compagnon'] || url.searchParams.get('jeton') || '';
       const k = j ? [...compagnons.values()].find((x) => x.jeton === j) : null;
       if (!k) return fin(res, 401, { erreur: 'Ce téléphone n\'est plus relié : scanne un nouveau QR code.', delie: true });
@@ -359,6 +359,27 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
         return;
       }
       if (req.method === 'POST' && p === '/compagnon/quitter') { couperCompagnon(k.id); return fin(res, 200); }
+      // Saga 1.39.1 : un téléphone de la campagne rejoint la séance lui-même (sans PC) : sous le prénom de son
+      // joueur ; sur Internet, l'hôte accepte (le téléphone redemande toutes les deux secondes).
+      if (req.method === 'POST' && p === '/compagnon/rejoindre') {
+        if (k.mj || k.de) return fin(res, 200, { ok: true });
+        if (k.refuse && Date.now() - k.refuse < 10 * 60e3) return fin(res, 403, { erreur: 'Le MJ n\'a pas accepté ta demande.' });
+        if (clients.size >= MAX_CLIENTS) return fin(res, 403, { erreur: 'La partie est pleine.' });
+        if (dehors) {
+          let a = [...attente.values()].find((x) => x.compagnon === k.id);
+          if (!a) {
+            if (attente.size >= MAX_ATTENTE) return fin(res, 429, { erreur: 'Le MJ a déjà plusieurs demandes à voir : réessaie dans un moment.' });
+            a = { id: `a-${crypto.randomBytes(4).toString('hex')}`, nom: k.nom, ip, depuis: Date.now(), vu: Date.now(), jeton: crypto.randomBytes(18).toString('base64url'), compagnon: k.id };
+            attente.set(a.jeton, a);
+            log('INFO', `Multijoueur : ${k.nom} demande à rejoindre depuis son téléphone (${ip})`);
+            prevenir();
+          }
+          a.vu = Date.now();
+          return fin(res, 202, { ok: true, attente: true });
+        }
+        admettre(k.nom, ip);
+        return fin(res, 200, { ok: true });
+      }
       if (req.method === 'GET' && p === '/compagnon/fond') {
         if (!fond) return fin(res, 404);
         res.writeHead(200, { 'Content-Type': fond.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
@@ -369,7 +390,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
         const a = await lireCorps(req);
         if (!a || typeof a !== 'object' || Array.isArray(a)) return fin(res, 400);
         // Saga 1.38 : un téléphone de la campagne dont le joueur n'est pas (encore) venu à la séance.
-        if (!k.de) return fin(res, 409, { erreur: 'La séance est ouverte : rejoins-la d\'abord sur ton PC (ou ton navigateur).' });
+        if (!k.de) return fin(res, 409, { erreur: 'La séance est ouverte : touche « Rejoindre la séance » d\'abord.' });
         if (a.type === 'chat') dire(k.de, a.texte, String(a.pour || 'tous'));
         else if (!['position', 'pair'].includes(a.type)) versHote({ ...a, client: k.de, compagnon: true });
         return fin(res, 200);
@@ -544,7 +565,11 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
     if (!a) return false;
     attente.delete(a.jeton);
     if (oui && clients.size < MAX_CLIENTS) admettre(a.nom, a.ip, a.jeton);
-    else { refuses.set(a.jeton, Date.now()); log('INFO', `Multijoueur : demande de ${a.nom} refusée`); prevenir(); }
+    else {
+      refuses.set(a.jeton, Date.now());
+      if (a.compagnon && compagnons.has(a.compagnon)) compagnons.get(a.compagnon).refuse = Date.now();
+      log('INFO', `Multijoueur : demande de ${a.nom} refusée`); prevenir();
+    }
     return true;
   }
   // Les demandes abandonnées (la page fermée) et les vieux refus s'effacent.
