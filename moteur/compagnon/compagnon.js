@@ -54,7 +54,7 @@
   const vibrer = (ms = 20) => { try { navigator.vibrate?.(ms); } catch { /* rien */ } };
 
   // --- Le réseau ---
-  let jeton = '', moi = null, vue = null, flux = null, connecte = false;
+  let jeton = '', moi = null, vue = null, flux = null, connecte = false, ailleurs = false;
   async function envoyer(chemin, corps) {
     // Le jeton va aussi dans l'adresse : un relais d'avant Saga 1.35.1 ne transmet pas l'en-tête X-Compagnon
     // (le téléphone se croyait alors délié au premier lancer).
@@ -76,12 +76,14 @@
   }
   function ecouter() {
     flux?.close();
+    ailleurs = false;
     flux = new EventSource(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}`);
     flux.onopen = () => { connecte = true; dessinerTete(); };
     flux.onerror = () => {
       connecte = false; dessinerTete();
       // Le serveur ne connaît plus ce jeton (la partie a été refermée) : on le saura en redemandant.
-      fetch(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}`, { method: 'GET' }).then((r) => { if (r.status === 401) delie(); else r.body?.cancel?.(); }).catch(() => {});
+      // (Saga 1.37.1 : avec ?verifier, sans ouvrir un deuxième flux qui chassait le premier.)
+      fetch(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}&verifier=1`, { method: 'GET' }).then((r) => { if (r.status === 401) delie(); else r.body?.cancel?.(); }).catch(() => {});
     };
     flux.addEventListener('bienvenue', (e) => { try { moi = JSON.parse(e.data); } catch { return; } dessiner(); });
     flux.addEventListener('vue', (e) => { try { recevoirVue(JSON.parse(e.data)); } catch { /* abîmé */ } });
@@ -91,6 +93,8 @@
       flux.close();
       connecte = false;
       if (d.raison === 'delie' || d.raison === 'expulse') { delie(d.raison === 'expulse' ? 'Le MJ t\'a retiré de la partie.' : 'Ce téléphone a été délié.'); return; }
+      // Saga 1.37.1 : le compagnon s'est ouvert ailleurs (l'appli installée, un autre onglet) : on lui laisse la place.
+      if (d.raison === 'ailleurs') { ailleurs = true; dessinerTete(); toast('Le compagnon est ouvert ailleurs (l\'appli ou un autre onglet). Touche « Reprendre ici » pour revenir.'); return; }
       toast('Le MJ a fermé la partie.');
       dessinerTete();
     });
@@ -154,7 +158,8 @@
     menu.onclick = () => accueil('', true);
     teteEl.replaceChildren(el('img', { src: 'icone.svg', alt: '' }),
       el('div', { className: 'qui' }, el('b', { textContent: titre }), el('small', { textContent: [qui, vue?.nom].filter(Boolean).join(' · ') })),
-      el('span', { className: `etat-co ${connecte ? 'oui' : 'non'}`, textContent: connecte ? '● en direct' : '○ hors ligne' }), menu);
+      ailleurs ? Object.assign(el('button', { className: 'etat-co non', type: 'button', textContent: '↻ Reprendre ici' }), { onclick: () => ecouter() })
+        : el('span', { className: `etat-co ${connecte ? 'oui' : 'non'}`, textContent: connecte ? '● en direct' : '○ hors ligne' }), menu);
   }
   function dessinerPage() {
     if (!pageEl) return;
@@ -268,7 +273,8 @@
   }
   // Un jet est arrivé dans le journal : si on l'attendait, les dés s'arrêtent sur ses valeurs.
   function nouveauJet(x) {
-    vibrer(15);
+    // Saga 1.37.1 : vibrer pour MES jets seulement (pas ceux des autres joueurs).
+    if (attenteJet || x.qui === monNom()) vibrer(15);
     if (attenteJet && onglet === 'des' && plateau && (x.qui === monNom() || moi?.mj || Date.now() - attenteJet.depuis < 2500)) {
       attenteJet = null;
       clearTimeout(lancer.minuterie);

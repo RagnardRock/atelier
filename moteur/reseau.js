@@ -268,8 +268,12 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       const j = req.headers['x-compagnon'] || url.searchParams.get('jeton') || '';
       const k = j ? [...compagnons.values()].find((x) => x.jeton === j) : null;
       if (!k) return fin(res, 401, { erreur: 'Ce téléphone n\'est plus relié : scanne un nouveau QR code.', delie: true });
+      // Saga 1.37.1 : « ce jeton est-il encore bon ? » sans prendre la place du flux ouvert.
+      if (req.method === 'GET' && p === '/compagnon/flux' && url.searchParams.has('verifier')) return fin(res, 200, { ok: true });
       if (req.method === 'GET' && p === '/compagnon/flux') {
-        k.flux?.end();
+        // Saga 1.37.1 : la même liaison ouverte deux fois (l'appli installée et l'onglet du navigateur) : l'ancienne
+        // page le sait et cesse de se reconnecter (sinon les deux se chassaient : « hors ligne », « en direct »…).
+        if (k.flux) { k.flux.write('event: fin\ndata: {"raison":"ailleurs"}\n\n'); k.flux.end(); }
         res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
         res.write('retry: 2000\n\n');
         k.flux = res;
