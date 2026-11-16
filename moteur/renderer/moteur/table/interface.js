@@ -85,10 +85,12 @@ const TableInterface = (() => {
     // --- L'ordre d'initiative ---
     let signatureOrdre = '';
     function dessinerOrdre() {
-      const c = T.combat;
+      // Saga 1.43 : hors combat, l'initiative tenue à la main (avec un bouton pour passer au suivant).
+      const manuel = !T.combat && T.vue()?.initiative;
+      const c = T.combat || manuel;
       const pions = T.vue()?.pions || [];
-      const l = (c?.ordre || []).map((o) => { const p = pions.find((q) => q.id === o.id); return { ...o, sorte: p?.sorte || 'monstre', ko: Boolean(p?.ko), cache: Boolean(p?.cache) }; });
-      const sig = JSON.stringify([l, c?.actif]);
+      const l = (c?.ordre || []).map((o) => { const p = pions.find((q) => q.id === o.id); return { ...o, sorte: p?.sorte || (manuel ? 'libre' : 'monstre'), ko: Boolean(p?.ko), cache: Boolean(p?.cache) }; });
+      const sig = JSON.stringify([l, c?.actif, c?.tour]);
       if (sig === signatureOrdre) return;
       signatureOrdre = sig;
       ordre.hidden = !l.length;
@@ -97,7 +99,7 @@ const TableInterface = (() => {
           el('span', { className: 'ti-init-rond', textContent: initiale(o.nom) }), el('span', { className: 'ti-init-nom', textContent: o.nom }), el('small', { textContent: String(o.init ?? '') }));
         b.onclick = () => { T.selection = o.id; maj(); };
         return b;
-      }));
+      }), ...(manuel ? [bouton('debug-continue', 'Suivant', () => T.passerInitiative(1), { titre: `Tour ${c.tour} : passer au suivant` })] : []));
     }
 
     // --- Le zoom ---

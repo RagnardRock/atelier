@@ -335,6 +335,47 @@ const TablePanneau = (() => {
           btn('flame', 'Lancer sans poser', () => { if (T.combat || T.occupe()) return; T.lancerCombat(choisi); }, { titre: 'Le combat commence tout de suite : les pions de cette rencontre déjà posés combattent, ceux qui manquent arrivent près du groupe.' })),
       ];
     }
+    // Saga 1.43 : l'initiative tenue à la main, pour un combat mené sans le moteur (ou une scène tendue) :
+    // jeter pour tous, ajouter un pion ou une ligne libre, régler le chiffre, monter, descendre, passer le tour.
+    function initiativeManuelle(jeu, partie, carte) {
+      if (T.combat) return [el('p', { className: 'table-note', textContent: 'Pendant un combat de Saga, l\'ordre est celui du combat (en haut du plateau).' })];
+      const ini = partie.table.initiative || { liste: [], actif: '', tour: 1 };
+      const o = [];
+      o.push(el('div', { className: 'table-boutons' },
+        btn('debug-step-back', '', () => T.passerInitiative(-1), { titre: 'Revenir au précédent' }),
+        btn('debug-continue', `Suivant · tour ${ini.tour}`, () => T.passerInitiative(1), { classe: 'accent', titre: 'Passer au suivant (après le dernier : un nouveau tour)' }),
+        btn('symbol-event', 'Jeter pour tous', () => { if (!T.jeterInitiative()) T.message('Aucun pion sur cette carte.'); }, { titre: 'Chaque pion de la carte lance son initiative (les héros en public, les monstres en secret) ; ceux déjà là relancent.' }),
+        btn('list-ordered', 'Trier', () => T.agir({ type: 'init_trier' }), { titre: 'Du plus haut au plus bas' }),
+        btn('clear-all', 'Vider', () => T.agir({ type: 'init_vider' }), { titre: 'Effacer toute la liste' })));
+      ini.liste.forEach((x) => {
+        const chiffre = el('input', { className: 'table-init-chiffre', type: 'number', value: String(x.init), title: 'Son initiative (Entrée : la liste se retrie)' });
+        chiffre.onchange = () => T.agir({ type: 'init_valeur', id: x.id, init: Number(chiffre.value) || 0 });
+        const nom = el('span', { className: 'table-nom', textContent: x.nom, title: x.pion ? 'Un pion de la table (clic : le choisir)' : 'Une ligne libre' });
+        if (x.pion) nom.onclick = () => { T.selection = x.pion; dessiner(); };
+        o.push(el('div', { className: `table-ligne table-init${x.id === ini.actif ? ' actif' : ''}` },
+          el('i', { className: `codicon codicon-${x.id === ini.actif ? 'play' : x.pion ? 'person' : 'tag'}` }), nom, chiffre,
+          btn('arrow-up', '', () => T.agir({ type: 'init_monter', id: x.id, sens: -1 }), { titre: 'Monter' }),
+          btn('arrow-down', '', () => T.agir({ type: 'init_monter', id: x.id, sens: 1 }), { titre: 'Descendre' }),
+          btn('close', '', () => T.agir({ type: 'init_retirer', id: x.id }), { titre: 'Retirer de la liste' })));
+      });
+      if (!ini.liste.length) o.push(el('p', { className: 'table-note', textContent: 'Liste vide : « Jeter pour tous », ou ajoute un pion ou une ligne libre (un piège, un renfort, l\'action du repaire).' }));
+      // Ajouter : un pion de la carte qui n'y est pas, ou une ligne libre.
+      const dans = new Set(ini.liste.map((x) => x.pion).filter(Boolean));
+      const libres = TableEtat.pionsSur(partie.table, carte.id).filter((p) => !p.vaincu && !dans.has(p.id));
+      const nomL = el('input', { className: 'table-init-texte', type: 'text', maxLength: 40, placeholder: 'Pion ou ligne libre' });
+      let choixP = libres[0]?.id || '';
+      const sp = libres.length ? select(choixP, [...libres.map((p) => [p.id, T.nomPion(p)]), ['', 'Une ligne libre…']], (v) => { choixP = v; nomL.hidden = Boolean(v); }) : null;
+      nomL.hidden = Boolean(choixP);
+      const val = el('input', { className: 'table-init-chiffre', type: 'number', value: '10', title: 'Son initiative' });
+      o.push(el('div', { className: 'table-ligne table-init-ajout' }, ...(sp ? [sp] : []), nomL, val,
+        btn('add', 'Ajouter', () => {
+          const p = choixP ? libres.find((q) => q.id === choixP) : null;
+          const r = T.agir({ type: 'init_ajouter', ...(p ? { pion: p.id, nom: T.nomPion(p) } : { nom: nomL.value }), init: Number(val.value) || 0 });
+          if (r.ok) nomL.value = '';
+        }, { titre: 'Ajouter à sa place dans l\'ordre' })));
+      o.push(el('p', { className: 'table-note', textContent: 'Les joueurs voient cet ordre en haut de leur écran, sans les chiffres. Un pion caché n\'y paraît pas chez eux.' }));
+      return o;
+    }
     function voletScene(jeu, partie, carte) {
       const vis = T.VISIBILITES();
       const out = [];
@@ -372,6 +413,7 @@ const TablePanneau = (() => {
         ];
       }));
       out.push(section('rencontres', 'Rencontres', () => rencontres(jeu)));
+      out.push(section('initiative', `Initiative à la main${partie.table.initiative?.liste?.length ? ` (${partie.table.initiative.liste.length})` : ''}`, () => initiativeManuelle(jeu, partie, carte)));
       out.push(section('musique', 'Musique et sons', () => {
         const o = [el('div', { className: 'table-boutons' }, btn('mute', 'Silence', () => T.musique('aucune')), btn('home', 'Celle de la carte', () => T.musique('')))];
         if (!sons.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));

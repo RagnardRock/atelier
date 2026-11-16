@@ -142,6 +142,12 @@ const TableOutils = (() => {
     gab.dataset.touche = 'G';
     const pingB = boutonOutil('ping', 'location', 'Ping (P) : montrer une case à tous. Alt + clic marche aussi sans l\'outil.');
     pingB.dataset.touche = 'P';
+    // Saga 1.43 : le feutre (F) et les notes (T) ; le MJ choisit son calque (pour lui seul, ou pour tous).
+    const feutreB = boutonOutil('feutre', 'edit', 'Feutre (F) : dessine sur le plateau');
+    feutreB.dataset.touche = 'F';
+    const noteB = boutonOutil('note', 'note', 'Note (T) : écris le texte, puis clique une case');
+    noteB.dataset.touche = 'T';
+    let calque = o.mj ? 'mj' : 'tous', teinteD = 'jaune';
     // Les boutons en plus de l'écran (le pinceau du MJ, le tapis de dés…) : { icone, titre, touche, faire(), actif() }.
     const extras = (o.extras || []).map((x) => {
       const b = el('button', { className: 'table-outil', type: 'button', title: x.titre }, el('i', { className: `codicon codicon-${x.icone}` }));
@@ -159,13 +165,27 @@ const TableOutils = (() => {
     choixTeinte.onchange = () => { teinte = choixTeinte.value; };
     effacer.onclick = () => o.effacer?.();
     const reglages = el('span', { className: 'table-outil-reglages' }, choixForme, champM, el('small', { textContent: 'm' }), choixTeinte);
-    racine.append(main, regle, gab, pingB, effacer, ...(extras.length ? [el('span', { className: 'table-outil-sep' }), ...extras.map(([b]) => b)] : []), reglages, aide);
+    const choixTeinteD = el('select', { className: 'table-outil-choix', title: 'La couleur du feutre' }, ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
+    const champNote = el('input', { className: 'table-outil-texte', type: 'text', maxLength: 120, placeholder: 'Texte de la note', title: 'Le texte de la note' });
+    const choixCalque = el('select', { className: 'table-outil-choix', title: 'Qui voit ce que tu dessines' },
+      el('option', { value: 'mj', textContent: 'Calque du MJ (moi seul)' }), el('option', { value: 'tous', textContent: 'Pour tous' }));
+    const effacerD = el('button', { className: 'table-outil', type: 'button', title: o.mj ? 'Effacer les dessins et notes de ce calque' : 'Effacer mes dessins et notes' }, el('i', { className: 'codicon codicon-trash' }));
+    choixTeinteD.onchange = () => { teinteD = choixTeinteD.value; };
+    choixCalque.onchange = () => { calque = choixCalque.value; };
+    effacerD.onclick = () => o.effacerDessins?.(o.mj ? calque : '');
+    if (!o.mj) choixCalque.hidden = true;
+    const reglagesD = el('span', { className: 'table-outil-reglages' }, choixTeinteD, champNote, choixCalque, effacerD);
+    racine.append(main, regle, gab, pingB, feutreB, noteB, effacer, ...(extras.length ? [el('span', { className: 'table-outil-sep' }), ...extras.map(([b]) => b)] : []), reglages, reglagesD, aide);
     o.conteneur.append(racine);
     function dessinerBarre() {
-      for (const b of [regle, gab, pingB]) b.classList.toggle('actif', outil === b.dataset.outil);
+      for (const b of [regle, gab, pingB, feutreB, noteB]) b.classList.toggle('actif', outil === b.dataset.outil);
       main.classList.toggle('actif', !outil);
       for (const [b, x] of extras) { let on = false; try { on = Boolean(x.actif?.()); } catch { /* pas encore prêt */ } b.classList.toggle('actif', on); }
       reglages.hidden = outil !== 'gabarit';
+      reglagesD.hidden = outil !== 'feutre' && outil !== 'note';
+      champNote.hidden = outil !== 'note';
+      choixTeinteD.value = teinteD;
+      choixCalque.value = calque;
       choixForme.value = forme;
       champM.value = String(metres);
       choixTeinte.value = teinte;
@@ -188,6 +208,8 @@ const TableOutils = (() => {
         if (e.key === 'r' || e.key === 'R') { outil = outil === 'regle' ? null : 'regle'; dessinerBarre(); return true; }
         if (e.key === 'g' || e.key === 'G') { outil = outil === 'gabarit' ? null : 'gabarit'; dessinerBarre(); return true; }
         if (e.key === 'p' || e.key === 'P') { outil = outil === 'ping' ? null : 'ping'; dessinerBarre(); return true; }
+        if (e.key === 'f' || e.key === 'F') { outil = outil === 'feutre' ? null : 'feutre'; dessinerBarre(); return true; }
+        if (e.key === 't' || e.key === 'T') { outil = outil === 'note' ? null : 'note'; dessinerBarre(); if (outil) champNote.focus(); return true; }
         if (e.key === 'v' || e.key === 'V') { outil = null; dessinerBarre(); return true; }
         const x = extras.find(([, k]) => k.touche && k.touche.toLowerCase() === e.key.toLowerCase());
         if (x) { x[1].faire(); dessinerBarre(); return true; }
@@ -198,12 +220,28 @@ const TableOutils = (() => {
         if (e.altKey || outil === 'ping') { o.ping?.(c); return true; }
         if (outil === 'regle' || e.shiftKey) { trait = { de: c, a: c, gabarit: false }; return true; }
         if (outil === 'gabarit') { trait = { de: c, a: c, gabarit: true }; return true; }
+        if (outil === 'feutre') { trait = { de: c, a: c, points: [[c.fx ?? c.x + 0.5, c.fy ?? c.y + 0.5]] }; return true; }
+        if (outil === 'note') {
+          const texte = champNote.value.trim();
+          if (!texte) { o.message?.('Écris d\'abord le texte de la note.'); champNote.focus(); return true; }
+          o.noter?.({ x: c.x, y: c.y, texte, couleur: teinteD, visible: calque });
+          champNote.value = '';
+          return true;
+        }
         return false;
       },
-      bouger(c) { if (trait && c) trait.a = c; },
+      bouger(c) {
+        if (!trait || !c) return;
+        trait.a = c;
+        if (trait.points && trait.points.length < 400) {
+          const p = [c.fx ?? c.x + 0.5, c.fy ?? c.y + 0.5], q = trait.points[trait.points.length - 1];
+          if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.12) trait.points.push([Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]);
+        }
+      },
       lacher() {
         const t = trait;
         trait = null;
+        if (t?.points) { o.dessiner?.({ points: t.points, couleur: teinteD, visible: calque }); return true; }
         if (!t?.gabarit) return Boolean(t);
         // Un cercle et un cube se posent au clic ; le cône et la ligne vont vers là où l'on a lâché.
         const vise = t.a.x !== t.de.x || t.a.y !== t.de.y ? t.a : { x: t.de.x, y: t.de.y + 1 };
@@ -213,6 +251,7 @@ const TableOutils = (() => {
       get occupe() { return Boolean(trait); },
       // Ce que le plateau dessine en plus pour cet écran seulement : la règle, l'aperçu du gabarit.
       dessin(survol) {
+        if (trait?.points) return { trace: { points: trait.points, couleur: teinteD, visible: calque } };
         if (trait && !trait.gabarit) {
           const n = longueur(trait.de, trait.a);
           return { regle: { de: trait.de, a: trait.a, texte: `${n} case${n > 1 ? 's' : ''} · ${metresDe(n)}` } };

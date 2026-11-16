@@ -64,6 +64,8 @@ const TableEtat = (() => {
     t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
     // Saga 1.42 : les images des jetons ({ id: data: URL }), partagées par les pions qui les portent.
     t.jetons = Object.fromEntries(Object.entries(t.jetons && typeof t.jetons === 'object' ? t.jetons : {}).filter(([k, v]) => /^jeton-[a-z0-9]+$/.test(k) && imageJetonValide(v)).slice(0, 200));
+    // Saga 1.43 : l'initiative tenue à la main par le MJ (hors des combats de Saga) : { liste, actif, tour }.
+    t.initiative = normInitiative(t.initiative);
     for (const p of t.pions) if (p.jeton && !(p.jeton.personnage ? typeof p.jeton.personnage === 'string' : t.jetons[p.jeton.image])) delete p.jeton;
     // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
     // Saga 1.38 : et ce qui la fait durer d'une séance à l'autre (table/campagne.js) : son identité sur le relais
@@ -91,6 +93,9 @@ const TableEtat = (() => {
     c.cases = c.cases || {};
     // Saga 1.32 : les gabarits de zone posés sur cette carte (vus de tous).
     if (!Array.isArray(c.gabarits)) c.gabarits = [];
+    // Saga 1.43 : les dessins au feutre et les notes ; visible 'mj' : le calque du MJ (lui seul).
+    if (!Array.isArray(c.dessins)) c.dessins = [];
+    if (!Array.isArray(c.notes)) c.notes = [];
     return c;
   }
 
@@ -243,10 +248,13 @@ const TableEtat = (() => {
       carte: carte.id, nom: carte.nom, largeur: carte.largeur, hauteur: carte.hauteur,
       brouillard: brouillard(table, carte), masque: Array.from(m).join(''),
       pions, pnj, combat, journal, pause: Boolean(table.pause),
+      initiative: combat ? null : vueInitiative(table, ids, mj),
       scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '', ...(Array.isArray(ctx.scene.choix) ? { choix: ctx.scene.choix.map(String) } : {}) } : null,
       caseM: reglages(jeu).caseM, diagonales: reglages(jeu).diagonales,
       // Saga 1.32 : les gabarits (tout le monde les voit), les pings récents.
       gabarits: etatCarte(table, carte.id).gabarits.map((g) => ({ ...g, mien: mj || g.auteur === auteur(role) })),
+      dessins: etatCarte(table, carte.id).dessins.filter((d) => mj || d.visible === 'tous').map((d) => ({ id: d.id, points: d.points, couleur: d.couleur, visible: d.visible, mien: mj || d.auteur === auteur(role) })),
+      notes: etatCarte(table, carte.id).notes.filter((n) => mj || n.visible === 'tous').map((n) => ({ id: n.id, x: n.x, y: n.y, texte: n.texte, couleur: n.couleur, visible: n.visible, mien: mj || n.auteur === auteur(role) })),
       pings: (ctx.pings || []).filter((q) => q.carte === carte.id).map(({ n, x, y, qui, couleur }) => ({ n, x, y, qui, couleur })),
       marques: dispo,
     };
@@ -272,6 +280,79 @@ const TableEtat = (() => {
 
   // --- Les actions (ce qu'un écran demande ; l'hôte vérifie que ce rôle en a le droit) ---
   // Rend { ok: true } ou { ok: false, erreur }.
+  // Saga 1.43 : les actions du MJ sur l'initiative à la main.
+  //   init_ajouter { pion?, nom?, init } · init_retirer { id } · init_valeur { id, init } · init_monter { id, sens: -1|1 }
+  //   init_trier · init_suivant · init_precedent · init_vider
+  function agirInitiative(table, a, non) {
+    const t = table.initiative = normInitiative(table.initiative);
+    const l = t.liste;
+    const i = l.findIndex((x) => x.id === a.id);
+    const ordonner = () => l.sort((x, y) => y.init - x.init);
+    switch (a.type) {
+      case 'init_ajouter': {
+        if (l.length >= 60) return non('L\'initiative est pleine.');
+        const p = typeof a.pion === 'string' ? table.pions.find((q) => q.id === a.pion) : null;
+        if (a.pion && !p) return non('Pion inconnu.');
+        if (p && l.some((x) => x.pion === p.id)) return non('Ce pion est déjà dans l\'initiative.');
+        const nom = String(a.nom || p?.nom || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40);
+        if (!nom) return non('Une ligne a un nom.');
+        const init = Math.round(Number(a.init) || 0);
+        const ligne = { id: `i-${Date.now().toString(36)}-${l.length}`, nom, init, ...(p ? { pion: p.id } : {}) };
+        // À sa place : après ceux qui ont autant ou plus (l'ordre déjà réglé à la main ne bouge pas).
+        const k = l.findIndex((x) => x.init < init);
+        l.splice(k < 0 ? l.length : k, 0, ligne);
+        if (!t.actif) t.actif = l[0].id;
+        return { ok: true, ligne };
+      }
+      case 'init_retirer': {
+        if (i < 0) return non('Ligne inconnue.');
+        if (t.actif === l[i].id) t.actif = l.length > 1 ? l[(i + 1) % l.length].id : '';
+        l.splice(i, 1);
+        return { ok: true };
+      }
+      case 'init_valeur': {
+        if (i < 0) return non('Ligne inconnue.');
+        l[i].init = Math.round(Number(a.init) || 0);
+        if (a.trier !== false) ordonner();
+        return { ok: true };
+      }
+      case 'init_monter': {
+        const j = i + (Number(a.sens) < 0 ? -1 : 1);
+        if (i < 0 || j < 0 || j >= l.length) return non('Rien à déplacer.');
+        [l[i], l[j]] = [l[j], l[i]];
+        return { ok: true };
+      }
+      case 'init_trier': ordonner(); return { ok: true };
+      case 'init_suivant':
+      case 'init_precedent': {
+        if (!l.length) return non('L\'initiative est vide.');
+        const k = l.findIndex((x) => x.id === t.actif);
+        if (a.type === 'init_suivant') {
+          if (k >= l.length - 1) { t.tour += 1; t.actif = l[0].id; } else t.actif = l[k + 1].id;
+        } else if (k <= 0) { if (t.tour > 1) { t.tour -= 1; t.actif = l[l.length - 1].id; } else t.actif = l[0].id; } else t.actif = l[k - 1].id;
+        const x = l.find((q) => q.id === t.actif);
+        return { ok: true, tourDe: x };
+      }
+      case 'init_vider': table.initiative = { liste: [], actif: '', tour: 1 }; return { ok: true };
+      default: return non('Action inconnue.');
+    }
+  }
+
+  // Saga 1.43 : une ligne : { id, nom, init, pion? } (un pion de la table, ou une ligne libre : « Le piège »).
+  function normInitiative(x) {
+    const liste = (Array.isArray(x?.liste) ? x.liste : []).filter((l) => l && typeof l.id === 'string').slice(0, 60)
+      .map((l) => ({ id: l.id, nom: String(l.nom || '?').slice(0, 40), init: Number.isFinite(Number(l.init)) ? Math.round(Number(l.init)) : 0, ...(typeof l.pion === 'string' && l.pion ? { pion: l.pion } : {}) }));
+    return { liste, actif: liste.some((l) => l.id === x?.actif) ? x.actif : '', tour: Math.max(1, Math.round(Number(x?.tour) || 1)) };
+  }
+  // Ce que voit un rôle de l'initiative à la main : les pions qu'il voit, et les lignes libres.
+  function vueInitiative(table, ids, mj) {
+    const t = table.initiative;
+    if (!t?.liste?.length) return null;
+    const l = t.liste.filter((x) => !x.pion || ids.has(x.pion));
+    const actif = l.find((x) => x.id === t.actif);
+    return { manuel: true, tour: t.tour, actif: actif ? actif.pion || actif.id : '', ordre: l.map((x) => ({ id: x.pion || x.id, ligne: x.id, nom: x.nom, ...(mj ? { init: x.init } : {}) })) };
+  }
+
   function agir(jeu, partie, role, a, ctx) {
     const table = partie.table, carte = ctx.carte;
     const non = (erreur) => ({ ok: false, erreur });
@@ -318,6 +399,39 @@ const TableEtat = (() => {
         l.push(g);
         return { ok: true, gabarit: g };
       }
+      case 'dessin':
+      case 'note': {
+        if (role.spectateur) return non('Les spectateurs ne dessinent pas.');
+        const ec = etatCarte(table, carte.id);
+        const l = a.type === 'dessin' ? ec.dessins : ec.notes;
+        if (l.filter((d) => d.auteur === auteur(role)).length >= (a.type === 'dessin' ? 60 : 40)) return non('C\'est plein : efface tes anciens dessins ou notes.');
+        const couleur = O.COULEURS.some(([c]) => c === a.couleur) ? a.couleur : 'jaune';
+        const visible = role.mj && a.visible === 'mj' ? 'mj' : 'tous';
+        const id = `${a.type === 'dessin' ? 'd' : 'n'}-${Date.now().toString(36)}-${l.length}`;
+        if (a.type === 'dessin') {
+          const pts = (Array.isArray(a.points) ? a.points : []).slice(0, 400)
+            .map((p) => [Number(p?.[0]), Number(p?.[1])]).filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+            .map(([x, y]) => [Math.round(Math.max(0, Math.min(carte.largeur, x)) * 100) / 100, Math.round(Math.max(0, Math.min(carte.hauteur, y)) * 100) / 100]);
+          if (!pts.length) return non('Un dessin vide.');
+          l.push({ id, points: pts, couleur, visible, auteur: auteur(role) });
+        } else {
+          const texte = String(a.texte || '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120);
+          const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
+          if (!texte) return non('Une note a un texte.');
+          if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');
+          l.push({ id, x, y, texte, couleur, visible, auteur: auteur(role) });
+        }
+        return { ok: true };
+      }
+      case 'dessin_retirer': {
+        // Un dessin ou une note (id) ; sans id : tous les miens (le MJ : tous ceux de la carte, ou d'un calque).
+        const ec = etatCarte(table, carte.id);
+        const avant = ec.dessins.length + ec.notes.length;
+        const peut = (d) => (role.mj || d.auteur === auteur(role)) && (!a.calque || d.visible === a.calque);
+        ec.dessins = ec.dessins.filter((d) => !(peut(d) && (!a.id || d.id === a.id)));
+        ec.notes = ec.notes.filter((d) => !(peut(d) && (!a.id || d.id === a.id)));
+        return ec.dessins.length + ec.notes.length < avant ? { ok: true } : non('Rien à toi à effacer ici.');
+      }
       case 'gabarit_retirer': {
         const ec = etatCarte(table, carte.id);
         const avant = ec.gabarits.length;
@@ -360,6 +474,7 @@ const TableEtat = (() => {
     }
     // Le reste est au MJ seulement.
     if (!role.mj) return non('Seul le MJ peut faire ça.');
+    if (/^init_/.test(a.type)) return agirInitiative(table, a, non);
     switch (a.type) {
       case 'jeton': {
         if (!pion) return non('Pion inconnu.');
