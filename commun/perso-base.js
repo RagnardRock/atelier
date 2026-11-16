@@ -171,8 +171,9 @@ const PersoBase = (() => {
       for (let k = 0; k < n; k++) poser(l, haut + k, c, fond ? 'pPP' : 'PPp');
       poser(l, haut + n, c, dos ? 'BBB' : fond ? 'bBB' : 'BBb');
     };
+    // Un pixel vide entre les deux jambes (entre leurs contours), comme sur le modèle.
     jambe(12, gauche, false);
-    jambe(17, droite, true);
+    jambe(18, droite, true);
   }
   // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas. Sur un pas, la jambe qui avance est en
   // diagonale jusqu'au sol, celle de derrière se lève (pied plus haut, plus sombre).
@@ -187,8 +188,10 @@ const PersoBase = (() => {
     // la caméra (claire) devant, celle du fond (sombre, plus fine) derrière ; ecart -1 : l'inverse.
     const jambe = (sens, proche) => {
       const P = proche ? 'PPPp' : 'ppp', c0 = sens > 0 ? 15 : proche ? 13 : 14;
-      for (let k = 0; k < 3; k++) poser(l, haut + k, c0 + sens * k, P);
-      poser(l, haut + 3, c0 + sens * 3, proche ? 'BBBB' : 'qqq');
+      // La jambe du fond est levée d'un pixel (une rangée de moins avant le pied).
+      const n = proche ? 3 : 2;
+      for (let k = 0; k < n; k++) poser(l, haut + k, c0 + sens * k, P);
+      poser(l, haut + n, c0 + sens * n, proche ? 'BBBB' : 'qqq');
     };
     jambe(-ecart, false);
     jambe(ecart, true);
