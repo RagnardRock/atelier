@@ -446,7 +446,9 @@ const TablePanneau = (() => {
     let prevu = 0;
     function rafraichir() {
       if (prevu) return;
-      prevu = setTimeout(() => { prevu = 0; if (!racine.matches(':focus-within')) dessiner(); else setTimeout(rafraichir, 400); }, 200);
+      // Saga 1.37.1 : seul un champ en train d'être écrit retarde le dessin (un bouton cliqué gardait le focus,
+      // et le panneau ne se redessinait plus : un document supprimé restait affiché).
+      prevu = setTimeout(() => { prevu = 0; const f = document.activeElement; if (!(racine.contains(f) && f.matches('input[type=text], input:not([type]), textarea, select'))) dessiner(); else setTimeout(rafraichir, 400); }, 200);
     }
     // Le chat arrive aussi sans que la table change.
     T.multi?.()?.sur?.((sorte) => { if (sorte === 'chat' || sorte === 'joueurs') rafraichir(); });

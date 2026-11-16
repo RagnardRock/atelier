@@ -1421,10 +1421,13 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .doc-tete b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doc-fermer { flex: none; width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.07); color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .doc-fermer:hover { background: rgba(255, 255, 255, 0.15); }
-.doc-image-cadre { min-height: 0; flex: 1 1 auto; display: flex; justify-content: center; overflow: auto; border-radius: 12px; background: rgba(0, 0, 0, 0.35); }
-.doc-image { display: block; max-width: 100%; max-height: calc(90vh - 90px); object-fit: contain; cursor: zoom-in; }
-.doc-carte.zoom .doc-image { max-width: none; max-height: none; cursor: zoom-out; }
-.doc-carte:has(.doc-texte) .doc-image { max-height: calc(90vh - 260px); }
+.doc-image-cadre { position: relative; min-height: 0; flex: 1 1 auto; display: flex; justify-content: center; align-items: center; overflow: hidden; touch-action: none; border-radius: 12px; background: rgba(0, 0, 0, 0.35); }
+.doc-image { display: block; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; user-select: none; will-change: transform; }
+.doc-image-cadre.zoome .doc-image { cursor: grab; }
+.doc-image-cadre.zoome .doc-image:active { cursor: grabbing; }
+/* Saga 1.37.1 : une image prend toute la place (même petite), le texte dessous. */
+.doc-carte:has(.doc-image-cadre) { width: min(1400px, 94vw); height: 90vh; max-width: none; }
+.doc-carte:has(.doc-image-cadre) .doc-texte { flex: none; max-height: 26vh; }
 .doc-texte { white-space: pre-wrap; overflow: auto; max-height: 40vh; font-size: 15px; line-height: 1.6; padding: 2px 4px; color: rgba(255, 255, 255, 0.9); }
 /* Une lettre (un document sans image) : une feuille claire, une écriture posée. */
 .doc-carte.lettre { width: min(640px, 92vw); }
@@ -1433,7 +1436,6 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 /* L'écran des joueurs (la télé) : le document que le MJ montre, en grand, sans croix. */
 .doc-visionneuse.grand { padding: 3vh 3vw; background: rgba(4, 4, 10, 0.7); }
 .doc-visionneuse.grand .doc-carte { max-width: 94vw; max-height: 94vh; }
-.doc-visionneuse.grand .doc-image { max-height: calc(94vh - 80px); }
-.doc-visionneuse.grand .doc-carte:has(.doc-texte) .doc-image { max-height: calc(94vh - 280px); }
+.doc-visionneuse.grand .doc-carte:has(.doc-image-cadre) { width: 96vw; height: 94vh; }
 .doc-visionneuse.grand .doc-tete { font-size: 20px; }
 .doc-visionneuse.grand .doc-texte { font-size: 20px; }

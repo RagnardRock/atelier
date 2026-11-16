@@ -25,7 +25,7 @@
   const liaison = () => liaisons.find((l) => l.cle === ici) || null;
   const garderLiaison = (l) => { liaisons = [l, ...liaisons.filter((x) => x.cle !== l.cle)].slice(0, 12); ecrire('liaisons', liaisons); };
   const oublierLiaison = () => { liaisons = liaisons.filter((x) => x.cle !== ici); ecrire('liaisons', liaisons); };
-  const reglages = { anime: lire('anime', true), secret: false };
+  const reglages = { anime: lire('anime', true), secousse: lire('secousse', true), secret: false };
 
   // --- Petits outils ---
   function el(tag, props = {}, ...enfants) {
@@ -54,7 +54,7 @@
   const vibrer = (ms = 20) => { try { navigator.vibrate?.(ms); } catch { /* rien */ } };
 
   // --- Le réseau ---
-  let jeton = '', moi = null, vue = null, flux = null, connecte = false;
+  let jeton = '', moi = null, vue = null, flux = null, connecte = false, ailleurs = false;
   async function envoyer(chemin, corps) {
     // Le jeton va aussi dans l'adresse : un relais d'avant Saga 1.35.1 ne transmet pas l'en-tête X-Compagnon
     // (le téléphone se croyait alors délié au premier lancer).
@@ -76,12 +76,14 @@
   }
   function ecouter() {
     flux?.close();
+    ailleurs = false;
     flux = new EventSource(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}`);
     flux.onopen = () => { connecte = true; dessinerTete(); };
     flux.onerror = () => {
       connecte = false; dessinerTete();
       // Le serveur ne connaît plus ce jeton (la partie a été refermée) : on le saura en redemandant.
-      fetch(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}`, { method: 'GET' }).then((r) => { if (r.status === 401) delie(); else r.body?.cancel?.(); }).catch(() => {});
+      // (Saga 1.37.1 : avec ?verifier, sans ouvrir un deuxième flux qui chassait le premier.)
+      fetch(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}&verifier=1`, { method: 'GET' }).then((r) => { if (r.status === 401) delie(); else r.body?.cancel?.(); }).catch(() => {});
     };
     flux.addEventListener('bienvenue', (e) => { try { moi = JSON.parse(e.data); } catch { return; } dessiner(); });
     flux.addEventListener('vue', (e) => { try { recevoirVue(JSON.parse(e.data)); } catch { /* abîmé */ } });
@@ -91,6 +93,8 @@
       flux.close();
       connecte = false;
       if (d.raison === 'delie' || d.raison === 'expulse') { delie(d.raison === 'expulse' ? 'Le MJ t\'a retiré de la partie.' : 'Ce téléphone a été délié.'); return; }
+      // Saga 1.37.1 : le compagnon s'est ouvert ailleurs (l'appli installée, un autre onglet) : on lui laisse la place.
+      if (d.raison === 'ailleurs') { ailleurs = true; dessinerTete(); toast('Le compagnon est ouvert ailleurs (l\'appli ou un autre onglet). Touche « Reprendre ici » pour revenir.'); return; }
       toast('Le MJ a fermé la partie.');
       dessinerTete();
     });
@@ -154,7 +158,8 @@
     menu.onclick = () => accueil('', true);
     teteEl.replaceChildren(el('img', { src: 'icone.svg', alt: '' }),
       el('div', { className: 'qui' }, el('b', { textContent: titre }), el('small', { textContent: [qui, vue?.nom].filter(Boolean).join(' · ') })),
-      el('span', { className: `etat-co ${connecte ? 'oui' : 'non'}`, textContent: connecte ? '● en direct' : '○ hors ligne' }), menu);
+      ailleurs ? Object.assign(el('button', { className: 'etat-co non', type: 'button', textContent: '↻ Reprendre ici' }), { onclick: () => ecouter() })
+        : el('span', { className: `etat-co ${connecte ? 'oui' : 'non'}`, textContent: connecte ? '● en direct' : '○ hors ligne' }), menu);
   }
   function dessinerPage() {
     if (!pageEl) return;
@@ -178,7 +183,7 @@
     const tapis = el('div', { className: 'tapis verre' });
     const canvas = el('canvas');
     resEl = el('div', { className: 'res' });
-    aideEl = el('div', { className: 'aide', textContent: mouvementPossible() ? 'Secoue le téléphone ou glisse pour lancer' : 'Glisse sur le tapis pour lancer' });
+    aideEl = el('div', { className: 'aide', textContent: mouvementPossible() && reglages.secousse ? 'Secoue le téléphone ou glisse pour lancer' : 'Glisse sur le tapis pour lancer' });
     tapis.append(canvas, resEl, aideEl);
     const des = el('div', { className: 'choix-des verre' });
     for (const t of TYPES) {
@@ -197,8 +202,11 @@
     anime.onclick = () => { reglages.anime = !reglages.anime; ecrire('anime', reglages.anime); if (plateau) plateau.anime = reglages.anime; pageDes(); };
     const vider = el('button', { className: 'btn2', type: 'button' }, icone('clear-all'), 'Vider');
     vider.onclick = () => { choix = {}; plateau?.vider(); resEl.innerHTML = ''; aideEl.hidden = false; majChoix(); };
-    const options = el('div', { className: 'options' }, secret, anime, vider);
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis) {
+    // Saga 1.37.1 : couper la secousse (un téléphone dans la poche, une table qui bouge).
+    const secousseB = mouvementPossible() ? el('button', { className: 'btn2', type: 'button' }, icone(reglages.secousse ? 'device-mobile' : 'circle-slash'), `Secousse : ${reglages.secousse ? 'oui' : 'non'}`) : null;
+    if (secousseB) secousseB.onclick = () => { reglages.secousse = !reglages.secousse; ecrire('secousse', reglages.secousse); pageDes(); };
+    const options = el('div', { className: 'options' }, secret, anime, secousseB, vider);
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis && reglages.secousse) {
       const perm = el('button', { className: 'btn2', type: 'button' }, icone('device-mobile'), 'Activer la secousse');
       // Saga 1.37 : on dit ce qui se passe (un refus d'avant reste en mémoire dans Safari).
       perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => {
@@ -211,7 +219,7 @@
     // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
     const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement › Autoriser ; si ça ne suffit pas, touche le lion et baisse les boucliers pour ce site. Puis recharge la page. Sinon, glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
     setTimeout(() => {
-      if (onglet !== 'des' || mouvement.recu || (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) return;
+      if (onglet !== 'des' || mouvement.recu || !reglages.secousse || (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) return;
       capteurAndroid();
       setTimeout(() => {
         if (mouvement.recu || onglet !== 'des') return;
@@ -265,7 +273,8 @@
   }
   // Un jet est arrivé dans le journal : si on l'attendait, les dés s'arrêtent sur ses valeurs.
   function nouveauJet(x) {
-    vibrer(15);
+    // Saga 1.37.1 : vibrer pour MES jets seulement (pas ceux des autres joueurs).
+    if (attenteJet || x.qui === monNom()) vibrer(15);
     if (attenteJet && onglet === 'des' && plateau && (x.qui === monNom() || moi?.mj || Date.now() - attenteJet.depuis < 2500)) {
       attenteJet = null;
       clearTimeout(lancer.minuterie);
@@ -304,7 +313,7 @@
   // Saga 1.37 : un à-coup, d'où qu'il vienne (devicemotion, ou le capteur d'accélération d'Android).
   function secousse(a, pure) {
     mouvement.recu = true;
-    if (onglet !== 'des' || attenteJet) return;
+    if (onglet !== 'des' || attenteJet || !reglages.secousse) return;
     const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
     const t = performance.now();
     if (f < 8) return;
@@ -516,9 +525,12 @@
     const fermer = el('button', { className: 'icone-bouton', type: 'button', title: 'Fermer' }, icone('close'));
     const v = el('div', { className: 'visionneuse' },
       el('div', { className: 'vis-tete verre' }, icone(d.image ? 'file-media' : 'note'), el('b', { textContent: d.titre || 'Document' }), fermer),
-      el('div', { className: 'vis-corps' },
-        d.image ? el('img', { src: urlDoc(d), alt: d.titre || '' }) : null,
-        d.texte ? el('div', { className: `vis-texte verre${d.image ? '' : ' lettre'}`, textContent: d.texte }) : null));
+      d.image ? el('div', { className: 'vis-cadre' }, el('img', { src: urlDoc(d), alt: d.titre || '' })) : null,
+      d.texte ? el('div', { className: `vis-corps${d.image ? ' sous' : ''}` }, el('div', { className: `vis-texte verre${d.image ? '' : ' lettre'}`, textContent: d.texte })) : null,
+      d.image ? el('p', { className: 'vis-aide', textContent: 'Pince ou touche deux fois pour zoomer' }) : null);
+    // Saga 1.37.1 : pincer, double toucher, glisser (la page, elle, ne zoome pas).
+    const img = v.querySelector('.vis-cadre img');
+    if (img && typeof ZoomImage !== 'undefined') img.addEventListener('load', () => ZoomImage.brancher(img.parentElement, img), { once: true });
     v.dataset.id = d.id;
     fermer.onclick = () => { v.remove(); if (onglet === 'documents') { docSig = ''; pageDocuments(); } };
     document.body.append(v);
