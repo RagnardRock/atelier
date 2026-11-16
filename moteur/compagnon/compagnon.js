@@ -197,7 +197,7 @@
         ecrire('liaisons', liaisons);
         envoyerAttente();
       }
-      if (moi.absent) { passerHorsLigne('La séance est ouverte : rejoins-la sur ton PC (ou ton navigateur) pour jouer en direct.'); return; }
+      if (moi.absent) { passerHorsLigne('La séance est ouverte : touche « Rejoindre la séance » pour jouer en direct.'); dessiner(); return; }
       dessiner();
     });
     flux.addEventListener('vue', (e) => { try { recevoirVue(JSON.parse(e.data)); } catch { /* abîmé */ } });
@@ -266,9 +266,31 @@
       b.onclick = () => { onglet = id; vibrer(8); dessiner(); };
       nav.append(b);
     }
-    app.append(teteEl, pageEl, nav);
+    app.append(teteEl, ...(moi?.absent && !moi.mj ? [bandeauRejoindre()] : []), pageEl, nav);
     dessinerTete();
     dessinerPage();
+  }
+  // Saga 1.39.1 : la séance est ouverte mais le joueur n'y est pas : le téléphone la rejoint lui-même.
+  let rejoignant = false;
+  function bandeauRejoindre() {
+    const etat = el('span', { textContent: rejoignant ? 'En attente : ton MJ doit accepter.' : 'La séance est ouverte.' });
+    const b = el('button', { className: 'btn', type: 'button', disabled: rejoignant }, icone('plug'), 'Rejoindre la séance');
+    b.onclick = async () => {
+      rejoignant = true; b.disabled = true; etat.textContent = 'Je demande au MJ…';
+      try {
+        for (let i = 0; i < 150; i++) {
+          const r = await fetch(`${racine}/compagnon/rejoindre?jeton=${encodeURIComponent(jeton)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Compagnon': jeton }, body: '{}' });
+          const d = await r.json().catch(() => ({}));
+          if (r.ok && r.status !== 202) { etat.textContent = 'Accepté !'; return; } // la bienvenue suit, puis la vue
+          if (r.status !== 202) throw new Error(d.erreur || `erreur ${r.status}`);
+          etat.textContent = 'En attente : ton MJ doit accepter.';
+          await new Promise((x) => setTimeout(x, 2000));
+          if (!moi?.absent) return;
+        }
+        throw new Error('Le MJ n\'a pas répondu : réessaie.');
+      } catch (err) { etat.textContent = err.message; b.disabled = false; } finally { rejoignant = false; }
+    };
+    return el('div', { className: 'bandeau-rejoindre verre' }, etat, b);
   }
   function dessinerTete() {
     if (!teteEl) return;
@@ -326,19 +348,21 @@
     const vider = el('button', { className: 'btn2', type: 'button' }, icone('clear-all'), 'Vider');
     vider.onclick = () => { choix = {}; plateau?.vider(); resEl.innerHTML = ''; aideEl.hidden = false; majChoix(); };
     // Saga 1.37.1 : couper la secousse (un téléphone dans la poche, une table qui bouge).
-    const secousseB = mouvementPossible() ? el('button', { className: 'btn2', type: 'button' }, icone(reglages.secousse ? 'device-mobile' : 'circle-slash'), `Secousse : ${reglages.secousse ? 'oui' : 'non'}`) : null;
-    if (secousseB) secousseB.onclick = () => { reglages.secousse = !reglages.secousse; ecrire('secousse', reglages.secousse); pageDes(); };
-    const options = el('div', { className: 'options' }, secret, anime, secousseB, vider);
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis && reglages.secousse) {
-      const perm = el('button', { className: 'btn2', type: 'button' }, icone('device-mobile'), 'Activer la secousse');
+    // Saga 1.39.1 : un seul bouton. Là où le téléphone demande la permission (iPhone, certains navigateurs), la
+    // secousse n'est « oui » qu'une fois permise : la toucher la demande.
+    const aPermettre = typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis;
+    const secousseOui = reglages.secousse && !aPermettre;
+    const secousseB = mouvementPossible() ? el('button', { className: 'btn2', type: 'button' }, icone(secousseOui ? 'device-mobile' : 'circle-slash'), `Secousse : ${secousseOui ? 'oui' : 'non'}`) : null;
+    if (secousseB) secousseB.onclick = () => {
+      if (!aPermettre) { reglages.secousse = !reglages.secousse; ecrire('secousse', reglages.secousse); pageDes(); return; }
       // Saga 1.37 : on dit ce qui se passe (un refus d'avant reste en mémoire dans Safari).
-      perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => {
+      DeviceMotionEvent.requestPermission().then((r) => {
         mouvement.permis = r === 'granted';
-        if (mouvement.permis) { brancherMouvement(); perm.remove(); toast('Secousse activée : secoue le téléphone.'); }
+        if (mouvement.permis) { reglages.secousse = true; ecrire('secousse', true); brancherMouvement(); toast('Secousse activée : secoue le téléphone.'); pageDes(); }
         else toast('Refusé par le téléphone. Réglages › Safari › Avancé › Données des sites : efface ce site, puis réessaie.');
       }).catch((e) => toast(`Le téléphone ne permet pas la secousse ici (${e?.message || 'refus'}). Glisse sur le tapis.`));
-      options.append(perm);
-    }
+    };
+    const options = el('div', { className: 'options' }, secret, anime, secousseB, vider);
     // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
     const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement › Autoriser ; si ça ne suffit pas, touche le lion et baisse les boucliers pour ce site. Puis recharge la page. Sinon, glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
     setTimeout(() => {

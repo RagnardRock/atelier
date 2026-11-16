@@ -272,8 +272,12 @@ module.exports = [
         // Le téléphone de Lou, sans nouveau QR : sa séance est ouverte, mais Lou n'est pas encore là.
         await tel.reload();
         await tel.waitForFunction(() => window.Compagnon?.moi?.absent && window.Compagnon.horsLigne, null, { timeout: 12000 });
-        // Lou revient (son navigateur) : le téléphone passe en direct, avec sa fiche à jour.
-        await rejoindre(ami, lien1, 'Lou');
+        // Saga 1.39.1 : Lou rejoint la séance depuis son téléphone (sans PC) ; le MJ accepte ; il passe en direct.
+        await tel.waitForSelector('.bandeau-rejoindre button');
+        await tel.locator('.bandeau-rejoindre button').click();
+        for (let i = 0; i < 80 && !reseau.infos().attente.length; i++) await tel.waitForTimeout(100);
+        egal(reseau.infos().attente[0]?.nom, 'Lou', 'le MJ voit la demande du téléphone de Lou');
+        reseau.accepter(reseau.infos().attente[0].id, true);
         await tel.waitForFunction(() => window.Compagnon && !window.Compagnon.horsLigne && window.Compagnon.vue?.fiche?.champs?.find((x) => x.id === 'destin')?.valeur === 2, null, { timeout: 12000 });
         await tel.evaluate(() => Compagnon.aller('fiche'));
         await tel.waitForSelector('.tete .etat-co.oui');
