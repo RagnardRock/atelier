@@ -74,13 +74,17 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   }
 
   // --- Le chat : à tous, ou en privé à un joueur (l'hôte compris) ---
-  function dire(de, texte, pour = 'tous') {
+  // Saga 1.32 : au mode table, une commande de dés (/r, /gr, /m…) ne part pas telle quelle : l'hôte lance
+  // les dés et renvoie le résultat (jet : true, nom : celui qui a lancé).
+  const COMMANDE = /^\/(r|roll|gr|mj|m|macro)(\s|$)/i;
+  function dire(de, texte, pour = 'tous', jet = null) {
     texte = String(texte || '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, 500);
     if (!texte) return;
     const auteur = de === 'hote' ? hote : clients.get(de);
     if (!auteur) return;
+    if (!jet && mode === 'table' && COMMANDE.test(texte)) { versHote({ type: 'commande', texte, client: de }); return; }
     if (pour !== 'tous' && pour !== 'hote' && !clients.has(pour)) pour = 'tous';
-    const l = { n: ++numeroChat, de, nom: auteur.nom, pour, texte, t: Date.now() };
+    const l = { n: ++numeroChat, de, nom: jet && de === 'hote' ? String(jet.nom || auteur.nom).slice(0, 40) : auteur.nom, pour, texte, t: Date.now(), ...(jet && de === 'hote' ? { jet: true } : {}) };
     chat.push(l);
     if (chat.length > 120) chat.shift();
     for (const id of ['hote', ...clients.keys()]) if (pour === 'tous' || id === pour || id === de) envoyerA(id, 'chat', l);
@@ -393,7 +397,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     ouvrir, fermer, envoyer, expulser, infos, oublierJeu, passerInternet, accepter, get ouvert() { return Boolean(serveur); },
     get port() { return port; },
     // Ce que fait l'hôte, comme un joueur : parler, bouger, écrire à un autre.
-    dire: (texte, pour) => dire('hote', texte, pour), bouger: (p) => bouger('hote', p), pair: (vers, donnees) => pair('hote', vers, donnees),
+    dire: (texte, pour, jet) => dire('hote', texte, pour, jet), bouger: (p) => bouger('hote', p), pair: (vers, donnees) => pair('hote', vers, donnees),
   };
 }
 

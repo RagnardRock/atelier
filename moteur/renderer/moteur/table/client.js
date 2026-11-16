@@ -30,8 +30,18 @@ const TableClient = (() => {
     // Saga 1.21.4 : le journal (le récit et les jets), à ouvrir quand on veut relire.
     const journalBouton = el('button', { className: 'joueurs-journal-bouton', type: 'button', textContent: 'Journal', title: 'Relire ce qui s\'est dit et les jets' });
     const journalEl = el('aside', { className: 'joueurs-journal', hidden: true });
-    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche, questionEl, roleEl, journalEl, journalBouton);
+    // Saga 1.32 : la barre des macros de mon héros, et le petit menu de ses marques.
+    const macrosEl = el('div', { className: 'joueurs-macros', hidden: true });
+    const menuEl = el('div', { className: 'table-menu', hidden: true });
+    scene.append(canvas, ordre, boite, jets, pauseEl, attente, fiche, questionEl, roleEl, journalEl, journalBouton, macrosEl, menuEl);
     const plateau = Plateau.creer(canvas);
+    // Saga 1.32 : la règle, les gabarits, le ping.
+    const outils = TableOutils.barre({
+      conteneur: scene, caseM: () => vue?.caseM || 1.5, diagonales: () => vue?.diagonales || 'simple',
+      placer: (g) => window.saga.tableDemander({ type: 'gabarit', ...g }),
+      ping: (c) => window.saga.tableDemander({ type: 'ping', x: c.x, y: c.y }),
+      effacer: () => window.saga.tableDemander({ type: 'gabarit_retirer' }),
+    });
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
     const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
     let jeu = null, vue = null, selection = null, survol = null, imageFiche = '', ficheLarge = false;
@@ -62,7 +72,61 @@ const TableClient = (() => {
       montrerFiche();
       montrerQuestion();
       montrerJournal();
+      montrerMacros();
+      if (v.avis && v.avis.n !== dernierAvis) { if (dernierAvis >= 0) notify?.(v.avis.texte, 'warning', 5000); dernierAvis = v.avis.n; }
+      else if (!v.avis && dernierAvis < 0) dernierAvis = 0;
     });
+
+    // --- Saga 1.32 : mes macros (un clic : le jet ; + : en garder une ; clic droit : l'oublier) ---
+    let dernierAvis = -1, signatureM = '', ajoutMacro = false;
+    function montrerMacros() {
+      const l = vue?.macros;
+      macrosEl.hidden = !Array.isArray(l);
+      if (!Array.isArray(l)) return;
+      const s = JSON.stringify([l, ajoutMacro]);
+      if (s === signatureM) return;
+      if (macrosEl.contains(document.activeElement) && document.activeElement.matches('input')) return;
+      signatureM = s;
+      macrosEl.innerHTML = '';
+      l.forEach((m, k) => {
+        const b = el('button', { className: 'joueurs-macro', type: 'button', textContent: m.nom, title: `${m.formule} · clic droit : oublier` });
+        b.onclick = () => window.saga.tableDemander({ type: 'macro', k });
+        b.oncontextmenu = (e) => { e.preventDefault(); window.saga.tableDemander({ type: 'macro_retirer', k }); };
+        macrosEl.append(b);
+      });
+      if (ajoutMacro) {
+        const nom = el('input', { className: 'multi-champ', type: 'text', maxLength: 30, placeholder: 'Nom (Épée)' });
+        const formule = el('input', { className: 'multi-champ', type: 'text', maxLength: 80, placeholder: '1d20+@for', title: '@for, @dex, @con, @int, @sag, @cha : tes modificateurs · @maitrise · @niveau · « /gr … » : un jet secret pour le MJ' });
+        const f = el('form', { className: 'joueurs-macro-form' }, nom, formule,
+          el('button', { className: 'joueurs-macro', type: 'submit', textContent: 'Garder' }));
+        const non = el('button', { className: 'joueurs-macro', type: 'button', textContent: '✕' });
+        non.onclick = () => { ajoutMacro = false; signatureM = ''; montrerMacros(); };
+        f.append(non);
+        f.onsubmit = (e) => { e.preventDefault(); window.saga.tableDemander({ type: 'macro_ajouter', nom: nom.value, formule: formule.value }); ajoutMacro = false; signatureM = ''; montrerMacros(); };
+        macrosEl.append(f);
+        setTimeout(() => nom.focus(), 0);
+      } else {
+        const plus = el('button', { className: 'joueurs-macro plus', type: 'button', title: 'Garder un jet en macro (dans le chat : /m nom)' }, el('i', { className: 'codicon codicon-add' }), el('span', { textContent: l.length ? '' : 'Macro' }));
+        plus.onclick = () => { ajoutMacro = true; signatureM = ''; montrerMacros(); };
+        macrosEl.append(plus);
+      }
+    }
+    // Le menu des marques de mon héros (clic droit dessus).
+    function menuMarques(x, y, p) {
+      menuEl.innerHTML = '';
+      const a = new Set((p.marques || []).map((m) => m.id));
+      menuEl.append(el('div', { className: 'table-menu-titre', textContent: p.nom }), el('div', { className: 'table-menu-note', textContent: 'Marques' }));
+      menuEl.append(el('div', { className: 'table-menu-marques' }, ...(vue.marques || []).map((m, i) => {
+        const b = el('button', { className: `table-marque${a.has(m.id) ? ' actif' : ''}`, type: 'button', title: m.nom, textContent: m.nom.replace(/^Marque /, '') });
+        b.style.setProperty('--marque', TableOutils.couleurMarque(m, i));
+        b.onclick = () => { window.saga.tableDemander({ type: 'marque', pion: p.id, id: m.id }); b.classList.toggle('actif'); };
+        return b;
+      })));
+      menuEl.hidden = false;
+      const r = scene.getBoundingClientRect();
+      menuEl.style.left = `${Math.min(x - r.left, r.width - 260)}px`;
+      menuEl.style.top = `${Math.min(y - r.top, r.height - menuEl.offsetHeight - 8)}px`;
+    }
 
     // Ce qui n'est pas sur le canvas : l'ordre du tour, ce qui se dit, les jets montrés à tous, la pause.
     function montrer() {
@@ -354,9 +418,11 @@ const TableClient = (() => {
     canvas.addEventListener('mousedown', (e) => {
       if (!jeu || !vue) return;
       const { px, py } = pos(e);
-      if (e.button !== 0) { glisse = { x: e.clientX, y: e.clientY }; return; }
+      menuEl.hidden = true;
+      if (e.button !== 0) { glisse = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, droit: e.button === 2, px, py }; return; }
       const id = plateau.pionSous(px, py, jeu, vue);
       const c = plateau.caseSous(px, py, jeu);
+      if (!q()?.choix && outils.appuyer(c, e)) return;
       // Mon tour en combat : la case où aller, ou la cible.
       const ch = q()?.choix;
       if (ch) {
@@ -378,11 +444,25 @@ const TableClient = (() => {
       if (!jeu) return;
       const { px, py } = pos(e);
       survol = plateau.caseSous(px, py, jeu);
+      outils.bouger(survol);
       if (glisse) { plateau.glisser(e.clientX - glisse.x, e.clientY - glisse.y); glisse.x = e.clientX; glisse.y = e.clientY; }
     });
-    window.addEventListener('mouseup', () => { glisse = null; });
+    window.addEventListener('mouseup', (e) => {
+      const g = glisse;
+      glisse = null;
+      if (outils.occupe) { outils.lacher(); return; }
+      // Un clic droit sans glisser sur mon héros : ses marques.
+      if (g?.droit && Math.abs(e.clientX - g.x0) + Math.abs(e.clientY - g.y0) < 4 && jeu && vue) {
+        const id = plateau.pionSous(g.px, g.py, jeu, vue);
+        const p = id && vue.pions.find((x) => x.id === id);
+        const mien = monHeros();
+        if (p && mien && p.id === mien.id) menuMarques(e.clientX, e.clientY, p);
+      }
+    });
     window.addEventListener('keydown', (e) => {
+      if (!e.ctrlKey && !e.metaKey && outils.touche(e)) return;
       if (e.key !== 'Escape') return;
+      menuEl.hidden = true;
       const x = q();
       if (x?.choix) repondre({ choix: x.choix.n, annuler: true });
       else if (x?.menu?.annulable) repondre({ menu: x.menu.n, k: -1 });
@@ -398,7 +478,7 @@ const TableClient = (() => {
       const ch = vue.question?.choix;
       const cases = ch?.cases ? new Map(ch.cases.map((i) => [i, 'aller'])) : null;
       const cibles = ch?.cibles ? new Set(ch.cibles) : null;
-      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles });
+      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles, outil: outils.dessin(survol) });
     }
     requestAnimationFrame(tour);
     return { plateau, multi, get vue() { return vue; }, get jeu() { return jeu; } };

@@ -21,6 +21,7 @@
 
 const TableEtat = (() => {
   const G = typeof TableGrille !== 'undefined' ? TableGrille : require('./grille.js');
+  const O = typeof TableOutils !== 'undefined' ? TableOutils : require('./outils.js');
 
   // Les réglages du mode table, dans les règles maison du pack JDR (Tafl › Réglages › Règles du jeu).
   function reglages(jeu) {
@@ -54,6 +55,8 @@ const TableEtat = (() => {
     t.pions = (Array.isArray(t.pions) ? t.pions : []).filter((p) => p && typeof p.id === 'string');
     t.cartes = t.cartes && typeof t.cartes === 'object' ? t.cartes : {};
     t.pause = Boolean(t.pause);
+    // Saga 1.32 : les macros du MJ ([{ nom, formule }]).
+    t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
     partie.table = t;
     return t;
   }
@@ -62,6 +65,8 @@ const TableEtat = (() => {
     const c = table.cartes[idCarte];
     c.pieces = c.pieces || {};
     c.cases = c.cases || {};
+    // Saga 1.32 : les gabarits de zone posés sur cette carte (vus de tous).
+    if (!Array.isArray(c.gabarits)) c.gabarits = [];
     return c;
   }
 
@@ -162,11 +167,16 @@ const TableEtat = (() => {
     const m = masque(table, carte, mj ? pourJoueurs : role);
     const voitCase = (x, y) => mj || m[y * carte.largeur + x] === 1;
     const pions = [];
+    const dispo = O.marquesDispo(jeu);
     for (const p of pionsSur(table, carte.id)) {
       if (p.vaincu && p.sorte !== 'heros') continue;
       const montre = p.sorte === 'heros' || (visiblePour(p.visible, role) && voitCase(p.x, p.y));
       if (!montre) continue;
       const v = { id: p.id, sorte: p.sorte, x: p.x, y: p.y, direction: p.direction || 'bas', nom: p.nom || '' };
+      // Saga 1.32 : les marques posées à la main, puis (pour un héros) ses états des règles.
+      const ids = [...(Array.isArray(p.marques) ? p.marques : [])];
+      if (p.sorte === 'heros') for (const e of membreDe(partie, p)?.etats || []) if (!ids.includes(e)) ids.push(e);
+      if (ids.length) v.marques = ids.map((id) => dispo.find((m) => m.id === id)).filter(Boolean).map((m, i) => ({ id: m.id, nom: m.nom, couleur: O.couleurMarque(m, i) }));
       if (p.sorte === 'heros') {
         const c = membreDe(partie, p);
         if (!c) continue;
@@ -201,15 +211,23 @@ const TableEtat = (() => {
       actif: ids.has(ctx.combat.actif) ? ctx.combat.actif : '',
       reste: ctx.combat.reste ?? null,
     } : null;
-    const journal = (partie.jdr?.journal || []).filter((l) => mj || !l.cache).slice(-30);
+    // Un jet secret d'un joueur (/gr) : le MJ et lui seul le voient.
+    const journal = (partie.jdr?.journal || []).filter((l) => mj || !l.cache || (l.voit && l.voit === role.heros)).slice(-30);
     const out = {
       v: 1, role: mj ? 'mj' : role.perso ? `perso:${role.perso}` : 'joueurs',
       carte: carte.id, nom: carte.nom, largeur: carte.largeur, hauteur: carte.hauteur,
       brouillard: brouillard(table, carte), masque: Array.from(m).join(''),
       pions, pnj, combat, journal, pause: Boolean(table.pause),
       scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '', ...(Array.isArray(ctx.scene.choix) ? { choix: ctx.scene.choix.map(String) } : {}) } : null,
-      caseM: reglages(jeu).caseM,
+      caseM: reglages(jeu).caseM, diagonales: reglages(jeu).diagonales,
+      // Saga 1.32 : les gabarits (tout le monde les voit), les pings récents.
+      gabarits: etatCarte(table, carte.id).gabarits.map((g) => ({ ...g, mien: mj || g.auteur === auteur(role) })),
+      pings: (ctx.pings || []).filter((q) => q.carte === carte.id).map(({ n, x, y, qui, couleur }) => ({ n, x, y, qui, couleur })),
+      marques: dispo,
     };
+    // Saga 1.32 : les macros (celles de mon héros, ou celles du MJ).
+    if (mj) out.macros = table.macros;
+    else { const c = partie.equipe.find((q) => q?.jdr && estMien(role, q)); if (c) out.macros = Array.isArray(c.macros) ? c.macros : []; }
     // Saga 1.0 : le joueur d'un héros reçoit sa fiche (lui seul), pour la lire et lancer ses jets.
     if (!mj && role.perso && ctx.ficheDe) out.fiche = ctx.ficheDe(role);
     if (!mj && role.heros) out.moi = role.heros;
@@ -250,6 +268,57 @@ const TableEtat = (() => {
         if (x !== pion.x || y !== pion.y) pion.direction = Math.abs(x - pion.x) >= Math.abs(y - pion.y) ? (x > pion.x ? 'droite' : 'gauche') : (y > pion.y ? 'bas' : 'haut');
         pion.x = x; pion.y = y;
         return { ok: true, pion };
+      }
+      // --- Saga 1.32 : les outils de la séance ---
+      case 'ping': {
+        const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
+        if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');
+        return { ok: true, ping: { carte: carte.id, x, y } };
+      }
+      case 'gabarit': {
+        if (role.spectateur) return non('Les spectateurs ne posent pas de gabarit.');
+        const l = etatCarte(table, carte.id).gabarits;
+        if (l.filter((g) => g.auteur === auteur(role)).length >= 12) return non('Pas plus de 12 gabarits chacun : efface les anciens.');
+        const g = { id: `g-${Date.now().toString(36)}-${l.length}`, ...O.normGabarit(a, carte), auteur: auteur(role) };
+        l.push(g);
+        return { ok: true, gabarit: g };
+      }
+      case 'gabarit_retirer': {
+        const ec = etatCarte(table, carte.id);
+        const avant = ec.gabarits.length;
+        // Sans id : tous les miens (le MJ : tous ceux de la carte).
+        const peut = (g) => role.mj || g.auteur === auteur(role);
+        ec.gabarits = ec.gabarits.filter((g) => !(peut(g) && (!a.id || g.id === a.id)));
+        return ec.gabarits.length < avant ? { ok: true } : non('Aucun gabarit à toi ici.');
+      }
+      case 'marque': {
+        if (!pion) return non('Pion inconnu.');
+        if (!role.mj) {
+          if (pion.sorte !== 'heros' || !estMien(role, membreDe(partie, pion))) return non('Tu ne marques que ton héros.');
+        }
+        const id = String(a.id || '');
+        if (!O.marquesDispo(jeu).some((m) => m.id === id)) return non('Marque inconnue.');
+        const l = Array.isArray(pion.marques) ? pion.marques : [];
+        pion.marques = a.valeur === false || (a.valeur === undefined && l.includes(id)) ? l.filter((x) => x !== id) : [...new Set([...l, id])];
+        return { ok: true };
+      }
+      case 'macro_ajouter':
+      case 'macro_retirer': {
+        const c = role.mj ? null : partie.equipe.find((q) => q?.jdr && estMien(role, q));
+        if (!role.mj && !c) return non('Il te faut un héros pour garder des macros.');
+        const l = role.mj ? table.macros : (c.macros = Array.isArray(c.macros) ? c.macros : []);
+        if (a.type === 'macro_retirer') {
+          const k = Math.round(Number(a.k));
+          if (!(k >= 0 && k < l.length)) return non('Macro inconnue.');
+          l.splice(k, 1);
+          return { ok: true };
+        }
+        const nom = String(a.nom || '').trim().slice(0, 30), formule = String(a.formule || '').trim().slice(0, 80);
+        if (!nom || !formule) return non('Une macro a un nom et une formule.');
+        if (l.length >= 20) return non('Pas plus de 20 macros.');
+        const k = l.findIndex((m) => m.nom.toLowerCase() === nom.toLowerCase());
+        if (k >= 0) l[k] = { nom, formule }; else l.push({ nom, formule });
+        return { ok: true };
       }
       default:
         break;
@@ -299,7 +368,10 @@ const TableEtat = (() => {
     }
   }
 
-  return { reglages, normVisible, visiblePour, estMien, preparer, etatCarte, pieces, dansZone, brouillard, visibilitePiece, masque, pionsSur, occupee, caseLibre, placerHeros, membreDe, poserGroupe, sante, vue, agir };
+  // Qui a posé un gabarit : 'mj', ou le pion du héros du joueur.
+  const auteur = (role) => (role.mj ? 'mj' : role.heros || (role.perso ? `perso:${role.perso}` : 'joueurs'));
+
+  return { auteur, reglages, normVisible, visiblePour, estMien, preparer, etatCarte, pieces, dansZone, brouillard, visibilitePiece, masque, pionsSur, occupee, caseLibre, placerHeros, membreDe, poserGroupe, sante, vue, agir };
 })();
 
 if (typeof module !== 'undefined') module.exports = TableEtat;

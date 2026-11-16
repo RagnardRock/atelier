@@ -559,7 +559,7 @@ handle('reseau:ouvrir', async (_event, o) => {
   return reseau.ouvrir(o && typeof o === 'object' ? o : {});
 });
 // L'hôte joue aussi : il parle, il bouge, il écrit à un autre joueur (échanges, duels).
-ipcMain.on('reseau:dire', (event, texte, pour) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous')); });
+ipcMain.on('reseau:dire', (event, texte, pour, jet) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous'), jet && typeof jet === 'object' ? { nom: String(jet.nom || '') } : null); });
 ipcMain.on('reseau:bouger', (event, p) => { if (event.sender === fenetrePrincipale?.webContents) reseau.bouger(p); });
 ipcMain.on('reseau:pair', (event, vers, donnees) => { if (event.sender === fenetrePrincipale?.webContents) reseau.pair(String(vers || ''), donnees); });
 handle('reseau:fermer', async () => { await internet.fermer(); reseau.fermer(); return reseau.infos(); });

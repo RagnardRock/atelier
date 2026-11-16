@@ -30,6 +30,13 @@ const TableMode = (() => {
     const menu = el('div', { className: 'table-menu', hidden: true });
     scene.append(canvas, colonne, menu);
     const plateau = Plateau.creer(canvas);
+    // Saga 1.32 : la règle, les gabarits, le ping (les mêmes outils que l'écran des joueurs).
+    const outils = TableOutils.barre({
+      conteneur: scene, caseM: () => R().caseM, diagonales: () => R().diagonales,
+      placer: (g) => agir({ type: 'gabarit', ...g }),
+      ping: (c) => agir({ type: 'ping', x: c.x, y: c.y }),
+      effacer: () => agir({ type: 'gabarit_retirer' }),
+    });
     let actif = false;
     let selection = null, survol = null, picker = null, pinceau = null, apercu = null;
     let combat = null;     // { tour, ordre, actif, reste, heros: [pion], ennemis: [pion] }
@@ -46,6 +53,10 @@ const TableMode = (() => {
       if (recit.length > 80) recit.shift();
     }
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
+    // Saga 1.32 : les pings (quelques secondes), et les avis pour un ami (« formule incomprise »…).
+    let pings = [], numeroPing = 0;
+    const avis = new Map(); // nom → { n, texte }
+    let numeroAvis = 0;
     let derniereVue = null, envoye = '', chronoEnvoi = 0;
     // Saga 1.0 : le multijoueur. Chaque ami connecté reçoit SA vue (celle de son rôle), jamais celle du MJ.
     const envoyes = new Map(); // id du client → le dernier texte envoyé
@@ -62,6 +73,7 @@ const TableMode = (() => {
       combat: combat ? { tour: combat.tour, ordre: combat.ordre, actif: combat.actif, reste: combat.reste } : null,
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
       ficheDe: (perso) => fichePour(perso),
+      pings: pings.filter((q) => performance.now() - q.t < 3000),
     });
     // La fiche qu'un joueur reçoit (la sienne) : de quoi la lire et lancer ses jets.
     function fichePour(role) {
@@ -202,10 +214,17 @@ const TableMode = (() => {
     }
 
     // --- Ce que le MJ fait sur le plateau ---
-    function agir(a, r = { mj: true }) {
+    function agir(a, r = { mj: true }, nom = '') {
       const res = E.agir(jeu(), partie(), r, a, ctxVue());
       if (!res.ok && r.mj) h.message(res.erreur);
+      else if (!res.ok && nom) avertir(nom, res.erreur);
       if (res.jet) lancerJet(res.jet);
+      if (res.ping) {
+        const qui = r.mj ? 'MJ' : nom || 'Joueurs';
+        pings.push({ n: ++numeroPing, ...res.ping, qui, couleur: r.mj ? '#ffd36b' : couleurDe(qui), t: performance.now() });
+        if (pings.length > 12) pings.shift();
+      }
+      if (res.ok && a.type !== 'ping') envoyes.clear();
       panneau?.rafraichir();
       return res;
     }
@@ -220,6 +239,41 @@ const TableMode = (() => {
       } catch (err) { h.message(`Jet impossible : ${err.message}`); }
       panneau?.rafraichir();
     }
+    // --- Saga 1.32 : les jets tapés dans le chat (/r, /gr, /m) et les macros ---
+    const COULEURS_JOUEURS = ['#5ea8ff', '#6fd17d', '#e86bd0', '#4cd4c8', '#f0a04c', '#a77bff'];
+    function couleurDe(nom) { let k = 0; for (const ch of nom) k = (k * 31 + ch.charCodeAt(0)) | 0; return COULEURS_JOUEURS[Math.abs(k) % COULEURS_JOUEURS.length]; }
+    function avertir(nom, texte) { if (nom) { avis.set(nom, { n: ++numeroAvis, texte }); envoyes.clear(); } }
+    // r : le rôle de celui qui lance ; nom : son nom (MJ : celui de l'hôte) ; client : son id réseau.
+    function commande(texte, r, nom, client = '') {
+      const dire = (t) => (r.mj ? h.message(t) : avertir(nom, t));
+      let cmd = TableOutils.commande(texte);
+      if (!cmd) return;
+      const c = r.mj ? null : herosDuGroupe().find((q) => E.estMien(r, q)) || null;
+      if (cmd.sorte === 'macro') {
+        const l = r.mj ? table().macros || [] : c?.macros || [];
+        const m = l.find((x) => x.nom.toLowerCase() === cmd.nom.toLowerCase()) || l[Math.round(Number(cmd.nom)) - 1];
+        if (!m) { dire(`Pas de macro « ${cmd.nom} ».`); return; }
+        cmd = TableOutils.commande(m.formule.startsWith('/') ? m.formule : `/r ${m.formule}`) || { sorte: 'jet', formule: m.formule, quoi: '' };
+        if (!cmd.quoi) cmd.quoi = m.nom;
+      }
+      lancerFormule({ ...cmd, r, nom, client, c, dire });
+    }
+    function lancerFormule({ formule, quoi, cache, r, nom, client, c, dire }) {
+      if (table().pause && !r.mj) { dire('La partie est en pause.'); return; }
+      const f = TableOutils.remplacer(formule, TableOutils.refsHeros(jeu(), c));
+      if (f.erreur) { dire(`${f.erreur}${c ? '' : ' (il faut un héros pour les @)'}.`); return; }
+      const res = JdrDes.lancer(partie(), f.formule);
+      if (!res.des.length && !res.bonus) { dire(`Formule de dés incomprise : « ${formule} »`); return; }
+      const qui = c ? JdrPerso.nom(jeu(), c) : r.mj ? 'MJ' : nom;
+      const l = JdrDes.noter(partie(), { qui, quoi: quoi || 'Jet', formule: res.formule, des: res.des, bonus: res.bonus, total: res.total, cache: Boolean(cache), voit: cache && !r.mj ? r.heros || '' : '' });
+      h.des({ titre: `${qui} · ${quoi || 'Jet'}${cache ? ' (secret)' : ''}`, lignes: [l] });
+      // Le chat aussi le dit (un jet secret : au MJ, et à celui qui l'a lancé).
+      const m = h.multi?.();
+      if (m?.actif) window.saga.reseauDire?.(`🎲 ${quoi || 'Jet'} : ${JdrDes.detail(l)}`, cache ? (client && client !== 'hote' ? client : 'hote') : 'tous', { nom: qui });
+      envoyes.clear();
+      panneau?.rafraichir();
+    }
+
     // Un héros arrivé sur sa case (hors combat) : le meneur du groupe est là ; un déclencheur ou un
     // téléporteur sous ses pieds se lance.
     function arrive(p) {
@@ -271,6 +325,7 @@ const TableMode = (() => {
       if (e.button !== 0) return;
       const c = plateau.caseSous(px, py, jeu());
       if (picker) { cliquerPicker(c, plateau.pionSous(px, py, jeu(), derniereVue)); return; }
+      if (outils.appuyer(c, e)) return;
       if (pinceau) { glisse = { pinceau: true }; peindre(c); return; }
       clicGauche(c, plateau.pionSous(px, py, jeu(), derniereVue), e);
     });
@@ -278,6 +333,7 @@ const TableMode = (() => {
       if (!actif || !jeu()) return;
       const { px, py } = pos(e);
       survol = plateau.caseSous(px, py, jeu());
+      outils.bouger(survol);
       if (glisse?.pinceau) { peindre(survol); return; }
       if (glisse && !glisse.pinceau) {
         const dx = e.clientX - glisse.x, dy = e.clientY - glisse.y;
@@ -285,12 +341,14 @@ const TableMode = (() => {
         if (glisse.bouge) { plateau.glisser(dx, dy); glisse.x = e.clientX; glisse.y = e.clientY; }
       }
     });
+    window.addEventListener('keydown', (e) => { if (actif && !ficheMj && !e.ctrlKey && !e.metaKey) outils.touche(e); });
     window.addEventListener('mouseup', (e) => {
+      if (actif && outils.occupe) { outils.lacher(); return; }
       const g = glisse;
       glisse = null;
       if (!actif || !g || g.pinceau) return;
       // Un clic droit sans glisser : le menu du pion (ou de la case).
-      if (g.droit && !g.bouge) menuPion(e.clientX, e.clientY, plateau.pionSous(g.px, g.py, jeu(), derniereVue));
+      if (g.droit && !g.bouge) menuPion(e.clientX, e.clientY, plateau.pionSous(g.px, g.py, jeu(), derniereVue), plateau.caseSous(g.px, g.py, jeu()));
     });
 
     function clicGauche(c, id, e) {
@@ -311,8 +369,21 @@ const TableMode = (() => {
 
     // Le petit menu d'un pion, d'un PNJ ou d'un événement (clic droit, ou clic sur un événement).
     function fermerMenu() { menu.hidden = true; menu.innerHTML = ''; }
-    function menuPion(x, y, id) {
+    function menuPion(x, y, id, c = null) {
       fermerMenu();
+      // Saga 1.32 : un clic droit sur un gabarit (sans pion) : l'effacer.
+      if (!id && c) {
+        const i = c.y * carte().largeur + c.x;
+        const g = [...(derniereVue?.gabarits || [])].reverse().find((q) => TableOutils.casesGabarit(carte(), q, R().diagonales).includes(i) || (q.x === c.x && q.y === c.y));
+        if (g) {
+          menu.append(el('div', { className: 'table-menu-titre', textContent: 'Gabarit' }), bouton('trash', 'Effacer ce gabarit', () => agir({ type: 'gabarit_retirer', id: g.id })));
+          menu.hidden = false;
+          const r = scene.getBoundingClientRect();
+          menu.style.left = `${Math.min(x - r.left, r.width - 260)}px`;
+          menu.style.top = `${Math.min(y - r.top, r.height - menu.offsetHeight - 8)}px`;
+        }
+        return;
+      }
       if (!id) return;
       const items = [];
       if (id.startsWith('ev:')) {
@@ -326,6 +397,15 @@ const TableMode = (() => {
         if (!p) return;
         const nom = p.sorte === 'heros' ? JdrPerso.nom(jeu(), E.membreDe(partie(), p) || {}) : p.nom;
         items.push(el('div', { className: 'table-menu-titre', textContent: nom }));
+        // Saga 1.32 : les marques (les états du jeu, des couleurs), vues de tous sur le pion.
+        const marques = new Set(p.marques || []);
+        const sous = el('div', { className: 'table-menu-marques' }, ...TableOutils.marquesDispo(jeu()).map((m, i) => {
+          const b = el('button', { className: `table-marque${marques.has(m.id) ? ' actif' : ''}`, type: 'button', title: m.nom, textContent: m.nom.replace(/^Marque /, '') });
+          b.style.setProperty('--marque', TableOutils.couleurMarque(m, i));
+          b.onclick = () => { agir({ type: 'marque', pion: id, id: m.id }); b.classList.toggle('actif'); };
+          return b;
+        }));
+        items.push(el('div', { className: 'table-menu-note', textContent: 'Marques' }), sous);
         if (p.sorte !== 'heros') {
           for (const [v, l] of VISIBILITES(jeu(), partie())) items.push(bouton(E.normVisible(p.visible) === v ? 'check' : 'blank', `Visible par : ${l}`, () => agir({ type: 'visibilite', pion: id, visible: v })));
           if (!combat) items.push(bouton('trash', 'Retirer de la table', () => { agir({ type: 'retirer', pion: id }); if (selection === id) selection = null; }));
@@ -602,11 +682,20 @@ const TableMode = (() => {
     // --- Les joueurs (leur fenêtre, ou le navigateur d'un ami) : leurs demandes, vérifiées ici ---
     function recevoir(a) {
       if (!actif || !a || typeof a !== 'object') return;
+      // Saga 1.32 : le MJ a tapé une commande dans son chat.
+      if (a.client === 'hote') { if (a.type === 'commande') commande(a.texte, { mj: true }, 'MJ', 'hote'); return; }
       // D'un ami par le réseau : son rôle décide, pas ce qu'il dit être.
       if (a.client) {
         const nom = h.multi?.()?.nomDe(a.client) || '';
         if (!nom) return;
         const r = rolePour(nom);
+        // Saga 1.32 : les jets du chat, les macros, les marques, les gabarits, le ping.
+        if (a.type === 'commande') { if (!creations.has(nom)) commande(String(a.texte || ''), r, nom, a.client); return; }
+        if (a.type === 'macro') { const m = herosDuGroupe().find((q) => E.estMien(r, q))?.macros?.[Math.round(Number(a.k))]; if (m) commande(`/m ${m.nom}`, r, nom, a.client); return; }
+        if (['ping', 'gabarit', 'gabarit_retirer', 'marque', 'macro_ajouter', 'macro_retirer'].includes(a.type)) {
+          agir({ ...a, pion: typeof a.pion === 'string' ? a.pion : undefined }, r, nom);
+          return;
+        }
         // Saga 1.21.2 : un ami sans héros en prend un libre ou crée le sien (étape par étape, ici).
         if (a.type === 'creation') { repondreCreation(nom, a); return; }
         if (r.spectateur) {
@@ -640,6 +729,8 @@ const TableMode = (() => {
         agir({ type: 'jet', sorte: a.sorte, id: a.id, quoi: a.quoi }, r);
       } else if (a.type === 'repondre') {
         repondre(a, r);
+      } else if (a.type === 'ping' || a.type === 'gabarit' || a.type === 'gabarit_retirer') {
+        agir(a, r);
       }
     }
 
@@ -791,6 +882,7 @@ const TableMode = (() => {
     // Ce qu'un ami sans héros voit en plus : les héros libres, sa création en cours.
     function extrasPour(nom, r) {
       const x = {};
+      if (avis.has(nom)) x.avis = avis.get(nom);
       const e = creations.get(nom);
       if (e) x.creation = e.q || { sorte: 'attente' };
       if (vote && !r.spectateur) x.vote = { n: vote.n, comptes: comptes(), moi: vote.votes.has(nom) ? vote.votes.get(nom) : -1 };
@@ -848,7 +940,7 @@ const TableMode = (() => {
           }
         }
       }
-      plateau.dessiner({ jeu: jeu(), carte: carte(), vue: derniereVue, maintenant, mj: r.mj, apercu: !r.mj, cases: cases || casesZone, cibles: picker?.sorte === 'pion' ? picker.cibles : null, selection, survol });
+      plateau.dessiner({ jeu: jeu(), carte: carte(), vue: derniereVue, maintenant, mj: r.mj, apercu: !r.mj, cases: cases || casesZone, cibles: picker?.sorte === 'pion' ? picker.cibles : null, selection, survol, outil: outils.dessin(survol) });
       // L'écran des joueurs : sa vue, au plus 8 fois par seconde, seulement quand elle change.
       chronoEnvoi += dt;
       if (chronoEnvoi >= 0.12) {
@@ -902,6 +994,9 @@ const TableMode = (() => {
       pointDe: (x, y) => { const r = canvas.getBoundingClientRect(); const q = plateau.pointDe(x, y, jeu()); return { x: r.left + q.px, y: r.top + q.py }; },
       musique: (c) => h.musique(c), son: (c) => h.son(c), message: (t) => h.message(t), des: (o) => h.des(o),
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),
+      // Saga 1.32 : une formule ou une commande du MJ (le panneau, ses macros).
+      commande: (texte) => commande(texte, { mj: true }, 'MJ', 'hote'),
+      outils,
       occupe: () => h.occupe(),
     };
     return api;

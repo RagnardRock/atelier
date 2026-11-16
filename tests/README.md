@@ -25,6 +25,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/6-saga-perso-base.js` : le personnage de base de Saga 1.31 (ses planches en 16 et 32 px),
   qui marche et frappe en temps réel dans « Le petit donjon ».
 
+- `essais/7-saga-table-outils.js` : les outils de la séance au mode table de Saga 1.32 (jets `/r` et `/gr`,
+  macros et `@`, gabarits, ping, marques, la règle, l'écran d'un joueur et ses demandes).
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```
