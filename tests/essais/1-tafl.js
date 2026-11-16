@@ -106,4 +106,37 @@ module.exports = [
       sansErreur(erreurs, 'en fabriquant le personnage de base');
     },
   },
+  {
+    nom: 'Tafl : les mécaniques du jeu, sans code (Tafl 1.36)',
+    async faire(ctx) {
+      const { page, erreurs } = await ouvrirTafl(ctx.navigateur, ctx);
+      // L'onglet Réglages › Mécaniques, dessiné seul : le modèle « Armure et blessures », une formule fausse signalée.
+      await page.evaluate(() => {
+        const r = { jdr: DonneesJdr.normRegles({}) };
+        window.essaiMeca = r;
+        const boite = document.createElement('div');
+        boite.id = 'essai-meca';
+        boite.className = 'editor-form';
+        boite.style.cssText = 'position:fixed;inset:20px;z-index:9999;overflow:auto;padding:20px;background:#15161c;border-radius:12px';
+        boite.append(...DonneesJdr.formMecaniques(r, { work: {}, change: () => {} }));
+        document.body.append(boite);
+      });
+      await page.getByRole('button', { name: 'Armure et blessures' }).click();
+      const r = await page.evaluate(() => {
+        const j = window.essaiMeca.jdr;
+        const n = DonneesJdr.normRegles(JSON.parse(JSON.stringify(j)));
+        return { defense: j.mecaniques.defense, paliers: j.mecaniques.paliers.length, tables: j.mecaniques.tables.length, champs: j.fiche.champs.map((c) => c.id), garde: Boolean(n.mecaniques?.active && n.mecaniques.paliers.length === 3) };
+      });
+      egal(r.defense, 'couverture + esquive', 'le modèle remplit la défense');
+      egal([r.paliers, r.tables], [3, 1], 'trois paliers, une table de blessures');
+      egal(r.champs, ['couverture', 'esquive', 'armure'], 'les champs lus par les formules sont ajoutés à la fiche');
+      vrai(r.garde, 'les mécaniques passent la normalisation de Tafl (enregistrées)');
+      const formule = page.locator('#essai-meca .mecanique-formule input').first();
+      await formule.fill('couverture + agilite');
+      vrai((await page.locator('#essai-meca .mecanique-formule .unit').first().textContent()).startsWith('⚠'), 'une formule avec un nom inconnu est signalée');
+      await formule.fill('couverture + esquive');
+      if (process.env.CAPTURES) await page.locator('#essai-meca').screenshot({ path: `${process.env.CAPTURES}/1-tafl-mecaniques.png` });
+      sansErreur(erreurs, 'dans l\'onglet Mécaniques');
+    },
+  },
 ];

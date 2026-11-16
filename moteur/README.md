@@ -390,6 +390,19 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.41 : des mécaniques à soi, sans code (avec Tafl 1.36)
+
+Tafl › Données › Réglages › **Mécaniques** (pack JDR) change le fonctionnement du jeu sans script ; Saga le joue
+(`regles/jdr/mecaniques.js`) :
+- **Toucher** : une formule à la place de la CA (« couverture + esquive ») ;
+- **Dégâts** : ce que l'armure retire (« armure »), avec un minimum ;
+- **Paliers de santé** en % des PV max : un malus aux attaques, tests et sauvegardes ; une table tirée une fois en
+  y entrant (une blessure qui reste sur la fiche) ; des jets pour tenir à chaque tour de combat ;
+- **Tables aléatoires** et **jets pour tenir** (formule, seuil, réussites pour être stabilisé, échecs pour mourir).
+
+Les formules lisent les champs de la Fiche des personnages. Deux modèles : « D&D 5e » (les règles du pack) et
+« Armure et blessures ». La fiche montre la défense, l'armure, le palier et les blessures ; le combat aussi.
+
 ## Saga 1.40 : installer le compagnon
 
 - Le compagnon propose de s'installer comme une appli : un bandeau « Installer l'appli » (un toucher sur Android et sur PC ; sur iPhone, le pas-à-pas Partager › Sur l'écran d'accueil), aussi sur l'accueil. La croix le range pour de bon. Le navigateur exige ce geste : un QR code ne peut pas installer l'appli tout seul.

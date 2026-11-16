@@ -23,6 +23,17 @@ const JdrFiches = (() => {
       { nom: 'Bonus de maîtrise', valeur: B.signe(P.pb(c)) },
       { nom: 'Perception passive', valeur: String(P.perceptionPassive(jeu, c)) },
       { nom: 'État', valeur: etat },
+      // Saga 1.41 : les mécaniques du jeu : sa défense, son palier de santé, ses blessures qui restent.
+      ...(() => {
+        if (typeof JdrMeca === 'undefined' || !JdrMeca.meca(jeu)) return [];
+        const M = JdrMeca.meca(jeu), v = JdrMeca.varsHeros(jeu, c), l = [];
+        if (M.defense) l.push({ nom: 'Défense', valeur: String(JdrMeca.defense(jeu, v, P.ca(jeu, c))), detail: M.defense });
+        if (M.absorption) l.push({ nom: 'Armure', valeur: String(JdrMeca.absorption(jeu, v)), detail: `retirée des dégâts (${M.absorption})` });
+        const p = JdrMeca.palier(jeu, c.pv, max), mal = JdrMeca.malus(jeu, c);
+        if (M.paliers.length) l.push({ nom: 'Santé', valeur: p?.nom || 'En forme', detail: mal ? `${mal > 0 ? '+' : ''}${mal} à ses jets` : '' });
+        for (const b of c.blessures || []) l.push({ nom: b.nom, valeur: b.texte, detail: b.malus ? `${b.malus > 0 ? '+' : ''}${b.malus} pour de bon` : '' });
+        return l;
+      })(),
       B.regles(jeu).progression === 'jalons'
         ? { nom: 'Progression', valeur: 'par jalons', detail: 'le niveau monte avec l\'histoire' }
         : { nom: 'Expérience', valeur: `${c.xp}`, detail: auMax ? 'niveau maximum' : P.peutMonter(jeu, c) ? `peut passer au niveau ${c.niveau + 1} !` : `encore ${Math.max(0, xpApres - c.xp)} pour le niveau ${c.niveau + 1}`, barre: auMax ? 1 : (c.xp - xpAvant) / Math.max(1, xpApres - xpAvant), couleur: '#4aa8ff' },

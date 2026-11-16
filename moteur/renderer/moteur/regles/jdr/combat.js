@@ -47,6 +47,7 @@ const JdrCombat = (() => {
       camp: 'heros', i, c, etats: (c.etats || []).map((id) => ({ id, garde: true })), bonus: [], concentration: null,
       esquive: false, cache: false, avantageProchain: false, rage: false, sournoise: false, init: 0,
     }));
+    if (JdrMeca.meca(jeu)) for (const h of heros) JdrMeca.caler(jeu, h.c);
     const monstres = [];
     for (const x of g?.monstres || []) {
       const m = B.trouver(jeu, 'monstres_jdr', x.monstre);
@@ -88,7 +89,12 @@ const JdrCombat = (() => {
     const effets = (u) => P.effetsEtats(jeu, u.etats.map((e) => e.id));
     const aEtat = (u, id) => u.etats.some((e) => e.id === id);
     const incapable = (u) => effets(u).has('incapable');
-    const caDe = (u) => (estHeros(u) ? P.ca(jeu, u.c) : Number(u.m.ca) || 10) + u.bonus.reduce((s, b) => s + (Number(b.ca) || 0), 0);
+    // Saga 1.41 : les mécaniques du jeu (Tafl › Réglages › Mécaniques) : une défense à la place de la CA.
+    const M = JdrMeca.meca(jeu);
+    const varsDe = (u) => (estHeros(u) ? JdrMeca.varsHeros(jeu, u.c) : JdrMeca.varsMonstre(u.m, pv(u), pvMax(u)));
+    const caBrute = (u) => (estHeros(u) ? P.ca(jeu, u.c) : Number(u.m.ca) || 10) + u.bonus.reduce((s, b) => s + (Number(b.ca) || 0), 0);
+    const caDe = (u) => (M?.defense ? JdrMeca.defense(jeu, varsDe(u), caBrute(u)) : caBrute(u));
+    const nomDefense = M?.defense ? 'Défense' : 'CA';
     const allies = (u) => (estHeros(u) ? heros : monstres);
     const adversaires = (u) => (estHeros(u) ? monstres : heros);
     const vivants = (l) => l.filter(debout);
@@ -99,9 +105,10 @@ const JdrCombat = (() => {
       if (u.concentration) l.push('CONC');
       if (u.rage) l.push('RAGE');
       if (estHeros(u) && !debout(u)) l.unshift(u.c.mort_definitive ? 'MORT' : u.c.stable ? 'STABLE' : `MOURANT ${u.c.mort.succes}✓ ${u.c.mort.echecs}✗`);
+      else if (estHeros(u) && M && u.c.palier) l.unshift(u.c.palier.toUpperCase() + (u.c.jets && !u.c.jets.stable ? ` ${u.c.jets.succes}✓ ${u.c.jets.echecs}✗` : ''));
       return l.join(' ');
     };
-    const vueHeros = (u) => ({ nom: nom(u), apparence: P.apparence(jeu, u.c), pv: pv(u), pvMax: pvMax(u), pm: 0, pmMax: 0, info: `CA ${caDe(u)}${u.c.pv_temp ? ` · +${u.c.pv_temp}` : ''}`, statut: statutCourt(u), ko: !debout(u) });
+    const vueHeros = (u) => ({ nom: nom(u), apparence: P.apparence(jeu, u.c), pv: pv(u), pvMax: pvMax(u), pm: 0, pmMax: 0, info: `${nomDefense} ${caDe(u)}${u.c.pv_temp ? ` · +${u.c.pv_temp}` : ''}`, statut: statutCourt(u), ko: !debout(u) });
     const vueMonstre = (u) => ({ nom: u.nom, pv: u.pv, pvMax: u.pvMax, statut: statutCourt(u), image: u.m.image || '', taille: u.m.taille_ecran || (['grande', 'tres_grande', 'gigantesque', 'grand'].includes(u.m.taille) ? 'grand' : ['tres_petite', 'petite', 'petit'].includes(u.m.taille) ? 'petit' : 'moyen'), boss: Boolean(u.m.boss), ko: !debout(u) });
     const maj = (u) => (estHeros(u) ? ui.heros(u.i, vueHeros(u)) : ui.ennemi(u.i, vueMonstre(u)));
     // Un jet d'un monstre, caché aux joueurs si le MJ le veut (mode table, règle maison jets_mj_caches).
@@ -195,6 +202,7 @@ const JdrCombat = (() => {
       if (estHeros(u)) u.c.pv = apres; else u.pv = apres;
       ui.nombre(u.camp, u.i, String(n), critique ? 'critique' : 'degats');
       await ui.animer(u.camp, u.i, 'touche');
+      if (M && estHeros(u)) { JdrMeca.touche(u.c); if (apres > 0) await suivrePalier(u); }
       maj(u);
       if (apres <= 0) await tomber(u, { reste: reste - avant });
       else if (u.concentration) {
@@ -206,6 +214,15 @@ const JdrCombat = (() => {
       // Un coup réveille celui qui dort (le sort Sommeil).
       if (aEtat(u, 'inconscient') && debout(u)) { oterEtat(u, 'inconscient'); await ui.message(`${Le(u)} se réveille !`); }
       return n;
+    }
+    // Saga 1.41 : un héros change de palier de santé (Mécaniques) : son malus, sa blessure tirée sur la table.
+    async function suivrePalier(u) {
+      const s = JdrMeca.suivre(jeu, partie, u.c);
+      if (!s) return;
+      if (s.sort) { if (!s.palier) await ui.message(`${nom(u)} va mieux.`); return; }
+      const p = s.entre;
+      await ui.message(`${nom(u)} : ${p.nom.toLowerCase()}${p.malus ? ` (${p.malus > 0 ? '+' : ''}${p.malus} à ses jets)` : ''}.`);
+      if (s.blessure) await ui.message(s.blessure.texte ? `${s.blessure.nom} (${s.blessure.jet}) : ${s.blessure.texte}${s.blessure.malus ? ` (${s.blessure.malus > 0 ? '+' : ''}${s.blessure.malus} pour de bon)` : ''}.` : `${s.blessure.nom} : ${s.blessure.jet}, rien.`);
     }
     async function soigner(u, n) {
       if (estHeros(u) && u.c.mort_definitive) { ui.nombre(u.camp, u.i, 'Trop tard', 'info'); return 0; }
@@ -220,6 +237,7 @@ const JdrCombat = (() => {
       }
       ui.nombre(u.camp, u.i, String(v - avant), 'soin');
       await ui.animer(u.camp, u.i, 'soin');
+      if (M && estHeros(u)) await suivrePalier(u);
       maj(u);
       return v - avant;
     }
@@ -274,7 +292,8 @@ const JdrCombat = (() => {
       u.avantageProchain = false;
       const des = D.d20(partie, { avantage, desavantage });
       const bonusSorts = u.bonus.filter((b) => b.attaque).map((b) => D.lancer(partie, b.attaque).total).reduce((s, x) => s + x, 0);
-      const bonus = Math.round(await Maison.formule('attaque', { naturel: des.naturel, bonus: a.bonus, magie: Number(a.magie) || 0, sort: Boolean(sort), distance: Boolean(a.distance) }, () => a.bonus)) + bonusSorts;
+      const bonus = Math.round(await Maison.formule('attaque', { naturel: des.naturel, bonus: a.bonus, magie: Number(a.magie) || 0, sort: Boolean(sort), distance: Boolean(a.distance) }, () => a.bonus)) + bonusSorts
+        + (M && estHeros(u) ? JdrMeca.malus(jeu, u.c) : 0); // Saga 1.41 : le malus de ses blessures
       // Le critique : 20 naturel (19 pour le champion, avec l'aptitude « critique_ameliore »).
       const critMin = estHeros(u) && !sort ? Number(P.palier(jeu, u.c, 'critique_ameliore')?.valeur) || 20 : 20;
       const seuil = B.borne(Math.round(await Maison.formule('critique', { niveau: estHeros(u) ? u.c.niveau : 0, classe: estHeros(u) ? u.c.classe : '' }, () => critMin)), 2, 20);
@@ -283,7 +302,7 @@ const JdrCombat = (() => {
       let critique = des.naturel >= seuil;
       const touche = critique || (!(des.naturel === 1 && R.echec_critique) && total >= ca);
       if (touche && !a.distance && eft.has('critique_contact')) critique = true;
-      const ligne = noterJet(u, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: 'd20', des: des.des, bonus, total, contre: `CA ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
+      const ligne = noterJet(u, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: 'd20', des: des.des, bonus, total, contre: `${nomDefense} ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
       if (!touche) {
         await montrer(a.nom, [ligne]);
         ui.nombre(t.camp, t.i, 'Raté', 'rate');
@@ -320,6 +339,15 @@ const JdrCombat = (() => {
       const dmgNormal = Math.max(0, r.total + plus);
       let n = Math.max(sort ? 0 : 1, Math.round(await Maison.formule('degats', { des: r.total, mod: plus, critique, type: a.type || '', sort: Boolean(sort) }, () => dmgNormal)));
       lignes.push(noterJet(u, { qui: nom(u), quoi: `Dégâts (${B.nomDegats(a.type).toLowerCase()})`, formule: r.formule, des: r.des, bonus: n - r.total, total: n }));
+      // Saga 1.41 : l'armure de la cible absorbe une part des dégâts (Mécaniques › Absorption).
+      if (M?.absorption) {
+        const abs = JdrMeca.absorption(jeu, varsDe(t));
+        if (abs > 0) {
+          const apres = Math.max(JdrMeca.degatMin(jeu), n - abs);
+          lignes.push(D.noter(partie, { qui: nom(t), quoi: 'Armure', formule: '', total: apres - n, resultat: '' }));
+          n = apres;
+        }
+      }
       for (const x of extra) lignes.push(D.noter(partie, { qui: nom(u), quoi: x.nom, formule: x.r.formule, des: x.r.des, bonus: x.r.bonus, total: x.r.total }));
       await montrer(a.nom, lignes);
       if (critique) ui.nombre(t.camp, t.i, 'Critique !', 'info');
@@ -897,6 +925,15 @@ const JdrCombat = (() => {
         if (fini()) break;
         if (estHeros(u) && !debout(u)) { if (!u.c.mort_definitive) { grille?.actif(u, tour, 0); await jetContreLaMort(u); } continue; }
         if (!debout(u)) continue;
+        // Saga 1.41 : un héros dans un palier « à jets » tente de tenir au début de son tour.
+        if (M && estHeros(u) && JdrMeca.doitJeter(jeu, u.c)) {
+          const j = JdrMeca.jetRepete(jeu, partie, u.c, nom(u));
+          await montrer('Jet pour tenir', [j.ligne]);
+          if (j.fini === 'mort') { u.c.mort_definitive = true; u.c.pv = 0; maj(u); await ui.animer(u.camp, u.i, 'ko'); await ui.message(`${nom(u)} succombe à ses blessures…`); continue; }
+          if (j.fini === 'stable') await ui.message(`${nom(u)} tient bon : ${nom(u)} est stabilisé.`);
+          else await ui.message(`${nom(u)} lutte (${j.succes} réussite${j.succes > 1 ? 's' : ''}, ${j.echecs} échec${j.echecs > 1 ? 's' : ''}).`);
+          maj(u);
+        }
         grille?.actif(u, tour, grille ? vitesseDe(u) : 0);
         if (incapable(u)) {
           await ui.message(`${Le(u)} ne peut pas agir (${u.etats.filter((e) => B.trouver(jeu, 'etats', e.id)?.effets?.includes('incapable')).map((e) => B.nomEtat(jeu, e.id).toLowerCase()).join(', ')}).`);

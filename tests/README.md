@@ -52,6 +52,10 @@ la page de l'essai (rubrique **Artifacts**).
   un téléphone qui rejoint sans QR (prénom et code) et prend un héros libre, le manifeste commun au relais.
   Les essais du mode table vérifient aussi que le MJ commence sans héros.
 
+- `essais/13-saga-mecaniques.js` : les mécaniques sans code de Saga 1.41 : la défense et l'armure lues dans la fiche,
+  un monstre qui garde sa CA, les paliers et leur malus (un test au d20 aussi), la blessure tirée sur sa table, les
+  jets pour tenir, puis un vrai combat du pack joué par une interface qui choisit seule.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

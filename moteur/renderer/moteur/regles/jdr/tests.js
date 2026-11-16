@@ -25,7 +25,7 @@ const JdrTests = (() => {
   async function test({ jeu, partie, ui, c, competence, dd = 0, avantage = false, desavantage = false, quoi = '', montrerJet = true, etatsCombat = [] }) {
     const ef = effets(jeu, c, etatsCombat);
     const des = D.d20(partie, { avantage, desavantage: desavantage || ef.has('desavantage_tests') });
-    const bonus = P.bonusCompetence(jeu, c, competence);
+    const bonus = P.bonusCompetence(jeu, c, competence) + JdrMeca.malus(jeu, c); // Saga 1.41 : ses blessures
     const normal = des.naturel + bonus;
     const total = Math.round(await Maison.formule('test', {
       naturel: des.naturel, bonus, dd: Number(dd) || 0, competence, carac: P.caracDe(jeu, competence), maitrise: P.competencesMaitrisees(jeu, c).includes(competence),
@@ -49,7 +49,7 @@ const JdrTests = (() => {
       return { reussi: false, total: 0, naturel: 0, bonus: 0, ligne };
     }
     const des = D.d20(partie, { avantage, desavantage: desavantage || (carac === 'dex' && ef.has('desavantage_sauvegardes_dex')) });
-    const bonus = P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0);
+    const bonus = P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0) + JdrMeca.malus(jeu, c);
     const total = Math.round(await Maison.formule('sauvegarde', {
       naturel: des.naturel, bonus, dd: Number(dd) || 0, carac, maitrise: P.maitriseSauvegarde(jeu, c, carac),
     }, () => des.naturel + bonus));
