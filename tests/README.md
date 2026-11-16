@@ -67,6 +67,9 @@ la page de l'essai (rubrique **Artifacts**).
   dans un combat de Saga où le MJ choisit qui agit), une image déposée sur le plateau, un monstre posé caché ; Tafl 1.38
   garde l'ordre libre dans les mécaniques.
 
+- `essais/17-saga-vision.js` : Saga 1.45 : les lignes de vue (mur, eau transparente), ce qui reste exploré sans le monstre
+  qui s'y tient, le noir à tâtons, une lanterne, la vision dans le noir du nain ; Tafl 1.39 garde une tuile transparente.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

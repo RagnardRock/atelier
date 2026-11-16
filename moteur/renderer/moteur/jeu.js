@@ -71,6 +71,7 @@ const Jeu = (() => {
         images,
         duree: Math.max(30, Number(liste[i].duration) || 200),
         passage: liste[i].passage === 'libre' ? PASSAGE.libre : liste[i].passage === 'bloque' ? PASSAGE.bloque : PASSAGE.auto,
+        transparent: liste[i].transparent === true, // Saga 1.45 : bloque le pas, pas la vue (eau, barrière basse)
         lumiere: lumiere(liste[i].lumiere), // Saga 0.11 : une tuile qui éclaire (lampadaire, fenêtre, feu)
         effet: effet(liste[i].effet), // Saga 1.20 : ce qui arrive à celui qui marche dessus (effets-sol.js)
       });

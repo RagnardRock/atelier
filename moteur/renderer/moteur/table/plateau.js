@@ -243,6 +243,11 @@ const Plateau = (() => {
         for (let y = 0; y < vue.hauteur; y++) {
           for (let x = 0; x < vue.largeur; x++) if (vue.masque[y * vue.largeur + x] === '0') ctx.fillRect(cx(x), cy(y), s + 1, s + 1);
         }
+        // Saga 1.45 : déjà vu, plus en vue (vision dynamique) : le décor, voilé.
+        ctx.fillStyle = plein ? 'rgba(5, 6, 14, 0.62)' : 'rgba(5, 6, 14, 0.28)';
+        for (let y = 0; y < vue.hauteur; y++) {
+          for (let x = 0; x < vue.largeur; x++) if (vue.masque[y * vue.largeur + x] === '2') ctx.fillRect(cx(x), cy(y), s + 1, s + 1);
+        }
       }
       // Les pièces, pour le MJ : leur contour, plein si les joueurs la voient.
       if (o.mj && !o.apercu) {
