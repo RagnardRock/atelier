@@ -59,6 +59,10 @@ la page de l'essai (rubrique **Artifacts**).
   MJ en ajoute depuis la fiche, le joueur le coche, il compte une fois), les repos et les niveaux à formule, puis un
   combat avec parade (celle d'un monstre, lue dans ses champs), localisation, héros d'abord et un poison par tour.
 
+- `essais/15-saga-calque-initiative.js` : Saga 1.43 : un trait au feutre (à la souris) sur le calque du MJ, une note
+  pour tous, ce qu'en voit un joueur, la corbeille du calque ; l'initiative à la main (jeter pour tous, une ligne
+  libre, Suivant, un nouveau tour, un joueur qui n'y touche pas).
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

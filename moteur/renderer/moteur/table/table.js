@@ -37,6 +37,12 @@ const TableMode = (() => {
       placer: (g) => agir({ type: 'gabarit', ...g }),
       ping: (c) => agir({ type: 'ping', x: c.x, y: c.y }),
       effacer: () => agir({ type: 'gabarit_retirer' }),
+      // Saga 1.43 : le feutre et les notes (le MJ choisit : son calque, ou pour tous).
+      mj: true,
+      dessiner: (d) => agir({ type: 'dessin', ...d }),
+      noter: (n) => agir({ type: 'note', ...n }),
+      effacerDessins: (calque) => agir({ type: 'dessin_retirer', calque }),
+      message: (t) => h.message(t),
       // Saga 1.35 : le pinceau du brouillard et le tapis de dés, dans le rail du MJ.
       extras: [
         { icone: 'lightbulb', titre: 'Révéler au pinceau (B) : glisse sur le plateau pour montrer des cases aux joueurs', touche: 'B', faire: () => { api.pinceau = pinceau === 'reveler' ? null : 'reveler'; panneau?.dessiner(); }, actif: () => pinceau === 'reveler' },
@@ -55,6 +61,11 @@ const TableMode = (() => {
     // Saga 1.21.4 : le récit (les dialogues et les messages des combats), gardé pour le journal des joueurs.
     const recit = [];
     let numeroRecit = 0;
+    // Le nom d'un pion (un héros : celui de sa fiche).
+    function nomPion(p) {
+      const c = p?.sorte === 'heros' ? E.membreDe(partie(), p) : null;
+      return c ? JdrPerso.nom(jeu(), c) : p?.nom || '?';
+    }
     function noterRecit(o) {
       const texte = String(o?.texte || '').trim();
       if (!texte) return;
@@ -413,8 +424,14 @@ const TableMode = (() => {
       if (!id && c) {
         const i = c.y * carte().largeur + c.x;
         const g = [...(derniereVue?.gabarits || [])].reverse().find((q) => TableOutils.casesGabarit(carte(), q, R().diagonales).includes(i) || (q.x === c.x && q.y === c.y));
-        if (g) {
-          menu.append(el('div', { className: 'table-menu-titre', textContent: 'Gabarit' }), bouton('trash', 'Effacer ce gabarit', () => agir({ type: 'gabarit_retirer', id: g.id })));
+        // Saga 1.43 : une note sur cette case, un trait de feutre qui passe tout près.
+        const n = [...(derniereVue?.notes || [])].reverse().find((q) => q.x === c.x && q.y === c.y);
+        const fx = c.fx ?? c.x + 0.5, fy = c.fy ?? c.y + 0.5;
+        const d = [...(derniereVue?.dessins || [])].reverse().find((q) => q.points.some(([px, py]) => Math.hypot(px - fx, py - fy) < 0.4));
+        if (n) menu.append(el('div', { className: 'table-menu-titre', textContent: `Note : ${n.texte}` }), bouton('trash', 'Effacer cette note', () => agir({ type: 'dessin_retirer', id: n.id })));
+        if (d) menu.append(el('div', { className: 'table-menu-titre', textContent: d.visible === 'mj' ? 'Dessin (calque du MJ)' : 'Dessin' }), bouton('trash', 'Effacer ce dessin', () => agir({ type: 'dessin_retirer', id: d.id })));
+        if (g) menu.append(el('div', { className: 'table-menu-titre', textContent: 'Gabarit' }), bouton('trash', 'Effacer ce gabarit', () => agir({ type: 'gabarit_retirer', id: g.id })));
+        if (g || n || d) {
           menu.hidden = false;
           const r = scene.getBoundingClientRect();
           menu.style.left = `${Math.min(x - r.left, r.width - 260)}px`;
@@ -738,7 +755,7 @@ const TableMode = (() => {
         // Saga 1.32 : les jets du chat, les macros, les marques, les gabarits, le ping.
         if (a.type === 'commande') { if (!creations.has(nom)) commande(String(a.texte || ''), r, nom, a.client); return; }
         if (a.type === 'macro') { const m = herosDuGroupe().find((q) => E.estMien(r, q))?.macros?.[Math.round(Number(a.k))]; if (m) commande(`/m ${m.nom}`, r, nom, a.client); return; }
-        if (['ping', 'gabarit', 'gabarit_retirer', 'marque', 'macro_ajouter', 'macro_retirer'].includes(a.type)) {
+        if (['ping', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer', 'marque', 'macro_ajouter', 'macro_retirer'].includes(a.type)) {
           agir({ ...a, pion: typeof a.pion === 'string' ? a.pion : undefined }, r, nom);
           return;
         }
@@ -776,7 +793,7 @@ const TableMode = (() => {
         agir({ type: 'jet', sorte: a.sorte, id: a.id, quoi: a.quoi }, r);
       } else if (a.type === 'repondre') {
         repondre(a, r);
-      } else if (a.type === 'ping' || a.type === 'gabarit' || a.type === 'gabarit_retirer') {
+      } else if (['ping', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer'].includes(a.type)) {
         agir(a, r);
       }
     }
@@ -1207,6 +1224,42 @@ const TableMode = (() => {
         for (const p of table().pions) if (p.sorte === 'monstre' && p.carte === c?.id && !p.vaincu && p.groupe) par.set(p.groupe, (par.get(p.groupe) || 0) + 1);
         const noms = new Map((jeu().donnees.groupes?.groupes || []).map((g) => [g.id, g.nom || g.id]));
         return [...par].map(([id, n]) => ({ id, nom: noms.get(id) || id, n }));
+      },
+      // Saga 1.43 : l'initiative tenue à la main (hors des combats de Saga). Jeter : chaque pion de la carte
+      // (ou ceux de ids) lance son initiative, comme dans un combat ; ceux déjà dans la liste relancent.
+      nomPion,
+      jeterInitiative(ids = null) {
+        const c = carte(), j = jeu(), lignes = [];
+        const vide = !table().initiative?.liste?.length;
+        const pions = table().pions.filter((p) => p.carte === c.id && !p.vaincu && (!ids || ids.includes(p.id)));
+        for (const p of pions) {
+          const h0 = p.sorte === 'heros' ? E.membreDe(partie(), p) : null;
+          const m = p.sorte === 'monstre' ? (j.donnees.monstres_jdr?.monstres_jdr || []).find((x) => x.id === p.monstre) : null;
+          if (!h0 && !m) continue;
+          const dex = h0 ? JdrPerso.initiative(j, h0) : JdrBase.mod(Number(m.carac?.dex) || 10) + (Number(m.initiative) || 0);
+          const vars = typeof JdrMeca !== 'undefined' ? (h0 ? JdrMeca.varsHeros(j, h0) : JdrMeca.varsMonstre(m, p.pv, p.pvMax)) : {};
+          const r = (typeof JdrMeca !== 'undefined' && JdrMeca.initiative(j, partie(), vars, dex)) || (() => { const d = JdrDes.d20(partie()); return { total: d.naturel + dex, des: d.des, formule: 'd20', bonus: dex }; })();
+          const nom = nomPion(p);
+          lignes.push(JdrDes.noter(partie(), { qui: nom, quoi: 'Initiative', formule: r.formule, des: r.des, bonus: r.bonus, total: r.total, cache: !h0 }));
+          const deja = (table().initiative?.liste || []).find((x) => x.pion === p.id);
+          if (deja) E.agir(j, partie(), { mj: true }, { type: 'init_valeur', id: deja.id, init: r.total }, ctxVue());
+          else E.agir(j, partie(), { mj: true }, { type: 'init_ajouter', pion: p.id, nom, init: r.total }, ctxVue());
+        }
+        if (lignes.length) {
+          E.agir(j, partie(), { mj: true }, { type: 'init_trier' }, ctxVue());
+          // Une liste neuve : le premier commence, au tour 1.
+          if (vide) Object.assign(table().initiative, { actif: table().initiative.liste[0].id, tour: 1 });
+          h.des({ titre: 'Initiative', lignes });
+        }
+        envoyes.clear();
+        panneau?.rafraichir();
+        return lignes.length;
+      },
+      // Passer au suivant (ou revenir) : le récit dit à qui c'est.
+      passerInitiative(sens = 1) {
+        const res = agir({ type: sens < 0 ? 'init_precedent' : 'init_suivant' });
+        if (res.ok && res.tourDe) noterRecit({ texte: `Au tour de ${res.tourDe.nom} (tour ${table().initiative.tour}).` });
+        return res;
       },
       // Saga 1.42 : le MJ emmène le groupe sur une autre carte ou une scène image (onglet Scène › Cartes).
       // Le groupe arrive au départ de la carte s'il y est, sinon sur la case libre la plus proche du centre.

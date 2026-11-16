@@ -390,6 +390,18 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.43 : le calque du MJ et l'initiative à la main
+
+- **Le feutre (F) et les notes (T)** dans le rail du plateau. Le MJ choisit son calque : « Calque du MJ (moi seul) »
+  (en pointillés, jamais envoyé aux joueurs) ou « Pour tous ». Un joueur dessine et note pour tous. Six couleurs,
+  une corbeille qui efface son calque (le MJ) ou ses traits (un joueur), clic droit du MJ sur une note ou un trait
+  pour l'effacer seul.
+- **L'initiative à la main** (onglet Scène › Initiative à la main), pour mener un combat sans le moteur : « Jeter
+  pour tous » (les héros en public, les monstres en secret, avec la formule des Mécaniques), un pion ou une ligne
+  libre (« Le piège ») à ajouter, le chiffre à changer, monter, descendre, retirer, trier, vider. « Suivant » (aussi
+  en haut du plateau) passe au suivant et ouvre un nouveau tour après le dernier ; le récit dit à qui c'est.
+  Les joueurs voient l'ordre en haut de leur écran, sans les chiffres ; un pion caché n'y paraît pas.
+
 ## Ce que fait Saga 1.42 : des scènes image et des jetons à soi (avec Tafl 1.37)
 
 - **Scène image** : dans Tafl, Carte › Nouvelle scène (ou Image de fond) pose une image (une battlemap, un lieu, une

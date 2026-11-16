@@ -41,6 +41,11 @@ const TableClient = (() => {
       placer: (g) => window.saga.tableDemander({ type: 'gabarit', ...g }),
       ping: (c) => window.saga.tableDemander({ type: 'ping', x: c.x, y: c.y }),
       effacer: () => window.saga.tableDemander({ type: 'gabarit_retirer' }),
+      // Saga 1.43 : le feutre et les notes d'un joueur (vus de tous).
+      dessiner: (d) => window.saga.tableDemander({ type: 'dessin', ...d }),
+      noter: (n) => window.saga.tableDemander({ type: 'note', ...n }),
+      effacerDessins: () => window.saga.tableDemander({ type: 'dessin_retirer' }),
+      message: (t) => notify?.(t, 'warning', 4000),
       extras: reseau ? [{ icone: 'symbol-event', titre: 'Le tapis de dés (D) : composer un jet, lancer au bouton ou en glissant', touche: 'D', faire: () => ouvrirTapis(), actif: () => Boolean(ecranDes?.tapis.ouvert) }] : [],
     });
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
@@ -148,14 +153,16 @@ const TableClient = (() => {
       attente.hidden = Boolean(vue && jeu);
       montrerChoixPerso();
       pauseEl.hidden = !vue?.pause;
-      ordre.hidden = !vue?.combat;
-      if (vue?.combat) {
+      // Saga 1.43 : l'initiative tenue à la main par le MJ se montre comme celle d'un combat.
+      const oc = vue?.combat || vue?.initiative;
+      ordre.hidden = !oc;
+      if (oc) {
         ordre.innerHTML = '';
-        ordre.append(el('span', { className: 'joueurs-tour', textContent: `Tour ${vue.combat.tour || 1}` }));
-        for (const o of vue.combat.ordre) {
-          if (!habit) { ordre.append(el('span', { className: `joueurs-ordre-nom${o.id === vue.combat.actif ? ' actif' : ''}`, textContent: o.nom })); continue; }
+        ordre.append(el('span', { className: 'joueurs-tour', textContent: `Tour ${oc.tour || 1}` }));
+        for (const o of oc.ordre) {
+          if (!habit) { ordre.append(el('span', { className: `joueurs-ordre-nom${o.id === oc.actif ? ' actif' : ''}`, textContent: o.nom })); continue; }
           const p = vue.pions.find((x) => x.id === o.id);
-          ordre.append(el('span', { className: `ti-init ${p?.sorte === 'heros' ? 'heros' : 'monstre'}${o.id === vue.combat.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}` },
+          ordre.append(el('span', { className: `ti-init ${p?.sorte === 'heros' ? 'heros' : p ? 'monstre' : 'libre'}${o.id === oc.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}` },
             el('span', { className: 'ti-init-rond', textContent: (o.nom || '?').trim().charAt(0).toUpperCase() }), el('span', { textContent: o.nom })));
         }
       }
@@ -263,17 +270,18 @@ const TableClient = (() => {
       scene.append(haut);
       ordre.className = 'ti-ordre ti-verre';
       journalBouton.hidden = true;
-      plateau.marges = () => ({ g: 12, d: 12, h: vue?.combat ? 120 : 64, b: 12 });
+      plateau.marges = () => ({ g: 12, d: 12, h: vue?.combat || vue?.initiative ? 120 : 64, b: 12 });
       let sig = '', enCombat = false;
       function maj() {
-        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.pause]);
+        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.initiative?.tour, vue?.initiative?.actif, vue?.pause]);
         if (s !== sig) {
           sig = s;
           titre.textContent = vue?.campagne?.nom || jeu?.titre || 'Saga';
           lieu.textContent = vue?.nom || '';
-          const actif = vue?.combat?.ordre.find((o) => o.id === vue.combat.actif);
-          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : vue?.combat ? 'ti-etat-combat' : 'ti-etat-vide'}`;
-          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : vue?.combat ? [el('i', { className: 'codicon codicon-flame' }), `Combat · tour ${vue.combat.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
+          const oc = vue?.combat || vue?.initiative;
+          const actif = oc?.ordre.find((o) => o.id === oc.actif);
+          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : oc ? 'ti-etat-combat' : 'ti-etat-vide'}`;
+          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : oc ? [el('i', { className: 'codicon codicon-flame' }), `${vue.combat ? 'Combat' : 'Initiative'} · tour ${oc.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
         }
         if (Boolean(vue?.combat) !== enCombat) { enCombat = Boolean(vue?.combat); plateau.oublier(); }
       }
@@ -406,14 +414,15 @@ const TableClient = (() => {
       }
       function maj() {
         const moi = multi.moi, n = multi.joueurs.filter((j) => j.connecte).length;
-        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.pause, moi?.nom, n]);
+        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.initiative?.tour, vue?.initiative?.actif, vue?.pause, moi?.nom, n]);
         if (s !== sigHaut) {
           sigHaut = s;
           titre.textContent = vue?.campagne?.nom || jeu?.titre || 'Saga';
           lieu.textContent = vue?.nom || '';
-          const actif = vue?.combat?.ordre.find((o) => o.id === vue.combat.actif);
-          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : vue?.combat ? 'ti-etat-combat' : 'ti-etat-vide'}`;
-          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : vue?.combat ? [el('i', { className: 'codicon codicon-flame' }), `Combat · tour ${vue.combat.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
+          const oc = vue?.combat || vue?.initiative;
+          const actif = oc?.ordre.find((o) => o.id === oc.actif);
+          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : oc ? 'ti-etat-combat' : 'ti-etat-vide'}`;
+          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : oc ? [el('i', { className: 'codicon codicon-flame' }), `${vue.combat ? 'Combat' : 'Initiative'} · tour ${oc.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
           qui.textContent = [moi?.nom, n ? `${n} joueur${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
         }
         sansFiche.hidden = Boolean(vue?.fiche);

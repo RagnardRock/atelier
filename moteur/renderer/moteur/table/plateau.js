@@ -68,7 +68,8 @@ const Plateau = (() => {
     // px, py : en pixels CSS dans le canvas.
     function caseSous(px, py, jeu) {
       const t = jeu.taille;
-      return { x: Math.floor((camera.x + (px * dpr) / camera.z) / t), y: Math.floor((camera.y + (py * dpr) / camera.z) / t) };
+      const fx = (camera.x + (px * dpr) / camera.z) / t, fy = (camera.y + (py * dpr) / camera.z) / t;
+      return { x: Math.floor(fx), y: Math.floor(fy), fx, fy }; // fx, fy : la position fine (Saga 1.43 : le feutre)
     }
     // Le centre d'une case, en pixels CSS dans le canvas (pour les tests, et poser un menu).
     const pointDe = (x, y, jeu) => ({ px: ((x + 0.5) * jeu.taille - camera.x) * camera.z / dpr, py: ((y + 0.5) * jeu.taille - camera.y) * camera.z / dpr });
@@ -271,6 +272,40 @@ const Plateau = (() => {
       };
       for (const g of vue.gabarits || []) gabarit(g, false);
       if (o.outil?.gabarit) gabarit(o.outil.gabarit, true);
+      // Saga 1.43 : les dessins au feutre et les notes (celles du calque du MJ : en pointillés, chez lui seul).
+      const trace = (d, apercu) => {
+        if (!d.points?.length) return;
+        ctx.strokeStyle = TableOutils.couleur(d.couleur);
+        ctx.globalAlpha = apercu ? 0.7 : 0.9;
+        ctx.lineWidth = Math.max(2, s * 0.08);
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.setLineDash(d.visible === 'mj' ? [Math.max(4, s * 0.2), Math.max(3, s * 0.14)] : []);
+        ctx.beginPath();
+        d.points.forEach(([x, y], k) => { if (k) ctx.lineTo(ecranX(x * t), ecranY(y * t)); else ctx.moveTo(ecranX(x * t), ecranY(y * t)); });
+        if (d.points.length === 1) ctx.lineTo(ecranX(d.points[0][0] * t) + 0.1, ecranY(d.points[0][1] * t));
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      };
+      for (const d of vue.dessins || []) trace(d, false);
+      if (o.outil?.trace) trace(o.outil.trace, true);
+      for (const n of vue.notes || []) {
+        const x0 = cx(n.x) + s * 0.5, y0 = cy(n.y) + s * 0.5;
+        const coul = TableOutils.couleur(n.couleur);
+        ctx.font = `600 ${Math.max(11, Math.round(s * 0.32))}px system-ui, sans-serif`;
+        const texte = `${n.visible === 'mj' ? '🔒 ' : ''}${n.texte}`;
+        const l = Math.min(ctx.measureText(texte).width, s * 8) + 12, h = Math.max(18, Math.round(s * 0.5));
+        ctx.fillStyle = 'rgba(12,14,20,.82)';
+        ctx.strokeStyle = coul;
+        ctx.lineWidth = 2;
+        ctx.setLineDash(n.visible === 'mj' ? [5, 3] : []);
+        ctx.beginPath(); ctx.roundRect(x0 - l / 2, y0 - h / 2, l, h, 6); ctx.fill(); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(texte, x0, y0 + 1, s * 8);
+        ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+      }
       // Les cases en surbrillance (où l'on peut aller, la zone d'un sort).
       if (o.cases) {
         for (const [i, sorte] of o.cases) {

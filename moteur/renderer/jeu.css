@@ -1117,6 +1117,7 @@ body.ecran-joueurs .table-outils { top: auto; bottom: 14px; left: 12px; max-widt
 .table-outil-reglages[hidden] { display: none; }
 .table-outil-choix, .table-outil-m { height: 26px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: inherit; font-size: 12px; padding: 0 4px; }
 .table-outil-m { width: 56px; }
+.table-outil-texte { height: 26px; width: 150px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: inherit; font-size: 12px; padding: 0 6px; }
 .table-outil-aide { opacity: 0.55; padding: 0 6px; white-space: nowrap; }
 body.outil-table .table-plateau { cursor: crosshair; }
 .joueurs-macros { position: absolute; z-index: 21; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: min(640px, calc(100% - 300px));
@@ -1455,3 +1456,12 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .table-proposition span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
 .table-case { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); cursor: pointer; }
 .table-case input { accent-color: var(--accent); }
+/* Saga 1.43 : l'initiative à la main (onglet Scène) */
+.table-init { gap: 4px; }
+.table-init.actif { background: rgba(255, 179, 71, 0.14); border-radius: 8px; }
+.table-init .table-nom { flex: 1; text-align: left; cursor: default; }
+.table-init .table-bouton { padding: 2px 5px; }
+.table-init-chiffre { width: 52px; height: 24px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: inherit; font-size: 12px; padding: 0 4px; }
+.table-init-texte { flex: 1; min-width: 0; height: 24px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: inherit; font-size: 12px; padding: 0 6px; }
+.table-init-ajout { gap: 4px; flex-wrap: wrap; }
+.ti-init.libre .ti-init-rond { background: #8a7a4a; }
