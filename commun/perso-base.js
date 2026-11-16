@@ -159,7 +159,9 @@ const PersoBase = (() => {
   // de droite). [rangée, colonne, pixels].
   const sym = (liste) => [...liste, ...liste.map(([r, c, t]) => [r, L - c - t.length, [...t].reverse().join('')])];
   const COUETTE = [[8, 1, 'hHh'], [9, 0, 'hHHh'], [10, 0, 'hHHHh'], [11, 0, 'hHHHh'], [12, 0, 'hHoHh'], [13, 0, 'hHHHh'], [14, 1, 'hHHh'], [15, 1, 'hHHh'], [16, 1, 'hHh'], [17, 2, 'hh']];
-  const HERISSES = sym([[0, 10, 'h'], [1, 9, 'hHH'], [2, 8, 'hHH'], [0, 15, 'h'], [1, 14, 'hH'], [2, 5, 'h'], [3, 5, 'hHHH'], [4, 6, 'HH'], [5, 3, 'h'], [6, 3, 'hHH'], [7, 4, 'HH']]);
+  // Le hérissé a sa propre silhouette : ses rangées remplacent celles du crâne de base (de la rangée 0).
+  const HERISSES_FACE = ['.......h....h......h....h.......', '......hH...hHh....hHh...Hh......', '...h..hHh.hHHh.hh.hHHh.hHh..h...', '...hHhHHHhHHHHhHHhHHHHhHHHhHh...', '....hHHHHHHHHlHHHHlHHHHHHHHh....', '..hhHHHHHHHHllHHHHllHHHHHHHHhh..', '...hHHHHHlHHHHHHHHHHHHlHHHHHh...', '..hHHHHHHHHHHHHHHHHHHHHHHHHHHh..', '...hHHHHHHHHoHHHHHHoHHHHHHHHh...', '..hHHoHHHHHHoHHHHHHoHHHHHHoHHh..', '...hHHHHHHHHHHHHHHHHHHHHHHHHh...', '....hHHHHhHHHhHHHHhHHHhHHHHh....', '....hHHHhsHHhssHHsshHHshHHHh....'];
+  const HERISSES_PROFIL = ['...........h.....h..............', '.....h....hH...hHh..............', '.....hHh.hHHh.hHHHh.h...........', '......hHhHHHHhHHHHHHhH..........', '...hhhHHHHHHHHlllHHHHHh.........', '....hHHHHHHHHHllllHHHHHh........', '.....hHHHHHHHHHHHHHHHHHHh.......', '...hHHHHHHHHHHHHHHHHHHoHHh......', '....hhHHoHHHHHHHHHHHHoHHHHh.....'];
   const CHIGNON = [[0, 12, 'hHHHHh'], [1, 11, 'hHHlHHHh'], [2, 11, 'hKKKKKKh']];
   const COUPES = {
     courts: { bas: [], haut: [], droite: [] },
@@ -184,9 +186,8 @@ const PersoBase = (() => {
       droite: [[0, 7, 'hHHHh'], [1, 6, 'hHHlHHh'], [2, 6, 'hHHHHHh'], [3, 7, 'KKKKK']],
     },
     herisses: {
-      bas: HERISSES,
-      haut: HERISSES,
-      droite: [[0, 18, 'h'], [1, 17, 'Hh'], [0, 13, 'h'], [1, 12, 'hHH'], [0, 8, 'hh'], [1, 7, 'hHHH'], [2, 6, 'hHHH'], [3, 3, 'hhHHH'], [4, 2, 'hHHHH'], [5, 3, 'hHH'], [7, 2, 'h'], [8, 2, 'hHH'], [9, 3, 'HH']],
+      lignes: { bas: HERISSES_FACE, haut: HERISSES_FACE.slice(0, 11), droite: HERISSES_PROFIL },
+      bas: [], haut: [], droite: [],
     },
   };
 
@@ -272,7 +273,9 @@ const PersoBase = (() => {
     // Pendant un pas, tout le haut du corps descend d'un pixel (les genoux plient).
     const plie = o.pas ? 1 : 0, dy = plie + (o.respire || 0);
     let l = (dir === 'droite' ? PROFIL : dir === 'haut' ? DOS : FACE).slice();
-    for (const [r, c, s] of COUPES[o.coiffure]?.[dir] || []) poser(l, r, c, s);
+    const coupe = COUPES[o.coiffure];
+    (coupe?.lignes?.[dir] || []).forEach((rangee, r) => { l[r] = rangee; });
+    for (const [r, c, s] of coupe?.[dir] || []) poser(l, r, c, s);
     l = ombrer(l);
     if (o.cligne && dir !== 'haut') {
       // Les yeux fermés : la peau à la place de l'œil, et un trait de cils en bas.
