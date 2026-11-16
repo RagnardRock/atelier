@@ -37,7 +37,12 @@ const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (on les confond avec 
 const MAX_ATTENTE = 6;            // demandes en attente de l'hôte, au plus
 const MAX_MAUVAIS_CODES = 20;     // sur Internet : mauvais codes par minute, toutes adresses confondues
 // Les seuls fichiers de commun/ dont l'interface a besoin.
-const COMMUN = new Set(['bac-a-sable.js', 'modules.js', 'fiche-perso.js']);
+// Saga 1.33.1 : on y ajoute tout ../commun/*.js que charge index.html (perso-base.js manquait : PersoBase is not defined).
+const COMMUN = new Set(['bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js']);
+try {
+  const index = require('node:fs').readFileSync(path.join(__dirname, 'renderer', 'index.html'), 'utf8');
+  for (const m of index.matchAll(/src="\.\.\/commun\/([\w.-]+\.js)"/g)) COMMUN.add(m[1]);
+} catch { /* la liste fixe suffit */ }
 const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -144,13 +149,16 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
 
   // --- Les fichiers de l'interface ---
   // racine : '' en direct, '/p/<salle>' par un relais (Saga 1.33) : tous les liens de la page partent de là.
+  // Saga 1.33.1 : un voile tant que l'interface arrive (par un relais, ça prend quelques secondes) ;
+  // sans lui, l'ami voyait l'accueil du logiciel (« ouvrir un jeu ») avant l'écran du code.
+  const CHARGEMENT = '<div id="reseau-chargement" style="position:fixed;inset:0;z-index:600;display:grid;place-items:center;background:#0a0a12;color:#f4f4f6;font:15px system-ui,sans-serif;text-align:center"><div><div style="font-size:34px;color:#ffd36b">ᛃ</div>Connexion à la partie…</div></div>';
   async function page(racine = '') {
     let html = await fs.readFile(path.join(moteur, 'renderer', 'index.html'), 'utf8');
     return html
       .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <base href="${racine}/saga/">`)
       .replace('../node_modules/@vscode/codicons/dist/codicon.css', `${racine}/codicons/codicon.css`)
       .replace(/<title>[^<]*<\/title>/, `<title>${titre.replace(/[<>&]/g, '') || 'Saga'} · rejoindre la partie</title>`)
-      .replace('<body class="glass">', '<body class="glass web reseau">')
+      .replace('<body class="glass">', `<body class="glass web reseau">\n  ${CHARGEMENT}`)
       .replace(/\s*<script src="update\.js"><\/script>/, '')
       .replace('<script src="base.js"></script>', `<script src="${racine}/web/saga-reseau.js"></script>\n  <script src="base.js"></script>`);
   }

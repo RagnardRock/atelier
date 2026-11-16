@@ -79,6 +79,7 @@
       const codeLien = new URLSearchParams(location.search).get('code');
       if (codeLien) form.code.value = codeLien.slice(0, 12).toUpperCase();
       document.body.append(boite);
+      document.getElementById('reseau-chargement')?.remove();
       (codeLien ? form.nom : form.code).focus();
       form.onsubmit = async (e) => {
         e.preventDefault();
@@ -117,6 +118,7 @@
         const d = await envoyer('/rejoindre', { jeton });
         moi = { id: d.id, nom: d.nom };
         ecrire('moi', moi);
+        document.getElementById('reseau-chargement')?.remove();
         return;
       } catch { jeton = ''; ecrire('jeton', ''); }
     }

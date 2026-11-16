@@ -40,8 +40,14 @@ module.exports = [
         // L'ami ouvre le lien (avec le code) : la page de Saga, ses scripts sous /p/<salle>/.
         const page = await ctx.navigateur.newPage();
         ctx.pages.push(page);
+        // Saga 1.33.1 : aucun fichier de l'interface ne doit manquer (perso-base.js manquait).
+        const manques = [], erreurs = [];
+        page.on('response', (r) => { if (r.request().method() === 'GET' && r.status() >= 400 && !r.url().endsWith('/favicon.ico')) manques.push(`${r.status()} ${r.url()}`); });
+        page.on('pageerror', (e) => erreurs.push(e.message));
         await page.goto(`${lien}?code=${encodeURIComponent(infos.code)}`);
         await page.waitForSelector('form.reseau-carte');
+        vrai(!(await page.$('#reseau-chargement')), 'le voile de chargement est parti');
+        egal(manques.join(' | '), '', 'aucun fichier manquant');
         egal(await page.inputValue('form.reseau-carte input[name=code]'), infos.code, 'le code pris dans le lien');
         await page.fill('form.reseau-carte input[name=nom]', 'Lou');
         await page.click('form.reseau-carte button[type=submit]');
@@ -58,6 +64,8 @@ module.exports = [
         for (let i = 0; i < 30 && !actions.some((x) => x.type === 'ping'); i++) await page.waitForTimeout(100);
         const ping = actions.find((x) => x.type === 'ping');
         vrai(Boolean(ping?.client), 'la demande de Lou arrive à l\'hôte');
+        await page.evaluate(() => PersoBase.planches); // le personnage de base est bien là
+        egal(erreurs.join(' | '), '', 'aucune erreur dans la page de Lou');
         egal(ping && reseau.infos().clients.find((c) => c.id === ping.client)?.nom, 'Lou', 'de la part de Lou');
       } finally {
         relais.fermer();
