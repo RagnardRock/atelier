@@ -21,7 +21,10 @@
   // --- Ce que le téléphone garde (le jeton de chaque partie reliée, les réglages) ---
   const lire = (k, d) => { try { const v = JSON.parse(localStorage.getItem(`saga-compagnon:${k}`)); return v ?? d; } catch { return d; } };
   const ecrire = (k, v) => { try { localStorage.setItem(`saga-compagnon:${k}`, JSON.stringify(v)); } catch { /* navigation privée */ } };
-  let liaisons = lire('liaisons', []); // [{ cle (adresse de la partie), jeton, nom, mj, titre, campagne, vu }]
+  // [{ cle (adresse de la partie), jeton, nom, mj, titre, campagne (son nom), vu,
+  //    Saga 1.38, une campagne par le relais : id, boite, coffre (la clé), derniere (date de la dernière copie),
+  //    attente : [{ id, valeur, t, envoye }] les changements de fiche faits hors séance }]
+  let liaisons = lire('liaisons', []);
   const liaison = () => liaisons.find((l) => l.cle === ici) || null;
   const garderLiaison = (l) => { liaisons = [l, ...liaisons.filter((x) => x.cle !== l.cle)].slice(0, 12); ecrire('liaisons', liaisons); };
   const oublierLiaison = () => { liaisons = liaisons.filter((x) => x.cle !== ici); ecrire('liaisons', liaisons); };
@@ -64,7 +67,104 @@
     if (!r.ok) throw Object.assign(new Error(d.erreur || `erreur ${r.status}`), { statut: r.status, delie: d.delie });
     return d;
   }
-  const demander = (a) => envoyer('/compagnon/action', a).catch((e) => { if (e.delie) delie(); else toast(e.message); });
+  const demander = (a) => {
+    // Saga 1.38 : hors séance, rien ne part à la partie (le MJ n'est pas là) : on le dit.
+    if (horsLigne) { toast(copie ? 'Hors séance : ça revient avec la prochaine séance.' : 'Pas de connexion à la partie.'); return Promise.resolve(); }
+    return envoyer('/compagnon/action', a).catch((e) => { if (e.delie) delie(); else toast(e.message); });
+  };
+
+  // ===================== Saga 1.38 : hors séance, la copie de la campagne =====================
+  // À la fin de chaque séance, Saga dépose sur le relais une copie de ce que ce joueur a le droit de voir,
+  // chiffrée avec une clé que seuls Saga et ce téléphone connaissent. Le téléphone la relit ici, hors séance.
+  let horsLigne = false, copie = null, veille = null;
+  const b64 = (octets) => { let s = ''; for (let i = 0; i < octets.length; i += 0x8000) s += String.fromCharCode(...octets.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const deB64 = (t) => Uint8Array.from(atob(String(t).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+  const cleCoffre = (l) => crypto.subtle.importKey('raw', deB64(l.coffre), 'AES-GCM', false, ['encrypt', 'decrypt']);
+  const urlCampagne = (l, suite) => `${location.origin}/campagne/${encodeURIComponent(l.id)}${suite}`;
+  async function chargerCopie() {
+    const l = liaison();
+    if (!l?.boite || !l.coffre || !window.crypto?.subtle) return null;
+    try {
+      const r = await fetch(urlCampagne(l, `/coffre/${encodeURIComponent(l.boite)}`), { cache: 'no-cache' });
+      if (!r.ok) return null;
+      const octets = new Uint8Array(await r.arrayBuffer());
+      const clair = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: octets.slice(0, 12) }, await cleCoffre(l), octets.slice(12));
+      const c = JSON.parse(new TextDecoder().decode(clair));
+      if (!c || c.v !== 1) return null;
+      copie = c;
+      l.derniere = c.t;
+      if (c.campagne?.nom) l.campagne = c.campagne.nom;
+      // Les changements que la copie connaît déjà (elle est plus récente) : le MJ les a vus.
+      l.attente = (l.attente || []).filter((x) => x.t > c.t);
+      ecrire('liaisons', liaisons);
+      return c;
+    } catch { return null; }
+  }
+  // La vue d'une copie : la même forme que celle de la séance (la fiche, les macros, le journal, les documents).
+  function vueDeCopie(c) {
+    const v = JSON.parse(JSON.stringify(c.vue || {}));
+    v.documents = c.documents || [];
+    v.campagne = { nom: c.campagne?.nom || '' };
+    // Mes changements pas encore vus par le MJ, par-dessus.
+    for (const x of liaison()?.attente || []) { const champ = v.fiche?.champs?.find((k) => k.id === x.id); if (champ) champ.valeur = x.valeur; }
+    return v;
+  }
+  // Plus de partie en direct (fermée, pas encore ouverte, pas de réseau) : on lit la copie.
+  function passerHorsLigne(raison = '') {
+    const avant = horsLigne;
+    horsLigne = true;
+    surveiller();
+    chargerCopie().then((c) => {
+      if (!horsLigne) return;
+      if (c) { vue = vueDeCopie(c); if (onglet === 'des') onglet = moi?.mj ? 'documents' : 'fiche'; }
+      if (raison && !avant) toast(raison);
+      dessiner();
+    });
+    if (!avant) dessinerTete();
+  }
+  // Hors séance, on regarde de temps en temps si la séance a commencé (alors on se reconnecte).
+  function surveiller() {
+    const l = liaison();
+    if (veille || !l?.id) return;
+    veille = setInterval(async () => {
+      if (!horsLigne || ailleurs) return;
+      try {
+        const r = await fetch(urlCampagne(l, '/etat'), { cache: 'no-store' });
+        const e = r.ok ? await r.json() : null;
+        if (e?.direct && (!flux || flux.readyState === 2)) ecouter();
+      } catch { /* pas de réseau */ }
+    }, 20000);
+  }
+  // Un changement de fiche hors séance : gardé ici, montré tout de suite, et laissé (chiffré) au coffre pour le MJ.
+  function proposer(id, valeur) {
+    const l = liaison();
+    if (!l?.boite) { toast('Hors séance, la fiche se lit seulement.'); return; }
+    l.attente = [...(l.attente || []).filter((x) => x.id !== id), { id, valeur, t: Date.now(), envoye: false }];
+    ecrire('liaisons', liaisons);
+    const champ = vue?.fiche?.champs?.find((k) => k.id === id);
+    if (champ) champ.valeur = valeur;
+    envoyerAttente();
+    ficheSignature = '';
+    dessinerPage();
+  }
+  async function envoyerAttente() {
+    const l = liaison();
+    if (!l?.boite || !window.crypto?.subtle) return;
+    for (const x of (l.attente || []).filter((a) => !a.envoye)) {
+      try {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const clair = new TextEncoder().encode(JSON.stringify({ changements: [{ id: x.id, valeur: x.valeur, t: x.t }] }));
+        const chiffre = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await cleCoffre(l), clair));
+        const tout = new Uint8Array(12 + chiffre.length);
+        tout.set(iv); tout.set(chiffre, 12);
+        const r = await fetch(urlCampagne(l, `/coffre/${encodeURIComponent(l.boite)}/proposition`), { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: b64(tout) });
+        if (!r.ok) { toast(r.status === 429 ? 'Trop de changements en attente : attends la séance.' : 'Le changement n\'est pas parti (réessai plus tard).'); break; }
+        x.envoye = true;
+        ecrire('liaisons', liaisons);
+      } catch { break; }
+    }
+  }
+  const enAttente = () => (liaison()?.attente || []).length;
 
   async function relier(code) {
     try {
@@ -84,8 +184,22 @@
       // Le serveur ne connaît plus ce jeton (la partie a été refermée) : on le saura en redemandant.
       // (Saga 1.37.1 : avec ?verifier, sans ouvrir un deuxième flux qui chassait le premier.)
       fetch(`${racine}/compagnon/flux?jeton=${encodeURIComponent(jeton)}&verifier=1`, { method: 'GET' }).then((r) => { if (r.status === 401) delie(); else r.body?.cancel?.(); }).catch(() => {});
+      // Saga 1.38 : pas de séance (ou pas de réseau) : la copie hors séance, si la campagne en a une.
+      if (liaison()?.id) passerHorsLigne();
     };
-    flux.addEventListener('bienvenue', (e) => { try { moi = JSON.parse(e.data); } catch { return; } dessiner(); });
+    flux.addEventListener('bienvenue', (e) => {
+      try { moi = JSON.parse(e.data); } catch { return; }
+      // Saga 1.38 : la campagne (par le relais) : la boîte et la clé de mon coffre, gardées ici.
+      const l = liaison();
+      if (l && moi.campagne?.id) {
+        if (l.coffre && l.coffre !== moi.campagne.cle) copie = null; // une nouvelle clé (un téléphone coupé)
+        Object.assign(l, { id: moi.campagne.id, boite: moi.campagne.boite || '', coffre: moi.campagne.cle || '' });
+        ecrire('liaisons', liaisons);
+        envoyerAttente();
+      }
+      if (moi.absent) { passerHorsLigne('La séance est ouverte : rejoins-la sur ton PC (ou ton navigateur) pour jouer en direct.'); return; }
+      dessiner();
+    });
     flux.addEventListener('vue', (e) => { try { recevoirVue(JSON.parse(e.data)); } catch { /* abîmé */ } });
     flux.addEventListener('fin', (e) => {
       let d = {};
@@ -95,6 +209,8 @@
       if (d.raison === 'delie' || d.raison === 'expulse') { delie(d.raison === 'expulse' ? 'Le MJ t\'a retiré de la partie.' : 'Ce téléphone a été délié.'); return; }
       // Saga 1.37.1 : le compagnon s'est ouvert ailleurs (l'appli installée, un autre onglet) : on lui laisse la place.
       if (d.raison === 'ailleurs') { ailleurs = true; dessinerTete(); toast('Le compagnon est ouvert ailleurs (l\'appli ou un autre onglet). Touche « Reprendre ici » pour revenir.'); return; }
+      // Saga 1.38 : la séance est finie ; une campagne se relit hors séance (et revient à la prochaine).
+      if (liaison()?.id) { passerHorsLigne('La séance est finie : ta fiche et tes documents restent lisibles ici.'); return; }
       toast('Le MJ a fermé la partie.');
       dessinerTete();
     });
@@ -102,6 +218,8 @@
   function delie(t = 'Ce téléphone n\'est plus relié à la partie.') {
     flux?.close();
     oublierLiaison();
+    clearInterval(veille);
+    veille = null; horsLigne = false; copie = null;
     jeton = ''; moi = null; vue = null;
     accueil(t);
   }
@@ -109,7 +227,9 @@
   // --- La vue (celle du joueur, ou du MJ) ---
   let dernierJournal = -1, fondVu = '';
   function recevoirVue(v) {
-    const avant = vue;
+    const avant = horsLigne ? null : vue;
+    // Saga 1.38 : de retour en séance.
+    if (horsLigne) { horsLigne = false; dernierJournal = -1; docsVus = null; setTimeout(dessiner, 0); }
     vue = v;
     // Le nom de la campagne, pour la liste des parties reliées.
     const l = liaison();
@@ -159,7 +279,8 @@
     teteEl.replaceChildren(el('img', { src: 'icone.svg', alt: '' }),
       el('div', { className: 'qui' }, el('b', { textContent: titre }), el('small', { textContent: [qui, vue?.nom].filter(Boolean).join(' · ') })),
       ailleurs ? Object.assign(el('button', { className: 'etat-co non', type: 'button', textContent: '↻ Reprendre ici' }), { onclick: () => ecouter() })
-        : el('span', { className: `etat-co ${connecte ? 'oui' : 'non'}`, textContent: connecte ? '● en direct' : '○ hors ligne' }), menu);
+        : horsLigne && copie ? el('span', { className: 'etat-co non', title: `Copie de la séance du ${new Date(copie.t).toLocaleString('fr-FR')}`, textContent: `○ hors séance · ${quand(copie.t)}` })
+          : el('span', { className: `etat-co ${connecte && !horsLigne ? 'oui' : 'non'}`, textContent: connecte && !horsLigne ? '● en direct' : '○ hors ligne' }), menu);
   }
   function dessinerPage() {
     if (!pageEl) return;
@@ -193,6 +314,8 @@
     }
     formuleEl = el('input', { className: 'champ', type: 'text', value: lire('formule', '1d20'), placeholder: '1d20+@for', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
     formuleEl.oninput = () => ecrire('formule', formuleEl.value);
+    // Saga 1.38 : hors séance, les dés attendent la partie (le résultat vient toujours du MJ).
+    if (horsLigne) aideEl.textContent = 'Hors séance : les dés reviennent avec la prochaine séance.';
     const lancerB = el('button', { className: 'btn', type: 'button' }, icone('debug-start'), 'Lancer');
     lancerB.onclick = () => lancer();
     formuleEl.onkeydown = (e) => { if (e.key === 'Enter') { formuleEl.blur(); lancer(); } };
@@ -258,6 +381,7 @@
   function lancer(main) {
     const formule = String(formuleEl?.value || '').trim();
     if (!formule) { toast('Choisis des dés ou écris une formule.'); return; }
+    if (horsLigne) { toast('Hors séance : les dés reviennent avec la prochaine séance.'); return; }
     if (vue?.pause && !moi?.mj) { toast('La partie est en pause.'); return; }
     const types = PlateauDes.types(formule);
     if (!types.length) { toast('Pas de dé dans cette formule.'); return; }
@@ -424,7 +548,7 @@
   let ficheSignature = '';
   function pageFiche() {
     const f = vue?.fiche;
-    const s = JSON.stringify([f, vue?.combat ? 1 : 0, vue?.creation ? 1 : 0]);
+    const s = JSON.stringify([f, vue?.combat ? 1 : 0, vue?.creation ? 1 : 0, horsLigne, copie?.t, enAttente()]);
     if (s === ficheSignature && pageEl.firstChild) return;
     ficheSignature = s;
     pageEl.innerHTML = '';
@@ -432,15 +556,19 @@
     const jet = (sorte, id, quoi) => { vibrer(15); demander({ type: 'jet', sorte, id, quoi }); toast(`${quoi || 'Jet'}…`); };
     // La fiche du jeu (Tafl › Réglages › Fiche des personnages) : la même que sur le PC.
     if (f.modele && typeof FichePerso !== 'undefined') {
-      const occupe = Boolean(vue.creation || vue.combat);
+      const occupe = Boolean(vue.creation || vue.combat) || horsLigne;
+      // Saga 1.38 : hors séance, un champ changé devient une proposition pour le MJ (les jets attendent la séance).
+      if (horsLigne) pageEl.append(el('p', { className: 'note hors-seance' }, icone('history'), copie ? ` Hors séance (copie du ${new Date(copie.t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}). Ce que tu changes ici part au MJ, qui l'accepte à la prochaine séance.` : ' Hors ligne : la fiche se lit seulement.',
+        enAttente() ? el('b', { className: 'attente-mj', textContent: `${enAttente()} changement${enAttente() > 1 ? 's' : ''} en attente du MJ` }) : null));
       pageEl.append(el('div', { className: 'fiche verre' }, FichePerso.rendre(f.modele, f, {
-        jet, occupe, combat: Boolean(vue.combat),
+        jet: horsLigne ? null : jet, occupe, combat: Boolean(vue.combat),
         utiliser: (objet) => { if (!occupe) demander({ type: 'agir_fiche', id: 'objet', objet }); },
         agir: (id) => { if (!occupe) demander({ type: 'agir_fiche', id }); },
-        changer: (id, valeur) => demander({ type: 'champ', id, valeur }),
+        changer: horsLigne ? (copie && liaison()?.boite ? (id, valeur) => proposer(id, valeur) : null) : (id, valeur) => demander({ type: 'champ', id, valeur }),
       })));
       return;
     }
+    if (horsLigne) pageEl.append(el('p', { className: 'note hors-seance' }, icone('history'), copie ? ` Hors séance : copie du ${new Date(copie.t).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}. Les jets reviennent avec la séance.` : ' Hors ligne.'));
     const signe = (n) => (n >= 0 ? `+${n}` : `−${Math.abs(n)}`);
     const pct = Math.max(0, Math.min(100, (f.pv / Math.max(1, f.pvMax)) * 100));
     pageEl.append(el('div', { className: 'fiche verre' },
@@ -504,7 +632,9 @@
   // montrer, et prendre une photo qui devient un document.
   let docsVus = null, dernierMontre = -1, docSig = '', envoiPhoto = null;
   const docsNeufs = new Set();
-  const urlDoc = (d) => (d.image ? `${racine}/compagnon/document?id=${encodeURIComponent(d.id)}&v=${encodeURIComponent(d.image)}&jeton=${encodeURIComponent(jeton)}` : '');
+  // Saga 1.38 : hors séance, l'image vient de la copie (elle y est entière).
+  const urlDoc = (d) => (!d.image ? '' : horsLigne && copie ? copie.images?.[d.id] || ''
+    : `${racine}/compagnon/document?id=${encodeURIComponent(d.id)}&v=${encodeURIComponent(d.image)}&jeton=${encodeURIComponent(jeton)}`);
   function recevoirDocuments(v) {
     const l = v.documents || [];
     if (docsVus == null) { docsVus = new Set(l.map((d) => d.id)); dernierMontre = v.montre?.n ?? -1; }
@@ -550,11 +680,11 @@
   };
   function pageDocuments() {
     const l = [...(vue?.documents || [])].sort((a, b) => b.t - a.t);
-    const sig = JSON.stringify([l, [...docsNeufs], vue?.montre?.id, envoiPhoto ? envoiPhoto.etat : 0, vue?.destinataires]);
+    const sig = JSON.stringify([l, [...docsNeufs], vue?.montre?.id, envoiPhoto ? envoiPhoto.etat : 0, vue?.destinataires, horsLigne]);
     if (sig === docSig && pageEl.firstChild) return;
     docSig = sig;
     pageEl.innerHTML = '';
-    if (moi?.mj) {
+    if (moi?.mj && !horsLigne) {
       if (envoiPhoto) { pageEl.append(formPhoto()); return; }
       const prendre = el('label', { className: 'btn photo' }, icone('device-camera'), 'Prendre une photo',
         el('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { const f = e.target.files[0]; if (f) preparerPhoto(f); } }));
@@ -581,7 +711,7 @@
       }
       g.append(b);
     }
-    pageEl.append(g, el('p', { className: 'note', textContent: moi?.mj ? 'Toucher : voir · l\'œil : le montrer maintenant sur les écrans de ceux qui l\'ont (un brouillon : à tous).' : 'Toucher : ouvrir. Tu gardes ces documents pendant toute la séance.' }));
+    pageEl.append(g, el('p', { className: 'note', textContent: moi?.mj ? 'Toucher : voir · l\'œil : le montrer maintenant sur les écrans de ceux qui l\'ont (un brouillon : à tous).' : horsLigne && copie ? 'Toucher : ouvrir. Hors séance : les documents de la dernière séance.' : liaison()?.boite ? 'Toucher : ouvrir. Tu les gardes aussi entre deux séances.' : 'Toucher : ouvrir. Tu gardes ces documents pendant toute la séance.' }));
   }
   // --- MJ : une photo → un document (réduite ici, puis envoyée en petits morceaux : le relais limite la taille) ---
   function preparerPhoto(fichier) {
@@ -653,7 +783,16 @@
       el('p', { textContent: depuisMenu ? 'Tes parties reliées :' : 'Sur l\'écran de la partie (Saga, ou la page de jeu de ton navigateur), touche le bouton « Compagnon » en haut, puis scanne le QR code avec l\'appareil photo. Un QR sert une fois, pendant 5 minutes.' }));
     if (autres.length) {
       const l = el('div', { className: 'campagnes' });
-      for (const x of autres) l.append(el('a', { href: `${x.cle}/compagnon/` }, el('span', { textContent: x.campagne || x.titre || 'Partie' }), el('small', { textContent: x.mj ? 'MJ' : x.nom })));
+      for (const x of autres) {
+        // Saga 1.38 : la date de la dernière séance, et une pastille quand la séance est ouverte.
+        const pastille = el('b', { className: 'direct', hidden: true, textContent: '● en direct' });
+        l.append(el('a', { href: `${x.cle}/compagnon/` }, el('span', { textContent: x.campagne || x.titre || 'Partie' }),
+          el('small', { textContent: [x.mj ? 'MJ' : x.nom, x.derniere ? `dernière séance ${quand(x.derniere)}` : ''].filter(Boolean).join(' · ') }), pastille));
+        if (x.id && x.cle.startsWith(location.origin)) {
+          fetch(`${location.origin}/campagne/${encodeURIComponent(x.id)}/etat`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null))
+            .then((e) => { if (e?.direct) pastille.hidden = false; }).catch(() => {});
+        }
+      }
       boite.append(l);
     }
     if (depuisMenu && liaison()) {
@@ -680,7 +819,12 @@
     }
     dessiner();
     ecouter();
+    // Saga 1.38 : une campagne : ses changements pas encore partis, et sa copie le temps que la séance réponde.
+    if (liaison()?.boite) {
+      envoyerAttente();
+      setTimeout(() => { if (!vue && !connecte) passerHorsLigne(); }, 2500);
+    }
   }
   demarrer();
-  window.Compagnon = { get vue() { return vue; }, get moi() { return moi; }, get onglet() { return onglet; }, aller: (o) => { onglet = o; dessiner(); }, lancer: (f) => { onglet = 'des'; dessiner(); formuleEl.value = f; lancer(); }, get plateau() { return plateau; } };
+  window.Compagnon = { get vue() { return vue; }, get moi() { return moi; }, get horsLigne() { return horsLigne; }, get copie() { return copie; }, get liaison() { return liaison(); }, get onglet() { return onglet; }, aller: (o) => { onglet = o; dessiner(); }, lancer: (f) => { onglet = 'des'; dessiner(); formuleEl.value = f; lancer(); }, get plateau() { return plateau; } };
 })();

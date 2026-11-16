@@ -316,6 +316,20 @@ const Moteur = (() => {
           }
         },
         dialogue,
+        // Saga 1.38 : le MJ prépare un héros (pré-tiré ou nouveau) avec les écrans de création du pack.
+        creerHeros: async (numero) => {
+          if (enScript || enCombat || fondu || !scripts) return null;
+          enScript = true;
+          entrees.oublier();
+          try {
+            return await JdrCreation.creer({ jeu, partie, ui: scripts.ui, numero, annulable: true });
+          } finally {
+            menus.fermer();
+            dialogue.fermer();
+            enScript = false;
+            entrees.oublier();
+          }
+        },
         // Saga 1.0 : le multijoueur (les amis connectés, pour leur envoyer leur vue).
         multi: () => multi,
         des: (o) => ecranDes.montrer(o),
@@ -1205,7 +1219,9 @@ const Moteur = (() => {
       enScript = true;
       entrees.oublier();
       try {
-        await Regles.debut({ jeu, partie, ui: scripts.ui, ranger: (c) => Collection.ranger(jeu, partie, c) });
+        // Saga 1.38 : à la table, le MJ commence sans héros (les joueurs créent le leur ; le MJ peut en
+        // préparer un depuis l'onglet Pions).
+        await Regles.debut({ jeu, partie, ui: scripts.ui, ranger: (c) => Collection.ranger(jeu, partie, c), table: modeTable && Boolean(Regles.capacites(jeu).table) });
       } catch (err) {
         rappels.message?.(`Erreur au début de la partie : ${err.message}`);
       } finally {

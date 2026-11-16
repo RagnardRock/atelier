@@ -44,6 +44,12 @@ la page de l'essai (rubrique **Artifacts**).
   ouverte chez lui, une carte montrée à tous, le serveur qui refuse l'image à qui ne l'a pas, la photo prise par
   le téléphone du MJ, le téléphone d'un joueur (vibration, « Nouveau »), un document repris.
 
+- `essais/12-saga-campagne.js` : la salle de campagne de Saga 1.38 avec un vrai relais (dossier de données
+  temporaire) : le même lien et le même code d'une séance à l'autre, la copie déposée chiffrée (le relais ne lit
+  pas la fiche), le mauvais secret refusé, le téléphone hors séance (fiche, documents, même rouvert), deux
+  changements proposés puis acceptés par le MJ, le téléphone qui repasse en direct, un téléphone coupé.
+  Les essais du mode table vérifient aussi que le MJ commence sans héros.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

@@ -239,6 +239,8 @@ const TablePanneau = (() => {
         out.push(ligne);
       }
       if (!pions.length) out.push(el('p', { className: 'table-note', textContent: 'Aucun pion sur cette carte.' }));
+      // Saga 1.38 : les joueurs créent leur héros depuis leur écran ; le MJ peut aussi en préparer un.
+      out.push(btn('person-add', 'Préparer un héros', () => T.preparerHeros?.(), { titre: 'Un pré-tiré ou un nouveau personnage, que tu donneras ensuite à un joueur (onglet Joueurs)' }));
       out.push(el('p', { className: 'table-note', textContent: 'Clique un pion puis une case pour le déplacer. Clic droit : qui le voit, ses marques. En bas à gauche : ses PV (+ et −).' }));
       return out;
     }
@@ -416,6 +418,8 @@ const TablePanneau = (() => {
     }
 
     // --- Joueurs : le multijoueur (le panneau de multi.js vient ici, sans sa discussion, qui est dans Chat) ---
+    // Saga 1.38 : la campagne (ses téléphones, les copies hors séance, les changements proposés).
+    const blocCampagne = () => T.campagne?.()?.bloc({ libelleChamp: T.libelleChamp }) || null;
     function dessinerJoueurs(jeu, partie) {
       const v = volets.joueurs;
       const multi = T.multi?.();
@@ -432,13 +436,13 @@ const TablePanneau = (() => {
         }
         amis.append(el('p', { className: 'table-note', textContent: 'Un ami sans héros en prend un libre ou crée le sien depuis son écran. Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat.' }));
         if (multi.element && multi.element.parentElement !== v) { multi.ouvrirPanneau?.(); v.append(multi.element); }
-        v.replaceChildren(...[multi.element, amis].filter(Boolean));
+        v.replaceChildren(...[multi.element, amis, blocCampagne()].filter(Boolean));
         multi.element.hidden = false;
       } else {
         v.replaceChildren(el('div', { className: 'table-vide-joueurs' },
           el('i', { className: 'codicon codicon-organization' }),
           el('p', { textContent: 'Tes amis rejoignent depuis leur navigateur (PC, tablette, téléphone), sans rien installer. Chacun reçoit seulement ce que son héros a le droit de voir.' }),
-          btn('broadcast', 'Ouvrir la partie aux joueurs', () => document.dispatchEvent(new CustomEvent('saga:multijoueur')), { classe: 'accent' })));
+          btn('broadcast', 'Ouvrir la partie aux joueurs', () => document.dispatchEvent(new CustomEvent('saga:multijoueur')), { classe: 'accent' })), ...[blocCampagne()].filter(Boolean));
       }
     }
 

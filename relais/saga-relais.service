@@ -10,6 +10,9 @@ Environment=RELAIS_CLE=change-moi
 Environment=PORT=8790
 Environment=HOTE=127.0.0.1
 Environment=CONFIANCE_PROXY=1
+# Saga 1.38 : les campagnes (copies chiffrées des joueurs). systemd crée /var/lib/saga-relais.
+StateDirectory=saga-relais
+Environment=DONNEES=/var/lib/saga-relais
 DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict

@@ -66,10 +66,16 @@ function creer({ log = () => {}, perdu = () => {}, lienChange = () => {} } = {})
 
   // Le flux du relais (server-sent events), lu à la main.
   async function ecouter(s, premier) {
-    const url = `${s.base}/hote/ouvrir?cle=${encodeURIComponent(s.cle)}${s.salle ? `&salle=${encodeURIComponent(s.salle)}&secret=${encodeURIComponent(s.secret)}` : ''}`;
+    // Saga 1.38 : une campagne revient toujours dans SA salle (le même lien à chaque séance).
+    const camp = s.campagne ? `&campagne=${encodeURIComponent(s.campagne.id)}&cs=${encodeURIComponent(s.campagne.secret)}` : '';
+    const url = `${s.base}/hote/ouvrir?cle=${encodeURIComponent(s.cle)}${camp}${s.salle ? `&salle=${encodeURIComponent(s.salle)}&secret=${encodeURIComponent(s.secret)}` : ''}`;
     s.controle = new AbortController();
     const r = await fetch(url, { headers: { Accept: 'text/event-stream' }, signal: s.controle.signal });
-    if (!r.ok) throw new Error(r.status === 403 ? 'Le relais refuse la clé (Réglages du multijoueur).' : r.status === 503 ? 'Le relais est plein.' : `Le relais répond ${r.status}.`);
+    if (!r.ok) {
+      const t = await r.text().catch(() => '');
+      if (s.campagne && /campagne/i.test(t)) throw new Error(t);
+      throw new Error(r.status === 403 ? 'Le relais refuse la clé (Réglages du multijoueur).' : r.status === 503 ? 'Le relais est plein.' : `Le relais répond ${r.status}.`);
+    }
     const lecteur = r.body.getReader();
     const dec = new TextDecoder();
     let tampon = '';
@@ -121,14 +127,15 @@ function creer({ log = () => {}, perdu = () => {}, lienChange = () => {} } = {})
     }
   }
 
-  function ouvrir({ adresse, cle = '', port, secretLocal }) {
+  function ouvrir({ adresse, cle = '', port, secretLocal, campagne = null }) {
     fermer();
     const base = normaliser(adresse);
-    const s = { base, cle: String(cle || ''), port, secretLocal, salle: '', secret: '', controle: null, envois: [], minuterie: null, actives: new Map(), arret: false };
+    const camp = campagne && /^[A-Za-z0-9_-]{16,32}$/.test(String(campagne.id || '')) && String(campagne.secret || '').length >= 20 ? { id: campagne.id, secret: campagne.secret } : null;
+    const s = { base, cle: String(cle || ''), port, secretLocal, campagne: camp, salle: '', secret: '', controle: null, envois: [], minuterie: null, actives: new Map(), arret: false };
     session = s;
     return new Promise((resoudre, rejeter) => {
       const delai = setTimeout(() => { if (!s.salle) { fermer(); rejeter(new Error('Le relais ne répond pas.')); } }, 12000);
-      tenir(s, () => { clearTimeout(delai); log('INFO', `Relais : salle ${s.salle} ouverte sur ${base}`); resoudre({ lien: `${base}/p/${s.salle}/` }); },
+      tenir(s, () => { clearTimeout(delai); log('INFO', `Relais : salle ${s.salle} ouverte sur ${base}`); resoudre({ lien: `${base}/p/${s.salle}/`, fixe: Boolean(s.campagne) && s.salle === s.campagne.id }); },
         (err) => { clearTimeout(delai); if (session === s) session = null; rejeter(err); });
     });
   }
@@ -141,7 +148,7 @@ function creer({ log = () => {}, perdu = () => {}, lienChange = () => {} } = {})
     s.controle?.abort();
     for (const r of s.actives.values()) r.destroy();
   }
-  return { ouvrir, fermer, get ouverte() { return Boolean(session?.salle); } };
+  return { ouvrir, fermer, normaliser, get ouverte() { return Boolean(session?.salle); }, get base() { return session?.base || ''; } };
 }
 
 module.exports = { creer };

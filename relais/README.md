@@ -60,11 +60,41 @@ amis (le code de la partie est dedans). Chaque nouveau joueur attend que le MJ l
 | `RELAIS_CLE` | vide | La clé demandée à Saga. **Vide = n'importe qui peut ouvrir une partie** |
 | `MAX_SALLES` | `20` | Les parties ouvertes en même temps |
 | `CONFIANCE_PROXY` | `0` | `1` derrière Caddy ou nginx : l'adresse des amis est lue dans `X-Forwarded-For` |
+| `DONNEES` | `./donnees` (à côté de `relais.js`) | Le dossier des campagnes (Saga 1.38). Le relais doit pouvoir y écrire |
+| `MAX_CAMPAGNES` | `100` | Les campagnes gardées |
+| `MAX_CAMPAGNE_MO` | `20` | La place d'une campagne (toutes ses copies), en Mo |
 
 Les limites sont prudentes : 40 requêtes par seconde et par adresse, 64 Ko par demande d'un ami, une
 partie fermée 90 s après que le MJ a perdu le fil (il revient dans la même partie s'il se reconnecte
 avant). Les fichiers de l'interface de Saga sont gardés en mémoire le temps d'une partie (40 Mo au
 plus), pour ne pas les redemander au PC du MJ à chaque ami.
+
+## Les campagnes (Saga 1.38)
+
+Une partie de JdR peut avoir une **salle de campagne** : un lien et un code qui ne changent plus d'une
+séance à l'autre, et des téléphones reliés une fois pour toutes. Entre deux séances, chaque joueur garde sur
+son téléphone une copie de sa fiche et de ses documents, et peut proposer des changements que le MJ accepte
+à la séance suivante.
+
+- Le relais garde, par campagne, l'empreinte (sha256) de son secret, pas le secret : un autre MJ ne peut
+  pas prendre la salle.
+- Les copies sont **chiffrées par Saga** (AES-256-GCM, une clé par joueur, donnée à ses seuls téléphones) ;
+  les propositions sont chiffrées par le téléphone. Le relais ne lit ni les fiches ni les documents.
+- Le MJ n'a pas de copie : ce qu'il sait ne quitte jamais son PC.
+- Limites : 12 Mo par copie, 40 joueurs, 60 propositions de 32 Ko, 20 Mo par campagne. Une campagne
+  oubliée depuis 400 jours est effacée.
+
+### Mettre à jour un relais déjà installé
+
+1. Copier le nouveau `relais.js` à la place de l'ancien.
+2. Vérifier que le relais peut écrire dans son dossier de données :
+   - lancé depuis un dossier à soi (par exemple `/home/ubuntu/saga-relais`, utilisateur `ubuntu`) : rien à
+     faire, il crée `donnees/` à côté de `relais.js` ;
+   - avec le service fourni (`DynamicUser=yes`) : ajouter `StateDirectory=saga-relais` et
+     `Environment=DONNEES=/var/lib/saga-relais` (voir `saga-relais.service`), puis `sudo systemctl daemon-reload`.
+3. `sudo systemctl restart saga-relais`.
+4. Vérifier : `/sante` répond avec `"version":2`. Sans cela, Saga prévient que le relais n'est pas à jour
+   et ouvre une salle ordinaire (un nouveau lien à chaque séance).
 
 ## Avec nginx
 
