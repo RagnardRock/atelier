@@ -55,6 +55,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/13-saga-mecaniques.js` : les mécaniques sans code de Saga 1.41 : la défense et l'armure lues dans la fiche,
   un monstre qui garde sa CA, les paliers et leur malus (un test au d20 aussi), la blessure tirée sur sa table, les
   jets pour tenir, puis un vrai combat du pack joué par une interface qui choisit seule.
+  Un second essai règle un autre système : d100 sous un score, réserve de d6, 2d6 à paliers, les bonus à cocher (le
+  MJ en ajoute depuis la fiche, le joueur le coche, il compte une fois), les repos et les niveaux à formule, puis un
+  combat avec parade (celle d'un monstre, lue dans ses champs), localisation, héros d'abord et un poison par tour.
 
 ## Les lancer sur un PC (pour un développeur)
 

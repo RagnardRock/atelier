@@ -299,7 +299,11 @@ const JdrCombat = (() => {
       u.avantageProchain = false;
       const bonusSorts = u.bonus.filter((b) => b.attaque).map((b) => D.lancer(partie, b.attaque).total).reduce((s, x) => s + x, 0);
       // Saga 1.41 : le malus de ses blessures et de ses états (Mécaniques).
-      const malusMeca = M ? (estHeros(u) ? JdrMeca.malus(jeu, u.c, idsEtats(u)) : JdrMeca.malusEtats(jeu, idsEtats(u))) : 0;
+      const coches = estHeros(u) ? JdrMeca.bonusCoches(u.c, 'attaque') : { total: 0, noms: [], ids: [] };
+      if (estHeros(u)) JdrMeca.consommer(u.c, coches.ids);
+      const malusMeca = (M ? (estHeros(u) ? JdrMeca.malus(jeu, u.c, idsEtats(u)) : JdrMeca.malusEtats(jeu, idsEtats(u))) : 0)
+        + coches.total; // et les bonus que le joueur a cochés
+      const quoiAttaque = `${a.nom} contre ${nom(t)}${coches.noms.length ? ` (${coches.noms.join(', ')})` : ''}`;
       const ca = caDe(t);
       // Saga 1.41 : le système de résolution du jeu (d100, réserve, 2d6) ; sinon le d20 de la 5e.
       const sys = M ? JdrMeca.resoudre(jeu, partie, { bonus: a.bonus + bonusSorts + malusMeca, dd: ca, avantage, desavantage, vars: varsDe(u) }) : null;
@@ -309,7 +313,7 @@ const JdrCombat = (() => {
         touche = sys.reussi;
         partiel = sys.partiel;
         total = sys.total;
-        ligne = noterJet(u, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: sys.formule, des: sys.des, bonus: sys.bonus, total, contre: `${nomDefense} ${ca} · ${sys.contre}`, resultat: JdrMeca.resultat(sys, { attaque: true }), mode: sys.mode });
+        ligne = noterJet(u, { qui: nom(u), quoi: quoiAttaque, formule: sys.formule, des: sys.des, bonus: sys.bonus, total, contre: `${nomDefense} ${ca} · ${sys.contre}`, resultat: JdrMeca.resultat(sys, { attaque: true }), mode: sys.mode });
       } else {
         const des = D.d20(partie, { avantage, desavantage });
         const bonus = Math.round(await Maison.formule('attaque', { naturel: des.naturel, bonus: a.bonus, magie: Number(a.magie) || 0, sort: Boolean(sort), distance: Boolean(a.distance) }, () => a.bonus)) + bonusSorts + malusMeca;
@@ -319,7 +323,7 @@ const JdrCombat = (() => {
         total = des.naturel + bonus;
         critique = des.naturel >= seuil;
         touche = critique || (!(des.naturel === 1 && R.echec_critique) && total >= ca);
-        ligne = noterJet(u, { qui: nom(u), quoi: `${a.nom} contre ${nom(t)}`, formule: 'd20', des: des.des, bonus, total, contre: `${nomDefense} ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
+        ligne = noterJet(u, { qui: nom(u), quoi: quoiAttaque, formule: 'd20', des: des.des, bonus, total, contre: `${nomDefense} ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
       }
       if (touche && !a.distance && eft.has('critique_contact')) critique = true;
       // Saga 1.41 : la cible tente de parer le coup (Mécaniques › Parade), sauf un critique.

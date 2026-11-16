@@ -263,6 +263,61 @@ const JdrMeca = (() => {
   // Un coup reçu remet les jets à zéro (il faut se stabiliser de nouveau).
   const touche = (c) => { if (c?.jets) c.jets = { succes: 0, echecs: 0, stable: false }; };
 
+  // --- Les bonus à cocher (Saga 1.41) ---
+  // Le MJ en met sur la fiche d'un héros (« Contre les droïdes +2 », sur Piratage) ; le joueur coche ceux qui
+  // comptent, puis lance : ils s'ajoutent à son prochain jet qui les concerne, et se décochent. Sans
+  // Mécaniques actives aussi. c.bonus_choix : [{ id, nom, valeur, sur: ['tout' | 'attaques' | 'sauvegardes' |
+  // 'competence:<id>'] }] ; c.bonus_coches : les ids cochés.
+  function normBonus(b, i = 0) {
+    const sur = (Array.isArray(b?.sur) ? b.sur : [b?.sur]).map((x) => texte(x, 60)).filter((x) => x === 'tout' || x === 'attaques' || x === 'sauvegardes' || /^competence:[a-z0-9_]+$/i.test(x));
+    return { id: texte(b?.id, 40) || `bonus_${i + 1}`, nom: texte(b?.nom, 60) || 'Bonus', valeur: entier(b?.valeur, 2, -20, 20), sur: sur.length ? [...new Set(sur)].slice(0, 20) : ['tout'] };
+  }
+  const bonusDe = (c) => (Array.isArray(c?.bonus_choix) ? c.bonus_choix : []);
+  // Ce que vaut un jet : sorte 'competence' (avec son id), 'attaque' ou 'sauvegarde'.
+  function bonusCoches(c, sorte, id = '') {
+    const coches = new Set(Array.isArray(c?.bonus_coches) ? c.bonus_coches : []);
+    const l = bonusDe(c).filter((b) => coches.has(b.id) && (b.sur || []).some((x) => x === 'tout'
+      || (sorte === 'attaque' && x === 'attaques') || (sorte === 'sauvegarde' && x === 'sauvegardes')
+      || (sorte === 'competence' && x === `competence:${id}`)));
+    return { total: l.reduce((s, b) => s + (Number(b.valeur) || 0), 0), noms: l.map((b) => `${b.nom} ${b.valeur >= 0 ? '+' : '−'}${Math.abs(b.valeur)}`), ids: l.map((b) => b.id) };
+  }
+  // Après le jet : ceux qui ont compté se décochent.
+  function consommer(c, ids) {
+    if (!ids?.length || !Array.isArray(c?.bonus_coches)) return;
+    c.bonus_coches = c.bonus_coches.filter((x) => !ids.includes(x));
+  }
+  // Le MJ ajoute, change ou retire ; le joueur coche (seulement les siens, qui existent).
+  function changerBonus(c, action) {
+    if (!c || !action) return false;
+    const l = bonusDe(c);
+    if (action.type === 'cocher') {
+      if (!l.some((b) => b.id === action.id)) return false;
+      const s = new Set(Array.isArray(c.bonus_coches) ? c.bonus_coches : []);
+      if (action.coche) s.add(action.id); else s.delete(action.id);
+      c.bonus_coches = [...s];
+      return true;
+    }
+    if (action.type === 'ajouter') {
+      if (l.length >= 20) return false;
+      let n = l.length + 1;
+      while (l.some((b) => b.id === `bonus_${n}`)) n++;
+      c.bonus_choix = [...l, normBonus({ ...action.bonus, id: `bonus_${n}` }, n - 1)];
+      return true;
+    }
+    if (action.type === 'retirer') {
+      c.bonus_choix = l.filter((b) => b.id !== action.id);
+      if (Array.isArray(c.bonus_coches)) c.bonus_coches = c.bonus_coches.filter((x) => x !== action.id);
+      return true;
+    }
+    return false;
+  }
+  // Pour la fiche : chaque bonus, ce qu'il touche en clair, coché ou non.
+  function vueBonus(jeu, c) {
+    const coches = new Set(Array.isArray(c?.bonus_coches) ? c.bonus_coches : []);
+    const nomSur = (x) => (x === 'tout' ? 'tous les jets' : x === 'attaques' ? 'les attaques' : x === 'sauvegardes' ? 'les sauvegardes' : B.nomCompetence(jeu, x.slice('competence:'.length)));
+    return bonusDe(c).map((b) => ({ id: b.id, nom: b.nom, valeur: b.valeur, sur: b.sur.map(nomSur).join(', '), coche: coches.has(b.id) }));
+  }
+
   // Les noms qu'une formule de mécanique peut lire (pour Tafl : vérifier les formules).
   function noms(jeu) {
     const n = new Set(['niveau', 'maitrise', 'pv', 'pv_max', 'ca']);
@@ -271,5 +326,5 @@ const JdrMeca = (() => {
     return n;
   }
 
-  return { JETS, TYPES, RESOLUTION, resoudre, resultat, parade, localiser, initiative, ordreCamps, pvRepos, pvNiveau, etat, malusEtats, de, meca, normaliser, varsHeros, varsMonstre, calculer, defense, absorption, degatMin, palier, malus, tirer, suivre, caler, jetRepete, doitJeter, touche, noms };
+  return { normBonus, bonusCoches, consommer, changerBonus, vueBonus, JETS, TYPES, RESOLUTION, resoudre, resultat, parade, localiser, initiative, ordreCamps, pvRepos, pvNiveau, etat, malusEtats, de, meca, normaliser, varsHeros, varsMonstre, calculer, defense, absorption, degatMin, palier, malus, tirer, suivre, caler, jetRepete, doitJeter, touche, noms };
 })();

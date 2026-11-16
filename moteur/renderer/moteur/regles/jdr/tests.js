@@ -24,7 +24,10 @@ const JdrTests = (() => {
   // { reussi, total, naturel, bonus, ligne }. dd 0 : un jet sans DD (le MJ dira).
   async function test({ jeu, partie, ui, c, competence, dd = 0, avantage = false, desavantage = false, quoi = '', montrerJet = true, etatsCombat = [] }) {
     const ef = effets(jeu, c, etatsCombat);
-    const bonus = P.bonusCompetence(jeu, c, competence) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null); // Saga 1.41 : ses blessures, ses états
+    const coches = JdrMeca.bonusCoches(c, 'competence', competence); // Saga 1.41 : les bonus que le joueur a cochés
+    JdrMeca.consommer(c, coches.ids);
+    if (coches.noms.length) quoi = `${quoi || B.nomCompetence(jeu, competence)} (${coches.noms.join(', ')})`;
+    const bonus = coches.total + P.bonusCompetence(jeu, c, competence) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null); // Saga 1.41 : ses blessures, ses états
     // Saga 1.41 : le système de résolution du jeu (d100, réserve de d6, 2d6), s'il n'est pas le d20.
     const sys = JdrMeca.resoudre(jeu, partie, { bonus, dd, avantage, desavantage: desavantage || ef.has('desavantage_tests'), vars: JdrMeca.varsHeros(jeu, c) });
     if (sys) return autreSysteme(partie, ui, sys, { qui: P.nom(jeu, c), quoi: quoi || B.nomCompetence(jeu, competence), dd, bonus, montrerJet });
@@ -51,7 +54,10 @@ const JdrTests = (() => {
       if (montrerJet) await montrer(ui, quoi || nom, [ligne]);
       return { reussi: false, total: 0, naturel: 0, bonus: 0, ligne };
     }
-    const bonus = P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null);
+    const coches = JdrMeca.bonusCoches(c, 'sauvegarde', carac);
+    JdrMeca.consommer(c, coches.ids);
+    if (coches.noms.length) quoi = `${quoi || nom} (${coches.noms.join(', ')})`;
+    const bonus = coches.total + P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null);
     const sys = JdrMeca.resoudre(jeu, partie, { bonus, dd, avantage, desavantage: desavantage || (carac === 'dex' && ef.has('desavantage_sauvegardes_dex')), vars: JdrMeca.varsHeros(jeu, c) });
     if (sys) return autreSysteme(partie, ui, sys, { qui: P.nom(jeu, c), quoi: quoi || nom, dd, bonus, montrerJet });
     const des = D.d20(partie, { avantage, desavantage: desavantage || (carac === 'dex' && ef.has('desavantage_sauvegardes_dex')) });

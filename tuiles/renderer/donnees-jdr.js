@@ -1136,7 +1136,7 @@ const DonneesJdr = (() => {
       const verifier = () => {
         const t = i.value.trim();
         const err = t && typeof FichePerso !== 'undefined' ? FichePerso.verifier(t, new Set([...noms(), ...plus])) : '';
-        etat.textContent = !t ? 'vide : la règle du pack' : err ? `⚠ ${err}` : '✓';
+        etat.textContent = !t ? (String(placeholder).startsWith('vide') ? '' : 'vide : la règle du pack') : err ? `⚠ ${err}` : '✓';
         etat.classList.toggle('erreur', Boolean(err));
       };
       i.oninput = () => { o[cle] = i.value; verifier(); ctx.change?.(); };

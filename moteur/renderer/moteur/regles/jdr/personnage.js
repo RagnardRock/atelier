@@ -294,6 +294,10 @@ const JdrPerso = (() => {
     c.pv_temp = Math.max(0, Math.round(Number(c.pv_temp) || 0));
     c.des_vie = B.borne(Math.round(Number(c.des_vie ?? c.niveau)), 0, c.niveau);
     c.pacte = Math.max(0, Number(c.pacte) || 0);
+    // Saga 1.41 : les bonus à cocher que le MJ a mis sur sa fiche.
+    if (Array.isArray(c.bonus_choix) && typeof JdrMeca !== 'undefined') c.bonus_choix = c.bonus_choix.slice(0, 20).map((b, i) => JdrMeca.normBonus(b, i));
+    else delete c.bonus_choix;
+    if (!Array.isArray(c.bonus_coches)) delete c.bonus_coches;
     return c;
   }
   // Repos long (et soin complet : auberge, défaite) : tout revient.

@@ -143,6 +143,24 @@ module.exports = [
         regler({ resolution: { type: '2d6', plein: '10', partiel: '7' } });
         const p2 = await essais(40, () => JdrTests.sauvegarde({ jeu, partie, ui, c: thor, carac: 'con', dd: 12, montrerJet: false }));
         out.deux = { ok: p2.every((t) => t.reussi === (t.total >= 7) && Boolean(t.partiel) === (t.total >= 7 && t.total < 10)), partiel: p2.some((t) => t.ligne.resultat === 'partiel') };
+        // Les bonus à cocher : le MJ en met un sur Athlétisme, le joueur le coche, il compte une fois.
+        regler({});
+        JdrMeca.changerBonus(thor, { type: 'ajouter', bonus: { nom: 'Contre les droïdes', valeur: 2, sur: ['competence:athletisme'] } });
+        const idB = thor.bonus_choix[0].id;
+        JdrMeca.changerBonus(thor, { type: 'cocher', id: idB, coche: true });
+        const sans = await JdrTests.test({ jeu, partie, ui, c: thor, competence: 'perception', montrerJet: false });
+        const avec = await JdrTests.test({ jeu, partie, ui, c: thor, competence: 'athletisme', montrerJet: false });
+        const apres = await JdrTests.test({ jeu, partie, ui, c: thor, competence: 'athletisme', montrerJet: false });
+        out.bonus = { ecart: avec.bonus - apres.bonus, garde: sans.bonus === JdrPerso.bonusCompetence(jeu, thor, 'perception'), journal: avec.ligne.quoi, decoche: !(thor.bonus_coches || []).length };
+        // La fiche du MJ : le formulaire ajoute un bonus.
+        const actions = [];
+        const f = FichePerso.rendre(FichePerso.defaut(), { nom: 'Thorgrim', bonusChoix: JdrMeca.vueBonus(jeu, thor), competences: [{ id: 'piratage', nom: 'Piratage' }] }, { mj: true, bonus: (a) => actions.push(a), cocher: () => {} });
+        document.body.append(f);
+        f.querySelector('.fp-bonus-ajout input[type="text"]').value = 'Sur les machines';
+        f.querySelector('.fp-bonus-ajout select').value = 'competence:piratage';
+        [...f.querySelectorAll('.fp-bonus-ajout button')].pop().click();
+        out.ficheBonus = { lignes: f.querySelectorAll('.fp-bonus').length, action: actions[0] };
+        f.remove();
         // Les repos et les niveaux.
         regler({ repos: { court: 'niveau + 2', long: 'pv_max / 2' } });
         const max = JdrPerso.pvMax(jeu, thor);
@@ -200,6 +218,11 @@ module.exports = [
       egal([r.d100.formule, r.d100.contre], ['d100', '≤ 60'], 'd100 : le journal le dit');
       vrai(r.reserve, 'réserve de d6 : on compte les 5 et les 6, il en faut deux');
       vrai(r.deux.ok && r.deux.partiel, '2d6 : réussite à 10, partielle de 7 à 9');
+      egal(r.bonus.ecart, 2, 'un bonus coché s\'ajoute au jet qu\'il concerne, une fois');
+      vrai(r.bonus.garde && r.bonus.decoche, 'il ne compte pas sur une autre compétence, et se décoche après');
+      vrai(/Contre les droïdes \+2/.test(r.bonus.journal), `le journal le dit (${r.bonus.journal})`);
+      egal(r.ficheBonus.lignes, 1, 'la fiche du MJ montre le bonus');
+      egal(r.ficheBonus.action, { type: 'ajouter', bonus: { nom: 'Sur les machines', valeur: 2, sur: ['competence:piratage'] } }, 'le MJ ajoute un bonus depuis la fiche');
       vrai(r.court > 0 && r.court <= 4, `repos court : niveau + 2 PV (${r.court})`);
       egal(r.long[0], r.long[1], 'repos long : la moitié des PV max');
       egal(r.niveau, 7, 'un niveau donne 7 PV (et ce que donne son origine)');

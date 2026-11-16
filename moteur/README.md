@@ -400,8 +400,21 @@ Tafl › Données › Réglages › **Mécaniques** (pack JDR) change le fonctio
   y entrant (une blessure qui reste sur la fiche) ; des jets pour tenir à chaque tour de combat ;
 - **Tables aléatoires** et **jets pour tenir** (formule, seuil, réussites pour être stabilisé, échecs pour mourir).
 
+- **Système de résolution** : d20 + bonus (la 5e), d100 sous un score, une réserve de d6 (on compte les réussites)
+  ou 2d6 à paliers (réussite, réussite partielle, échec), pour les tests, les sauvegardes et les attaques ;
+- **Parade** (la cible lance pour parer un coup qui touche) et **localisation** (une table tirée à chaque coup, qui
+  multiplie les dégâts) ;
+- **Initiative** : la 5e, un dé et une formule à soi, ou un camp d'abord ;
+- **Repos et niveaux** : les PV rendus par un repos court ou long, les PV gagnés à un niveau (des formules) ;
+- **États** : un malus, des dégâts ou des soins à chaque tour, un jet pour en sortir ;
+- **Champs des monstres** : un monstre a ses valeurs pour les champs de la fiche (couverture, armure, parade…).
+
 Les formules lisent les champs de la Fiche des personnages. Deux modèles : « D&D 5e » (les règles du pack) et
 « Armure et blessures ». La fiche montre la défense, l'armure, le palier et les blessures ; le combat aussi.
+
+**Les bonus à cocher** (mode table, avec ou sans mécaniques) : le MJ met sur la fiche d'un héros des bonus comme
+« Contre les droïdes +2 » sur Piratage (une compétence, les attaques, les sauvegardes ou tout) ; le joueur coche
+ceux qui comptent, lance, et ils s'ajoutent à ce jet (le journal les nomme), puis se décochent.
 
 ## Saga 1.40 : installer le compagnon
 

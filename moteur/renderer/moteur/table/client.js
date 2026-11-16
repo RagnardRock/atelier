@@ -494,6 +494,7 @@ const TableClient = (() => {
           utiliser: (objet) => { if (!occupe) window.saga.tableDemander({ type: 'agir_fiche', id: 'objet', objet }); },
           agir: (id) => { if (!occupe) window.saga.tableDemander({ type: 'agir_fiche', id }); },
           changer: (id, valeur) => window.saga.tableDemander({ type: 'champ', id, valeur }),
+          cocher: (id, coche) => window.saga.tableDemander({ type: 'bonus', id, coche }),
           occupe, combat: Boolean(vue.combat), image: imageFiche,
         }));
         fiche.classList.toggle('xl', ficheLarge && f.modele.colonnes > 1);
@@ -506,6 +507,14 @@ const TableClient = (() => {
         el('span', { className: 'joueurs-fiche-pv', textContent: `${f.pv} / ${f.pvMax} PV` }),
         el('span', { className: 'joueurs-fiche-ca', textContent: `CA ${f.ca}` })));
       if (f.etats?.length) fiche.append(el('div', { className: 'joueurs-fiche-etats', textContent: f.etats.join(', ') }));
+      // Saga 1.41 : les bonus du MJ, à cocher avant de lancer.
+      if (f.bonusChoix?.length) {
+        fiche.append(el('div', { className: 'joueurs-fiche-bonus' }, ...f.bonusChoix.map((b) => {
+          const c = el('input', { type: 'checkbox', checked: Boolean(b.coche) });
+          c.onchange = () => window.saga.tableDemander({ type: 'bonus', id: b.id, coche: c.checked });
+          return el('label', { title: `Sur ${b.sur}. Coché, il s'ajoute à ton prochain jet qu'il concerne.` }, c, ` ${b.nom} ${b.valeur >= 0 ? '+' : '−'}${Math.abs(b.valeur)}`);
+        })));
+      }
       const onglets = el('div', { className: 'joueurs-onglets' });
       for (const [id, nom] of [['caracs', 'Caracs'], ['competences', 'Compétences'], ['attaques', 'Attaques'], ['sac', 'Sac'], ['actions', `Actions${f.actions?.some((x) => x.id === 'niveau') ? ' ★' : ''}`]]) {
         const b = el('button', { className: `joueurs-onglet${ongletFiche === id ? ' actif' : ''}`, type: 'button', textContent: nom });

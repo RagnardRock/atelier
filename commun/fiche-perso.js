@@ -250,6 +250,34 @@ const FichePerso = (() => {
     if (f) b.onclick = (e) => { e.stopPropagation(); f(); };
     return b;
   }
+  // Saga 1.41 : les bonus à cocher. Le MJ les met sur la fiche (o.bonus : ajouter, retirer) ; le joueur
+  // coche ceux qui comptent (o.cocher), puis lance : ils s'ajoutent à son prochain jet qui les concerne.
+  function blocBonus(d, o) {
+    const l = Array.isArray(d.bonusChoix) ? d.bonusChoix : null;
+    if (!l || (!l.length && !(o.mj && o.bonus))) return null;
+    const corps = l.map((b) => {
+      const c = el('input', { type: 'checkbox', checked: Boolean(b.coche), disabled: !o.cocher, title: 'Cocher avant de lancer : il s\'ajoute au prochain jet qu\'il concerne' });
+      c.onchange = () => o.cocher?.(b.id, c.checked);
+      return el('label', { className: `fp-ligne fp-bonus${b.coche ? ' coche' : ''}` }, c,
+        el('span', { className: 'fp-nom', textContent: b.nom }), el('small', { textContent: b.sur }),
+        el('b', { className: 'fp-valeur', textContent: signe(b.valeur) }),
+        o.mj && o.bonus ? bouton('✕', () => o.bonus({ type: 'retirer', id: b.id }), 'Retirer ce bonus') : null);
+    });
+    if (o.mj && o.bonus) {
+      const nom = el('input', { type: 'text', className: 'fp-texte', placeholder: 'Contre les droïdes', maxLength: 60 });
+      const valeur = el('input', { type: 'number', className: 'fp-texte fp-bonus-valeur', value: 2, min: -20, max: 20 });
+      const sur = el('select', { className: 'fp-choix' },
+        ...[['tout', 'Tous les jets'], ['attaques', 'Les attaques'], ['sauvegardes', 'Les sauvegardes'], ...(d.competences || []).map((k) => [`competence:${k.id}`, k.nom])]
+          .map(([v, t]) => el('option', { value: v, textContent: t })));
+      const ajouter = bouton('+ Bonus', () => {
+        if (!nom.value.trim()) { nom.focus(); return; }
+        o.bonus({ type: 'ajouter', bonus: { nom: nom.value.trim(), valeur: Number(valeur.value) || 0, sur: [sur.value] } });
+      }, 'Ajouter ce bonus à la fiche');
+      corps.push(el('div', { className: 'fp-ligne fp-bonus-ajout' }, nom, valeur, sur, ajouter));
+    }
+    if (!l.length) corps.unshift(el('p', { className: 'fp-note', textContent: 'Des bonus que le joueur coche avant un jet (contre un type d\'ennemi, une situation…).' }));
+    return el('section', { className: 'fp-bloc fp-bonus-bloc' }, el('h4', { className: 'fp-bloc-titre', textContent: 'Bonus à cocher' }), ...corps);
+  }
   function blocChamps(fiche, b, d, o) {
     const parId = new Map((d.champs || []).map((c) => [c.id, c]));
     const corps = [];
@@ -370,6 +398,8 @@ const FichePerso = (() => {
         titre ? el('h4', { className: 'fp-bloc-titre', textContent: titre }) : null, contenuBloc(f, b, d, o)));
     }
     racine.append(...colonnes);
+    const bonus = blocBonus(d, o);
+    if (bonus) colonnes[0].append(bonus);
     // La boîte autour mesure la place : sur un écran étroit, les colonnes passent l'une sous l'autre.
     return el('div', { className: 'fiche-perso-boite' }, racine);
   }
@@ -424,6 +454,12 @@ const FichePerso = (() => {
 .fp-jauge span { position: relative; display: block; text-align: center; font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .fp-texte, .fp-choix { font: inherit; font-size: 12px; color: inherit; background: rgba(0,0,0,.2); border: 1px solid var(--fp-cadre); border-radius: 6px; padding: 2px 6px; max-width: 55%; }
 .fp-choix option { color: #111; }
+.fp-bonus { cursor: pointer; }
+.fp-bonus.coche .fp-nom { color: var(--fp-accent); }
+.fp-bonus-ajout { flex-wrap: wrap; }
+.fp-bonus-ajout .fp-texte { max-width: none; flex: 1; min-width: 90px; }
+.fp-bonus-ajout .fp-bonus-valeur { flex: 0 0 52px; min-width: 0; }
+.fp-bonus-ajout .fp-choix { max-width: 140px; }
 `;
     document.head.append(s);
   }
