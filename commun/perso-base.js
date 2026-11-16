@@ -159,7 +159,7 @@ const PersoBase = (() => {
   // de droite). [rangée, colonne, pixels].
   const sym = (liste) => [...liste, ...liste.map(([r, c, t]) => [r, L - c - t.length, [...t].reverse().join('')])];
   const COUETTE = [[8, 1, 'hHh'], [9, 0, 'hHHh'], [10, 0, 'hHHHh'], [11, 0, 'hHHHh'], [12, 0, 'hHoHh'], [13, 0, 'hHHHh'], [14, 1, 'hHHh'], [15, 1, 'hHHh'], [16, 1, 'hHh'], [17, 2, 'hh']];
-  const HERISSES = [[0, 8, 'h'], [0, 14, 'hh'], [0, 21, 'h'], [1, 7, 'hH'], [1, 13, 'hHHh'], [1, 20, 'hHh'], [2, 6, 'hHH'], [3, 5, 'hHH'], [4, 4, 'hH'], [2, 24, 'Hh'], [3, 25, 'Hh'], [4, 26, 'Hh'], [7, 3, 'hH'], [8, 2, 'hHH'], [7, 27, 'Hh'], [8, 27, 'HHh']];
+  const HERISSES = sym([[0, 10, 'h'], [1, 9, 'hHH'], [2, 8, 'hHH'], [0, 15, 'h'], [1, 14, 'hH'], [2, 5, 'h'], [3, 5, 'hHHH'], [4, 6, 'HH'], [5, 3, 'h'], [6, 3, 'hHH'], [7, 4, 'HH']]);
   const CHIGNON = [[0, 12, 'hHHHHh'], [1, 11, 'hHHlHHHh'], [2, 11, 'hKKKKKKh']];
   const COUPES = {
     courts: { bas: [], haut: [], droite: [] },
@@ -186,7 +186,7 @@ const PersoBase = (() => {
     herisses: {
       bas: HERISSES,
       haut: HERISSES,
-      droite: [[0, 10, 'h'], [0, 16, 'h'], [0, 20, 'h'], [1, 9, 'hH'], [1, 15, 'hHh'], [1, 19, 'hH'], [2, 7, 'hHH'], [3, 6, 'hH'], [4, 5, 'hH'], [6, 3, 'hH'], [7, 2, 'hHH']],
+      droite: [[0, 18, 'h'], [1, 17, 'Hh'], [0, 13, 'h'], [1, 12, 'hHH'], [0, 8, 'hh'], [1, 7, 'hHHH'], [2, 6, 'hHHH'], [3, 3, 'hhHHH'], [4, 2, 'hHHHH'], [5, 3, 'hHH'], [7, 2, 'h'], [8, 2, 'hHH'], [9, 3, 'HH']],
     },
   };
 
