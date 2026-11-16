@@ -615,6 +615,10 @@ handle('reseau:expulser', async (_event, id) => { reseau.expulser(String(id || '
 // Saga 1.34 : le compagnon du MJ (un QR code à scanner avec son téléphone), et couper les téléphones d'un joueur.
 handle('reseau:compagnon', async () => reseau.compagnonMj());
 ipcMain.on('reseau:fond', (event, url) => { if (event.sender === fenetrePrincipale?.webContents) reseau.fondCompagnon(typeof url === 'string' ? url : ''); });
+// Saga 1.37 : les images des documents du MJ (servies aux amis qui les ont reçues), et celle d'un document
+// donné à tous pour l'écran des joueurs (la télé).
+ipcMain.on('table:documents', (event, liste) => { if (event.sender === fenetrePrincipale?.webContents) reseau.documents(liste); });
+ipcMain.handle('table:document', (event, id) => (event.sender === fenetreJoueurs?.webContents ? reseau.documentTous(String(id || '')) : ''));
 handle('reseau:compagnon-couper', async (_event, de) => { reseau.couperCompagnons(String(de || '')); return reseau.infos(); });
 ipcMain.on('reseau:envoyer', (event, id, sorte, json) => {
   if (event.sender !== fenetrePrincipale?.webContents || typeof json !== 'string' || json.length > 4e6) return;

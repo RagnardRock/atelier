@@ -9,6 +9,7 @@
 //   GET  <racine>/compagnon/flux?jeton=   bienvenue, vue, chat, fin
 //   POST <racine>/compagnon/action        { type: 'chat' | 'macro' | 'jet' | 'champ' | 'agir_fiche' | 'pv' | … }
 //   GET  <racine>/compagnon/fond?jeton=   l'image de fond choisie par le MJ
+//   GET  <racine>/compagnon/document?id=&jeton=   l'image d'un document que le MJ m'a donné (Saga 1.37)
 
 (() => {
   const C = (() => { try { return JSON.parse(document.querySelector('meta[name="compagnon"]').content || '{}'); } catch { return {}; } })();
@@ -119,6 +120,7 @@
     if (dernierJournal < 0) dernierJournal = journal.reduce((m, x) => Math.max(m, x.n || 0), 0);
     else for (const x of journal) if ((x.n || 0) > dernierJournal) { dernierJournal = x.n; nouveauJet(x); }
     if (Array.isArray(v.avis) && v.avis.length && JSON.stringify(v.avis) !== JSON.stringify(avant?.avis)) toast(String(v.avis[v.avis.length - 1]?.texte || v.avis[v.avis.length - 1] || ''));
+    recevoirDocuments(v);
     dessinerTete();
     if (onglet !== 'des') dessinerPage(); else majHisto();
   }
@@ -127,7 +129,7 @@
   // --- L'écran ---
   let onglet = 'des', pageEl = null, teteEl = null;
   const ONGLETS = () => (moi?.mj
-    ? [['des', 'Dés', 'circuit-board'], ['macros', 'Macros', 'zap'], ['pions', 'Pions', 'organization']]
+    ? [['des', 'Dés', 'circuit-board'], ['macros', 'Macros', 'zap'], ['pions', 'Pions', 'organization'], ['documents', 'Documents', 'files']]
     : [['des', 'Dés', 'circuit-board'], ['macros', 'Macros', 'zap'], ['fiche', 'Fiche', 'person'], ['documents', 'Documents', 'files']]);
 
   function dessiner() {
@@ -136,7 +138,7 @@
     pageEl = el('section', { className: 'page' });
     const nav = el('nav', { className: 'nav verre' });
     for (const [id, nom, ic] of ONGLETS()) {
-      const b = el('button', { className: onglet === id ? 'on' : '', type: 'button' }, icone(ic), el('span', { textContent: nom }));
+      const b = el('button', { className: onglet === id ? 'on' : '', type: 'button' }, icone(ic), el('span', { textContent: nom }), id === 'documents' && docsNeufs.size ? el('b', { className: 'pastille', textContent: String(docsNeufs.size) }) : null);
       b.onclick = () => { onglet = id; vibrer(8); dessiner(); };
       nav.append(b);
     }
@@ -198,7 +200,12 @@
     const options = el('div', { className: 'options' }, secret, anime, vider);
     if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis) {
       const perm = el('button', { className: 'btn2', type: 'button' }, icone('device-mobile'), 'Activer la secousse');
-      perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => { mouvement.permis = r === 'granted'; if (mouvement.permis) { brancherMouvement(); perm.remove(); } }).catch(() => {});
+      // Saga 1.37 : on dit ce qui se passe (un refus d'avant reste en mémoire dans Safari).
+      perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => {
+        mouvement.permis = r === 'granted';
+        if (mouvement.permis) { brancherMouvement(); perm.remove(); toast('Secousse activée : secoue le téléphone.'); }
+        else toast('Refusé par le téléphone. Réglages › Safari › Avancé › Données des sites : efface ce site, puis réessaie.');
+      }).catch((e) => toast(`Le téléphone ne permet pas la secousse ici (${e?.message || 'refus'}). Glisse sur le tapis.`));
       options.append(perm);
     }
     // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
@@ -283,11 +290,11 @@
       if (onglet !== 'des' || attenteJet) return;
       const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
       const t = performance.now();
-      if (f < 10) return;
+      if (f < 8) return;
       mouvement.coups = mouvement.coups.filter((x) => t - x < 900);
       // Deux à-coups (séparés d'au moins 80 ms), ou un seul très fort.
       if (!mouvement.coups.length || t - mouvement.coups.at(-1) > 80) mouvement.coups.push(t);
-      if (mouvement.coups.length >= 2 || f > 24) {
+      if (mouvement.coups.length >= 2 || f > 20) {
         mouvement.coups = [];
         const r = pageEl.querySelector('.tapis')?.getBoundingClientRect();
         lancer({ x: (r?.width || 300) / 2, y: (r?.height || 300) / 2, vx: -(a.x || 0) * 160, vy: (a.y || 0) * 160 });
@@ -447,9 +454,144 @@
     }
   }
 
+  // ===================== Les documents (Saga 1.37) =====================
+  // Le joueur : ce que le MJ lui a donné (il les garde et les rouvre). Le MJ : tous, à qui il les a donnés, les
+  // montrer, et prendre une photo qui devient un document.
+  let docsVus = null, dernierMontre = -1, docSig = '', envoiPhoto = null;
+  const docsNeufs = new Set();
+  const urlDoc = (d) => (d.image ? `${racine}/compagnon/document?id=${encodeURIComponent(d.id)}&v=${encodeURIComponent(d.image)}&jeton=${encodeURIComponent(jeton)}` : '');
+  function recevoirDocuments(v) {
+    const l = v.documents || [];
+    if (docsVus == null) { docsVus = new Set(l.map((d) => d.id)); dernierMontre = v.montre?.n ?? -1; }
+    let neuf = null;
+    for (const d of l) if (!docsVus.has(d.id)) { docsVus.add(d.id); if (!moi?.mj) { docsNeufs.add(d.id); neuf = d; } }
+    if (neuf) { vibrer([30, 60, 30]); if (v.montre?.id !== neuf.id) toast(`Nouveau document : ${neuf.titre}`); if (onglet !== 'documents') dessiner(); }
+    if (v.montre && v.montre.n !== dernierMontre) {
+      dernierMontre = v.montre.n;
+      const d = l.find((x) => x.id === v.montre.id);
+      if (d && !moi?.mj) ouvrirDoc(d);
+    }
+    const o = document.querySelector('.visionneuse');
+    if (o && !l.some((d) => d.id === o.dataset.id)) o.remove();
+  }
+  function ouvrirDoc(d) {
+    document.querySelector('.visionneuse')?.remove();
+    docsNeufs.delete(d.id);
+    const fermer = el('button', { className: 'icone-bouton', type: 'button', title: 'Fermer' }, icone('close'));
+    const v = el('div', { className: 'visionneuse' },
+      el('div', { className: 'vis-tete verre' }, icone(d.image ? 'file-media' : 'note'), el('b', { textContent: d.titre || 'Document' }), fermer),
+      el('div', { className: 'vis-corps' },
+        d.image ? el('img', { src: urlDoc(d), alt: d.titre || '' }) : null,
+        d.texte ? el('div', { className: `vis-texte verre${d.image ? '' : ' lettre'}`, textContent: d.texte }) : null));
+    v.dataset.id = d.id;
+    fermer.onclick = () => { v.remove(); if (onglet === 'documents') { docSig = ''; pageDocuments(); } };
+    document.body.append(v);
+    if (onglet === 'documents') { docSig = ''; pageDocuments(); }
+    dessinerNavPastille();
+  }
+  function dessinerNavPastille() {
+    const b = app.querySelector('.nav button:last-child');
+    if (!b || moi?.mj) return;
+    b.querySelector('.pastille')?.remove();
+    if (docsNeufs.size) b.append(el('b', { className: 'pastille', textContent: String(docsNeufs.size) }));
+  }
+  const quand = (t) => {
+    if (!t) return '';
+    const s = Math.round((Date.now() - t) / 1000);
+    return s < 60 ? 'à l\'instant' : s < 3600 ? `il y a ${Math.round(s / 60)} min` : new Date(t).toLocaleString('fr-FR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  };
   function pageDocuments() {
+    const l = [...(vue?.documents || [])].sort((a, b) => b.t - a.t);
+    const sig = JSON.stringify([l, [...docsNeufs], vue?.montre?.id, envoiPhoto ? envoiPhoto.etat : 0, vue?.destinataires]);
+    if (sig === docSig && pageEl.firstChild) return;
+    docSig = sig;
     pageEl.innerHTML = '';
-    pageEl.append(el('div', { className: 'vide verre' }, icone('files'), el('p', { textContent: 'Les documents que le MJ te donnera (images, lettres, cartes, indices) arriveront ici.' })));
+    if (moi?.mj) {
+      if (envoiPhoto) { pageEl.append(formPhoto()); return; }
+      const prendre = el('label', { className: 'btn photo' }, icone('device-camera'), 'Prendre une photo',
+        el('input', { type: 'file', accept: 'image/*', capture: 'environment', hidden: true, onchange: (e) => { const f = e.target.files[0]; if (f) preparerPhoto(f); } }));
+      const choisir = el('label', { className: 'btn2' }, icone('file-media'), 'Une image du téléphone',
+        el('input', { type: 'file', accept: 'image/*', hidden: true, onchange: (e) => { const f = e.target.files[0]; if (f) preparerPhoto(f); } }));
+      pageEl.append(el('div', { className: 'ligne' }, prendre, choisir));
+    }
+    if (!l.length) {
+      pageEl.append(el('div', { className: 'vide verre' }, icone('files'), el('p', { textContent: moi?.mj ? 'Aucun document : prépare-les dans Saga (onglet Docs), ou prends une photo.' : 'Les documents que le MJ te donnera (images, lettres, cartes, indices) arriveront ici.' })));
+      return;
+    }
+    const g = el('div', { className: 'docs' });
+    for (const d of l) {
+      const b = el('button', { className: `doc verre${docsNeufs.has(d.id) ? ' neuf' : ''}`, type: 'button' },
+        d.image ? el('img', { src: urlDoc(d), alt: '', loading: 'lazy' }) : el('span', { className: 'doc-txt', textContent: (d.texte || '').slice(0, 140) }),
+        el('div', { className: 'doc-bas' }, el('b', { textContent: d.titre || 'Document' }),
+          el('small', { textContent: moi?.mj ? (d.pour === 'tous' ? 'Tous' : Array.isArray(d.pour) && d.pour.length ? d.pour.join(', ') : 'Brouillon') : quand(d.t) })));
+      b.onclick = () => ouvrirDoc(d);
+      if (moi?.mj) {
+        const montre = vue?.montre?.id === d.id;
+        const m = el('button', { className: `mini${montre ? ' actif' : ''}`, type: 'button', title: montre ? 'Ne plus montrer' : 'Montrer sur leurs écrans' }, icone(montre ? 'eye-closed' : 'eye'));
+        m.onclick = (e) => { e.stopPropagation(); vibrer(12); demander(montre ? { type: 'doc_cacher' } : { type: 'doc_montrer', id: d.id }); };
+        b.append(m);
+      }
+      g.append(b);
+    }
+    pageEl.append(g, el('p', { className: 'note', textContent: moi?.mj ? 'Toucher : voir · l\'œil : le montrer maintenant sur les écrans de ceux qui l\'ont (un brouillon : à tous).' : 'Toucher : ouvrir. Tu gardes ces documents pendant toute la séance.' }));
+  }
+  // --- MJ : une photo → un document (réduite ici, puis envoyée en petits morceaux : le relais limite la taille) ---
+  function preparerPhoto(fichier) {
+    const url = URL.createObjectURL(fichier);
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      envoiPhoto = { image: c.toDataURL('image/jpeg', 0.8), titre: '', pour: 'tous', montrer: true, etat: 1 };
+      docSig = '';
+      pageDocuments();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Cette image est illisible.'); };
+    img.src = url;
+  }
+  function formPhoto() {
+    const e = envoiPhoto;
+    const titre = el('input', { className: 'champ', type: 'text', maxLength: 80, value: e.titre, placeholder: 'Titre (Le plan griffonné…)' });
+    titre.oninput = () => { e.titre = titre.value; };
+    const noms = vue?.destinataires || [];
+    const puce = (val, texte, faire) => { const b = el('button', { className: `puce${val ? ' on' : ''}`, type: 'button', textContent: texte }); b.onclick = () => { faire(); vibrer(6); docSig = ''; pageDocuments(); }; return b; };
+    const puces = el('div', { className: 'puces' }, puce(e.pour === 'tous', 'Tous', () => { e.pour = e.pour === 'tous' ? [] : 'tous'; }),
+      ...noms.map((n) => puce(Array.isArray(e.pour) && e.pour.includes(n), n, () => { const l = Array.isArray(e.pour) ? e.pour : []; e.pour = l.includes(n) ? l.filter((x) => x !== n) : [...l, n]; })));
+    const montrer = puce(e.montrer, 'L\'ouvrir chez eux', () => { e.montrer = !e.montrer; });
+    const envoyerB = el('button', { className: 'btn', type: 'button', disabled: e.etat === 2 }, icone('send'), e.etat === 2 ? `Envoi… ${e.pct || 0} %` : (e.pour === 'tous' || e.pour.length ? 'Donner' : 'Garder en brouillon'));
+    envoyerB.onclick = () => envoyerPhoto();
+    const annuler = el('button', { className: 'btn2', type: 'button', disabled: e.etat === 2 }, 'Annuler');
+    annuler.onclick = () => { envoiPhoto = null; docSig = ''; pageDocuments(); };
+    setTimeout(() => { if (e.etat === 1 && !e.titre) titre.focus(); }, 50);
+    return el('div', { className: 'edition verre' }, el('b', { textContent: 'Nouveau document' }), el('img', { className: 'apercu', src: e.image, alt: '' }), titre,
+      el('small', { textContent: 'À qui :' }), puces, el('div', { className: 'puces' }, montrer), el('div', { className: 'ligne' }, envoyerB, annuler));
+  }
+  async function envoyerPhoto() {
+    const e = envoiPhoto;
+    if (!e || e.etat === 2) return;
+    e.etat = 2; e.pct = 0; docSig = ''; pageDocuments();
+    const data = e.image.slice(e.image.indexOf(',') + 1);
+    const TAILLE = 12000, n = Math.ceil(data.length / TAILLE), envoi = `p${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      for (let i = 0; i < n; i++) {
+        await envoyer('/compagnon/action', { type: 'doc_morceau', envoi, i, n, data: data.slice(i * TAILLE, (i + 1) * TAILLE), titre: e.titre || 'Photo', pour: e.pour, montrer: e.montrer });
+        e.pct = Math.round(((i + 1) / n) * 100);
+        const b = pageEl.querySelector('.edition .btn');
+        if (b) b.lastChild.textContent = `Envoi… ${e.pct} %`;
+      }
+      vibrer(30);
+      toast('Document envoyé.');
+      envoiPhoto = null;
+    } catch (err) {
+      if (err.delie) { delie(); return; }
+      toast(`L'envoi a échoué : ${err.message}`);
+      e.etat = 1;
+    }
+    docSig = '';
+    pageDocuments();
   }
 
   // ===================== Relier, accueil =====================

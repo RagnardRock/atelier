@@ -8,10 +8,12 @@
 //   Pions     les héros et les monstres de la carte : leurs PV, qui les voit, la fiche d'un héros
 //   Scène     la campagne (son nom, le fond des téléphones), le brouillard, les rencontres (lancer un combat),
 //             la musique, les dés
+//   Docs      Saga 1.37 : les documents du MJ (images, lettres, cartes, indices), à donner à un joueur, à
+//             plusieurs ou à tous, et à montrer sur leurs écrans
 //   Joueurs   le multijoueur : ouvrir la partie, qui est là, quel héros chacun joue, les téléphones
 
 const TablePanneau = (() => {
-  const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['pions', 'Pions', 'person'], ['scene', 'Scène', 'map'], ['joueurs', 'Joueurs', 'organization']];
+  const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['pions', 'Pions', 'person'], ['scene', 'Scène', 'map'], ['docs', 'Docs', 'files'], ['joueurs', 'Joueurs', 'organization']];
   const lire = (k, d) => { try { const v = localStorage.getItem(`saga:table:${k}`); return v == null ? d : v; } catch { return d; } };
   const ecrire = (k, v) => { try { localStorage.setItem(`saga:table:${k}`, String(v)); } catch { /* stockage refusé */ } };
 
@@ -209,6 +211,7 @@ const TablePanneau = (() => {
       const haut = v.scrollTop;
       if (onglet === 'pions') v.replaceChildren(...voletPions(jeu, partie, carte));
       else if (onglet === 'scene') v.replaceChildren(...voletScene(jeu, partie, carte));
+      else if (onglet === 'docs') v.replaceChildren(...voletDocuments());
       else if (onglet === 'joueurs') dessinerJoueurs(jeu, partie);
       v.scrollTop = haut;
     }
@@ -338,6 +341,80 @@ const TablePanneau = (() => {
       return out;
     }
 
+    // --- Saga 1.37 : Docs. Les documents du MJ : en créer (une image, un texte), les donner, les montrer ---
+    let edition = null;   // { id (null : nouveau), titre, texte, image }
+    let donnerA = null;   // { id, pour: Set de prénoms | 'tous', montrer }
+    function fichierImage(faire) {
+      const f = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+      f.onchange = () => { if (f.files[0]) TableDocuments.reduire(f.files[0]).then(faire).catch(() => T.message('Cette image est illisible.')); };
+      f.click();
+    }
+    function formDocument() {
+      const e = edition;
+      const titre = el('input', { className: 'table-champ', type: 'text', maxLength: 80, value: e.titre || '', placeholder: 'Titre (Lettre du baron, Carte de la crypte…)' });
+      const texte = el('textarea', { className: 'table-champ doc-zone', maxLength: TableDocuments.MAX_TEXTE, rows: 6, placeholder: 'Le texte (une lettre, un indice, une légende). Facultatif avec une image.' });
+      texte.value = e.texte || '';
+      titre.oninput = () => { e.titre = titre.value; };
+      texte.oninput = () => { e.texte = texte.value; };
+      for (const c of [titre, texte]) c.onkeydown = (ev) => ev.stopPropagation();
+      const apercu = e.image ? el('div', { className: 'doc-apercu' }, el('img', { src: e.image, alt: '' })) : null;
+      const garder = btn('check', e.id ? 'Garder' : 'Créer', () => {
+        const res = T.docAgir({ type: e.id ? 'doc_modifier' : 'doc_nouveau', id: e.id, titre: titre.value, texte: texte.value, image: e.image || '' });
+        if (res.ok) { edition = null; if (!e.id) donnerA = { id: res.doc.id, pour: new Set(), montrer: true }; dessiner(); }
+      }, { classe: 'accent' });
+      return [el('div', { className: 'table-sous-titre', textContent: e.id ? 'Modifier le document' : 'Nouveau document' }), titre, apercu,
+        el('div', { className: 'table-boutons' },
+          btn('file-media', e.image ? 'Changer l\'image' : 'Ajouter une image', () => fichierImage((url) => { e.image = url; dessiner(); })),
+          e.image ? btn('trash', '', () => { e.image = ''; dessiner(); }, { titre: 'Retirer l\'image' }) : null),
+        texte,
+        el('div', { className: 'table-boutons' }, garder, btn('close', 'Annuler', () => { edition = null; dessiner(); }))];
+    }
+    function formDonner(d) {
+      const noms = T.destinataires();
+      const tous = donnerA.pour === 'tous';
+      const coche = (val, texte, change, titre = '') => {
+        const c = el('input', { type: 'checkbox', checked: val });
+        c.onchange = () => { change(c.checked); dessiner(); };
+        return el('label', { className: 'table-ligne coche', title: titre }, c, el('span', { textContent: texte }));
+      };
+      const o = [coche(tous, 'Tous les joueurs (et l\'écran des joueurs)', (v) => { donnerA.pour = v ? 'tous' : new Set(); })];
+      if (!tous) for (const n of noms) o.push(coche(donnerA.pour.has(n), n, (v) => { if (v) donnerA.pour.add(n); else donnerA.pour.delete(n); }));
+      if (!tous && !noms.length) o.push(el('p', { className: 'table-note', textContent: 'Personne encore : les amis apparaissent ici quand ils rejoignent (onglet Joueurs). Tu peux le donner à tous.' }));
+      o.push(coche(donnerA.montrer, 'L\'ouvrir tout de suite sur leur écran', (v) => { donnerA.montrer = v; }));
+      const pour = tous ? 'tous' : [...donnerA.pour];
+      const ok = btn('send', 'Donner', () => { T.docAgir({ type: 'doc_donner', id: d.id, pour, montrer: donnerA.montrer }); donnerA = null; dessiner(); }, { classe: 'accent' });
+      ok.disabled = pour !== 'tous' && !pour.length;
+      return el('div', { className: 'doc-donner' }, el('div', { className: 'table-sous-titre', textContent: `Donner « ${d.titre} » à…` }), ...o,
+        el('div', { className: 'table-boutons' }, ok, btn('close', 'Annuler', () => { donnerA = null; dessiner(); })));
+    }
+    function voletDocuments() {
+      const out = [];
+      if (edition) return formDocument();
+      const docs = T.documents();
+      const montre = T.montre;
+      out.push(el('div', { className: 'table-boutons' },
+        btn('file-media', 'Image…', () => fichierImage((url) => { edition = { id: null, titre: '', texte: '', image: url }; dessiner(); }), { classe: 'accent', titre: 'Une image (une carte, un portrait, une lettre scannée) : PNG, JPEG ou WebP' }),
+        btn('note', 'Texte', () => { edition = { id: null, titre: '', texte: '', image: '' }; dessiner(); }, { titre: 'Une lettre, un indice, une légende' })));
+      if (!docs.length) out.push(el('p', { className: 'table-note table-vide', textContent: 'Prépare ici les documents de la séance : ils restent des brouillons tant que tu ne les donnes pas. Un joueur garde ce que tu lui donnes et le rouvre quand il veut (sur son écran ou son téléphone).' }));
+      for (const d of [...docs].reverse()) {
+        const montreIci = montre?.id === d.id;
+        out.push(TableDocuments.ligne(d, {
+          image: d.image,
+          sous: `${TableDocuments.pourTexte(d)}${d.donne ? ` · ${heureDe(d.donne)}` : ''}${montreIci ? ' · montré' : ''}`,
+          ouvrir: () => TableDocuments.ouvrir(d, { image: d.image }),
+          boutons: [
+            btn(montreIci ? 'eye-closed' : 'eye', '', () => (montreIci ? T.cacherDocument() : T.docAgir({ type: 'doc_montrer', id: d.id })), { classe: montreIci ? 'actif' : '', titre: montreIci ? 'Ne plus le montrer (il reste à ceux qui l\'ont)' : 'Le montrer maintenant sur l\'écran de ceux qui l\'ont (un brouillon : à tous, télé comprise)' }),
+            btn('person-add', '', () => { donnerA = donnerA?.id === d.id ? null : { id: d.id, pour: d.pour === 'tous' ? 'tous' : new Set(d.pour), montrer: false }; dessiner(); }, { titre: 'À qui le donner' }),
+            btn('edit', '', () => { edition = { id: d.id, titre: d.titre, texte: d.texte, image: d.image }; donnerA = null; dessiner(); }, { titre: 'Modifier' }),
+            btn('trash', '', () => { if (donnerA?.id === d.id) donnerA = null; T.docAgir({ type: 'doc_retirer', id: d.id }); }, { titre: 'Supprimer (les joueurs ne l\'ont plus)' }),
+          ],
+        }));
+        if (donnerA?.id === d.id) out.push(formDonner(d));
+      }
+      if (docs.length) out.push(el('p', { className: 'table-note', textContent: 'Les documents sont gardés avec la partie. Depuis ton téléphone (le compagnon), tu peux aussi prendre une photo et la donner.' }));
+      return out;
+    }
+
     // --- Joueurs : le multijoueur (le panneau de multi.js vient ici, sans sa discussion, qui est dans Chat) ---
     function dessinerJoueurs(jeu, partie) {
       const v = volets.joueurs;
@@ -388,5 +465,5 @@ const TablePanneau = (() => {
       },
     };
   }
-  return { creer, carteJet: carteJetCommune, ligneRecit };
+  return { creer, carteJet: carteJetCommune, ligneRecit, heure: heureDe };
 })();

@@ -72,6 +72,22 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   const liens = new Map();       // code du QR → { de, expire }
   const compagnons = new Map();  // id → { id, jeton, de, flux, appareil }
   let fond = null;               // { type, data } : l'image de fond des compagnons (choisie par le MJ)
+  // Saga 1.37 : les images des documents du MJ. La vue n'en porte que l'empreinte ; chacun ne reçoit l'image
+  // que si le MJ la lui a donnée (pour : 'tous' ou une liste de prénoms).
+  let documents = new Map();     // id → { type, data, pour }
+  const nomDe = (de) => (de === 'hote' ? 'hote' : clients.get(de)?.nom || '');
+  function documentPour(id, nom) {
+    const d = documents.get(String(id || ''));
+    if (!d) return null;
+    if (nom === 'hote' || d.pour === 'tous') return d;
+    const n = String(nom || '').toLowerCase();
+    return n && Array.isArray(d.pour) && d.pour.some((x) => String(x).toLowerCase() === n) ? d : null;
+  }
+  function servirDocument(res, d) {
+    if (!d) return fin(res, 404);
+    res.writeHead(200, { 'Content-Type': d.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
+    return res.end(d.data);
+  }
   const compagnonsDe = (de) => [...compagnons.values()].filter((k) => k.de === de);
   const nbCompagnons = (de) => compagnonsDe(de).filter((k) => k.flux).length;
   const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux), compagnons: nbCompagnons(c.id) }));
@@ -239,7 +255,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       res.end(await pageCompagnon(racineRelais));
       return;
     }
-    if (req.method === 'GET' && p.startsWith('/compagnon/') && p !== '/compagnon/flux' && p !== '/compagnon/fond') return fichier(res, path.join(moteur, 'compagnon'), p.slice(11));
+    if (req.method === 'GET' && p.startsWith('/compagnon/') && p !== '/compagnon/flux' && p !== '/compagnon/fond' && p !== '/compagnon/document') return fichier(res, path.join(moteur, 'compagnon'), p.slice(11));
     if (req.method === 'POST' && p === '/compagnon/relier') {
       const corps = await lireCorps(req);
       const l = essais.get(ip) || [];
@@ -248,7 +264,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       if (!r) { l.push(Date.now()); essais.set(ip, l); return fin(res, 403, { erreur: 'Ce QR code a déjà servi ou a expiré : demandes-en un nouveau.' }); }
       return fin(res, 200, r);
     }
-    if (p === '/compagnon/flux' || p === '/compagnon/action' || p === '/compagnon/quitter' || p === '/compagnon/fond') {
+    if (p === '/compagnon/flux' || p === '/compagnon/action' || p === '/compagnon/quitter' || p === '/compagnon/fond' || p === '/compagnon/document') {
       const j = req.headers['x-compagnon'] || url.searchParams.get('jeton') || '';
       const k = j ? [...compagnons.values()].find((x) => x.jeton === j) : null;
       if (!k) return fin(res, 401, { erreur: 'Ce téléphone n\'est plus relié : scanne un nouveau QR code.', delie: true });
@@ -268,6 +284,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
         res.writeHead(200, { 'Content-Type': fond.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
         return res.end(fond.data);
       }
+      if (req.method === 'GET' && p === '/compagnon/document') return servirDocument(res, documentPour(url.searchParams.get('id'), nomDe(k.de)));
       if (req.method === 'POST' && p === '/compagnon/action') {
         const a = await lireCorps(req);
         if (!a || typeof a !== 'object' || Array.isArray(a)) return fin(res, 400);
@@ -344,6 +361,8 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       if (c.position) bouger(c.id, c.position);
       return;
     }
+    // Saga 1.37 : l'image d'un document que le MJ lui a donné.
+    if (req.method === 'GET' && p === '/document') return servirDocument(res, documentPour(url.searchParams.get('id'), c.nom));
     // Un ami demande un QR pour relier son téléphone.
     if (req.method === 'POST' && p === '/compagnon/lien') return fin(res, 200, { code: lienCompagnon(c.id) });
     if (req.method === 'POST' && p === '/compagnon/couper') { for (const k of compagnonsDe(c.id)) couperCompagnon(k.id); return fin(res, 200); }
@@ -534,6 +553,20 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(url || ''));
       fond = m && m[2].length < 8e6 ? { type: m[1], data: Buffer.from(m[2], 'base64') } : null;
     },
+    // Saga 1.37 : les images des documents ([{ id, image (data: URL), pour }]), et celle d'un document donné à
+    // tous (pour l'écran des joueurs, la fenêtre de la télé).
+    documents: (liste) => {
+      const m = new Map();
+      let poids = 0;
+      for (const x of Array.isArray(liste) ? liste.slice(0, 80) : []) {
+        const r = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(x?.image || ''));
+        if (!r || r[2].length > 6e6 || (poids += r[2].length) > 60e6) continue;
+        const pour = x.pour === 'tous' ? 'tous' : Array.isArray(x.pour) ? x.pour.map((n) => String(n).slice(0, 24)).slice(0, 16) : [];
+        m.set(String(x.id || ''), { type: r[1], data: Buffer.from(r[2], 'base64'), pour });
+      }
+      documents = m;
+    },
+    documentTous: (id) => { const d = documentPour(id, ''); return d ? `data:${d.type};base64,${d.data.toString('base64')}` : ''; },
     compagnonMj: () => { if (!serveur) return null; const code = lienCompagnon('hote'); return { code, url: urlCompagnon(code) }; },
     couperCompagnons: (de) => { for (const k of compagnonsDe(String(de))) couperCompagnon(k.id); },
     get port() { return port; },
