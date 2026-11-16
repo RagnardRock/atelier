@@ -25,6 +25,7 @@ const Plateau = (() => {
     const ctx = canvas.getContext('2d');
     const camera = { x: 0, y: 0, z: 2 }; // x, y : le coin haut gauche, en pixels de jeu ; z : pixels d'écran par pixel de jeu
     let dpr = 1, L = 1, H = 1, cadree = '';
+    const ambiance = { toile: document.createElement('canvas'), pret: false, carte: '', t: 0 };
     const flottants = []; // { id, texte, sorte, t0 }
     const pingsVus = new Map(); // n → l'heure où ce ping est arrivé ici
     const eclats = [];    // { id, couleur, t0, secousse }
@@ -150,6 +151,15 @@ const Plateau = (() => {
       ctx.imageSmoothingEnabled = false;
       ctx.fillStyle = '#07080c';
       ctx.fillRect(0, 0, L, H);
+      // Saga 1.35 : autour de la carte, son reflet flou (les panneaux en verre ont quelque chose à laisser voir).
+      if (ambiance.pret && ambiance.carte === carte.id && document.body.classList.contains('table-verre')) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        const k = Math.max(L / ambiance.toile.width, H / ambiance.toile.height) * 1.15;
+        ctx.globalAlpha = 0.55;
+        ctx.drawImage(ambiance.toile, (L - ambiance.toile.width * k) / 2, (H - ambiance.toile.height * k) / 2, ambiance.toile.width * k, ambiance.toile.height * k);
+        ctx.globalAlpha = 1;
+      }
       enJeu();
       ctx.imageSmoothingEnabled = false;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') calque(jeu, carte, c, maintenant);
@@ -167,6 +177,17 @@ const Plateau = (() => {
       // --- Par-dessus, à la résolution de l'écran ---
       enEcran();
       const cx = (x) => ecranX(x * t), cy = (y) => ecranY(y * t), s = t * z;
+      // Le reflet de la carte (ce qu'on en voit à l'écran, en tout petit), repris toutes les 2 secondes.
+      if (!ambiance.pret || ambiance.carte !== carte.id || maintenant - ambiance.t > 2000) {
+        const x0 = Math.max(0, cx(0)), y0 = Math.max(0, cy(0)), x1 = Math.min(L, cx(carte.largeur)), y1 = Math.min(H, cy(carte.hauteur));
+        if (x1 - x0 > 8 && y1 - y0 > 8) {
+          const a = ambiance.toile, ac = a.getContext('2d');
+          a.width = 24; a.height = Math.max(8, Math.min(48, Math.round(24 * (y1 - y0) / (x1 - x0))));
+          ac.imageSmoothingEnabled = true;
+          ac.drawImage(canvas, x0, y0, x1 - x0, y1 - y0, 0, 0, a.width, a.height);
+          Object.assign(ambiance, { pret: true, carte: carte.id, t: maintenant });
+        }
+      }
       // La grille.
       if (s >= 10) {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
