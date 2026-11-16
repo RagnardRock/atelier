@@ -390,6 +390,37 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.41 : des mécaniques à soi, sans code (avec Tafl 1.36)
+
+Tafl › Données › Réglages › **Mécaniques** (pack JDR) change le fonctionnement du jeu sans script ; Saga le joue
+(`regles/jdr/mecaniques.js`) :
+- **Toucher** : une formule à la place de la CA (« couverture + esquive ») ;
+- **Dégâts** : ce que l'armure retire (« armure »), avec un minimum ;
+- **Paliers de santé** en % des PV max : un malus aux attaques, tests et sauvegardes ; une table tirée une fois en
+  y entrant (une blessure qui reste sur la fiche) ; des jets pour tenir à chaque tour de combat ;
+- **Tables aléatoires** et **jets pour tenir** (formule, seuil, réussites pour être stabilisé, échecs pour mourir).
+
+- **Système de résolution** : d20 + bonus (la 5e), d100 sous un score, une réserve de d6 (on compte les réussites)
+  ou 2d6 à paliers (réussite, réussite partielle, échec), pour les tests, les sauvegardes et les attaques ;
+- **Parade** (la cible lance pour parer un coup qui touche) et **localisation** (une table tirée à chaque coup, qui
+  multiplie les dégâts) ;
+- **Initiative** : la 5e, un dé et une formule à soi, ou un camp d'abord ;
+- **Repos et niveaux** : les PV rendus par un repos court ou long, les PV gagnés à un niveau (des formules) ;
+- **États** : un malus, des dégâts ou des soins à chaque tour, un jet pour en sortir ;
+- **Champs des monstres** : un monstre a ses valeurs pour les champs de la fiche (couverture, armure, parade…) ;
+- **Ressources** : une jauge de la fiche (mana, munitions, stress) que les sorts ou les tirs dépensent, qui revient
+  aux repos et donne un malus quand elle est vide ; le mana peut remplacer les emplacements de sorts ;
+- **Relances** : dés explosifs, points de destin pour relancer un jet raté ;
+- **Critiques** : le seuil, l'effet (doublés, maximum, des dés en plus), une table de critiques et une de
+  maladresses ; et des dégâts selon la **marge de réussite**.
+
+Les formules lisent les champs de la Fiche des personnages. Deux modèles : « D&D 5e » (les règles du pack) et
+« Armure et blessures ». La fiche montre la défense, l'armure, le palier et les blessures ; le combat aussi.
+
+**Les bonus à cocher** (mode table, avec ou sans mécaniques) : le MJ met sur la fiche d'un héros des bonus comme
+« Contre les droïdes +2 » sur Piratage (une compétence, les attaques, les sauvegardes ou tout) ; le joueur coche
+ceux qui comptent, lance, et ils s'ajoutent à ce jet (le journal les nomme), puis se décochent.
+
 ## Saga 1.40 : installer le compagnon
 
 - Le compagnon propose de s'installer comme une appli : un bandeau « Installer l'appli » (un toucher sur Android et sur PC ; sur iPhone, le pas-à-pas Partager › Sur l'écran d'accueil), aussi sur l'accueil. La croix le range pour de bon. Le navigateur exige ce geste : un QR code ne peut pas installer l'appli tout seul.

@@ -163,6 +163,8 @@ const DonneesJdr = (() => {
         or: des(m?.or),
         butin: arr(m?.butin).filter((b) => b?.objet).map((b) => ({ objet: Doc.slug(b.objet, ''), chance: int(b.chance, 10, 1, 100) })),
         traits: nomDesc(m?.traits),
+        // Tafl 1.36 : ses valeurs pour les champs de la fiche du jeu (couverture, armure…), lues par les Mécaniques.
+        champs: Object.fromEntries(Object.entries(m?.champs && typeof m.champs === 'object' ? m.champs : {}).filter(([k, v]) => /^[a-z_][a-z0-9_]*$/.test(k) && Number.isFinite(Number(v))).slice(0, 40).map(([k, v]) => [k, Math.round(Number(v))])),
         actions: arr(m?.actions).filter((a) => a && typeof a === 'object').map((a, k) => normAction(a, k)),
         description: str(m?.description),
       };
@@ -235,8 +237,43 @@ const DonneesJdr = (() => {
       case_m: Math.round(num(r.case_m, d.case_m, 0.5, 30) * 10) / 10, diagonales: pick(r.diagonales, DIAGONALES, d.diagonales), jets_mj_caches: Boolean(r.jets_mj_caches),
       // Tafl 1.23 : la fiche des personnages du jeu (commun/fiche-perso.js), si le jeu a la sienne.
       ...(r.fiche && typeof FichePerso !== 'undefined' ? { fiche: FichePerso.normaliser(r.fiche) } : {}),
+      // Tafl 1.36 : les mécaniques du jeu (Réglages › Mécaniques, jouées par Saga 1.41 : regles/jdr/mecaniques.js).
+      ...(r.mecaniques && typeof r.mecaniques === 'object' ? { mecaniques: normMeca(r.mecaniques) } : {}),
       // Tafl 1.35 : le fond du compagnon de Saga (le téléphone des joueurs).
       ...(/^data:image\/(png|jpeg|webp);base64,/.test(String(r.compagnon?.fond || '')) ? { compagnon: { fond: r.compagnon.fond } } : {}),
+    };
+  }
+  // La même normalisation que Saga (JdrMeca.normaliser) : ce que Tafl enregistre est toujours propre.
+  // Les mêmes valeurs que Saga (JdrMeca.RESOLUTION) : elles traduisent le bonus et le DD de la 5e.
+  const RESOLUTION = { score: '(21 + bonus - dd) * 5', des: 'max(1, bonus)', reussites: 'max(1, floor(dd / 5))', plein: '10', partiel: '7' };
+  const RESOLUTIONS = [['d20', 'd20 + bonus contre un DD (la 5e)'], ['d100', 'd100 sous un score (réussi si le dé fait au plus le score)'], ['reserve', 'Une réserve de d6 (on compte les réussites)'], ['2d6', '2d6 + bonus à paliers (réussite, réussite partielle, échec)']];
+  const INITIATIVES = [['', 'La 5e : d20 + Dex, du plus grand au plus petit'], ['jet', 'Un dé et une formule à soi'], ['heros', 'Les héros d\'abord, puis les monstres (sans jet)'], ['monstres', 'Les monstres d\'abord, puis les héros (sans jet)']];
+  function normMeca(x) {
+    const t = (v, n = 200) => String(v ?? '').trim().slice(0, n);
+    const e = (v, d, min, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : d; };
+    return {
+      active: x.active !== false, defense: t(x.defense), absorption: t(x.absorption), degat_min: e(x.degat_min, 0, 0, 10),
+      paliers: arr(x.paliers).slice(0, 10).map((p) => ({ nom: t(p?.nom, 40) || 'Palier', sous: e(p?.sous, 50, 0, 100), malus: e(p?.malus, 0, -20, 20), table: t(p?.table, 40), jets: Boolean(p?.jets) })),
+      tables: arr(x.tables).slice(0, 20).map((tb, i) => ({
+        id: t(tb?.id, 40) || `table_${i + 1}`, nom: t(tb?.nom, 60) || `Table ${i + 1}`, de: t(tb?.de, 20) || '1d6',
+        lignes: arr(tb?.lignes).slice(0, 100).map((l) => ({ min: e(l?.min, 1, 0, 1000), max: e(l?.max ?? l?.min, 1, 0, 1000), texte: t(l?.texte), malus: e(l?.malus, 0, -20, 20), mult: e(l?.mult, 100, 0, 500) })),
+      })),
+      jets: { formule: t(x.jets?.formule, 40) || '1d20', seuil: e(x.jets?.seuil, 10, 0, 100), reussites: e(x.jets?.reussites, 3, 1, 10), echecs: e(x.jets?.echecs, 3, 1, 10) },
+      // La suite de Tafl 1.36 : le système de résolution, la parade, la localisation, l'initiative, les repos, les niveaux, les états.
+      resolution: {
+        type: RESOLUTIONS.some(([k]) => k === x.resolution?.type) ? x.resolution.type : 'd20',
+        score: t(x.resolution?.score) || RESOLUTION.score, des: t(x.resolution?.des) || RESOLUTION.des, face: e(x.resolution?.face, 5, 2, 6),
+        reussites: t(x.resolution?.reussites) || RESOLUTION.reussites, plein: t(x.resolution?.plein) || RESOLUTION.plein, partiel: t(x.resolution?.partiel) || RESOLUTION.partiel,
+      },
+      parade: t(x.parade), parade_dd: e(x.parade_dd, 10, 0, 100), localisation: t(x.localisation, 40),
+      initiative: { mode: INITIATIVES.some(([k]) => k === x.initiative?.mode) ? x.initiative.mode : '', de: t(x.initiative?.de, 20) || '1d20', bonus: t(x.initiative?.bonus) },
+      repos: { court: t(x.repos?.court), long: t(x.repos?.long) },
+      niveau_pv: t(x.niveau_pv),
+      ressources: arr(x.ressources).filter((r) => r && t(r.champ, 40)).slice(0, 10).map((r) => ({ champ: t(r.champ, 40), sorts: t(r.sorts), distance: e(r.distance, 0, 0, 20), remplace: Boolean(r.remplace), court: t(r.court), long: t(r.long), zero_malus: e(r.zero_malus, 0, -20, 20) })),
+      relances: { explosif: Boolean(x.relances?.explosif), destin: t(x.relances?.destin, 40) },
+      critique: { seuil: e(x.critique?.seuil, 0, 0, 20), effet: ['', 'doubler', 'max', 'plus'].includes(x.critique?.effet) ? x.critique.effet : '', plus: t(x.critique?.plus, 20), table: t(x.critique?.table, 40), maladresse: t(x.critique?.maladresse, 40) },
+      marge: { pas: e(x.marge?.pas, 0, 0, 50), bonus: e(x.marge?.bonus, 1, -20, 20) },
+      etats: arr(x.etats).filter((y) => y && t(y.id, 40)).slice(0, 40).map((y) => ({ id: t(y.id, 40), malus: e(y.malus, 0, -20, 20), degats: t(y.degats, 20), soin: t(y.soin, 20), fin_de: t(y.fin_de, 20), fin_seuil: e(y.fin_seuil, 0, 0, 100) })),
     };
   }
   const PV_NIVEAU = [['moyenne', 'La moyenne du dé de vie (arrondie au-dessus)'], ['jet', 'Un jet du dé de vie'], ['choix', 'Le joueur choisit à chaque niveau']];
@@ -475,6 +512,22 @@ const DonneesJdr = (() => {
       section('Utilisation'), ctx.usages('sort', s.id),
     );
   }
+  // Tafl 1.36 : un monstre a ses valeurs des champs nombre de la fiche du jeu (vide : 0, ou sa CA pour la défense).
+  function champsDuJeu(m, work) {
+    const { champ, section, info } = U();
+    const champs = (work.reglages?.jdr?.fiche?.champs || []).filter((c) => c.type === 'nombre' || c.type === 'jauge');
+    if (!champs.length) return [];
+    if (!m.champs || typeof m.champs !== 'object') m.champs = {};
+    return [
+      section('Champs du jeu'),
+      info('Ses valeurs pour les champs de la Fiche des personnages, lues par les Mécaniques (la défense, l\'armure…). Vide : il n\'a pas ce champ ; une défense qui le lit lui laisse alors sa CA, une armure qui le lit ne retire rien.'),
+      ...champs.map((c) => {
+        const i = el('input', { type: 'number', value: m.champs[c.id] ?? '', className: 'num-input', placeholder: '0' });
+        i.oninput = () => { if (i.value === '') delete m.champs[c.id]; else m.champs[c.id] = Math.round(Number(i.value)); };
+        return champ(c.nom, i, c.id);
+      }),
+    ];
+  }
   function formMonstre(m, ctx) {
     const { champ, sel, section, info, nombreIn, table, refInfo, descNom, blocImage, texteIn } = U();
     const { work } = ctx;
@@ -575,6 +628,7 @@ const DonneesJdr = (() => {
         ['Chance %', (b) => nombreIn(b, 'chance', 1, 100)],
       ], () => ({ objet: '', chance: 10 }), { ajouter: '+ Butin', max: 6, vide: 'Il ne laisse rien.' }),
       info('L\'expérience vient du FP (partagée entre les héros debout).'),
+      ...champsDuJeu(m, work),
       section('Utilisation'), ctx.usages('monstre_jdr', m.id),
     );
   }
@@ -1045,8 +1099,228 @@ const DonneesJdr = (() => {
     if (sorte === 'monstre_jdr') for (const g of d.groupes || []) if (g.monstres.some((x) => x.monstre === id)) out.add(`Rencontre ${g.nom}`);
   }
 
+  // --- Tafl 1.36 : Réglages › Mécaniques (jouées par Saga 1.41, regles/jdr/mecaniques.js) ---
+  // Des règles à soi sans code : ce qu'il faut atteindre pour toucher, ce que l'armure retire, des paliers de
+  // santé (malus, blessure tirée sur une table, jets pour tenir), des tables aléatoires. Les formules lisent les
+  // champs de la Fiche des personnages, les caractéristiques, niveau, pv, pv_max, ca.
+  const MODELE_BLESSURES = () => ({
+    active: true, defense: 'couverture + esquive', absorption: 'armure', degat_min: 0,
+    paliers: [
+      { nom: 'Blessé', sous: 80, malus: -2, table: '', jets: false },
+      { nom: 'Gravement blessé', sous: 40, malus: -4, table: 'blessures', jets: false },
+      { nom: 'Mourant', sous: 10, malus: -6, table: '', jets: true },
+    ],
+    tables: [{ id: 'blessures', nom: 'Blessure permanente', de: '1d6', lignes: [
+      { min: 1, max: 2, texte: 'Une vilaine cicatrice', malus: 0 }, { min: 3, max: 3, texte: 'Un doigt en moins', malus: -1 },
+      { min: 4, max: 4, texte: 'Boiteux', malus: -1 }, { min: 5, max: 5, texte: 'Une oreille arrachée', malus: -1 }, { min: 6, max: 6, texte: 'Un œil crevé', malus: -2 },
+    ] }],
+    jets: { formule: '1d20', seuil: 10, reussites: 3, echecs: 3 },
+  });
+  const CHAMPS_BLESSURES = [
+    { id: 'couverture', nom: 'Couverture', type: 'nombre', depart: 4, modifiable: 'mj', visible: 'tous' },
+    { id: 'esquive', nom: 'Esquive', type: 'nombre', depart: 6, modifiable: 'mj', visible: 'tous' },
+    { id: 'armure', nom: 'Armure', type: 'nombre', depart: 2, modifiable: 'mj', visible: 'tous' },
+  ];
+  function formMecaniques(r, ctx) {
+    const { champ, section, info, sel, table, petitBouton } = U();
+    if (!r.jdr) r.jdr = normRegles({});
+    const j = r.jdr;
+    const caracs = liste(ctx.work, 'caracteristiques');
+    const corps = el('div', { className: 'mecaniques' });
+    const noms = () => {
+      const n = new Set(['niveau', 'maitrise', 'pv', 'pv_max', 'ca']);
+      for (const k of caracs) { n.add(k.id); n.add(`mod_${k.id}`); }
+      for (const c of j.fiche?.champs || []) if (c.type !== 'texte') { n.add(c.id); if (c.type === 'jauge') n.add(`${c.id}_max`); }
+      return n;
+    };
+    // Une formule, vérifiée à chaque frappe (avec les noms qu'elle peut lire).
+    const formule = (o, cle, placeholder, plus = []) => {
+      const i = el('input', { type: 'text', value: o[cle] || '', placeholder, spellcheck: false });
+      const etat = el('span', { className: 'unit' });
+      const verifier = () => {
+        const t = i.value.trim();
+        const err = t && typeof FichePerso !== 'undefined' ? FichePerso.verifier(t, new Set([...noms(), ...plus])) : '';
+        etat.textContent = !t ? (String(placeholder).startsWith('vide') ? '' : 'vide : la règle du pack') : err ? `⚠ ${err}` : '✓';
+        etat.classList.toggle('erreur', Boolean(err));
+      };
+      i.oninput = () => { o[cle] = i.value; verifier(); ctx.change?.(); };
+      verifier();
+      return el('span', { className: 'inline mecanique-formule' }, [i, etat]);
+    };
+    const nombre = (o, cle, min, max) => { const i = el('input', { type: 'number', value: o[cle], min, max, className: 'num-input' }); i.oninput = () => { o[cle] = Number(i.value); ctx.change?.(); }; return i; };
+    const texte = (o, cle, placeholder = '') => { const i = el('input', { type: 'text', value: o[cle] || '', placeholder }); i.oninput = () => { o[cle] = i.value; ctx.change?.(); }; return i; };
+    function modeleBlessures() {
+      j.mecaniques = MODELE_BLESSURES();
+      // Les champs que ses formules lisent : ajoutés à la fiche du jeu (créée s'il n'y en a pas).
+      if (!j.fiche && typeof FichePerso !== 'undefined') j.fiche = FichePerso.defaut();
+      if (j.fiche) {
+        j.fiche.active = true;
+        for (const c of CHAMPS_BLESSURES) if (!j.fiche.champs.some((x) => x.id === c.id)) j.fiche.champs.push({ ...c });
+        if (!j.fiche.blocs.some((b) => b.type === 'champs' && CHAMPS_BLESSURES.every((c) => (b.champs || []).includes(c.id)))) {
+          j.fiche.blocs.splice(1, 0, { type: 'champs', titre: 'Défense', colonne: 1, champs: CHAMPS_BLESSURES.map((c) => c.id) });
+        }
+      }
+      ctx.change?.();
+      dessiner();
+    }
+    function dessiner() {
+      const m = j.mecaniques;
+      const actif = Boolean(m?.active);
+      const c = el('input', { type: 'checkbox', checked: actif });
+      c.onchange = () => {
+        if (c.checked) j.mecaniques = normMeca({ ...(j.mecaniques || {}), active: true });
+        else if (j.mecaniques) j.mecaniques.active = false;
+        ctx.change?.();
+        dessiner();
+      };
+      const modeles = el('div', { className: 'inline mecaniques-modeles' }, [
+        el('span', { className: 'unit', textContent: 'Partir d\'un modèle :' }),
+        Object.assign(el('button', { className: 'cmd-add', type: 'button', textContent: 'D&D 5e (les règles du pack)' }), { onclick: (e) => { e.preventDefault(); if (j.mecaniques) j.mecaniques.active = false; ctx.change?.(); dessiner(); } }),
+        Object.assign(el('button', { className: 'cmd-add', type: 'button', textContent: 'Armure et blessures' }), { onclick: (e) => { e.preventDefault(); modeleBlessures(); } }),
+      ]);
+      const out = [
+        info('Change le fonctionnement du jeu sans écrire de code. Les formules lisent les champs de la Fiche des personnages (couverture, armure…), les caractéristiques (dex, mod_dex), niveau, pv, pv_max et ca. Laissé vide, un réglage garde la règle du pack (D&D 5e).'),
+        modeles,
+        champ('Utiliser ces mécaniques', c),
+      ];
+      if (!actif) { corps.replaceChildren(...out); return; }
+      if (!m.resolution || !m.initiative || !m.repos || !Array.isArray(m.etats) || !Array.isArray(m.ressources) || !m.relances || !m.critique || !m.marge) { j.mecaniques = normMeca(m); dessiner(); return; }
+      const res = m.resolution;
+      const BD = ['bonus', 'dd'];
+      const parSysteme = {
+        d20: [info('Le jet de la 5e : d20 + bonus, réussi s\'il atteint le DD (ou la défense, pour une attaque). Avantage, 20 naturel et règles maison comme dans le pack.')],
+        d100: [
+          champ('Score à ne pas dépasser', formule(res, 'score', RESOLUTION.score, BD), ''),
+          info('Réussi si le d100 fait au plus le score ; un dixième du score ou moins : critique ; 96 ou plus raté : échec critique. Avantage : deux d100, le plus bas compte. La formule lit bonus (le bonus du test) et dd (la difficulté) : la formule de départ traduit ceux de la 5e. Un jeu à compétences en % écrit plutôt le nom de son champ.'),
+        ],
+        reserve: [
+          champ('Dés dans la réserve', formule(res, 'des', RESOLUTION.des, BD), ''),
+          champ('Un dé réussit à partir de', nombre(res, 'face', 2, 6)),
+          champ('Réussites qu\'il faut', formule(res, 'reussites', RESOLUTION.reussites, BD), ''),
+          info('On lance autant de d6 que la réserve et on compte ceux qui font la face ou plus. Deux fois les réussites qu\'il faut : critique. Avantage : un dé de plus ; désavantage : un de moins.'),
+        ],
+        '2d6': [
+          champ('Réussite à partir de', formule(res, 'plein', RESOLUTION.plein, BD), ''),
+          champ('Réussite partielle à partir de', formule(res, 'partiel', RESOLUTION.partiel, BD), ''),
+          info('2d6 + bonus. Une réussite partielle passe, mais à moitié : une attaque fait la moitié des dégâts. Double 6 : critique. Avantage : 3d6, les deux meilleurs comptent.'),
+        ],
+      };
+      const systeme = sel(RESOLUTIONS, res.type, (v) => { res.type = v; ctx.change?.(); dessiner(); });
+      out.push(
+        section('Système de résolution'),
+        champ('Un jet réussit avec', systeme),
+        ...parSysteme[res.type],
+        info('Il sert aux tests, aux sauvegardes et aux attaques, en combat comme hors combat.'),
+        section('Toucher'),
+        champ('À atteindre pour toucher', formule(m, 'defense', 'ca (la classe d\'armure)'), ''),
+        info('Remplace la CA : le jet d\'attaque doit l\'atteindre (c\'est le dd des formules du système). Exemple : couverture + esquive. Un monstre qui n\'a pas ces champs garde sa CA.'),
+        champ('Parade de la cible', formule(m, 'parade', 'vide : pas de parade'), ''),
+        ...(res.type === 'd20' || res.type === '2d6' ? [] : [champ('Difficulté de la parade', nombre(m, 'parade_dd', 0, 100))]),
+        info(res.type === 'd20' || res.type === '2d6'
+          ? 'Un coup qui touche (sauf un critique) peut être paré : la cible lance avec ce bonus et doit atteindre le total de l\'attaque. Exemple : parade + mod_dex. Une cible sans ce champ ne pare pas.'
+          : 'Un coup qui touche (sauf un critique) peut être paré : la cible fait un jet du système avec ce bonus, contre cette difficulté. Une cible sans ce champ ne pare pas.'),
+        section('Dégâts'),
+        champ('Retiré des dégâts', formule(m, 'absorption', 'armure'), ''),
+        champ('Dégâts minimum après l\'armure', nombre(m, 'degat_min', 0, 10)),
+        champ('Marge de réussite', el('span', { className: 'inline' }, [el('span', { className: 'unit', textContent: '+' }), nombre(m.marge, 'bonus', -20, 20), el('span', { className: 'unit', textContent: 'aux dégâts par tranche de' }), nombre(m.marge, 'pas', 0, 50), el('span', { className: 'unit', textContent: 'au-dessus de la défense (0 : rien)' })])),
+        champ('Où le coup touche', sel([['', '(pas de localisation)'], ...m.tables.map((t) => [t.id, t.nom])], m.localisation || '', (v) => { m.localisation = v; ctx.change?.(); })),
+        info('Une table tirée à chaque coup qui touche (la tête, le torse, un bras…). La colonne « Dégâts % » de ses lignes multiplie les dégâts : 200 à la tête, 50 sur un bras.'),
+        section('Critiques'),
+        champ('Critique sur un d20 de', el('span', { className: 'inline' }, [nombre(m.critique, 'seuil', 0, 20), el('span', { className: 'unit', textContent: 'ou plus (0 : 20, la règle du pack)' })])),
+        champ('Effet d\'un critique', sel([['', 'La règle du pack (Réglages › Règles)'], ['doubler', 'Les dés de dégâts doublés'], ['max', 'Le maximum des dés, plus un jet'], ['plus', 'Des dés en plus']], m.critique.effet, (v) => { m.critique.effet = v; ctx.change?.(); dessiner(); })),
+        ...(m.critique.effet === 'plus' ? [champ('Dés en plus', texte(m.critique, 'plus', '1d6'))] : []),
+        champ('Table des critiques', sel([['', '(aucune)'], ...m.tables.map((t) => [t.id, t.nom])], m.critique.table || '', (v) => { m.critique.table = v; ctx.change?.(); dessiner(); })),
+        champ('Table des maladresses', sel([['', '(aucune)'], ...m.tables.map((t) => [t.id, t.nom])], m.critique.maladresse || '', (v) => { m.critique.maladresse = v; ctx.change?.(); })),
+        info('Un critique tire sur sa table (« Dégâts % » multiplie les dégâts : 300 pour une tête tranchée). Un échec critique (un 1 naturel, ou celui du système) tire sur celle des maladresses : l\'attaque est perdue et le texte dit ce qui arrive. Les autres systèmes que le d20 ont leur propre critique.'),
+        section('Relances'),
+        champ('Dés explosifs', (() => { const i = el('input', { type: 'checkbox', checked: Boolean(m.relances.explosif) }); i.onchange = () => { m.relances.explosif = i.checked; ctx.change?.(); }; return i; })()),
+        champ('Points pour relancer', sel([['', '(aucun)'], ...(j.fiche?.champs || []).filter((c) => c.type === 'nombre' || c.type === 'jauge').map((c) => [c.id, c.nom])], m.relances.destin || '', (v) => { m.relances.destin = v; ctx.change?.(); })),
+        info('Dés explosifs : un dé de dégâts au maximum se relance et s\'ajoute (un 6 de la réserve donne un dé de plus). Points pour relancer : un champ de la fiche (Destin, Chance…) ; après un jet raté, le héros peut en dépenser un pour relancer.'),
+        section('Ressources'),
+        info('Une jauge de la Fiche des personnages (Mana, Munitions, Stress…) qui se dépense et revient. Sorts : ce que coûte un sort, une formule qui lit niveau_sort (exemple : niveau_sort * 2 + 1) ; « au lieu des emplacements » : les sorts ne prennent plus d\'emplacement. Tir : par attaque à distance. Repos : ce qui revient (long vide : la jauge se remplit). À zéro : un malus aux jets.'),
+        table(m.ressources, [
+          ['Jauge', (x) => sel([['', '(choisir)'], ...(j.fiche?.champs || []).filter((c) => c.type === 'jauge' || c.type === 'nombre').map((c) => [c.id, c.nom])], x.champ, (v) => { x.champ = v; ctx.change?.(); }), true],
+          ['Sorts', (x) => formule(x, 'sorts', 'niveau_sort', ['niveau_sort'])],
+          ['Au lieu des emplacements', (x) => { const i = el('input', { type: 'checkbox', checked: Boolean(x.remplace) }); i.onchange = () => { x.remplace = i.checked; ctx.change?.(); }; return i; }],
+          ['Tir', (x) => nombre(x, 'distance', 0, 20)],
+          ['Repos court', (x) => formule(x, 'court', '')],
+          ['Repos long', (x) => formule(x, 'long', 'vide : pleine')],
+          ['À zéro', (x) => nombre(x, 'zero_malus', -20, 20)],
+        ], () => ({ champ: '', sorts: '', distance: 0, remplace: false, court: '', long: '', zero_malus: 0 }), { ajouter: '+ Ressource', max: 10, change: ctx.change }),
+        ...(!(j.fiche?.champs || []).some((c) => c.type === 'jauge') ? [info('La fiche du jeu n\'a pas encore de jauge : ajoute-en une dans Réglages › Fiche des personnages (Mana, max : 10 + niveau * 2).')] : []),
+        section('Initiative'),
+        champ('Qui joue en premier', sel(INITIATIVES, m.initiative.mode, (v) => { m.initiative.mode = v; ctx.change?.(); dessiner(); })),
+        ...(m.initiative.mode === 'jet' ? [
+          champ('Dé', texte(m.initiative, 'de', '1d20')),
+          champ('Plus', formule(m.initiative, 'bonus', 'vide : le modificateur de Dex'), ''),
+          info('Chacun lance le dé et ajoute la formule, du plus grand au plus petit. Exemple : 1d10 + reflexes.'),
+        ] : []),
+        section('Paliers de santé'),
+        info('En % des PV max. Le héros est dans le palier le plus bas dont il est sous le seuil. Le malus s\'ajoute à ses attaques, tests et sauvegardes. Une table se tire une fois, en entrant dans le palier (la blessure reste sur sa fiche). « Jets pour tenir » : à chaque tour de combat, il fait les jets réglés plus bas.'),
+        table(m.paliers, [
+          ['Nom', (p) => texte(p, 'nom', 'Blessé'), true],
+          ['Sous (%)', (p) => nombre(p, 'sous', 0, 100)],
+          ['Malus', (p) => nombre(p, 'malus', -20, 20)],
+          ['Table tirée', (p) => sel([['', '(aucune)'], ...m.tables.map((t) => [t.id, t.nom])], p.table || '', (v) => { p.table = v; ctx.change?.(); })],
+          ['Jets pour tenir', (p) => { const i = el('input', { type: 'checkbox', checked: Boolean(p.jets) }); i.onchange = () => { p.jets = i.checked; ctx.change?.(); }; return i; }],
+        ], () => ({ nom: 'Palier', sous: 50, malus: -1, table: '', jets: false }), { ajouter: '+ Palier', max: 10, change: ctx.change }),
+        section('Tables aléatoires'),
+      );
+      m.tables.forEach((t, k) => {
+        out.push(el('div', { className: 'mecanique-table' }, [
+          el('div', { className: 'inline' }, [
+            champ('Nom', texte(t, 'nom', 'Blessure permanente')),
+            champ('Dé', texte(t, 'de', '1d6')),
+            petitBouton('trash', 'Retirer cette table', () => { m.tables.splice(k, 1); for (const p of m.paliers) if (p.table === t.id) p.table = ''; ctx.change?.(); dessiner(); }),
+          ]),
+          table(t.lignes, [
+            ['De', (l) => nombre(l, 'min', 0, 1000)],
+            ['À', (l) => nombre(l, 'max', 0, 1000)],
+            ['Résultat', (l) => texte(l, 'texte', 'Un œil crevé'), true],
+            ['Malus (pour de bon)', (l) => nombre(l, 'malus', -20, 20)],
+            ...(m.localisation === t.id ? [['Dégâts %', (l) => { if (l.mult == null) l.mult = 100; return nombre(l, 'mult', 0, 500); }]] : []),
+          ], () => { const n = t.lignes.length ? t.lignes[t.lignes.length - 1].max + 1 : 1; return { min: n, max: n, texte: '', malus: 0, mult: 100 }; }, { ajouter: '+ Ligne', max: 100, change: ctx.change }),
+        ]));
+      });
+      const nouvelle = el('button', { className: 'cmd-add', type: 'button', textContent: '+ Table' });
+      nouvelle.onclick = (e) => {
+        e.preventDefault();
+        let n = m.tables.length + 1;
+        while (m.tables.some((t) => t.id === `table_${n}`)) n++;
+        m.tables.push({ id: `table_${n}`, nom: `Table ${n}`, de: '1d6', lignes: [{ min: 1, max: 1, texte: '', malus: 0 }] });
+        ctx.change?.();
+        dessiner();
+      };
+      out.push(nouvelle,
+        section('Jets pour tenir'),
+        info('Faits à chaque tour par un héros dans un palier « jets pour tenir » : assez de réussites, il est stabilisé ; assez d\'échecs, il meurt. Un nouveau coup remet les compteurs à zéro.'),
+        champ('Jet', texte(m.jets, 'formule', '1d20')),
+        champ('Réussi à partir de', nombre(m.jets, 'seuil', 0, 100)),
+        champ('Réussites pour être stabilisé', nombre(m.jets, 'reussites', 1, 10)),
+        champ('Échecs pour mourir', nombre(m.jets, 'echecs', 1, 10)),
+        section('États'),
+        info('Ce que font en plus les états du jeu (Données › États) : un malus aux jets, des dégâts ou des soins à la fin de chaque tour de combat (des dés : 1d4), un jet pour en sortir à la fin du tour (réussi à partir du seuil).'),
+        table(m.etats, [
+          ['État', (x) => sel(choix(ctx.work, 'etats'), x.id, (v) => { x.id = v; ctx.change?.(); }), true],
+          ['Malus', (x) => nombre(x, 'malus', -20, 20)],
+          ['Dégâts / tour', (x) => texte(x, 'degats', '1d4')],
+          ['Soin / tour', (x) => texte(x, 'soin', '')],
+          ['Jet pour sortir', (x) => texte(x, 'fin_de', '1d20')],
+          ['Seuil', (x) => nombre(x, 'fin_seuil', 0, 100)],
+        ], () => ({ id: choix(ctx.work, 'etats')[0]?.[0] || 'empoisonne', malus: -1, degats: '', soin: '', fin_de: '', fin_seuil: 10 }), { ajouter: '+ État', max: 40, change: ctx.change }),
+        section('Repos et niveaux'),
+        champ('PV rendus par un repos court', formule(m.repos, 'court', 'vide : les dés de vie seulement'), ''),
+        champ('PV rendus par un repos long', formule(m.repos, 'long', 'vide : tous'), ''),
+        champ('PV gagnés à un niveau', formule(m, 'niveau_pv', 'vide : le dé de vie + Con', ['de', 'jet', 'moyenne']), ''),
+        info('Les formules du repos se calculent pour chaque héros (exemple : niveau + mod_con ; pv_max / 4). Celle du niveau lit aussi de (le dé de vie de sa classe), jet (un jet de ce dé) et moyenne ; elle donne tout le gain (la Con comprise).'));
+      corps.replaceChildren(...out);
+    }
+    dessiner();
+    return [corps];
+  }
+
   return {
     SORTES, NORMES, ONGLETS, DEFAUTS_REGLES, TYPES_DEGATS, EFFETS_APTITUDE, normObjet, normFiche, normRegles, listes, resumer, utilisations,
-    formObjet, formPersonnage, formRegles, formFiche, chargerModele, imageMonstre, des, moyenne, visibilites, normVisible,
+    formObjet, formPersonnage, formRegles, formFiche, formMecaniques, normMeca, chargerModele, imageMonstre, des, moyenne, visibilites, normVisible,
   };
 })();

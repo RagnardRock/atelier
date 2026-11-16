@@ -105,6 +105,8 @@ const TableMode = (() => {
         }).filter(Boolean),
         argent: partie().argent || 0,
         notes: c.notes || '',
+        // Saga 1.41 : les bonus que le MJ a mis sur sa fiche, à cocher avant un jet.
+        bonusChoix: JdrMeca.vueBonus(j, c),
         ...ficheDuJeu(c, false),
       };
     }
@@ -135,6 +137,15 @@ const TableMode = (() => {
       return true;
     }
 
+    // Saga 1.41 : les bonus à cocher (le MJ ajoute et retire ; le joueur coche les siens).
+    function changerBonus(c, action) {
+      if (!JdrMeca.changerBonus(c, action)) return false;
+      envoyes.clear();
+      panneau?.rafraichir();
+      ficheMj?.maj();
+      return true;
+    }
+
     // La fiche d'un héros pour le MJ : tous les champs, qu'il peut tous changer.
     let ficheMj = null;
     function ouvrirFiche(c) {
@@ -152,7 +163,7 @@ const TableMode = (() => {
         if (s === signatureMj) return;
         signatureMj = s;
         const f = JdrBase.fiche(jeu());
-        cadre.replaceChildren(fermer, FichePerso.rendre(f, d, { changer: (id, v) => changerChamp(c, id, v, true), image: f?.theme.image, mj: true }));
+        cadre.replaceChildren(fermer, FichePerso.rendre(f, d, { changer: (id, v) => changerChamp(c, id, v, true), image: f?.theme.image, mj: true, bonus: (action) => changerBonus(c, action), cocher: (id, coche) => changerBonus(c, { type: 'cocher', id, coche }) }));
       };
       const minuterie = setInterval(maj, 700);
       const quitter = () => { clearInterval(minuterie); fond.remove(); ficheMj = null; };
@@ -742,6 +753,7 @@ const TableMode = (() => {
         // Saga 1.21.3 : un champ de la fiche du jeu, sur son propre héros.
         if (a.type === 'champ') { const c = herosDuGroupe().find((q) => E.estMien(r, q)); if (c && !creations.has(nom)) changerChamp(c, String(a.id || ''), a.valeur, false); return; }
         if (a.type === 'voter') { voter(nom, a); return; }
+        if (a.type === 'bonus') { const c = herosDuGroupe().find((q) => E.estMien(r, q)); if (c) changerBonus(c, { type: 'cocher', id: String(a.id || ''), coche: Boolean(a.coche) }); return; }
         a = { ...a, perso: r.perso, heros: r.heros };
       }
       const r = { mj: false, perso: typeof a.perso === 'string' && a.perso ? a.perso : null, heros: typeof a.heros === 'string' ? a.heros : '' };
