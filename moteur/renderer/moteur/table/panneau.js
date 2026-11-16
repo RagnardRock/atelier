@@ -238,9 +238,15 @@ const TablePanneau = (() => {
     function choisirImageJeton() {
       return new Promise((ok) => {
         const i = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
-        i.onchange = () => {
-          const f = i.files?.[0];
-          if (!f) { ok(''); return; }
+        i.onchange = () => { imageJeton(i.files?.[0]).then(ok); };
+        i.click();
+      });
+    }
+    // Saga 1.44 : la même chose pour un fichier déposé sur le plateau.
+    function imageJeton(f) {
+      return new Promise((ok) => {
+        {
+          if (!f || !/^image\/(png|jpeg|webp)$/.test(f.type)) { if (f) T.message('Une image PNG, JPEG ou WebP.'); ok(''); return; }
           const r = new FileReader();
           r.onload = () => {
             const im = new Image();
@@ -257,10 +263,10 @@ const TablePanneau = (() => {
             im.src = r.result;
           };
           r.readAsDataURL(f);
-        };
-        i.click();
+        }
       });
     }
+    let monstreChoisi = '', visAjout = 'tous';
     function voletPions(jeu, partie, carte) {
       const vis = T.VISIBILITES();
       const out = [];
@@ -284,6 +290,26 @@ const TablePanneau = (() => {
         out.push(ligne);
       }
       if (!pions.length) out.push(el('p', { className: 'table-note', textContent: 'Aucun pion sur cette carte.' }));
+      // Saga 1.44 : un monstre du jeu en pleine séance (clic sur une case), ou une image déposée sur le plateau.
+      const monstres = jeu.donnees.monstres_jdr?.monstres_jdr || [];
+      if (monstres.length) {
+        if (!monstres.some((m) => m.id === monstreChoisi)) monstreChoisi = monstres[0].id;
+        if (!vis.some(([v]) => v === visAjout)) visAjout = vis[0]?.[0] || 'tous';
+        const nb = el('input', { className: 'table-init-chiffre', type: 'number', min: '1', max: '9', value: '1', title: 'Combien' });
+        out.push(el('div', { className: 'table-sous-titre', textContent: 'Ajouter un monstre du jeu' }),
+          el('div', { className: 'table-ligne table-init-ajout' },
+            select(monstreChoisi, monstres.map((m) => [m.id, m.nom || m.id]), (v) => { monstreChoisi = v; }), nb,
+            select(visAjout, vis, (v) => { visAjout = v; }),
+            btn('add', 'Poser', async () => {
+              if (enAttente) return;
+              enAttente = true;
+              T.message('Clique la case où le poser.');
+              const c = await T.choisirCase(null);
+              enAttente = false;
+              if (c) for (let k = 0; k < Math.max(1, Math.min(9, Math.round(Number(nb.value) || 1))); k++) T.agir({ type: 'pion_poser', monstre: monstreChoisi, x: c.x, y: c.y, visible: visAjout });
+            }, { titre: 'Sa fiche du jeu (PV, CA, attaques) ; il compte dans l\'initiative à la main' })));
+      }
+      out.push(el('p', { className: 'table-note', textContent: 'Une image (PNG, JPEG, WebP) déposée sur le plateau devient un pion : un portrait, un PNJ, un objet.' }));
       // Saga 1.38 : les joueurs créent leur héros depuis leur écran ; le MJ peut aussi en préparer un.
       out.push(btn('person-add', 'Préparer un héros', () => T.preparerHeros?.(), { titre: 'Un pré-tiré ou un nouveau personnage, que tu donneras ensuite à un joueur (onglet Joueurs)' }));
       out.push(el('p', { className: 'table-note', textContent: 'Clique un pion puis une case pour le déplacer. Clic droit : qui le voit, ses marques. En bas à gauche : ses PV (+ et −).' }));
@@ -338,25 +364,58 @@ const TablePanneau = (() => {
     // Saga 1.43 : l'initiative tenue à la main, pour un combat mené sans le moteur (ou une scène tendue) :
     // jeter pour tous, ajouter un pion ou une ligne libre, régler le chiffre, monter, descendre, passer le tour.
     function initiativeManuelle(jeu, partie, carte) {
-      if (T.combat) return [el('p', { className: 'table-note', textContent: 'Pendant un combat de Saga, l\'ordre est celui du combat (en haut du plateau).' })];
+      // Saga 1.44 : glisser une ligne pour la placer ; l'ordre libre (le MJ choisit qui agit) se coche ici.
+      const glisser = (ligne, id, placer) => {
+        ligne.draggable = true;
+        ligne.ondragstart = (e) => { e.dataTransfer.setData('text/x-saga-init', id); ligne.classList.add('glisse'); };
+        ligne.ondragend = () => ligne.classList.remove('glisse');
+        ligne.ondragover = (e) => { if (e.dataTransfer.types.includes('text/x-saga-init')) { e.preventDefault(); ligne.classList.add('cible'); } };
+        ligne.ondragleave = () => ligne.classList.remove('cible');
+        ligne.ondrop = (e) => { e.preventDefault(); ligne.classList.remove('cible'); const de = e.dataTransfer.getData('text/x-saga-init'); if (de && de !== id) placer(de); };
+      };
+      const caseLibre = (on, faire) => {
+        const c = el('input', { type: 'checkbox', checked: Boolean(on) });
+        c.onchange = () => faire(c.checked);
+        return el('label', { className: 'table-ligne table-init-libre', title: 'À chaque fois, tu choisis qui agit parmi ceux qui n\'ont pas joué ce tour' }, c, el('span', { textContent: 'Ordre libre : je choisis qui agit' }));
+      };
+      // Pendant un combat de Saga : son ordre, réglable pour ceux qui n'ont pas encore joué ce tour.
+      if (T.combat) {
+        const c = T.combat;
+        const o = [caseLibre(c.libre, (v) => T.ordreLibre(v))];
+        c.ordre.forEach((x, k) => {
+          const pret = (c.attente || []).includes(x.id) && x.id !== c.actif;
+          const ligne = el('div', { className: `table-ligne table-init${x.id === c.actif ? ' actif' : ''}${pret || x.id === c.actif ? '' : ' fait'}` },
+            el('i', { className: 'codicon codicon-gripper' }),
+            el('span', { className: 'table-nom', textContent: x.nom }), el('small', { textContent: String(x.init ?? '') }),
+            ...(pret ? [btn('debug-step-into', 'Agir maintenant', () => T.agirMaintenant(x.id), { titre: 'Il sera le prochain à jouer' })] : []));
+          glisser(ligne, x.id, (de) => T.ordreCombat(de, k));
+          o.push(ligne);
+        });
+        o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour changer l\'ordre. Ça compte pour ceux qui n\'ont pas encore joué ce tour (en gris : déjà joué).' }));
+        return o;
+      }
       const ini = partie.table.initiative || { liste: [], actif: '', tour: 1 };
       const o = [];
       o.push(el('div', { className: 'table-boutons' },
-        btn('debug-step-back', '', () => T.passerInitiative(-1), { titre: 'Revenir au précédent' }),
-        btn('debug-continue', `Suivant · tour ${ini.tour}`, () => T.passerInitiative(1), { classe: 'accent', titre: 'Passer au suivant (après le dernier : un nouveau tour)' }),
+        ...(ini.libre || !ini.liste.length ? [] : [btn('debug-step-back', '', () => T.passerInitiative(-1), { titre: 'Revenir au précédent' })]),
+        !ini.liste.length ? null : ini.libre ? el('small', { className: 'table-note', textContent: `Tour ${ini.tour} : clique « Agir » sur qui joue.` }) : btn('debug-continue', `Suivant · tour ${ini.tour}`, () => T.passerInitiative(1), { classe: 'accent', titre: 'Passer au suivant (après le dernier : un nouveau tour)' }),
         btn('symbol-event', 'Jeter pour tous', () => { if (!T.jeterInitiative()) T.message('Aucun pion sur cette carte.'); }, { titre: 'Chaque pion de la carte lance son initiative (les héros en public, les monstres en secret) ; ceux déjà là relancent.' }),
         btn('list-ordered', 'Trier', () => T.agir({ type: 'init_trier' }), { titre: 'Du plus haut au plus bas' }),
         btn('clear-all', 'Vider', () => T.agir({ type: 'init_vider' }), { titre: 'Effacer toute la liste' })));
-      ini.liste.forEach((x) => {
-        const chiffre = el('input', { className: 'table-init-chiffre', type: 'number', value: String(x.init), title: 'Son initiative (Entrée : la liste se retrie)' });
+      if (ini.liste.length) o.push(caseLibre(ini.libre, (v) => T.ordreLibre(v)));
+      ini.liste.forEach((x, k) => {
+        const chiffre = el('input', { className: 'table-init-chiffre', type: 'number', value: String(x.init), title: 'Son initiative (la liste se retrie)' });
         chiffre.onchange = () => T.agir({ type: 'init_valeur', id: x.id, init: Number(chiffre.value) || 0 });
-        const nom = el('span', { className: 'table-nom', textContent: x.nom, title: x.pion ? 'Un pion de la table (clic : le choisir)' : 'Une ligne libre' });
+        const nom = el('span', { className: 'table-nom', textContent: x.attend ? `${x.nom} (attend)` : x.nom, title: x.pion ? 'Un pion de la table (clic : le choisir)' : 'Une ligne libre' });
         if (x.pion) nom.onclick = () => { T.selection = x.pion; dessiner(); };
-        o.push(el('div', { className: `table-ligne table-init${x.id === ini.actif ? ' actif' : ''}` },
-          el('i', { className: `codicon codicon-${x.id === ini.actif ? 'play' : x.pion ? 'person' : 'tag'}` }), nom, chiffre,
-          btn('arrow-up', '', () => T.agir({ type: 'init_monter', id: x.id, sens: -1 }), { titre: 'Monter' }),
-          btn('arrow-down', '', () => T.agir({ type: 'init_monter', id: x.id, sens: 1 }), { titre: 'Descendre' }),
-          btn('close', '', () => T.agir({ type: 'init_retirer', id: x.id }), { titre: 'Retirer de la liste' })));
+        const actif = x.id === ini.actif;
+        const ligne = el('div', { className: `table-ligne table-init${actif ? ' actif' : ''}${x.attend ? ' attend' : ''}` },
+          el('i', { className: `codicon codicon-${actif ? 'play' : x.pion ? 'person' : 'tag'}` }), nom, chiffre,
+          ...(!actif || ini.libre ? [btn('debug-step-into', '', () => T.agirMaintenant(x.id), { titre: x.attend ? 'Il cesse d\'attendre et agit maintenant' : 'Agir maintenant' })] : []),
+          ...(!x.attend && !ini.libre ? [btn('watch', '', () => T.agir({ type: 'init_retarder', id: x.id }), { titre: 'Retarder : il attend, on passe sans lui (« Agir maintenant » quand il se décide)' })] : []),
+          btn('close', '', () => T.agir({ type: 'init_retirer', id: x.id }), { titre: 'Retirer de la liste' }));
+        glisser(ligne, x.id, (de) => T.agir({ type: 'init_placer', id: de, index: k }));
+        o.push(ligne);
       });
       if (!ini.liste.length) o.push(el('p', { className: 'table-note', textContent: 'Liste vide : « Jeter pour tous », ou ajoute un pion ou une ligne libre (un piège, un renfort, l\'action du repaire).' }));
       // Ajouter : un pion de la carte qui n'y est pas, ou une ligne libre.
@@ -373,7 +432,7 @@ const TablePanneau = (() => {
           const r = T.agir({ type: 'init_ajouter', ...(p ? { pion: p.id, nom: T.nomPion(p) } : { nom: nomL.value }), init: Number(val.value) || 0 });
           if (r.ok) nomL.value = '';
         }, { titre: 'Ajouter à sa place dans l\'ordre' })));
-      o.push(el('p', { className: 'table-note', textContent: 'Les joueurs voient cet ordre en haut de leur écran, sans les chiffres. Un pion caché n\'y paraît pas chez eux.' }));
+      o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour la placer. Les joueurs voient cet ordre en haut de leur écran, sans les chiffres ; un pion caché n\'y paraît pas chez eux.' }));
       return o;
     }
     function voletScene(jeu, partie, carte) {
@@ -413,7 +472,7 @@ const TablePanneau = (() => {
         ];
       }));
       out.push(section('rencontres', 'Rencontres', () => rencontres(jeu)));
-      out.push(section('initiative', `Initiative à la main${partie.table.initiative?.liste?.length ? ` (${partie.table.initiative.liste.length})` : ''}`, () => initiativeManuelle(jeu, partie, carte)));
+      out.push(section('initiative', `${T.combat ? 'Initiative du combat' : 'Initiative à la main'}${!T.combat && partie.table.initiative?.liste?.length ? ` (${partie.table.initiative.liste.length})` : ''}`, () => initiativeManuelle(jeu, partie, carte)));
       out.push(section('musique', 'Musique et sons', () => {
         const o = [el('div', { className: 'table-boutons' }, btn('mute', 'Silence', () => T.musique('aucune')), btn('home', 'Celle de la carte', () => T.musique('')))];
         if (!sons.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));
@@ -558,7 +617,7 @@ const TablePanneau = (() => {
     const minuterie = setInterval(() => dessinerFil(), 1000);
     dessiner();
     return {
-      rafraichir, dessiner,
+      rafraichir, dessiner, imageJeton,
       macro: (i) => interfaceMj?.macro(i) || false,
       fermer() {
         clearTimeout(prevu); clearInterval(minuterie);

@@ -20,7 +20,8 @@
 //   parade      une formule : la cible d'un coup qui touche tente de le parer (un jet du système du jeu,
 //               en d20 contre le total de l'attaque, sinon contre parade_dd) ;
 //   localisation l'id d'une table tirée à chaque coup (la tête, le bras…) ; ses lignes ont un mult (% des dégâts) ;
-//   initiative  { mode, de, bonus } : mode '' (la 5e), 'jet' (de + formule bonus), 'heros' ou 'monstres'
+//   initiative  { mode, de, bonus, ordre } : mode '' (la 5e), 'jet' (de + formule bonus), 'heros' ou 'monstres' ;
+//               ordre '' (fixe) ou 'libre' (Saga 1.44 : le MJ choisit qui agit, à chaque fois)
 //               (un camp joue d'abord, sans jet) ;
 //   repos       { court, long } : des formules, les PV rendus à chacun (long vide : tout revient) ;
 //   niveau_pv   une formule : les PV gagnés à un niveau (elle lit de, jet, moyenne en plus) ;
@@ -80,7 +81,7 @@ const JdrMeca = (() => {
         plein: texte(x.resolution?.plein) || RESOLUTION.plein, partiel: texte(x.resolution?.partiel) || RESOLUTION.partiel,
       },
       parade: texte(x.parade), parade_dd: entier(x.parade_dd, 10, 0, 100), localisation: texte(x.localisation, 40),
-      initiative: { mode: ['', 'jet', 'heros', 'monstres'].includes(x.initiative?.mode) ? x.initiative.mode : '', de: texte(x.initiative?.de, 20) || '1d20', bonus: texte(x.initiative?.bonus) },
+      initiative: { mode: ['', 'jet', 'heros', 'monstres'].includes(x.initiative?.mode) ? x.initiative.mode : '', de: texte(x.initiative?.de, 20) || '1d20', bonus: texte(x.initiative?.bonus), ordre: x.initiative?.ordre === 'libre' ? 'libre' : '' },
       repos: { court: texte(x.repos?.court), long: texte(x.repos?.long) },
       niveau_pv: texte(x.niveau_pv),
       ressources: (Array.isArray(x.ressources) ? x.ressources : []).filter((r) => r && texte(r.champ, 40)).slice(0, 10).map((r) => ({

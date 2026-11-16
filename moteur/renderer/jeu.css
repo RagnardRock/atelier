@@ -1465,3 +1465,12 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .table-init-texte { flex: 1; min-width: 0; height: 24px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.16); background: rgba(0, 0, 0, 0.35); color: inherit; font-size: 12px; padding: 0 6px; }
 .table-init-ajout { gap: 4px; flex-wrap: wrap; }
 .ti-init.libre .ti-init-rond { background: #8a7a4a; }
+/* Saga 1.44 : l'initiative réglable (glisser, déjà joué, attend, ordre libre) */
+.ti-init.fait, .table-init.fait { opacity: 0.5; }
+.ti-init.attend { border-style: dashed; border-color: rgba(255, 255, 255, 0.35); }
+.ti-init-libre { align-self: center; padding: 3px 10px; border-radius: 99px; background: rgba(120, 200, 255, 0.18); color: #bfe4ff; font-size: 12px; font-weight: 600; }
+.table-init[draggable="true"] { cursor: grab; }
+.table-init.glisse { opacity: 0.4; }
+.table-init.cible { box-shadow: inset 0 2px 0 var(--accent, #ffb347); }
+.table-init.attend .table-nom { font-style: italic; opacity: 0.75; }
+.table-init-libre { gap: 6px; font-size: 12px; }

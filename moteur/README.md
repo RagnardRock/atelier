@@ -390,6 +390,18 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.44 : l'initiative réglable et des pions en pleine séance (avec Tafl 1.38)
+
+- **Glisser** une ligne de l'initiative (dans l'onglet Scène, ou une pastille en haut du plateau) pour la placer.
+- **Retarder** : il attend, on passe sans lui ; **Agir maintenant** (ou double-clic sur sa pastille) : il joue
+  tout de suite et garde cette place.
+- **L'ordre libre** : pas d'ordre, le MJ choisit qui agit à chaque fois (« Qui agit maintenant ? » dans un combat
+  de Saga). Se coche en pleine partie ; le défaut se règle dans Tafl › Réglages › Mécaniques › Initiative.
+- **Pendant un combat de Saga**, l'onglet Scène montre son ordre : glisser ou « Agir maintenant » compte pour ceux
+  qui n'ont pas encore joué ce tour (ceux qui ont joué sont en gris, chez le MJ et chez les joueurs).
+- **Un monstre du jeu en pleine séance** (onglet Pions › Ajouter un monstre du jeu : combien, qui le voit, puis
+  une case) et **une image déposée sur le plateau** qui devient un pion (un portrait, un PNJ, un objet).
+
 ## Ce que fait Saga 1.43 : le calque du MJ et l'initiative à la main
 
 - **Le feutre (F) et les notes (T)** dans le rail du plateau. Le MJ choisit son calque : « Calque du MJ (moi seul) »

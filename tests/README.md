@@ -63,6 +63,10 @@ la page de l'essai (rubrique **Artifacts**).
   pour tous, ce qu'en voit un joueur, la corbeille du calque ; l'initiative à la main (jeter pour tous, une ligne
   libre, Suivant, un nouveau tour, un joueur qui n'y touche pas).
 
+- `essais/16-saga-initiative-reglable.js` : Saga 1.44 : retarder, agir maintenant, glisser une ligne, l'ordre libre (aussi
+  dans un combat de Saga où le MJ choisit qui agit), une image déposée sur le plateau, un monstre posé caché ; Tafl 1.38
+  garde l'ordre libre dans les mécaniques.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

@@ -268,7 +268,7 @@ const DonneesJdr = (() => {
         reussites: t(x.resolution?.reussites) || RESOLUTION.reussites, plein: t(x.resolution?.plein) || RESOLUTION.plein, partiel: t(x.resolution?.partiel) || RESOLUTION.partiel,
       },
       parade: t(x.parade), parade_dd: e(x.parade_dd, 10, 0, 100), localisation: t(x.localisation, 40),
-      initiative: { mode: INITIATIVES.some(([k]) => k === x.initiative?.mode) ? x.initiative.mode : '', de: t(x.initiative?.de, 20) || '1d20', bonus: t(x.initiative?.bonus) },
+      initiative: { mode: INITIATIVES.some(([k]) => k === x.initiative?.mode) ? x.initiative.mode : '', de: t(x.initiative?.de, 20) || '1d20', bonus: t(x.initiative?.bonus), ordre: x.initiative?.ordre === 'libre' ? 'libre' : '' },
       repos: { court: t(x.repos?.court), long: t(x.repos?.long) },
       niveau_pv: t(x.niveau_pv),
       ressources: arr(x.ressources).filter((r) => r && t(r.champ, 40)).slice(0, 10).map((r) => ({ champ: t(r.champ, 40), sorts: t(r.sorts), distance: e(r.distance, 0, 0, 20), remplace: Boolean(r.remplace), court: t(r.court), long: t(r.long), zero_malus: e(r.zero_malus, 0, -20, 20) })),
@@ -1260,6 +1260,9 @@ const DonneesJdr = (() => {
           champ('Plus', formule(m.initiative, 'bonus', 'vide : le modificateur de Dex'), ''),
           info('Chacun lance le dé et ajoute la formule, du plus grand au plus petit. Exemple : 1d10 + reflexes.'),
         ] : []),
+        // Tafl 1.38 (Saga 1.44) : l'ordre libre : à chaque fois, le MJ choisit qui agit parmi ceux qui n'ont pas joué ce tour.
+        champ('Ordre des tours', sel([['', 'Fixe : dans l\'ordre de l\'initiative'], ['libre', 'Libre : le MJ choisit qui agit, à chaque fois']], m.initiative.ordre || '', (v) => { m.initiative.ordre = v; ctx.change?.(); })),
+        info('Le MJ peut aussi changer d\'avis en pleine partie (Saga › onglet Scène › Initiative).'),
         section('Paliers de santé'),
         info('En % des PV max. Le héros est dans le palier le plus bas dont il est sous le seuil. Le malus s\'ajoute à ses attaques, tests et sauvegardes. Une table se tire une fois, en entrant dans le palier (la blessure reste sur sa fiche). « Jets pour tenir » : à chaque tour de combat, il fait les jets réglés plus bas.'),
         table(m.paliers, [
