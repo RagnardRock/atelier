@@ -36,7 +36,8 @@ la page de l'essai (rubrique **Artifacts**).
 
 - `essais/10-saga-table-interface.js` : la table en verre de Saga 1.35 : les onglets du MJ, une macro à la
   touche 1, le chat, le tapis de dés, les PV du pion choisi, la largeur retenue ; puis un ami dans son
-  navigateur (ses onglets, ses macros calculées, le chat, sa fiche, le tapis).
+  navigateur (ses onglets, ses macros calculées, le chat, sa fiche, le tapis), et un combat (le menu du tour
+  à côté du plateau, l'initiative en haut, les phrases du combat dans le chat).
 
 ## Les lancer sur un PC (pour un développeur)
 

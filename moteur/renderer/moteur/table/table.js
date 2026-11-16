@@ -24,11 +24,12 @@ const TableMode = (() => {
   function creer({ scene, hote }) {
     const h = hote;
     const canvas = el('canvas', { className: 'table-plateau' });
-    // À droite, la colonne du MJ : la boîte des combats en haut (le plateau reste tout visible), le panneau dessous.
+    // À droite, la colonne du MJ (le panneau). La boîte des combats (le menu du tour) : un encart en verre à
+    // côté du plateau (Saga 1.35 : plus d'onglet Combat, le chat reste visible pendant le combat).
     const boite = el('div', { className: 'table-combat', hidden: true });
-    const colonne = el('aside', { className: 'table-colonne' }, boite);
+    const colonne = el('aside', { className: 'table-colonne' });
     const menu = el('div', { className: 'table-menu', hidden: true });
-    scene.append(canvas, colonne, menu);
+    scene.append(canvas, colonne, boite, menu);
     const plateau = Plateau.creer(canvas);
     // Saga 1.32 : la règle, les gabarits, le ping (les mêmes outils que l'écran des joueurs).
     const outils = TableOutils.barre({
@@ -59,7 +60,7 @@ const TableMode = (() => {
       if (!texte) return;
       const der = recit[recit.length - 1];
       if (der && der.texte === texte && der.qui === (o.qui || '')) return; // la même boîte (avec ses choix)
-      recit.push({ n: ++numeroRecit, qui: o.qui || '', texte, visible: o.visible || 'tous', combat: Boolean(combat) });
+      recit.push({ n: ++numeroRecit, qui: o.qui || '', texte, visible: o.visible || 'tous', combat: Boolean(combat), heure: Date.now() });
       if (recit.length > 80) recit.shift();
     }
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
@@ -198,7 +199,7 @@ const TableMode = (() => {
       });
       // Un deuxième démarrage (une nouvelle partie, F5) remplace le panneau au lieu d'en empiler un autre.
       panneau?.fermer();
-      panneau = TablePanneau.creer({ conteneur: colonne, scene, boite, table: api });
+      panneau = TablePanneau.creer({ conteneur: colonne, scene, table: api });
       plateau.oublier();
       brancherMulti();
     }
@@ -1043,6 +1044,8 @@ const TableMode = (() => {
       demarrer, arreter, entrerCarte, dessiner, combattre, touche, recevoir, annuler,
       get actif() { return actif; },
       get enCombat() { return Boolean(combat); },
+      // Saga 1.35 : le récit (le chat du MJ y mêle les phrases du combat).
+      get recit() { return recit; },
       get combatOuvert() { return Boolean(combat) && !boite.hidden; },
       // Pour le panneau du MJ.
       jeu, partie, carte, table, agir, pion, VISIBILITES: () => VISIBILITES(jeu(), partie()), libelleVisible,

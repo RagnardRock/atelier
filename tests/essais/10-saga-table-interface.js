@@ -1,4 +1,4 @@
-// Saga 1.35 : la table en verre. Chez le MJ : le panneau à onglets (Chat, Combat, Pions, Scène, Joueurs),
+// Saga 1.35 : la table en verre. Chez le MJ : le panneau à onglets (Chat, Pions, Scène, Joueurs),
 // la barre des macros (touches 1 à 9), le pion choisi et ses PV, le tapis de dés (D), la largeur du panneau
 // retenue. Chez un ami (son navigateur, par moteur/reseau.js) : la même table, sa fiche, ses macros, le chat.
 const fs = require('node:fs');
@@ -62,7 +62,7 @@ module.exports = [
         await page.waitForTimeout(400);
 
         // --- Le MJ ---
-        egal(await page.locator('.table-onglet').allTextContents(), ['Chat', 'Combat', 'Pions', 'Scène', 'Joueurs'], 'les onglets du MJ');
+        egal(await page.locator('.table-onglet').allTextContents(), ['Chat', 'Pions', 'Scène', 'Joueurs'], 'les onglets du MJ');
         vrai(await page.locator('.ti-haut').isVisible() && await page.locator('.table-outils').isVisible(), 'la barre du haut et le rail d\'outils');
         await page.evaluate(() => {
           const T = App.moteur.table;
@@ -173,6 +173,23 @@ module.exports = [
         await ami.click('.des-tapis-lancer');
         await page.waitForFunction((n) => App.moteur.table.partie().jdr.journal.at(-1).n > n, avant2);
         await capture(ami, '8-ami-tapis');
+        await ami.click('.des-tapis-fermer');
+        // Un combat : pas d'onglet à part. Le menu du tour est un encart près du plateau, l'initiative en haut,
+        // et les phrases du combat tombent dans le chat, chez le MJ comme chez l'ami.
+        await onglet(page, 'Chat');
+        await onglet(ami, 'Chat');
+        await page.evaluate(() => { const T = App.moteur.table; T.lancerCombat(T.jeu().donnees.groupes?.groupes?.[0]?.id); });
+        await page.waitForSelector('#scene > .table-combat:not([hidden])');
+        for (let i = 0; i < 12 && !(await page.locator('.ti-ordre .ti-init').count()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(700); }
+        vrai(await page.locator('.ti-ordre .ti-init').count() >= 4, 'l\'initiative dans la bande du haut');
+        vrai(await page.locator('.ti-etat-combat').isVisible(), 'l\'état du combat dans la barre du haut');
+        vrai(await page.locator('.table-panneau .table-combat').count() === 0, 'le menu du tour n\'est plus dans le panneau');
+        await page.waitForSelector('.table-fil .table-dit.recit');
+        await ami.waitForSelector('.table-fil .table-dit.recit');
+        await ami.waitForSelector('.ti-ordre .ti-init');
+        await page.waitForTimeout(2500);
+        await capture(page, '9-mj-combat');
+        await capture(ami, '10-ami-combat');
         sansErreur(erreurs);
         sansErreur(erreursAmi);
       } finally {

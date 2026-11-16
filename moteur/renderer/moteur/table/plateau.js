@@ -49,7 +49,10 @@ const Plateau = (() => {
       const g = (m.g || 0) * dpr, d = (m.d || 0) * dpr, hh = (m.h || 0) * dpr, b = (m.b || 0) * dpr;
       const LL = Math.max(1, L - g - d), HH = Math.max(1, H - hh - b);
       camera.z = Math.max(1, Math.min(8, Math.floor(Math.min(LL / (carte.largeur * t), HH / (carte.hauteur * t)))));
-      camera.x = (carte.largeur * t - LL / camera.z) / 2 - g / camera.z;
+      // Une place « souple » à droite (l'encart du tour, en combat) : on l'évite si la carte y tient sans dézoomer.
+      const souple = (m.souple || 0) * dpr;
+      const LS = souple && carte.largeur * t * camera.z <= LL - souple ? LL - souple : LL;
+      camera.x = (carte.largeur * t - LS / camera.z) / 2 - g / camera.z;
       camera.y = (carte.hauteur * t - HH / camera.z) / 2 - hh / camera.z;
       cadree = carte.id;
     }

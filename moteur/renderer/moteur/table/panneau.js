@@ -3,14 +3,15 @@
 // Saga 1.35 : un panneau en verre à onglets, par-dessus le plateau (qui prend tout l'écran), et
 // l'habillage autour (table/interface.js : la barre du haut, l'initiative, le pion choisi, les macros).
 //
-//   Chat      les jets de dés et la discussion avec les amis, mêlés ; une ligne pour écrire (/r, /gr, /m)
-//   Combat    la boîte du combat (le menu du tour, les messages) et l'ordre d'initiative ; lancer un combat
+//   Chat      les jets de dés, la discussion avec les amis et les phrases du combat, mêlés ; une ligne pour
+//             écrire (/r, /gr, /m). Le menu du tour d'un combat est un encart à côté du plateau (table.js).
 //   Pions     les héros et les monstres de la carte : leurs PV, qui les voit, la fiche d'un héros
-//   Scène     la campagne (son nom, le fond des téléphones), le brouillard, les rencontres, la musique, les dés
+//   Scène     la campagne (son nom, le fond des téléphones), le brouillard, les rencontres (lancer un combat),
+//             la musique, les dés
 //   Joueurs   le multijoueur : ouvrir la partie, qui est là, quel héros chacun joue, les téléphones
 
 const TablePanneau = (() => {
-  const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['combat', 'Combat', 'flame'], ['pions', 'Pions', 'person'], ['scene', 'Scène', 'map'], ['joueurs', 'Joueurs', 'organization']];
+  const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['pions', 'Pions', 'person'], ['scene', 'Scène', 'map'], ['joueurs', 'Joueurs', 'organization']];
   const lire = (k, d) => { try { const v = localStorage.getItem(`saga:table:${k}`); return v == null ? d : v; } catch { return d; } };
   const ecrire = (k, v) => { try { localStorage.setItem(`saga:table:${k}`, String(v)); } catch { /* stockage refusé */ } };
 
@@ -35,15 +36,15 @@ const TablePanneau = (() => {
     return b;
   }
 
-  function creer({ conteneur, scene, boite, table: T }) {
-    // Le panneau : ses onglets, un volet par onglet (le combat garde la boîte de table.js).
+  // Une phrase du combat (« Thorgrim touche le gobelin ») dans le fil.
+  const ligneRecit = (e) => el('div', { className: 'table-dit recit' }, e.qui ? el('b', { textContent: `${e.qui} : ` }) : null, el('span', { textContent: e.texte }));
+
+  function creer({ conteneur, scene, table: T }) {
+    // Le panneau : ses onglets, un volet par onglet.
     const racine = el('div', { className: 'table-panneau' });
     const onglets = el('nav', { className: 'table-onglets' });
     const volets = {};
     for (const [id] of ONGLETS) volets[id] = el('div', { className: `table-volet volet-${id}`, hidden: true });
-    const combatHaut = el('div', { className: 'table-combat-haut' });
-    if (boite) volets.combat.append(boite);
-    volets.combat.append(combatHaut);
     const poignee = el('div', { className: 'table-poignee', title: 'Glisser : élargir ou réduire le panneau' });
     racine.append(onglets, ...Object.values(volets));
     conteneur.append(poignee, racine);
@@ -91,8 +92,8 @@ const TablePanneau = (() => {
       return s;
     }
 
-    // --- Les onglets (avec ce qui attend : des messages non lus, un combat en cours) ---
-    let nonLus = 0, combatVu = false;
+    // --- Les onglets (avec ce qui attend : des messages non lus) ---
+    let nonLus = 0;
     function choisir(id) {
       onglet = id;
       ecrire('onglet', id);
@@ -103,7 +104,7 @@ const TablePanneau = (() => {
     document.addEventListener('saga:table-onglet', (e) => { if (volets[e.detail]) choisir(e.detail); });
     function dessinerOnglets() {
       onglets.replaceChildren(...ONGLETS.map(([id, nom, ic]) => {
-        const pastille = id === 'chat' && nonLus ? String(nonLus) : id === 'combat' && T.combat ? '!' : '';
+        const pastille = id === 'chat' && nonLus ? String(nonLus) : '';
         const b = el('button', { type: 'button', className: `table-onglet${onglet === id ? ' on' : ''}`, title: nom },
           el('i', { className: `codicon codicon-${ic}` }), el('span', { textContent: nom }), pastille ? el('b', { className: 'table-pastille', textContent: pastille }) : null);
         b.onclick = () => choisir(id);
@@ -139,7 +140,8 @@ const TablePanneau = (() => {
       const multi = T.multi?.();
       const jets = (partie?.jdr?.journal || []).slice(-40);
       const chat = multi?.actif ? (multi.lignes || []).filter((x) => !x.jet).slice(-60) : [];
-      const sig = JSON.stringify([jets.map((l) => [l.n, l.cache]), chat.map((x) => x.n), Math.floor(Date.now() / 30000)]);
+      const dits = (T.recit || []).filter((e) => e.combat).slice(-40);
+      const sig = JSON.stringify([jets.map((l) => [l.n, l.cache]), chat.map((x) => x.n), dits.at(-1)?.n || 0, Math.floor(Date.now() / 30000)]);
       if (!force && sig === signatureFil) return;
       // Les nouveautés depuis la dernière fois (pour la pastille de l'onglet).
       const derJ = jets.at(-1)?.n || 0, derC = chat.at(-1)?.n || 0;
@@ -150,6 +152,7 @@ const TablePanneau = (() => {
       const bas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 40;
       const items = [...jets.map((l) => ({ t: l.heure || 0, n: l.n, el: () => carteJet(l) })),
         ...chat.map((x) => ({ t: x.t || 0, n: x.n, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
+        .concat(dits.map((e) => ({ t: e.heure || 0, el: () => ligneRecit(e) })))
         .sort((a, b) => a.t - b.t);
       fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+3 pour lancer, /gr pour un jet que toi seul vois, ou ouvre le tapis de dés (D).' })]));
       if (bas || force) fil.scrollTop = fil.scrollHeight;
@@ -199,39 +202,18 @@ const TablePanneau = (() => {
     function dessiner() {
       const jeu = T.jeu(), partie = T.partie(), carte = T.carte();
       if (!jeu || !partie?.table || !carte) return;
-      // Un combat commence : son onglet s'ouvre.
-      if (T.combat && !combatVu && onglet !== 'combat') { onglet = 'combat'; }
-      combatVu = Boolean(T.combat);
       dessinerOnglets();
       dessinerFil();
       interfaceMj?.maj();
       const v = volets[onglet];
       const haut = v.scrollTop;
-      if (onglet === 'combat') dessinerCombat(jeu, partie);
-      else if (onglet === 'pions') v.replaceChildren(...voletPions(jeu, partie, carte));
+      if (onglet === 'pions') v.replaceChildren(...voletPions(jeu, partie, carte));
       else if (onglet === 'scene') v.replaceChildren(...voletScene(jeu, partie, carte));
       else if (onglet === 'joueurs') dessinerJoueurs(jeu, partie);
       v.scrollTop = haut;
     }
 
     // --- Combat : la boîte (table.js), l'ordre d'initiative, lancer une rencontre ---
-    function dessinerCombat(jeu, partie) {
-      const out = [];
-      if (T.combat) {
-        if (!T.combat.ordre?.length) out.push(el('p', { className: 'table-note', textContent: 'L\'initiative se lance…' }));
-        else out.push(el('div', { className: 'table-sous-titre', textContent: `Initiative · tour ${T.combat.tour || 1}` }));
-        for (const o of T.combat.ordre || []) {
-          const l = el('div', { className: `table-ligne ordre${T.combat.actif === o.id ? ' actif' : ''}` }, el('span', { className: 'table-init', textContent: String(o.init ?? '') }), el('span', { className: 'table-nom', textContent: o.nom }));
-          l.onclick = () => { T.selection = o.id; rafraichir(); };
-          out.push(l);
-        }
-      } else {
-        out.push(el('p', { className: 'table-note', textContent: 'Pas de combat. Pose une rencontre (onglet Scène) et lance-la, ou lance-la d\'ici : les monstres qui manquent arrivent près du groupe.' }));
-        out.push(...rencontres(jeu));
-      }
-      combatHaut.replaceChildren(...out);
-    }
-
     // --- Pions ---
     function voletPions(jeu, partie, carte) {
       const vis = T.VISIBILITES();
@@ -382,5 +364,5 @@ const TablePanneau = (() => {
       },
     };
   }
-  return { creer, carteJet: carteJetCommune };
+  return { creer, carteJet: carteJetCommune, ligneRecit };
 })();

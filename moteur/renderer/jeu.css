@@ -1245,8 +1245,11 @@ body.table-verre .table-panneau { display: flex; flex-direction: column; padding
 .table-ecrire .table-bouton { height: 38px; padding: 0 10px; border-radius: 12px; }
 
 /* Combat */
-.volet-combat .table-combat { margin: 0; max-height: none; background: rgba(40, 30, 50, 0.55); }
-.table-combat-haut { display: flex; flex-direction: column; gap: 6px; }
+/* Le menu du tour d'un combat : un encart en verre à côté du plateau (plus d'onglet Combat) */
+body.table-verre .table-combat { position: absolute; z-index: 9; top: calc(var(--ti-haut) + 62px); right: calc(var(--table-panneau) + 24px); width: min(300px, calc(100% - var(--ti-g) - var(--table-panneau) - 60px)); max-height: calc(100% - var(--ti-haut) - var(--ti-bas) - 150px); margin: 0;
+  border-radius: 16px; border: 1px solid var(--verre-bord); border-top: 1px solid var(--verre-bord); background: var(--verre-fond); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45); }
+body.joueur-reseau .joueurs-question { top: calc(var(--ti-haut) + 62px); }
+.table-dit.recit { color: rgba(255, 255, 255, 0.72); font-style: italic; font-size: 13px; padding-left: 10px; border-left: 2px solid rgba(255, 179, 71, 0.5); }
 
 /* Pions */
 .table-carte-pion { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer; }

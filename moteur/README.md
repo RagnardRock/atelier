@@ -374,8 +374,12 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 - **À gauche** : le rail d'outils, chacun avec sa touche (V déplacer, R règle, G gabarit, P ping, B et N le
   pinceau du brouillard, D le tapis de dés).
 - **À droite** : un panneau à onglets, dont la largeur se règle en glissant son bord (retenue).
-  MJ : Chat (les jets en cartes et la discussion, mêlés ; on y tape `/r`, `/gr`, `/m`), Combat, Pions, Scène
-  (campagne, brouillard, rencontres, musique, dés), Joueurs. Ami : Chat, Journal, Fiche, Joueurs.
+  MJ : Chat (les jets en cartes, la discussion et les phrases du combat, mêlés ; on y tape `/r`, `/gr`, `/m`),
+  Pions, Scène (campagne, brouillard, rencontres et lancer un combat, musique, dés), Joueurs.
+  Ami : Chat, Journal, Fiche, Joueurs.
+- **En combat** : pas d'onglet à part. Le menu du tour est un encart en verre à côté du plateau, l'ordre
+  d'initiative est dans la bande du haut, et le chat reste visible.
+- Autour d'une petite carte, son reflet flou remplit l'écran : les panneaux en verre laissent voir quelque chose.
 - **En bas** : le pion choisi (PV + et −, Maj : par 5) et la barre des macros (touches 1 à 9, clic droit :
   oublier). La hauteur se règle aussi.
 - **Le tapis de dés** : les jets roulent au milieu du plateau (`moteur/des-3d.js`, les mêmes dés que le

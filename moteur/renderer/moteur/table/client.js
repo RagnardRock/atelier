@@ -281,7 +281,8 @@ const TableClient = (() => {
       function dessinerFil() {
         const jetsV = (vue?.journal || []).slice(-40);
         const chat = (multi.lignes || []).filter((x) => !x.jet).slice(-60);
-        const sig = JSON.stringify([jetsV.map((l) => l.n), chat.map((x) => x.n), Math.floor(Date.now() / 30000)]);
+        const dits = (vue?.recit || []).filter((e) => e.combat).slice(-40);
+        const sig = JSON.stringify([jetsV.map((l) => l.n), chat.map((x) => x.n), dits.at(-1)?.n || 0, Math.floor(Date.now() / 30000)]);
         if (sig === sigFil) return;
         const neufs = sigFil ? jetsV.filter((l) => l.n > derJ).length + chat.filter((x) => x.n > derC && x.de !== multi.moi?.id).length : 0;
         derJ = jetsV.at(-1)?.n || 0; derC = chat.at(-1)?.n || 0;
@@ -290,6 +291,7 @@ const TableClient = (() => {
         const auBas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 40;
         const items = [...jetsV.map((l) => ({ t: l.heure || 0, el: () => TablePanneau.carteJet(l) })),
           ...chat.map((x) => ({ t: x.t || 0, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
+          .concat(dits.map((e) => ({ t: e.heure || 0, el: () => TablePanneau.ligneRecit(e) })))
           .sort((a, b) => a.t - b.t);
         fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+@dex pour lancer, /gr pour un jet que seuls toi et le MJ voyez, ou ouvre le tapis de dés (D).' })]));
         if (auBas) fil.scrollTop = fil.scrollHeight;

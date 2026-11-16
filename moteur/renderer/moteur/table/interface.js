@@ -185,7 +185,12 @@ const TableInterface = (() => {
       dessinerZoom();
     }
     // Le zoom et l'ordre bougent sans que la table change : un petit coup d'œil régulier.
-    const minuterie = setInterval(() => { dessinerZoom(); dessinerPion(); dessinerOrdre(); dessinerHaut(); }, 300);
+    // Un combat commence ou finit : l'encart du tour prend (ou rend) sa place, la carte se recadre à côté.
+    let enCombat = Boolean(T.combat);
+    const minuterie = setInterval(() => {
+      dessinerZoom(); dessinerPion(); dessinerOrdre(); dessinerHaut();
+      if (Boolean(T.combat) !== enCombat) { enCombat = Boolean(T.combat); T.cadrer(); }
+    }, 300);
 
     return {
       maj,
@@ -194,7 +199,7 @@ const TableInterface = (() => {
       marges() {
         const r = scene.getBoundingClientRect();
         const rh = haut.getBoundingClientRect(), rb = bas.getBoundingClientRect();
-        return { g: 72, d: Math.max(0, r.right - (scene.querySelector('.table-colonne')?.getBoundingClientRect().left ?? r.right)) + 8, h: rh.bottom - r.top + (ordre.hidden ? 8 : 56), b: r.bottom - rb.top + 8 };
+        return { g: 72, d: Math.max(0, r.right - (scene.querySelector('.table-colonne')?.getBoundingClientRect().left ?? r.right)) + 8, souple: T.combat ? 316 : 0, h: rh.bottom - r.top + (ordre.hidden ? 8 : 56), b: r.bottom - rb.top + 8 };
       },
       fermer() { clearInterval(minuterie); haut.remove(); ordre.remove(); zoom.remove(); bas.remove(); },
     };
