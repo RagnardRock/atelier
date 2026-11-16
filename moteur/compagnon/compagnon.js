@@ -25,7 +25,7 @@
   const liaison = () => liaisons.find((l) => l.cle === ici) || null;
   const garderLiaison = (l) => { liaisons = [l, ...liaisons.filter((x) => x.cle !== l.cle)].slice(0, 12); ecrire('liaisons', liaisons); };
   const oublierLiaison = () => { liaisons = liaisons.filter((x) => x.cle !== ici); ecrire('liaisons', liaisons); };
-  const reglages = { anime: lire('anime', true), secret: false };
+  const reglages = { anime: lire('anime', true), secousse: lire('secousse', true), secret: false };
 
   // --- Petits outils ---
   function el(tag, props = {}, ...enfants) {
@@ -178,7 +178,7 @@
     const tapis = el('div', { className: 'tapis verre' });
     const canvas = el('canvas');
     resEl = el('div', { className: 'res' });
-    aideEl = el('div', { className: 'aide', textContent: mouvementPossible() ? 'Secoue le téléphone ou glisse pour lancer' : 'Glisse sur le tapis pour lancer' });
+    aideEl = el('div', { className: 'aide', textContent: mouvementPossible() && reglages.secousse ? 'Secoue le téléphone ou glisse pour lancer' : 'Glisse sur le tapis pour lancer' });
     tapis.append(canvas, resEl, aideEl);
     const des = el('div', { className: 'choix-des verre' });
     for (const t of TYPES) {
@@ -197,8 +197,11 @@
     anime.onclick = () => { reglages.anime = !reglages.anime; ecrire('anime', reglages.anime); if (plateau) plateau.anime = reglages.anime; pageDes(); };
     const vider = el('button', { className: 'btn2', type: 'button' }, icone('clear-all'), 'Vider');
     vider.onclick = () => { choix = {}; plateau?.vider(); resEl.innerHTML = ''; aideEl.hidden = false; majChoix(); };
-    const options = el('div', { className: 'options' }, secret, anime, vider);
-    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis) {
+    // Saga 1.37.1 : couper la secousse (un téléphone dans la poche, une table qui bouge).
+    const secousseB = mouvementPossible() ? el('button', { className: 'btn2', type: 'button' }, icone(reglages.secousse ? 'device-mobile' : 'circle-slash'), `Secousse : ${reglages.secousse ? 'oui' : 'non'}`) : null;
+    if (secousseB) secousseB.onclick = () => { reglages.secousse = !reglages.secousse; ecrire('secousse', reglages.secousse); pageDes(); };
+    const options = el('div', { className: 'options' }, secret, anime, secousseB, vider);
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' && !mouvement.permis && reglages.secousse) {
       const perm = el('button', { className: 'btn2', type: 'button' }, icone('device-mobile'), 'Activer la secousse');
       // Saga 1.37 : on dit ce qui se passe (un refus d'avant reste en mémoire dans Safari).
       perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => {
@@ -211,7 +214,7 @@
     // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
     const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement › Autoriser ; si ça ne suffit pas, touche le lion et baisse les boucliers pour ce site. Puis recharge la page. Sinon, glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
     setTimeout(() => {
-      if (onglet !== 'des' || mouvement.recu || (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) return;
+      if (onglet !== 'des' || mouvement.recu || !reglages.secousse || (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) return;
       capteurAndroid();
       setTimeout(() => {
         if (mouvement.recu || onglet !== 'des') return;
@@ -304,7 +307,7 @@
   // Saga 1.37 : un à-coup, d'où qu'il vienne (devicemotion, ou le capteur d'accélération d'Android).
   function secousse(a, pure) {
     mouvement.recu = true;
-    if (onglet !== 'des' || attenteJet) return;
+    if (onglet !== 'des' || attenteJet || !reglages.secousse) return;
     const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
     const t = performance.now();
     if (f < 8) return;

@@ -390,6 +390,10 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Saga 1.37.1
+
+- Compagnon : un réglage « Secousse : oui / non » à côté de « Animation » (gardé dans le téléphone) pour ne plus lancer les dés en secouant.
+
 ## Ce que fait Saga 1.37 : les documents du MJ
 
 - **Onglet Docs** du panneau du MJ : une image (PNG, JPEG, WebP, réduite à 1600 px) ou un texte (une lettre,
