@@ -337,6 +337,13 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Le ping** (Alt + clic) : des ondes à la couleur du joueur, avec son nom, chez tout le monde.
 - Tout passe par la vue filtrée de chaque rôle (`table/etat.js` › `vue` : `gabarits`, `pings`, `marques`, `macros`) : un autre écran (le futur compagnon sur téléphone) n'a qu'à la dessiner. Les calculs sont dans `table/outils.js`.
 
+## Ce que fait Saga 1.33 : jouer en ligne par un relais
+
+- **Le relais** (`relais/` à la racine de l'Atelier) : un petit programme sans dépendance à poser sur un serveur, avec son guide d'installation (Caddy ou nginx pour le HTTPS). N'importe qui peut avoir le sien.
+- **Dans Saga** : Multijoueur › Réglages du relais (son adresse et sa clé, gardées dans les réglages de Saga, jamais dans le code), puis « Par un relais ». Saga donne un **lien d'invitation** avec le code de la partie dedans ; l'ami n'a plus qu'à écrire son prénom, et le MJ l'accepte.
+- Rien ne s'ouvre sur la box. Saga rejoue chaque requête de l'ami sur son serveur de partie (`relais-client.js` → `reseau.js`, qui reconnaît le relais par un secret) : le code, l'accord du MJ et la vue filtrée de chacun restent chez le MJ.
+- Une coupure : Saga revient dans la même salle (le relais la garde 90 s), sinon le lien change et le panneau montre le nouveau.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

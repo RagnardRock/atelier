@@ -12,7 +12,9 @@
 
 (() => {
   const R = window.SAGA_RESEAU || { mode: 'monde', titre: 'Saga', version: '', config: {} };
-  const cle = `saga-reseau:${location.host}`;
+  // Saga 1.33 : par un relais, tout est sous /p/<salle> (R.racine) ; chaque salle garde ses propres jetons.
+  const racine = R.racine || '';
+  const cle = `saga-reseau:${location.host}${racine}`;
   const lire = (k) => { try { return JSON.parse(localStorage.getItem(`${cle}:${k}`)); } catch { return null; } };
   const ecrire = (k, v) => { try { localStorage.setItem(`${cle}:${k}`, JSON.stringify(v)); } catch { /* navigation privée */ } };
   const rien = () => {};
@@ -23,7 +25,7 @@
   const dire = (sorte, x) => { for (const f of ecoutes[sorte] || []) f(x); };
 
   async function envoyer(chemin, corps) {
-    const r = await fetch(chemin, {
+    const r = await fetch(racine + chemin, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(jeton ? { 'X-Jeton': jeton } : {}) },
       body: JSON.stringify(corps || {}),
@@ -33,7 +35,7 @@
     return d;
   }
   async function demander(chemin) {
-    const r = await fetch(chemin, { headers: jeton ? { 'X-Jeton': jeton } : {} });
+    const r = await fetch(racine + chemin, { headers: jeton ? { 'X-Jeton': jeton } : {} });
     if (!r.ok) throw new Error(`erreur ${r.status}`);
     return r;
   }
@@ -73,8 +75,11 @@
       const bouton = boite.querySelector('button');
       const nomAvant = lire('nom');
       if (nomAvant) form.nom.value = nomAvant;
+      // Le lien d'invitation peut porter le code (…/?code=ABCD-EFGH) : il ne reste que le prénom.
+      const codeLien = new URLSearchParams(location.search).get('code');
+      if (codeLien) form.code.value = codeLien.slice(0, 12).toUpperCase();
       document.body.append(boite);
-      form.code.focus();
+      (codeLien ? form.nom : form.code).focus();
       form.onsubmit = async (e) => {
         e.preventDefault();
         bouton.disabled = true;
@@ -122,7 +127,7 @@
   let flux = null;
   function ecouter() {
     flux?.close();
-    flux = new EventSource(`/flux?jeton=${encodeURIComponent(jeton)}`);
+    flux = new EventSource(`${racine}/flux?jeton=${encodeURIComponent(jeton)}`);
     for (const sorte of ['vue', 'chat', 'joueurs', 'monde', 'pair', 'jeu']) {
       flux.addEventListener(sorte, (e) => { try { dire(sorte, JSON.parse(e.data)); } catch { /* message abîmé */ } });
     }

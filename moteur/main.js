@@ -562,14 +562,41 @@ handle('reseau:ouvrir', async (_event, o) => {
 ipcMain.on('reseau:dire', (event, texte, pour, jet) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous'), jet && typeof jet === 'object' ? { nom: String(jet.nom || '') } : null); });
 ipcMain.on('reseau:bouger', (event, p) => { if (event.sender === fenetrePrincipale?.webContents) reseau.bouger(p); });
 ipcMain.on('reseau:pair', (event, vers, donnees) => { if (event.sender === fenetrePrincipale?.webContents) reseau.pair(String(vers || ''), donnees); });
-handle('reseau:fermer', async () => { await internet.fermer(); reseau.fermer(); return reseau.infos(); });
+handle('reseau:fermer', async () => { relais.fermer(); await internet.fermer(); reseau.fermer(); return reseau.infos(); });
 // Saga 1.1 : ouvrir la partie sur Internet. 'upnp' : Saga demande à la box d'ouvrir le port (internet.js) ;
 // 'manuel' : Ragna l'a ouvert à la main dans sa box ; false : on referme. Dans tous les cas le port de
 // la box se referme avec la partie ou avec Saga.
 const Internet = require('./internet.js');
 const internet = Internet.creer({ log });
+// Saga 1.33 : ou par un relais (relais/relais.js sur un serveur). Son adresse et sa clé sont dans les
+// réglages de Saga (config.relais), jamais dans le code.
+const Relais = require('./relais-client.js');
+const relais = Relais.creer({
+  log,
+  perdu: () => fenetrePrincipale?.webContents.send('reseau:clients', []),
+  lienChange: (lien) => { reseau.passerInternet({ adresse: lien, methode: 'relais' }); fenetrePrincipale?.webContents.send('reseau:clients', []); },
+});
+handle('reseau:relais-reglages', async (_event, r) => {
+  const config = await readConfig();
+  if (r && typeof r === 'object') {
+    config.relais = { adresse: String(r.adresse || '').trim().slice(0, 300), cle: String(r.cle || '').slice(0, 200) };
+    await writeConfig(config);
+  }
+  return { adresse: config.relais?.adresse || '', cle: config.relais?.cle || '' };
+});
 handle('reseau:internet', async (_event, voulu) => {
   if (!reseau.ouvert) throw new Error('Ouvre d\'abord la partie');
+  if (voulu === 'relais') {
+    await internet.fermer();
+    const { relais: r = {} } = await readConfig();
+    try {
+      const { lien } = await relais.ouvrir({ adresse: r.adresse, cle: r.cle, port: reseau.port, secretLocal: reseau.secretRelais });
+      return { ...reseau.passerInternet({ adresse: lien, methode: 'relais' }), echec: null };
+    } catch (err) {
+      return { ...reseau.infos(), echec: { raison: err.message, relais: true } };
+    }
+  }
+  relais.fermer();
   if (voulu === 'upnp') {
     const r = await internet.ouvrir(reseau.port);
     if (!r.ok) return { ...reseau.infos(), echec: r };
@@ -592,6 +619,7 @@ ipcMain.on('reseau:envoyer', (event, id, sorte, json) => {
 // En quittant : on attend (un peu) que la box ait refermé le port.
 let fermetureFaite = false;
 app.on('before-quit', (event) => {
+  relais.fermer();
   reseau.fermer();
   if (fermetureFaite || !internet.ouverte) return;
   event.preventDefault();

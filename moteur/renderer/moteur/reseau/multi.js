@@ -135,8 +135,8 @@ const Multi = (() => {
         const r = await window.saga.reseauInternet(voulu);
         echecNet = r.echec || null;
         infos = r;
-        if (r.internet) message('La partie est ouverte sur Internet.');
-        else if (echecNet) aideInternet();
+        if (r.internet) message(r.internet.methode === 'relais' ? 'La partie passe par le relais : donne le lien à tes amis.' : 'La partie est ouverte sur Internet.');
+        else if (echecNet && !echecNet.relais) aideInternet();
       } catch (err) {
         echecNet = { raison: String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), port: infos.port };
       }
@@ -168,6 +168,18 @@ const Multi = (() => {
         x.onclick = f;
         return x;
       };
+      // Saga 1.33 : par un relais, le lien d'invitation (avec le code dedans).
+      if (net?.methode === 'relais') {
+        const lien = `${net.adresse}?code=${encodeURIComponent(infos.code || '')}`;
+        const copier = bouton('Copier le lien', 'copy', () => { navigator.clipboard?.writeText(lien).then(() => message('Lien copié.')).catch(() => {}); });
+        b.append(
+          el('div', { className: 'multi-label', textContent: 'Amis éloignés : ce lien' }),
+          el('code', { className: 'multi-adresse', textContent: lien }),
+          el('p', { className: 'multi-note', textContent: 'Le code est dans le lien. Tu acceptes chaque nouveau joueur. Rien n\'est ouvert sur ta box.' }),
+          copier,
+          bouton(ouvertureNet ? 'Fermeture…' : 'Quitter le relais', 'debug-disconnect', () => internet(false)));
+        return b;
+      }
       if (net) {
         b.append(
           el('div', { className: 'multi-label', textContent: 'Amis éloignés : cette adresse' }),
@@ -178,13 +190,37 @@ const Multi = (() => {
           bouton(ouvertureNet ? 'Fermeture…' : 'Fermer l\'accès Internet', 'debug-disconnect', () => internet(false)));
         return b;
       }
-      b.append(bouton(ouvertureNet ? 'Ouverture de la box…' : 'Ouvrir sur Internet', 'globe', () => internet('upnp')),
-        el('p', { className: 'multi-note', textContent: 'Pour des amis hors de chez toi : Saga ouvre un port de ta box le temps de la partie.' }));
-      if (echecNet) {
+      b.append(bouton(ouvertureNet ? 'Connexion…' : 'Par un relais', 'cloud', async () => { if (await relaisPret()) internet('relais'); }),
+        el('p', { className: 'multi-note', textContent: 'Pour des amis hors de chez toi, sans toucher à ta box : la partie passe par un relais (sur un serveur).' }),
+        bouton('Réglages du relais', 'settings-gear', reglerRelais),
+        bouton(ouvertureNet ? 'Ouverture de la box…' : 'Ouvrir ma box', 'globe', () => internet('upnp')),
+        el('p', { className: 'multi-note', textContent: 'Ou : Saga ouvre un port de ta box le temps de la partie.' }));
+      if (echecNet?.relais) {
+        b.append(el('p', { className: 'multi-note multi-erreur', textContent: echecNet.raison || 'Le relais n\'a pas répondu.' }));
+      } else if (echecNet) {
         b.append(el('p', { className: 'multi-note multi-erreur', textContent: echecNet.raison || 'La box n\'a pas ouvert le port.' }),
           bouton('Faire à la main', 'tools', aideInternet));
       }
       return b;
+    }
+    // Saga 1.33 : l'adresse et la clé du relais, gardées dans les réglages de Saga (sur ce PC).
+    async function reglerRelais() {
+      const r = await window.saga.reseauRelais?.() || { adresse: '', cle: '' };
+      const v = await Dialogs.form({
+        title: 'Le relais', okLabel: 'Garder', cancelLabel: 'Annuler', width: 520,
+        fields: [
+          { type: 'info', text: 'Un relais est un petit programme (le dossier relais/ de l\'Atelier) posé sur un serveur. Tes amis passent par lui : tu n\'ouvres rien sur ta box.' },
+          { key: 'adresse', label: 'Adresse du relais', type: 'text', value: r.adresse, placeholder: 'relais.mon-domaine.fr' },
+          { key: 'cle', label: 'Clé du relais', type: 'password', value: r.cle, placeholder: 'celle du serveur (RELAIS_CLE)' },
+        ],
+      });
+      if (!v) return false;
+      await window.saga.reseauRelais?.({ adresse: v.adresse, cle: v.cle });
+      return Boolean(String(v.adresse || '').trim());
+    }
+    async function relaisPret() {
+      const r = await window.saga.reseauRelais?.();
+      return r?.adresse ? true : reglerRelais();
     }
     const expulser = (id) => window.saga.reseauExpulser?.(id).then(rafraichir);
 
