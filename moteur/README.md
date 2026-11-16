@@ -403,7 +403,7 @@ Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les ong
 - Les documents sont gardés dans la partie (`table.documents`). Les images ne passent jamais dans la vue :
   l'hôte les sert (`/document`, `/compagnon/document`) seulement à ceux à qui elles ont été données.
 - Retours de l'essai de la 1.36 : le tapis de dés est plus petit par défaut (480 × 310), et le bouton
-  « Activer la secousse » (iPhone) dit si le téléphone accepte ou refuse.
+  « Activer la secousse » (iPhone) dit si le téléphone accepte ou refuse ; sur Android, si `devicemotion` ne donne rien, le compagnon essaie le capteur d'accélération (Generic Sensor API) et propose « Réessayer la secousse ».
 
 ## Ce que fait Saga 1.36 : après le premier essai de la table en verre
 

@@ -209,8 +209,20 @@
       options.append(perm);
     }
     // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
-    const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Autorise-les pour ce site (Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement), ou glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
-    setTimeout(() => { if (onglet === 'des' && !mouvement.recu && (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function')) sansSecousse.hidden = false; }, 2500);
+    const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement › Autoriser ; si ça ne suffit pas, touche le lion et baisse les boucliers pour ce site. Puis recharge la page. Sinon, glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
+    setTimeout(() => {
+      if (onglet !== 'des' || mouvement.recu || (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function')) return;
+      capteurAndroid();
+      setTimeout(() => {
+        if (mouvement.recu || onglet !== 'des') return;
+        sansSecousse.hidden = false;
+        if (window.isSecureContext && !sansSecousse.querySelector('button')) {
+          const b = el('button', { className: 'btn2', type: 'button' }, icone('device-mobile'), 'Réessayer la secousse');
+          b.onclick = () => { mouvement.capteur?.stop?.(); mouvement.capteur = null; capteurAndroid(true); };
+          sansSecousse.append(el('br'), b);
+        }
+      }, 1500);
+    }, 2500);
     histoEl = el('div', { className: 'histo verre' });
     pageEl.append(tapis, des, el('div', { className: 'formule verre ligne' }, formuleEl, lancerB), options, sansSecousse, histoEl);
     plateau = PlateauDes.creer(canvas, { accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ffb347', anime: reglages.anime });
@@ -286,20 +298,44 @@
       const pure = e.acceleration && e.acceleration.x != null;
       const a = pure ? e.acceleration : e.accelerationIncludingGravity;
       if (!a || a.x == null) return;
-      mouvement.recu = true;
-      if (onglet !== 'des' || attenteJet) return;
-      const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
-      const t = performance.now();
-      if (f < 8) return;
-      mouvement.coups = mouvement.coups.filter((x) => t - x < 900);
-      // Deux à-coups (séparés d'au moins 80 ms), ou un seul très fort.
-      if (!mouvement.coups.length || t - mouvement.coups.at(-1) > 80) mouvement.coups.push(t);
-      if (mouvement.coups.length >= 2 || f > 20) {
-        mouvement.coups = [];
-        const r = pageEl.querySelector('.tapis')?.getBoundingClientRect();
-        lancer({ x: (r?.width || 300) / 2, y: (r?.height || 300) / 2, vx: -(a.x || 0) * 160, vy: (a.y || 0) * 160 });
-      }
+      secousse(a, pure);
     });
+  }
+  // Saga 1.37 : un à-coup, d'où qu'il vienne (devicemotion, ou le capteur d'accélération d'Android).
+  function secousse(a, pure) {
+    mouvement.recu = true;
+    if (onglet !== 'des' || attenteJet) return;
+    const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
+    const t = performance.now();
+    if (f < 8) return;
+    mouvement.coups = mouvement.coups.filter((x) => t - x < 900);
+    // Deux à-coups (séparés d'au moins 80 ms), ou un seul très fort.
+    if (!mouvement.coups.length || t - mouvement.coups.at(-1) > 80) mouvement.coups.push(t);
+    if (mouvement.coups.length >= 2 || f > 20) {
+      mouvement.coups = [];
+      const r = pageEl.querySelector('.tapis')?.getBoundingClientRect();
+      lancer({ x: (r?.width || 300) / 2, y: (r?.height || 300) / 2, vx: -(a.x || 0) * 160, vy: (a.y || 0) * 160 });
+    }
+  }
+  // Saga 1.37 : Android (Brave, Chrome) peut bloquer devicemotion mais laisser le capteur d'accélération
+  // (Generic Sensor API), qui demande la permission lui-même. On l'essaie quand devicemotion ne donne rien.
+  function capteurAndroid(dire = false) {
+    const C = window.LinearAccelerationSensor || window.Accelerometer;
+    if (!C || !window.isSecureContext) { if (dire) toast('Ce navigateur ne donne pas accès aux capteurs de mouvement.'); return false; }
+    if (mouvement.capteur) return true;
+    try {
+      const c = new C({ frequency: 60 });
+      const pure = C === window.LinearAccelerationSensor;
+      c.addEventListener('reading', () => secousse({ x: c.x, y: c.y, z: c.z }, pure));
+      c.addEventListener('error', (e) => {
+        mouvement.capteur = null;
+        if (dire) toast(e.error?.name === 'NotAllowedError' ? 'Capteurs refusés : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement › Autoriser, puis recharge la page.' : `Capteur indisponible (${e.error?.name || 'erreur'}).`);
+      });
+      c.start();
+      mouvement.capteur = c;
+      setTimeout(() => { if (dire && mouvement.recu) toast('Secousse activée : secoue le téléphone.'); }, 1200);
+      return true;
+    } catch (e) { if (dire) toast(`Capteur indisponible (${e.name || e.message}).`); return false; }
   }
   if (mouvementPossible() && typeof DeviceMotionEvent.requestPermission !== 'function') brancherMouvement();
 
