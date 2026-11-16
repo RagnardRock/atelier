@@ -14,8 +14,10 @@ module.exports = [
       const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'jdr', { taille: 32 }), { ctx });
       // Un jeu JDR demande d'abord comment jouer : le mode table (le MJ).
       await page.getByText('Mode table (MJ)').click();
-      // Trois héros pré-tirés.
-      for (const n of ['Thorgrim', 'Elaria', 'Pip']) { await page.getByText(n).first().click(); await page.waitForTimeout(600); }
+      // Saga 1.38 : le MJ commence sans héros ; il en prépare trois (pré-tirés) depuis le panneau.
+      await page.waitForFunction(() => App.moteur.table.actif && !App.moteur.table.occupe());
+      vrai(await page.evaluate(() => !App.moteur.table.partie().equipe.length), 'le MJ commence sans héros');
+      await page.waitForFunction(() => App.moteur.table.actif && !App.moteur.table.occupe()); for (const n of ['Thorgrim', 'Elaria', 'Pip']) { await page.evaluate(() => { App.moteur.table.preparerHeros(); }); await page.getByText(n).first().click(); await page.waitForTimeout(600); }
       await page.waitForFunction(() => App.moteur.table.actif && App.moteur.table.vue(), null, { timeout: 8000 });
       await page.waitForTimeout(500);
 

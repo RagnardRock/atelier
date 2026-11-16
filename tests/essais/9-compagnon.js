@@ -56,7 +56,7 @@ module.exports = [
         await page.goto(`file://${html}`);
         await page.waitForFunction(() => typeof App !== 'undefined' && App?.moteur);
         await page.getByText('Mode table (MJ)').click();
-        for (const n of ['Thorgrim', 'Elaria', 'Pip']) { await page.getByText(n).first().click(); await page.waitForTimeout(600); }
+        await page.waitForFunction(() => App.moteur.table.actif && !App.moteur.table.occupe()); for (const n of ['Thorgrim', 'Elaria', 'Pip']) { await page.evaluate(() => { App.moteur.table.preparerHeros(); }); await page.getByText(n).first().click(); await page.waitForTimeout(600); }
         await page.waitForFunction(() => App.moteur.table.actif && App.moteur.table.vue(), null, { timeout: 8000 });
         // Le MJ nomme la campagne et choisit le fond des téléphones, puis ouvre la partie.
         // (Le fond : un dégradé dessiné ici, en JPEG, comme une image choisie par le MJ.)

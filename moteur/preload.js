@@ -50,6 +50,13 @@ contextBridge.exposeInMainWorld('saga', {
   reseauEnvoyer: (id, sorte, json) => ipcRenderer.send('reseau:envoyer', id, sorte, json),
   onReseauAction: (callback) => ipcRenderer.on('reseau:action', (_event, a) => callback(a)),
   onReseauClients: (callback) => ipcRenderer.on('reseau:clients', (_event, l) => callback(l)),
+  // Saga 1.38 : la campagne (salle fixe, téléphones gardés, coffre des joueurs sur le relais).
+  reseauCampagne: (c) => ipcRenderer.send('reseau:campagne', c),
+  reseauDeposer: (copies) => ipcRenderer.invoke('reseau:deposer', copies),
+  reseauRelever: () => ipcRenderer.invoke('reseau:relever'),
+  reseauOublierTelephone: (jeton) => ipcRenderer.invoke('reseau:oublier-telephone', jeton),
+  onReseauCampagne: (callback) => ipcRenderer.on('reseau:campagne', (_event, c) => callback(c)),
+  onReseauPropositions: (callback) => ipcRenderer.on('reseau:propositions', (_event, l) => callback(l)),
   listeSons: () => ipcRenderer.invoke('jeu:listeSons'),
   // Le jeu (un dossier écrit par Tafl) : renvoie { dossier, jeu, tuiles, cartes, donnees } en textes.
   choisirJeu: () => ipcRenderer.invoke('jeu:choisir'),

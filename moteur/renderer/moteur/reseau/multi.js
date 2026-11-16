@@ -22,6 +22,7 @@ const Multi = (() => {
     scene.append(racine, bulle);
     let infos = { ouvert: false, joueurs: [], attente: [], code: '', adresses: [], port: 0, internet: null };
     let ouvertureNet = false; // la box est en train de répondre
+    let campagneFixe = null;  // Saga 1.38 : par le relais, le lien de la campagne est-il fixe ? (null : pas de campagne)
     let echecNet = null;      // ce que la box a répondu quand ça n'a pas marché
     let joueurs = [];
     let lignes = [];
@@ -99,6 +100,7 @@ const Multi = (() => {
     // --- L'hôte ouvre la partie ---
     async function ouvrir({ mode = 'monde', nom = '', titre = '' } = {}) {
       if (ami) return infos;
+      campagneFixe = null;
       infos = await window.saga.reseauOuvrir({ mode, nom, titre });
       moi = { id: 'hote', nom: nom || (mode === 'table' ? 'MJ' : 'Hôte') };
       joueurs = infos.joueurs || [];
@@ -109,6 +111,8 @@ const Multi = (() => {
     }
     async function fermer() {
       if (ami) return;
+      // Saga 1.38 : la campagne dépose les copies hors séance des joueurs avant que la partie se ferme.
+      if (api.avantFermeture) { try { await api.avantFermeture(); } catch { /* tant pis : la dernière copie reste */ } }
       infos = await window.saga.reseauFermer();
       echecNet = null;
       joueurs = [];
@@ -136,7 +140,14 @@ const Multi = (() => {
         const r = await window.saga.reseauInternet(voulu);
         echecNet = r.echec || null;
         infos = r;
-        if (r.internet) message(r.internet.methode === 'relais' ? 'La partie passe par le relais : donne le lien à tes amis.' : 'La partie est ouverte sur Internet.');
+        // Saga 1.38 : une campagne a son lien fixe, si le relais est à jour.
+        campagneFixe = r.campagne ? Boolean(r.campagne.fixe) : null;
+        if (r.internet) {
+          message(r.internet.methode !== 'relais' ? 'La partie est ouverte sur Internet.'
+            : campagneFixe ? 'La partie passe par le relais : le lien de la campagne est le même à chaque séance.'
+              : campagneFixe === false ? 'La partie passe par le relais, mais il n\'est pas à jour : le lien changera à chaque séance (voir relais/README.md).'
+                : 'La partie passe par le relais : donne le lien à tes amis.');
+        }
         else if (echecNet && !echecNet.relais) aideInternet();
       } catch (err) {
         echecNet = { raison: String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), port: infos.port };
@@ -176,7 +187,9 @@ const Multi = (() => {
         b.append(
           el('div', { className: 'multi-label', textContent: 'Amis éloignés : ce lien' }),
           el('code', { className: 'multi-adresse', textContent: lien }),
-          el('p', { className: 'multi-note', textContent: 'Le code est dans le lien. Tu acceptes chaque nouveau joueur. Rien n\'est ouvert sur ta box.' }),
+          el('p', { className: 'multi-note', textContent: campagneFixe ? 'Le lien de la campagne : le même à chaque séance, code compris. Tu acceptes chaque joueur. Rien n\'est ouvert sur ta box.'
+            : 'Le code est dans le lien. Tu acceptes chaque nouveau joueur. Rien n\'est ouvert sur ta box.' }),
+          campagneFixe === false ? el('p', { className: 'multi-note multi-erreur', textContent: 'Ce relais n\'est pas à jour (Saga 1.38) : pas de lien fixe ni de copies hors séance. Copie le nouveau relais.js sur le serveur et redémarre-le.' }) : '',
           copier,
           bouton(ouvertureNet ? 'Fermeture…' : 'Quitter le relais', 'debug-disconnect', () => internet(false)));
         return b;
@@ -305,7 +318,7 @@ const Multi = (() => {
           el('span', { className: 'multi-nom', textContent: j.nom }),
           j.connecte ? null : el('small', { textContent: 'déconnecté' }), tel);
         if (!ami && !j.hote) {
-          const b = el('button', { className: 'multi-mini', type: 'button', title: 'Retirer de la partie' }, el('i', { className: 'codicon codicon-close' }));
+          const b = el('button', { className: 'multi-mini', type: 'button', title: 'Retirer de la partie (et couper ses téléphones)' }, el('i', { className: 'codicon codicon-close' }));
           b.onclick = () => expulser(j.id);
           ligne.append(b);
         }

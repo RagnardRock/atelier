@@ -390,6 +390,31 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.38 : la salle de campagne
+
+- **Un lien et un code qui ne changent plus** : une partie de JdR ouverte par un relais (version 2) garde sa
+  salle d'une séance à l'autre. Les amis gardent le même lien ; les téléphones reliés le restent, sans QR à
+  rescanner.
+- **Hors séance, sur le téléphone** : chaque joueur garde une copie de sa fiche, de ses macros, de son journal
+  et des documents qu'il a reçus. Elle est **chiffrée par Saga** avec une clé à lui : le relais ne la lit pas,
+  les autres joueurs non plus. Le MJ n'a pas de copie (ses secrets ne quittent pas son PC).
+- **Proposer des changements** : hors séance, un joueur change sa fiche sur son téléphone (« en attente du
+  MJ ») ; à la séance suivante, le MJ les voit dans l'onglet Joueurs et les accepte (✓), les refuse (✕), ou
+  les accepte tous. Une case « Accepter tout seul » les applique directement (avec les droits d'un joueur).
+- **Quand Saga dépose** : au bouton « Déposer maintenant », en fermant la partie, et toutes les 10 minutes si
+  quelque chose a changé.
+- **Retour en direct** : quand le MJ relance la séance, le téléphone le voit (dans les 20 s) et repasse en
+  direct tout seul.
+- **Couper un téléphone** (onglet Joueurs, ou « Retirer de la partie ») : la clé du joueur change et sa copie
+  est effacée du relais.
+- **Mode table : le MJ commence sans héros.** Les joueurs choisissent ou créent le leur depuis leur écran ; le
+  MJ peut en préparer un (pré-tiré ou nouveau) avec « Préparer un héros » dans l'onglet Pions.
+- Documents : le curseur ne montre plus de loupe sur les images (le zoom est à la molette ou au double-clic).
+
+Le relais doit être mis à jour (voir `relais/README.md`, « Mettre à jour un relais déjà installé »).
+Fichiers : `table/campagne.js` (l'onglet Joueurs), `coffre.js` (le chiffrement), `compagnon/compagnon.js`
+(le hors séance).
+
 ## Saga 1.37.1
 
 - Documents : un vrai zoom des images (molette ou double-clic au PC, pincer ou double toucher au téléphone, glisser pour se déplacer), sans barres de défilement ; l'image prend toute la visionneuse, même petite.

@@ -202,6 +202,13 @@ const TableMode = (() => {
       panneau = TablePanneau.creer({ conteneur: colonne, scene, table: api });
       plateau.oublier();
       brancherMulti();
+      // Saga 1.38 : la campagne (salle fixe, téléphones gardés, copies hors séance).
+      if (typeof TableCampagne !== 'undefined') {
+        campagne = campagne || TableCampagne.creer({ table, copiePour, appliquer: appliquerProposition, multi: () => h.multi?.(), message: (t) => h.message(t), rafraichir: () => panneau?.rafraichir() });
+        campagne.brancher();
+        const m = h.multi?.();
+        if (m) m.avantFermeture = () => Promise.race([campagne.deposer({ silencieux: true }), pause(8000)]);
+      }
     }
     function arreter() {
       actif = false;
@@ -213,6 +220,9 @@ const TableMode = (() => {
       boite.hidden = true;
       combat = null;
       window.saga.tableFermer?.();
+      campagne?.debrancher();
+      const m = h.multi?.();
+      if (m) m.avantFermeture = null;
     }
     // Le groupe arrive sur une carte (le départ, un téléporteur, une sauvegarde) : ses pions autour de (x, y).
     function entrerCarte(c, x, y) {
@@ -827,6 +837,21 @@ const TableMode = (() => {
       envoyes.clear();
       e.resoudre(v);
     }
+    // Saga 1.38 : le MJ prépare un héros lui-même (onglet Pions) : il rejoint le groupe, sans joueur.
+    async function preparerHeros() {
+      if (!actif || !jeu() || !partie() || h.occupe()) return null;
+      const c = await h.creerHeros?.(herosDuGroupe().length + 1);
+      if (!c || !actif) return null;
+      const ou = Collection.ranger(jeu(), partie(), c);
+      if (ou?.ou !== 'equipe') h.message(`Le groupe est complet : ${JdrPerso.nom(jeu(), c)} attend dans la réserve.`);
+      else {
+        E.placerHeros(table(), partie(), carte(), h.joueur().x, h.joueur().y, h.presents());
+        h.message(`${JdrPerso.nom(jeu(), c)} rejoint la table.`);
+      }
+      envoyes.clear();
+      panneau?.rafraichir();
+      return c;
+    }
     async function creerPour(nom) {
       if (creations.has(nom) || !jeu() || !partie()) return;
       creations.set(nom, { q: null, resoudre: null });
@@ -976,6 +1001,36 @@ const TableMode = (() => {
       if (e.recus < n) return;
       envois.delete(id);
       docAgir({ type: 'doc_nouveau', titre: a.titre, texte: a.texte, image: `data:image/jpeg;base64,${e.morceaux.join('')}`, pour: a.pour, montrer: a.montrer });
+    }
+
+    // --- Saga 1.38 : la campagne (table/campagne.js) ---
+    let campagne = null;
+    // La copie hors séance d'un joueur : ce que son téléphone montre entre deux séances (sa fiche, ses macros, le
+    // journal qu'il voit, ses documents avec leurs images, le chat public). Rien que sa vue ne lui montrerait pas.
+    function copiePour(nom) {
+      const r = rolePour(nom);
+      const v = r.spectateur ? null : vuePour(r);
+      const images = {};
+      for (const d of TableDocuments.liste(table())) if (d.image && !TableDocuments.brouillon(d) && TableDocuments.voit(d, nom)) images[d.id] = d.image;
+      const chat = (h.multi?.()?.lignes || []).filter((l) => l.pour === 'tous' && l.de !== '').slice(-60).map((l) => ({ nom: l.nom, texte: l.texte, t: l.t, ...(l.jet ? { jet: true } : {}) }));
+      const p = v?.pions?.find((q) => q.id === v.moi);
+      return {
+        v: 1, t: Date.now(), campagne: { nom: table().campagne?.nom || jeu()?.titre || '' }, nom,
+        vue: v ? { fiche: v.fiche || null, macros: v.macros || [], journal: v.journal || [], moi: v.moi || '', nom: v.nom || '', pions: p ? [{ id: p.id, nom: p.nom }] : [] } : { fiche: null, macros: [], journal: [], moi: '', pions: [] },
+        documents: TableDocuments.vue(table(), nom, false, null).documents, images, chat,
+      };
+    }
+    // Un changement de fiche proposé hors séance : appliqué comme s'il venait du joueur en séance.
+    function appliquerProposition(nom, id, valeur) {
+      const r = rolePour(nom);
+      if (r.spectateur) return false;
+      const c = herosDuGroupe().find((q) => E.estMien(r, q));
+      return c ? changerChamp(c, id, valeur, false) : false;
+    }
+    function libelleChamp(nom, id) {
+      const r = rolePour(nom);
+      const c = r.spectateur ? null : herosDuGroupe().find((q) => E.estMien(r, q));
+      return (c && JdrFiches.champs(jeu(), c).find((x) => x.id === id)?.nom) || id;
     }
 
     // Saga 1.34 : ce que demande le téléphone du MJ.
@@ -1158,6 +1213,8 @@ const TableMode = (() => {
       // Saga 1.37 : les documents (le volet Documents du MJ, son téléphone).
       documents: () => TableDocuments.liste(table()), docAgir, cacherDocument, destinataires,
       get montre() { return montre; },
+      // Saga 1.38 : la campagne (l'onglet Joueurs, les essais).
+      campagne: () => campagne, copiePour, libelleChamp, preparerHeros,
     };
     return api;
   }

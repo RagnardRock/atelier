@@ -198,10 +198,11 @@ const Jdr = (() => {
         if (c) partie.equipe.push(c);
       }
     },
-    async debut({ jeu, partie, ui, ranger }) {
+    async debut({ jeu, partie, ui, ranger, table }) {
       const n = Number(partie.jdr?.creer) || 0;
       if (!n) return;
       partie.jdr.creer = 0;
+      if (table) return; // Saga 1.38 : à la table, les joueurs créent leur héros (le MJ peut en préparer)
       if (partie.equipe.length) return; // un test rapide de Tafl a déjà mis son groupe
       for (let k = 1; k <= n; k++) {
         const c = await JdrCreation.creer({ jeu, partie, ui, numero: k, annulable: k > 1 });

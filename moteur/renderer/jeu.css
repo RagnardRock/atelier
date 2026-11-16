@@ -1422,7 +1422,10 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .doc-fermer { flex: none; width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.07); color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 .doc-fermer:hover { background: rgba(255, 255, 255, 0.15); }
 .doc-image-cadre { position: relative; min-height: 0; flex: 1 1 auto; display: flex; justify-content: center; align-items: center; overflow: hidden; touch-action: none; border-radius: 12px; background: rgba(0, 0, 0, 0.35); }
-.doc-image { display: block; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; user-select: none; will-change: transform; }
+.doc-image { display: block; width: 100%; height: 100%; object-fit: contain; cursor: default; user-select: none; will-change: transform; }
+/* Saga 1.38 : pas de loupe (le zoom se fait à la molette ou au double-clic) ; zoomée, on la déplace. */
+.zoom-cadre.zoome .doc-image { cursor: grab; }
+.zoom-cadre.zoome .doc-image:active { cursor: grabbing; }
 .doc-image-cadre.zoome .doc-image { cursor: grab; }
 .doc-image-cadre.zoome .doc-image:active { cursor: grabbing; }
 /* Saga 1.37.1 : une image prend toute la place (même petite), le texte dessous. */
@@ -1439,3 +1442,14 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .doc-visionneuse.grand .doc-carte:has(.doc-image-cadre) { width: 96vw; height: 94vh; }
 .doc-visionneuse.grand .doc-tete { font-size: 20px; }
 .doc-visionneuse.grand .doc-texte { font-size: 20px; }
+
+/* Saga 1.38 : la campagne (onglet Joueurs du MJ) : ses téléphones, les copies hors séance, les changements proposés. */
+.table-campagne { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.table-telephones, .table-propositions { display: flex; flex-direction: column; gap: 4px; }
+.table-telephones .table-ligne, .table-propositions .table-ligne, .table-coffre { padding: 5px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.04); }
+.table-telephones small { margin-left: auto; color: rgba(255, 255, 255, 0.5); font-size: 11px; }
+.table-telephones .table-bouton, .table-proposition .table-bouton { flex: none; padding: 2px 6px; }
+.table-coffre span { flex: 1; min-width: 0; font-size: 12px; }
+.table-proposition span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text); }
+.table-case { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text); cursor: pointer; }
+.table-case input { accent-color: var(--accent); }

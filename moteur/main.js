@@ -552,7 +552,49 @@ const reseau = Reseau.creer({
   lireSon: (chemin) => lireSonDuJeu(chemin),
   versHote: (a) => fenetrePrincipale?.webContents.send('reseau:action', a),
   clientsChanges: (l) => fenetrePrincipale?.webContents.send('reseau:clients', l),
+  // Saga 1.38 : la campagne a changé (un téléphone relié ou coupé) : la fenêtre la garde dans la partie. La
+  // boîte d'un téléphone coupé est vidée sur le relais.
+  campagneChange: (c) => {
+    fenetrePrincipale?.webContents.send('reseau:campagne', { code: c.code, telephones: c.telephones, cles: c.cles });
+    if (c.retirer?.length) coffreDu().then((x) => { if (x) for (const boite of c.retirer) coffre.retirer({ ...x, boite }); }).catch(() => {});
+  },
 });
+// Saga 1.38 : le coffre de la campagne, sur le relais des réglages (moteur/coffre.js).
+const Coffre = require('./coffre.js');
+const coffre = Coffre.creer({ log });
+async function coffreDu() {
+  const campagne = reseau.campagneRelais;
+  if (!campagne) return null;
+  let base = relais.base;
+  if (!base) {
+    const { relais: r = {} } = await readConfig();
+    if (!r.adresse) return null;
+    try { base = relais.normaliser(r.adresse); } catch { return null; }
+  }
+  return { base, campagne };
+}
+async function releverPropositions() {
+  const x = await coffreDu();
+  if (!x) return [];
+  const l = await coffre.relever({ ...x, boites: reseau.boites() });
+  if (l.length) fenetrePrincipale?.webContents.send('reseau:propositions', l);
+  return l;
+}
+ipcMain.on('reseau:campagne', (event, c) => { if (event.sender === fenetrePrincipale?.webContents) reseau.campagne(c && typeof c === 'object' ? c : null); });
+// Déposer les copies des joueurs : [{ nom, json }] (chacun la sienne, déjà filtrée par la fenêtre du MJ).
+handle('reseau:deposer', async (_event, copies) => {
+  const x = await coffreDu();
+  if (!x) return { deposes: [], erreurs: [{ nom: '', erreur: 'Pas de relais pour cette campagne (Réglages du relais).' }] };
+  const boites = reseau.boites();
+  const parNom = new Map(Object.entries(boites).map(([boite, b]) => [b.nom.toLowerCase(), { boite, cle: b.cle }]));
+  const l = (Array.isArray(copies) ? copies : []).filter((c) => c && typeof c.json === 'string' && c.json.length < 11e6 && parNom.has(String(c.nom || '').toLowerCase()))
+    .map((c) => ({ nom: String(c.nom), json: c.json, ...parNom.get(String(c.nom).toLowerCase()) }));
+  const r = await coffre.deposer({ ...x, copies: l });
+  await releverPropositions().catch(() => {});
+  return r;
+});
+handle('reseau:relever', async () => { try { return { propositions: await releverPropositions() }; } catch (err) { return { propositions: [], erreur: err.message }; } });
+handle('reseau:oublier-telephone', async (_event, jeton) => { reseau.oublierTelephone(String(jeton || '')); return true; });
 handle('reseau:ouvrir', async (_event, o) => {
   if (joueur) throw new Error('Le multijoueur se lance depuis Saga');
   if (!dossierOuvert) throw new Error('Aucun jeu ouvert');
@@ -562,7 +604,16 @@ handle('reseau:ouvrir', async (_event, o) => {
 ipcMain.on('reseau:dire', (event, texte, pour, jet) => { if (event.sender === fenetrePrincipale?.webContents) reseau.dire(String(texte || ''), String(pour || 'tous'), jet && typeof jet === 'object' ? { nom: String(jet.nom || '') } : null); });
 ipcMain.on('reseau:bouger', (event, p) => { if (event.sender === fenetrePrincipale?.webContents) reseau.bouger(p); });
 ipcMain.on('reseau:pair', (event, vers, donnees) => { if (event.sender === fenetrePrincipale?.webContents) reseau.pair(String(vers || ''), donnees); });
-handle('reseau:fermer', async () => { relais.fermer(); await internet.fermer(); reseau.fermer(); return reseau.infos(); });
+// Saga 1.38 : la partie se ferme d'abord (chacun reçoit « fin »), le relais un peu après (le temps que ce « fin »
+// passe par lui : un téléphone de la campagne sait alors que la séance est finie).
+handle('reseau:fermer', async () => {
+  const parRelais = relais.ouverte;
+  reseau.fermer();
+  if (parRelais) await new Promise((r) => setTimeout(r, 400));
+  relais.fermer();
+  await internet.fermer();
+  return reseau.infos();
+});
 // Saga 1.1 : ouvrir la partie sur Internet. 'upnp' : Saga demande à la box d'ouvrir le port (internet.js) ;
 // 'manuel' : Ragna l'a ouvert à la main dans sa box ; false : on referme. Dans tous les cas le port de
 // la box se referme avec la partie ou avec Saga.
@@ -590,8 +641,12 @@ handle('reseau:internet', async (_event, voulu) => {
     await internet.fermer();
     const { relais: r = {} } = await readConfig();
     try {
-      const { lien } = await relais.ouvrir({ adresse: r.adresse, cle: r.cle, port: reseau.port, secretLocal: reseau.secretRelais });
-      return { ...reseau.passerInternet({ adresse: lien, methode: 'relais' }), echec: null };
+      // Saga 1.38 : une campagne ouvre sa salle fixe (le même lien à chaque séance).
+      const campagne = reseau.campagneRelais;
+      const { lien, fixe } = await relais.ouvrir({ adresse: r.adresse, cle: r.cle, port: reseau.port, secretLocal: reseau.secretRelais, campagne });
+      // Les changements de fiche laissés par les téléphones depuis la dernière séance.
+      if (campagne && fixe) setTimeout(() => releverPropositions().catch((err) => log('AVERTISSEMENT', `Campagne : propositions non relevées (${err.message})`)), 500);
+      return { ...reseau.passerInternet({ adresse: lien, methode: 'relais' }), echec: null, campagne: campagne ? { fixe } : null };
     } catch (err) {
       return { ...reseau.infos(), echec: { raison: err.message, relais: true } };
     }

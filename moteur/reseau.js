@@ -53,7 +53,7 @@ const TYPES = {
 const MAX_COMPAGNONS = 3;          // par joueur
 const DUREE_LIEN = 5 * 60e3;       // un QR sert une fois, 5 minutes
 
-function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log = () => {}, version = '', config = {} }) {
+function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campagneChange = () => {}, log = () => {}, version = '', config = {} }) {
   let serveur = null, code = '', port = 0, mode = 'monde', titre = '';
   let hote = { id: 'hote', nom: 'Hôte', position: null };
   let chat = [], numeroChat = 0;
@@ -88,6 +88,73 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     res.writeHead(200, { 'Content-Type': d.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
     return res.end(d.data);
   }
+  // --- Saga 1.38 : la campagne (au mode table) : ce qui reste d'une séance à l'autre ---
+  // Gardée dans la partie du MJ (table.campagne), donnée ici par sa fenêtre :
+  //   { id, secret : la salle fixe sur le relais · code : celui de la partie sur Internet (le même lien chaque fois)
+  //     telephones : [{ jeton, nom, mj, appareil }] les téléphones reliés (plus de QR à chaque séance)
+  //     cles : { prénom en minuscules : { nom, boite, cle } } la boîte et la clé du coffre de chaque joueur }
+  // Ce qui change ici (un téléphone relié ou coupé, une clé créée) repart à la fenêtre par campagneChange.
+  let campagne = null;
+  const campagneActive = () => Boolean(campagne) && mode === 'table';
+  const aleatoire = (n) => crypto.randomBytes(n).toString('base64url');
+  function normCampagne(c) {
+    if (!c || typeof c !== 'object') return null;
+    const id = /^[A-Za-z0-9_-]{16,32}$/.test(String(c.id || '')) ? c.id : '';
+    const secret = String(c.secret || '').length >= 20 ? String(c.secret).slice(0, 100) : '';
+    if (!id || !secret) return null;
+    const telephones = (Array.isArray(c.telephones) ? c.telephones : []).filter((t) => t && typeof t.jeton === 'string' && t.jeton.length >= 20)
+      .map((t) => ({ jeton: t.jeton.slice(0, 100), nom: String(t.nom || '').slice(0, 24), mj: Boolean(t.mj), appareil: String(t.appareil || '').slice(0, 40) })).slice(0, 60);
+    const cles = {};
+    for (const [n, x] of Object.entries(c.cles && typeof c.cles === 'object' ? c.cles : {})) {
+      if (x && /^[A-Za-z0-9_-]{20,48}$/.test(String(x.boite || '')) && /^[A-Za-z0-9_-]{43}$/.test(String(x.cle || ''))) cles[n.toLowerCase().slice(0, 24)] = { nom: String(x.nom || n).slice(0, 24), boite: x.boite, cle: x.cle };
+    }
+    return { id, secret, code: /^[A-Z]{4}-[A-Z]{4}$/.test(String(c.code || '')) ? c.code : '', telephones, cles };
+  }
+  function changementCampagne(retirer = []) {
+    if (!campagne) return;
+    campagneChange({ code: campagne.code, telephones: campagne.telephones.map((t) => ({ ...t })), cles: JSON.parse(JSON.stringify(campagne.cles)), retirer });
+  }
+  // Le téléphone k retrouve son joueur (par le prénom) : celui-ci est là, ou pas encore.
+  function lierTelephone(k) {
+    const avant = k.de;
+    k.de = k.mj ? 'hote' : [...clients.values()].find((c) => c.nom.toLowerCase() === k.nom.toLowerCase())?.id || null;
+    if (avant !== k.de && k.flux) k.flux.write(`event: bienvenue\ndata: ${JSON.stringify(bienvenueCompagnon(k))}\n\n`);
+  }
+  // Les téléphones de la campagne reviennent (à l'ouverture de la partie).
+  function restaurerTelephones() {
+    if (!campagneActive()) return;
+    for (const t of campagne.telephones) {
+      if ([...compagnons.values()].some((k) => k.jeton === t.jeton)) continue;
+      const k = { id: `k-${crypto.randomBytes(4).toString('hex')}`, jeton: t.jeton, nom: t.nom, mj: t.mj, de: null, flux: null, appareil: t.appareil, garde: true };
+      compagnons.set(k.id, k);
+      lierTelephone(k);
+    }
+  }
+  // La boîte et la clé du coffre d'un joueur (créées la première fois).
+  function cleJoueur(nom) {
+    const n = String(nom || '').toLowerCase();
+    if (!campagne || !n) return null;
+    if (!campagne.cles[n]) { campagne.cles[n] = { nom, boite: aleatoire(24), cle: aleatoire(32) }; changementCampagne(); }
+    return campagne.cles[n];
+  }
+  function reglerCampagne(c) {
+    const avant = campagne;
+    campagne = normCampagne(c);
+    if (!campagne) return;
+    // Les téléphones et les clés que la fenêtre ne connaît pas encore (reliés entre deux envois) restent.
+    if (avant && avant.id === campagne.id) {
+      for (const t of avant.telephones) if (!campagne.telephones.some((x) => x.jeton === t.jeton)) campagne.telephones.push(t);
+      for (const [n, x] of Object.entries(avant.cles)) if (!campagne.cles[n]) campagne.cles[n] = x;
+    } else if (avant) {
+      // Une autre campagne (le MJ a ouvert une autre partie) : les téléphones de l'ancienne s'en vont.
+      for (const k of [...compagnons.values()]) if (k.garde) { k.flux?.write('event: fin\ndata: {"raison":"ferme"}\n\n'); k.flux?.end(); compagnons.delete(k.id); }
+    }
+    let change = false;
+    if (!campagne.code) { campagne.code = nouveauCode(8); change = true; }
+    if (serveur && campagneActive()) { if (internet) code = campagne.code; restaurerTelephones(); prevenir(); }
+    if (change) changementCampagne();
+  }
+
   const compagnonsDe = (de) => [...compagnons.values()].filter((k) => k.de === de);
   const nbCompagnons = (de) => compagnonsDe(de).filter((k) => k.flux).length;
   const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux), compagnons: nbCompagnons(c.id) }));
@@ -288,10 +355,12 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
         res.writeHead(200, { 'Content-Type': fond.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
         return res.end(fond.data);
       }
-      if (req.method === 'GET' && p === '/compagnon/document') return servirDocument(res, documentPour(url.searchParams.get('id'), nomDe(k.de)));
+      if (req.method === 'GET' && p === '/compagnon/document') return servirDocument(res, documentPour(url.searchParams.get('id'), k.de ? nomDe(k.de) : ''));
       if (req.method === 'POST' && p === '/compagnon/action') {
         const a = await lireCorps(req);
         if (!a || typeof a !== 'object' || Array.isArray(a)) return fin(res, 400);
+        // Saga 1.38 : un téléphone de la campagne dont le joueur n'est pas (encore) venu à la séance.
+        if (!k.de) return fin(res, 409, { erreur: 'La séance est ouverte : rejoins-la d\'abord sur ton PC (ou ton navigateur).' });
         if (a.type === 'chat') dire(k.de, a.texte, String(a.pour || 'tous'));
         else if (!['position', 'pair'].includes(a.type)) versHote({ ...a, client: k.de, compagnon: true });
         return fin(res, 200);
@@ -400,21 +469,48 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     // Trop de téléphones pour ce joueur : le plus ancien laisse sa place.
     const deja = compagnonsDe(l.de);
     if (deja.length >= MAX_COMPAGNONS) couperCompagnon(deja[0].id);
-    const k = { id: `k-${crypto.randomBytes(4).toString('hex')}`, jeton: crypto.randomBytes(24).toString('base64url'), de: l.de, flux: null, appareil: appareil.replace(/[\u0000-\u001f<>]/g, '').slice(0, 40) };
+    const k = { id: `k-${crypto.randomBytes(4).toString('hex')}`, jeton: crypto.randomBytes(24).toString('base64url'), de: l.de, mj: l.de === 'hote', nom: l.de === 'hote' ? '' : clients.get(l.de)?.nom || '', flux: null, appareil: appareil.replace(/[\u0000-\u001f<>]/g, '').slice(0, 40) };
     compagnons.set(k.id, k);
     log('INFO', `Multijoueur : un compagnon relié pour ${l.de === 'hote' ? hote.nom : clients.get(l.de)?.nom}`);
+    // Saga 1.38 : un téléphone de la campagne reste relié d'une séance à l'autre.
+    if (campagneActive()) {
+      k.garde = true;
+      campagne.telephones.push({ jeton: k.jeton, nom: k.nom, mj: k.mj, appareil: k.appareil });
+      changementCampagne();
+    }
     prevenir();
     return { jeton: k.jeton, ...bienvenueCompagnon(k) };
   }
   function bienvenueCompagnon(k) {
-    const j = k.de === 'hote' ? hote : clients.get(k.de);
-    return { id: k.de, nom: j?.nom || '', mj: k.de === 'hote', mode, titre, version, chat: chatPour(k.de) };
+    const j = k.de === 'hote' ? hote : k.de ? clients.get(k.de) : null;
+    const b = { id: k.de || '', nom: j?.nom || k.nom || '', mj: Boolean(k.mj), mode, titre, version, chat: k.de ? chatPour(k.de) : [] };
+    // Saga 1.38 : son joueur n'est pas encore à la séance (le téléphone relit sa copie en attendant).
+    if (!k.de) b.absent = true;
+    // Par le relais, la campagne : sa boîte et sa clé du coffre (un joueur ; le MJ n'a pas de copie : ses infos
+    // ne quittent pas son PC).
+    if (campagneActive() && internet?.methode === 'relais') {
+      b.campagne = { id: campagne.id };
+      const c = k.mj ? null : cleJoueur(b.nom);
+      if (c) Object.assign(b.campagne, { boite: c.boite, cle: c.cle });
+    }
+    return b;
   }
   function couperCompagnon(id) {
     const k = compagnons.get(id);
     if (!k) return;
     if (k.flux) { k.flux.write('event: fin\ndata: {"raison":"delie"}\n\n'); k.flux.end(); }
     compagnons.delete(id);
+    // Saga 1.38 : il n'est plus de la campagne ; la boîte de son joueur change de clé (un téléphone perdu ne lit
+    // plus les prochaines copies ; les autres téléphones du joueur reçoivent la nouvelle clé en séance).
+    if (campagne) {
+      const avant = campagne.telephones.length;
+      campagne.telephones = campagne.telephones.filter((t) => t.jeton !== k.jeton);
+      const n = String(k.nom || '').toLowerCase();
+      const retirer = [];
+      if (!k.mj && n && campagne.cles[n]) { retirer.push(campagne.cles[n].boite); delete campagne.cles[n]; }
+      if (avant !== campagne.telephones.length || retirer.length) changementCampagne(retirer);
+      for (const x of compagnons.values()) if (!x.mj && x.nom.toLowerCase() === n && x.flux) x.flux.write(`event: bienvenue\ndata: ${JSON.stringify(bienvenueCompagnon(x))}\n\n`);
+    }
     prevenir();
   }
 
@@ -427,6 +523,8 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       c = { id: `j-${crypto.randomBytes(4).toString('hex')}`, nom, jeton, flux: null, ip };
       clients.set(c.id, c);
     }
+    // Saga 1.38 : ses téléphones de la campagne (gardés d'une séance à l'autre) le retrouvent.
+    for (const k of compagnons.values()) if (!k.mj && !k.de && k.nom.toLowerCase() === nom.toLowerCase()) lierTelephone(k);
     log('INFO', `Multijoueur : ${nom} rejoint la partie (${ip})`);
     prevenir();
     return { ok: true, jeton: c.jeton, id: c.id, nom: c.nom, version };
@@ -452,7 +550,8 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   function passerInternet(details) {
     if (!serveur) return infos();
     internet = details ? { adresse: String(details.adresse || ''), port: Number(details.port) || port, methode: ['manuel', 'relais'].includes(details.methode) ? details.methode : 'upnp' } : null;
-    code = nouveauCode();
+    // Saga 1.38 : sur Internet, une campagne garde son code (le lien d'invitation ne change plus).
+    code = internet && campagneActive() ? campagne.code || nouveauCode() : nouveauCode();
     mauvais = [];
     if (!internet) { for (const a of attente.values()) refuses.set(a.jeton, Date.now()); attente.clear(); }
     log('INFO', internet ? `Multijoueur : partie ouverte sur Internet (${internet.methode})` : 'Multijoueur : partie refermée à Internet');
@@ -477,7 +576,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
         else rejeter(new Error(err.code === 'EADDRINUSE' ? 'Les ports 7777 à 7787 sont déjà pris' : err.message));
       });
       s.maxConnections = 64;
-      s.listen(pt, '0.0.0.0', () => { serveur = s; port = pt; resoudre(infos()); });
+      s.listen(pt, '0.0.0.0', () => { serveur = s; port = pt; restaurerTelephones(); resoudre(infos()); });
     });
     // Un ping régulier garde les flux ouverts (certains routeurs coupent un flux muet).
     const r = essayer(Number(portVoulu) || PORT_DEFAUT, 10);
@@ -525,7 +624,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     if (!c) return;
     envoyer(id, 'fin', '{"raison":"expulse"}');
     c.flux?.end();
-    for (const k of compagnonsDe(id)) { k.flux?.end(); compagnons.delete(k.id); }
+    for (const k of compagnonsDe(id)) couperCompagnon(k.id);
     clients.delete(id);
     log('INFO', `Multijoueur : ${c.nom} quitte la partie`);
     prevenir();
@@ -574,6 +673,23 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     documentTous: (id) => { const d = documentPour(id, ''); return d ? `data:${d.type};base64,${d.data.toString('base64')}` : ''; },
     compagnonMj: () => { if (!serveur) return null; const code = lienCompagnon('hote'); return { code, url: urlCompagnon(code) }; },
     couperCompagnons: (de) => { for (const k of compagnonsDe(String(de))) couperCompagnon(k.id); },
+    // Saga 1.38 : la campagne (sa salle fixe, ses téléphones, les clés du coffre). null : pas de campagne.
+    campagne: (c) => { if (c == null) campagne = null; else reglerCampagne(c); },
+    get campagneRelais() { return campagneActive() ? { id: campagne.id, secret: campagne.secret } : null; },
+    // Les boîtes du coffre : { boite: { nom, cle } } ; et celle d'un joueur (créée s'il le faut).
+    boites: () => Object.fromEntries(Object.values(campagne?.cles || {}).map((x) => [x.boite, { nom: x.nom, cle: x.cle }])),
+    cleJoueur: (nom) => cleJoueur(nom),
+    // Couper un téléphone de la campagne, même hors séance (le MJ le retire de la liste).
+    oublierTelephone: (jeton) => {
+      const k = [...compagnons.values()].find((x) => x.jeton === jeton);
+      if (k) { couperCompagnon(k.id); return; }
+      const t = campagne?.telephones.find((x) => x.jeton === jeton);
+      if (!t) return;
+      campagne.telephones = campagne.telephones.filter((x) => x !== t);
+      const n = t.nom.toLowerCase(), retirer = [];
+      if (!t.mj && campagne.cles[n]) { retirer.push(campagne.cles[n].boite); delete campagne.cles[n]; }
+      changementCampagne(retirer);
+    },
     get port() { return port; },
     get secretRelais() { return secretRelais; },
     // Ce que fait l'hôte, comme un joueur : parler, bouger, écrire à un autre.

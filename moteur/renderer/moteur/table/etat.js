@@ -58,7 +58,21 @@ const TableEtat = (() => {
     // Saga 1.32 : les macros du MJ ([{ nom, formule }]).
     t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
     // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
-    t.campagne = t.campagne && typeof t.campagne === 'object' ? { nom: String(t.campagne.nom || '').slice(0, 60), fond: /^data:image\/(png|jpeg|webp);base64,/.test(String(t.campagne.fond || '')) ? t.campagne.fond : '' } : { nom: '', fond: '' };
+    // Saga 1.38 : et ce qui la fait durer d'une séance à l'autre (table/campagne.js) : son identité sur le relais
+    // (id, secret, code), les téléphones reliés, les clés du coffre des joueurs, les changements proposés hors séance.
+    const c = t.campagne && typeof t.campagne === 'object' ? t.campagne : {};
+    t.campagne = {
+      nom: String(c.nom || '').slice(0, 60),
+      fond: /^data:image\/(png|jpeg|webp);base64,/.test(String(c.fond || '')) ? c.fond : '',
+      id: /^[A-Za-z0-9_-]{16,32}$/.test(String(c.id || '')) ? c.id : '',
+      secret: String(c.secret || '').length >= 20 ? String(c.secret).slice(0, 100) : '',
+      code: /^[A-Z]{4}-[A-Z]{4}$/.test(String(c.code || '')) ? c.code : '',
+      telephones: Array.isArray(c.telephones) ? c.telephones.filter((x) => x && typeof x.jeton === 'string').slice(0, 60) : [],
+      cles: c.cles && typeof c.cles === 'object' && !Array.isArray(c.cles) ? c.cles : {},
+      propositions: Array.isArray(c.propositions) ? c.propositions.filter((p) => p && p.nom && p.id).slice(-200) : [],
+      auto: Boolean(c.auto),
+      depot: Number(c.depot) || 0,
+    };
     partie.table = t;
     return t;
   }
