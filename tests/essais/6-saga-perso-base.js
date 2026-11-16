@@ -10,13 +10,14 @@ module.exports = [
       const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'donjon'), { ctx });
       await saga.attendreLibre();
       const vu = await saga.lire(() => {
-        const b = Sprites.base('#d94a4a', 16), b2 = Sprites.base('#d94a4a', 32);
+        const b = Sprites.base('#d94a4a', 16), b2 = Sprites.base('#d94a4a', 64);
         return {
           marche: `${b.sprite.largeur}x${b.sprite.hauteur}`, double: `${b2.sprite.largeur}x${b2.sprite.hauteur}`,
           animations: Object.keys(b.animations).join(' '), heros: App.moteur ? Boolean(Sprites.animationBase('#d94a4a', 'repos', 16)) : false,
         };
       });
-      egal(vu, { marche: '16x24', double: '32x48', animations: 'repos attaque coup mort', heros: true }, 'les planches du personnage de base');
+      // Jamais réduit : 32 × 32 en tuiles de 16 et de 32 px, doublé en tuiles de 64.
+      egal(vu, { marche: '32x32', double: '64x64', animations: 'repos attaque coup mort', heros: true }, 'les planches du personnage de base');
       // Il marche, frappe (la lame de Saga par-dessus le bras), puis reste au repos, sans erreur.
       await page.mouse.click(640, 300);
       await page.keyboard.down('ArrowRight'); await page.waitForTimeout(350); await page.keyboard.up('ArrowRight');

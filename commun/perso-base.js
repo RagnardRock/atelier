@@ -5,7 +5,7 @@
 // image de 32 × 32 px, une grosse tête aux cheveux en mèches, des yeux de 3 × 5 px (cils, pupille, iris en
 // bas) écartés de 5 px, ni bouche ni nez, un contour doux (la couleur voisine très assombrie, pas du noir).
 // Planche de marche au format de Saga : 4 rangées (face, gauche, droite, dos) × 3 images (debout, pas,
-// autre pas). Pendant un pas, tout le corps monte d'un pixel, une jambe avance et l'autre recule.
+// autre pas). Pendant un pas, le corps descend d'un pixel (les genoux plient) ; de profil les jambes s'ouvrent en V.
 //
 // Tout se fabrique ici à partir de modèles qui se lisent comme des images (une lettre = un pixel), retouchés
 // selon la pose (debout, pas, repos, coup d'épée, coup reçu, chute). Rien ne dépend du navigateur sauf
