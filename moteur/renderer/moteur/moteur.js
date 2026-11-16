@@ -339,6 +339,8 @@ const Moteur = (() => {
         son: (chemin) => audio.fichier(chemin),
         // Saga 1.46 : le morceau qui joue (les amis l'entendent aussi).
         morceau: () => audio.morceau,
+        // Saga 1.48 : un morceau d'une liste de lecture, joué une fois (la promesse se tient à sa fin).
+        musiqueFois: (chemin) => { partie.musique = chemin; return audio.musique(chemin, { boucle: false }); },
         // Saga 1.47 : les moments de la table pour les scripts JS (tout de suite, même en combat).
         reagir: (moment, infos) => { if (scriptsJs.ecoute(moment)) scriptsJs.quand(moment, infos); },
         message: (t) => rappels.message?.(t),

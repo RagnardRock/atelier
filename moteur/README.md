@@ -390,6 +390,15 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.48 : auras, listes de lecture et cartes séparées
+
+- **Une aura autour d'un pion** (onglet Pions) : un cercle de 1,5 à 18 m, de la couleur choisie, qui le suit. Vue de
+  tous ou du MJ seul.
+- **Des listes de lecture** (Scène › Musique) : plusieurs morceaux à la suite, dans l'ordre ou au hasard, en boucle.
+- **Des joueurs sur des cartes différentes** : dans la fiche d'un héros, « Envoyer : une carte ». Son joueur voit
+  cette carte-là. « Y aller seul » (Scène › Cartes) : le MJ y va sans emmener le groupe. Les héros restés ailleurs
+  sont listés dans l'onglet Pions.
+
 ## Ce que fait Saga 1.47 : des scripts à la table (avec Tafl 1.41)
 
 - **Les scripts JS du jeu réagissent au mode table** : un message du chat (`table_chat`), un jet (`table_jet`), le

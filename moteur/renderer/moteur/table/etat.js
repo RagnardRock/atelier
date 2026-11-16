@@ -55,6 +55,14 @@ const TableEtat = (() => {
   const IMAGE_JETON = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
   const imageJetonValide = (v) => typeof v === 'string' && v.length <= 600000 && IMAGE_JETON.test(v);
   function idJeton(v) { let h = 2166136261; for (let i = 0; i < v.length; i += 7) h = Math.imul(h ^ v.charCodeAt(i), 16777619); return `jeton-${(h >>> 0).toString(36)}${v.length.toString(36)}`; }
+  const SON = /^sons\/[^/\\]{1,120}$/;
+  function normListes(l) {
+    return (Array.isArray(l) ? l : []).filter((x) => x && typeof x.id === 'string').slice(0, 30).map((x) => ({
+      id: x.id.slice(0, 40), nom: String(x.nom || 'Liste').slice(0, 40),
+      morceaux: (Array.isArray(x.morceaux) ? x.morceaux : []).filter((m) => typeof m === 'string' && SON.test(m)).slice(0, 100),
+      hasard: Boolean(x.hasard),
+    }));
+  }
   function preparer(jeu, partie) {
     const t = partie.table && typeof partie.table === 'object' ? partie.table : {};
     t.version = 1;
@@ -67,6 +75,8 @@ const TableEtat = (() => {
     t.jetons = Object.fromEntries(Object.entries(t.jetons && typeof t.jetons === 'object' ? t.jetons : {}).filter(([k, v]) => /^jeton-[a-z0-9]+$/.test(k) && imageJetonValide(v)).slice(0, 200));
     // Saga 1.43 : l'initiative tenue à la main par le MJ (hors des combats de Saga) : { liste, actif, tour }.
     t.initiative = normInitiative(t.initiative);
+    // Saga 1.48 : les listes de lecture du MJ ([{ id, nom, morceaux: [sons/…], hasard }]).
+    t.listes = normListes(t.listes);
     for (const p of t.pions) if (p.jeton && !(p.jeton.personnage ? typeof p.jeton.personnage === 'string' : t.jetons[p.jeton.image])) delete p.jeton;
     // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
     // Saga 1.38 : et ce qui la fait durer d'une séance à l'autre (table/campagne.js) : son identité sur le relais
@@ -199,7 +209,8 @@ const TableEtat = (() => {
   }
   // Les héros de l'équipe sur la table : un pion chacun, autour de (x, y) s'il n'en a pas sur cette carte.
   // Les pions des héros partis du groupe s'en vont.
-  function placerHeros(table, partie, carte, x, y, presents = []) {
+  // garder : les pions de héros à laisser où ils sont (Saga 1.48 : ceux qui sont sur une autre carte).
+  function placerHeros(table, partie, carte, x, y, presents = [], garder = null) {
     const membres = partie.equipe.filter((c) => c && c.jdr);
     let n = table.pions.filter((p) => p.sorte === 'heros').length;
     for (const c of membres) if (!c.pion) c.pion = `h-${Date.now().toString(36)}-${n++}`;
@@ -207,7 +218,7 @@ const TableEtat = (() => {
     table.pions = table.pions.filter((p) => p.sorte !== 'heros' || ids.has(p.id));
     for (const c of membres) {
       let p = table.pions.find((q) => q.id === c.pion);
-      if (p && p.carte === carte.id) continue;
+      if (p && (p.carte === carte.id || garder?.has(p.id))) continue;
       const pos = caseLibre(table, carte, x, y, [], presents);
       if (!p) { p = { id: c.pion, sorte: 'heros', direction: 'haut', visible: 'tous' }; table.pions.push(p); }
       Object.assign(p, { carte: carte.id, x: pos.x, y: pos.y });
@@ -276,6 +287,7 @@ const TableEtat = (() => {
         Object.assign(v, { monstre: p.monstre, sante: sante(p.pv, p.pvMax), ko: p.pv <= 0 });
         if (mj) Object.assign(v, { pv: p.pv, pvMax: p.pvMax });
       }
+      if (p.aura?.rayon > 0 && (mj || p.aura.visible !== 'mj')) v.aura = { rayon: Math.max(1, Math.round(p.aura.rayon / (reglages(jeu).caseM || 1.5))), couleur: p.aura.couleur, ...(mj ? { metres: p.aura.rayon, visible: p.aura.visible } : {}) };
       if (mj) { v.visible = normVisible(p.visible); v.cache = p.sorte !== 'heros' && !(visiblePour(p.visible, pourJoueurs) && m[p.y * carte.largeur + p.x] === 1); }
       pions.push(v);
     }
@@ -625,6 +637,34 @@ const TableEtat = (() => {
         const v = a.metres === '' || a.metres == null ? null : Math.max(0, Math.min(60, Number(a.metres) || 0));
         if (a.type === 'lumiere') { if (v) pion.lumiere = v; else delete pion.lumiere; } else if (v == null) delete pion.nuit; else pion.nuit = v;
         return { ok: true };
+      }
+      // Saga 1.48 : une aura autour d'un pion (un cercle qui le suit) : rayon en mètres, couleur, qui la voit.
+      case 'aura': {
+        if (!pion) return non('Pion inconnu.');
+        const r = a.metres === '' || a.metres == null ? 0 : Math.max(0, Math.min(60, Number(a.metres) || 0));
+        if (!r) { delete pion.aura; return { ok: true }; }
+        const avant = pion.aura || {};
+        pion.aura = { rayon: r, couleur: O.COULEURS.some(([id]) => id === a.couleur) ? a.couleur : avant.couleur || 'jaune', visible: a.visible === 'mj' || (a.visible == null && avant.visible === 'mj') ? 'mj' : 'tous' };
+        return { ok: true };
+      }
+      // Saga 1.48 : les listes de lecture (jouées par table.js : un morceau après l'autre, en boucle).
+      case 'liste_nouvelle': {
+        table.listes = normListes(table.listes);
+        if (table.listes.length >= 30) return non('30 listes au plus.');
+        const l = { id: `liste-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, nom: String(a.nom || '').trim().slice(0, 40) || `Liste ${table.listes.length + 1}`, morceaux: [], hasard: false };
+        table.listes.push(l);
+        return { ok: true, liste: l };
+      }
+      case 'liste_modifier': case 'liste_retirer': {
+        table.listes = normListes(table.listes);
+        const l = table.listes.find((x) => x.id === a.id);
+        if (!l) return non('Liste inconnue.');
+        if (a.type === 'liste_retirer') { table.listes = table.listes.filter((x) => x !== l); return { ok: true }; }
+        if (a.nom != null) l.nom = String(a.nom).trim().slice(0, 40) || l.nom;
+        if (a.hasard != null) l.hasard = Boolean(a.hasard);
+        if (typeof a.ajouter === 'string' && SON.test(a.ajouter) && l.morceaux.length < 100) l.morceaux.push(a.ajouter);
+        if (Number.isInteger(a.enlever) && a.enlever >= 0) l.morceaux.splice(a.enlever, 1);
+        return { ok: true, liste: l };
       }
       case 'audio': table.audio = a.valeur === 'mj' ? 'mj' : 'tous'; return { ok: true };
       case 'pion_poser': {
