@@ -142,11 +142,13 @@ module.exports = [
         const m = window.essaiMeca.jdr.mecaniques;
         m.parade = 'esquive'; m.initiative.mode = 'heros'; m.repos.court = 'niveau'; m.niveau_pv = 'moyenne + mod_con';
         m.etats.push({ id: 'empoisonne', malus: -1, degats: '1d4', fin_de: '1d20', fin_seuil: 15 });
+        m.ressources.push({ champ: 'mana', sorts: 'niveau_sort * 2', remplace: true }); m.relances.destin = 'destin'; m.critique.seuil = 19; m.marge.pas = 5;
         const n = DonneesJdr.normMeca(JSON.parse(JSON.stringify(m)));
         const g = DonneesJdr.NORMES.monstres_jdr({ id: 'g', nom: 'G', champs: { couverture: '3', 'mauvais nom': 2, armure: 'x' } }, 0);
-        return { type: n.resolution.type, parade: n.parade, init: n.initiative.mode, court: n.repos.court, niveau: n.niveau_pv, etat: n.etats[0]?.degats, champs: g.champs };
+        return { type: n.resolution.type, parade: n.parade, init: n.initiative.mode, court: n.repos.court, niveau: n.niveau_pv, etat: n.etats[0]?.degats, champs: g.champs, suite: [n.ressources[0]?.sorts, n.ressources[0]?.remplace, n.relances.destin, n.critique.seuil, n.marge.pas] };
       });
       egal([s2.type, s2.parade, s2.init, s2.court, s2.niveau, s2.etat], ['d100', 'esquive', 'heros', 'niveau', 'moyenne + mod_con', '1d4'], 'résolution, parade, initiative, repos, niveaux et états sont enregistrés');
+      egal(s2.suite, ['niveau_sort * 2', true, 'destin', 19, 5], 'ressources, relances, critiques et marge sont enregistrés');
       egal(s2.champs, { couverture: 3 }, 'un monstre garde ses champs du jeu (des nombres, des noms propres)');
       if (process.env.CAPTURES) await page.locator('#essai-meca').screenshot({ path: `${process.env.CAPTURES}/1-tafl-mecaniques.png` });
       sansErreur(erreurs, 'dans l\'onglet Mécaniques');

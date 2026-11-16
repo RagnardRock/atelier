@@ -124,7 +124,9 @@ module.exports = [
         const T = App.moteur.table, jeu = T.jeu(), partie = T.partie();
         const R = jeu.donnees.reglages.reglages;
         const fiche = FichePerso.defaut();
-        fiche.champs = [...CHAMPS, { id: 'parade', nom: 'Parade', type: 'nombre', depart: 5, modifiable: 'mj' }];
+        fiche.champs = [...CHAMPS, { id: 'parade', nom: 'Parade', type: 'nombre', depart: 5, modifiable: 'mj' },
+          { id: 'mana', nom: 'Mana', type: 'jauge', formule: '10', modifiable: 'mj' }, { id: 'fleches', nom: 'Flèches', type: 'nombre', depart: 2, modifiable: 'mj' },
+          { id: 'destin', nom: 'Destin', type: 'nombre', depart: 1, modifiable: 'mj' }];
         R.jdr = { ...R.jdr, fiche };
         const regler = (m) => { R.jdr.mecaniques = { active: true, ...m }; };
         const [thor] = partie.equipe;
@@ -161,6 +163,26 @@ module.exports = [
         [...f.querySelectorAll('.fp-bonus-ajout button')].pop().click();
         out.ficheBonus = { lignes: f.querySelectorAll('.fp-bonus').length, action: actions[0] };
         f.remove();
+        // Les ressources : le mana paie les sorts (au lieu des emplacements), les flèches les tirs, le repos long remplit.
+        regler({ ressources: [{ champ: 'mana', sorts: 'niveau_sort * 3', remplace: true, zero_malus: -3 }, { champ: 'fleches', distance: 1 }] });
+        const mana = () => JdrFiches.champs(jeu, thor).find((x) => x.id === 'mana').valeur;
+        out.ressources = { depart: mana(), sans: JdrMeca.sansEmplacements(jeu, thor), cout: JdrMeca.couts(jeu, thor, 'sort', 2)[0]?.cout };
+        JdrMeca.payer(jeu, thor, 'sort', 2); JdrMeca.payer(jeu, thor, 'sort', 1);
+        out.ressources.apres = mana();
+        out.ressources.trop = JdrMeca.payer(jeu, thor, 'sort', 1) === false;
+        out.ressources.malusVide = JdrMeca.malus(jeu, thor, []);
+        out.ressources.tirs = [JdrMeca.payer(jeu, thor, 'distance'), JdrMeca.payer(jeu, thor, 'distance'), JdrMeca.payer(jeu, thor, 'distance')];
+        thor.pv = JdrPerso.pvMax(jeu, thor);
+        await JdrHorsCombat.repos({ jeu, partie, ui: { dire: async () => {} }, sorte: 'long' });
+        out.ressources.repos = mana();
+        // Les dés explosifs et le point de destin.
+        regler({ relances: { explosif: true, destin: 'destin' } });
+        const ex = JdrMeca.exploser(jeu, partie, { formule: '1d6', des: [{ faces: 6, valeur: 6, signe: 1, garde: true }], bonus: 0, total: 6 });
+        out.explosif = ex.des.length >= 2 && ex.total > 6;
+        const avantJ = partie.jdr.journal.length;
+        let question = '';
+        await JdrTests.test({ jeu, partie, ui: { ...ui, liste: async (q) => { question = q.titre; return 0; } }, c: thor, competence: 'athletisme', dd: 99, montrerJet: false });
+        out.destin = { jets: partie.jdr.journal.length - avantJ, reste: JdrFiches.champs(jeu, thor).find((x) => x.id === 'destin').valeur, question };
         // Les repos et les niveaux.
         regler({ repos: { court: 'niveau + 2', long: 'pv_max / 2' } });
         const max = JdrPerso.pvMax(jeu, thor);
@@ -179,7 +201,9 @@ module.exports = [
         // Un combat : la parade, la localisation, les héros d'abord, un état qui blesse à chaque tour.
         regler({
           parade: 'parade', localisation: 'lieux', initiative: { mode: 'heros' },
-          tables: [{ id: 'lieux', nom: 'Localisation', de: '1d2', lignes: [{ min: 1, max: 1, texte: 'La tête', mult: 200 }, { min: 2, max: 2, texte: 'Le bras', mult: 50 }] }],
+          critique: { seuil: 11, effet: 'plus', plus: '1d4', table: 'crits' }, marge: { pas: 5, bonus: 1 },
+          tables: [{ id: 'lieux', nom: 'Localisation', de: '1d2', lignes: [{ min: 1, max: 1, texte: 'La tête', mult: 200 }, { min: 2, max: 2, texte: 'Le bras', mult: 50 }] },
+            { id: 'crits', nom: 'Coup terrible', de: '1d1', lignes: [{ min: 1, max: 1, texte: 'Une artère tranchée', mult: 150 }] }],
           etats: [{ id: 'empoisonne', malus: -2, degats: '1', fin_de: '1d20', fin_seuil: 30 }],
         });
         out.malusEtat = JdrMeca.malus(jeu, thor, ['empoisonne']);
@@ -210,6 +234,8 @@ module.exports = [
           herosDabord: premier >= 0 && partie.equipe.some((h) => JdrPerso.nom(jeu, h) === journal[premier].qui),
           sansInit: !journal.some((l) => l.quoi === 'Initiative'),
           poison: journal.some((l) => l.quoi === JdrBase.nomEtat(jeu, 'empoisonne')),
+          critTable: journal.some((l) => l.quoi === 'Coup terrible : Une artère tranchée') && journal.some((l) => l.quoi === 'Critique'),
+          marge: journal.some((l) => /^Marge de réussite/.test(l.quoi)),
         };
         return out;
       }, { CHAMPS });
@@ -223,6 +249,15 @@ module.exports = [
       vrai(/Contre les droïdes \+2/.test(r.bonus.journal), `le journal le dit (${r.bonus.journal})`);
       egal(r.ficheBonus.lignes, 1, 'la fiche du MJ montre le bonus');
       egal(r.ficheBonus.action, { type: 'ajouter', bonus: { nom: 'Sur les machines', valeur: 2, sur: ['competence:piratage'] } }, 'le MJ ajoute un bonus depuis la fiche');
+      egal([r.ressources.depart, r.ressources.sans, r.ressources.cout], [10, true, 6], 'le mana : plein, il remplace les emplacements, un sort de niveau 2 coûte 6');
+      egal([r.ressources.apres, r.ressources.trop], [1, true], 'les sorts dépensent le mana ; sans assez, pas de sort');
+      egal(r.ressources.malusVide, 0, 'pas de malus tant qu\'il en reste');
+      egal(r.ressources.tirs.map((x) => x !== false), [true, true, false], 'deux flèches, deux tirs');
+      egal(r.ressources.repos, 10, 'le repos long remplit le mana');
+      vrai(r.explosif, 'un dé au maximum explose');
+      vrai(r.destin.jets === 2 && r.destin.reste === 0 && /Destin/.test(r.destin.question), `un point de destin relance un test raté (${r.destin.jets} jets, ${r.destin.reste} restant)`);
+      vrai(r.combat.critTable, 'un critique tire sur sa table et ajoute ses dés');
+      vrai(r.combat.marge, 'la marge de réussite ajoute aux dégâts');
       vrai(r.court > 0 && r.court <= 4, `repos court : niveau + 2 PV (${r.court})`);
       egal(r.long[0], r.long[1], 'repos long : la moitié des PV max');
       egal(r.niveau, 7, 'un niveau donne 7 PV (et ce que donne son origine)');

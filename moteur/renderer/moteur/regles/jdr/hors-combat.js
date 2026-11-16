@@ -130,7 +130,9 @@ const JdrHorsCombat = (() => {
   }
   async function soignerHorsCombat(jeu, partie, ui, c, s) {
     let emp = 0;
-    if (Number(s.niveau) > 0) {
+    // Saga 1.41 : un sort peut coûter une ressource (mana), en plus ou à la place des emplacements.
+    if (!JdrMeca.peutPayer(jeu, c, 'sort', Number(s.niveau))) { await ui.dire(`Pas assez de ${JdrMeca.couts(jeu, c, 'sort', Number(s.niveau)).map((x) => x.nom.toLowerCase()).join(', ')}.`); return; }
+    if (Number(s.niveau) > 0 && !JdrMeca.sansEmplacements(jeu, c)) {
       const possibles = P.emplacements(jeu, c).map((n, i) => i + 1).filter((nv) => nv >= Number(s.niveau) && P.restants(jeu, c, nv) > 0);
       if (!possibles.length) { await ui.dire('Plus d\'emplacement de sort de ce niveau.'); return; }
       emp = possibles[0];
@@ -148,6 +150,7 @@ const JdrHorsCombat = (() => {
       l = [partie.equipe[j]];
     }
     if (emp) c.emplacements[emp] = (Number(c.emplacements[emp]) || 0) + 1;
+    JdrMeca.payer(jeu, c, 'sort', Number(s.niveau));
     const mod = s.effet.ajouter_mod !== false ? P.modCarac(jeu, c, P.caracMagie(jeu, c)) : 0;
     const base = B.lireDes(s.effet.soin), sup = B.lireDes(s.effet.niveau_sup);
     const des = base ? `${base.n + (sup && emp > s.niveau && sup.faces === base.faces ? sup.n * (emp - s.niveau) : 0)}d${base.faces}${base.bonus ? B.signe(base.bonus).replace('−', '-') : ''}` : String(s.effet.soin || '0');
@@ -241,18 +244,22 @@ const JdrHorsCombat = (() => {
         if (!c.jdr || c.mort_definitive) continue;
         const avant = c.pv, n = JdrMeca.pvRepos(jeu, c, 'long');
         P.reposLong(jeu, c);
-        if (n != null) { c.pv = Math.min(P.pvMax(jeu, c), Math.max(0, avant) + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - Math.max(0, avant)}`); }
+        if (n != null) { c.pv = Math.min(P.pvMax(jeu, c), Math.max(0, avant) + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - Math.max(0, avant)} PV`); }
+        const res = JdrMeca.reposRessources(jeu, c, 'long'); // Saga 1.41 : mana, munitions…
+        if (res.length) rendus.push(`${P.nom(jeu, c)} ${res.join(', ')}`);
       }
-      await ui.dire(`Le groupe se repose (${long}). ${rendus.length ? `PV : ${rendus.join(', ')}. Emplacements` : 'PV, emplacements'} de sorts et aptitudes sont revenus.`);
+      await ui.dire(`Le groupe se repose (${long}). ${rendus.length ? `${rendus.join(' ; ')}. ` : ''}${rendus.some((x) => x.endsWith(' PV')) ? 'Emplacements' : 'PV, emplacements'} de sorts et aptitudes sont revenus.`);
       return true;
     }
     for (const c of partie.equipe) {
       if (!c.jdr) continue;
       P.reposCourt(jeu, c);
       const n = c.pv > 0 ? JdrMeca.pvRepos(jeu, c, 'court') : null;
-      if (n) { const avant = c.pv; c.pv = Math.min(P.pvMax(jeu, c), c.pv + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - avant}`); }
+      if (n) { const avant = c.pv; c.pv = Math.min(P.pvMax(jeu, c), c.pv + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - avant} PV`); }
+      const res = c.mort_definitive ? [] : JdrMeca.reposRessources(jeu, c, 'court');
+      if (res.length) rendus.push(`${P.nom(jeu, c)} ${res.join(', ')}`);
     }
-    await ui.dire(`Le groupe fait une pause (${court}).${rendus.length ? ` PV : ${rendus.join(', ')}.` : ''} Chacun peut dépenser ses dés de vie.`);
+    await ui.dire(`Le groupe fait une pause (${court}).${rendus.length ? ` ${rendus.join(' ; ')}.` : ''} Chacun peut dépenser ses dés de vie.`);
     for (;;) {
       const qui = partie.equipe.filter((c) => c.jdr && c.pv > 0 && c.des_vie > 0 && c.pv < P.pvMax(jeu, c));
       if (!qui.length) break;

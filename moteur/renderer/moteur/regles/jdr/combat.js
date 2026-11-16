@@ -287,8 +287,14 @@ const JdrCombat = (() => {
     // --- Une attaque ---
     // a : { nom, bonus, des, mod, type, distance, finesse, critique_min }
     let frappesAuContact = new Map(); // ce tour-ci : cible → qui l'a frappée au contact (prise en tenaille)
-    async function attaquer(u, t, a, { sort = null } = {}) {
+    async function attaquer(u, t, a, { sort = null, relance = false } = {}) {
       const ef = effets(u), eft = effets(t);
+      // Saga 1.41 : un tir coûte ses munitions (Mécaniques › Ressources).
+      if (M && estHeros(u) && a.distance && !sort && !relance) {
+        const paye = JdrMeca.payer(jeu, u.c, 'distance');
+        if (paye === false) { await ui.message(`${nom(u)} n'a plus de quoi tirer (${JdrMeca.couts(jeu, u.c, 'distance').map((x) => x.nom).join(', ')}).`); return { touche: false }; }
+        if (paye) maj(u);
+      }
       // Une cible à terre : avantage au contact, désavantage à distance.
       const terre = aEtat(t, 'a_terre');
       const contre = terre && a.distance ? P.effetsEtats(jeu, t.etats.filter((e) => e.id !== 'a_terre').map((e) => e.id)) : eft;
@@ -307,20 +313,26 @@ const JdrCombat = (() => {
       const ca = caDe(t);
       // Saga 1.41 : le système de résolution du jeu (d100, réserve, 2d6) ; sinon le d20 de la 5e.
       const sys = M ? JdrMeca.resoudre(jeu, partie, { bonus: a.bonus + bonusSorts + malusMeca, dd: ca, avantage, desavantage, vars: varsDe(u) }) : null;
-      let critique, touche, ligne, partiel = false, total;
+      let critique, touche, ligne, partiel = false, total, marge = 0, fumble = false;
       if (sys) {
         critique = sys.critique;
         touche = sys.reussi;
         partiel = sys.partiel;
         total = sys.total;
+        marge = sys.marge || 0;
+        fumble = Boolean(sys.fumble && !sys.reussi);
         ligne = noterJet(u, { qui: nom(u), quoi: quoiAttaque, formule: sys.formule, des: sys.des, bonus: sys.bonus, total, contre: `${nomDefense} ${ca} · ${sys.contre}`, resultat: JdrMeca.resultat(sys, { attaque: true }), mode: sys.mode });
       } else {
         const des = D.d20(partie, { avantage, desavantage });
         const bonus = Math.round(await Maison.formule('attaque', { naturel: des.naturel, bonus: a.bonus, magie: Number(a.magie) || 0, sort: Boolean(sort), distance: Boolean(a.distance) }, () => a.bonus)) + bonusSorts + malusMeca;
         // Le critique : 20 naturel (19 pour le champion, avec l'aptitude « critique_ameliore »).
-        const critMin = estHeros(u) && !sort ? Number(P.palier(jeu, u.c, 'critique_ameliore')?.valeur) || 20 : 20;
+        // Saga 1.41 : le seuil du jeu (Mécaniques › Critiques), le champion garde son avantage.
+        const critBase = M?.critique.seuil || 20;
+        const critMin = estHeros(u) && !sort ? Math.min(critBase, Number(P.palier(jeu, u.c, 'critique_ameliore')?.valeur) || 20) : critBase;
         const seuil = B.borne(Math.round(await Maison.formule('critique', { niveau: estHeros(u) ? u.c.niveau : 0, classe: estHeros(u) ? u.c.classe : '' }, () => critMin)), 2, 20);
         total = des.naturel + bonus;
+        marge = total - ca;
+        fumble = des.naturel === 1;
         critique = des.naturel >= seuil;
         touche = critique || (!(des.naturel === 1 && R.echec_critique) && total >= ca);
         ligne = noterJet(u, { qui: nom(u), quoi: quoiAttaque, formule: 'd20', des: des.des, bonus, total, contre: `${nomDefense} ${ca}`, resultat: critique ? 'critique' : touche ? 'touche' : des.naturel === 1 ? 'echec_critique' : 'manque', mode: des.mode });
@@ -336,6 +348,30 @@ const JdrCombat = (() => {
           const p = sp || (() => { const d = D.d20(partie); return { reussi: d.naturel + vp >= ddp, des: d.des, total: d.naturel + vp, bonus: vp, formule: 'd20', contre: `${ddp}`, mode: '' }; })();
           pare = noterJet(t, { qui: nom(t), quoi: 'Parade', formule: p.formule, des: p.des, bonus: p.bonus, total: p.total, contre: sp ? sp.contre : `${ddp}`, resultat: p.reussi ? 'reussi' : 'rate', mode: p.mode });
           if (p.reussi) touche = false;
+        }
+      }
+      // Saga 1.41 : raté, un héros peut dépenser un point de destin pour relancer (Mécaniques › Relances).
+      if (!touche && !pare && M?.relances.destin && estHeros(u) && ui.liste) {
+        const d = JdrMeca.destin(jeu, u.c);
+        if (d && d.reste > 0) {
+          await montrer(a.nom, [ligne]);
+          const k = await ui.liste(`${nom(u)} rate : dépenser 1 ${d.nom} pour relancer ? (${d.reste} restant${d.reste > 1 ? 's' : ''})`, [{ texte: 'Relancer' }, { texte: 'Garder le jet' }], false);
+          if (k === 0 && JdrMeca.depenserDestin(jeu, u.c)) {
+            if (coches.ids.length) u.c.bonus_coches = [...new Set([...(u.c.bonus_coches || []), ...coches.ids])];
+            maj(u);
+            await ui.message(`${nom(u)} force le destin.`);
+            return attaquer(u, t, a, { sort, relance: true });
+          }
+        }
+      }
+      // Saga 1.41 : une maladresse (échec critique) tire sur sa table.
+      if (!touche && !pare && fumble && M?.critique.maladresse) {
+        const tm = JdrMeca.tirer(jeu, partie, M.critique.maladresse);
+        if (tm?.ligne) {
+          await montrer(a.nom, [ligne, noterJet(u, { qui: nom(u), quoi: `${tm.table.nom} : ${tm.ligne.texte}`, formule: tm.jet.formule, des: tm.jet.des, bonus: tm.jet.bonus, total: tm.jet.total })]);
+          await ui.message(`${Le(u)} : ${tm.ligne.texte.charAt(0).toLowerCase()}${tm.ligne.texte.slice(1)}.`);
+          ui.nombre(t.camp, t.i, 'Raté', 'rate');
+          return { touche: false };
         }
       }
       if (!touche) {
@@ -355,8 +391,9 @@ const JdrCombat = (() => {
       if (!a.distance) { if (!frappesAuContact.has(t)) frappesAuContact.set(t, new Set()); frappesAuContact.get(t).add(u); }
       // Les dégâts : les dés de l'arme (doublés sur un critique), le modificateur, et ce qui s'ajoute.
       const lignes = pare ? [ligne, pare] : [ligne];
-      const crit = { doubler: critique && R.critiques !== 'max', max: critique && R.critiques === 'max' };
-      const r = D.lancer(partie, a.des, crit);
+      const effetCrit = M?.critique.effet || (R.critiques === 'max' ? 'max' : 'doubler');
+      const crit = { doubler: critique && effetCrit === 'doubler', max: critique && effetCrit === 'max' };
+      const r = M ? JdrMeca.exploser(jeu, partie, D.lancer(partie, a.des, crit)) : D.lancer(partie, a.des, crit);
       let plus = Number(a.mod) || 0;
       const extra = [];
       if (estHeros(u)) {
@@ -382,6 +419,26 @@ const JdrCombat = (() => {
       const dmgNormal = Math.max(0, r.total + plus);
       let n = Math.max(sort ? 0 : 1, Math.round(await Maison.formule('degats', { des: r.total, mod: plus, critique, type: a.type || '', sort: Boolean(sort) }, () => dmgNormal)));
       lignes.push(noterJet(u, { qui: nom(u), quoi: `Dégâts (${B.nomDegats(a.type).toLowerCase()})`, formule: r.formule, des: r.des, bonus: n - r.total, total: n }));
+      // Saga 1.41 : un critique « des dés en plus », la marge de réussite, la table des critiques.
+      if (critique && effetCrit === 'plus' && M?.critique.plus) {
+        const x = JdrMeca.exploser(jeu, partie, D.lancer(partie, M.critique.plus));
+        n += Math.max(0, x.total);
+        lignes.push(noterJet(u, { qui: nom(u), quoi: 'Critique', formule: x.formule, des: x.des, bonus: x.bonus, total: x.total }));
+      }
+      if (M?.marge.pas && marge > 0) {
+        const plusMarge = Math.floor(marge / M.marge.pas) * M.marge.bonus;
+        if (plusMarge) { n = Math.max(0, n + plusMarge); lignes.push(D.noter(partie, { qui: nom(u), quoi: `Marge de réussite (${marge})`, formule: '', total: plusMarge })); }
+      }
+      let texteCrit = '';
+      if (critique && M?.critique.table) {
+        const tc = JdrMeca.tirer(jeu, partie, M.critique.table);
+        if (tc?.ligne) {
+          const avant = n;
+          n = Math.max(0, Math.round(n * (tc.ligne.mult ?? 100) / 100));
+          texteCrit = tc.ligne.texte;
+          lignes.push(D.noter(partie, { qui: nom(t), quoi: `${tc.table.nom} : ${tc.ligne.texte}`, formule: tc.jet.formule, des: tc.jet.des, bonus: n - avant, total: tc.jet.total }));
+        }
+      }
       // Saga 1.41 : une réussite partielle (2d6) fait la moitié des dégâts ; la localisation du coup les multiplie.
       if (partiel) { const avant = n; n = Math.max(1, Math.floor(n / 2)); lignes.push(D.noter(partie, { qui: nom(u), quoi: 'Réussite partielle', formule: '', total: n - avant })); }
       const lieu = M ? JdrMeca.localiser(jeu, partie) : null;
@@ -404,14 +461,17 @@ const JdrCombat = (() => {
       if (critique) ui.nombre(t.camp, t.i, 'Critique !', 'info');
       let fait = await blesser(t, n, { critique, type: a.type });
       for (const x of extra) if (debout(t) || !estHeros(t)) fait += await blesser(t, x.r.total, { type: x.type || a.type });
-      await ui.message(`${Le(u)} touche ${le(t)}${lieu ? ` (${lieu.texte.toLowerCase()})` : ''}${critique ? ' (coup critique)' : partiel ? ' (de justesse)' : ''} : ${fait} dégât${fait > 1 ? 's' : ''}.`);
+      await ui.message(`${Le(u)} touche ${le(t)}${lieu ? ` (${lieu.texte.toLowerCase()})` : ''}${critique ? ` (coup critique${texteCrit ? ` : ${texteCrit.toLowerCase()}` : ''})` : partiel ? ' (de justesse)' : ''} : ${fait} dégât${fait > 1 ? 's' : ''}.`);
       return { touche: true, critique, degats: fait };
     }
 
     // --- Les sorts ---
     const sortsDe = (u) => P.sortsConnus(jeu, u.c).filter((s) => s.effet && s.effet.type && s.effet.type !== 'aucun');
     const estBonus = (s) => /bonus/i.test(s.temps || '') || s.effet?.action === 'bonus';
-    const peutLancer = (u, s) => Number(s.niveau) === 0 || P.emplacements(jeu, u.c).some((nb, i) => i + 1 >= Number(s.niveau) && P.restants(jeu, u.c, i + 1) > 0);
+    // Saga 1.41 : un sort peut coûter une ressource (mana), en plus ou à la place des emplacements.
+    const sansEmp = (u) => Boolean(M && JdrMeca.sansEmplacements(jeu, u.c));
+    const peutLancer = (u, s) => (!M || JdrMeca.peutPayer(jeu, u.c, 'sort', Number(s.niveau)))
+      && (Number(s.niveau) === 0 || sansEmp(u) || P.emplacements(jeu, u.c).some((nb, i) => i + 1 >= Number(s.niveau) && P.restants(jeu, u.c, i + 1) > 0));
     // Les dés d'un sort : ses dés, augmentés au niveau 5, 11 et 17 (tours de magie) ou par emplacement au-dessus.
     function desDuSort(s, lanceurNiveau, emplacement, cle = 'degats') {
       const base = B.lireDes(s.effet[cle]);
@@ -428,6 +488,7 @@ const JdrCombat = (() => {
     }
     async function choisirEmplacement(u, s) {
       if (Number(s.niveau) === 0) return 0;
+      if (sansEmp(u)) return Number(s.niveau);
       const possibles = P.emplacements(jeu, u.c).map((nb, i) => i + 1).filter((nv) => nv >= Number(s.niveau) && P.restants(jeu, u.c, nv) > 0);
       if (!possibles.length) return null;
       if (possibles.length === 1 || !s.effet.niveau_sup) return possibles[0];
@@ -470,8 +531,10 @@ const JdrCombat = (() => {
     }
     async function lancerSort(u, s, emplacement, cibles) {
       const e = s.effet;
-      if (emplacement > 0) u.c.emplacements[emplacement] = (Number(u.c.emplacements[emplacement]) || 0) + 1;
-      if (P.lanceur(jeu, u.c)?.type === 'occultiste' && emplacement > 0) u.c.pacte = (Number(u.c.pacte) || 0) + 1;
+      if (emplacement > 0 && !sansEmp(u)) u.c.emplacements[emplacement] = (Number(u.c.emplacements[emplacement]) || 0) + 1;
+      if (P.lanceur(jeu, u.c)?.type === 'occultiste' && emplacement > 0 && !sansEmp(u)) u.c.pacte = (Number(u.c.pacte) || 0) + 1;
+      const paye = M ? JdrMeca.payer(jeu, u.c, 'sort', Number(s.niveau)) : '';
+      if (paye) ui.nombre('heros', u.i, paye, 'info');
       ui.bandeau(`${s.nom}${emplacement > Number(s.niveau) ? ` (niveau ${emplacement})` : ''}`);
       maj(u);
       await ui.animer('heros', u.i, 'avance');
@@ -659,7 +722,7 @@ const JdrCombat = (() => {
           const l = sorts().filter((s) => !estBonus(s));
           const k = await ui.liste('Lancer un sort', l.map((s) => ({
             texte: s.nom, couleur: Number(s.niveau) ? '' : '#9aa0aa',
-            detail: `${Number(s.niveau) ? `niv. ${s.niveau}` : 'tour'}${s.concentration ? ' · concentration' : ''}${peutLancer(u, s) ? '' : ' · plus d\'emplacement'}`, desactive: !peutLancer(u, s),
+            detail: `${Number(s.niveau) ? `niv. ${s.niveau}` : 'tour'}${s.concentration ? ' · concentration' : ''}${peutLancer(u, s) ? '' : M && !JdrMeca.peutPayer(jeu, u.c, 'sort', Number(s.niveau)) ? ` · pas assez de ${JdrMeca.couts(jeu, u.c, 'sort', Number(s.niveau)).map((x) => x.nom.toLowerCase()).join(', ')}` : ' · plus d\'emplacement'}${M ? JdrMeca.couts(jeu, u.c, 'sort', Number(s.niveau)).map((x) => ` · ${x.nom} ${x.cout}`).join('') : ''}`, desactive: !peutLancer(u, s),
           })), true);
           if (k == null) continue;
           const s = l[k];

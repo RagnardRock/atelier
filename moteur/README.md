@@ -407,7 +407,12 @@ Tafl › Données › Réglages › **Mécaniques** (pack JDR) change le fonctio
 - **Initiative** : la 5e, un dé et une formule à soi, ou un camp d'abord ;
 - **Repos et niveaux** : les PV rendus par un repos court ou long, les PV gagnés à un niveau (des formules) ;
 - **États** : un malus, des dégâts ou des soins à chaque tour, un jet pour en sortir ;
-- **Champs des monstres** : un monstre a ses valeurs pour les champs de la fiche (couverture, armure, parade…).
+- **Champs des monstres** : un monstre a ses valeurs pour les champs de la fiche (couverture, armure, parade…) ;
+- **Ressources** : une jauge de la fiche (mana, munitions, stress) que les sorts ou les tirs dépensent, qui revient
+  aux repos et donne un malus quand elle est vide ; le mana peut remplacer les emplacements de sorts ;
+- **Relances** : dés explosifs, points de destin pour relancer un jet raté ;
+- **Critiques** : le seuil, l'effet (doublés, maximum, des dés en plus), une table de critiques et une de
+  maladresses ; et des dégâts selon la **marge de réussite**.
 
 Les formules lisent les champs de la Fiche des personnages. Deux modèles : « D&D 5e » (les règles du pack) et
 « Armure et blessures ». La fiche montre la défense, l'armure, le palier et les blessures ; le combat aussi.

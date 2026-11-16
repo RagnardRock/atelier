@@ -269,6 +269,10 @@ const DonneesJdr = (() => {
       initiative: { mode: INITIATIVES.some(([k]) => k === x.initiative?.mode) ? x.initiative.mode : '', de: t(x.initiative?.de, 20) || '1d20', bonus: t(x.initiative?.bonus) },
       repos: { court: t(x.repos?.court), long: t(x.repos?.long) },
       niveau_pv: t(x.niveau_pv),
+      ressources: arr(x.ressources).filter((r) => r && t(r.champ, 40)).slice(0, 10).map((r) => ({ champ: t(r.champ, 40), sorts: t(r.sorts), distance: e(r.distance, 0, 0, 20), remplace: Boolean(r.remplace), court: t(r.court), long: t(r.long), zero_malus: e(r.zero_malus, 0, -20, 20) })),
+      relances: { explosif: Boolean(x.relances?.explosif), destin: t(x.relances?.destin, 40) },
+      critique: { seuil: e(x.critique?.seuil, 0, 0, 20), effet: ['', 'doubler', 'max', 'plus'].includes(x.critique?.effet) ? x.critique.effet : '', plus: t(x.critique?.plus, 20), table: t(x.critique?.table, 40), maladresse: t(x.critique?.maladresse, 40) },
+      marge: { pas: e(x.marge?.pas, 0, 0, 50), bonus: e(x.marge?.bonus, 1, -20, 20) },
       etats: arr(x.etats).filter((y) => y && t(y.id, 40)).slice(0, 40).map((y) => ({ id: t(y.id, 40), malus: e(y.malus, 0, -20, 20), degats: t(y.degats, 20), soin: t(y.soin, 20), fin_de: t(y.fin_de, 20), fin_seuil: e(y.fin_seuil, 0, 0, 100) })),
     };
   }
@@ -1180,7 +1184,7 @@ const DonneesJdr = (() => {
         champ('Utiliser ces mécaniques', c),
       ];
       if (!actif) { corps.replaceChildren(...out); return; }
-      if (!m.resolution || !m.initiative || !m.repos || !Array.isArray(m.etats)) { j.mecaniques = normMeca(m); dessiner(); return; }
+      if (!m.resolution || !m.initiative || !m.repos || !Array.isArray(m.etats) || !Array.isArray(m.ressources) || !m.relances || !m.critique || !m.marge) { j.mecaniques = normMeca(m); dessiner(); return; }
       const res = m.resolution;
       const BD = ['bonus', 'dd'];
       const parSysteme = {
@@ -1218,8 +1222,32 @@ const DonneesJdr = (() => {
         section('Dégâts'),
         champ('Retiré des dégâts', formule(m, 'absorption', 'armure'), ''),
         champ('Dégâts minimum après l\'armure', nombre(m, 'degat_min', 0, 10)),
+        champ('Marge de réussite', el('span', { className: 'inline' }, [el('span', { className: 'unit', textContent: '+' }), nombre(m.marge, 'bonus', -20, 20), el('span', { className: 'unit', textContent: 'aux dégâts par tranche de' }), nombre(m.marge, 'pas', 0, 50), el('span', { className: 'unit', textContent: 'au-dessus de la défense (0 : rien)' })])),
         champ('Où le coup touche', sel([['', '(pas de localisation)'], ...m.tables.map((t) => [t.id, t.nom])], m.localisation || '', (v) => { m.localisation = v; ctx.change?.(); })),
         info('Une table tirée à chaque coup qui touche (la tête, le torse, un bras…). La colonne « Dégâts % » de ses lignes multiplie les dégâts : 200 à la tête, 50 sur un bras.'),
+        section('Critiques'),
+        champ('Critique sur un d20 de', el('span', { className: 'inline' }, [nombre(m.critique, 'seuil', 0, 20), el('span', { className: 'unit', textContent: 'ou plus (0 : 20, la règle du pack)' })])),
+        champ('Effet d\'un critique', sel([['', 'La règle du pack (Réglages › Règles)'], ['doubler', 'Les dés de dégâts doublés'], ['max', 'Le maximum des dés, plus un jet'], ['plus', 'Des dés en plus']], m.critique.effet, (v) => { m.critique.effet = v; ctx.change?.(); dessiner(); })),
+        ...(m.critique.effet === 'plus' ? [champ('Dés en plus', texte(m.critique, 'plus', '1d6'))] : []),
+        champ('Table des critiques', sel([['', '(aucune)'], ...m.tables.map((t) => [t.id, t.nom])], m.critique.table || '', (v) => { m.critique.table = v; ctx.change?.(); dessiner(); })),
+        champ('Table des maladresses', sel([['', '(aucune)'], ...m.tables.map((t) => [t.id, t.nom])], m.critique.maladresse || '', (v) => { m.critique.maladresse = v; ctx.change?.(); })),
+        info('Un critique tire sur sa table (« Dégâts % » multiplie les dégâts : 300 pour une tête tranchée). Un échec critique (un 1 naturel, ou celui du système) tire sur celle des maladresses : l\'attaque est perdue et le texte dit ce qui arrive. Les autres systèmes que le d20 ont leur propre critique.'),
+        section('Relances'),
+        champ('Dés explosifs', (() => { const i = el('input', { type: 'checkbox', checked: Boolean(m.relances.explosif) }); i.onchange = () => { m.relances.explosif = i.checked; ctx.change?.(); }; return i; })()),
+        champ('Points pour relancer', sel([['', '(aucun)'], ...(j.fiche?.champs || []).filter((c) => c.type === 'nombre' || c.type === 'jauge').map((c) => [c.id, c.nom])], m.relances.destin || '', (v) => { m.relances.destin = v; ctx.change?.(); })),
+        info('Dés explosifs : un dé de dégâts au maximum se relance et s\'ajoute (un 6 de la réserve donne un dé de plus). Points pour relancer : un champ de la fiche (Destin, Chance…) ; après un jet raté, le héros peut en dépenser un pour relancer.'),
+        section('Ressources'),
+        info('Une jauge de la Fiche des personnages (Mana, Munitions, Stress…) qui se dépense et revient. Sorts : ce que coûte un sort, une formule qui lit niveau_sort (exemple : niveau_sort * 2 + 1) ; « au lieu des emplacements » : les sorts ne prennent plus d\'emplacement. Tir : par attaque à distance. Repos : ce qui revient (long vide : la jauge se remplit). À zéro : un malus aux jets.'),
+        table(m.ressources, [
+          ['Jauge', (x) => sel([['', '(choisir)'], ...(j.fiche?.champs || []).filter((c) => c.type === 'jauge' || c.type === 'nombre').map((c) => [c.id, c.nom])], x.champ, (v) => { x.champ = v; ctx.change?.(); }), true],
+          ['Sorts', (x) => formule(x, 'sorts', 'niveau_sort', ['niveau_sort'])],
+          ['Au lieu des emplacements', (x) => { const i = el('input', { type: 'checkbox', checked: Boolean(x.remplace) }); i.onchange = () => { x.remplace = i.checked; ctx.change?.(); }; return i; }],
+          ['Tir', (x) => nombre(x, 'distance', 0, 20)],
+          ['Repos court', (x) => formule(x, 'court', '')],
+          ['Repos long', (x) => formule(x, 'long', 'vide : pleine')],
+          ['À zéro', (x) => nombre(x, 'zero_malus', -20, 20)],
+        ], () => ({ champ: '', sorts: '', distance: 0, remplace: false, court: '', long: '', zero_malus: 0 }), { ajouter: '+ Ressource', max: 10, change: ctx.change }),
+        ...(!(j.fiche?.champs || []).some((c) => c.type === 'jauge') ? [info('La fiche du jeu n\'a pas encore de jauge : ajoute-en une dans Réglages › Fiche des personnages (Mana, max : 10 + niveau * 2).')] : []),
         section('Initiative'),
         champ('Qui joue en premier', sel(INITIATIVES, m.initiative.mode, (v) => { m.initiative.mode = v; ctx.change?.(); dessiner(); })),
         ...(m.initiative.mode === 'jet' ? [
