@@ -142,8 +142,8 @@ const Sprites = (() => {
     return true;
   }
 
-  // --- L'éditeur, dans la fiche du personnage (Jeu › Données du jeu › Personnages) ---
-  // p : le personnage (modifié sur place : p.sprite) ; palette : les couleurs du jeu de tuiles ;
+  // --- L'éditeur, dans la fiche du personnage (Données › Personnages) ---
+  // p : le personnage (modifié sur place : p.sprite) ; palette : les couleurs du lot de tuiles ;
   // tuile() : le canvas de sa tuile (ou null), pour partir de lui quand on crée le sprite.
   // Tafl 1.34 : le personnage de base de Saga (../commun/perso-base.js), en planches PNG prêtes à retoucher :
   // { sprite, animations: { repos, attaque, coup, mort } }. coiffure : '' (tirée de la couleur), casquette,
@@ -207,7 +207,7 @@ const Sprites = (() => {
     function renderVide() {
       const hauteur = el('select');
       hauteur.add(new Option(`${tileSize} × ${tileSize} (une case)`, String(tileSize)));
-      hauteur.add(new Option(`${tileSize} × ${tileSize * 2} (une case et la tête au-dessus, comme dans Pokémon)`, String(tileSize * 2)));
+      hauteur.add(new Option(`${tileSize} × ${tileSize * 2} (une case et la tête au-dessus)`, String(tileSize * 2)));
       hauteur.value = String(tileSize * 2);
       const nb = el('select');
       for (const n of [1, 2, 3, 4]) nb.add(new Option(n === 1 ? '1 (pas d\'animation)' : n === 3 ? '3 (debout, pied gauche, pied droit)' : String(n), String(n)));

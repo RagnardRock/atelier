@@ -9,7 +9,7 @@
 // Les cases vides du morceau ne recouvrent rien : on peut coller un arbre sur de l'herbe.
 //
 // Le morceau garde les numéros de tuiles : il se colle dans le même jeu (n'importe quelle carte),
-// pas dans un autre jeu de tuiles, où les numéros ne voudraient plus rien dire.
+// pas dans un autre lot de tuiles, où les numéros ne voudraient plus rien dire.
 
 const PressePapiers = (() => {
   let clip = null;

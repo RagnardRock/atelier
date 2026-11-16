@@ -279,10 +279,10 @@ const Espaces = (() => {
     corps,
   ]);
   const packDe = (doc) => doc.data?.reglages?.regles || 'pokemon';
-  const nomPack = (doc) => {
-    const p = (typeof Donnees !== 'undefined' ? Donnees.REGLES : []).find(([k]) => k === packDe(doc));
-    return p ? p[1].split(' :')[0] : packDe(doc);
-  };
+  // Tafl 1.41.2 : un seul nom court par pack, partout (celui des Réglages).
+  const nomPack = (doc) => (typeof Donnees !== 'undefined' ? Donnees.nomPack(packDe(doc)) : packDe(doc));
+  // Ce que le Test rapide permet de choisir, selon le pack (pas de badges hors Pokémon).
+  const contenuTest = (doc) => ({ pokemon: 'l\'équipe, les badges, les objets', jrpg: 'le groupe, les objets', jdr: 'le groupe, les objets' }[packDe(doc)] || 'les objets');
   // Les listes de données du pack du jeu (comme la page Données).
   // Tafl 1.3 : et ceux d'un module seulement si le jeu l'active (Réglages › Règles du jeu › Modules).
   const ongletsDuPack = (doc) => [...Events.ONGLETS, ...(typeof Donnees !== 'undefined' ? Donnees.ONGLETS : [])].filter((d) => (!d.packs || d.packs.includes(packDe(doc))) && (!d.modules || d.modules.some((m) => (doc.data?.reglages?.modules || []).includes(m))));
@@ -292,7 +292,7 @@ const Espaces = (() => {
   function lignesVerif(doc, r, max = Infinity) {
     const box = el('div', { className: 'verif-liste' });
     if (!r.problemes.length) {
-      box.append(el('div', { className: 'verif-vide petit' }, [icon('pass-filled'), el('strong', { textContent: 'Aucun problème trouvé.' }), el('span', { textContent: 'Les téléporteurs, les accès, les quêtes et les ids sont en ordre.' })]));
+      box.append(el('div', { className: 'verif-vide petit' }, [icon('pass-filled'), el('strong', { textContent: 'Aucun problème trouvé.' }), el('span', { textContent: 'Téléporteurs, accès, quêtes et identifiants en ordre.' })]));
       return box;
     }
     const tri = [...r.problemes].sort((a, b) => (a.gravite === b.gravite ? 0 : a.gravite === 'erreur' ? -1 : 1));
@@ -338,7 +338,7 @@ const Espaces = (() => {
       el('div', { className: 'accueil-titre' }, [
         el('h1', { textContent: doc.name }),
         el('p', {}, [
-          doc.game ? el('span', { className: 'pack-badge', title: 'Le pack de règles du jeu : il décide des combats et des données (Données › Réglages)', textContent: `Pack ${nomPack(doc)}` }) : el('span', { className: 'pack-badge', textContent: 'Jeu de tuiles' }),
+          doc.game ? el('span', { className: 'pack-badge', title: 'Le pack de règles du jeu : il décide des combats et des données (Données › Réglages)', textContent: `Pack ${nomPack(doc)}` }) : el('span', { className: 'pack-badge', textContent: 'Lot de tuiles' }),
           ` · tuiles ${doc.tileSize} × ${doc.tileSize}${doc.game?.folder ? ` · ${doc.game.folder}` : doc.path ? ` · ${doc.path}` : ' · pas encore enregistré'}${doc.dirty ? ' · modifié' : ''}`,
         ]),
       ]),
@@ -402,8 +402,8 @@ const Espaces = (() => {
       b.onclick = () => App.run(run);
       raccourcis.append(b);
     };
-    rac('beaker', 'Test rapide', 'Ctrl+F5 · équipe, objets et badges choisis', () => App.testRapide(), Boolean(doc.game));
-    rac('export', 'Exporter le jeu', 'version web et Windows (.exe)', () => App.exporterJeu(), Boolean(doc.game));
+    rac('beaker', 'Test rapide', `Ctrl+F5 · ${contenuTest(doc)}`, () => App.testRapide(), Boolean(doc.game));
+    rac('export', 'Exporter le jeu', 'page web et installateur Windows', () => App.exporterJeu(), Boolean(doc.game));
     rac('database', 'Données du jeu', 'Alt+5 · personnages, quêtes, et celles du pack', () => aller('donnees'), Boolean(doc.game));
     rac('sparkle', 'Générer des tuiles', 'ComfyUI · Ctrl+Maj+G', () => Comfy.fenetre());
     rac('file-media', 'Importer une planche', 'PNG à découper · Ctrl+I', () => IO.importDialog());
@@ -450,12 +450,12 @@ const Espaces = (() => {
     const cartes = el('div', { className: 'jeu-cartes' });
     const carte = (ic, titre, texte, ...boutons) => cartes.append(el('div', { className: 'jeu-carte' }, [el('h3', {}, [icon(ic), titre]), el('p', { textContent: texte }), el('div', { className: 'jeu-boutons' }, boutons.filter(Boolean))]));
     if (!doc.game) {
-      carte('game', 'Ce n\'est pas encore un jeu', 'C\'est un jeu de tuiles (.tafl). Enregistre-le comme dossier de jeu pour avoir plusieurs cartes, des événements, des données, et y jouer dans Saga.', bouton('Enregistrer comme dossier de jeu…', 'save', () => IO.saveAsGame(doc), true));
+      carte('game', 'Ce n\'est pas encore un jeu', 'C\'est un lot de tuiles (.tafl). Enregistre-le comme dossier de jeu pour avoir plusieurs cartes, des événements, des données, et y jouer dans Saga.', bouton('Enregistrer comme dossier de jeu…', 'save', () => IO.saveAsGame(doc), true));
     } else {
       carte('play', 'Jouer', 'Lance le jeu dans Saga, depuis le départ du joueur. Maj+F5 sur une carte : depuis la case sous la souris.', bouton('Jouer', 'play', () => App.jouer(false), true, 'F5'));
-      carte('beaker', 'Test rapide', 'Choisis l\'équipe, le niveau, les objets, les badges et l\'endroit, puis lance une partie de test.', bouton('Préparer un test…', 'beaker', () => App.testRapide(), false, 'Ctrl+F5'));
-      carte('export', 'Exporter le jeu', 'Une version web (index.html) et une version Windows (.exe) dans un zip, prêtes à partager.', bouton('Exporter…', 'export', () => App.exporterJeu()));
-      carte('law', `Pack de règles : ${nomPack(doc)}`, 'Il décide des combats, des statistiques et des données du jeu. Il se change dans Données › Réglages, avec l\'interface de Saga, le jour et la nuit, les sons…', bouton('Réglages du jeu…', 'settings-gear', () => aller('donnees', { tab: 'reglages' })));
+      carte('beaker', 'Test rapide', `Choisis ${contenuTest(doc)} et l'endroit, puis lance une partie de test.`, bouton('Préparer un test…', 'beaker', () => App.testRapide(), false, 'Ctrl+F5'));
+      carte('export', 'Exporter le jeu', 'Une page web (.html) et un installateur Windows (.exe), prêts à partager.', bouton('Exporter…', 'export', () => App.exporterJeu()));
+      carte('law', `Pack de règles : ${nomPack(doc)}`, 'Il décide des combats et des statistiques. Il se change dans Données › Réglages.', bouton('Réglages du jeu…', 'settings-gear', () => aller('donnees', { tab: 'reglages' })));
       carte('globe', 'Carte monde', 'Les villes et les routes ensemble, placées selon leurs téléporteurs.', bouton('Ouvrir la carte monde…', 'globe', () => App.openWorld(), false, 'Ctrl+Maj+M'));
       carte('book', 'Mode d\'emploi', 'Le guide de Tafl et Saga, avec captures : créer un jeu, le jouer, le mode table, le compagnon.', bouton('Ouvrir le mode d\'emploi', 'book', () => window.tafl.ouvrirManuel()));
       carte('edit', 'Titre et dossier', `« ${doc.name} »${doc.game.folder ? ` · ${doc.game.folder}` : ' · pas encore enregistré'}`, bouton('Renommer…', 'edit', () => App.renameGame()), doc.game.folder ? bouton('Afficher le dossier', 'folder-opened', () => window.tafl.revealFile(doc.path)) : null);
@@ -470,7 +470,7 @@ const Espaces = (() => {
 
   return {
     aide: () => LISTE.find((e) => e.id === courant)?.aide || '',
-    LISTE, aller, numero, suivant, choisirScript, majBarre, appliquer, recharger, fermerPage, estPage, rendre, ongletsDuPack, libelle, nomPack, packDe,
+    LISTE, aller, numero, suivant, choisirScript, majBarre, appliquer, recharger, fermerPage, estPage, rendre, ongletsDuPack, libelle, nomPack, packDe, contenuTest,
     get courant() { return courant; },
   };
 })();

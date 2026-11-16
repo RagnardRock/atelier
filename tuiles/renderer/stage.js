@@ -513,7 +513,7 @@ const Stage = (() => {
     const doc = App.doc;
     const piece = PressePapiers.pourDoc(doc);
     if (!piece) {
-      notify(PressePapiers.clip ? 'Ce morceau vient d\'un autre jeu de tuiles : ses numéros de tuiles ne correspondent pas ici.' : 'Rien à coller : sélectionne et copie d\'abord un morceau de carte (outil Sélection, R, puis Ctrl+C).', 'info', 4000);
+      notify(PressePapiers.clip ? 'Ce morceau vient d\'un autre lot de tuiles : ses numéros de tuiles ne correspondent pas ici.' : 'Rien à coller : sélectionne et copie d\'abord un morceau de carte (outil Sélection, R, puis Ctrl+C).', 'info', 4000);
       return false;
     }
     if (App.mode !== 'map') App.setMode('map');

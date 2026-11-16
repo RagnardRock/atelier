@@ -1,6 +1,6 @@
-// Palettes proposées à la création d'un jeu de tuiles (et dans le panneau Palette).
+// Palettes proposées à la création d'un lot de tuiles (et dans le panneau Palette).
 // Une palette = un id, un nom affiché et une liste de couleurs. En ajouter une : une ligne de plus.
-// La palette d'un jeu de tuiles est ensuite la sienne : tu peux y ajouter ou retirer des couleurs.
+// La palette d'un lot de tuiles est ensuite la sienne : tu peux y ajouter ou retirer des couleurs.
 
 const PALETTES = [
   {

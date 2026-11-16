@@ -157,7 +157,7 @@ const IO = (() => {
     } catch {
       throw new Error(`${file.name} n'est pas un fichier Tafl valide (JSON illisible)`);
     }
-    if (data.format !== 'tafl') throw new Error(`${file.name} n'est pas un jeu de tuiles Tafl`);
+    if (data.format !== 'tafl') throw new Error(`${file.name} n'est pas un lot de tuiles Tafl`);
     if (data.version > 1) throw new Error(`${file.name} vient d'une version plus récente de Tafl : mets Tafl à jour pour l'ouvrir`);
     const s = Number(data.tileSize) || 16;
     const doc = Doc.create({ name: data.name || file.name.replace(/\.tafl$/i, ''), tileSize: s, palette: data.palette || [], tiles: 0, columns: data.columns || 8, mapWidth: data.map?.width || 20, mapHeight: data.map?.height || 15 });
@@ -368,7 +368,7 @@ const IO = (() => {
     notify(`Jeu enregistré : ${doc.maps.length} carte(s) dans ${folder}`, 'success', 3000, [{ label: 'Afficher', run: () => window.tafl.revealFile(saved.path) }]);
     return true;
   }
-  // Fichier › Enregistrer comme dossier de jeu… : un simple jeu de tuiles devient un dossier de jeu.
+  // Fichier › Enregistrer comme dossier de jeu… : un simple lot de tuiles devient un dossier de jeu.
   async function saveAsGame(doc) {
     const before = doc.game;
     doc.game = { folder: null, fichiers: [] };
@@ -604,7 +604,7 @@ const IO = (() => {
         { key: 'fond', label: 'Fond à rendre transparent', type: 'select', value: defauts.fond ?? (fond.couleurs.length ? 'auto' : 'aucun'), choices: FONDS },
         { key: 'couleur', label: 'Couleur du fond', type: 'color', value: fond.couleurs[0] || '#ff00ff' },
         { key: 'petits', label: 'Garder les petits morceaux de cette couleur au milieu des objets', type: 'checkbox', value: true },
-        { key: 'target', label: 'Destination', type: 'select', value: doc ? 'add' : 'new', choices: doc ? [['add', `Ajouter au jeu ouvert (${doc.name})`], ['new', 'Nouveau jeu de tuiles']] : [['new', 'Nouveau jeu de tuiles']] },
+        { key: 'target', label: 'Destination', type: 'select', value: doc ? 'add' : 'new', choices: doc ? [['add', `Ajouter au jeu ouvert (${doc.name})`], ['new', 'Nouveau lot de tuiles']] : [['new', 'Nouveau lot de tuiles']] },
         { key: 'skipEmpty', label: 'Ignorer les cases entièrement transparentes', type: 'checkbox', value: true },
         { key: 'dedupe', label: 'Une seule fois chaque tuile identique', type: 'checkbox', value: true },
         { key: 'tampons', label: noms ? 'Chercher en plus les objets de plusieurs tuiles (la planche nommée a déjà ses tampons)' : 'Un tampon pour chaque objet de plusieurs tuiles (arbre, maison…)', type: 'checkbox', value: defauts.tampons ?? !noms },
@@ -688,7 +688,7 @@ const IO = (() => {
     if (target === doc) {
       let r;
       Doc.change(doc, `Importer ${file.name}`, () => { r = add(); });
-      notify(`${bilan(r)} ajouté(s) depuis ${file.name}.${r.stamps ? ' Les tampons sont dans le panneau Tampons (mode Carte).' : ''}`, 'success', 5000);
+      notify(`${bilan(r)} ajouté(s) depuis ${file.name}.${r.stamps ? ' Les tampons sont dans le panneau Tampons (espace Cartes).' : ''}`, 'success', 5000);
     } else {
       const r = add();
       if (!target.tiles.length) Doc.addTile(target);

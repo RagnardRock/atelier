@@ -1634,3 +1634,11 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 body.espace-page #status-tile, body.espace-page #status-zoom { display: none; }
 /* Test rapide : l'aide sous le groupe ne pousse plus le reste vers le bas. */
 .test-main .editor-hint { flex: 0 0 auto; }
+/* Tafl 1.41.2 : la licence du SRD repliée, sous le bouton du modèle. */
+details.licence { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+details.licence summary { cursor: pointer; }
+details.licence p { margin: 6px 0 0; user-select: text; }
+.button.danger { color: #ff9b9b; border-color: rgba(255, 120, 120, 0.3); }
+.button.danger:hover { background: rgba(255, 90, 90, 0.14); color: #ffc1c1; }
+/* Tafl 1.41.2 : un seul style pour les boutons « + Ajouter » (plus de pointillés). */
+.cmd-add { border-style: solid; border-color: var(--border, rgba(255, 255, 255, 0.1)); background: rgba(255, 255, 255, 0.04); color: var(--text); }
