@@ -917,7 +917,7 @@ const TableMode = (() => {
       return { campagne: { nom: table().campagne?.nom || jeu()?.titre || '', fond: empreinte(f) } };
     }
     function extrasPour(nom, r) {
-      const x = {};
+      const x = { ...TableDocuments.vue(table(), nom, false, montre) };
       if (avis.has(nom)) x.avis = avis.get(nom);
       const e = creations.get(nom);
       if (e) x.creation = e.q || { sorte: 'attente' };
@@ -929,9 +929,61 @@ const TableMode = (() => {
       }
       return x;
     }
+    // --- Saga 1.37 : les documents du MJ (table/documents.js) ---
+    // montre : celui que le MJ vient d'ouvrir sur les écrans de ceux qui l'ont (et la télé, s'il est à tous).
+    let montre = null, numeroMontre = 0, docsPousses = '';
+    const envois = new Map(); // une photo du téléphone du MJ, morceau par morceau : envoi → { n, morceaux, meta, t }
+    function docAgir(a) {
+      const res = TableDocuments.agir(table(), a);
+      if (!res.ok) { h.message(res.erreur); return res; }
+      if (res.montre) montre = { id: res.doc.id, n: ++numeroMontre };
+      if (a.type === 'doc_retirer' && montre?.id === a.id) montre = null;
+      if (a.type === 'doc_donner' && montre?.id === a.id && TableDocuments.brouillon(res.doc)) montre = null;
+      envoyes.clear();
+      panneau?.rafraichir();
+      return res;
+    }
+    function cacherDocument() { montre = null; envoyes.clear(); panneau?.rafraichir(); }
+    // À qui le MJ peut donner : les amis venus (même partis) et ceux qui jouent un héros.
+    function destinataires() {
+      const noms = new Map();
+      for (const n of Object.keys(roles())) if (n) noms.set(n.toLowerCase(), n);
+      for (const j of h.multi?.()?.joueurs || []) if (!j.hote && j.nom) noms.set(j.nom.toLowerCase(), j.nom);
+      return [...noms.values()].sort((a, b) => a.localeCompare(b, 'fr'));
+    }
+    // Les images partent au serveur (une fois, quand la liste change) ; les vues n'en portent que l'empreinte.
+    function pousserDocuments() {
+      if (!window.saga.tableDocuments) return;
+      const l = TableDocuments.liste(table()).filter((d) => d.image && !TableDocuments.brouillon(d));
+      const sig = JSON.stringify(l.map((d) => [d.id, d.pour, TableDocuments.empreinte(d.image)]));
+      if (sig === docsPousses) return;
+      docsPousses = sig;
+      window.saga.tableDocuments(l.map((d) => ({ id: d.id, image: d.image, pour: d.pour })));
+    }
+    // Une photo prise avec le téléphone du MJ arrive en morceaux (une demande est petite) ; au dernier, c'est
+    // un nouveau document.
+    function morceauDocument(a) {
+      const id = String(a.envoi || '').slice(0, 40), n = Math.round(Number(a.n)), i = Math.round(Number(a.i));
+      const data = String(a.data || '');
+      if (!id || !(n > 0 && n <= 600) || !(i >= 0 && i < n) || data.length > 15000 || !/^[A-Za-z0-9+/=]*$/.test(data)) return;
+      for (const [k, e] of envois) if (Date.now() - e.t > 120e3) envois.delete(k);
+      const e = envois.get(id) || { n, morceaux: new Array(n), recus: 0, t: Date.now() };
+      if (e.n !== n) return;
+      if (e.morceaux[i] == null) e.recus++;
+      e.morceaux[i] = data;
+      e.t = Date.now();
+      envois.set(id, e);
+      if (e.recus < n) return;
+      envois.delete(id);
+      docAgir({ type: 'doc_nouveau', titre: a.titre, texte: a.texte, image: `data:image/jpeg;base64,${e.morceaux.join('')}`, pour: a.pour, montrer: a.montrer });
+    }
+
     // Saga 1.34 : ce que demande le téléphone du MJ.
     function actionCompagnonMj(a) {
-      if (a.type === 'macro') {
+      if (a.type === 'doc_morceau') morceauDocument(a);
+      else if (a.type === 'doc_cacher') cacherDocument();
+      else if (/^doc_(nouveau|modifier|donner|montrer|retirer)$/.test(a.type)) docAgir(a);
+      else if (a.type === 'macro') {
         const m = (table().macros || [])[Math.round(Number(a.k))];
         if (m) commande(`/m ${m.nom}`, { mj: true }, 'MJ', 'hote');
       } else if (a.type === 'pv') changerPv(String(a.pion || ''), a);
@@ -1010,17 +1062,19 @@ const TableMode = (() => {
       if (chronoEnvoi >= 0.12) {
         chronoEnvoi = 0;
         if (window.saga.tableEnvoyer) {
-          const v = JSON.stringify({ ...vuePour({ mj: false, perso: null }), campagne: { nom: table().campagne?.nom || jeu()?.titre || '' } });
+          pousserDocuments();
+          const v = JSON.stringify({ ...vuePour({ mj: false, perso: null }), campagne: { nom: table().campagne?.nom || jeu()?.titre || '' }, ...TableDocuments.vue(table(), '', false, montre) });
           if (v !== envoye) { envoye = v; window.saga.tableEnvoyer(v); }
         }
         // Le multijoueur : à chaque ami, la vue de SON rôle (un spectateur voit celle de l'écran partagé).
         const multi = h.multi?.();
         if (multi?.actif && window.saga.reseauEnvoyer) {
+          pousserDocuments();
           for (const j of multi.joueurs) {
             // Saga 1.34 : le téléphone du MJ reçoit la vue du MJ (tout), seulement s'il y en a un.
             if (j.hote) {
               if (!j.compagnons) continue;
-              const v = JSON.stringify({ ...vuePour({ mj: true }), ...extrasCompagnon() });
+              const v = JSON.stringify({ ...vuePour({ mj: true }), ...extrasCompagnon(), ...TableDocuments.vue(table(), '', true, montre), destinataires: destinataires() });
               if (envoyes.get('hote') !== v) { envoyes.set('hote', v); window.saga.reseauEnvoyer('hote', 'vue', v); }
               continue;
             }
@@ -1101,6 +1155,9 @@ const TableMode = (() => {
       changerPv,
       outils,
       occupe: () => h.occupe(),
+      // Saga 1.37 : les documents (le volet Documents du MJ, son téléphone).
+      documents: () => TableDocuments.liste(table()), docAgir, cacherDocument, destinataires,
+      get montre() { return montre; },
     };
     return api;
   }

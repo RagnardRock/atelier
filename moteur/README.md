@@ -390,6 +390,22 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.37 : les documents du MJ
+
+- **Onglet Docs** du panneau du MJ : une image (PNG, JPEG, WebP, réduite à 1600 px) ou un texte (une lettre,
+  un indice), avec un titre. Un document créé est un **brouillon** : personne ne l'a tant que le MJ ne le donne
+  pas, à un joueur, à plusieurs ou à tous, et peut l'ouvrir tout de suite sur leur écran.
+- **Montrer** (l'œil) : le document s'ouvre en grand chez ceux qui l'ont ; un brouillon montré est donné à
+  tous. L'écran des joueurs (la télé) affiche ce que le MJ montre à tous, tant qu'il le montre.
+- **Chez un ami** : onglet Docs (une pastille quand un document arrive), visionneuse (clic sur l'image : zoom).
+  **Sur le compagnon** : onglet Documents, vibration et « Nouveau », plein écran. Le téléphone du MJ prend une
+  photo, choisit à qui la donner, et l'envoie en petits morceaux (le relais n'a pas à être mis à jour).
+- Les documents sont gardés dans la partie (`table.documents`). Les images ne passent jamais dans la vue :
+  l'hôte les sert (`/document`, `/compagnon/document`) seulement à ceux à qui elles ont été données.
+- Le QR du compagnon porte son code dans la requête (`/compagnon/?lien=…`) et non plus après le `#`, que certains lecteurs de QR (Google Lens) perdent : le téléphone arrivait sur l'accueil sans être relié. Les anciens liens en `#lien=` marchent toujours.
+- Retours de l'essai de la 1.36 : le tapis de dés est plus petit par défaut (480 × 310), et le bouton
+  « Activer la secousse » (iPhone) dit si le téléphone accepte ou refuse ; sur Android, si `devicemotion` ne donne rien, le compagnon essaie le capteur d'accélération (Generic Sensor API) et propose « Réessayer la secousse ».
+
 ## Ce que fait Saga 1.36 : après le premier essai de la table en verre
 
 - **Compagnon** : il ne se délie plus au premier lancer derrière le relais (le jeton passe aussi dans l'adresse ;

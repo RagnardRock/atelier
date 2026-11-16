@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld('saga', {
   onTableVue: (callback) => ipcRenderer.on('table:vue', (_event, json) => callback(json)),
   tableDemander: (a) => ipcRenderer.send('table:action', a),
   onTableAction: (callback) => ipcRenderer.on('table:action', (_event, a) => callback(a)),
+  // Saga 1.37 : les documents du MJ. Sa fenêtre envoie les images ; l'écran des joueurs demande celle d'un
+  // document donné à tous (une data: URL, ou '').
+  tableDocuments: (liste) => ipcRenderer.send('table:documents', liste),
+  tableDocument: (id) => ipcRenderer.invoke('table:document', id),
   // Le multijoueur (Saga 1.0) : ouvrir la partie aux amis (sur le réseau local), leur envoyer leur vue,
   // recevoir leurs demandes et la liste de qui est là.
   // o : { mode: 'table' | 'monde', nom (celui de l'hôte), titre, port }.

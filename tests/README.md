@@ -40,6 +40,10 @@ la page de l'essai (rubrique **Artifacts**).
   à côté du plateau, l'initiative en haut, les phrases du combat dans le chat), le tapis déplacé et redimensionné, deux rencontres lancées ensemble,
   Échap qui ouvre le menu du jeu en plein combat (Saga 1.36).
 
+- `essais/11-saga-documents.js` : les documents de Saga 1.37 : une lettre en brouillon donnée à un seul ami et
+  ouverte chez lui, une carte montrée à tous, le serveur qui refuse l'image à qui ne l'a pas, la photo prise par
+  le téléphone du MJ, le téléphone d'un joueur (vibration, « Nouveau »), un document repris.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

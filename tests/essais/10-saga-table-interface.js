@@ -62,7 +62,7 @@ module.exports = [
         await page.waitForTimeout(400);
 
         // --- Le MJ ---
-        egal(await page.locator('.table-onglet').allTextContents(), ['Chat', 'Pions', 'Scène', 'Joueurs'], 'les onglets du MJ');
+        egal(await page.locator('.table-onglet').allTextContents(), ['Chat', 'Pions', 'Scène', 'Docs', 'Joueurs'], 'les onglets du MJ');
         vrai(await page.locator('.ti-haut').isVisible() && await page.locator('.table-outils').isVisible(), 'la barre du haut et le rail d\'outils');
         await page.evaluate(() => {
           const T = App.moteur.table;
@@ -148,7 +148,7 @@ module.exports = [
         await capture(page, '5-mj-joueurs');
         await page.evaluate(() => { const T = App.moteur.table; const c = T.partie().equipe.find((x) => x.jdr && /Thorgrim/.test(x.nom || x.creature)); T.donnerRole('Lou', T.cleDe(c)); });
         await ami.waitForSelector('.ti-pion:not([hidden])');
-        egal(await ami.locator('.table-onglet').allTextContents(), ['Chat', 'Journal', 'Fiche', 'Joueurs'], 'les onglets de l\'ami');
+        egal(await ami.locator('.table-onglet').allTextContents(), ['Chat', 'Journal', 'Fiche', 'Docs', 'Joueurs'], 'les onglets de l\'ami');
         vrai((await ami.locator('.ti-titre b').textContent()).includes('Brumeval'), 'l\'ami voit le nom de la campagne');
         vrai((await ami.locator('.ti-pion-nom b').textContent()).includes('Thorgrim'), 'son héros en bas');
         // Ses macros, la touche 1, et le jet qui arrive chez lui et chez le MJ.

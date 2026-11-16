@@ -163,7 +163,7 @@
       // Saga 1.34 : relier son téléphone (le compagnon) par un QR code, ou couper ceux reliés.
       compagnon: async () => {
         const d = await envoyer('/compagnon/lien', {});
-        return { code: d.code, url: `${location.origin}${racine}/compagnon/#lien=${d.code}` };
+        return { code: d.code, url: `${location.origin}${racine}/compagnon/?lien=${d.code}` };
       },
       couperCompagnon: () => envoyer('/compagnon/couper', {}).catch(rien),
     },
@@ -207,6 +207,9 @@
     onTableVue: (callback) => sur('vue', (v) => callback(JSON.stringify(v))),
     tableDemander: (a) => envoyer('/action', a).catch(rien),
     onTableAction: rien,
+    // Saga 1.37 : l'image d'un document du MJ (l'hôte ne la sert que si elle m'a été donnée).
+    tableDocuments: rien,
+    tableDocument: async (id, v = '') => `${racine}/document?id=${encodeURIComponent(id)}&v=${encodeURIComponent(v)}&jeton=${encodeURIComponent(jeton)}`,
     listeSons: async () => [],
   };
 })();

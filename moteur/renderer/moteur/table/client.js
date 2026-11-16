@@ -81,6 +81,7 @@ const TableClient = (() => {
       montrerQuestion();
       montrerJournal();
       montrerMacros();
+      montrerDocuments();
       habit?.maj();
       if (v.avis && v.avis.n !== dernierAvis) { if (dernierAvis >= 0) notify?.(v.avis.texte, 'warning', 5000); dernierAvis = v.avis.n; }
       else if (!v.avis && dernierAvis < 0) dernierAvis = 0;
@@ -202,6 +203,55 @@ const TableClient = (() => {
       }
     }
 
+    // --- Saga 1.37 : les documents que le MJ m'a donnés (et celui qu'il montre maintenant) ---
+    const images = new Map(); // id:empreinte → promesse d'URL
+    const imageDe = (d) => {
+      if (!d.image) return '';
+      const k = `${d.id}:${d.image}`;
+      if (!images.has(k)) images.set(k, Promise.resolve(window.saga.tableDocument?.(d.id, d.image) || '').catch(() => ''));
+      return images.get(k);
+    };
+    let docsVus = null, dernierMontre = -1, nonLusD = 0;
+    const nouveauxDocs = new Set();
+    function ouvrirDocument(d, grand = false) {
+      nouveauxDocs.delete(d.id);
+      TableDocuments.ouvrir(d, { image: imageDe(d), grand, fermable: !grand });
+      habit?.maj?.();
+    }
+    function montrerDocuments() {
+      const l = vue?.documents || [];
+      if (docsVus == null) { docsVus = new Set(l.map((d) => d.id)); if (reseau) dernierMontre = vue?.montre?.n ?? -1; }
+      for (const d of l) {
+        if (docsVus.has(d.id)) continue;
+        docsVus.add(d.id);
+        if (!reseau) continue;
+        nouveauxDocs.add(d.id);
+        if (habit?.onglet !== 'documents') nonLusD++;
+        if (vue.montre?.id !== d.id) notify?.(`Le MJ t'a donné un document : ${d.titre}`, 'info', 5000);
+      }
+      const m = vue?.montre;
+      // L'écran des joueurs (la télé) montre le document tant que le MJ le montre.
+      if (!reseau) {
+        const o = TableDocuments.ouverte;
+        if (m && o?.id !== m.id) { const d = l.find((x) => x.id === m.id); if (d) ouvrirDocument(d, true); }
+        else if (!m && o) TableDocuments.fermer();
+        return;
+      }
+      if (m && m.n !== dernierMontre) {
+        dernierMontre = m.n;
+        const d = l.find((x) => x.id === m.id);
+        if (d) ouvrirDocument(d);
+      }
+      // Un document repris par le MJ se referme.
+      const o = TableDocuments.ouverte;
+      if (o && !l.some((d) => d.id === o.id)) TableDocuments.fermer();
+    }
+    function listeDocuments() {
+      const l = [...(vue?.documents || [])].sort((a, b) => b.t - a.t);
+      if (!l.length) return [el('p', { className: 'table-note table-vide', textContent: 'Les documents que le MJ te donne (images, lettres, cartes, indices) arrivent ici. Tu les gardes et les rouvres quand tu veux.' })];
+      return l.map((d) => TableDocuments.ligne(d, { image: imageDe(d), sous: TablePanneau.heure(d.t), nouveau: nouveauxDocs.has(d.id), ouvrir: () => ouvrirDocument(d) }));
+    }
+
     // --- Saga 1.35.1 : l'écran des joueurs du MJ (la télé, un 2e écran) dans le même verre : la barre du haut
     // (la campagne, la carte, l'état du combat), l'initiative en pastilles, les jets sur le tapis. Pas de
     // panneau ni de barre du bas : c'est un écran qu'on regarde.
@@ -242,7 +292,7 @@ const TableClient = (() => {
       tel.onclick = () => multi?.compagnon();
       const haut = el('header', { className: 'ti-haut ti-verre' }, el('div', { className: 'ti-titre' }, el('span', { className: 'ti-rune', textContent: 'ᛃ' }), titre, lieu), etat, el('div', { className: 'ti-actions' }, qui, tel));
       // Le panneau : la discussion et les jets, le journal, ma fiche, les joueurs.
-      const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['journal', 'Journal', 'book'], ['fiche', 'Fiche', 'person'], ['joueurs', 'Joueurs', 'organization']];
+      const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['journal', 'Journal', 'book'], ['fiche', 'Fiche', 'person'], ['documents', 'Docs', 'files'], ['joueurs', 'Joueurs', 'organization']];
       const colonne = el('aside', { className: 'table-colonne' });
       const racine = el('div', { className: 'table-panneau' });
       const nav = el('nav', { className: 'table-onglets' });
@@ -289,19 +339,22 @@ const TableClient = (() => {
       ordre.className = 'ti-ordre ti-verre';
       plateau.marges = () => ({ g: 72, d: largeur + 24, h: 64, b: 98 });
 
-      let nonLusC = 0, sigFil = '', derJ = 0, derC = 0, sigHaut = '', sigCarte = '';
+      let nonLusC = 0, sigFil = '', derJ = 0, derC = 0, sigHaut = '', sigCarte = '', sigDocs = '';
       function choisir(id) {
         onglet = id;
         ecrire('onglet-ami', id);
         if (id === 'chat') nonLusC = 0;
         if (id === 'journal') signatureJ = '';
+        if (id === 'documents') nonLusD = 0;
+        sigDocs = '';
         maj();
         if (id === 'chat') setTimeout(() => { fil.scrollTop = fil.scrollHeight; }, 0);
       }
       function dessinerOnglets() {
         nav.replaceChildren(...ONGLETS.map(([id, nom, ic]) => {
           const b = el('button', { type: 'button', className: `table-onglet${onglet === id ? ' on' : ''}`, title: nom },
-            el('i', { className: `codicon codicon-${ic}` }), el('span', { textContent: nom }), id === 'chat' && nonLusC ? el('b', { className: 'table-pastille', textContent: String(nonLusC) }) : null);
+            el('i', { className: `codicon codicon-${ic}` }), el('span', { textContent: nom }), id === 'chat' && nonLusC ? el('b', { className: 'table-pastille', textContent: String(nonLusC) }) : null,
+            id === 'documents' && nonLusD ? el('b', { className: 'table-pastille', textContent: String(nonLusD) }) : null);
           b.onclick = () => choisir(id);
           return b;
         }));
@@ -368,6 +421,9 @@ const TableClient = (() => {
         dessinerOnglets();
         dessinerCarte();
         if (onglet === 'journal') montrerJournal();
+        // Saga 1.37 : mes documents.
+        const sd = JSON.stringify([(vue?.documents || []).map((d) => [d.id, d.titre, d.image, d.t]), [...nouveauxDocs]]);
+        if (onglet === 'documents' && sd !== sigDocs) { sigDocs = sd; volets.documents.replaceChildren(...listeDocuments()); }
       }
       multi.sur?.((sorte) => { if (sorte === 'chat' || sorte === 'joueurs') maj(); });
       setInterval(dessinerFil, 1000);
