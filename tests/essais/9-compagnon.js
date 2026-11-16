@@ -79,7 +79,7 @@ module.exports = [
         await page.keyboard.press('Escape');
         // Le code du QR (un nouveau remplace l'ancien : un seul valable à la fois par personne).
         const lien = reseau.compagnonMj();
-        vrai(/#lien=[A-Za-z0-9_-]{16,}$/.test(lien?.url || ''), `l'adresse du QR : ${lien?.url}`);
+        vrai(/\/compagnon\/\?lien=[A-Za-z0-9_-]{16,}$/.test(lien?.url || ''), `l'adresse du QR : ${lien?.url}`);
 
         // Le téléphone ouvre l'adresse du QR.
         const ctel = await ctx.navigateur.newContext({ ...devices['Pixel 7'] });
@@ -91,9 +91,9 @@ module.exports = [
         const erreursTel = suivreErreurs(tel);
         const manques = [];
         tel.on('response', (r) => { if (r.status() >= 400 && !r.url().endsWith('/favicon.ico')) manques.push(`${r.status()} ${r.url()}`); });
-        await tel.goto(`http://127.0.0.1:${reseau.port}/compagnon/#lien=${lien.code}`);
+        await tel.goto(lien.url.replace(/^https?:\/\/[^/]+/, `http://127.0.0.1:${reseau.port}`));
         await tel.waitForFunction(() => window.Compagnon?.vue?.pions, null, { timeout: 10000 });
-        const moi = await tel.evaluate(() => ({ mj: Compagnon.moi.mj, hash: location.hash, campagne: document.querySelector('.tete b')?.textContent }));
+        const moi = await tel.evaluate(() => ({ mj: Compagnon.moi.mj, hash: location.hash + location.search, campagne: document.querySelector('.tete b')?.textContent }));
         egal(moi, { mj: true, hash: '', campagne: 'Les ombres de Brumeval' }, 'le téléphone est le MJ, le lien a servi');
         egal(reseau.infos().joueurs.find((j) => j.hote)?.compagnons, 1, 'Saga voit un téléphone relié au MJ');
         await tel.waitForFunction(() => /fond\?/.test(document.getElementById('fond').style.backgroundImage), null, { timeout: 5000 });

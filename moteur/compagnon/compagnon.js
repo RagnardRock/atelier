@@ -638,7 +638,7 @@
       el('img', { src: 'icone.svg', alt: '' }),
       el('h1', { textContent: 'Compagnon de Saga' }),
       message ? el('p', { textContent: message }) : null,
-      el('p', { textContent: depuisMenu ? 'Tes parties reliées :' : 'Sur l\'écran de la partie (Saga, ou la page de jeu de ton navigateur) : Multijoueur › « Relier mon téléphone », puis scanne le QR code avec l\'appareil photo.' }));
+      el('p', { textContent: depuisMenu ? 'Tes parties reliées :' : 'Sur l\'écran de la partie (Saga, ou la page de jeu de ton navigateur), touche le bouton « Compagnon » en haut, puis scanne le QR code avec l\'appareil photo. Un QR sert une fois, pendant 5 minutes.' }));
     if (autres.length) {
       const l = el('div', { className: 'campagnes' });
       for (const x of autres) l.append(el('a', { href: `${x.cle}/compagnon/` }, el('span', { textContent: x.campagne || x.titre || 'Partie' }), el('small', { textContent: x.mj ? 'MJ' : x.nom })));
@@ -657,7 +657,8 @@
   // --- Le départ ---
   async function demarrer() {
     if (window.isSecureContext && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
-    const code = new URLSearchParams(location.hash.slice(1)).get('lien');
+    // Le code du QR : dans la requête (Saga 1.37), ou après le # (QR d'avant).
+    const code = new URLSearchParams(location.search).get('lien') || new URLSearchParams(location.hash.slice(1)).get('lien');
     if (code) {
       history.replaceState(null, '', location.pathname);
       if (!(await relier(code))) { accueil('Ce QR code a déjà servi ou a expiré : demandes-en un nouveau.'); return; }

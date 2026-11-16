@@ -536,7 +536,8 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   function urlCompagnon(code) {
     const base = internet?.methode === 'relais' ? internet.adresse.replace(/\/+$/, '')
       : internet?.adresse ? `http://${internet.adresse}:${internet.port}` : `http://${adresses()[0] || '127.0.0.1'}:${port}`;
-    return `${base}/compagnon/#lien=${code}`;
+    // Saga 1.37 : le code dans la requête (?lien=) : certains lecteurs de QR (Google Lens) perdent le #.
+    return `${base}/compagnon/?lien=${code}`;
   }
   // La page du compagnon : ses liens partent de la racine (un relais : /p/<salle>).
   async function pageCompagnon(racine = '') {

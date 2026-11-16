@@ -402,6 +402,7 @@ Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les ong
   photo, choisit à qui la donner, et l'envoie en petits morceaux (le relais n'a pas à être mis à jour).
 - Les documents sont gardés dans la partie (`table.documents`). Les images ne passent jamais dans la vue :
   l'hôte les sert (`/document`, `/compagnon/document`) seulement à ceux à qui elles ont été données.
+- Le QR du compagnon porte son code dans la requête (`/compagnon/?lien=…`) et non plus après le `#`, que certains lecteurs de QR (Google Lens) perdent : le téléphone arrivait sur l'accueil sans être relié. Les anciens liens en `#lien=` marchent toujours.
 - Retours de l'essai de la 1.36 : le tapis de dés est plus petit par défaut (480 × 310), et le bouton
   « Activer la secousse » (iPhone) dit si le téléphone accepte ou refuse ; sur Android, si `devicemotion` ne donne rien, le compagnon essaie le capteur d'accélération (Generic Sensor API) et propose « Réessayer la secousse ».
 
