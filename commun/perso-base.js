@@ -188,10 +188,11 @@ const PersoBase = (() => {
     // la caméra (claire) devant, celle du fond (sombre, plus fine) derrière ; ecart -1 : l'inverse.
     const jambe = (sens, proche) => {
       const P = proche ? 'PPPp' : 'ppp', c0 = sens > 0 ? 15 : proche ? 13 : 14;
-      // La jambe du fond est levée d'un pixel (une rangée de moins avant le pied).
-      const n = proche ? 3 : 2;
-      for (let k = 0; k < n; k++) poser(l, haut + k, c0 + sens * k, P);
-      poser(l, haut + n, c0 + sens * n, proche ? 'BBBB' : 'qqq');
+      // La jambe du fond a la même forme, levée d'un pixel : son haut passe derrière la tunique.
+      const h0 = proche ? haut : haut - 1;
+      const mettre = (r, c, t) => { if (proche) poser(l, r, c, t); else [...t].forEach((ch, i) => { if (l[r][c + i] === '.') poser(l, r, c + i, ch); }); };
+      for (let k = 0; k < 3; k++) mettre(h0 + k, c0 + sens * k, P);
+      mettre(h0 + 3, c0 + sens * 3, proche ? 'BBBB' : 'qqq');
     };
     jambe(-ecart, false);
     jambe(ecart, true);
