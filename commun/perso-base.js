@@ -140,11 +140,11 @@ const PersoBase = (() => {
     '.......hHHHhKrsSSSSiiSse........',
     '........hHh..rrsSSSSSsr.........',
     '.........h..eerrsssrre..........',
-    '..............xxxxxxxx..........', // 20
-    '.............UTTTWWTt...........',
-    '............UTTTAAATt...........',
-    '............tTTAAAAtt...........',
-    '............GGGSSGGGG...........',
+    '.............xxxxxxx............', // 20
+    '............UTTTTWWTt...........',
+    '............UTTTTTTTt...........',
+    '............tTTTTTTtt...........',
+    '............GGGGGGGGG...........',
     '............tTTTTTTTt...........', // 25
     '................................',
     '................................',
@@ -197,13 +197,17 @@ const PersoBase = (() => {
     jambe(-ecart, false);
     jambe(ecart, true);
   }
-  // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
+  // Le bras de profil, sur la moitié arrière du buste (l'épaule n'avance pas), séparé du buste par un trait
+  // sombre devant lui. haut : la rangée de l'épaule. dx : le balancement de la main (+ en avant) ; le coude
+  // suit à moitié. La main fait 3 × 2 px.
   function brasProfil(l, haut, dx) {
-    remplacer(l, haut, haut + 2, 12, 22, 'AS', 'T');
-    remplacer(l, haut + 3, haut + 3, 12, 22, 'S', 'G');
-    poser(l, haut + 1, 15 + Math.max(0, dx), 'AAA');
-    poser(l, haut + 2, 15 + dx, 'AAAA');
-    poser(l, haut + 3, 16 + dx, 'SS');
+    const a = Math.sign(dx) * Math.min(1, Math.abs(dx));
+    poser(l, haut, 13, 'UUA');
+    poser(l, haut + 1, 13, 'UAAA'); poser(l, haut + 1, 17, 'x');
+    poser(l, haut + 2, 13 + a, 'AAAA'); poser(l, haut + 2, 17 + a, 'x');
+    poser(l, haut + 3, 13 + dx, 'AAA');
+    poser(l, haut + 4, 13 + dx, 'SSS');
+    poser(l, haut + 5, 13 + dx, 'sss');
   }
   // De face/dos, la main qui avance descend d'un pixel (la manche s'allonge), celle qui recule remonte.
   // haut : la rangée des épaules (19 debout) ; la main est 4 rangées plus bas.
@@ -248,7 +252,7 @@ const PersoBase = (() => {
     l = decaler(l, dy);
     if (dir === 'droite') {
       const e = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
-      brasProfil(l, 21 + dy, e * 2);
+      if (!o.sansBras) brasProfil(l, 20 + dy, e * 3);
       jambesProfil(l, 26 + plie, e);
     } else {
       const dos = dir === 'haut';
@@ -354,15 +358,14 @@ const PersoBase = (() => {
   // 2 la fin du geste, 3 le retour. Rend { lignes, dx, dy }.
   function poseCoup(o, k) {
     const dir = o.dir === 'gauche' ? 'droite' : o.dir;
-    const l = pose({ ...o, dir, pas: 0 });
+    const l = pose({ ...o, dir, pas: 0, sansBras: dir === 'droite' });
     if (dir === 'droite') {
       // Le bras : ramené en arrière, puis tendu devant (à hauteur de poitrine), puis qui retombe.
-      remplacer(l, 21, 23, 12, 22, 'AS', 'T');
-      remplacer(l, 24, 24, 12, 22, 'S', 'G');
-      if (k === 0) { poser(l, 22, 11, 'AAA'); poser(l, 23, 10, 'AAA'); poser(l, 24, 9, 'SS'); }
-      else if (k === 1) { poser(l, 22, 16, 'AAAAAA'); poser(l, 23, 16, 'AAAAAA'); poser(l, 22, 22, 'SS'); poser(l, 23, 22, 'Ss'); }
-      else if (k === 2) { poser(l, 23, 16, 'AAAAA'); poser(l, 24, 17, 'AAAA'); poser(l, 24, 21, 'SS'); poser(l, 25, 21, 'ss'); }
-      else { poser(l, 22, 15, 'AAA'); poser(l, 23, 15, 'AAAA'); poser(l, 24, 17, 'SS'); }
+      poser(l, 20, 13, 'UUA');
+      if (k === 0) { poser(l, 21, 12, 'AAAA'); poser(l, 22, 10, 'AAAA'); poser(l, 23, 8, 'AAA'); poser(l, 23, 6, 'SS'); poser(l, 24, 6, 'ss'); }
+      else if (k === 1) { poser(l, 21, 14, 'AAAAAAA'); poser(l, 22, 14, 'AAAAAAA'); poser(l, 21, 21, 'SSS'); poser(l, 22, 21, 'sss'); }
+      else if (k === 2) { poser(l, 21, 13, 'AAAA'); poser(l, 22, 15, 'AAAAA'); poser(l, 23, 17, 'AAA'); poser(l, 23, 20, 'SSS'); poser(l, 24, 20, 'sss'); }
+      else { poser(l, 21, 13, 'UAAA'); poser(l, 22, 14, 'AAAA'); poser(l, 23, 15, 'AAA'); poser(l, 24, 15, 'SSS'); poser(l, 25, 15, 'sss'); }
       // Pendant la frappe, les pieds s'écartent (une petite fente).
       if (k === 1 || k === 2) { remplacer(l, 26, 31, 0, L - 1, 'PpBbq', '.'); jambesProfil(l, 27, 1); }
     } else {
