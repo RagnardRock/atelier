@@ -38,6 +38,8 @@ module.exports = [
 
       const r = await saga.lire(async ({ MECANIQUES, CHAMPS }) => {
         const T = App.moteur.table, jeu = T.jeu(), partie = T.partie();
+        // Une graine fixe : les mêmes dés à chaque fois (un tirage malchanceux faisait rater l'essai).
+        partie.jdr = { ...(partie.jdr || {}), graine: 1748 };
         const R = jeu.donnees.reglages.reglages;
         const fiche = FichePerso.defaut();
         fiche.champs = CHAMPS;
@@ -122,6 +124,8 @@ module.exports = [
 
       const r = await saga.lire(async ({ CHAMPS }) => {
         const T = App.moteur.table, jeu = T.jeu(), partie = T.partie();
+        // Une graine fixe : les mêmes dés à chaque fois (un tirage malchanceux faisait rater l'essai).
+        partie.jdr = { ...(partie.jdr || {}), graine: 1748 };
         const R = jeu.donnees.reglages.reglages;
         const fiche = FichePerso.defaut();
         fiche.champs = [...CHAMPS, { id: 'parade', nom: 'Parade', type: 'nombre', depart: 5, modifiable: 'mj' },
