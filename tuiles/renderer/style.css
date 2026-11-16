@@ -1615,8 +1615,8 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .mecaniques-modeles { gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
 
 /* ---------- Tafl 1.42 : l'audit de l'interface ---------- */
-/* Sur une seule colonne (écran normal), les tuiles restent visibles : les listes au-dessus (cartes,
-   calques, tampons, événements) et la palette rétrécissent et défilent, les tuiles gardent un bon tiers de la
+/* Sur une seule colonne (écran normal), les tuiles restent visibles : en Cartes, les listes au-dessus
+   (cartes, calques, tampons, événements) rétrécissent et défilent, les tuiles gardent un bon tiers de la
    hauteur. Plus rien ne passe sous la barre d'état. */
 #sidepanel:not(.deux-colonnes) { overflow-y: auto; }
 #sidepanel:not(.deux-colonnes) #maps-panel, #sidepanel:not(.deux-colonnes) #layers-panel,
@@ -1625,9 +1625,9 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 #sidepanel:not(.deux-colonnes) #layers-panel { min-height: 130px; }
 #sidepanel:not(.deux-colonnes) #stamps-panel { min-height: 80px; }
 #sidepanel:not(.deux-colonnes) #events-panel { min-height: 72px; }
-#sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 0 36%; }
-#sidepanel:not(.deux-colonnes) #color-panel { flex: 0 1 auto; min-height: 96px; }
-#sidepanel:not(.deux-colonnes) #color-panel #palette { overflow-y: auto; min-height: 0; }
+body.espace-cartes #sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 0 36%; }
+/* En Tuiles, la palette reste entière ; les tuiles, l'animation et l'aperçu se partagent le reste. */
+body.espace-tuiles #sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 1 auto; min-height: 130px; }
 #sidepanel:not(.deux-colonnes) #frames-panel, #sidepanel:not(.deux-colonnes) #preview-panel { flex: 0 1 auto; min-height: 34px; }
 .panel.folded { min-height: 0 !important; }
 /* La barre d'état ne parle de tuile et de zoom que là où on dessine. */
