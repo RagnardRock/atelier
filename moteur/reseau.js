@@ -55,6 +55,9 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   let mauvais = [];          // dates des mauvais codes, toutes adresses (sur Internet)
   let internet = null;       // { adresse, port, methode: 'upnp' | 'manuel' } quand la partie est ouverte sur Internet
   let jeuPublic = null;
+  // Saga 1.33 : une requête rejouée par relais-client.js porte ce secret (jamais envoyé au relais).
+  const secretRelais = crypto.randomBytes(24).toString('base64url');
+  const egalSecret = (v) => { const a = Buffer.from(String(v || '')), b = Buffer.from(secretRelais); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 
   const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux) }));
   const enAttente = () => [...attente.values()].map((a) => ({ id: a.id, nom: a.nom, remplace: [...clients.values()].some((c) => c.nom.toLowerCase() === a.nom.toLowerCase()) }));
@@ -140,15 +143,16 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   const sansTiret = (t) => String(t || '').toUpperCase().replace(/[^A-Z]/g, '');
 
   // --- Les fichiers de l'interface ---
-  async function page() {
+  // racine : '' en direct, '/p/<salle>' par un relais (Saga 1.33) : tous les liens de la page partent de là.
+  async function page(racine = '') {
     let html = await fs.readFile(path.join(moteur, 'renderer', 'index.html'), 'utf8');
     return html
-      .replace('<meta charset="utf-8">', '<meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <base href="/saga/">')
-      .replace('../node_modules/@vscode/codicons/dist/codicon.css', '/codicons/codicon.css')
+      .replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <base href="${racine}/saga/">`)
+      .replace('../node_modules/@vscode/codicons/dist/codicon.css', `${racine}/codicons/codicon.css`)
       .replace(/<title>[^<]*<\/title>/, `<title>${titre.replace(/[<>&]/g, '') || 'Saga'} · rejoindre la partie</title>`)
       .replace('<body class="glass">', '<body class="glass web reseau">')
       .replace(/\s*<script src="update\.js"><\/script>/, '')
-      .replace('<script src="base.js"></script>', '<script src="/web/saga-reseau.js"></script>\n  <script src="base.js"></script>');
+      .replace('<script src="base.js"></script>', `<script src="${racine}/web/saga-reseau.js"></script>\n  <script src="base.js"></script>`);
   }
   // Un fichier sous une racine, sans jamais en sortir.
   async function fichier(res, racine, rel) {
@@ -185,17 +189,22 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   async function repondre(req, res) {
     const url = new URL(req.url, 'http://saga');
     const p = url.pathname;
-    const ip = req.socket.remoteAddress || '';
+    // Par un relais : l'adresse de l'ami et le préfixe des liens viennent de relais-client.js (le secret le prouve).
+    const viaRelais = egalSecret(req.headers['x-relais']);
+    const racineRelais = viaRelais && /^\/p\/[A-Za-z0-9_-]{4,20}$/.test(String(req.headers['x-relais-racine'] || '')) ? String(req.headers['x-relais-racine']) : '';
+    const ip = viaRelais ? `relais:${String(req.headers['x-relais-ip'] || '?').slice(0, 64)}` : req.socket.remoteAddress || '';
+    // Venu de dehors (la box ouverte, ou un relais) : code long, accord de l'hôte.
+    const dehors = Boolean(internet) || viaRelais;
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
       res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-cache', ...SURETE });
-      res.end(await page());
+      res.end(await page(racineRelais));
       return;
     }
     // Le pont du navigateur, précédé de ce qu'il doit savoir avant que l'interface démarre (la sorte de partie).
     if (req.method === 'GET' && p === '/web/saga-reseau.js') {
       const pont = await fs.readFile(path.join(moteur, 'web', 'saga-reseau.js'), 'utf8');
       res.writeHead(200, { 'Content-Type': TYPES['.js'], 'Cache-Control': 'no-store', ...SURETE });
-      res.end(`window.SAGA_RESEAU = ${JSON.stringify({ mode, titre, version, config })};\n${pont}`);
+      res.end(`window.SAGA_RESEAU = ${JSON.stringify({ mode, titre, version, config, racine: racineRelais })};\n${pont}`);
       return;
     }
     if (req.method === 'GET' && p.startsWith('/saga/')) return fichier(res, path.join(moteur, 'renderer'), p.slice(6));
@@ -221,13 +230,13 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       const attend = jetonDonne ? attente.get(jetonDonne) : null;
       if (attend) { attend.vu = maintenant; return fin(res, 202, { ok: true, attente: true, jeton: jetonDonne, nom: attend.nom }); }
       if (jetonDonne && refuses.has(jetonDonne)) return fin(res, 403, { erreur: 'L\'hôte n\'a pas accepté ta demande.', refuse: true });
-      if (internet) {
+      if (dehors) {
         mauvais = mauvais.filter((t) => maintenant - t < 60e3);
         if (mauvais.length >= MAX_MAUVAIS_CODES) return fin(res, 429, { erreur: 'Trop d\'essais sur cette partie : réessaie dans une minute.' });
       }
       if (sansTiret(corps?.code) !== sansTiret(code)) {
         l.push(maintenant);
-        if (internet) {
+        if (dehors) {
           mauvais.push(maintenant);
           if (mauvais.length === MAX_MAUVAIS_CODES) log('ATTENTION', 'Multijoueur : beaucoup de mauvais codes, les demandes sont suspendues une minute');
         }
@@ -236,7 +245,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       if (!nom) return fin(res, 400, { erreur: 'Écris ton prénom.' });
       if (clients.size >= MAX_CLIENTS) return fin(res, 403, { erreur: 'La partie est pleine.' });
       // Sur Internet : on attend que l'hôte accepte (il voit le prénom, et s'il remplace quelqu'un).
-      if (internet) {
+      if (dehors) {
         if (attente.size >= MAX_ATTENTE) return fin(res, 429, { erreur: 'L\'hôte a déjà plusieurs demandes à voir : réessaie dans un moment.' });
         const a = { id: `a-${crypto.randomBytes(4).toString('hex')}`, nom, ip, depuis: maintenant, vu: maintenant, jeton: crypto.randomBytes(18).toString('base64url') };
         attente.set(a.jeton, a);
@@ -317,7 +326,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   // Passer sur Internet (ou en revenir) : un nouveau code, plus long. Ceux déjà là gardent leur place.
   function passerInternet(details) {
     if (!serveur) return infos();
-    internet = details ? { adresse: String(details.adresse || ''), port: Number(details.port) || port, methode: details.methode === 'manuel' ? 'manuel' : 'upnp' } : null;
+    internet = details ? { adresse: String(details.adresse || ''), port: Number(details.port) || port, methode: ['manuel', 'relais'].includes(details.methode) ? details.methode : 'upnp' } : null;
     code = nouveauCode();
     mauvais = [];
     if (!internet) { for (const a of attente.values()) refuses.set(a.jeton, Date.now()); attente.clear(); }
@@ -396,6 +405,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   return {
     ouvrir, fermer, envoyer, expulser, infos, oublierJeu, passerInternet, accepter, get ouvert() { return Boolean(serveur); },
     get port() { return port; },
+    get secretRelais() { return secretRelais; },
     // Ce que fait l'hôte, comme un joueur : parler, bouger, écrire à un autre.
     dire: (texte, pour, jet) => dire('hote', texte, pour, jet), bouger: (p) => bouger('hote', p), pair: (vers, donnees) => pair('hote', vers, donnees),
   };

@@ -1,0 +1,19 @@
+[Unit]
+Description=Relais de Saga (parties en ligne)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node /opt/saga-relais/relais.js
+Restart=on-failure
+# Mettre ici une longue clé à soi (la même que dans Saga › Réglages du relais).
+Environment=RELAIS_CLE=change-moi
+Environment=PORT=8790
+Environment=HOTE=127.0.0.1
+Environment=CONFIANCE_PROXY=1
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

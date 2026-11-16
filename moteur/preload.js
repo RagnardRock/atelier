@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('saga', {
   // recevoir leurs demandes et la liste de qui est là.
   // o : { mode: 'table' | 'monde', nom (celui de l'hôte), titre, port }.
   reseauOuvrir: (o) => ipcRenderer.invoke('reseau:ouvrir', o),
+  reseauRelais: (r) => ipcRenderer.invoke('reseau:relais-reglages', r),
   reseauDire: (texte, pour, jet) => ipcRenderer.send('reseau:dire', texte, pour, jet),
   reseauBouger: (p) => ipcRenderer.send('reseau:bouger', p),
   reseauPair: (vers, donnees) => ipcRenderer.send('reseau:pair', vers, donnees),
