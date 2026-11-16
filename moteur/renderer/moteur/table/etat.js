@@ -57,6 +57,8 @@ const TableEtat = (() => {
     t.pause = Boolean(t.pause);
     // Saga 1.32 : les macros du MJ ([{ nom, formule }]).
     t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
+    // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
+    t.campagne = t.campagne && typeof t.campagne === 'object' ? { nom: String(t.campagne.nom || '').slice(0, 60), fond: /^data:image\/(png|jpeg|webp);base64,/.test(String(t.campagne.fond || '')) ? t.campagne.fond : '' } : { nom: '', fond: '' };
     partie.table = t;
     return t;
   }

@@ -1,0 +1,122 @@
+/* Saga 1.34 : le compagnon. Des panneaux en verre sur le fond de la campagne. */
+:root {
+  --accent: #ffb347; --accent-texte: #1a1205;
+  --texte: #f2f1f8; --doux: rgba(255, 255, 255, .66); --bord: rgba(255, 255, 255, .22);
+  --vert: #4fd18b; --rouge: #ff6b6b; --bleu: #9fd2ff;
+  --haut: env(safe-area-inset-top, 0px); --bas: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body { color: var(--texte); font: 15px/1.35 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; background: #0b0916; overflow: hidden; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.fond { position: fixed; inset: 0; background:
+  radial-gradient(60vw 60vw at 12% 10%, rgba(255, 150, 60, .5), transparent 70%),
+  radial-gradient(70vw 70vw at 98% 42%, rgba(140, 90, 255, .45), transparent 70%),
+  radial-gradient(65vw 65vw at 30% 98%, rgba(40, 180, 200, .4), transparent 70%), #0b0916; }
+.fond.image { background-size: cover; background-position: center; }
+.fond.image::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 8, 16, .25), rgba(8, 8, 16, .55)); }
+#app { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 10px; padding: calc(10px + var(--haut)) 12px calc(10px + var(--bas)); }
+
+.verre { background: linear-gradient(135deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .05)), rgba(14, 14, 26, .3); border: 1px solid var(--bord);
+  backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .35), inset 0 1px 0 rgba(255, 255, 255, .25); border-radius: 20px; }
+
+/* La tête : la campagne, qui je suis, en direct ou non */
+.tete { display: flex; align-items: center; gap: 10px; padding: 9px 12px; flex: none; }
+.tete img { width: 28px; height: 28px; border-radius: 8px; }
+.tete .qui { min-width: 0; flex: 1; }
+.tete b, .tete small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tete small { color: var(--doux); font-size: 12.5px; }
+.etat-co { font-size: 11px; padding: 3px 8px; border-radius: 99px; white-space: nowrap; border: 1px solid; }
+.etat-co.oui { background: rgba(79, 209, 139, .18); color: #9ff0c4; border-color: rgba(79, 209, 139, .4); }
+.etat-co.non { background: rgba(255, 107, 107, .15); color: #ffc0c0; border-color: rgba(255, 107, 107, .4); }
+.icone-bouton { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; border: 1px solid var(--bord); background: rgba(255, 255, 255, .08); }
+
+.page { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; -webkit-overflow-scrolling: touch; }
+.page::-webkit-scrollbar { display: none; }
+h3 { margin: 4px 4px 0; font-size: 11.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--doux); }
+.note { font-size: 12.5px; color: var(--doux); text-align: center; margin: 2px 8px; }
+.vide { padding: 22px 16px; text-align: center; color: var(--doux); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 14px; border-radius: 14px; border: 0; background: var(--accent); color: var(--accent-texte); font-weight: 700; }
+.btn2 { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border-radius: 14px; border: 1px solid var(--bord); background: rgba(255, 255, 255, .08); font-size: 13px; }
+.btn2.actif { background: rgba(255, 179, 71, .25); border-color: rgba(255, 179, 71, .65); }
+.champ { width: 100%; min-width: 0; padding: 10px 12px; border-radius: 14px; border: 1px solid var(--bord); background: rgba(0, 0, 0, .28); font-family: ui-monospace, Menlo, monospace; font-size: 15px; user-select: text; -webkit-user-select: text; }
+
+/* Les dés */
+.tapis { position: relative; flex: 1 1 260px; min-height: 220px; overflow: hidden; touch-action: none;
+  background: radial-gradient(120% 90% at 50% 40%, rgba(255, 255, 255, .10), rgba(0, 0, 0, .25)), linear-gradient(135deg, rgba(255, 255, 255, .12), rgba(255, 255, 255, .03)); }
+.tapis canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tapis .aide { position: absolute; left: 0; right: 0; bottom: 12px; text-align: center; font-size: 12.5px; color: var(--doux); pointer-events: none; }
+.tapis .res { position: absolute; left: 14px; right: 14px; top: 10px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; pointer-events: none; }
+.tapis .res span { font: 12px ui-monospace, monospace; color: rgba(255, 255, 255, .78); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tapis .res b { font-size: 34px; text-shadow: 0 0 18px rgba(255, 180, 80, .6); }
+.tapis .res.secret b { text-shadow: 0 0 18px rgba(120, 190, 255, .7); }
+.choix-des { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 9px; flex: none; }
+.dch { aspect-ratio: 1; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .14); font-weight: 700; font-size: 13px; position: relative; padding: 0; }
+.dch.on { background: rgba(255, 179, 71, .28); border-color: rgba(255, 179, 71, .7); }
+.dch i { position: absolute; top: -6px; right: -6px; font-style: normal; background: var(--accent); color: var(--accent-texte); border-radius: 99px; font-size: 10.5px; padding: 0 5px; }
+.ligne { display: flex; gap: 8px; align-items: center; }
+.formule { padding: 8px; flex: none; }
+.options { display: flex; gap: 8px; flex-wrap: wrap; flex: none; }
+.histo { padding: 6px 12px; font-size: 13px; color: rgba(255, 255, 255, .8); flex: none; }
+.histo div { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; }
+.histo div + div { border-top: 1px solid rgba(255, 255, 255, .08); }
+.histo span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.histo .cache { color: var(--bleu); }
+
+/* Les macros */
+.grille { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.mac { padding: 13px 14px; border-radius: 18px; position: relative; text-align: left; min-height: 66px; }
+.mac:active { transform: scale(.97); }
+.mac b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mac code { display: block; margin-top: 3px; font: 12px ui-monospace, monospace; color: var(--doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mac .codicon-eye-closed { color: var(--bleu); font-size: 13px; margin-left: 5px; }
+.ajout { border: 1.5px dashed rgba(255, 255, 255, .3); border-radius: 18px; display: grid; place-items: center; color: var(--doux); padding: 16px; font-size: 13px; background: transparent; }
+.edition { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* La fiche */
+.fiche { padding: 12px; }
+.fiche-tete { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.fiche-tete b { font-size: 18px; }
+.jauge { height: 9px; border-radius: 9px; background: rgba(255, 255, 255, .1); overflow: hidden; margin: 7px 0 4px; }
+.jauge i { display: block; height: 100%; background: linear-gradient(90deg, #3fbf7f, #7be3a6); }
+.jauge.basse i { background: linear-gradient(90deg, #d94b4b, #ff8d6b); }
+.etiquettes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.etiquette { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: rgba(255, 107, 107, .18); color: #ffc0c0; }
+.caracs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.carac { padding: 9px 6px; border-radius: 14px; text-align: center; background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); }
+.carac small { display: block; color: var(--doux); font-size: 11px; text-transform: uppercase; }
+.carac b { display: block; font-size: 20px; }
+.carac .sauv { font-size: 11px; color: var(--doux); }
+.liste-jets > button { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 12px; border: 0; background: transparent; text-align: left; }
+.liste-jets > button + button { border-top: 1px solid rgba(255, 255, 255, .07); }
+.liste-jets > button.maitrise span::after { content: ' ●'; color: var(--accent); font-size: 9px; vertical-align: middle; }
+.liste-jets b { font-variant-numeric: tabular-nums; }
+.fiche-perso { color: var(--texte); }
+
+/* Les pions (MJ) */
+.pion { padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; }
+.pion .nom { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pion .nom small { font-weight: 400; color: var(--doux); }
+.pion .pvs { display: flex; gap: 5px; }
+.pion .pvs button { min-width: 38px; height: 34px; border-radius: 10px; border: 1px solid var(--bord); background: rgba(255, 255, 255, .08); font-weight: 700; }
+.pion .jauge { grid-column: 1 / -1; margin: 2px 0 0; }
+.pion.ko { opacity: .55; }
+.pion.actif { border-color: rgba(255, 179, 71, .7); }
+
+/* Le bas : les onglets */
+.nav { display: flex; padding: 6px; flex: none; }
+.nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--doux); padding: 6px 0; border-radius: 14px; border: 0; background: transparent; position: relative; }
+.nav .codicon { font-size: 20px; }
+.nav .on { background: rgba(255, 255, 255, .14); color: #fff; }
+
+/* Relier, attendre */
+.accueil { margin: auto 0; padding: 22px 18px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.accueil img { width: 64px; }
+.accueil h1 { margin: 0; font-size: 22px; }
+.accueil p { margin: 0; color: var(--doux); }
+.campagnes { width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.campagnes a { display: flex; justify-content: space-between; padding: 11px 13px; border-radius: 14px; background: rgba(255, 255, 255, .08); color: inherit; text-decoration: none; }
+.toast { position: fixed; left: 16px; right: 16px; bottom: calc(86px + var(--bas)); padding: 11px 14px; border-radius: 14px; background: rgba(20, 20, 32, .92); border: 1px solid var(--bord); font-size: 14px; text-align: center; z-index: 10; transition: opacity .3s; }
+.toast.part { opacity: 0; }

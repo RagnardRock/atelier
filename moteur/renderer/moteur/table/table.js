@@ -491,6 +491,7 @@ const TableMode = (() => {
       ordre(liste) { combat.ordre = liste.map(({ u, nom, init }) => ({ id: pionDe(u)?.id || '', nom, init })); },
       actif(u, tour, reste) { combat.tour = tour; combat.actif = pionDe(u)?.id || ''; combat.reste = u.camp === 'heros' ? reste : null; panneau?.rafraichir(); },
       vaincu(u) { const p = pionDe(u); if (p) p.vaincu = true; },
+      brancher(f) { if (combat) combat.ajuster = f; },
       async deplacer(u, reste) {
         const p = pionDe(u);
         if (!p) return 0;
@@ -683,7 +684,12 @@ const TableMode = (() => {
     function recevoir(a) {
       if (!actif || !a || typeof a !== 'object') return;
       // Saga 1.32 : le MJ a tapé une commande dans son chat.
-      if (a.client === 'hote') { if (a.type === 'commande') commande(a.texte, { mj: true }, 'MJ', 'hote'); return; }
+      if (a.client === 'hote') {
+        if (a.type === 'commande') commande(a.texte, { mj: true }, 'MJ', 'hote');
+        // Saga 1.34 : le téléphone du MJ (son compagnon) : ses macros, les PV d'un pion.
+        else if (a.compagnon) actionCompagnonMj(a);
+        return;
+      }
       // D'un ami par le réseau : son rôle décide, pas ce qu'il dit être.
       if (a.client) {
         const nom = h.multi?.()?.nomDe(a.client) || '';
@@ -880,6 +886,17 @@ const TableMode = (() => {
       });
     }
     // Ce qu'un ami sans héros voit en plus : les héros libres, sa création en cours.
+    // Saga 1.34 : le nom de la campagne et le fond du compagnon (l'image elle-même passe à part).
+    // Le fond : celui de la campagne (Saga), sinon celui du jeu (Tafl › Réglages › Fiche des personnages).
+    const fondCompagnon = () => table().campagne?.fond || jeu()?.donnees?.reglages?.reglages?.jdr?.compagnon?.fond || '';
+    const empreinte = (t) => { let x = t.length; for (let i = 0; i < t.length; i += 997) x = (x * 31 + t.charCodeAt(i)) | 0; return t ? `${t.length}-${x >>> 0}` : ''; };
+    let fondPousse = null;
+    function extrasCompagnon() {
+      const f = fondCompagnon();
+      // L'image part une fois au serveur ; la vue n'en porte que l'empreinte (le téléphone la recharge si elle change).
+      if (f !== fondPousse && window.saga.reseauFond) { fondPousse = f; window.saga.reseauFond(f); }
+      return { campagne: { nom: table().campagne?.nom || jeu()?.titre || '', fond: empreinte(f) } };
+    }
     function extrasPour(nom, r) {
       const x = {};
       if (avis.has(nom)) x.avis = avis.get(nom);
@@ -892,6 +909,33 @@ const TableMode = (() => {
         x.groupePlein = partie().equipe.length >= (Number(jeu().donnees?.reglages?.reglages?.equipe_max) || 6);
       }
       return x;
+    }
+    // Saga 1.34 : ce que demande le téléphone du MJ.
+    function actionCompagnonMj(a) {
+      if (a.type === 'macro') {
+        const m = (table().macros || [])[Math.round(Number(a.k))];
+        if (m) commande(`/m ${m.nom}`, { mj: true }, 'MJ', 'hote');
+      } else if (a.type === 'pv') changerPv(String(a.pion || ''), a);
+      else if (a.type === 'macro_ajouter' || a.type === 'macro_retirer') { agir(a, { mj: true }, 'MJ'); envoyes.clear(); panneau?.rafraichir(); }
+    }
+    // Les PV d'un pion, changés à la main par le MJ (+1, −5, ou une valeur) : héros ou monstre, en combat aussi.
+    function changerPv(id, { delta, valeur }) {
+      const p = table().pions.find((q) => q.id === id);
+      if (!p) return false;
+      const calcul = (pv, max) => Math.max(0, Math.min(max, Number.isFinite(Number(valeur)) && valeur !== '' && valeur != null ? Math.round(Number(valeur)) : pv + Math.round(Number(delta) || 0)));
+      if (p.sorte === 'heros') {
+        const c = E.membreDe(partie(), p);
+        if (!c) return false;
+        c.pv = calcul(Math.max(0, c.pv), JdrPerso.pvMax(jeu(), c));
+      } else {
+        const i = combat ? combat.ennemis.indexOf(p) : -1;
+        const v = calcul(Math.max(0, Number(p.pv) || 0), Number(p.pvMax) || 1);
+        if (i >= 0 && combat.ajuster) combat.ajuster.pvMonstre(i, v);
+        else { p.pv = v; if (v <= 0 && !combat) p.vaincu = true; }
+      }
+      envoyes.clear();
+      panneau?.rafraichir();
+      return true;
     }
     // Un ami arrive sans héros : le MJ le sait.
     const vus = new Set();
@@ -912,7 +956,8 @@ const TableMode = (() => {
         // Les demandes des amis (déplacer, parler, lancer un jet, répondre en combat) arrivent par le réseau.
         m.sur((sorte, d) => {
           if (sorte === 'demande') recevoir(d);
-          else if (sorte === 'joueurs') arrivees(d);
+          // Quelqu'un arrive (un ami, un téléphone) : chacun reçoit sa vue à nouveau.
+          else if (sorte === 'joueurs') { envoyes.clear(); arrivees(d); }
         });
       }
       arrivees(m.joueurs);
@@ -953,9 +998,16 @@ const TableMode = (() => {
         const multi = h.multi?.();
         if (multi?.actif && window.saga.reseauEnvoyer) {
           for (const j of multi.joueurs) {
-            if (j.hote || !j.connecte) continue;
+            // Saga 1.34 : le téléphone du MJ reçoit la vue du MJ (tout), seulement s'il y en a un.
+            if (j.hote) {
+              if (!j.compagnons) continue;
+              const v = JSON.stringify({ ...vuePour({ mj: true }), ...extrasCompagnon() });
+              if (envoyes.get('hote') !== v) { envoyes.set('hote', v); window.saga.reseauEnvoyer('hote', 'vue', v); }
+              continue;
+            }
+            if (!j.connecte && !j.compagnons) continue;
             const r = rolePour(j.nom);
-            const v = JSON.stringify({ ...vuePour(r.spectateur ? { mj: false, perso: null } : r), ...extrasPour(j.nom, r) });
+            const v = JSON.stringify({ ...vuePour(r.spectateur ? { mj: false, perso: null } : r), ...extrasPour(j.nom, r), ...extrasCompagnon() });
             if (envoyes.get(j.id) !== v) { envoyes.set(j.id, v); window.saga.reseauEnvoyer(j.id, 'vue', v); }
           }
         }
@@ -996,6 +1048,7 @@ const TableMode = (() => {
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),
       // Saga 1.32 : une formule ou une commande du MJ (le panneau, ses macros).
       commande: (texte) => commande(texte, { mj: true }, 'MJ', 'hote'),
+      changerPv,
       outils,
       occupe: () => h.occupe(),
     };

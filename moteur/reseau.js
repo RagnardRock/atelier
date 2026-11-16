@@ -47,7 +47,11 @@ const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 };
+// Saga 1.34 : le compagnon (le téléphone d'un joueur ou du MJ, relié par un QR code).
+const MAX_COMPAGNONS = 3;          // par joueur
+const DUREE_LIEN = 5 * 60e3;       // un QR sert une fois, 5 minutes
 
 function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log = () => {}, version = '', config = {} }) {
   let serveur = null, code = '', port = 0, mode = 'monde', titre = '';
@@ -64,17 +68,23 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   const secretRelais = crypto.randomBytes(24).toString('base64url');
   const egalSecret = (v) => { const a = Buffer.from(String(v || '')), b = Buffer.from(secretRelais); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 
-  const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux) }));
+  // Saga 1.34 : les compagnons. Un compagnon EST son joueur (même vue, mêmes droits), sur un autre appareil.
+  const liens = new Map();       // code du QR → { de, expire }
+  const compagnons = new Map();  // id → { id, jeton, de, flux, appareil }
+  let fond = null;               // { type, data } : l'image de fond des compagnons (choisie par le MJ)
+  const compagnonsDe = (de) => [...compagnons.values()].filter((k) => k.de === de);
+  const nbCompagnons = (de) => compagnonsDe(de).filter((k) => k.flux).length;
+  const liste = () => [...clients.values()].map((c) => ({ id: c.id, nom: c.nom, connecte: Boolean(c.flux), compagnons: nbCompagnons(c.id) }));
   const enAttente = () => [...attente.values()].map((a) => ({ id: a.id, nom: a.nom, remplace: [...clients.values()].some((c) => c.nom.toLowerCase() === a.nom.toLowerCase()) }));
   // Qui est là, pour tout le monde (l'hôte en tête).
-  const joueurs = () => [{ id: 'hote', nom: hote.nom, connecte: true, hote: true }, ...liste()];
+  const joueurs = () => [{ id: 'hote', nom: hote.nom, connecte: true, hote: true, compagnons: nbCompagnons('hote') }, ...liste()];
   function prevenir() {
     clientsChanges?.(liste());
     diffuser('joueurs', JSON.stringify(joueurs()));
   }
   // Envoyer à un joueur (l'hôte compris : sa fenêtre reçoit par versHote).
   function envoyerA(id, sorte, objet) {
-    if (id === 'hote') versHote({ reseau: sorte, ...objet });
+    if (id === 'hote') { versHote({ reseau: sorte, ...objet }); envoyer('hote', sorte, JSON.stringify(objet)); }
     else envoyer(id, sorte, JSON.stringify(objet));
   }
   function diffuser(sorte, json, sauf = '') {
@@ -222,6 +232,51 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     }
     if (req.method === 'GET' && p.startsWith('/codicons/')) return fichier(res, path.join(moteur, 'node_modules', '@vscode', 'codicons', 'dist'), p.slice(10));
 
+    // Saga 1.34 : le compagnon. Sa page (sans jeton), puis le lien par le QR, puis son flux et ses demandes.
+    if (req.method === 'GET' && (p === '/compagnon' || p === '/compagnon/' || p === '/compagnon/index.html')) {
+      if (p === '/compagnon') { res.writeHead(301, { Location: `${racineRelais}/compagnon/`, ...SURETE }); return res.end(); }
+      res.writeHead(200, { 'Content-Type': TYPES['.html'], 'Cache-Control': 'no-cache', ...SURETE });
+      res.end(await pageCompagnon(racineRelais));
+      return;
+    }
+    if (req.method === 'GET' && p.startsWith('/compagnon/') && p !== '/compagnon/flux' && p !== '/compagnon/fond') return fichier(res, path.join(moteur, 'compagnon'), p.slice(11));
+    if (req.method === 'POST' && p === '/compagnon/relier') {
+      const corps = await lireCorps(req);
+      const l = essais.get(ip) || [];
+      if (l.filter((t) => Date.now() - t < 60e3).length >= 6) return fin(res, 429, { erreur: 'Trop d\'essais : attends une minute.' });
+      const r = relierCompagnon(String(corps?.code || ''), String(corps?.appareil || ''));
+      if (!r) { l.push(Date.now()); essais.set(ip, l); return fin(res, 403, { erreur: 'Ce QR code a déjà servi ou a expiré : demandes-en un nouveau.' }); }
+      return fin(res, 200, r);
+    }
+    if (p === '/compagnon/flux' || p === '/compagnon/action' || p === '/compagnon/quitter' || p === '/compagnon/fond') {
+      const j = req.headers['x-compagnon'] || url.searchParams.get('jeton') || '';
+      const k = j ? [...compagnons.values()].find((x) => x.jeton === j) : null;
+      if (!k) return fin(res, 401, { erreur: 'Ce téléphone n\'est plus relié : scanne un nouveau QR code.', delie: true });
+      if (req.method === 'GET' && p === '/compagnon/flux') {
+        k.flux?.end();
+        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.write('retry: 2000\n\n');
+        k.flux = res;
+        req.on('close', () => { if (k.flux === res) { k.flux = null; prevenir(); } });
+        res.write(`event: bienvenue\ndata: ${JSON.stringify(bienvenueCompagnon(k))}\n\n`);
+        prevenir();
+        return;
+      }
+      if (req.method === 'POST' && p === '/compagnon/quitter') { couperCompagnon(k.id); return fin(res, 200); }
+      if (req.method === 'GET' && p === '/compagnon/fond') {
+        if (!fond) return fin(res, 404);
+        res.writeHead(200, { 'Content-Type': fond.type, 'Cache-Control': 'private, max-age=86400', ...SURETE });
+        return res.end(fond.data);
+      }
+      if (req.method === 'POST' && p === '/compagnon/action') {
+        const a = await lireCorps(req);
+        if (!a || typeof a !== 'object' || Array.isArray(a)) return fin(res, 400);
+        if (a.type === 'chat') dire(k.de, a.texte, String(a.pour || 'tous'));
+        else if (!['position', 'pair'].includes(a.type)) versHote({ ...a, client: k.de, compagnon: true });
+        return fin(res, 200);
+      }
+    }
+
     if (req.method === 'POST' && p === '/rejoindre') {
       const maintenant = Date.now();
       const l = (essais.get(ip) || []).filter((t) => maintenant - t < 60e3);
@@ -289,6 +344,9 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       if (c.position) bouger(c.id, c.position);
       return;
     }
+    // Un ami demande un QR pour relier son téléphone.
+    if (req.method === 'POST' && p === '/compagnon/lien') return fin(res, 200, { code: lienCompagnon(c.id) });
+    if (req.method === 'POST' && p === '/compagnon/couper') { for (const k of compagnonsDe(c.id)) couperCompagnon(k.id); return fin(res, 200); }
     if (req.method === 'POST' && p === '/action') {
       const a = await lireCorps(req);
       if (!a || typeof a !== 'object' || Array.isArray(a)) return fin(res, 400);
@@ -299,6 +357,42 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
       return fin(res, 200);
     }
     return fin(res, 404);
+  }
+
+  // --- Saga 1.34 : relier un compagnon ---
+  function lienCompagnon(de) {
+    const t = Date.now();
+    for (const [c, l] of liens) if (l.expire < t) liens.delete(c);
+    // Un seul QR valable à la fois par joueur : le nouveau remplace l'ancien.
+    for (const [c, l] of liens) if (l.de === de) liens.delete(c);
+    const code = crypto.randomBytes(15).toString('base64url');
+    liens.set(code, { de, expire: t + DUREE_LIEN });
+    return code;
+  }
+  function relierCompagnon(code, appareil) {
+    const l = liens.get(code);
+    if (!l || l.expire < Date.now()) return null;
+    liens.delete(code);
+    if (l.de !== 'hote' && !clients.has(l.de)) return null;
+    // Trop de téléphones pour ce joueur : le plus ancien laisse sa place.
+    const deja = compagnonsDe(l.de);
+    if (deja.length >= MAX_COMPAGNONS) couperCompagnon(deja[0].id);
+    const k = { id: `k-${crypto.randomBytes(4).toString('hex')}`, jeton: crypto.randomBytes(24).toString('base64url'), de: l.de, flux: null, appareil: appareil.replace(/[\u0000-\u001f<>]/g, '').slice(0, 40) };
+    compagnons.set(k.id, k);
+    log('INFO', `Multijoueur : un compagnon relié pour ${l.de === 'hote' ? hote.nom : clients.get(l.de)?.nom}`);
+    prevenir();
+    return { jeton: k.jeton, ...bienvenueCompagnon(k) };
+  }
+  function bienvenueCompagnon(k) {
+    const j = k.de === 'hote' ? hote : clients.get(k.de);
+    return { id: k.de, nom: j?.nom || '', mj: k.de === 'hote', mode, titre, version, chat: chatPour(k.de) };
+  }
+  function couperCompagnon(id) {
+    const k = compagnons.get(id);
+    if (!k) return;
+    if (k.flux) { k.flux.write('event: fin\ndata: {"raison":"delie"}\n\n'); k.flux.end(); }
+    compagnons.delete(id);
+    prevenir();
   }
 
   // Une place dans la partie (tout de suite à la maison, ou une fois acceptée par l'hôte sur Internet).
@@ -366,7 +460,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     const r = essayer(Number(portVoulu) || PORT_DEFAUT, 10);
     r.then(() => {
       log('INFO', `Multijoueur : partie ouverte sur le port ${port}`);
-      ping = setInterval(() => { for (const c of clients.values()) c.flux?.write(': ping\n\n'); }, 20e3);
+      ping = setInterval(() => { for (const c of [...clients.values(), ...compagnons.values()]) c.flux?.write(': ping\n\n'); }, 20e3);
       nettoyage = setInterval(menage, 10e3);
     }).catch(() => {});
     return r;
@@ -375,6 +469,10 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
   function fermer() {
     if (!serveur) return;
     for (const c of clients.values()) { envoyer(c.id, 'fin', '{"raison":"ferme"}'); c.flux?.end(); }
+    for (const k of compagnons.values()) if (!clients.has(k.de)) { k.flux?.write('event: fin\ndata: {"raison":"ferme"}\n\n'); }
+    for (const k of compagnons.values()) k.flux?.end();
+    compagnons.clear();
+    liens.clear();
     clients.clear();
     attente.clear();
     refuses.clear();
@@ -390,16 +488,21 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     prevenir();
   }
   function envoyer(id, sorte, json) {
+    if (typeof json !== 'string') return false;
+    const message = `event: ${sorte}\ndata: ${json.replace(/\n/g, '\ndata: ')}\n\n`;
     const c = clients.get(id);
-    if (!c?.flux || typeof json !== 'string') return false;
-    c.flux.write(`event: ${sorte}\ndata: ${json.replace(/\n/g, '\ndata: ')}\n\n`);
-    return true;
+    let ok = false;
+    if (c?.flux) { c.flux.write(message); ok = true; }
+    // Saga 1.34 : ses compagnons reçoivent la même chose (sa vue, son chat, la fin de la partie).
+    for (const k of compagnons.values()) if (k.de === id && k.flux) { k.flux.write(message); ok = true; }
+    return ok;
   }
   function expulser(id) {
     const c = clients.get(id);
     if (!c) return;
     envoyer(id, 'fin', '{"raison":"expulse"}');
     c.flux?.end();
+    for (const k of compagnonsDe(id)) { k.flux?.end(); compagnons.delete(k.id); }
     clients.delete(id);
     log('INFO', `Multijoueur : ${c.nom} quitte la partie`);
     prevenir();
@@ -410,8 +513,29 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, log =
     ? { ouvert: true, port, code, mode, adresses: adresses(), clients: liste(), joueurs: joueurs(), attente: enAttente(), internet, chat: chatPour('hote') }
     : { ouvert: false, clients: [], joueurs: [], attente: [], internet: null, chat: [] });
 
+  // L'adresse que le téléphone du MJ ouvre (le relais, la box ouverte, ou le Wi-Fi de la maison).
+  function urlCompagnon(code) {
+    const base = internet?.methode === 'relais' ? internet.adresse.replace(/\/+$/, '')
+      : internet?.adresse ? `http://${internet.adresse}:${internet.port}` : `http://${adresses()[0] || '127.0.0.1'}:${port}`;
+    return `${base}/compagnon/#lien=${code}`;
+  }
+  // La page du compagnon : ses liens partent de la racine (un relais : /p/<salle>).
+  async function pageCompagnon(racine = '') {
+    const html = await fs.readFile(path.join(moteur, 'compagnon', 'index.html'), 'utf8');
+    return html.replace('<meta charset="utf-8">', `<meta charset="utf-8">\n  <base href="${racine}/compagnon/">`)
+      .replace('<meta name="compagnon" content="{}">', `<meta name="compagnon" content="${JSON.stringify({ racine, titre, version }).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}">`);
+  }
+
   return {
     ouvrir, fermer, envoyer, expulser, infos, oublierJeu, passerInternet, accepter, get ouvert() { return Boolean(serveur); },
+    // Saga 1.34 : le compagnon du MJ (un QR à scanner), et couper ceux d'un joueur.
+    // L'image de fond des compagnons (une data: URL png/jpeg/webp, ou rien).
+    fondCompagnon: (url) => {
+      const m = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(url || ''));
+      fond = m && m[2].length < 8e6 ? { type: m[1], data: Buffer.from(m[2], 'base64') } : null;
+    },
+    compagnonMj: () => { if (!serveur) return null; const code = lienCompagnon('hote'); return { code, url: urlCompagnon(code) }; },
+    couperCompagnons: (de) => { for (const k of compagnonsDe(String(de))) couperCompagnon(k.id); },
     get port() { return port; },
     get secretRelais() { return secretRelais; },
     // Ce que fait l'hôte, comme un joueur : parler, bouger, écrire à un autre.

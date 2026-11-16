@@ -235,6 +235,8 @@ const DonneesJdr = (() => {
       case_m: Math.round(num(r.case_m, d.case_m, 0.5, 30) * 10) / 10, diagonales: pick(r.diagonales, DIAGONALES, d.diagonales), jets_mj_caches: Boolean(r.jets_mj_caches),
       // Tafl 1.23 : la fiche des personnages du jeu (commun/fiche-perso.js), si le jeu a la sienne.
       ...(r.fiche && typeof FichePerso !== 'undefined' ? { fiche: FichePerso.normaliser(r.fiche) } : {}),
+      // Tafl 1.35 : le fond du compagnon de Saga (le téléphone des joueurs).
+      ...(/^data:image\/(png|jpeg|webp);base64,/.test(String(r.compagnon?.fond || '')) ? { compagnon: { fond: r.compagnon.fond } } : {}),
     };
   }
   const PV_NIVEAU = [['moyenne', 'La moyenne du dé de vie (arrondie au-dessus)'], ['jet', 'Un jet du dé de vie'], ['choix', 'Le joueur choisit à chaque niveau']];
@@ -881,15 +883,37 @@ const DonneesJdr = (() => {
       info('La fiche que voient les joueurs (leur écran, en multijoueur) et le MJ : quels blocs, dans quel ordre, sur combien de colonnes, des champs à ton jeu, et son allure. Le menu Groupe de Saga montre les champs du jeu dans une page à eux.'),
       activer,
       el('div', { className: 'fiche-editeur-corps' }, [corps, apercu]),
+      section('Compagnon (le téléphone des joueurs)'),
+      fondCompagnon(j),
     );
     dessiner();
     return [boite];
   }
+  // Tafl 1.35 : l'image derrière le compagnon de Saga (le téléphone des joueurs). Le MJ peut en mettre une
+  // autre pour sa campagne, dans Saga.
+  function fondCompagnon(j) {
+    const ligne = el('div', { className: 'field' });
+    const dessiner = () => {
+      j.compagnon = j.compagnon && typeof j.compagnon === 'object' ? j.compagnon : {};
+      const a = j.compagnon.fond;
+      ligne.replaceChildren(el('span', { className: 'field-label', textContent: 'Image de fond' }), el('span', { className: 'inline' }, [
+        a ? el('img', { src: a, alt: '', style: 'width:54px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--border)' }) : el('small', { textContent: 'Aucune (un fond sombre aux couleurs du jeu)' }),
+        petitBouton('folder-opened', 'Importer une image (le décor du jeu, une carte, une ambiance…)', async () => {
+          const fi = await window.tafl.openFile({ kind: 'image', titre: 'Fond du compagnon' });
+          if (!fi) return;
+          try { j.compagnon.fond = await imageFond(fi, 1400); notify('Fond du compagnon ajouté.', 'success'); dessiner(); } catch (err) { notify(cleanError(err), 'error'); }
+        }),
+        a ? petitBouton('trash', 'Retirer l\'image', () => { j.compagnon.fond = ''; dessiner(); }) : null,
+      ].filter(Boolean)));
+    };
+    dessiner();
+    return el('div', {}, [info('Le compagnon : les joueurs relient leur téléphone à la partie (un QR code) pour lancer leurs dés, leurs macros et lire leur fiche. Son fond, flouté derrière les panneaux en verre :'), ligne]);
+  }
   // L'image de fond : réduite (1000 px au plus) et en JPEG, pour garder le jeu léger.
-  async function imageFond(fi) {
+  async function imageFond(fi, max = 1000) {
     const src = await Events.imagePortrait(fi);
     const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('Image illisible')); i.src = src.png; });
-    const k = Math.min(1, 1000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);

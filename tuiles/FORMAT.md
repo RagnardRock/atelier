@@ -452,6 +452,7 @@ Saga peut jouer un jeu JDR en **mode table** : le MJ fait avancer la partie sur 
 - Dans un événement et dans une rencontre (`groupes.json`) : `visible_par`, avec les mêmes valeurs (absent = `"tous"`). Un PNJ ou des monstres « MJ » sont posés sur la table sans que les joueurs les voient, jusqu'à ce que le MJ les montre ou que le combat commence.
 - Dans une attaque (de personnage, d'arme ou de monstre) : `portee` et `portee_longue` en mètres (à distance ; la portée longue vaut 4 × la normale si elle manque, avec désavantage), `allonge: true` (au contact à 3 m). Une attaque de zone de monstre ou un sort de zone touche ceux qui sont à `rayon` mètres de la cible (3 par défaut). Les murs (cases bloquées) coupent la vue.
 - Saga 1.32 : la table garde aussi les macros du MJ (`table.macros` : `[{ nom, formule }]`), celles de chaque héros (`macros` dans le membre de l'équipe), les marques des pions (`marques` : des ids d'`etats.json`, ou `c-rouge`, `c-orange`, `c-jaune`, `c-vert`, `c-bleu`, `c-violet`) et les gabarits de chaque carte (`cartes.<id>.gabarits` : `{ id, forme: cercle|cone|ligne|carre, x, y, vx, vy, taille (en cases), couleur, auteur }`). Une ligne du journal des jets peut avoir `voit` (le pion du joueur qui a fait un jet secret). Un état (`etats.json`) peut avoir une `couleur` pour sa marque.
+- Saga 1.34 : `table.campagne` : `{ nom (60 caractères au plus), fond (data URL png/jpeg/webp) }`, le nom de la campagne et le fond des compagnons choisis par le MJ.
 
 #### Ce que le moteur garde dans une sauvegarde
 
@@ -1023,6 +1024,8 @@ Pour un jeu JDR, Tafl met aussi `equipe_max` à 4 et `argent_depart` à 0 au cha
 `partie.jdr` : `graine` (le hasard des dés : recharger rejoue les mêmes jets) et `journal` (les 200 derniers jets : `{ n, qui, quoi, formule, des: [{ faces, valeur, garde }], bonus, total, contre, resultat, cache }`). Chaque membre du groupe garde sa fiche : `origine`, `classe`, `niveau`, `xp`, `carac`, `competences`, `expertises`, `pv`, `pv_temp`, `pv_niveaux`, `des_vie`, `equipement`, `sorts`, `emplacements`, `ressources`, `etats`, `mort`, et `joueur` (vide pour l'instant : l'ami à qui appartient la fiche, pour le multijoueur). La CA, les bonus et les PV max se recalculent depuis les données, pour qu'un changement fait dans Tafl se voie aussitôt.
 
 #### La fiche personnalisée (Tafl 1.23, Saga 1.21.3)
+
+`reglages.jdr.compagnon.fond` (facultatif, Tafl 1.35) : l'image de fond du compagnon de Saga 1.34 (le téléphone des joueurs), une data URL png/jpeg/webp ; la campagne peut la remplacer dans Saga.
 
 `reglages.jdr.fiche` (facultatif) : la fiche de personnage du jeu, faite dans **Données › Réglages › Fiche des personnages** (avec un aperçu). Sans elle, Saga montre sa fiche à lui. Le format et les calculs sont dans `commun/fiche-perso.js`, partagé par Tafl et Saga.
 

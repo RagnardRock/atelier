@@ -612,6 +612,10 @@ handle('reseau:internet', async (_event, voulu) => {
 handle('reseau:accepter', async (_event, id, oui) => { reseau.accepter(String(id || ''), Boolean(oui)); return reseau.infos(); });
 handle('reseau:infos', async () => reseau.infos());
 handle('reseau:expulser', async (_event, id) => { reseau.expulser(String(id || '')); return true; });
+// Saga 1.34 : le compagnon du MJ (un QR code à scanner avec son téléphone), et couper les téléphones d'un joueur.
+handle('reseau:compagnon', async () => reseau.compagnonMj());
+ipcMain.on('reseau:fond', (event, url) => { if (event.sender === fenetrePrincipale?.webContents) reseau.fondCompagnon(typeof url === 'string' ? url : ''); });
+handle('reseau:compagnon-couper', async (_event, de) => { reseau.couperCompagnons(String(de || '')); return reseau.infos(); });
 ipcMain.on('reseau:envoyer', (event, id, sorte, json) => {
   if (event.sender !== fenetrePrincipale?.webContents || typeof json !== 'string' || json.length > 4e6) return;
   reseau.envoyer(String(id), ['vue', 'jeu', 'fin'].includes(sorte) ? sorte : 'vue', json);

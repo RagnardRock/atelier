@@ -160,6 +160,12 @@
       pair: (vers, donnees) => envoyer('/action', { type: 'pair', vers, donnees }).catch(rien),
       // Une demande à l'hôte (le mode table : déplacer son pion, parler, lancer un jet…).
       demander: (a) => envoyer('/action', a).catch(rien),
+      // Saga 1.34 : relier son téléphone (le compagnon) par un QR code, ou couper ceux reliés.
+      compagnon: async () => {
+        const d = await envoyer('/compagnon/lien', {});
+        return { code: d.code, url: `${location.origin}${racine}/compagnon/#lien=${d.code}` };
+      },
+      couperCompagnon: () => envoyer('/compagnon/couper', {}).catch(rien),
     },
     choisirJeu: async () => null,
     ouvrirJeu: async () => (await demander('/jeu')).json(),
