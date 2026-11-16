@@ -89,17 +89,25 @@ const TableInterface = (() => {
       const manuel = !T.combat && T.vue()?.initiative;
       const c = T.combat || manuel;
       const pions = T.vue()?.pions || [];
-      const l = (c?.ordre || []).map((o) => { const p = pions.find((q) => q.id === o.id); return { ...o, sorte: p?.sorte || (manuel ? 'libre' : 'monstre'), ko: Boolean(p?.ko), cache: Boolean(p?.cache) }; });
-      const sig = JSON.stringify([l, c?.actif, c?.tour]);
+      const attente = T.combat ? T.combat.attente || [] : null;
+      const l = (c?.ordre || []).map((o) => { const p = pions.find((q) => q.id === o.id); return { ...o, sorte: p?.sorte || (manuel ? 'libre' : 'monstre'), ko: Boolean(p?.ko), cache: Boolean(p?.cache), fait: Boolean(attente?.length && !attente.includes(o.id) && o.id !== c.actif) }; });
+      const sig = JSON.stringify([l, c?.actif, c?.tour, c?.libre]);
       if (sig === signatureOrdre) return;
       signatureOrdre = sig;
       ordre.hidden = !l.length;
-      ordre.replaceChildren(...l.map((o) => {
-        const b = el('button', { type: 'button', className: `ti-init ${o.sorte}${o.id === c.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}`, title: `${o.nom} · initiative ${o.init ?? '?'}${o.cache ? ' · caché aux joueurs' : ''}` },
+      // Saga 1.44 : glisser une pastille la place ailleurs ; double-clic : elle agit maintenant.
+      const placer = (de, k) => (T.combat ? T.ordreCombat(de, k) : T.agir({ type: 'init_placer', id: de, index: k }));
+      ordre.replaceChildren(...(c?.libre ? [el('span', { className: 'ti-init-libre', textContent: 'Ordre libre' })] : []), ...l.map((o, k) => {
+        const cle = manuel ? o.ligne : o.id;
+        const b = el('button', { type: 'button', draggable: true, className: `ti-init ${o.sorte}${o.id === c.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}${o.fait ? ' fait' : ''}${o.attend ? ' attend' : ''}`, title: `${o.nom} · initiative ${o.init ?? '?'}${o.attend ? ' · attend' : ''}${o.cache ? ' · caché aux joueurs' : ''}\nGlisser : le placer · double-clic : il agit maintenant` },
           el('span', { className: 'ti-init-rond', textContent: initiale(o.nom) }), el('span', { className: 'ti-init-nom', textContent: o.nom }), el('small', { textContent: String(o.init ?? '') }));
         b.onclick = () => { T.selection = o.id; maj(); };
+        b.ondblclick = () => T.agirMaintenant(cle);
+        b.ondragstart = (e) => e.dataTransfer.setData('text/x-saga-init', cle);
+        b.ondragover = (e) => { if (e.dataTransfer.types.includes('text/x-saga-init')) e.preventDefault(); };
+        b.ondrop = (e) => { e.preventDefault(); const de = e.dataTransfer.getData('text/x-saga-init'); if (de && de !== cle) placer(de, k); };
         return b;
-      }), ...(manuel ? [bouton('debug-continue', 'Suivant', () => T.passerInitiative(1), { titre: `Tour ${c.tour} : passer au suivant` })] : []));
+      }), ...(manuel && !c.libre ? [bouton('debug-continue', 'Suivant', () => T.passerInitiative(1), { titre: `Tour ${c.tour} : passer au suivant` })] : []));
     }
 
     // --- Le zoom ---

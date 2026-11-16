@@ -158,11 +158,11 @@ const TableClient = (() => {
       ordre.hidden = !oc;
       if (oc) {
         ordre.innerHTML = '';
-        ordre.append(el('span', { className: 'joueurs-tour', textContent: `Tour ${oc.tour || 1}` }));
+        ordre.append(el('span', { className: 'joueurs-tour', textContent: `Tour ${oc.tour || 1}${oc.libre ? ' · ordre libre' : ''}` }));
         for (const o of oc.ordre) {
           if (!habit) { ordre.append(el('span', { className: `joueurs-ordre-nom${o.id === oc.actif ? ' actif' : ''}`, textContent: o.nom })); continue; }
           const p = vue.pions.find((x) => x.id === o.id);
-          ordre.append(el('span', { className: `ti-init ${p?.sorte === 'heros' ? 'heros' : p ? 'monstre' : 'libre'}${o.id === oc.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}` },
+          ordre.append(el('span', { className: `ti-init ${p?.sorte === 'heros' ? 'heros' : p ? 'monstre' : 'libre'}${o.id === oc.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}${o.fait ? ' fait' : ''}${o.attend ? ' attend' : ''}` },
             el('span', { className: 'ti-init-rond', textContent: (o.nom || '?').trim().charAt(0).toUpperCase() }), el('span', { textContent: o.nom })));
         }
       }

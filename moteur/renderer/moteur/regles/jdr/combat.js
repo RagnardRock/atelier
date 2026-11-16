@@ -21,7 +21,8 @@
 // sa portée, et un mur cache la cible. Sans grille, rien ne change.
 //   grille : { placer({ heros, monstres }), cases(metres), distance(u, t), voit(u, t), autour(t, rayon, liste),
 //              deplacer(u, reste) → cases faites, approcher(u, t, portee, max) → cases faites,
-//              actif(u, tour, reste), vaincu(u), ordre(liste), jetsCaches }
+//              actif(u, tour, reste), vaincu(u), ordre(liste), jetsCaches,
+//              suivant(restants) → index (Saga 1.44, facultatif : l'ordre réglé par le MJ, ou son choix en ordre libre) }
 
 const JdrCombat = (() => {
   const B = JdrBase, P = JdrPerso, D = JdrDes, T = JdrTests;
@@ -1076,8 +1077,13 @@ const JdrCombat = (() => {
     while (!fini() && tour < 200) {
       tour++;
       frappesAuContact = new Map();
-      for (const u of ordre) {
+      // Saga 1.44 : à chaque tour, ceux qui n'ont pas encore joué ; la grille peut choisir le suivant
+      // (l'ordre que le MJ a réglé, « agir maintenant », ou l'ordre libre).
+      const restants = [...ordre];
+      while (restants.length) {
         if (fini()) break;
+        const k = grille?.suivant ? Math.max(0, Math.min(restants.length - 1, Math.round(Number(await grille.suivant(restants)) || 0))) : 0;
+        const u = restants.splice(k, 1)[0];
         if (estHeros(u) && !debout(u)) { if (!u.c.mort_definitive) { grille?.actif(u, tour, 0); await jetContreLaMort(u); } continue; }
         if (!debout(u)) continue;
         // Saga 1.41 : un héros dans un palier « à jets » tente de tenir au début de son tour.

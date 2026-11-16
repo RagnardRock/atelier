@@ -92,7 +92,7 @@ const TableMode = (() => {
     const role = () => apercu || { mj: true };
     const ctxVue = () => ({
       carte: carte(), presents: h.presents(), scene: sceneTexte,
-      combat: combat ? { tour: combat.tour, ordre: combat.ordre, actif: combat.actif, reste: combat.reste } : null,
+      combat: combat ? { tour: combat.tour, ordre: combat.ordre, actif: combat.actif, reste: combat.reste, libre: combat.libre, attente: combat.attente } : null,
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
       ficheDe: (perso) => fichePour(perso),
       pings: pings.filter((q) => performance.now() - q.t < 3000),
@@ -359,6 +359,17 @@ const TableMode = (() => {
     let glisse = null;
     const pos = (e) => { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; };
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Saga 1.44 : une image déposée sur le plateau devient un pion (le MJ), là où on l'a lâchée.
+    canvas.addEventListener('dragover', (e) => { if (!apercu && [...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    canvas.addEventListener('drop', async (e) => {
+      const f = e.dataTransfer?.files?.[0];
+      if (!f || apercu || !panneau) return;
+      e.preventDefault();
+      const { px, py } = pos(e);
+      const c = plateau.caseSous(px, py, jeu());
+      const src = await panneau.imageJeton(f);
+      if (src) agir({ type: 'pion_poser', image: src, nom: f.name.replace(/\.[a-z0-9]+$/i, '').replace(/[-_]+/g, ' ').slice(0, 40), x: c.x, y: c.y });
+    });
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); const { px, py } = pos(e); plateau.zoomer(e.deltaY < 0 ? 1 : -1, px, py); }, { passive: false });
     canvas.addEventListener('mousedown', (e) => {
       if (!actif || !jeu()) return;
@@ -501,7 +512,9 @@ const TableMode = (() => {
     function combattre(o) {
       const g = typeof o.groupe === 'string' ? (jeu().donnees.groupes?.groupes || []).find((x) => x.id === o.groupe) : o.groupe;
       // Saga 1.35.1 : plusieurs rencontres posées dans un même combat (g.ids : celles dont les pions combattent).
-      combat = { tour: 0, ordre: [], actif: '', reste: null, heros: [], ennemis: [], groupe: g?.id || '', groupes: Array.isArray(g?.ids) ? g.ids : null };
+      combat = { tour: 0, ordre: [], actif: '', reste: null, heros: [], ennemis: [], groupe: g?.id || '', groupes: Array.isArray(g?.ids) ? g.ids : null,
+        // Saga 1.44 : l'ordre libre (le MJ choisit qui agit), par défaut celui du jeu (Tafl › Mécaniques › Initiative).
+        libre: typeof JdrMeca !== 'undefined' && JdrMeca.meca(jeu())?.initiative?.ordre === 'libre', attente: [] };
       return Regles.combattre({ ...o, ui, grille }).finally(() => {
         combat = null;
         boite.hidden = true;
@@ -547,6 +560,28 @@ const TableMode = (() => {
       ordre(liste) { combat.ordre = liste.map(({ u, nom, init }) => ({ id: pionDe(u)?.id || '', nom, init })); },
       actif(u, tour, reste) { combat.tour = tour; combat.actif = pionDe(u)?.id || ''; combat.reste = u.camp === 'heros' ? reste : null; panneau?.rafraichir(); },
       vaincu(u) { const p = pionDe(u); if (p) p.vaincu = true; },
+      // Saga 1.44 : qui agit maintenant, parmi ceux qui n'ont pas joué ce tour : le premier dans l'ordre que le MJ
+      // a réglé (glissé, « agir maintenant ») ; en ordre libre, le MJ le choisit dans la boîte du combat.
+      async suivant(restants) {
+        combat.attente = restants.map((u) => pionDe(u)?.id || '');
+        const rang = (u) => { const k = combat.ordre.findIndex((o) => o.id === pionDe(u)?.id); return k < 0 ? 999 : k; };
+        let k = 0;
+        restants.forEach((u, i) => { if (rang(u) < rang(restants[k])) k = i; });
+        const debout = restants.map((u, i) => [u, i]).filter(([u]) => !(pionDe(u)?.vaincu) && !(pionDe(u)?.ko));
+        if (combat.libre && debout.length > 1) {
+          combat.actif = '';
+          envoyes.clear();
+          panneau?.rafraichir();
+          boite.hidden = false;
+          tete.textContent = `Tour ${combat.tour || 1} · ordre libre`;
+          texte.textContent = 'Qui agit maintenant ?';
+          const tri = [...debout].sort((a, b) => rang(a[0]) - rang(b[0]));
+          const choix = await menuBoite(tri.map(([u]) => ({ texte: combat.ordre.find((o) => o.id === pionDe(u)?.id)?.nom || '?', icone: u.camp === 'heros' ? 'person' : 'flame' })), false, 'Ordre libre');
+          if (choix != null && tri[choix]) k = tri[choix][1];
+        }
+        combat.attente = combat.attente.filter((id) => id !== (pionDe(restants[k])?.id || ''));
+        return k;
+      },
       brancher(f) { if (combat) combat.ajuster = f; },
       async deplacer(u, reste) {
         const p = pionDe(u);
@@ -1248,12 +1283,42 @@ const TableMode = (() => {
         if (lignes.length) {
           E.agir(j, partie(), { mj: true }, { type: 'init_trier' }, ctxVue());
           // Une liste neuve : le premier commence, au tour 1.
-          if (vide) Object.assign(table().initiative, { actif: table().initiative.liste[0].id, tour: 1 });
+          if (vide) Object.assign(table().initiative, { actif: table().initiative.liste[0].id, tour: 1, libre: typeof JdrMeca !== 'undefined' && JdrMeca.meca(j)?.initiative?.ordre === 'libre' });
           h.des({ titre: 'Initiative', lignes });
         }
         envoyes.clear();
         panneau?.rafraichir();
         return lignes.length;
+      },
+      // Saga 1.44 : régler l'ordre d'un combat de Saga : placer une ligne (glisser), faire agir quelqu'un juste
+      // après le tour en cours, passer en ordre libre. Ça compte pour ceux qui n'ont pas encore joué ce tour.
+      ordreCombat(id, index) {
+        if (!combat) return false;
+        const i = combat.ordre.findIndex((o) => o.id === id);
+        if (i < 0) return false;
+        const [o] = combat.ordre.splice(i, 1);
+        combat.ordre.splice(Math.max(0, Math.min(combat.ordre.length, Math.round(Number(index) || 0))), 0, o);
+        envoyes.clear(); panneau?.rafraichir();
+        return true;
+      },
+      agirMaintenant(id) {
+        if (!combat) {
+          const l = table().initiative?.liste || [];
+          const x = l.find((q) => q.id === id || q.pion === id);
+          const res = x ? agir({ type: 'init_agir', id: x.id }) : { ok: false };
+          if (res.ok) noterRecit({ texte: `Au tour de ${x.nom} (tour ${table().initiative.tour}).` });
+          return res.ok;
+        }
+        if (!combat.attente.includes(id)) { h.message('Il a déjà joué ce tour.'); return false; }
+        // Juste après celui qui joue (ou en tête) : il sera le prochain.
+        const a = combat.ordre.findIndex((o) => o.id === combat.actif);
+        const i = combat.ordre.findIndex((o) => o.id === id);
+        return api.ordreCombat(id, a < 0 ? 0 : (i > a ? a + 1 : a));
+      },
+      ordreLibre(v) {
+        if (combat) combat.libre = Boolean(v);
+        else agir({ type: 'init_libre', valeur: Boolean(v) });
+        envoyes.clear(); panneau?.rafraichir();
       },
       // Passer au suivant (ou revenir) : le récit dit à qui c'est.
       passerInitiative(sens = 1) {

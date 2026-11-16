@@ -237,9 +237,11 @@ const TableEtat = (() => {
     const combat = ctx.combat ? {
       tour: ctx.combat.tour,
       // L'ordre du tour : ceux qu'on ne voit pas n'y sont pas (un monstre caché ne se trahit pas).
-      ordre: ctx.combat.ordre.filter((o) => ids.has(o.id)).map((o) => ({ id: o.id, nom: o.nom, ...(mj ? { init: o.init } : {}) })),
+      // Saga 1.44 : fait : a déjà joué ce tour ; libre : le MJ choisit qui agit.
+      ordre: ctx.combat.ordre.filter((o) => ids.has(o.id)).map((o) => ({ id: o.id, nom: o.nom, ...(mj ? { init: o.init } : {}), ...(Array.isArray(ctx.combat.attente) && ctx.combat.attente.length && !ctx.combat.attente.includes(o.id) && o.id !== ctx.combat.actif ? { fait: true } : {}) })),
       actif: ids.has(ctx.combat.actif) ? ctx.combat.actif : '',
       reste: ctx.combat.reste ?? null,
+      libre: Boolean(ctx.combat.libre),
     } : null;
     // Un jet secret d'un joueur (/gr) : le MJ et lui seul le voient.
     const journal = (partie.jdr?.journal || []).filter((l) => mj || !l.cache || (l.voit && l.voit === role.heros)).slice(-30);
@@ -283,6 +285,7 @@ const TableEtat = (() => {
   // Saga 1.43 : les actions du MJ sur l'initiative à la main.
   //   init_ajouter { pion?, nom?, init } · init_retirer { id } · init_valeur { id, init } · init_monter { id, sens: -1|1 }
   //   init_trier · init_suivant · init_precedent · init_vider
+  //   Saga 1.44 : init_placer { id, index } (glisser) · init_retarder { id } · init_agir { id } · init_libre { valeur }
   function agirInitiative(table, a, non) {
     const t = table.initiative = normInitiative(table.initiative);
     const l = t.liste;
@@ -323,13 +326,46 @@ const TableEtat = (() => {
         return { ok: true };
       }
       case 'init_trier': ordonner(); return { ok: true };
+      case 'init_placer': {
+        if (i < 0) return non('Ligne inconnue.');
+        const [x] = l.splice(i, 1);
+        l.splice(Math.max(0, Math.min(l.length, Math.round(Number(a.index) || 0))), 0, x);
+        return { ok: true };
+      }
+      case 'init_retarder': {
+        // Il attend : on passe sans lui ; « Agir maintenant » le remet dans l'ordre, là où il agit.
+        if (i < 0) return non('Ligne inconnue.');
+        l[i].attend = true;
+        if (t.actif === l[i].id) return agirInitiative(table, { type: 'init_suivant' }, non);
+        return { ok: true };
+      }
+      case 'init_agir': {
+        // Il agit tout de suite : sa ligne se place là où l'on en est (en ordre libre, elle ne bouge pas).
+        if (i < 0) return non('Ligne inconnue.');
+        const x = l[i];
+        delete x.attend;
+        if (!t.libre) {
+          const k = l.findIndex((q) => q.id === t.actif);
+          if (k >= 0 && k !== i) { l.splice(i, 1); l.splice(l.findIndex((q) => q.id === t.actif), 0, x); }
+        }
+        t.actif = x.id;
+        return { ok: true, tourDe: x };
+      }
+      case 'init_libre': t.libre = Boolean(a.valeur); return { ok: true };
       case 'init_suivant':
       case 'init_precedent': {
         if (!l.length) return non('L\'initiative est vide.');
-        const k = l.findIndex((x) => x.id === t.actif);
-        if (a.type === 'init_suivant') {
-          if (k >= l.length - 1) { t.tour += 1; t.actif = l[0].id; } else t.actif = l[k + 1].id;
-        } else if (k <= 0) { if (t.tour > 1) { t.tour -= 1; t.actif = l[l.length - 1].id; } else t.actif = l[0].id; } else t.actif = l[k - 1].id;
+        // Ceux qui attendent (retardés) sont passés ; s'ils attendent tous, on avance quand même.
+        const pret = (x) => !x.attend || l.every((q) => q.attend);
+        let k = l.findIndex((x) => x.id === t.actif);
+        const pas = a.type === 'init_suivant' ? 1 : -1;
+        for (let n = 0; n < l.length; n++) {
+          k += pas;
+          if (k >= l.length) { k = 0; t.tour += 1; }
+          if (k < 0) { if (t.tour > 1) { t.tour -= 1; k = l.length - 1; } else { k = 0; break; } }
+          if (pret(l[k])) break;
+        }
+        t.actif = l[k].id;
         const x = l.find((q) => q.id === t.actif);
         return { ok: true, tourDe: x };
       }
@@ -341,8 +377,8 @@ const TableEtat = (() => {
   // Saga 1.43 : une ligne : { id, nom, init, pion? } (un pion de la table, ou une ligne libre : « Le piège »).
   function normInitiative(x) {
     const liste = (Array.isArray(x?.liste) ? x.liste : []).filter((l) => l && typeof l.id === 'string').slice(0, 60)
-      .map((l) => ({ id: l.id, nom: String(l.nom || '?').slice(0, 40), init: Number.isFinite(Number(l.init)) ? Math.round(Number(l.init)) : 0, ...(typeof l.pion === 'string' && l.pion ? { pion: l.pion } : {}) }));
-    return { liste, actif: liste.some((l) => l.id === x?.actif) ? x.actif : '', tour: Math.max(1, Math.round(Number(x?.tour) || 1)) };
+      .map((l) => ({ id: l.id, nom: String(l.nom || '?').slice(0, 40), init: Number.isFinite(Number(l.init)) ? Math.round(Number(l.init)) : 0, ...(typeof l.pion === 'string' && l.pion ? { pion: l.pion } : {}), ...(l.attend ? { attend: true } : {}) }));
+    return { liste, actif: liste.some((l) => l.id === x?.actif) ? x.actif : '', tour: Math.max(1, Math.round(Number(x?.tour) || 1)), libre: Boolean(x?.libre) };
   }
   // Ce que voit un rôle de l'initiative à la main : les pions qu'il voit, et les lignes libres.
   function vueInitiative(table, ids, mj) {
@@ -350,7 +386,7 @@ const TableEtat = (() => {
     if (!t?.liste?.length) return null;
     const l = t.liste.filter((x) => !x.pion || ids.has(x.pion));
     const actif = l.find((x) => x.id === t.actif);
-    return { manuel: true, tour: t.tour, actif: actif ? actif.pion || actif.id : '', ordre: l.map((x) => ({ id: x.pion || x.id, ligne: x.id, nom: x.nom, ...(mj ? { init: x.init } : {}) })) };
+    return { manuel: true, libre: t.libre, tour: t.tour, actif: actif ? actif.pion || actif.id : '', ordre: l.map((x) => ({ id: x.pion || x.id, ligne: x.id, nom: x.nom, ...(mj ? { init: x.init } : {}), ...(x.attend ? { attend: true } : {}) })) };
   }
 
   function agir(jeu, partie, role, a, ctx) {
@@ -518,6 +554,23 @@ const TableEtat = (() => {
       case 'tout_cacher':
         table.cartes[carte.id] = { brouillard: true, pieces: {}, cases: {} };
         return { ok: true };
+      // Saga 1.44 : un pion de plus en pleine séance : un monstre du jeu (sa fiche), ou une image déposée sur le
+      // plateau (un pion sans fiche : un nom, des PV, son image). Hors des rencontres : l'initiative à la main le compte.
+      case 'pion_poser': {
+        const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
+        if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');
+        if (table.pions.length >= 300) return non('Trop de pions sur la table.');
+        const m = a.monstre ? (jeu.donnees.monstres_jdr?.monstres_jdr || []).find((q) => q.id === a.monstre) : null;
+        if (a.monstre && !m) return non('Monstre inconnu.');
+        if (!m && !imageJetonValide(a.image)) return non('Image trop grande ou illisible (PNG, JPEG ou WebP).');
+        const nom = String(a.nom || m?.nom || m?.id || 'Pion').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 40) || 'Pion';
+        const pv = Math.max(1, Math.min(9999, Math.round(Number(a.pv) || Number(m?.pv) || 10)));
+        const pos = caseLibre(table, carte, x, y, [], ctx.presents || []);
+        const p = { id: `m-${Date.now().toString(36)}-${table.pions.length}`, sorte: 'monstre', monstre: m?.id || '', groupe: '', nom, carte: carte.id, x: pos.x, y: pos.y, direction: 'bas', visible: normVisible(a.visible, 'tous'), pv, pvMax: pv };
+        if (a.image && imageJetonValide(a.image)) { const id = idJeton(a.image); table.jetons[id] = a.image; p.jeton = { image: id }; }
+        table.pions.push(p);
+        return { ok: true, pion: p };
+      }
       case 'groupe': {
         const l = poserGroupe(jeu, table, carte, a.groupe, Math.round(Number(a.x) || 0), Math.round(Number(a.y) || 0), ctx.presents);
         return l.length ? { ok: true, pions: l } : non('Rencontre inconnue ou vide.');
