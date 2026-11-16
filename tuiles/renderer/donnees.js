@@ -1517,15 +1517,24 @@ const Donnees = (() => {
     // Tafl 1.26 (Saga 1.25) : un seul menu dans le jeu (Échap) ; Tab (Select) ouvre un raccourci au choix.
     const modules = Array.isArray(r.modules) ? r.modules : [];
     const choixTab = [['', 'Le sac (par défaut)'], ['menu', 'Le menu du jeu'], ['equipe', `${m.equipe || d.equipe}`],
-      ...(m.dex_visible ? [['dex', `${m.dex || d.dex}`]] : []), ['quetes', 'Les quêtes'],
+      ...(m.dex_visible && r.regles !== 'jdr' ? [['dex', `${m.dex || d.dex}`]] : []), ['quetes', 'Les quêtes'],
       ...(r.carte_monde?.active !== false ? [['carte', 'La carte du monde']] : []),
-      ...(r.badges?.length || pokemon ? [['badges', 'Les badges']] : []),
+      ...((r.badges?.length || pokemon) && r.regles !== 'jdr' ? [['badges', 'Les badges']] : []),
       ...(r.regles === 'jdr' ? [['jets', 'Jets de dés'], ['repos', 'Se reposer']] : []),
       ...(modules.includes('gestion') ? [['module:gestion:construire', 'Construire (sur une zone constructible)'], ['module:gestion:domaine', 'L\'écran du domaine']] : []),
       ...(modules.includes('relations') ? [['module:relations:relations', 'Les relations']] : []),
       ...(modules.includes('roguelite') ? [['module:roguelite:perks', 'Les perks de la partie']] : []),
       ['aucun', 'Rien']];
     if (m.tab && !choixTab.some(([k]) => k === m.tab)) choixTab.push([m.tab, m.tab]);
+    // Tafl 1.40 : le JDR n'a ni bestiaire ni réserve ; seulement la touche Tab et les pages de la fiche.
+    if (r.regles === 'jdr') {
+      return [
+        section('Le menu du jeu'),
+        champ('Touche Tab (Select)', sel(choixTab, m.tab || '', (v) => { m.tab = v; })),
+        section('Pages de la fiche d\'un héros'),
+        champ('Montrées dans Saga', pages),
+      ];
+    }
     return [
       section('Le menu du jeu'),
       info('Dans Saga, Échap (Start à la manette) ouvre le menu du jeu : équipe, sac, quêtes, options… Tab (Select) ouvre directement ce que tu choisis ici.'),
@@ -1638,7 +1647,7 @@ const Donnees = (() => {
       out.push(
         section('Le groupe de héros'),
         el('div', { className: 'field-grid' }, [
-          champ('Héros qui se battent', nombreIn(r, 'equipe_max', 1, 8), 'les autres attendent dans la Réserve'),
+          r.regles === 'jdr' ? champ('Héros dans le groupe', nombreIn(r, 'equipe_max', 1, 8), 'un par joueur, MJ à part') : champ('Héros qui se battent', nombreIn(r, 'equipe_max', 1, 8), 'les autres attendent dans la Réserve'),
           champ('Niveau maximum', r.regles === 'jdr' ? niveauMaxJdr(r) : nombreIn(r, 'niveau_max', 1, 999), r.regles === 'jdr' ? '20 au plus' : ''),
         ]),
         r.regles === 'jrpg' ? champ('Expérience', sel(COURBES_XP, r.courbe_xp, (v) => { r.courbe_xp = v; }), 'ce qu\'il faut pour chaque niveau') : null,
@@ -1747,7 +1756,7 @@ const Donnees = (() => {
       ]),
     ];
     // Un jeu d'un autre pack qui a déjà des badges les garde (la commande « Donner un badge » reste là).
-    if (!pokemon && r.badges.length) {
+    if (!pokemon && r.regles !== 'jdr' && r.badges.length) {
       out.push(
         section('Badges'),
         info(`Ton jeu a des badges, mais le pack ${nomPack(r.regles)} ne s'en sert pas pour les niveaux : ce sont de simples récompenses, montrées dans le menu du jeu. Retire-les tous pour ne plus les voir.`),

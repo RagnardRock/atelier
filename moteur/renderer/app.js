@@ -162,7 +162,7 @@ function creerSaga() {
     if (!moteur.peutTable(jeu) || test) moteur.modeTable = false;
     else if (!(partie && depart)) {
       const avant = Boolean(config.modeTable?.[textes.dossier]);
-      const m = await Dialogs.ask(jeu.titre, 'Comment jouer ?\nMode table : tu es le MJ. Les héros et les monstres sont des pions sur la carte, avec le brouillard sur les pièces et un écran à part pour les joueurs.', [
+      const m = await Dialogs.ask(jeu.titre, 'Comment jouer ?\nMode table : tu es le MJ, tes amis jouent les héros.', [
         { label: 'Seul (aventure)', value: 'aventure', primary: !avant },
         { label: 'Mode table (MJ)', value: 'table', primary: avant },
       ]);
@@ -197,9 +197,9 @@ function creerSaga() {
       fields: [
         { key: 'nom', label: 'Ton nom pour les autres', type: 'text', value: nomAvant || (moteur.modeTable ? 'MJ' : 'Hôte') },
         { type: 'info', text: moteur.modeTable
-          ? 'Tes amis ouvriront l\'adresse que Saga affichera, dans le navigateur de leur PC, de leur tablette ou de leur téléphone. Tu donneras un héros à chacun dans le panneau du MJ.'
-          : 'Tes amis ouvriront l\'adresse que Saga affichera, dans leur navigateur. Chacun joue sa propre partie dans ton jeu : vous vous voyez marcher, vous discutez, vous échangez et vous vous défiez.' },
-        { type: 'info', text: 'Il faut être sur le même réseau (le Wi-Fi de la maison). Si Windows demande à autoriser Saga sur le réseau, dis oui pour les réseaux privés.' },
+          ? 'Tes amis ouvrent l\'adresse affichée dans leur navigateur.'
+          : 'Tes amis ouvrent l\'adresse affichée dans leur navigateur.' },
+        { type: 'info', text: 'Même Wi-Fi requis. Si Windows demande, autorise Saga sur les réseaux privés.' },
       ],
     });
     if (!v) return;
@@ -379,7 +379,13 @@ function creerSaga() {
     $('.pause-choix[data-page="quetes"]').hidden = !listeDonnees('quetes').length && !Object.keys(p.quetes).length;
     // Les choix du pack de règles (Saga 0.13, le JDR : les jets de dés, se reposer) et des modules (le
     // domaine, construire), puis les résumés des modules.
-    const actions = moteur.actionsPause();
+    // Saga 1.46 : le JDR n'a ni bestiaire ni badges ; en mode table, pas non plus le sac, les quêtes, la carte
+    // du monde ni les jets de dés (le MJ mène l'histoire ; la table a son tapis et ses fiches).
+    const table = Boolean(moteur.modeTable);
+    const horsPack = jeu.donnees.reglages?.reglages?.regles === 'jdr' ? ['[data-action="dex"]', '[data-page="badges"]'] : [];
+    if (table) horsPack.push('[data-page="sac"]', '[data-page="quetes"]', '[data-action="carte"]');
+    for (const sel of horsPack) $(`.pause-choix${sel}`).hidden = true;
+    const actions = moteur.actionsPause().filter(([id]) => !(table && id === 'jets'));
     $('#pause-actions').replaceChildren(
       ...actions.map(([id, nom, icone]) => {
         const b = el('button', { className: 'pause-choix', type: 'button' }, el('i', { className: `codicon codicon-${icone || 'circle-filled'}` }), el('span', { textContent: nom }));
@@ -478,9 +484,11 @@ function creerSaga() {
     if (!ouvert) return;
     if (pauseOuverte()) { fermerPause(); return; }
     if (moteur.enScript || moteur.enCombat) return;
+    if (moteur.modeTable) { ouvrirPause(); return; } // la table n'a ni sac ni bestiaire
     const forme = moteur.formeMenus();
     const t = forme.tab || 'sac';
     if (t === 'aucun') return;
+    if (ouvert.jeu.donnees.reglages?.reglages?.regles === 'jdr' && ['dex', 'badges'].includes(t)) { ouvrirPause(); return; }
     if (t === 'menu') ouvrirPause();
     else if (t === 'equipe' || (t === 'dex' && forme.dex_visible)) moteur.ouvrirEcran(t);
     else if (t === 'carte' && moteur.carteDisponible) moteur.ouvrirCarte(); // Saga 1.26

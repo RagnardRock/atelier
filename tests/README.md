@@ -70,6 +70,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/17-saga-vision.js` : Saga 1.45 : les lignes de vue (mur, eau transparente), ce qui reste exploré sans le monstre
   qui s'y tient, le noir à tâtons, une lanterne, la vision dans le noir du nain ; Tafl 1.39 garde une tuile transparente.
 
+- `essais/18-saga-musique-partagee.js` : Saga 1.46 : la musique et un bruitage du MJ demandés par le navigateur d'un ami,
+  son bouton de son retenu, le MJ qui garde le son pour lui ; le menu du MJ sans bestiaire, sac, quêtes ni jets de dés.
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

@@ -390,6 +390,16 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.46 : la musique chez les amis, et un mode table plus sobre (avec Tafl 1.40)
+
+- **La musique et les bruitages du MJ** s'entendent chez les amis, dans leur navigateur. Chacun a son bouton de son et
+  son volume (en haut de son écran). Onglet Scène › Musique › « Qui entend » : tous, ou le MJ seul.
+- **Des textes d'aide courts** dans le panneau du MJ et chez les joueurs ; les notifications prennent le verre de Saga.
+- **Le menu du jeu d'un JDR** n'a ni bestiaire ni badges ; en mode table, ni sac, ni quêtes, ni carte du monde, ni jets
+  de dés (la table a son tapis et ses fiches).
+- **Tafl 1.40** : pour un JDR, Réglages › Interface ne garde que la touche Tab et les pages de la fiche, et « Héros dans
+  le groupe » remplace « Héros qui se battent ».
+
 ## Ce que fait Saga 1.45 : la vision dynamique (avec Tafl 1.39)
 
 - **Onglet Scène › Vision et lumière** : « Dynamique, en plein jour » ou « Dynamique, dans le noir », carte par carte.

@@ -305,6 +305,7 @@ const TableEtat = (() => {
       carte: carte.id, nom: carte.nom, largeur: carte.largeur, hauteur: carte.hauteur,
       brouillard: brouillard(table, carte), masque: Array.from(m).join(''),
       pions, pnj, combat, journal, pause: Boolean(table.pause),
+      audio: ctx.audio || null,
       initiative: combat ? null : vueInitiative(table, ids, mj),
       scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '', ...(Array.isArray(ctx.scene.choix) ? { choix: ctx.scene.choix.map(String) } : {}) } : null,
       caseM: reglages(jeu).caseM, diagonales: reglages(jeu).diagonales,
@@ -625,6 +626,7 @@ const TableEtat = (() => {
         if (a.type === 'lumiere') { if (v) pion.lumiere = v; else delete pion.lumiere; } else if (v == null) delete pion.nuit; else pion.nuit = v;
         return { ok: true };
       }
+      case 'audio': table.audio = a.valeur === 'mj' ? 'mj' : 'tous'; return { ok: true };
       case 'pion_poser': {
         const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
         if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');

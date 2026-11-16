@@ -74,6 +74,7 @@ const TableMode = (() => {
       recit.push({ n: ++numeroRecit, qui: o.qui || '', texte, visible: o.visible || 'tous', combat: Boolean(combat), heure: Date.now() });
       if (recit.length > 80) recit.shift();
     }
+    const sons = []; let numeroSon = 0; // Saga 1.46 : les bruitages du MJ, rejoués chez les amis
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
     // Saga 1.32 : les pings (quelques secondes), et les avis pour un ami (« formule incomprise »…).
     let pings = [], numeroPing = 0;
@@ -96,6 +97,8 @@ const TableMode = (() => {
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
       ficheDe: (perso) => fichePour(perso),
       pings: pings.filter((q) => performance.now() - q.t < 3000),
+      // Saga 1.46 : la musique et les bruitages du MJ, que les amis entendent chez eux (sauf s'il les garde pour lui).
+      audio: table().audio === 'mj' ? null : { musique: h.morceau?.() || '', sons: sons.filter((x) => Date.now() - x.t < 8000).map(({ n, chemin }) => ({ n, chemin })) },
     });
     // La fiche qu'un joueur reçoit (la sienne) : de quoi la lire et lancer ses jets.
     function fichePour(role) {
@@ -1250,7 +1253,7 @@ const TableMode = (() => {
       set marges(f) { plateau.marges = f; },
       redessinerOutils: () => outils.rafraichir(),
       pointDe: (x, y) => { const r = canvas.getBoundingClientRect(); const q = plateau.pointDe(x, y, jeu()); return { x: r.left + q.px, y: r.top + q.py }; },
-      musique: (c) => h.musique(c), son: (c) => h.son(c), message: (t) => h.message(t), des: (o) => h.des(o),
+      musique: (c) => h.musique(c), son: (c) => { h.son(c); sons.push({ n: ++numeroSon, chemin: c, t: Date.now() }); if (sons.length > 6) sons.shift(); envoyes.clear(); }, message: (t) => h.message(t), des: (o) => h.des(o),
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),
       // Saga 1.35.1 : les rencontres posées sur cette carte ([{ id, nom, n }]), et en lancer plusieurs d'un coup
       // (les monstres du combat : ceux qui sont sur la table, pas un de plus).

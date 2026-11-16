@@ -337,6 +337,8 @@ const Moteur = (() => {
         tapis: () => ecranDes.tapis,
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique || 'aucune' : chemin),
         son: (chemin) => audio.fichier(chemin),
+        // Saga 1.46 : le morceau qui joue (les amis l'entendent aussi).
+        morceau: () => audio.morceau,
         message: (t) => rappels.message?.(t),
         bruit,
       },
