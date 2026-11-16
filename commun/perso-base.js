@@ -171,8 +171,8 @@ const PersoBase = (() => {
       for (let k = 0; k < n; k++) poser(l, haut + k, c, fond ? 'pPP' : 'PPp');
       poser(l, haut + n, c, dos ? 'BBB' : fond ? 'bBB' : 'BBb');
     };
-    jambe(11, gauche, false);
-    jambe(18, droite, true);
+    jambe(12, gauche, false);
+    jambe(17, droite, true);
   }
   // De profil (vers la droite) : écart 0 debout, 1/-1 les deux pas. Sur un pas, la jambe qui avance est en
   // diagonale jusqu'au sol, celle de derrière se lève (pied plus haut, plus sombre).
@@ -183,17 +183,15 @@ const PersoBase = (() => {
       poser(l, haut + 4, 14, 'BBBB');
       return;
     }
-    // Calé sur le modèle. ecart 1 : la jambe proche de la caméra (claire) est devant, penchée vers l'avant,
-    // et celle du fond (sombre, fine, levée) derrière. ecart -1 : la jambe proche est derrière, presque droite
-    // sous le corps, et celle du fond devant, levée. Le pied touche le sol au même endroit que debout.
-    if (ecart > 0) {
-      poser(l, haut, 12, 'ppp'); poser(l, haut + 1, 12, 'ppp'); poser(l, haut + 2, 12, 'qqq');
-      poser(l, haut, 16, 'PPPp'); poser(l, haut + 1, 17, 'PPPp'); poser(l, haut + 2, 17, 'PPPp'); poser(l, haut + 3, 17, 'BBBB');
-    } else {
-      poser(l, haut, 19, 'ppp'); poser(l, haut + 1, 19, 'ppp'); poser(l, haut + 2, 19, 'qqq');
-      for (let k = 0; k < 3; k++) poser(l, haut + k, 12, 'PPPp');
-      poser(l, haut + 3, 12, 'BBBB');
-    }
+    // Sur un pas, les jambes s'ouvrent en V (en diagonale), les deux pieds au sol. ecart 1 : la jambe proche de
+    // la caméra (claire) devant, celle du fond (sombre, plus fine) derrière ; ecart -1 : l'inverse.
+    const jambe = (sens, proche) => {
+      const P = proche ? 'PPPp' : 'ppp', c0 = sens > 0 ? 15 : proche ? 13 : 14;
+      for (let k = 0; k < 3; k++) poser(l, haut + k, c0 + sens * k, P);
+      poser(l, haut + 3, c0 + sens * 3, proche ? 'BBBB' : 'qqq');
+    };
+    jambe(-ecart, false);
+    jambe(ecart, true);
   }
   // Le bras de profil (devant le buste), décalé de dx colonnes (+ en avant). La main sort sous la manche.
   function brasProfil(l, haut, dx) {
