@@ -11,7 +11,7 @@ module.exports = [
   {
     nom: 'Saga : les outils de la séance au mode table (Saga 1.32)',
     async faire(ctx) {
-      const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'jdr'), { ctx });
+      const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'jdr', { taille: 32 }), { ctx });
       // Un jeu JDR demande d'abord comment jouer : le mode table (le MJ).
       await page.getByText('Mode table (MJ)').click();
       // Trois héros pré-tirés.
@@ -94,7 +94,7 @@ module.exports = [
         TableEtat.agir(jeu, partie, r1, { type: 'gabarit', forme: 'ligne', x: 2, y: 8, vx: 9, vy: 8, taille: 6, couleur: 'violet' }, { carte: T.carte(), presents: [] });
         return JSON.stringify(TableEtat.vue(jeu, partie, r1, { carte: T.carte(), presents: [] }));
       });
-      const html = await jeuDuModele(ctx, 'jdr');
+      const html = await jeuDuModele(ctx, 'jdr', { taille: 32 });
       const ctx2 = await ctx.navigateur.newContext({ viewport: { width: 1280, height: 720 } });
       const pj = await ctx2.newPage();
       ctx.pages.push(pj);

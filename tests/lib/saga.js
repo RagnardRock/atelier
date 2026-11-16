@@ -107,12 +107,13 @@ function aides(page) {
 module.exports = { exporter, ouvrirSaga };
 
 // Le jeu d'un modèle de Tafl, exporté une seule fois pour tous les essais (ctx.partage).
-async function jeuDuModele(ctx, modele) {
-  const cle = `html:${modele}`;
+// taille : la taille des tuiles (Ragna veut 32 px pour les nouveaux essais et leurs captures).
+async function jeuDuModele(ctx, modele, { taille = 16 } = {}) {
+  const cle = `html:${modele}:${taille}`;
   if (!ctx.partage[cle]) {
     const { ouvrirTafl, nouveauJeu, fichiersDuJeu } = require('./tafl');
     const { page } = await ouvrirTafl(ctx.navigateur);
-    await nouveauJeu(page, modele);
+    await nouveauJeu(page, modele, { taille });
     ctx.partage[cle] = await exporter(await fichiersDuJeu(page), modele);
     await page.context().close();
   }
