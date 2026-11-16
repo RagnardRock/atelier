@@ -21,6 +21,7 @@
 
 const TableEtat = (() => {
   const G = typeof TableGrille !== 'undefined' ? TableGrille : require('./grille.js');
+  const V = typeof TableVision !== 'undefined' ? TableVision : require('./vision.js');
   const O = typeof TableOutils !== 'undefined' ? TableOutils : require('./outils.js');
 
   // Les réglages du mode table, dans les règles maison du pack JDR (Tafl › Réglages › Règles du jeu).
@@ -96,6 +97,9 @@ const TableEtat = (() => {
     // Saga 1.43 : les dessins au feutre et les notes ; visible 'mj' : le calque du MJ (lui seul).
     if (!Array.isArray(c.dessins)) c.dessins = [];
     if (!Array.isArray(c.notes)) c.notes = [];
+    // Saga 1.45 : la vision dynamique ('' : non ; 'jour' ; 'sombre') et ce que les héros ont déjà vu ('0'/'1').
+    if (!['', 'jour', 'sombre'].includes(c.vision)) c.vision = '';
+    if (typeof c.vus !== 'string') c.vus = '';
     return c;
   }
 
@@ -104,6 +108,7 @@ const TableEtat = (() => {
   const dansZone = (z, x, y) => x >= z.x && y >= z.y && x < z.x + z.largeur && y < z.y + z.hauteur;
   // Le brouillard est mis sur une carte qui a des pièces ; le MJ peut l'ôter ou le mettre à la main.
   function brouillard(table, carte) {
+    if (etatCarte(table, carte.id).vision) return true;
     const b = etatCarte(table, carte.id).brouillard;
     return typeof b === 'boolean' ? b : pieces(carte).length > 0;
   }
@@ -111,11 +116,14 @@ const TableEtat = (() => {
   const visibilitePiece = (table, carte, z) => normVisible(etatCarte(table, carte.id).pieces[z.id], normVisible(z.visible_par, 'mj'));
   // Le masque d'un rôle : 1 = la case se voit, 0 = dans le brouillard. Le MJ reçoit celui des joueurs
   // (pour savoir ce qu'ils voient), mais lui voit tout.
-  function masque(table, carte, role) {
+  // Saga 1.45 : avec la vision dynamique, 1 = ses héros le voient, 2 = déjà vu (le décor, sans qui s'y trouve).
+  // env : { jeu, partie, presents } (pour les tuiles et les événements qui éclairent, la vision des héros).
+  function masque(table, carte, role, env = null) {
     const n = carte.largeur * carte.hauteur;
     const out = new Uint8Array(n);
     if (!brouillard(table, carte)) { out.fill(1); return out; }
     const ec = etatCarte(table, carte.id);
+    if (ec.vision && env?.jeu) return masqueVision(table, carte, role, env, ec);
     const ps = pieces(carte).filter((z) => visiblePour(visibilitePiece(table, carte, z), role));
     for (const z of ps) {
       for (let y = Math.max(0, z.y); y < Math.min(carte.hauteur, z.y + z.hauteur); y++) {
@@ -125,6 +133,53 @@ const TableEtat = (() => {
     for (const [i, v] of Object.entries(ec.cases)) if (Number(i) >= 0 && Number(i) < n) out[Number(i)] = v ? 1 : 0;
     // Là où se tient un héros, son joueur voit au moins sa case.
     for (const p of table.pions) if (p.sorte === 'heros' && p.carte === carte.id && G.libre(carte, p.x, p.y)) out[p.y * carte.largeur + p.x] = 1;
+    return out;
+  }
+
+  // Les yeux (les héros de ce rôle sur la carte) et les lumières ; le résultat est gardé tant que rien ne bouge.
+  const caches = new WeakMap();
+  function masqueVision(table, carte, role, { jeu, partie, presents = [] }, ec) {
+    const n = carte.largeur * carte.hauteur;
+    const out = new Uint8Array(n);
+    const caseM = reglages(jeu).caseM || 1.5;
+    const enCases = (m) => Math.max(0, Math.round((Number(m) || 0) / caseM));
+    const heros = table.pions.filter((p) => p.sorte === 'heros' && p.carte === carte.id && !p.vaincu);
+    const miens = heros.filter((p) => !role.perso || estMien(role, membreDe(partie, p)));
+    const yeux = miens.map((p) => {
+      const c = membreDe(partie, p);
+      const nuit = Number.isFinite(Number(p.nuit)) && p.nuit !== '' && p.nuit != null ? Number(p.nuit) : V.visionNuit(jeu, c);
+      return { x: p.x, y: p.y, nuit: enCases(nuit) };
+    });
+    const lumieres = [];
+    for (const p of table.pions) if (p.carte === carte.id && !p.vaincu && Number(p.lumiere) > 0) lumieres.push({ x: p.x, y: p.y, rayon: enCases(p.lumiere) });
+    for (const q of presents) { const l = q.visible && q.ev?.lumiere; if (l) lumieres.push({ x: q.x, y: q.y, rayon: Math.max(1, Math.round(Number(l.rayon) || 3)) }); }
+    if (!carte._lumieres) {
+      const l = [];
+      for (let i = 0; i < n; i++) {
+        for (const c of carte.calques || []) { const t = c.cases?.[i]; const lu = t >= 0 ? jeu.tuiles?.[t]?.lumiere : null; if (lu) { l.push({ x: i % carte.largeur, y: Math.floor(i / carte.largeur), rayon: Math.max(1, Math.round(Number(lu.rayon) || 3)) }); break; } }
+      }
+      Object.defineProperty(carte, '_lumieres', { value: l, configurable: true, enumerable: false });
+    }
+    lumieres.push(...carte._lumieres);
+    const sig = JSON.stringify([ec.vision, yeux, lumieres.length > carte._lumieres.length ? lumieres.slice(0, lumieres.length - carte._lumieres.length) : 0, ec.cases, ec.vus.length]);
+    if (!caches.has(ec)) caches.set(ec, new Map());
+    const parRole = caches.get(ec), cle = role.perso || '';
+    let vus = parRole.get(cle)?.sig === sig ? parRole.get(cle).voit : null;
+    if (!vus) {
+      vus = V.voit(carte, V.opaque(carte, jeu.tuiles || []), yeux, lumieres, ec.vision);
+      parRole.set(cle, { sig, voit: vus });
+    }
+    // Ce qui a été vu reste exploré (la mémoire est celle du groupe : un joueur garde ce que tous ont vu).
+    let memoire = ec.vus.length === n ? ec.vus : '0'.repeat(n);
+    if ([...vus].some((i) => memoire[i] !== '1')) {
+      const a = memoire.split('');
+      for (const i of vus) a[i] = '1';
+      memoire = a.join('');
+      ec.vus = memoire;
+    }
+    for (let i = 0; i < n; i++) out[i] = vus.has(i) ? 1 : memoire[i] === '1' ? 2 : 0;
+    // Le MJ garde la main : une case qu'il a révélée au pinceau se voit.
+    for (const [i, v] of Object.entries(ec.cases)) if (v && Number(i) >= 0 && Number(i) < n) out[Number(i)] = 1;
     return out;
   }
 
@@ -193,7 +248,7 @@ const TableEtat = (() => {
     const table = partie.table, carte = ctx.carte;
     const mj = Boolean(role.mj);
     const pourJoueurs = { mj: false, perso: role.perso || null };
-    const m = masque(table, carte, mj ? pourJoueurs : role);
+    const m = masque(table, carte, mj ? pourJoueurs : role, { jeu, partie, presents: ctx.presents || [] });
     const voitCase = (x, y) => mj || m[y * carte.largeur + x] === 1;
     const pions = [];
     const dispo = O.marquesDispo(jeu);
@@ -556,6 +611,20 @@ const TableEtat = (() => {
         return { ok: true };
       // Saga 1.44 : un pion de plus en pleine séance : un monstre du jeu (sa fiche), ou une image déposée sur le
       // plateau (un pion sans fiche : un nom, des PV, son image). Hors des rencontres : l'initiative à la main le compte.
+      // Saga 1.45 : la vision dynamique de cette carte, oublier ce qui a été vu, la lumière et la vision d'un pion.
+      case 'vision': {
+        const ec = etatCarte(table, carte.id);
+        ec.vision = ['jour', 'sombre'].includes(a.valeur) ? a.valeur : '';
+        return { ok: true };
+      }
+      case 'vision_oublier': etatCarte(table, carte.id).vus = ''; return { ok: true };
+      case 'lumiere':
+      case 'nuit': {
+        if (!pion) return non('Pion inconnu.');
+        const v = a.metres === '' || a.metres == null ? null : Math.max(0, Math.min(60, Number(a.metres) || 0));
+        if (a.type === 'lumiere') { if (v) pion.lumiere = v; else delete pion.lumiere; } else if (v == null) delete pion.nuit; else pion.nuit = v;
+        return { ok: true };
+      }
       case 'pion_poser': {
         const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
         if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');

@@ -282,11 +282,25 @@ const TablePanneau = (() => {
             el('div', { className: 'table-ligne' }, el('span', { className: 'table-nom', textContent: nom }), el('small', { className: 'table-pv', textContent: `${pv}/${max} PV` })),
             el('div', { className: `table-jauge${pc < 40 ? ' basse' : ''}` }, el('i', { style: `width:${pc}%` }))));
         ligne.onclick = (e) => { if (e.target.closest('select, button')) return; T.selection = T.selection === p.id ? null : p.id; dessiner(); };
-        if (p.sorte !== 'heros') ligne.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
+        const choix = el('div', { className: 'table-pion-choix' });
+        if (p.sorte !== 'heros') choix.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
         // Saga 1.42 : son jeton : par défaut, une image importée, ou un personnage du jeu (son sprite).
-        ligne.append(choixJeton(jeu, p));
+        choix.append(choixJeton(jeu, p));
+        // Saga 1.45 : avec la vision dynamique : sa lumière (une torche…) et, pour un héros, sa vision dans le noir.
+        if (TableEtat.etatCarte(partie.table, carte.id).vision) {
+          const l = select(String(p.lumiere || ''), [['', 'Pas de lumière'], ['3', 'Bougie (3 m)'], ['6', 'Torche (6 m)'], ['9', 'Lanterne (9 m)'], ['18', 'Grande lumière (18 m)']], (v) => T.agir({ type: 'lumiere', pion: p.id, metres: v }));
+          l.title = 'La lumière qu\'il porte : elle éclaire autour de lui, pour tous, quand la carte est sombre';
+          choix.append(l);
+          if (c) {
+            const auto = TableVision.visionNuit(jeu, c);
+            const n = select(p.nuit == null ? '' : String(p.nuit), [['', `Vision dans le noir : ${auto ? `${auto} m (son origine)` : 'aucune (son origine)'}`], ['0', 'Pas de vision dans le noir'], ['9', 'Dans le noir : 9 m'], ['18', 'Dans le noir : 18 m'], ['36', 'Dans le noir : 36 m']], (v) => T.agir({ type: 'nuit', pion: p.id, metres: v }));
+            n.title = 'Jusqu\'où il voit sans lumière quand la carte est sombre';
+            choix.append(n);
+          }
+        }
         // Saga 1.21.3 : la fiche du héros (et les champs du jeu, que le MJ peut tous changer).
         if (c) ligne.append(btn('account', '', () => T.ouvrirFiche(c), { titre: `La fiche de ${nom}` }));
+        ligne.append(choix);
         out.push(ligne);
       }
       if (!pions.length) out.push(el('p', { className: 'table-note', textContent: 'Aucun pion sur cette carte.' }));
@@ -469,6 +483,20 @@ const TablePanneau = (() => {
         return [
           ...(scenes.length ? [el('div', { className: 'table-sous-titre', textContent: 'Scènes (une image)' }), ...scenes.map(ligne)] : [el('p', { className: 'table-note', textContent: 'Une scène, c\'est une image (une battlemap, un lieu) avec une grille dessus : Tafl › Carte › Nouvelle scène.' })]),
           el('div', { className: 'table-sous-titre', textContent: 'Cartes' }), ...autres.map(ligne),
+        ];
+      }));
+      // Saga 1.45 : la vision dynamique : chacun ne voit que ce que voient ses héros (les murs arrêtent la vue).
+      out.push(section('vision', `Vision et lumière${TableEtat.etatCarte(partie.table, carte.id).vision ? ' (dynamique)' : ''}`, () => {
+        const ec = TableEtat.etatCarte(partie.table, carte.id);
+        return [
+          el('label', { className: 'table-ligne' }, el('span', { textContent: 'Vision' }), select(ec.vision, [['', 'Non : le brouillard des pièces'], ['jour', 'Dynamique, en plein jour'], ['sombre', 'Dynamique, dans le noir']], (v) => T.agir({ type: 'vision', valeur: v }))),
+          el('p', { className: 'table-note', textContent: ec.vision === 'sombre'
+            ? 'Les héros ne voient que ce qui est éclairé (tuiles et événements qui éclairent, lumière des pions : onglet Pions) ou à portée de leur vision dans le noir. Les murs arrêtent la vue.'
+            : ec.vision === 'jour' ? 'Les héros voient tout ce qui est en vue, jusqu\'à 30 cases. Les murs arrêtent la vue ; l\'eau ou une barrière basse cochées « transparentes » dans Tafl, non.'
+              : 'Dynamique : chaque joueur ne voit que ce que voient ses héros ; ce qui a été vu reste voilé (le décor, sans qui s\'y trouve).' }),
+          ...(ec.vision ? [el('div', { className: 'table-boutons' },
+            btn('eye-closed', 'Oublier ce qui a été vu', () => T.agir({ type: 'vision_oublier' }), { titre: 'Le décor déjà vu redevient noir' }),
+            btn('lightbulb', 'Révéler au pinceau', () => { T.pinceau = T.pinceau === 'reveler' ? null : 'reveler'; T.redessinerOutils?.(); dessiner(); }, { classe: T.pinceau === 'reveler' ? 'actif' : '', titre: 'Le pinceau marche toujours : une case révélée se voit (B)' }))] : []),
         ];
       }));
       out.push(section('rencontres', 'Rencontres', () => rencontres(jeu)));

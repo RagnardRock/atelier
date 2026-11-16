@@ -566,10 +566,10 @@ const Recettes = (() => {
   // et deux pièces voisines se raccordent (les ondulations reviennent tous les s pixels).
   const BORDS = {
     transition_chemin: { libelle: 'Bords herbe → chemin de terre (13 tuiles)', dessous: 'herbe', dessus: 'chemin', style: 'chemin' },
-    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque', effet: 'eau_profonde' },
+    transition_eau: { libelle: 'Rives herbe → eau (13 tuiles)', dessous: 'herbe', dessus: 'eau', style: 'eau', passage: 'bloque', transparent: true, effet: 'eau_profonde' },
     transition_sable: { libelle: 'Bords herbe → sable (13 tuiles)', dessous: 'herbe', dessus: 'sable', style: 'sable', effet: 'sable' },
     transition_hautes_herbes: { libelle: 'Hautes herbes en relief sur l\'herbe rase : bord festonné éclairé en haut, lisière et ombre en bas et à droite (13 tuiles)', dessous: 'herbe', dessus: 'hautes_herbes', style: 'touffu', effet: 'hautes_herbes' },
-    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque', effet: 'eau_basse' },
+    transition_plage: { libelle: 'Rives sable → eau, une plage : écume et sable mouillé (13 tuiles)', dessous: 'sable', dessus: 'eau', style: 'plage', passage: 'bloque', transparent: true, effet: 'eau_basse' },
   };
   const PIECES = [
     ['centre', []], ['haut', ['h']], ['bas', ['b']], ['gauche', ['g']], ['droite', ['d']],
@@ -660,7 +660,7 @@ const Recettes = (() => {
         if (b.style === 'eau' && surB && !voisinA && [[2, 0], [-2, 0], [0, 2], [0, -2], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([dx, dy]) => !estBInt(x + dx, y + dy))) t.set(x, y, hex(rb[1]));
       }
       for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) if (estBInt(x, y)) { const k = (y * s + x) * 4; if (data[k + 3]) couleursB.add(`#${[data[k], data[k + 1], data[k + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`); }
-      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}), ...effetDe(b.effet) };
+      return { suffixe, frames: [data], ...(b.passage ? { passage: b.passage } : {}), ...(b.transparent ? { transparent: true } : {}), ...effetDe(b.effet) };
     });
     for (const p of pieces) if (p.effet && p.effet.corps !== 'aucun') p.effet = Effets.norm({ ...p.effet, masque: [...couleursB] });
     return pieces;

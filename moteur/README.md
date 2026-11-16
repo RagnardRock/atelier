@@ -390,6 +390,18 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.45 : la vision dynamique (avec Tafl 1.39)
+
+- **Onglet Scène › Vision et lumière** : « Dynamique, en plein jour » ou « Dynamique, dans le noir », carte par carte.
+  Chaque joueur ne voit que ce que voient ses héros (l'écran des joueurs : tout le groupe). Les murs arrêtent la
+  vue ; ce qui a été vu reste voilé (le décor, sans qui s'y trouve) ; « Oublier ce qui a été vu » ; le pinceau
+  du MJ révèle toujours.
+- **Dans le noir** : on voit ce qui est éclairé (les tuiles et les événements qui éclairent, la lumière d'un pion :
+  bougie, torche, lanterne…) et à portée de sa **vision dans le noir** (lue dans les traits de l'origine, « jusqu'à
+  18 m », ou réglée par le MJ dans l'onglet Pions).
+- **Tafl 1.39** : clic droit sur une tuile › « Transparente » : elle bloque le pas, pas la vue (l'eau, une barrière
+  basse). Les rives d'eau des recettes le sont déjà. Sur une scène image, peindre le passage « bloqué » fait les murs.
+
 ## Ce que fait Saga 1.44 : l'initiative réglable et des pions en pleine séance (avec Tafl 1.38)
 
 - **Glisser** une ligne de l'initiative (dans l'onglet Scène, ou une pastille en haut du plateau) pour la placer.

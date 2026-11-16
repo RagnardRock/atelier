@@ -1474,3 +1474,7 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .table-init.cible { box-shadow: inset 0 2px 0 var(--accent, #ffb347); }
 .table-init.attend .table-nom { font-style: italic; opacity: 0.75; }
 .table-init-libre { gap: 6px; font-size: 12px; }
+/* Saga 1.45 : les réglages d'un pion (qui le voit, son jeton, sa lumière, sa vision) sur une ligne à part */
+.table-carte-pion { flex-wrap: wrap; }
+.table-pion-choix { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.table-carte-pion .table-pion-choix select { flex: 1 1 calc(50% - 6px); width: auto; max-width: none; min-width: 0; }

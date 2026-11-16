@@ -252,6 +252,7 @@ const App = (() => {
         const i = Doc.addTile(doc, p.frames, doc.tiles.some((t) => t.name === nom) ? Doc.uniqueName(doc, nom) : nom, doc.tiles.length, p.duree || undefined);
         if (v.categorie.trim()) doc.tiles[i].categorie = v.categorie.trim();
         if (p.passage && p.passage !== 'auto') doc.tiles[i].passage = p.passage;
+        if (p.transparent) doc.tiles[i].transparent = true; // Tafl 1.39 : l'eau laisse passer la vue
         if (p.effet) doc.tiles[i].effet = { ...p.effet }; // Tafl 1.22 : hautes herbes, eau, sable…
         indices.push(i);
       }
@@ -512,6 +513,7 @@ const App = (() => {
       { label: 'Passage : auto (ne décide rien)', checked: (doc.tiles[doc.current].passage || 'auto') === 'auto', run: () => setTilePassage('auto') },
       { label: 'Passage : laisse passer le joueur', checked: doc.tiles[doc.current].passage === 'libre', run: () => setTilePassage('libre') },
       { label: 'Passage : bloque le joueur (arbre, mur, eau…)', checked: doc.tiles[doc.current].passage === 'bloque', run: () => setTilePassage('bloque') },
+      { label: 'Transparente : bloque le pas, pas la vue (eau, barrière basse)', checked: Boolean(doc.tiles[doc.current].transparent), run: () => setTileTransparent(!doc.tiles[doc.current].transparent) },
       { label: doc.tiles[doc.current].lumiere ? 'Lumière de la tuile… (elle éclaire)' : 'Lumière de la tuile… (lampadaire, fenêtre, feu)', checked: Boolean(doc.tiles[doc.current].lumiere), run: () => run(() => tileLight(lot)) },
       { label: doc.tiles[doc.current].effet ? `Effet au passage… (${Effets.resume(doc.tiles[doc.current].effet)})` : 'Effet au passage… (hautes herbes, eau, sable, neige)', checked: Boolean(doc.tiles[doc.current].effet), run: () => run(() => tileEffect(lot)) },
       null,
@@ -520,6 +522,12 @@ const App = (() => {
   }
   // Le passage par défaut d'une tuile : partout où elle est posée, la case est libre ou bloquée
   // (sauf si le passage de la case a été peint à la main).
+  // Tafl 1.39 : une tuile transparente (eau, barrière basse, gouffre) : elle bloque le joueur, mais pas la vue
+  // de la vision dynamique de Saga 1.45 (un mur, un arbre la cachent).
+  function setTileTransparent(value, index = api.doc.current) {
+    const doc = api.doc;
+    Doc.change(doc, 'Tuile transparente', () => { const t = { ...doc.tiles[index] }; if (value) t.transparent = true; else delete t.transparent; doc.tiles[index] = t; });
+  }
   function setTilePassage(value, index = api.doc.current) {
     const doc = api.doc;
     if ((doc.tiles[index].passage || 'auto') === value) return;
