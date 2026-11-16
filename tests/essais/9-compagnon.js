@@ -11,8 +11,6 @@ const { egal, vrai } = require('../lib/verifier');
 
 const MOTEUR = path.join(RACINE, 'moteur');
 const CAPTURES = process.env.CAPTURES || '';
-// Une image de fond de 2×2 pixels (violet), en PNG.
-const FOND = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNsaOhgYGBgYmBgYGBgAAAJ4AE8x+Nq2QAAAABJRU5ErkJggg==';
 
 module.exports = [
   {
@@ -61,7 +59,17 @@ module.exports = [
         for (const n of ['Thorgrim', 'Elaria', 'Pip']) { await page.getByText(n).first().click(); await page.waitForTimeout(600); }
         await page.waitForFunction(() => App.moteur.table.actif && App.moteur.table.vue(), null, { timeout: 8000 });
         // Le MJ nomme la campagne et choisit le fond des téléphones, puis ouvre la partie.
-        await page.evaluate((fond) => { const t = App.moteur.table.table(); t.campagne = { nom: 'Les brumes', fond }; }, FOND);
+        // (Le fond : un dégradé dessiné ici, en JPEG, comme une image choisie par le MJ.)
+        await page.evaluate(() => {
+          const c = document.createElement('canvas'); c.width = 360; c.height = 780;
+          const x = c.getContext('2d');
+          x.fillStyle = '#0b0916'; x.fillRect(0, 0, 360, 780);
+          for (const [cx, cy, r, col] of [[40, 80, 300, 'rgba(255,150,60,.75)'], [350, 330, 320, 'rgba(140,90,255,.7)'], [110, 760, 320, 'rgba(40,180,200,.6)']]) {
+            const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+            x.fillStyle = g; x.fillRect(0, 0, 360, 780);
+          }
+          App.moteur.table.table().campagne = { nom: 'Les ombres de Brumeval', fond: c.toDataURL('image/jpeg', 0.85) };
+        });
         await page.evaluate(() => App.moteur.multi.ouvrir({ mode: 'table', nom: 'MJ', titre: 'Brumeval' }));
         // Le bouton « Relier mon téléphone » montre le QR (la fenêtre reste ouverte jusqu'à Fermer).
         await page.evaluate(() => { App.moteur.multi.compagnon(); });
@@ -83,7 +91,7 @@ module.exports = [
         await tel.goto(`http://127.0.0.1:${reseau.port}/compagnon/#lien=${lien.code}`);
         await tel.waitForFunction(() => window.Compagnon?.vue?.pions, null, { timeout: 10000 });
         const moi = await tel.evaluate(() => ({ mj: Compagnon.moi.mj, hash: location.hash, campagne: document.querySelector('.tete b')?.textContent }));
-        egal(moi, { mj: true, hash: '', campagne: 'Les brumes' }, 'le téléphone est le MJ, le lien a servi');
+        egal(moi, { mj: true, hash: '', campagne: 'Les ombres de Brumeval' }, 'le téléphone est le MJ, le lien a servi');
         egal(reseau.infos().joueurs.find((j) => j.hote)?.compagnons, 1, 'Saga voit un téléphone relié au MJ');
         await tel.waitForFunction(() => /fond\?/.test(document.getElementById('fond').style.backgroundImage), null, { timeout: 5000 });
 
@@ -115,6 +123,38 @@ module.exports = [
         await page.waitForFunction((c) => App.moteur.table.vue().pions.find((q) => q.id === c.id)?.pv < c.pv, cible, { timeout: 5000 });
         await tel.waitForFunction((c) => document.querySelector(`.pion[data-id="${c.id}"] small`)?.textContent.includes(` ${Math.max(0, c.pv - 5)} /`), cible, { timeout: 5000 });
         if (CAPTURES) await tel.screenshot({ path: `${CAPTURES}/4-pions.png` });
+
+        // Un ami, Lou, joue Thorgrim et relie son téléphone : ses macros (avec les @ de sa fiche) et sa fiche.
+        const base = `http://127.0.0.1:${reseau.port}`;
+        const poster = (chemin, corps, entetes = {}) => fetch(base + chemin, { method: 'POST', headers: { 'Content-Type': 'application/json', ...entetes }, body: JSON.stringify(corps) }).then((r) => r.json().catch(() => ({})));
+        const lou = await poster('/rejoindre', { code: reseau.infos().code, nom: 'Lou' });
+        vrai(Boolean(lou.jeton), 'Lou rejoint la partie');
+        const thorgrim = await page.evaluate(() => App.moteur.table.partie().equipe.find((c) => c.jdr && /Thorgrim/.test(c.nom || c.creature))?.pion);
+        await poster('/action', { type: 'prendre', heros: thorgrim }, { 'X-Jeton': lou.jeton });
+        for (const [nom, formule] of [['Hache d\'armes', '1d20+@for+@pb'], ['Dégâts hache', '1d8+@for'], ['Perception', '1d20+@sag+@pb'], ['Discrétion', '/gr 1d20+@dex'], ['Second souffle', '1d10+@niveau']]) {
+          await poster('/action', { type: 'macro_ajouter', nom, formule }, { 'X-Jeton': lou.jeton });
+        }
+        const lienLou = await poster('/compagnon/lien', {}, { 'X-Jeton': lou.jeton });
+        vrai(Boolean(lienLou.code), 'Lou a un code de compagnon');
+        const ctel2 = await ctx.navigateur.newContext({ ...devices['Pixel 7'] });
+        const tel2 = await ctel2.newPage();
+        ctx.pages.push(tel2);
+        const erreursTel2 = suivreErreurs(tel2);
+        await tel2.goto(`${base}/compagnon/#lien=${lienLou.code}`);
+        await tel2.waitForFunction(() => window.Compagnon?.vue?.macros?.length === 5, null, { timeout: 10000 });
+        egal(await tel2.evaluate(() => Compagnon.moi.mj), false, 'le téléphone de Lou est Lou');
+        await tel2.evaluate(() => Compagnon.aller('macros'));
+        await tel2.waitForSelector('.mac .val');
+        const vals = await tel2.$$eval('.mac', (l) => l.map((b) => [b.querySelector('b').textContent, b.querySelector('.val')?.textContent || '']));
+        vrai(vals.every(([, v]) => v && !v.includes('@')), `les valeurs calculées : ${JSON.stringify(vals)}`);
+        if (CAPTURES) await tel2.screenshot({ path: `${CAPTURES}/5-macros-joueur.png` });
+        await tel2.evaluate(() => Compagnon.aller('fiche'));
+        await tel2.waitForTimeout(400);
+        if (CAPTURES) await tel2.screenshot({ path: `${CAPTURES}/6-fiche-joueur.png` });
+        await tel2.evaluate(() => Compagnon.lancer('1d20+2d6+3'));
+        await tel2.waitForFunction(() => Compagnon.plateau.des.length === 3 && Compagnon.plateau.des.every((d) => d.arret && d.valeur != null), null, { timeout: 8000 });
+        if (CAPTURES) await tel2.screenshot({ path: `${CAPTURES}/7-des-joueur.png` });
+        egal(erreursTel2.join(' | '), '', 'aucune erreur sur le téléphone de Lou');
 
         // Le MJ coupe le lien : le téléphone le sait.
         reseau.couperCompagnons('hote');

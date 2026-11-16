@@ -70,7 +70,12 @@ h3 { margin: 4px 4px 0; font-size: 11.5px; text-transform: uppercase; letter-spa
 .mac { padding: 13px 14px; border-radius: 18px; position: relative; text-align: left; min-height: 66px; }
 .mac:active { transform: scale(.97); }
 .mac b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mac code { display: block; margin-top: 3px; font: 12px ui-monospace, monospace; color: var(--doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mac code { display: block; min-width: 0; flex: 1; font: 12px ui-monospace, monospace; color: var(--doux); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mac-bas { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.mac .val { flex: none; font-weight: 700; font-size: 13px; padding: 2px 9px; border-radius: 99px; background: rgba(0, 0, 0, .3); font-variant-numeric: tabular-nums; }
+.mac { background: linear-gradient(135deg, rgba(255, 120, 90, .22), rgba(255, 255, 255, .04)), rgba(14, 14, 26, .3); }
+.mac.degats { background: linear-gradient(135deg, rgba(150, 100, 255, .32), rgba(255, 255, 255, .05)), rgba(14, 14, 26, .3); }
+.mac.degats .val { background: rgba(150, 100, 255, .35); }
 .mac .codicon-eye-closed { color: var(--bleu); font-size: 13px; margin-left: 5px; }
 .ajout { border: 1.5px dashed rgba(255, 255, 255, .3); border-radius: 18px; display: grid; place-items: center; color: var(--doux); padding: 16px; font-size: 13px; background: transparent; }
 .edition { padding: 12px; display: flex; flex-direction: column; gap: 8px; }

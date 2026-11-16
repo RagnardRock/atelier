@@ -181,7 +181,7 @@
       appuiLong(b, () => { choix[t] = Math.max(0, (choix[t] || 0) - 1); majChoix(); }, () => { choix[t] = Math.min(20, (choix[t] || 0) + 1); majChoix(); });
       des.append(b);
     }
-    formuleEl = el('input', { className: 'champ', type: 'text', value: lire('formule', '1d20'), placeholder: '1d20+@force', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
+    formuleEl = el('input', { className: 'champ', type: 'text', value: lire('formule', '1d20'), placeholder: '1d20+@for', autocapitalize: 'off', autocomplete: 'off', spellcheck: false });
     formuleEl.oninput = () => ecrire('formule', formuleEl.value);
     const lancerB = el('button', { className: 'btn', type: 'button' }, icone('debug-start'), 'Lancer');
     lancerB.onclick = () => lancer();
@@ -302,28 +302,44 @@
     const macros = vue?.macros || [];
     if (!moi?.mj && !vue?.moi) { pageEl.append(el('div', { className: 'vide verre', textContent: 'Il te faut un héros (sur l\'écran du PC) pour avoir des macros.' })); return; }
     if (edition) { pageEl.append(formMacro()); return; }
+    // Deux familles, comme sur la fiche : les jets (un d20) et les dégâts ou soins (le reste).
+    const jets = [], degats = [];
+    macros.forEach((m, k) => (/d20/i.test(m.formule) ? jets : degats).push([m, k]));
+    const deux = jets.length && degats.length;
     const g = el('div', { className: 'grille' });
-    macros.forEach((m, k) => {
+    const tuile = ([m, k]) => {
       const secret = /^\/(gr|mj)\b/i.test(m.formule);
-      const b = el('button', { className: 'mac verre', type: 'button' },
-        el('b', {}, m.nom, secret ? icone('eye-closed') : null), el('code', { textContent: m.formule }));
+      // La valeur calculée (les @ de la fiche) : « +5 » pour un d20, sinon la formule (« 1d8+4 »).
+      let calc = String(m.calcul || (/@/.test(m.formule) ? '' : m.formule)).replace(/^\/\w+\s+/, '').split(/\s/)[0];
+      // Les nombres s'additionnent (« 1d20+2+2 » → « 1d20+4 »).
+      const m2 = /^(\d*d\d+)((?:[+-]\d+)+)$/i.exec(calc);
+      if (m2) { const n = m2[2].match(/[+-]\d+/g).reduce((a, x) => a + Number(x), 0); calc = n ? `${m2[1]}${n > 0 ? '+' : ''}${n}` : m2[1]; }
+      const d20 = /^1?d20([+-]\d+)?$/i.exec(calc);
+      const valeur = d20 ? (d20[1] || '+0') : calc;
+      const b = el('button', { className: `mac verre${/d20/i.test(m.formule) ? '' : ' degats'}`, type: 'button' },
+        el('b', {}, m.nom, secret ? icone('eye-closed') : null),
+        el('div', { className: 'mac-bas' }, el('code', { textContent: m.formule }), valeur && valeur !== m.formule.replace(/^\/\w+\s+/, '') ? el('span', { className: 'val', textContent: valeur }) : null));
       appuiLong(b, () => { edition = { k, nom: m.nom, formule: m.formule }; pageMacros(); }, () => {
         vibrer(20);
         demander({ type: 'macro', k });
         toast(`${m.nom}…`);
       });
-      g.append(b);
-    });
+      return b;
+    };
+    if (deux) {
+      pageEl.append(el('h3', { textContent: 'Jets' }), el('div', { className: 'grille' }, ...jets.map(tuile)), el('h3', { textContent: 'Dégâts et soins' }));
+      degats.forEach((x) => g.append(tuile(x)));
+    } else [...jets, ...degats].sort((a, b) => a[1] - b[1]).forEach((x) => g.append(tuile(x)));
     if (macros.length < 20) {
       const plus = el('button', { className: 'ajout', type: 'button' }, icone('add'), ' Nouvelle macro');
       plus.onclick = () => { edition = { k: null, nom: '', formule: '1d20+' }; pageMacros(); };
       g.append(plus);
     }
-    pageEl.append(g, el('p', { className: 'note', textContent: 'Toucher : lancer · appui long : modifier. Les @ lisent ta fiche (@force, @pb, @niveau…). /gr au début : un jet secret pour le MJ.' }));
+    pageEl.append(g, el('p', { className: 'note', textContent: 'Toucher : lancer · appui long : modifier. Les @ lisent ta fiche (@for, @pb, @niveau…). /gr au début : un jet secret pour le MJ.' }));
   }
   function formMacro() {
     const nom = el('input', { className: 'champ', type: 'text', maxLength: 30, value: edition.nom, placeholder: 'Nom (Hache d\'armes)' });
-    const formule = el('input', { className: 'champ', type: 'text', maxLength: 80, value: edition.formule, placeholder: '1d20+@force+@pb', autocapitalize: 'off', spellcheck: false });
+    const formule = el('input', { className: 'champ', type: 'text', maxLength: 80, value: edition.formule, placeholder: '1d20+@for+@pb', autocapitalize: 'off', spellcheck: false });
     const ok = el('button', { className: 'btn', type: 'button' }, icone('check'), 'Garder');
     ok.onclick = () => {
       const n = nom.value.trim(), f = formule.value.trim();

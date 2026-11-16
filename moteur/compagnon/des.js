@@ -94,7 +94,9 @@ const PlateauDes = (() => {
         // Les bords rebondissent.
         if (d.x < r) { d.x = r; d.vx = Math.abs(d.vx) * 0.62; d.va *= -0.8; }
         if (d.x > w - r) { d.x = w - r; d.vx = -Math.abs(d.vx) * 0.62; d.va *= -0.8; }
-        if (d.y < r) { d.y = r; d.vy = Math.abs(d.vy) * 0.62; }
+        // Le haut du tapis (le résultat écrit) reste libre : les dés rebondissent sous lui.
+        const haut = Math.min(h * 0.3, 64) + r;
+        if (d.y < haut) { d.y = haut; d.vy = Math.abs(d.vy) * 0.62; }
         if (d.y > h - r) { d.y = h - r; d.vy = -Math.abs(d.vy) * 0.62; }
         // Le chiffre change tant qu'il roule vite.
         d.tic -= dt;
