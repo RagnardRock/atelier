@@ -319,6 +319,8 @@ const Moteur = (() => {
         // Saga 1.0 : le multijoueur (les amis connectés, pour leur envoyer leur vue).
         multi: () => multi,
         des: (o) => ecranDes.montrer(o),
+        // Saga 1.35 : le tapis de dés de la table (ouvert par le MJ, touche D).
+        tapis: () => ecranDes.tapis,
         musique: (chemin) => changerMusique(chemin === '' ? carte.ambiance.musique || partie.musique || 'aucune' : chemin),
         son: (chemin) => audio.fichier(chemin),
         message: (t) => rappels.message?.(t),

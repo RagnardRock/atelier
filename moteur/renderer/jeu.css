@@ -1137,3 +1137,220 @@ body.outil-table .table-plateau { cursor: crosshair; }
   body.ecran-joueurs .table-outils { max-width: calc(100% - 110px); }
   .table-outil-aide { display: none; }
 }
+
+/* ================= Saga 1.35 : la table du MJ en verre ================= */
+/* Le plateau prend tout l'écran ; la barre du haut, le rail d'outils, le panneau à onglets, la barre du bas
+   et le zoom flottent dessus, en verre (flou 14 px). Les tailles se règlent à la souris (--table-panneau, --ti-bas). */
+body.table-verre { --ti-haut: 64px; --ti-bas: 74px; --ti-g: 72px; --verre-fond: linear-gradient(135deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.03)), rgba(12, 12, 22, 0.46); --verre-bord: rgba(255, 255, 255, 0.16); }
+body.table-verre .table-plateau { inset: 0; }
+.ti-verre, body.table-verre .table-colonne, body.table-verre .table-outils, .des-tapis {
+  background: var(--verre-fond, rgba(12, 12, 22, 0.5)); border: 1px solid var(--verre-bord, rgba(255, 255, 255, 0.16)); border-radius: 16px;
+  backdrop-filter: blur(14px) saturate(150%); -webkit-backdrop-filter: blur(14px) saturate(150%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14); color: var(--text-strong, #f4f4f6);
+}
+body:not(.mode-table) .ti-haut, body:not(.mode-table) .ti-ordre, body:not(.mode-table) .ti-zoom, body:not(.mode-table) .ti-bas, body.ecran-joueurs:not(.table-verre) .ti-haut { display: none; }
+/* Le panneau du multijoueur n'est plus posé sur le plateau : il est dans l'onglet Joueurs (et sa discussion dans Chat). */
+body.table-verre #scene > .multi-panneau, body.table-verre #scene > .multi-bulles { display: none; }
+
+/* --- La barre du haut --- */
+.ti-haut { position: absolute; z-index: 10; top: 12px; left: 12px; right: 12px; height: calc(var(--ti-haut) - 14px); display: flex; align-items: center; gap: 12px; padding: 0 8px 0 14px; }
+.ti-titre { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 0; }
+.ti-rune { color: var(--accent); font-size: 22px; line-height: 1; align-self: center; }
+.ti-titre b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti-titre small { color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti-etat { flex: 0 1 auto; display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 99px; font-size: 13px; font-weight: 600; white-space: nowrap; min-width: 0; overflow: hidden; }
+.ti-etat-vide { display: none; }
+.ti-etat-combat { color: #ffd59a; background: rgba(255, 160, 60, 0.16); border: 1px solid rgba(255, 170, 70, 0.45); }
+.ti-etat-pause { color: #c9d6ff; background: rgba(110, 140, 255, 0.16); border: 1px solid rgba(130, 160, 255, 0.4); }
+.ti-actions { flex: 1 1 0; display: flex; justify-content: flex-end; align-items: center; gap: 6px; min-width: 0; }
+.ti-bouton { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.07); color: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.ti-bouton:hover { background: rgba(255, 255, 255, 0.14); }
+.ti-bouton.actif { background: rgba(255, 179, 71, 0.22); border-color: rgba(255, 179, 71, 0.6); }
+.ti-bouton.accent, .table-bouton.accent { background: var(--accent); color: var(--accent-text, #1a1205); border-color: transparent; font-weight: 700; }
+.ti-select { height: 34px; max-width: 220px; min-width: 0; padding: 0 8px; border-radius: 11px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.25); color: inherit; font-size: 13px; }
+@media (max-width: 1250px) { .ti-actions .ti-bouton span { display: none; } .ti-actions .ti-bouton { padding: 0 9px; } }
+
+/* --- L'ordre d'initiative --- */
+.ti-ordre { position: absolute; z-index: 9; top: calc(var(--ti-haut) + 8px); left: calc(var(--ti-g) + (100% - var(--ti-g) - var(--table-panneau) - 24px) / 2); transform: translateX(-50%);
+  max-width: calc(100% - var(--ti-g) - var(--table-panneau) - 48px); display: flex; gap: 6px; padding: 6px; overflow-x: auto; border-radius: 99px; scrollbar-width: none; }
+.ti-ordre[hidden] { display: none; }
+.ti-init { display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 4px 12px 4px 4px; border-radius: 99px; border: 1px solid transparent; background: rgba(255, 255, 255, 0.06); color: inherit; font-size: 13px; cursor: pointer; }
+.ti-init small { color: rgba(255, 255, 255, 0.55); font-variant-numeric: tabular-nums; }
+.ti-init.actif { border-color: rgba(255, 179, 71, 0.8); background: rgba(255, 179, 71, 0.2); box-shadow: 0 0 14px rgba(255, 170, 60, 0.35); }
+.ti-init.ko { opacity: 0.45; text-decoration: line-through; }
+.ti-init-rond, .ti-pion-rond, .table-rond { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; font-size: 12px; font-weight: 800; color: #fff; background: #4b7bd8; }
+.ti-init.monstre .ti-init-rond, .ti-pion.monstre .ti-pion-rond, .table-carte-pion.monstre .table-rond { background: #d64a4a; }
+.ti-init.actif .ti-init-rond { background: var(--accent); color: var(--accent-text, #1a1205); }
+
+/* --- Le rail d'outils (à gauche) --- */
+body.table-verre .table-outils { top: calc(var(--ti-haut) + 8px); left: 12px; flex-direction: column; flex-wrap: nowrap; width: 48px; padding: 6px; gap: 4px; max-width: none; overflow: visible; }
+body.table-verre .table-outil { position: relative; width: 36px; height: 36px; border-radius: 10px; }
+body.table-verre .table-outil .codicon { font-size: 17px; }
+body.table-verre .table-outil.actif { background: rgba(255, 179, 71, 0.22); box-shadow: inset 0 0 0 1px rgba(255, 179, 71, 0.7); color: #ffd59a; }
+.table-outil[data-touche]::after { content: attr(data-touche); position: absolute; right: 2px; bottom: 0; font-size: 9px; color: rgba(255, 255, 255, 0.45); font-weight: 600; }
+.table-outil-sep { display: block; width: 24px; height: 1px; margin: 4px auto; background: rgba(255, 255, 255, 0.16); }
+body.table-verre .table-outil-aide { display: none; }
+body.table-verre .table-outil-reglages { position: absolute; left: 56px; top: 50px; display: flex; gap: 4px; align-items: center; padding: 6px; border-radius: 12px;
+  background: rgba(14, 14, 24, 0.88); border: 1px solid rgba(255, 255, 255, 0.14); white-space: nowrap; }
+body.table-verre .table-outil-reglages[hidden] { display: none; }
+
+/* --- Le panneau à onglets (à droite) --- */
+body.table-verre .table-colonne { top: calc(var(--ti-haut) + 8px); right: 12px; bottom: 12px; width: var(--table-panneau); border-left: 1px solid var(--verre-bord); z-index: 9; overflow: visible; }
+.table-poignee { position: absolute; left: -6px; top: 20px; bottom: 20px; width: 10px; cursor: ew-resize; z-index: 2; }
+.table-poignee:hover::after, .ti-poignee-bas:hover::after { content: ''; position: absolute; background: rgba(255, 179, 71, 0.7); border-radius: 4px; }
+.table-poignee:hover::after { left: 4px; top: 40%; width: 3px; height: 20%; }
+body.table-verre .table-panneau { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.table-onglets { display: flex; flex: none; gap: 2px; padding: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.table-onglet { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px; border: 0; border-radius: 10px; background: none; color: rgba(255, 255, 255, 0.6); font-size: 11.5px; cursor: pointer; }
+.table-onglet .codicon { font-size: 17px; }
+.table-onglet span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-onglet:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
+.table-onglet.on { color: #fff; background: rgba(255, 255, 255, 0.12); }
+.table-pastille { position: absolute; top: 2px; right: calc(50% - 22px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--accent); color: var(--accent-text, #1a1205); font-size: 10px; line-height: 16px; text-align: center; }
+.table-volet { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.table-volet[hidden] { display: none; }
+.table-volet .table-section { background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.09); margin: 0; }
+
+/* Chat : un fil (jets et discussion) et la ligne pour écrire */
+.volet-chat { padding: 0; gap: 0; overflow: hidden; }
+.table-fil { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.table-fil > :first-child { margin-top: auto; }
+.table-vide { text-align: center; padding: 18px 8px; }
+.table-dit { font-size: 13.5px; line-height: 1.4; padding: 0 4px; overflow-wrap: anywhere; }
+.table-dit b { color: #fff; }
+.table-dit.prive { color: #d8c8ff; }
+.table-fil .table-jet { padding: 9px 11px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.1); gap: 6px; }
+.table-fil .table-jet.cache { background: rgba(120, 100, 255, 0.12); border: 1px dashed rgba(160, 140, 255, 0.55); box-shadow: none; }
+.table-fil .table-jet-tete { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: rgba(255, 255, 255, 0.75); }
+.table-fil .table-jet-tete small { margin-left: auto; color: rgba(255, 255, 255, 0.5); white-space: nowrap; }
+.table-jet-corps { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.table-jet-des { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
+.table-de { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 4px; border-radius: 7px; background: rgba(255, 255, 255, 0.1); font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.table-de.d20 { clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); border-radius: 0; background: rgba(110, 90, 200, 0.55); min-width: 28px; height: 28px; }
+.table-de.max { background: rgba(70, 190, 120, 0.45); color: #d8ffe6; }
+.table-de.min { background: rgba(220, 70, 60, 0.5); color: #ffd6d0; }
+.table-de.ecarte { opacity: 0.35; text-decoration: line-through; }
+.table-jet-bonus { color: rgba(255, 255, 255, 0.75); font-size: 13px; }
+.table-jet-fin { display: flex; align-items: center; gap: 8px; flex: none; }
+.table-fil .table-jet-total { font-size: 24px; font-weight: 800; color: #fff; margin: 0; }
+.table-jet-res { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: rgba(255, 255, 255, 0.1); }
+.table-jet-res.critique, .table-jet-res.reussi, .table-jet-res.touche { color: #8be39a; background: rgba(80, 200, 110, 0.18); }
+.table-jet-res.rate, .table-jet-res.manque, .table-jet-res.echec_critique { color: #ff9c8c; background: rgba(240, 80, 60, 0.16); }
+.table-ecrire-zone { flex: none; padding: 8px; border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 6px; }
+.table-pour { align-self: flex-start; max-width: 60%; }
+.table-pour[hidden] { display: none; }
+.table-ecrire { display: flex; gap: 6px; align-items: center; }
+.table-ecrire-champ { flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.3); color: inherit; font: 13px ui-monospace, Menlo, Consolas, monospace; }
+.table-envoyer { flex: none; width: 40px; height: 38px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-text, #1a1205); cursor: pointer; }
+.table-ecrire .table-bouton { height: 38px; padding: 0 10px; border-radius: 12px; }
+
+/* Combat */
+/* Le menu du tour d'un combat : un encart en verre à côté du plateau (plus d'onglet Combat) */
+body.table-verre .table-combat { position: absolute; z-index: 9; top: calc(var(--ti-haut) + 62px); right: calc(var(--table-panneau) + 24px); width: min(300px, calc(100% - var(--ti-g) - var(--table-panneau) - 60px)); max-height: calc(100% - var(--ti-haut) - var(--ti-bas) - 150px); margin: 0;
+  border-radius: 16px; border: 1px solid var(--verre-bord); border-top: 1px solid var(--verre-bord); background: var(--verre-fond); backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45); }
+body.joueur-reseau .joueurs-question { top: calc(var(--ti-haut) + 62px); }
+.table-dit.recit { color: rgba(255, 255, 255, 0.72); font-style: italic; font-size: 13px; padding-left: 10px; border-left: 2px solid rgba(255, 179, 71, 0.5); }
+
+/* Pions */
+.table-carte-pion { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer; }
+.table-carte-pion:hover { background: rgba(255, 255, 255, 0.09); }
+.table-carte-pion.choisi { border-color: rgba(255, 179, 71, 0.65); background: rgba(255, 179, 71, 0.1); }
+.table-carte-pion.actif { box-shadow: inset 3px 0 0 #ffd36b; }
+.table-carte-pion .table-rond { width: 30px; height: 30px; font-size: 13px; }
+.table-carte-corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.table-carte-pion .table-select { flex: 0 1 104px; }
+.table-jauge, .ti-jauge { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.table-jauge i, .ti-jauge i { display: block; height: 100%; background: linear-gradient(90deg, #3fbf7f, #7be3a6); }
+.table-jauge.basse i, .ti-jauge.basse i { background: linear-gradient(90deg, #d94b4b, #ff8d6b); }
+
+/* Joueurs : le panneau du multijoueur, sans sa discussion (elle est dans Chat) */
+.volet-joueurs .multi-panneau { position: static; width: auto; max-height: none; margin: 0; padding: 0; background: none; border: 0; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.volet-joueurs .multi-tete, .volet-joueurs .multi-journal, .volet-joueurs .multi-ecrire { display: none; }
+.table-vide-joueurs { margin: auto 0; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 20px 10px; color: rgba(255, 255, 255, 0.75); }
+.table-vide-joueurs > .codicon { font-size: 34px; color: var(--accent); }
+.table-vide-joueurs .table-bouton { padding: 8px 14px; font-size: 13px; }
+
+/* --- La barre du bas : le pion choisi, les macros --- */
+.ti-bas { position: absolute; z-index: 9; left: 12px; right: calc(var(--table-panneau) + 24px); bottom: 12px; height: var(--ti-bas); display: flex; gap: 10px; }
+.ti-poignee-bas { position: absolute; left: 30%; right: 30%; top: -7px; height: 10px; cursor: ns-resize; }
+.ti-poignee-bas:hover::after { left: 40%; right: 40%; top: 3px; height: 3px; }
+.ti-pion { flex: 0 0 auto; width: min(340px, 34%); display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.ti-pion[hidden] { display: none; }
+.ti-pion-rond { width: calc(var(--ti-bas) - 22px); height: calc(var(--ti-bas) - 22px); max-width: 64px; max-height: 64px; border-radius: 14px; font-size: 22px; }
+.ti-pion.heros .ti-pion-rond { background: linear-gradient(135deg, #f0a64a, #b8661f); }
+.ti-pion-corps { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ti-pion-nom { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ti-pion-nom b { white-space: nowrap; }
+.ti-pion-nom small { color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.ti-pion-bas { display: flex; align-items: center; gap: 6px; font-size: 12px; color: rgba(255, 255, 255, 0.7); white-space: nowrap; overflow: hidden; }
+.ti-etat-pion { padding: 1px 7px; border-radius: 99px; background: rgba(255, 107, 107, 0.18); color: #ffc0c0; }
+.ti-pv { display: flex; flex-direction: column; gap: 4px; }
+.ti-pv-bouton { width: 30px; height: 26px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.08); color: inherit; cursor: pointer; }
+.ti-pv-bouton:hover { background: rgba(255, 255, 255, 0.16); }
+.ti-fiche { height: 30px; padding: 0 8px; }
+.ti-macros { flex: 1 1 auto; min-width: 0; display: flex; align-items: stretch; gap: 8px; padding: 8px; overflow-x: auto; scrollbar-width: thin; }
+.ti-macro { position: relative; flex: 0 0 auto; min-width: 120px; max-width: 200px; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 6px 12px; border-radius: 12px; text-align: left; cursor: pointer; color: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: linear-gradient(135deg, rgba(255, 120, 90, 0.2), rgba(255, 255, 255, 0.04)); }
+.ti-macro.degats { background: linear-gradient(135deg, rgba(150, 100, 255, 0.3), rgba(255, 255, 255, 0.05)); }
+.ti-macro:hover { border-color: rgba(255, 255, 255, 0.35); }
+.ti-macro b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti-macro b .codicon { font-size: 12px; margin-left: 4px; color: #9fd2ff; }
+.ti-macro code { font: 11.5px ui-monospace, Menlo, Consolas, monospace; color: rgba(255, 255, 255, 0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti-macro kbd { position: absolute; right: 6px; bottom: 4px; font: 10px ui-monospace, monospace; color: rgba(255, 255, 255, 0.4); }
+.ti-macro-plus { flex: none; align-self: center; height: 40px; border-style: dashed; }
+.ti-macro-form { display: flex; align-items: center; gap: 6px; flex: none; }
+.ti-champ { height: 34px; width: 150px; padding: 0 10px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.3); color: inherit; font: 12.5px ui-monospace, Menlo, Consolas, monospace; }
+
+/* --- Le zoom --- */
+.ti-zoom { position: absolute; z-index: 9; right: calc(var(--table-panneau) + 24px); bottom: calc(var(--ti-bas) + 22px); display: flex; gap: 4px; padding: 4px; border-radius: 14px; }
+.ti-zoom .ti-bouton { height: 32px; padding: 0 9px; border: 0; background: none; }
+.ti-zoom .ti-bouton:hover { background: rgba(255, 255, 255, 0.1); }
+.ti-pct { min-width: 64px; justify-content: center; font-variant-numeric: tabular-nums; }
+
+/* Les boîtes du jeu (dialogues, annonces) tiennent compte des panneaux. */
+body.table-verre #scene .dialogue { bottom: calc(var(--ti-bas) + 24px); }
+
+/* --- Le tapis de dés (au milieu du plateau) --- */
+.des-tapis { position: absolute; z-index: 30; top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(640px, calc(100% - 40px)); height: min(420px, calc(100% - 80px)); display: flex; flex-direction: column; overflow: hidden; }
+body.table-verre .des-tapis { left: calc(var(--ti-g) + (100% - var(--ti-g) - var(--table-panneau) - 24px) / 2); width: min(640px, calc(100% - var(--ti-g) - var(--table-panneau) - 60px)); height: min(420px, calc(100% - var(--ti-haut) - var(--ti-bas) - 60px)); }
+.des-tapis[hidden] { display: none; }
+.des-tapis-haut { position: absolute; z-index: 1; top: 0; left: 0; right: 44px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; padding: 14px 16px; pointer-events: none; }
+.des-tapis-tete { min-width: 0; display: flex; flex-direction: column; gap: 3px; font: 12.5px ui-monospace, Menlo, Consolas, monospace; color: rgba(255, 255, 255, 0.82); }
+.des-tapis-tete > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.des-tapis-ligne-jet { display: flex; align-items: center; gap: 6px; }
+.des-tapis-ligne-jet.cache { color: #c9b8ff; }
+.des-tapis-total { font-size: 38px; line-height: 1; font-weight: 800; color: #fff; text-shadow: 0 0 18px rgba(255, 180, 80, 0.6); flex: none; }
+.des-tapis canvas { flex: 1 1 auto; min-height: 0; width: 100%; display: block; touch-action: none; cursor: grab; }
+.des-tapis-fermer { position: absolute; z-index: 2; top: 10px; right: 10px; width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06); color: inherit; cursor: pointer; }
+.des-tapis-compo { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px; }
+.des-tapis-compo:empty { display: none; }
+.des-tapis-puces { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.des-tapis-puce { position: relative; height: 34px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.07); color: inherit; font-weight: 700; cursor: pointer; }
+.des-tapis-puce.on { background: rgba(255, 179, 71, 0.25); border-color: rgba(255, 179, 71, 0.7); }
+.des-tapis-puce i { position: absolute; top: -6px; right: -6px; font-style: normal; font-size: 10px; padding: 0 5px; border-radius: 99px; background: var(--accent); color: var(--accent-text, #1a1205); }
+.des-tapis-ligne { display: flex; gap: 8px; align-items: center; }
+.des-tapis-formule { flex: 1 1 auto; min-width: 0; height: 38px; padding: 0 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(0, 0, 0, 0.3); color: inherit; font: 14px ui-monospace, Menlo, Consolas, monospace; }
+.des-tapis-secret { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.des-tapis-lancer { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 12px; border: 0; background: var(--accent); color: var(--accent-text, #1a1205); font-weight: 700; cursor: pointer; }
+.des-tapis.passif { pointer-events: none; }
+.des-tapis.passif .des-tapis-fermer { pointer-events: auto; }
+
+/* --- L'ami dans son navigateur : la même table en verre (table/client.js › habiller) --- */
+body.joueur-reseau .ti-qui { font-size: 13px; color: rgba(255, 255, 255, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.joueur-reseau .table-colonne { position: absolute; }
+body.joueur-reseau .table-outils { bottom: auto; }
+body.joueur-reseau .ti-ordre { max-width: calc(100% - var(--ti-g) - var(--table-panneau) - 60px); }
+body.joueur-reseau .volet-journal, body.joueur-reseau .volet-fiche { padding: 0; overflow: hidden; }
+body.joueur-reseau .joueurs-journal, body.joueur-reseau .joueurs-fiche { position: static; width: auto; height: auto; max-height: none; flex: 1 1 auto; min-height: 0; margin: 0; border: 0; border-radius: 0; background: none; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.joueur-reseau .joueurs-fiche { overflow-y: auto; }
+body.joueur-reseau .joueurs-fiche[hidden], body.joueur-reseau .table-vide[hidden] { display: none; }
+body.joueur-reseau .joueurs-fiche-taille { display: none; }
+body.joueur-reseau .joueurs-question { top: calc(var(--ti-haut) + 8px); right: calc(var(--table-panneau) + 24px); max-height: calc(100% - var(--ti-haut) - var(--ti-bas) - 50px); }
+body.joueur-reseau .joueurs-role { top: calc(var(--ti-haut) + 60px); left: calc(var(--ti-g) + (100% - var(--ti-g) - var(--table-panneau) - 24px) / 2); max-height: calc(100% - var(--ti-haut) - var(--ti-bas) - 90px); }
+body.joueur-reseau .joueurs-scene { left: calc(var(--ti-g) + (100% - var(--ti-g) - var(--table-panneau) - 24px) / 2); bottom: calc(var(--ti-bas) + 24px); max-width: calc(100% - var(--ti-g) - var(--table-panneau) - 60px); }
+body.joueur-reseau .joueurs-pause { left: calc(var(--ti-g) + (100% - var(--ti-g) - var(--table-panneau) - 24px) / 2); }
+body.joueur-reseau .ti-macros[hidden], body.joueur-reseau .ti-bas[hidden] { display: none; }
+@media (max-width: 900px) {
+  body.joueur-reseau .ti-pion { display: none; }
+  body.joueur-reseau .ti-actions .ti-qui { display: none; }
+}

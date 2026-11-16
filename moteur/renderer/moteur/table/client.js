@@ -41,11 +41,19 @@ const TableClient = (() => {
       placer: (g) => window.saga.tableDemander({ type: 'gabarit', ...g }),
       ping: (c) => window.saga.tableDemander({ type: 'ping', x: c.x, y: c.y }),
       effacer: () => window.saga.tableDemander({ type: 'gabarit_retirer' }),
+      extras: reseau ? [{ icone: 'symbol-event', titre: 'Le tapis de dés (D) : composer un jet, lancer au bouton ou en glissant', touche: 'D', faire: () => ouvrirTapis(), actif: () => Boolean(ecranDes?.tapis.ouvert) }] : [],
     });
     // Saga 1.0 : un ami qui a rejoint par le réseau a aussi le panneau des joueurs et la discussion.
     const multi = reseau ? Multi.creer({ scene, moteur: null, message: (t) => notify?.(t, 'warning', 6000) }) : null;
     let jeu = null, vue = null, selection = null, survol = null, imageFiche = '', ficheLarge = false;
     let dernierEffet = -1, dernierJet = -1;
+    // Saga 1.35 : l'ami qui joue depuis son navigateur a la même table en verre que le MJ (verre()).
+    const ecranDes = reseau && typeof EcranDes !== 'undefined' ? EcranDes.creer(scene) : null;
+    const tapisVoulu = () => { try { return localStorage.getItem('saga:des-tapis') !== '0'; } catch { return true; } };
+    function ouvrirTapis() {
+      ecranDes?.tapis.basculer({ lancer: (f, secret) => multi?.dire(f.startsWith('/') ? f : `${secret ? '/gr' : '/r'} ${f}`, 'tous'), secretTitre: 'Un jet que seuls toi et le MJ voyez' });
+    }
+    let habit = null;
 
     (async () => {
       try {
@@ -73,6 +81,7 @@ const TableClient = (() => {
       montrerQuestion();
       montrerJournal();
       montrerMacros();
+      habit?.maj();
       if (v.avis && v.avis.n !== dernierAvis) { if (dernierAvis >= 0) notify?.(v.avis.texte, 'warning', 5000); dernierAvis = v.avis.n; }
       else if (!v.avis && dernierAvis < 0) dernierAvis = 0;
     });
@@ -89,24 +98,29 @@ const TableClient = (() => {
       signatureM = s;
       macrosEl.innerHTML = '';
       l.forEach((m, k) => {
-        const b = el('button', { className: 'joueurs-macro', type: 'button', textContent: m.nom, title: `${m.formule} · clic droit : oublier` });
+        const secret = /^\/gr\b/i.test(m.formule);
+        const b = habit
+          ? el('button', { className: `ti-macro${/d20/i.test(m.formule) ? '' : ' degats'}`, type: 'button', title: `${m.formule}${m.calcul ? ` = ${m.calcul}` : ''} · clic droit : oublier` },
+            el('b', {}, m.nom, secret ? el('i', { className: 'codicon codicon-eye-closed' }) : null), el('code', { textContent: m.calcul || m.formule }), k < 9 ? el('kbd', { textContent: String(k + 1) }) : null)
+          : el('button', { className: 'joueurs-macro', type: 'button', textContent: m.nom, title: `${m.formule} · clic droit : oublier` });
         b.onclick = () => window.saga.tableDemander({ type: 'macro', k });
         b.oncontextmenu = (e) => { e.preventDefault(); window.saga.tableDemander({ type: 'macro_retirer', k }); };
         macrosEl.append(b);
       });
       if (ajoutMacro) {
-        const nom = el('input', { className: 'multi-champ', type: 'text', maxLength: 30, placeholder: 'Nom (Épée)' });
-        const formule = el('input', { className: 'multi-champ', type: 'text', maxLength: 80, placeholder: '1d20+@for', title: '@for, @dex, @con, @int, @sag, @cha : tes modificateurs · @maitrise · @niveau · « /gr … » : un jet secret pour le MJ' });
-        const f = el('form', { className: 'joueurs-macro-form' }, nom, formule,
-          el('button', { className: 'joueurs-macro', type: 'submit', textContent: 'Garder' }));
-        const non = el('button', { className: 'joueurs-macro', type: 'button', textContent: '✕' });
+        const nom = el('input', { className: habit ? 'ti-champ' : 'multi-champ', type: 'text', maxLength: 30, placeholder: 'Nom (Épée)' });
+        const formule = el('input', { className: habit ? 'ti-champ' : 'multi-champ', type: 'text', maxLength: 80, placeholder: '1d20+@for', title: '@for, @dex, @con, @int, @sag, @cha : tes modificateurs · @maitrise · @niveau · « /gr … » : un jet secret pour le MJ' });
+        const cb = habit ? 'ti-bouton' : 'joueurs-macro';
+        const f = el('form', { className: habit ? 'ti-macro-form' : 'joueurs-macro-form' }, nom, formule,
+          el('button', { className: `${cb}${habit ? ' accent' : ''}`, type: 'submit', textContent: 'Garder' }));
+        const non = el('button', { className: cb, type: 'button', textContent: '✕' });
         non.onclick = () => { ajoutMacro = false; signatureM = ''; montrerMacros(); };
         f.append(non);
         f.onsubmit = (e) => { e.preventDefault(); window.saga.tableDemander({ type: 'macro_ajouter', nom: nom.value, formule: formule.value }); ajoutMacro = false; signatureM = ''; montrerMacros(); };
         macrosEl.append(f);
         setTimeout(() => nom.focus(), 0);
       } else {
-        const plus = el('button', { className: 'joueurs-macro plus', type: 'button', title: 'Garder un jet en macro (dans le chat : /m nom)' }, el('i', { className: 'codicon codicon-add' }), el('span', { textContent: l.length ? '' : 'Macro' }));
+        const plus = el('button', { className: habit ? 'ti-bouton ti-macro-plus' : 'joueurs-macro plus', type: 'button', title: 'Garder un jet en macro (dans le chat : /m nom)' }, el('i', { className: 'codicon codicon-add' }), el('span', { textContent: l.length && !habit ? '' : 'Macro' }));
         plus.onclick = () => { ajoutMacro = true; signatureM = ''; montrerMacros(); };
         macrosEl.append(plus);
       }
@@ -137,7 +151,12 @@ const TableClient = (() => {
       if (vue?.combat) {
         ordre.innerHTML = '';
         ordre.append(el('span', { className: 'joueurs-tour', textContent: `Tour ${vue.combat.tour || 1}` }));
-        for (const o of vue.combat.ordre) ordre.append(el('span', { className: `joueurs-ordre-nom${o.id === vue.combat.actif ? ' actif' : ''}`, textContent: o.nom }));
+        for (const o of vue.combat.ordre) {
+          if (!habit) { ordre.append(el('span', { className: `joueurs-ordre-nom${o.id === vue.combat.actif ? ' actif' : ''}`, textContent: o.nom })); continue; }
+          const p = vue.pions.find((x) => x.id === o.id);
+          ordre.append(el('span', { className: `ti-init ${p?.sorte === 'heros' ? 'heros' : 'monstre'}${o.id === vue.combat.actif ? ' actif' : ''}${o.ko ? ' ko' : ''}` },
+            el('span', { className: 'ti-init-rond', textContent: (o.nom || '?').trim().charAt(0).toUpperCase() }), el('span', { textContent: o.nom })));
+        }
       }
       boite.hidden = !vue?.scene?.texte;
       if (vue?.scene?.texte) {
@@ -157,6 +176,11 @@ const TableClient = (() => {
       // Les nouveaux jets (ceux du MJ cachés n'arrivent jamais ici).
       const lignes = vue?.journal || [];
       if (dernierJet < 0) dernierJet = lignes.length ? lignes[lignes.length - 1].n : 0;
+      const neufs = lignes.filter((x) => x.n > dernierJet);
+      if (habit && neufs.length) {
+        if (tapisVoulu() && neufs.some((l) => l.des?.length)) ecranDes.tapis.montrer({ lignes: neufs.filter((l) => l.des?.length).slice(-3) });
+        dernierJet = neufs.at(-1).n;
+      }
       for (const l of lignes.filter((x) => x.n > dernierJet)) {
         const r = l.resultat ? ` · ${JdrDes.RESULTATS[l.resultat] || l.resultat}` : '';
         const j = el('div', { className: `joueurs-jet ${l.resultat || ''}` },
@@ -178,17 +202,162 @@ const TableClient = (() => {
       }
     }
 
+    // --- Saga 1.35 : l'habillage en verre de l'ami (la barre du haut, le panneau à onglets, mon héros en bas) ---
+    function habiller() {
+      document.body.classList.add('table-verre', 'joueur-reseau');
+      const lire = (k, d) => { try { const v = localStorage.getItem(`saga:table:${k}`); return v == null ? d : v; } catch { return d; } };
+      const ecrire = (k, v) => { try { localStorage.setItem(`saga:table:${k}`, String(v)); } catch { /* stockage refusé */ } };
+      // La barre du haut.
+      const titre = el('b'), lieu = el('small'), etat = el('span', { className: 'ti-etat ti-etat-vide' }), qui = el('span', { className: 'ti-qui' });
+      const tel = el('button', { className: 'ti-bouton', type: 'button', title: 'Un QR code à scanner : ton téléphone lance tes dés, tes macros et montre ta fiche' }, el('i', { className: 'codicon codicon-device-mobile' }), el('span', { textContent: 'Compagnon' }));
+      tel.onclick = () => multi?.compagnon();
+      const haut = el('header', { className: 'ti-haut ti-verre' }, el('div', { className: 'ti-titre' }, el('span', { className: 'ti-rune', textContent: 'ᛃ' }), titre, lieu), etat, el('div', { className: 'ti-actions' }, qui, tel));
+      // Le panneau : la discussion et les jets, le journal, ma fiche, les joueurs.
+      const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['journal', 'Journal', 'book'], ['fiche', 'Fiche', 'person'], ['joueurs', 'Joueurs', 'organization']];
+      const colonne = el('aside', { className: 'table-colonne' });
+      const racine = el('div', { className: 'table-panneau' });
+      const nav = el('nav', { className: 'table-onglets' });
+      const volets = {};
+      for (const [id] of ONGLETS) volets[id] = el('div', { className: `table-volet volet-${id}`, hidden: true });
+      const poignee = el('div', { className: 'table-poignee', title: 'Glisser : élargir ou réduire le panneau' });
+      racine.append(nav, ...Object.values(volets));
+      colonne.append(poignee, racine);
+      let onglet = lire('onglet-ami', 'chat');
+      if (!volets[onglet]) onglet = 'chat';
+      let largeur = Math.max(280, Math.min(560, Number(lire('largeur', 340)) || 340));
+      const appliquer = () => document.body.style.setProperty('--table-panneau', `${largeur}px`);
+      appliquer();
+      poignee.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        const x0 = e.clientX, l0 = largeur;
+        const bouger = (m) => { largeur = Math.max(280, Math.min(560, l0 + (x0 - m.clientX))); appliquer(); };
+        const finir = () => { window.removeEventListener('pointermove', bouger); window.removeEventListener('pointerup', finir); ecrire('largeur', largeur); plateau.oublier(); };
+        window.addEventListener('pointermove', bouger);
+        window.addEventListener('pointerup', finir);
+      });
+      // Le chat : les jets (en cartes) et la discussion, mêlés.
+      const fil = el('div', { className: 'table-fil' });
+      const champ = el('input', { className: 'table-ecrire-champ', type: 'text', maxLength: 300, placeholder: 'Écrire… /r 1d20+@dex · /gr secret · /m macro', spellcheck: false });
+      const pourQui = el('select', { className: 'table-select table-pour', title: 'À qui' });
+      const desB = el('button', { className: 'table-bouton', type: 'button', title: 'Le tapis de dés (D)' }, el('i', { className: 'codicon codicon-symbol-event' }));
+      desB.onclick = ouvrirTapis;
+      const form = el('form', { className: 'table-ecrire' }, desB, champ, el('button', { className: 'table-envoyer', type: 'submit', title: 'Envoyer (Entrée)' }, el('i', { className: 'codicon codicon-send' })));
+      form.onsubmit = (e) => { e.preventDefault(); const t = champ.value.trim(); if (t) multi.dire(t, t.startsWith('/') ? 'tous' : pourQui.value || 'tous'); champ.value = ''; };
+      volets.chat.append(fil, el('div', { className: 'table-ecrire-zone' }, pourQui, form));
+      volets.journal.append(journalEl);
+      volets.fiche.append(fiche);
+      const sansFiche = el('p', { className: 'table-note table-vide', textContent: 'Pas encore de héros : prends-en un libre ou crée le tien (au milieu de l\'écran).' });
+      volets.fiche.append(sansFiche);
+      volets.joueurs.append(multi.element);
+      multi.ouvrirPanneau();
+      journalEl.hidden = false;
+      journalBouton.hidden = true;
+      // Mon héros, en bas, à côté de mes macros.
+      const carte = el('div', { className: 'ti-pion ti-verre heros', hidden: true });
+      macrosEl.className = 'ti-macros ti-verre';
+      const bas = el('div', { className: 'ti-bas' }, carte, macrosEl);
+      scene.append(haut, colonne, bas);
+      ordre.className = 'ti-ordre ti-verre';
+      plateau.marges = () => ({ g: 72, d: largeur + 24, h: 64, b: 98 });
+
+      let nonLusC = 0, sigFil = '', derJ = 0, derC = 0, sigHaut = '', sigCarte = '';
+      function choisir(id) {
+        onglet = id;
+        ecrire('onglet-ami', id);
+        if (id === 'chat') nonLusC = 0;
+        if (id === 'journal') signatureJ = '';
+        maj();
+        if (id === 'chat') setTimeout(() => { fil.scrollTop = fil.scrollHeight; }, 0);
+      }
+      function dessinerOnglets() {
+        nav.replaceChildren(...ONGLETS.map(([id, nom, ic]) => {
+          const b = el('button', { type: 'button', className: `table-onglet${onglet === id ? ' on' : ''}`, title: nom },
+            el('i', { className: `codicon codicon-${ic}` }), el('span', { textContent: nom }), id === 'chat' && nonLusC ? el('b', { className: 'table-pastille', textContent: String(nonLusC) }) : null);
+          b.onclick = () => choisir(id);
+          return b;
+        }));
+        for (const [id, v] of Object.entries(volets)) v.hidden = id !== onglet;
+      }
+      function dessinerFil() {
+        const jetsV = (vue?.journal || []).slice(-40);
+        const chat = (multi.lignes || []).filter((x) => !x.jet).slice(-60);
+        const dits = (vue?.recit || []).filter((e) => e.combat).slice(-40);
+        const sig = JSON.stringify([jetsV.map((l) => l.n), chat.map((x) => x.n), dits.at(-1)?.n || 0, Math.floor(Date.now() / 30000)]);
+        if (sig === sigFil) return;
+        const neufs = sigFil ? jetsV.filter((l) => l.n > derJ).length + chat.filter((x) => x.n > derC && x.de !== multi.moi?.id).length : 0;
+        derJ = jetsV.at(-1)?.n || 0; derC = chat.at(-1)?.n || 0;
+        sigFil = sig;
+        if (onglet !== 'chat' && neufs) nonLusC += neufs;
+        const auBas = fil.scrollHeight - fil.scrollTop - fil.clientHeight < 40;
+        const items = [...jetsV.map((l) => ({ t: l.heure || 0, el: () => TablePanneau.carteJet(l) })),
+          ...chat.map((x) => ({ t: x.t || 0, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
+          .concat(dits.map((e) => ({ t: e.heure || 0, el: () => TablePanneau.ligneRecit(e) })))
+          .sort((a, b) => a.t - b.t);
+        fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+@dex pour lancer, /gr pour un jet que seuls toi et le MJ voyez, ou ouvre le tapis de dés (D).' })]));
+        if (auBas) fil.scrollTop = fil.scrollHeight;
+        const options = [['tous', 'À tous'], ...multi.joueurs.filter((j) => j.id !== multi.moi?.id).map((j) => [j.id, `→ ${j.nom}`])];
+        if (!pourQui.matches(':focus')) {
+          const avant = pourQui.value || 'tous';
+          pourQui.replaceChildren(...options.map(([v, t]) => el('option', { value: v, textContent: t })));
+          pourQui.value = options.some(([v]) => v === avant) ? avant : 'tous';
+        }
+        pourQui.hidden = options.length < 2;
+      }
+      function dessinerCarte() {
+        const p = monHeros(), f = vue?.fiche;
+        carte.hidden = !p;
+        bas.hidden = !p && !Array.isArray(vue?.macros);
+        if (!p) return;
+        const pv = f?.pv ?? p.pv, max = f?.pvMax ?? p.pvMax;
+        const s = JSON.stringify([p.nom, pv, max, f?.ca, f?.classe, f?.niveau, f?.etats, p.etats]);
+        if (s === sigCarte) return;
+        sigCarte = s;
+        const etats = f?.etats || p.etats || [];
+        carte.replaceChildren(
+          el('span', { className: 'ti-pion-rond', textContent: (p.nom || '?').trim().charAt(0).toUpperCase() }),
+          el('div', { className: 'ti-pion-corps' },
+            el('div', { className: 'ti-pion-nom' }, el('b', { textContent: p.nom }), el('small', { textContent: [f?.classe, f?.niveau ? `niv. ${f.niveau}` : ''].filter(Boolean).join(' ') })),
+            Number.isFinite(max) && max > 0 ? el('div', { className: `ti-jauge${pv / max < 0.34 ? ' basse' : ''}` }, Object.assign(el('i'), { style: `width:${Math.max(0, Math.min(100, (pv / max) * 100))}%` })) : el('span'),
+            el('div', { className: 'ti-pion-bas' }, Number.isFinite(max) ? el('span', { textContent: `${pv} / ${max} PV` }) : el('span'), f?.ca != null ? el('span', { textContent: `CA ${f.ca}` }) : el('span'),
+              ...etats.slice(0, 3).map((e) => el('span', { className: 'ti-etat-pion', textContent: typeof e === 'string' ? e : e.nom || '' })))),
+          Object.assign(el('button', { className: 'ti-bouton ti-fiche', type: 'button', title: 'Ma fiche' }, el('i', { className: 'codicon codicon-person' })), { onclick: () => choisir('fiche') }));
+      }
+      function maj() {
+        const moi = multi.moi, n = multi.joueurs.filter((j) => j.connecte).length;
+        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.pause, moi?.nom, n]);
+        if (s !== sigHaut) {
+          sigHaut = s;
+          titre.textContent = vue?.campagne?.nom || jeu?.titre || 'Saga';
+          lieu.textContent = vue?.nom || '';
+          const actif = vue?.combat?.ordre.find((o) => o.id === vue.combat.actif);
+          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : vue?.combat ? 'ti-etat-combat' : 'ti-etat-vide'}`;
+          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : vue?.combat ? [el('i', { className: 'codicon codicon-flame' }), `Combat · tour ${vue.combat.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
+          qui.textContent = [moi?.nom, n ? `${n} joueur${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ');
+        }
+        sansFiche.hidden = Boolean(vue?.fiche);
+        dessinerFil();
+        dessinerOnglets();
+        dessinerCarte();
+        if (onglet === 'journal') montrerJournal();
+      }
+      multi.sur?.((sorte) => { if (sorte === 'chat' || sorte === 'joueurs') maj(); });
+      setInterval(dessinerFil, 1000);
+      window.addEventListener('resize', () => plateau.oublier());
+      return { maj, get onglet() { return onglet; } };
+    }
+
     // --- Saga 1.21.4 : le journal des joueurs (le récit, les jets visibles de tous) ---
     let ongletJournal = 'recit', signatureJ = '', nonLus = 0, vusJ = '';
     journalBouton.onclick = () => { journalEl.hidden = !journalEl.hidden; nonLus = 0; signatureJ = ''; montrerJournal(); };
     function montrerJournal() {
       const recitV = vue?.recit || [], jetsV = vue?.journal || [];
       const fin = `${recitV.at(-1)?.n || 0}:${jetsV.at(-1)?.n || 0}`;
-      if (vusJ && fin !== vusJ && journalEl.hidden) nonLus++;
+      if (vusJ && fin !== vusJ && journalEl.hidden && !habit) nonLus++;
       vusJ = fin;
       journalBouton.textContent = nonLus && journalEl.hidden ? `Journal · ${nonLus}` : 'Journal';
       journalBouton.classList.toggle('nouveau', Boolean(nonLus && journalEl.hidden));
-      if (journalEl.hidden) return;
+      if (habit ? habit.onglet !== 'journal' : journalEl.hidden) return;
+      if (habit) ongletJournal = 'recit';
       const s = `${fin}|${ongletJournal}`;
       if (s === signatureJ) return;
       signatureJ = s;
@@ -209,7 +378,7 @@ const TableClient = (() => {
         }
         if (!jetsV.length) liste.append(el('p', { className: 'joueurs-fiche-note', textContent: 'Aucun jet pour l\'instant.' }));
       }
-      journalEl.replaceChildren(onglets, liste);
+      journalEl.replaceChildren(...(habit ? [liste] : [onglets, liste]));
       liste.scrollTop = liste.scrollHeight;
     }
 
@@ -460,6 +629,8 @@ const TableClient = (() => {
       }
     });
     window.addEventListener('keydown', (e) => {
+      if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+      if (habit && !e.ctrlKey && !e.metaKey && !e.altKey && /^[1-9]$/.test(e.key) && vue?.macros?.[Number(e.key) - 1]) { window.saga.tableDemander({ type: 'macro', k: Number(e.key) - 1 }); return; }
       if (!e.ctrlKey && !e.metaKey && outils.touche(e)) return;
       if (e.key !== 'Escape') return;
       menuEl.hidden = true;
@@ -480,6 +651,7 @@ const TableClient = (() => {
       const cibles = ch?.cibles ? new Set(ch.cibles) : null;
       plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles, outil: outils.dessin(survol) });
     }
+    if (reseau) { habit = habiller(); habit.maj(); }
     requestAnimationFrame(tour);
     return { plateau, multi, get vue() { return vue; }, get jeu() { return jeu; } };
   }

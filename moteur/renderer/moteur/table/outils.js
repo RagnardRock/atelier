@@ -132,8 +132,23 @@ const TableOutils = (() => {
       b.dataset.outil = id;
       return b;
     };
+    // Saga 1.35 : un rail vertical à gauche ; chaque outil dit sa touche (data-touche, montrée au survol).
+    const main = el('button', { className: 'table-outil', type: 'button', title: 'Choisir et déplacer les pions (V)' }, el('i', { className: 'codicon codicon-move' }));
+    main.dataset.touche = 'V';
+    main.onclick = () => { outil = null; dessinerBarre(); };
     const regle = boutonOutil('regle', 'symbol-ruler', 'Règle (R) : glisse sur le plateau pour mesurer. Maj + glisser marche aussi sans l\'outil.');
+    regle.dataset.touche = 'R';
     const gab = boutonOutil('gabarit', 'circle-large-outline', 'Gabarit de zone (G) : clique le centre, ou glisse de l\'origine vers la direction pour un cône ou une ligne');
+    gab.dataset.touche = 'G';
+    const pingB = boutonOutil('ping', 'location', 'Ping (P) : montrer une case à tous. Alt + clic marche aussi sans l\'outil.');
+    pingB.dataset.touche = 'P';
+    // Les boutons en plus de l'écran (le pinceau du MJ, le tapis de dés…) : { icone, titre, touche, faire(), actif() }.
+    const extras = (o.extras || []).map((x) => {
+      const b = el('button', { className: 'table-outil', type: 'button', title: x.titre }, el('i', { className: `codicon codicon-${x.icone}` }));
+      if (x.touche) b.dataset.touche = x.touche;
+      b.onclick = () => { x.faire(); dessinerBarre(); };
+      return [b, x];
+    });
     const choixForme = el('select', { className: 'table-outil-choix', title: 'La forme du gabarit' }, ...FORMES.map(([f, nom]) => el('option', { value: f, textContent: nom })));
     const champM = el('input', { className: 'table-outil-m', type: 'number', min: '0.5', step: '0.5', title: 'La taille, en mètres' });
     const choixTeinte = el('select', { className: 'table-outil-choix', title: 'La couleur' }, ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
@@ -144,10 +159,12 @@ const TableOutils = (() => {
     choixTeinte.onchange = () => { teinte = choixTeinte.value; };
     effacer.onclick = () => o.effacer?.();
     const reglages = el('span', { className: 'table-outil-reglages' }, choixForme, champM, el('small', { textContent: 'm' }), choixTeinte);
-    racine.append(regle, gab, reglages, effacer, aide);
+    racine.append(main, regle, gab, pingB, effacer, ...(extras.length ? [el('span', { className: 'table-outil-sep' }), ...extras.map(([b]) => b)] : []), reglages, aide);
     o.conteneur.append(racine);
     function dessinerBarre() {
-      for (const b of [regle, gab]) b.classList.toggle('actif', outil === b.dataset.outil);
+      for (const b of [regle, gab, pingB]) b.classList.toggle('actif', outil === b.dataset.outil);
+      main.classList.toggle('actif', !outil);
+      for (const [b, x] of extras) { let on = false; try { on = Boolean(x.actif?.()); } catch { /* pas encore prêt */ } b.classList.toggle('actif', on); }
       reglages.hidden = outil !== 'gabarit';
       choixForme.value = forme;
       champM.value = String(metres);
@@ -163,16 +180,22 @@ const TableOutils = (() => {
     const metresDe = (n) => `${Math.round(n * (o.caseM() || 1.5) * 10) / 10} m`.replace('.', ',');
     const api = {
       get outil() { return outil; },
+      rafraichir: () => dessinerBarre(),
+      get element() { return racine; },
       set outil(v) { outil = v; dessinerBarre(); },
       touche(e) {
         if (e.target?.matches?.('input, select, textarea')) return false;
         if (e.key === 'r' || e.key === 'R') { outil = outil === 'regle' ? null : 'regle'; dessinerBarre(); return true; }
         if (e.key === 'g' || e.key === 'G') { outil = outil === 'gabarit' ? null : 'gabarit'; dessinerBarre(); return true; }
+        if (e.key === 'p' || e.key === 'P') { outil = outil === 'ping' ? null : 'ping'; dessinerBarre(); return true; }
+        if (e.key === 'v' || e.key === 'V') { outil = null; dessinerBarre(); return true; }
+        const x = extras.find(([, k]) => k.touche && k.touche.toLowerCase() === e.key.toLowerCase());
+        if (x) { x[1].faire(); dessinerBarre(); return true; }
         if (e.key === 'Escape' && (outil || trait)) { outil = null; trait = null; dessinerBarre(); return true; }
         return false;
       },
       appuyer(c, e) {
-        if (e.altKey) { o.ping?.(c); return true; }
+        if (e.altKey || outil === 'ping') { o.ping?.(c); return true; }
         if (outil === 'regle' || e.shiftKey) { trait = { de: c, a: c, gabarit: false }; return true; }
         if (outil === 'gabarit') { trait = { de: c, a: c, gabarit: true }; return true; }
         return false;

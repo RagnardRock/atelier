@@ -180,6 +180,8 @@ function creerSaga() {
   // Saga ouvre un petit serveur sur le réseau de la maison : les amis ouvrent l'adresse dans leur
   // navigateur et entrent le code. En mode table, chacun reçoit la vue de son rôle ; sinon, chacun joue
   // sa partie dans le même jeu et on se voit, on échange, on se défie (moteur/reseau/).
+  // Saga 1.35 : le panneau du MJ (onglet Joueurs) ouvre aussi la partie.
+  document.addEventListener('saga:multijoueur', () => multijoueur());
   async function multijoueur() {
     if (!ouvert) return;
     if (moteur.multi?.actif) {

@@ -55,8 +55,9 @@ const Multi = (() => {
     function recevoirChat(l) {
       lignes.push(l);
       if (lignes.length > 120) lignes.shift();
-      if (replie && l.de !== moi?.id) { nonLus++; montrerBulle(l); }
+      if (replie && l.de !== moi?.id && !racine.closest('.table-panneau')) { nonLus++; montrerBulle(l); }
       dessiner();
+      prevenir('chat', l);
     }
     function recevoirJoueurs(l) {
       joueurs = Array.isArray(l) ? l : [];
@@ -353,6 +354,8 @@ const Multi = (() => {
       get ami() { return ami; },
       get moi() { return moi; },
       get joueurs() { return joueurs; },
+      // Saga 1.35 : les messages du chat (le panneau de la table les mêle aux jets).
+      get lignes() { return lignes; },
       get infos() { return infos; },
       get actif() { return ami || infos.ouvert; },
       nomDe,
