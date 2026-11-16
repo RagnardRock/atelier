@@ -162,11 +162,12 @@ const PersoBase = (() => {
   // Le hérissé a sa propre silhouette : ses rangées remplacent celles du crâne de base (de la rangée 0).
   const HERISSES_FACE = ['.........h....h..h....h.........', '........hH...hHhhHh...Hh........', '.....h.hHHh.hHHHHHHh.hHHh.h.....', '.....hHHHHHhHHHHHHHHhHHHHHh.....', '...h.hHHHHHHHlHHHHlHHHHHHHh.h...', '...hhHHHHHHHllHHHHllHHHHHHHhh...', '.....hHHHlHHHHHHHHHHHHlHHHh.....', '...hhHHHHHHHHHHHHHHHHHHHHHHhh...', '....hHHHHHHHoHHHHHHoHHHHHHHh....', '...hHHoHHHHHoHHHHHHoHHHHHoHHh...', '....hHHHHHHHHHHHHHHHHHHHHHHh....', '....hHHHHhHHHhHHHHhHHHhHHHHh....', '....hHHHhsHHhssHHsshHHshHHHh....'];
   const HERISSES_PROFIL = ['..............h...h.............', '.........h...hH..hHh............', '.........hHhhHHhhHHHh...........', '......h..hHHHHHHHHHHHh..........', '......hhhHHHHHlllHHHHHh.........', '.......hHHHHHHllllHHHHHh........', '....hhhHHHHHHHHHHHHHHHHHh.......', '.....hHHHHHHHHHHHHHHHHoHHh......', '...hhHHHoHHHHHHHHHHHHoHHHHh.....'];
-  const CHIGNON = [[0, 11, 'hhHHHHhh'], [1, 10, 'hHHlHHHHHh'], [2, 10, 'hHHHHHHHHh'], [3, 11, 'KKKKKKKK']];
+  const CHIGNON = [[11, 13, 'KKKKKK'], [12, 12, 'hHHHHHHh'], [13, 11, 'hHHlHHHHHh'], [14, 11, 'hHHHHoHHHh'], [15, 11, 'hHHHHHHHHh'], [16, 12, 'hHHHHHHh'], [17, 13, 'hhhhhh']];
   const COUPES = {
-    courts: { bas: [], haut: [], droite: [] },
+    // Les courts : le crâne de base resserré d'un pixel tout autour (moins de volume).
+    courts: { lignes: { bas: ['................................', '................................', '...........hhHHhhHHh............', '.........hHHlHHHllHhhHh.........', '........hHllHHHlllHHHHHh........', '.......hHlllHHHHHHHHHHHHh.......', '......hHHHHHHHHHHHHHHHHHh.......', '......hHHHHHHHoHHHHHHHHHHh......', '.....hHHoHHHHHHoHHHHHHoHHh......', '.....hHoHHHHHHHoHHHHHHHoHHh.....'], haut: ['................................', '................................', '...........hhHHhhHHh............', '.........hHHlHHHllHhhHh.........', '........hHllHHHlllHHHHHh........', '.......hHlllHHHHHHHHHHHHh.......', '......hHHHHHHHHHHHHHHHHHh.......', '......hHHHHHHHoHHHHHHHHHHh......', '.....hHHoHHHHHHoHHHHHHoHHh......', '.....hHoHHHHHHHoHHHHHHHoHHh.....'], droite: ['................................', '................................', '..............hhHhHHh...........', '...........hHHHlllHHHHhh........', '.........hHHHHllllHHHHHHh.......', '........hHHHHHHHHHHHHHHHHh......', '.......hHHHHHHHHHHHHHHHHHHh.....', '......hHHHHHHHHHHHHHHHHoHHh.....', '......hHHoHHHHHHHHHHHHoHHHHh....'] }, bas: [], haut: [], droite: [] },
     longs: {
-      bas: [[2, 15, 'hh'], [3, 15, 'oo'], [4, 15, 'oo'], [5, 15, 'oo'], [6, 15, 'oo'], ...sym([[11, 3, 'hH'], [12, 3, 'hHH'], [13, 3, 'hHH'], [14, 3, 'hHHH'], [15, 3, 'hHHHh'], [16, 4, 'hHHHh'], [17, 4, 'hHHHh'], [18, 5, 'hHHh'], [19, 5, 'hHHh'], [20, 6, 'hHh'], [21, 6, 'hHh'], [22, 7, 'hh']])],
+      bas: [...sym([[11, 3, 'hH'], [12, 3, 'hHH'], [13, 3, 'hHH'], [14, 3, 'hHHH'], [15, 3, 'hHHHh'], [16, 4, 'hHHHh'], [17, 4, 'hHHHh'], [18, 5, 'hHHh'], [19, 5, 'hHHh'], [20, 6, 'hHh'], [21, 6, 'hHh'], [22, 7, 'hh']])],
       haut: [[17, 7, 'hHHHHHHHHHHHHHHHHh'], [18, 7, 'hHHoHHHHHHHHoHHHHh'], [19, 8, 'hHHHHHHHHHHHHHHh'], [20, 8, 'hHHHoHHHHoHHHHHh'], [21, 9, 'hhHHHHHHHHHHhh'], [22, 11, 'hhhhhhhhhh']],
       droite: [[16, 6, 'HHHHHh'], [17, 6, 'hHHHHh'], [18, 7, 'hHHHh'], [19, 7, 'hHHh'], [20, 8, 'hHh'], [21, 8, 'hh']],
     },
@@ -180,10 +181,11 @@ const PersoBase = (() => {
       haut: sym(COUETTE),
       droite: [[10, 2, 'hHh'], [11, 1, 'hHHh'], [12, 1, 'hHHHh'], [13, 1, 'hHoHh'], [14, 1, 'hHHh'], [15, 2, 'hHHh'], [16, 2, 'hHh'], [17, 3, 'hh']],
     },
+    // Le chignon est bas, sur la nuque : de dos et de profil (de face, il est caché par la tête).
     chignon: {
-      bas: CHIGNON,
+      bas: [],
       haut: CHIGNON,
-      droite: [[0, 7, 'hHHHh'], [1, 6, 'hHHlHHh'], [2, 6, 'hHHHHHh'], [3, 7, 'KKKKK']],
+      droite: [[8, 5, 'K'], [8, 2, 'hHH'], [9, 1, 'hHHHh'], [10, 1, 'hHlHH'], [11, 1, 'hHHHh'], [12, 1, 'hHoHh'], [13, 2, 'hHHh'], [14, 3, 'hh']],
     },
     herisses: {
       lignes: { bas: HERISSES_FACE, haut: HERISSES_FACE.slice(0, 11), droite: HERISSES_PROFIL },
