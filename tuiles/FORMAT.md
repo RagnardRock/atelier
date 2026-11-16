@@ -496,7 +496,7 @@ Un fichier par sorte, chacun avec son `format` et sa `version`. Tous les `id` so
   - **Ordre** (Tafl 1.29) : une planche qui suit un autre ordre (debout, pas 2, pas 1 ; ou d'autres directions par rangée) se remet dans celui-ci dans Tafl, à l'import ou par « Ordre des images… » : Tafl réécrit la planche, le format ne change pas.
   - **Marche** : pendant un pas d'une case, le moteur montre l'image de pas suivante (1, 2, …, `images - 1`, puis il recommence à 1) pendant la première moitié du pas, puis l'image 0. Avec une seule image, le personnage ne s'anime pas.
   - **Placement** : l'image est centrée sur la case, ses pieds (le bas de l'image) en bas de la case. Un sprite plus haut qu'une case (16 × 32, comme dans Pokémon) dépasse vers le haut, sur la case du dessus.
-  - Le moteur montre le sprite s'il y en a un, sinon la `tuile`, sinon ce qu'il veut (Saga dessine un petit bonhomme à la `couleur` du personnage).
+  - Le moteur montre le sprite s'il y en a un, sinon la `tuile`, sinon ce qu'il veut (Saga 1.31 dessine le personnage de base, 32 × 32 px dans un style à la RPG Maker, jamais réduit (deux cases de haut en tuiles de 16 px, agrandi ×2 en tuiles de 64), à la `couleur` du personnage, avec 6 coupes de cheveux et ses animations du temps réel).
 - `tenues` (Tafl 0.16, pour le héros) : ses autres apparences, `[{ "id": "hiver", "nom": "Hiver", "sprite": { … } }]`, chacune avec un `sprite` au même format que ci-dessus (ou `null`). Le joueur en choisit une (commande `personnaliser`), ou l'histoire la lui met (commande `tenue`) ; le moteur montre alors le sprite de la tenue à la place du sien. Les portraits ne changent pas, sauf (Tafl 1.24, Saga 1.22) si la tenue a ses propres `portraits` (même format que ceux du personnage) : le héros parle alors avec ceux-là (une héroïne, un déguisement).
 - `classe`, `niveau`, `equipement` (Tafl 0.25, pack JRPG) : ce qu'il est quand il rejoint le groupe. `classe` : un id de `classes.json` (`""` = aucune) ; `niveau` : son niveau de départ (1 par défaut) ; `equipement` : ce qu'il porte au départ, `{ "arme": "epee-courte", "armure": "tunique" }` (places `arme`, `bouclier`, `casque`, `armure`, `accessoire` ; des ids d'objets avec `equipement`). Le héros (`heros: true`) qui a une classe est dans le groupe dès le début d'une partie ; les autres le rejoignent par la commande `groupe`.
 - `portraits` : un visage par expression (`normal`, `content`, `rire`, `triste`, `colere`, `surpris`, `inquiet`, `gene`, `determine`, ou d'autres noms), en image encodée en texte comme les tuiles. Taille libre.
@@ -1265,6 +1265,9 @@ soigné, et les ennemis de la carte reviennent.
 
 - `animations` : `repos`, `attaque`, `coup`, `mort`, chacune une planche comme `sprite` (4 directions)
   avec `duree` (ms par image, 16 à 2000, 80 par défaut). Sans `attaque`, Saga dessine un arc d'épée.
+  Tafl 1.34 (Saga 1.31) : `attaque` peut avoir `lame: true` (le personnage frappe du bras, Saga dessine
+  l'arc d'épée par-dessus, comme l'attaque du personnage de base). Un personnage sans sprite ni tuile prend les
+  animations du personnage de base (`commun/perso-base.js`) pour celles qu'il n'a pas.
   Tafl 1.22 (Saga 1.20) : `nage`, au même format, vaut pour **tous les packs** : elle tourne en boucle sur
   une tuile dont l'effet au passage a `nage` (voir « Effets au passage »).
 - `hitbox` : `{ x, y, largeur, hauteur }` en pixels dans la case : son corps (par défaut, le centre bas

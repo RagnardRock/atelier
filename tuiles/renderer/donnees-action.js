@@ -82,7 +82,7 @@ const DonneesAction = (() => {
     const anims = {};
     for (const [k] of ANIMATIONS) {
       const s = typeof Sprites !== 'undefined' ? Sprites.norm(p?.animations?.[k], tileSize) : null;
-      if (s) anims[k] = { ...s, duree: int(p.animations[k].duree, 80, 16, 2000) };
+      if (s) anims[k] = { ...s, duree: int(p.animations[k].duree, 80, 16, 2000), ...(p.animations[k].lame === true ? { lame: true } : {}) };
     }
     if (Object.keys(anims).length) out.animations = anims;
     const h = p?.hitbox;
@@ -103,7 +103,7 @@ const DonneesAction = (() => {
     const idl = ctx.idLigne(e);
     Donnees.listes(ctx.work);
     const persos = arr(ctx.work.personnages);
-    const choixPerso = [['', 'Aucun : un petit bonhomme à sa couleur'], ...persos.filter((p) => !p.heros).map((p) => [p.id, `${p.nom}${p.sprite ? '' : ' (sans sprite)'}`])];
+    const choixPerso = [['', 'Aucun : le personnage de base, à sa couleur'], ...persos.filter((p) => !p.heros).map((p) => [p.id, `${p.nom}${p.sprite ? '' : ' (sans sprite)'}`])];
     const couleur = el('input', { type: 'color', value: e.couleur || '#9b59d0' });
     couleur.oninput = () => { e.couleur = couleur.value; ctx.renderListe?.(); };
     const script = el('div');
@@ -124,7 +124,7 @@ const DonneesAction = (() => {
       ]),
       section('Apparence'),
       champ('Personnage', sel(choixPerso, e.personnage || '', (v) => { e.personnage = v; ctx.renderListe?.(); }), 'son sprite, ses animations et ses boîtes (onglet Personnages)'),
-      el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur' }), couleur, el('span', { className: 'unit', textContent: 'sans personnage : le petit bonhomme de Saga, à cette couleur' })]),
+      el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur' }), couleur, el('span', { className: 'unit', textContent: 'sans personnage : le personnage de base de Saga, à cette couleur' })]),
       section('Combat'),
       el('div', { className: 'field-grid' }, [
         champ('PV', nombreIn(e, 'pv', 1, 99999), 'le héros enlève son attaque − cette défense à chaque coup'),
@@ -240,6 +240,11 @@ const DonneesAction = (() => {
       boite.replaceChildren(
         champ('Animation', sel(liste, k, (v) => { choix = v; try { localStorage.setItem('tafl.animationChoisie', v); } catch { /* */ } rendreAnimation(); })),
         ...(a ? [champ('Durée d\'une image', nombreIn(a, 'duree', 16, 2000, 10), 'millisecondes')] : [el('div', { className: 'sprite-actions' }, [copier])]),
+        // Tafl 1.34 : l'animation du personnage de base de Saga (repos, attaque, coup, mort ; pas de nage).
+        ...(!a && k !== 'nage' && typeof PersoBase !== 'undefined' ? [Sprites.blocBase(p, 'Partir du personnage de base', (coiffure) => {
+          p.animations[k] = Sprites.persoBase(p.couleur, coiffure, t).animations[k];
+          rendreAnimation();
+        })] : []),
         Sprites.editeur(vue, { tileSize: t, palette: doc.palette, change: () => render?.(), tuile: () => null }),
       );
     }
@@ -253,7 +258,7 @@ const DonneesAction = (() => {
     }
     return [
       section('Temps réel : animations (pack action)'),
-      info('Chaque animation est une planche comme le sprite : 4 rangées (face, gauche, droite, dos). Sans elle, Saga se débrouille : la marche au repos, une lame qui balaie pour l\'attaque, un clignotement pour un coup, un fondu pour la mort. La nage (Tafl 1.22) vaut pour tous les packs : dans une eau dont l\'effet au passage a « Nage ».'),
+      info('Chaque animation est une planche comme le sprite : 4 rangées (face, gauche, droite, dos). Sans elle, un personnage sans sprite prend les animations du personnage de base de Saga ; avec un sprite, Saga se débrouille : la marche au repos, une lame qui balaie pour l\'attaque, un clignotement pour un coup, un fondu pour la mort. La nage (Tafl 1.22) vaut pour tous les packs : dans une eau dont l\'effet au passage a « Nage ».'),
       boite,
       section('Temps réel : boîtes de coups'),
       editeurBoites(p, t),

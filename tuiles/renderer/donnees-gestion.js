@@ -594,7 +594,7 @@ const DonneesGestion = (() => {
   function champsPromeneurs(g, ctx, r = {}) {
     const { champ, info, nombreIn, sel } = U();
     const tuiles = [['-1', 'Dessinée par Saga'], ...arr(ctx.doc?.tiles).map((t, i) => [String(i), `${i}. ${t.name}`])];
-    const persos = [['', 'Un petit bonhomme (une couleur chacun)'], ...arr(ctx.work?.personnages).map((p) => [p.id, p.nom || p.id])];
+    const persos = [['', 'Le personnage de base (une couleur chacun)'], ...arr(ctx.work?.personnages).map((p) => [p.id, p.nom || p.id])];
     const voir = el('input', { type: 'checkbox', checked: g.promeneurs });
     const user = el('input', { type: 'checkbox', checked: g.usure });
     const horaires = el('input', { type: 'checkbox', checked: g.horaires });

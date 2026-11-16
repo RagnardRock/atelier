@@ -2878,7 +2878,18 @@ const Events = (() => {
           })()),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Couleur du nom' }), couleur, sansCouleur, el('span', { className: 'unit', textContent: 'dans les boîtes de dialogue' })]),
           section('Sprite sur la carte : 4 directions et la marche'),
-          Sprites.editeur(p, { tileSize: doc.tileSize, palette: doc.palette, change: renderListe, tuile: () => (doc.tiles[p.tuile] ? Doc.tileCanvas(doc.tiles[p.tuile], doc.tileSize) : null) }),
+          Sprites.editeur(p, {
+            tileSize: doc.tileSize, palette: doc.palette, change: renderListe, tuile: () => (doc.tiles[p.tuile] ? Doc.tileCanvas(doc.tiles[p.tuile], doc.tileSize) : null),
+            // Tafl 1.34 : le personnage de base de Saga, sa marche et ses animations du temps réel (sans écraser celles déjà là).
+            base: (coiffure) => {
+              const b = Sprites.persoBase(p.couleur, coiffure, doc.tileSize);
+              p.sprite = b.sprite;
+              if (!p.animations || typeof p.animations !== 'object') p.animations = {};
+              for (const [k, a] of Object.entries(b.animations)) if (!p.animations[k]) p.animations[k] = a;
+              renderListe();
+              render();
+            },
+          }),
           champ('Tuile sur la carte', selectEl(choixTuiles(doc), p.tuile, (v) => { p.tuile = Number(v); }), 'Sans sprite : la tuile qui le montre sur la carte (une seule image, quelle que soit sa direction)'),
           ...(p.heros ? [section('Tenues : le joueur personnalise son héros'), tenuesHeros(p)] : []),
           ...(pack() === 'jrpg' ? groupeJrpg(p) : []),

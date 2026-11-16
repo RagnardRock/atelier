@@ -1,118 +1,33 @@
 // Les personnages sur la carte.
 // Un personnage qui a un sprite dessiné dans Tafl (Tafl 0.12, FORMAT.md › personnages.json) est
-// dessiné avec : voir dessinerSprite, plus bas. Sinon, Saga dessine un petit bonhomme en pixel art (16 × 16, agrandi à la taille des tuiles), avec une
-// casquette et un haut à la couleur du personnage (sa `couleur` dans personnages.json) : 4 directions,
-// 3 images chacune (debout, pied gauche, pied droit) pour la marche.
-//
-// Les modèles ci-dessous se lisent comme des images : une lettre = un pixel.
-//   o contour   h casquette   H ombre de la casquette   w reflet   x cheveux
-//   s peau      e œil         c haut                    C ombre du haut   p pantalon   P jambe du fond   b chaussures
+// dessiné avec : voir dessinerSprite, plus bas. Sinon, Saga dessine le personnage de base
+// (../commun/perso-base.js, Saga 1.31) : 32 × 32 px dans un style à la RPG Maker, à la couleur du
+// personnage (sa `couleur` dans personnages.json), 4 directions, 3 images de marche, une respiration quand
+// il est debout, et en temps réel ses animations (coup d'épée, coup reçu, chute). Il n'est jamais réduit :
+// en tuiles de 16 px il fait une case de large et deux de haut ; agrandi pour les tuiles de 64 px et plus.
 
 const Sprites = (() => {
-  const TETE_FACE = [
-    '................',
-    '.....oooooo.....',
-    '....owwhhhho....',
-    '...owhhhhhhho...',
-    '...ohhhhhhhho...',
-    '...oHHHHHHHHo...',
-    '...oxssssssxo...',
-    '...osesssseso...',
-    '....osssssso....',
-  ];
-  const TETE_DOS = [
-    '................',
-    '.....oooooo.....',
-    '....owwhhhho....',
-    '...owhhhhhhho...',
-    '...ohhhhhhhho...',
-    '...oHHHHHHHHo...',
-    '...oxxxxxxxxo...',
-    '...oxxxxxxxxo...',
-    '....oxxxxxxo....',
-  ];
-  const CORPS_FACE = [
-    '...oCccccccCo...',
-    '..osCccccccCso..',
-    '..osoCccccCoso..',
-    '...ooppppppoo...',
-  ];
-  const JAMBES_FACE = [
-    ['....oppooppo....', '....obboobbo....'],
-    ['....oppooppo....', '....ooo..obbo...'],
-    ['....oppooppo....', '...obbo..ooo....'],
-  ];
-  const COTE = [
-    '................',
-    '.....ooooo......',
-    '....owhhhhho....',
-    '...owhhhhhhho...',
-    '...ohhhhhhhhoo..',
-    '...oHHHHHHHHHHo.',
-    '...oxxxssssso...',
-    '...oxxsssseso...',
-    '....oxsssssso...',
-    '....oCcccccCo...',
-    '....oCcsscCo....',
-    '....oCccccCo....',
-    '....oopppoo.....',
-  ];
-  // De côté : debout, puis les deux pas, jambe avant et jambe arrière inversées (la jambe du fond
-  // est plus sombre), pour que la marche se lise bien à chaque case.
-  const JAMBES_COTE = [
-    ['.....oppo.......', '.....obbo.......'],
-    ['....oppopo......', '...obboobbo.....'],
-    ['....opoppo......', '...oPPooobbo....'],
-  ];
-  const VIDE = '................';
-
-  // Les 3 images d'une direction, chacune une liste de 16 lignes.
-  function images(direction) {
-    const out = [];
-    for (let f = 0; f < 3; f++) {
-      let lignes;
-      if (direction === 'bas' || direction === 'haut') {
-        lignes = [...(direction === 'bas' ? TETE_FACE : TETE_DOS), ...CORPS_FACE, ...JAMBES_FACE[f], VIDE];
-      } else {
-        lignes = [...COTE, ...JAMBES_COTE[f], VIDE];
-      }
-      if (direction === 'gauche') lignes = lignes.map((l) => [...l].reverse().join(''));
-      out.push(lignes);
-    }
-    return out;
-  }
-
-  // Couleurs : la casquette à la couleur du personnage, le haut un peu plus sombre.
-  const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-  const melange = (a, b, t) => `rgb(${hex(a).map((v, i) => Math.round(v + (hex(b)[i] - v) * t)).join(',')})`;
-  function palette(couleur) {
-    const c = /^#[0-9a-f]{6}$/i.test(couleur || '') ? couleur : '#d94a4a';
-    return {
-      o: '#1b1822', h: c, H: melange(c, '#000000', 0.3), w: melange(c, '#ffffff', 0.45), x: '#4a3326',
-      s: '#f2c9a0', e: '#1b1822', c: melange(c, '#2a3550', 0.55), C: melange(c, '#141826', 0.7), p: '#3b4763', P: '#2a3247', b: '#2a2230',
-    };
-  }
-
-  // Une planche par couleur : 3 colonnes (images) × 4 rangées (bas, gauche, droite, haut), à 16 px.
   const ORDRE = ['bas', 'gauche', 'droite', 'haut'];
+
+  // Les planches du personnage de base, par couleur et par taille de case : dessinées en 32 px, agrandies
+  // (×2, ×3…) pour les cases de 64 px et plus, jamais réduites (réduit, le pixel art devient flou) : avec des
+  // tuiles de 16 px, le personnage fait une case de large et deux de haut, comme un sprite 16 × 32 de Tafl.
   const cache = new Map();
-  function planche(couleur) {
-    if (cache.has(couleur)) return cache.get(couleur);
-    const pal = palette(couleur);
-    const cv = document.createElement('canvas');
-    cv.width = 48;
-    cv.height = 64;
-    const g = cv.getContext('2d');
-    ORDRE.forEach((dir, r) => images(dir).forEach((lignes, f) => {
-      lignes.forEach((ligne, y) => [...ligne].forEach((ch, x) => {
-        if (ch === '.' || !pal[ch]) return;
-        g.fillStyle = pal[ch];
-        g.fillRect(f * 16 + x, r * 16 + y, 1, 1);
-      }));
-    }));
-    cache.set(couleur, cv);
-    return cv;
+  const echelleDe = (taille) => Math.max(1, Math.round((taille || 16) / 32));
+  function base(couleur, taille = 16) {
+    const c = /^#[0-9a-f]{6}$/i.test(couleur || '') ? couleur.toLowerCase() : '#d94a4a';
+    const e = echelleDe(taille), cle = `${c}/${e}`;
+    if (!cache.has(cle)) {
+      const p = PersoBase.planches(c, {}, e);
+      const anims = {};
+      for (const [nom, a] of Object.entries(p.animations)) anims[nom] = { img: a.toile, largeur: a.largeur, hauteur: a.hauteur, images: a.images, duree: a.duree, base: true };
+      cache.set(cle, { sprite: { img: p.marche.toile, largeur: p.marche.largeur, hauteur: p.marche.hauteur, images: 3, base: true }, animations: anims, echelle: e });
+      if (cache.size > 96) cache.delete(cache.keys().next().value);
+    }
+    return cache.get(cle);
   }
+  // Une animation du personnage de base (repos, attaque, coup, mort), pour le temps réel.
+  const animationBase = (couleur, nom, taille) => base(couleur, taille).animations[nom] || null;
 
   // L'ombre douce au sol, sous chaque personnage : c'est elle qui le « pose » sur la carte.
   function ombre(ctx, x, y, taille, echelle = 1) {
@@ -125,11 +40,19 @@ const Sprites = (() => {
     ctx.restore();
   }
 
-  // Dessine le bonhomme en (x, y) (coin haut gauche de sa case, en pixels de jeu).
-  // pas : 0 debout, 1 et 2 les deux pieds.
+  // Dessine le personnage de base en (x, y) (coin haut gauche de sa case, en pixels de jeu) : les pieds en
+  // bas de la case, centré. pas : 0 debout (il respire, chacun à son rythme), 1 et 2 les deux pieds.
+  // Il garde sa taille (32 px, ou 64 px pour les cases de 64) : en tuiles de 16 px, il dépasse sur la case du dessus.
   function dessiner(ctx, couleur, direction, pas, x, y, taille) {
-    const r = Math.max(0, ORDRE.indexOf(direction));
-    ctx.drawImage(planche(couleur), pas * 16, r * 16, 16, 16, x, y, taille, taille);
+    const b = base(couleur, taille), r = Math.max(0, ORDRE.indexOf(direction));
+    let img = b.sprite.img, col = Math.min(2, Math.max(0, pas)), s = b.sprite;
+    if (!pas) {
+      // Debout : la respiration (l'animation repos), décalée selon la couleur pour que tous ne respirent pas ensemble.
+      const a = b.animations.repos, t = performance.now() + (parseInt(String(couleur).slice(1, 7), 16) || 0) % 997;
+      img = a.img; s = a; col = Math.floor(t / a.duree) % a.images;
+    }
+    ctx.drawImage(img, col * s.largeur, r * s.hauteur, s.largeur, s.hauteur,
+      Math.round(x + (taille - s.largeur) / 2), Math.round(y + taille - s.hauteur), s.largeur, s.hauteur);
   }
 
   // L'image d'un pas (FORMAT.md) : pendant le pas n° `pas` (1, 2, 3…), l'image de marche suivante
@@ -180,14 +103,15 @@ const Sprites = (() => {
       cv.height = t;
       g.drawImage(jeu.planche, im.sx, im.sy, t, t, 0, 0, t, t);
     } else {
-      cv.width = 16;
-      cv.height = 16;
-      g.drawImage(planche(perso.couleur || '#d94a4a'), Math.min(2, Math.max(0, image)) * 16, r * 16, 16, 16, 0, 0, 16, 16);
+      const s = base(perso.couleur, 32).sprite;
+      cv.width = s.largeur;
+      cv.height = s.hauteur;
+      g.drawImage(s.img, Math.min(2, Math.max(0, image)) * s.largeur, r * s.hauteur, s.largeur, s.hauteur, 0, 0, s.largeur, s.hauteur);
     }
     const url = cv.toDataURL('image/png');
     parPerso.set(cle, url);
     return url;
   }
 
-  return { dessiner, dessinerSprite, dessinerAnimation, imageDeMarche, ombre, images, vignette };
+  return { dessiner, dessinerSprite, dessinerAnimation, imageDeMarche, ombre, vignette, base, animationBase };
 })();

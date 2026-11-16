@@ -13,7 +13,7 @@ la page de l'essai (rubrique **Artifacts**).
 
 - `essais/1-tafl.js` : Tafl démarre ; chaque modèle de Fichier › Nouveau jeu passe le vérificateur
   sans erreur ; chercher une commande ou une condition (Tafl 1.32) ; remettre dans l'ordre les
-  images d'une planche de sprite (Tafl 1.29).
+  images d'une planche de sprite (Tafl 1.29) ; partir du personnage de base de Saga (Tafl 1.34).
 - `essais/2-saga-modeles.js` : chaque modèle est exporté en version web, démarre dans Saga, et le
   héros se déplace, sans erreur dans la console.
 - `essais/3-saga-domaine.js` : trois jours dans « Le petit domaine » (parler à Brune, construire une
@@ -22,6 +22,8 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/4-saga-scenes.js` : les nouveautés de Saga 1.27 à 1.29 jouées pour de vrai (changer
   d'apparence et disparaître en pleine scène, un tampon qui traverse et sort de la carte, une quête
   qui réagit à la maison posée par le joueur, jouer au doigt sur une tablette simulée).
+- `essais/6-saga-perso-base.js` : le personnage de base de Saga 1.31 (ses planches en 16 et 32 px),
+  qui marche et frappe en temps réel dans « Le petit donjon ».
 
 ## Les lancer sur un PC (pour un développeur)
 

@@ -215,7 +215,7 @@ comportement('papillonner', (e) => {
       N({ id: 'squelette', nom: 'Squelette', numero: 3, description: 'Un vieux soldat de la crypte. Il s\'arrête, lève son épée… et frappe : recule à temps !', couleur: '#d8d4c8', pv: 8, attaque: 2, defense: 1, vitesse: 2.2, vue: 6, comportement: 'suivre', portee: 1, recharge: 1.4, contact: false, xp: 8, argent: 4, coeur: 35 }, 2),
       N({ id: 'gardien', nom: 'Le Gardien', numero: 4, description: 'Il garde le coffre de la crypte depuis des siècles. Lourd, il recule à peine.', couleur: '#8a4ad0', pv: 24, attaque: 3, defense: 1, vitesse: 1.8, vue: 4, comportement: 'garde', portee: 1.3, recharge: 1.1, contact: true, poids: 4, xp: 40, argent: 20, coeur: 100, boss: true }, 3),
     ];
-    // Le héros (sans sprite : le petit bonhomme de Saga, avec une lame dessinée par Saga) ; Arne ; les
+    // Le héros (sans sprite : le personnage de base de Saga, avec une lame dessinée par Saga) ; Arne ; les
     // personnages des ennemis (leur sprite, et l'animation de mort du slime).
     const animMort = { largeur: 16, hauteur: 16, images: 4, duree: 110, planche: planche(4, (g, dir, k) => { g.globalAlpha = 1 - k * 0.22; slime(g, dir, 1, k * 2); }) };
     data.personnages.unshift({ id: 'heros', nom: 'Héros', description: 'Le joueur.', heros: true, couleur: '#3a9ad9', tuile: -1, portraits: [], sprite: null, tenues: [] });

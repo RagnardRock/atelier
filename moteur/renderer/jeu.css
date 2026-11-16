@@ -403,7 +403,7 @@ body.plein-ecran #scene { cursor: none; }
   backdrop-filter: blur(20px) saturate(150%); box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5); color: #f4f4f6;
 }
 .perso-titre { font-size: 20px; font-weight: 700; color: var(--accent); }
-.perso-apercu { width: 96px; height: 144px; image-rendering: pixelated; }
+.perso-apercu { width: 128px; height: 144px; image-rendering: pixelated; }
 .perso-label { align-self: flex-start; font-size: 12px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
 .perso-nom { width: 100%; padding: 10px 14px; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 10px; background: rgba(255, 255, 255, 0.06); color: #fff; font-size: 20px; text-align: center; outline: none; }
 .perso-nom:focus { border-color: var(--accent); }
