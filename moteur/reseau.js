@@ -322,6 +322,15 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
       res.end(await pageCompagnon(racineRelais));
       return;
     }
+    // Saga 1.38.1 : par un relais, une seule appli installée pour toutes les campagnes de ce relais (/p/…).
+    if (req.method === 'GET' && p === '/compagnon/manifest.webmanifest' && racineRelais) {
+      try {
+        const m = JSON.parse(await fs.readFile(path.join(moteur, 'compagnon', 'manifest.webmanifest'), 'utf8'));
+        Object.assign(m, { id: '/p/compagnon', scope: '/p/' });
+        res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache', ...SURETE });
+        return res.end(JSON.stringify(m));
+      } catch { return fin(res, 404); }
+    }
     if (req.method === 'GET' && p.startsWith('/compagnon/') && p !== '/compagnon/flux' && p !== '/compagnon/fond' && p !== '/compagnon/document') return fichier(res, path.join(moteur, 'compagnon'), p.slice(11));
     if (req.method === 'POST' && p === '/compagnon/relier') {
       const corps = await lireCorps(req);

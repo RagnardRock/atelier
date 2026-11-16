@@ -79,7 +79,9 @@ const Multi = (() => {
         r.sur('fin', (d) => {
           joueurs = [];
           dessiner();
-          message(d.raison === 'expulse' ? 'L\'hôte t\'a retiré de la partie.' : 'L\'hôte a fermé la partie.');
+          // Saga 1.38.1 : par le relais, la page d'une campagne mène ensuite au compagnon de ce PC (hors séance).
+          const relais = Boolean(window.SAGA_RESEAU?.racine);
+          message(d.raison === 'expulse' ? 'L\'hôte t\'a retiré de la partie.' : `L'hôte a fermé la partie.${relais ? ' Si tu as ouvert ton compagnon sur ce PC, recharge la page : ta fiche et tes documents y restent hors séance.' : ''}`);
           prevenir('fin', d);
         });
         moi = r.moi;
@@ -258,8 +260,17 @@ const Multi = (() => {
           { type: 'element', element: boite },
           { type: 'element', element: el('code', { className: 'multi-adresse multi-qr-lien', textContent: r.url.replace(/#.*$/, '') }) },
           local ? { type: 'info', text: 'Le téléphone doit être sur le même Wi-Fi. Par un relais (https), tu peux aussi lancer les dés en secouant le téléphone.' } : null,
+          // Saga 1.38.1 : le compagnon marche aussi dans le navigateur du PC (et, par un relais, hors séance).
+          ami ? { type: 'element', element: surCePc(r.url, local) } : null,
         ].filter(Boolean),
       });
+    }
+    function surCePc(url, local) {
+      const b = el('button', { className: 'multi-bouton', type: 'button' }, el('i', { className: 'codicon codicon-device-desktop' }), el('span', { textContent: ' Ouvrir sur ce PC' }));
+      b.onclick = () => { window.open(url, '_blank', 'noopener'); b.disabled = true; b.lastChild.textContent = ' Ouvert dans un nouvel onglet'; };
+      return el('div', { className: 'multi-qr-pc' }, b, el('p', { className: 'multi-note', textContent: local
+        ? 'Pas de téléphone ? Ton compagnon s\'ouvre aussi dans un onglet de ce PC (le code sert alors ici).'
+        : 'Pas de téléphone ? Ton compagnon s\'ouvre aussi dans un onglet de ce PC. Entre deux séances, ce même lien de partie te montre alors ta fiche et tes documents, et tu peux proposer des changements au MJ.' }));
     }
     const couperCompagnons = (id) => (ami ? window.saga.reseau.couperCompagnon() : window.saga.reseauCompagnonCouper?.(id)).then(() => (ami ? null : rafraichir()));
 

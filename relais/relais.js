@@ -235,6 +235,9 @@ async function ami(req, res, url) {
   const m = url.pathname.match(/^\/p\/([A-Za-z0-9_-]{4,32})(\/.*)?$/);
   const salle = m && salles.get(m[1]);
   // Saga 1.38 : le lien d'une campagne sert à chaque séance ; entre deux, il le dit.
+  // Saga 1.38.1 : entre deux séances, la page de la partie mène au compagnon (celui d'un PC ou d'un
+  // téléphone déjà relié s'ouvre de son cache, hors séance).
+  if (!salle?.flux && m && campagnes[m[1]] && req.method === 'GET' && (!m[2] || m[2] === '/')) { res.writeHead(302, { Location: `/p/${m[1]}/compagnon/`, 'Cache-Control': 'no-store' }); return res.end(); }
   if (!salle && m && campagnes[m[1]]) return fin(res, 503, 'La séance n\'est pas ouverte : reviens quand ton MJ la lance (le lien reste le même).');
   if (!salle) return fin(res, 404, 'Cette partie n\'existe pas ou est finie.');
   if (!m[2]) { res.writeHead(301, { Location: `/p/${salle.id}/${url.search}` }); return res.end(); }

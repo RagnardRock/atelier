@@ -252,6 +252,14 @@ const ExempleJdr = (() => {
     data.interrupteurs.push({ id: 'gobelins-battus', nom: 'Gobelins de la route battus', description: '' }, { id: 'grille-ouverte', nom: 'Grille de la crypte ouverte', description: '' }, { id: 'morts-vaincus', nom: 'Morts de la crypte vaincus', description: '' }, { id: 'gardien-vaincu', nom: 'Gardien de la crypte vaincu', description: '' });
     // Les règles maison : on crée trois personnages (ou on prend des pré-tirés).
     data.reglages.jdr.creation.nombre = 3;
+    // Saga 1.38.1 : deux champs à soi que le joueur peut changer, même hors séance (le MJ accepte ensuite).
+    const fiche = FichePerso.defaut();
+    fiche.champs = [
+      { id: 'destin', nom: 'Points de destin', type: 'jauge', max: 3, depart: 3, modifiable: 'joueur', visible: 'tous' },
+      { id: 'carnet', nom: 'Carnet', type: 'texte', depart: '', modifiable: 'joueur', visible: 'tous', note: 'Tes notes d\'aventure : le MJ les voit.' },
+    ];
+    fiche.blocs.splice(1, 0, { type: 'champs', titre: 'Destinée', colonne: 1, champs: ['destin', 'carnet'] });
+    data.reglages.jdr.fiche = fiche;
   }
 
   return { remplir };
