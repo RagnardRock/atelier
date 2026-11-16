@@ -158,22 +158,22 @@ const PersoBase = (() => {
   // Les coupes : des mèches ajoutées par-dessus la tête de base (« courts »), par direction (gauche = miroir
   // de droite). [rangée, colonne, pixels].
   const sym = (liste) => [...liste, ...liste.map(([r, c, t]) => [r, L - c - t.length, [...t].reverse().join('')])];
-  const COUETTE = [[8, 1, 'hHh'], [9, 0, 'hHHh'], [10, 0, 'hHHHh'], [11, 0, 'hHHHh'], [12, 0, 'hHoHh'], [13, 0, 'hHHHh'], [14, 1, 'hHHh'], [15, 1, 'hHHh'], [16, 1, 'hHh'], [17, 2, 'hh']];
+  const COUETTE = [[7, 2, 'KK'], [8, 1, 'hHh'], [9, 0, 'hHHh'], [10, 0, 'hHHHh'], [11, 0, 'hHHHh'], [12, 0, 'hHoHh'], [13, 0, 'hHHHh'], [14, 1, 'hHHh'], [15, 1, 'hHHh'], [16, 1, 'hHHh'], [17, 1, 'hHh'], [18, 2, 'hHh'], [19, 2, 'hh']];
   // Le hérissé a sa propre silhouette : ses rangées remplacent celles du crâne de base (de la rangée 0).
-  const HERISSES_FACE = ['.......h....h......h....h.......', '......hH...hHh....hHh...Hh......', '...h..hHh.hHHh.hh.hHHh.hHh..h...', '...hHhHHHhHHHHhHHhHHHHhHHHhHh...', '....hHHHHHHHHlHHHHlHHHHHHHHh....', '..hhHHHHHHHHllHHHHllHHHHHHHHhh..', '...hHHHHHlHHHHHHHHHHHHlHHHHHh...', '..hHHHHHHHHHHHHHHHHHHHHHHHHHHh..', '...hHHHHHHHHoHHHHHHoHHHHHHHHh...', '..hHHoHHHHHHoHHHHHHoHHHHHHoHHh..', '...hHHHHHHHHHHHHHHHHHHHHHHHHh...', '....hHHHHhHHHhHHHHhHHHhHHHHh....', '....hHHHhsHHhssHHsshHHshHHHh....'];
-  const HERISSES_PROFIL = ['...........h.....h..............', '.....h....hH...hHh..............', '.....hHh.hHHh.hHHHh.h...........', '......hHhHHHHhHHHHHHhH..........', '...hhhHHHHHHHHlllHHHHHh.........', '....hHHHHHHHHHllllHHHHHh........', '.....hHHHHHHHHHHHHHHHHHHh.......', '...hHHHHHHHHHHHHHHHHHHoHHh......', '....hhHHoHHHHHHHHHHHHoHHHHh.....'];
-  const CHIGNON = [[0, 12, 'hHHHHh'], [1, 11, 'hHHlHHHh'], [2, 11, 'hKKKKKKh']];
+  const HERISSES_FACE = ['.........h....h..h....h.........', '........hH...hHhhHh...Hh........', '.....h.hHHh.hHHHHHHh.hHHh.h.....', '.....hHHHHHhHHHHHHHHhHHHHHh.....', '...h.hHHHHHHHlHHHHlHHHHHHHh.h...', '...hhHHHHHHHllHHHHllHHHHHHHhh...', '.....hHHHlHHHHHHHHHHHHlHHHh.....', '...hhHHHHHHHHHHHHHHHHHHHHHHhh...', '....hHHHHHHHoHHHHHHoHHHHHHHh....', '...hHHoHHHHHoHHHHHHoHHHHHoHHh...', '....hHHHHHHHHHHHHHHHHHHHHHHh....', '....hHHHHhHHHhHHHHhHHHhHHHHh....', '....hHHHhsHHhssHHsshHHshHHHh....'];
+  const HERISSES_PROFIL = ['..............h...h.............', '.........h...hH..hHh............', '.........hHhhHHhhHHHh...........', '......h..hHHHHHHHHHHHh..........', '......hhhHHHHHlllHHHHHh.........', '.......hHHHHHHllllHHHHHh........', '....hhhHHHHHHHHHHHHHHHHHh.......', '.....hHHHHHHHHHHHHHHHHoHHh......', '...hhHHHoHHHHHHHHHHHHoHHHHh.....'];
+  const CHIGNON = [[0, 11, 'hhHHHHhh'], [1, 10, 'hHHlHHHHHh'], [2, 10, 'hHHHHHHHHh'], [3, 11, 'KKKKKKKK']];
   const COUPES = {
     courts: { bas: [], haut: [], droite: [] },
     longs: {
-      bas: sym([[11, 3, 'hH'], [12, 3, 'hHH'], [13, 3, 'hHH'], [14, 3, 'hHHH'], [15, 3, 'hHHHh'], [16, 4, 'hHHHh'], [17, 4, 'hHHHh'], [18, 5, 'hHHh'], [19, 5, 'hHHh'], [20, 6, 'hHh'], [21, 6, 'hh']]),
+      bas: [[2, 15, 'hh'], [3, 15, 'oo'], [4, 15, 'oo'], [5, 15, 'oo'], [6, 15, 'oo'], ...sym([[11, 3, 'hH'], [12, 3, 'hHH'], [13, 3, 'hHH'], [14, 3, 'hHHH'], [15, 3, 'hHHHh'], [16, 4, 'hHHHh'], [17, 4, 'hHHHh'], [18, 5, 'hHHh'], [19, 5, 'hHHh'], [20, 6, 'hHh'], [21, 6, 'hHh'], [22, 7, 'hh']])],
       haut: [[17, 7, 'hHHHHHHHHHHHHHHHHh'], [18, 7, 'hHHoHHHHHHHHoHHHHh'], [19, 8, 'hHHHHHHHHHHHHHHh'], [20, 8, 'hHHHoHHHHoHHHHHh'], [21, 9, 'hhHHHHHHHHHHhh'], [22, 11, 'hhhhhhhhhh']],
       droite: [[16, 6, 'HHHHHh'], [17, 6, 'hHHHHh'], [18, 7, 'hHHHh'], [19, 7, 'hHHh'], [20, 8, 'hHh'], [21, 8, 'hh']],
     },
     queue: {
-      bas: [[12, 26, 'hH'], [13, 26, 'hHh'], [14, 26, 'hHh'], [15, 27, 'Hh'], [16, 27, 'hh']],
-      haut: [[13, 13, 'hKKKKh'], [14, 13, 'hHHHHh'], [15, 13, 'hHHHHh'], [16, 14, 'hHHh'], [17, 14, 'hHoh'], [18, 14, 'hHHh'], [19, 14, 'hHHh'], [20, 15, 'hh']],
-      droite: [[7, 4, 'K'], [7, 2, 'hH'], [8, 1, 'hHHh'], [9, 1, 'hHHh'], [10, 1, 'hHoh'], [11, 1, 'hHHh'], [12, 1, 'hHHh'], [13, 2, 'hHh'], [14, 2, 'hHh'], [15, 3, 'hh']],
+      bas: [[1, 21, 'hHh'], [2, 22, 'hHHh'], [3, 24, 'HHh'], [4, 26, 'Hh'], [5, 26, 'hHh'], [6, 27, 'Hh'], [12, 26, 'hH'], [13, 26, 'hHh'], [14, 26, 'hHh'], [15, 27, 'Hh'], [16, 27, 'hHh'], [17, 27, 'hh']],
+      haut: [[6, 13, 'hKKKKh'], [7, 13, 'hHHHHh'], [8, 13, 'hHHHHh'], [9, 13, 'hHHoHh'], [10, 13, 'hHHHHh'], [11, 14, 'hHHh'], [12, 14, 'hHoh'], [13, 14, 'hHHh'], [14, 14, 'hHHh'], [15, 14, 'hHHh'], [16, 14, 'hHHh'], [17, 14, 'hHoh'], [18, 14, 'hHHh'], [19, 15, 'hh']],
+      droite: [[4, 6, 'KK'], [3, 3, 'hHh'], [4, 2, 'hHHh'], [5, 1, 'hHHh'], [6, 1, 'hHHh'], [7, 1, 'hHoh'], [8, 1, 'hHHh'], [9, 1, 'hHHh'], [10, 1, 'hHoh'], [11, 1, 'hHHh'], [12, 2, 'hHh'], [13, 2, 'hHh'], [14, 2, 'hHh'], [15, 3, 'hh']],
     },
     couettes: {
       bas: sym(COUETTE),
