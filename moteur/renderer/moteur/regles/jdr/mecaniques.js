@@ -11,6 +11,21 @@
 //   tables      [{ id, nom, de, lignes: [{ min, max, texte, malus }] }] : des tables aléatoires ;
 //   jets        { formule, seuil, reussites, echecs } : les jets répétés (assez de réussites : stabilisé ;
 //               assez d'échecs : mort).
+// Saga 1.41, la suite (l'éditeur de règles complet) :
+//   resolution  { type, score, des, face, reussites, plein, partiel } : comment un jet réussit (tests,
+//               sauvegardes, attaques). type 'd20' (la 5e, par défaut) ; 'd100' (réussi si le d100 fait au
+//               plus le score : formule score) ; 'reserve' (une réserve de d6 : formule des, chaque dé à face
+//               ou plus est une réussite, il en faut la formule reussites) ; '2d6' (2d6 + bonus : plein ou
+//               plus, réussite ; partiel ou plus, réussite partielle). Les formules lisent bonus et dd en plus ;
+//   parade      une formule : la cible d'un coup qui touche tente de le parer (un jet du système du jeu,
+//               en d20 contre le total de l'attaque, sinon contre parade_dd) ;
+//   localisation l'id d'une table tirée à chaque coup (la tête, le bras…) ; ses lignes ont un mult (% des dégâts) ;
+//   initiative  { mode, de, bonus } : mode '' (la 5e), 'jet' (de + formule bonus), 'heros' ou 'monstres'
+//               (un camp joue d'abord, sans jet) ;
+//   repos       { court, long } : des formules, les PV rendus à chacun (long vide : tout revient) ;
+//   niveau_pv   une formule : les PV gagnés à un niveau (elle lit de, jet, moyenne en plus) ;
+//   etats       [{ id, malus, degats, soin, fin_de, fin_seuil }] : ce que fait un état du jeu en plus (un
+//               malus aux jets, des dés de dégâts ou de soin à la fin de chaque tour, un jet pour en sortir).
 // Les formules sont celles de la fiche du jeu (commun/fiche-perso.js) : elles lisent les champs de la
 // fiche (couverture, armure…), les caractéristiques (dex, mod_dex), niveau, pv, pv_max, ca. Un monstre lit
 // sa CA, ses PV et ses `champs` s'il en a ; une formule qu'il ne peut pas calculer lui laisse sa CA.
@@ -18,6 +33,10 @@
 const JdrMeca = (() => {
   const B = JdrBase, D = JdrDes;
   const JETS = { formule: '1d20', seuil: 10, reussites: 3, echecs: 3 };
+  const TYPES = ['d20', 'd100', 'reserve', '2d6'];
+  // Les formules par défaut d'un système : elles traduisent le bonus et le DD de la 5e (les données du pack
+  // marchent tout de suite) ; un jeu les change pour lire ses propres champs (« competence », « reflexes »…).
+  const RESOLUTION = { score: '(21 + bonus - dd) * 5', des: 'max(1, bonus)', face: 5, reussites: 'max(1, floor(dd / 5))', plein: '10', partiel: '7' };
 
   function de(jeu) {
     const m = jeu?.donnees?.reglages?.reglages?.jdr?.mecaniques;
@@ -32,7 +51,7 @@ const JdrMeca = (() => {
     const tables = (Array.isArray(x.tables) ? x.tables : []).slice(0, 20).map((t, i) => ({
       id: texte(t?.id, 40) || `table_${i + 1}`, nom: texte(t?.nom, 60) || `Table ${i + 1}`, de: texte(t?.de, 20) || '1d6',
       lignes: (Array.isArray(t?.lignes) ? t.lignes : []).slice(0, 100).map((l) => ({
-        min: entier(l?.min, 1, 0, 1000), max: entier(l?.max ?? l?.min, 1, 0, 1000), texte: texte(l?.texte, 200), malus: entier(l?.malus, 0, -20, 20),
+        min: entier(l?.min, 1, 0, 1000), max: entier(l?.max ?? l?.min, 1, 0, 1000), texte: texte(l?.texte, 200), malus: entier(l?.malus, 0, -20, 20), mult: entier(l?.mult, 100, 0, 500),
       })),
     }));
     return {
@@ -44,6 +63,19 @@ const JdrMeca = (() => {
       })).sort((a, b) => b.sous - a.sous),
       tables,
       jets: { formule: texte(x.jets?.formule, 40) || JETS.formule, seuil: entier(x.jets?.seuil, JETS.seuil, 0, 100), reussites: entier(x.jets?.reussites, JETS.reussites, 1, 10), echecs: entier(x.jets?.echecs, JETS.echecs, 1, 10) },
+      resolution: {
+        type: TYPES.includes(x.resolution?.type) ? x.resolution.type : 'd20',
+        score: texte(x.resolution?.score) || RESOLUTION.score, des: texte(x.resolution?.des) || RESOLUTION.des,
+        face: entier(x.resolution?.face, RESOLUTION.face, 2, 6), reussites: texte(x.resolution?.reussites) || RESOLUTION.reussites,
+        plein: texte(x.resolution?.plein) || RESOLUTION.plein, partiel: texte(x.resolution?.partiel) || RESOLUTION.partiel,
+      },
+      parade: texte(x.parade), parade_dd: entier(x.parade_dd, 10, 0, 100), localisation: texte(x.localisation, 40),
+      initiative: { mode: ['', 'jet', 'heros', 'monstres'].includes(x.initiative?.mode) ? x.initiative.mode : '', de: texte(x.initiative?.de, 20) || '1d20', bonus: texte(x.initiative?.bonus) },
+      repos: { court: texte(x.repos?.court), long: texte(x.repos?.long) },
+      niveau_pv: texte(x.niveau_pv),
+      etats: (Array.isArray(x.etats) ? x.etats : []).filter((e) => e && texte(e.id, 40)).slice(0, 40).map((e) => ({
+        id: texte(e.id, 40), malus: entier(e.malus, 0, -20, 20), degats: texte(e.degats, 20), soin: texte(e.soin, 20), fin_de: texte(e.fin_de, 20), fin_seuil: entier(e.fin_seuil, 0, 0, 100),
+      })),
     };
   }
   const memo = new WeakMap();
@@ -88,10 +120,92 @@ const JdrMeca = (() => {
     return p;
   }
   // Le malus d'un héros à ses jets : son palier et ses blessures qui restent.
-  function malus(jeu, c) {
+  // etats : ses états du combat (ids) ; hors combat, ceux qu'il garde (c.etats).
+  function malus(jeu, c, etats = null) {
     if (!meca(jeu) || !c) return 0;
     const p = palier(jeu, Number(c.pv) || 0, JdrPerso.pvMax(jeu, c));
-    return (p?.malus || 0) + (Array.isArray(c.blessures) ? c.blessures.reduce((s, b) => s + (Number(b.malus) || 0), 0) : 0);
+    const ids = etats || (Array.isArray(c.etats) ? c.etats : []);
+    return (p?.malus || 0) + (Array.isArray(c.blessures) ? c.blessures.reduce((s, b) => s + (Number(b.malus) || 0), 0) : 0) + malusEtats(jeu, ids);
+  }
+  // Le malus des états (Mécaniques › États) : un monstre empoisonné vise moins bien, lui aussi.
+  const etat = (jeu, id) => meca(jeu)?.etats.find((e) => e.id === id) || null;
+  const malusEtats = (jeu, ids) => (meca(jeu) ? (ids || []).reduce((s, id) => s + (etat(jeu, id)?.malus || 0), 0) : 0);
+
+  // --- Le système de résolution ---
+  // Un jet du système du jeu, ou null en d20 (le pack garde alors ses jets de la 5e : avantage, 20 naturel,
+  // règles maison). Rend { reussi, partiel, critique, fumble, des, total, bonus, formule, contre, mode }.
+  const borne = (n, a, b) => Math.max(a, Math.min(b, n));
+  function resoudre(jeu, partie, { bonus = 0, dd = 0, avantage = false, desavantage = false, vars = {} } = {}) {
+    const r = meca(jeu)?.resolution;
+    if (!r || r.type === 'd20') return null;
+    const v = { ...vars, bonus: Number(bonus) || 0, dd: Number(dd) || 0 };
+    const f = (formule, d) => { const n = calculer(formule, v); return n == null ? d : n; };
+    const deux = avantage !== desavantage;
+    const mode = deux ? (avantage ? 'avantage' : 'desavantage') : '';
+    if (r.type === 'd100') {
+      // Réussi si le d100 fait au plus le score ; avantage : deux d100, le plus bas compte.
+      const score = borne(f(r.score, (21 + v.bonus - v.dd) * 5), 0, 100);
+      const a = D.d(partie, 100), b = deux ? D.d(partie, 100) : null;
+      const garde = b == null ? a : avantage ? Math.min(a, b) : Math.max(a, b);
+      const des = [{ faces: 100, valeur: a, garde: a === garde }, ...(b == null ? [] : [{ faces: 100, valeur: b, garde: a !== garde }])];
+      const reussi = garde <= score;
+      return { reussi, partiel: false, critique: reussi && garde <= Math.max(1, Math.floor(score / 10)), fumble: !reussi && garde >= 96, des, total: garde, bonus: 0, formule: 'd100', contre: `≤ ${score}`, mode };
+    }
+    if (r.type === 'reserve') {
+      // Une réserve de d6 : chaque dé à « face » ou plus est une réussite. Avantage : un dé de plus.
+      const n = borne(f(r.des, Math.max(1, v.bonus)) + (avantage ? 1 : 0) - (desavantage ? 1 : 0), 1, 30);
+      const besoin = Math.max(0, f(r.reussites, Math.max(1, Math.floor(v.dd / 5))));
+      const des = Array.from({ length: n }, () => { const x = D.d(partie, 6); return { faces: 6, valeur: x, garde: x >= r.face }; });
+      const succes = des.filter((x) => x.garde).length;
+      const reussi = succes >= besoin;
+      return { reussi, partiel: false, critique: reussi && besoin > 0 && succes >= besoin * 2, fumble: !succes && des.filter((x) => x.valeur === 1).length * 2 > n, des, total: succes, bonus: 0, formule: `${n}d6`, contre: `${besoin} réussite${besoin > 1 ? 's' : ''}`, mode };
+    }
+    // 2d6 + bonus, à paliers. Avantage : 3d6, les deux meilleurs comptent.
+    const l = Array.from({ length: deux ? 3 : 2 }, () => D.d(partie, 6));
+    const tries = [...l].map((x, i) => ({ x, i })).sort((a, b) => (avantage ? b.x - a.x : a.x - b.x));
+    const gardes = new Set(tries.slice(0, 2).map((t) => t.i));
+    const des = l.map((x, i) => ({ faces: 6, valeur: x, garde: gardes.has(i) }));
+    const somme = des.filter((x) => x.garde).reduce((s, x) => s + x.valeur, 0);
+    const total = somme + v.bonus;
+    const plein = f(r.plein, 10), partiel = f(r.partiel, 7);
+    const reussi = total >= Math.min(plein, partiel);
+    const gv = des.filter((x) => x.garde).map((x) => x.valeur);
+    return { reussi, partiel: reussi && total < plein, critique: gv.every((x) => x === 6), fumble: gv.every((x) => x === 1), des, total, bonus: v.bonus, formule: '2d6', contre: `${partiel} / ${plein}`, mode };
+  }
+  // Le résultat d'un jet pour le journal.
+  const resultat = (j, { attaque = false } = {}) => (j.critique ? 'critique' : j.fumble && !j.reussi ? 'echec_critique' : j.partiel ? 'partiel' : j.reussi ? (attaque ? 'touche' : 'reussi') : (attaque ? 'manque' : 'rate'));
+
+  // --- La parade, la localisation, l'initiative, les repos, les niveaux, les états ---
+  const parade = (jeu, vars) => { const m = meca(jeu); return m?.parade ? calculer(m.parade, vars) : null; };
+  // Le coup touche : où ? { texte, mult, jet } ou null.
+  function localiser(jeu, partie) {
+    const m = meca(jeu);
+    if (!m?.localisation) return null;
+    const t = tirer(jeu, partie, m.localisation);
+    return t?.ligne ? { texte: t.ligne.texte, mult: t.ligne.mult ?? 100, jet: t.jet, table: t.table.nom } : null;
+  }
+  // L'initiative d'un combattant : { total, ligne } (mode 'jet'), ou null (la 5e, ou un camp d'abord).
+  function initiative(jeu, partie, vars, dex) {
+    const i = meca(jeu)?.initiative;
+    if (!i || i.mode !== 'jet') return null;
+    const r = D.lancer(partie, i.de);
+    const b = i.bonus ? calculer(i.bonus, vars) : null;
+    const bonus = b == null ? dex : b;
+    return { total: r.total + bonus, des: r.des, formule: r.formule, bonus: r.bonus + bonus };
+  }
+  const ordreCamps = (jeu) => { const i = meca(jeu)?.initiative; return i?.mode === 'heros' || i?.mode === 'monstres' ? i.mode : ''; };
+  // Les PV rendus par un repos (null : la règle du pack) ; ceux gagnés à un niveau.
+  function pvRepos(jeu, c, sorte) {
+    const m = meca(jeu), f = m?.repos?.[sorte];
+    if (!f) return null;
+    const n = calculer(f, varsHeros(jeu, c));
+    return n == null ? null : Math.max(0, n);
+  }
+  function pvNiveau(jeu, c, { de, jet, moyenne }) {
+    const m = meca(jeu);
+    if (!m?.niveau_pv) return null;
+    const n = calculer(m.niveau_pv, { ...varsHeros(jeu, c), de, jet, moyenne });
+    return n == null ? null : Math.max(1, n);
   }
   // Tirer sur une table : { table, jet, ligne } (ligne : null si aucune ne couvre le résultat).
   function tirer(jeu, partie, id) {
@@ -157,5 +271,5 @@ const JdrMeca = (() => {
     return n;
   }
 
-  return { JETS, de, meca, normaliser, varsHeros, varsMonstre, calculer, defense, absorption, degatMin, palier, malus, tirer, suivre, caler, jetRepete, doitJeter, touche, noms };
+  return { JETS, TYPES, RESOLUTION, resoudre, resultat, parade, localiser, initiative, ordreCamps, pvRepos, pvNiveau, etat, malusEtats, de, meca, normaliser, varsHeros, varsMonstre, calculer, defense, absorption, degatMin, palier, malus, tirer, suivre, caler, jetRepete, doitJeter, touche, noms };
 })();

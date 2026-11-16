@@ -135,6 +135,19 @@ module.exports = [
       await formule.fill('couverture + agilite');
       vrai((await page.locator('#essai-meca .mecanique-formule .unit').first().textContent()).startsWith('⚠'), 'une formule avec un nom inconnu est signalée');
       await formule.fill('couverture + esquive');
+      // Le système de résolution : choisir le d100 montre son score ; la suite passe la normalisation.
+      await page.locator('#essai-meca select').first().selectOption('d100');
+      vrai(await page.getByText('Score à ne pas dépasser').isVisible(), 'le d100 montre son score');
+      const s2 = await page.evaluate(() => {
+        const m = window.essaiMeca.jdr.mecaniques;
+        m.parade = 'esquive'; m.initiative.mode = 'heros'; m.repos.court = 'niveau'; m.niveau_pv = 'moyenne + mod_con';
+        m.etats.push({ id: 'empoisonne', malus: -1, degats: '1d4', fin_de: '1d20', fin_seuil: 15 });
+        const n = DonneesJdr.normMeca(JSON.parse(JSON.stringify(m)));
+        const g = DonneesJdr.NORMES.monstres_jdr({ id: 'g', nom: 'G', champs: { couverture: '3', 'mauvais nom': 2, armure: 'x' } }, 0);
+        return { type: n.resolution.type, parade: n.parade, init: n.initiative.mode, court: n.repos.court, niveau: n.niveau_pv, etat: n.etats[0]?.degats, champs: g.champs };
+      });
+      egal([s2.type, s2.parade, s2.init, s2.court, s2.niveau, s2.etat], ['d100', 'esquive', 'heros', 'niveau', 'moyenne + mod_con', '1d4'], 'résolution, parade, initiative, repos, niveaux et états sont enregistrés');
+      egal(s2.champs, { couverture: 3 }, 'un monstre garde ses champs du jeu (des nombres, des noms propres)');
       if (process.env.CAPTURES) await page.locator('#essai-meca').screenshot({ path: `${process.env.CAPTURES}/1-tafl-mecaniques.png` });
       sansErreur(erreurs, 'dans l\'onglet Mécaniques');
     },

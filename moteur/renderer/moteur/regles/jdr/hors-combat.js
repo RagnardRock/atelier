@@ -234,13 +234,25 @@ const JdrHorsCombat = (() => {
       if (i == null) return false;
       s = i === 0 ? 'court' : 'long';
     }
+    // Saga 1.41 : les PV rendus par un repos, une formule du jeu (Mécaniques › Repos).
+    const rendus = [];
     if (s === 'long') {
-      for (const c of partie.equipe) if (c.jdr && !c.mort_definitive) P.reposLong(jeu, c);
-      await ui.dire(`Le groupe se repose (${long}). PV, emplacements de sorts et aptitudes sont revenus.`);
+      for (const c of partie.equipe) {
+        if (!c.jdr || c.mort_definitive) continue;
+        const avant = c.pv, n = JdrMeca.pvRepos(jeu, c, 'long');
+        P.reposLong(jeu, c);
+        if (n != null) { c.pv = Math.min(P.pvMax(jeu, c), Math.max(0, avant) + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - Math.max(0, avant)}`); }
+      }
+      await ui.dire(`Le groupe se repose (${long}). ${rendus.length ? `PV : ${rendus.join(', ')}. Emplacements` : 'PV, emplacements'} de sorts et aptitudes sont revenus.`);
       return true;
     }
-    for (const c of partie.equipe) if (c.jdr) P.reposCourt(jeu, c);
-    await ui.dire(`Le groupe fait une pause (${court}). Chacun peut dépenser ses dés de vie.`);
+    for (const c of partie.equipe) {
+      if (!c.jdr) continue;
+      P.reposCourt(jeu, c);
+      const n = c.pv > 0 ? JdrMeca.pvRepos(jeu, c, 'court') : null;
+      if (n) { const avant = c.pv; c.pv = Math.min(P.pvMax(jeu, c), c.pv + n); rendus.push(`${P.nom(jeu, c)} +${c.pv - avant}`); }
+    }
+    await ui.dire(`Le groupe fait une pause (${court}).${rendus.length ? ` PV : ${rendus.join(', ')}.` : ''} Chacun peut dépenser ses dés de vie.`);
     for (;;) {
       const qui = partie.equipe.filter((c) => c.jdr && c.pv > 0 && c.des_vie > 0 && c.pv < P.pvMax(jeu, c));
       if (!qui.length) break;
@@ -270,6 +282,10 @@ const JdrHorsCombat = (() => {
       gain = r.total;
     }
     gain = Math.max(1, Math.round(await Maison.formule('pv_niveau', { de, con, jet, niveau: c.niveau + 1 }, () => gain)));
+    // Saga 1.41 : les PV d'un niveau, une formule du jeu (Mécaniques › Niveaux). Elle donne le gain entier :
+    // la fiche ajoute déjà la Con à chaque niveau, on la retire.
+    const fixe = JdrMeca.pvNiveau(jeu, c, { de, jet: jet || D.lancer(partie, `1d${de}`).total, moyenne });
+    if (fixe != null) gain = Math.max(1, fixe - con);
     const avant = P.pvMax(jeu, c);
     const nouvelles = P.monter(jeu, c, gain);
     await ui.dire(`${nom} passe au niveau ${c.niveau} ! PV max : ${avant} → ${P.pvMax(jeu, c)}. Bonus de maîtrise : ${B.signe(P.pb(c))}.`);

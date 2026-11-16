@@ -10,7 +10,7 @@
 const EcranDes = (() => {
   const DUREES = { normale: 650, rapide: 260, aucune: 0 };
   const RESTE = 2600; // ms pendant lesquelles le plateau reste visible après l'arrêt des dés
-  const RESULTATS = { reussi: 'Réussi', rate: 'Raté', critique: 'Critique !', echec_critique: 'Échec critique', touche: 'Touché', manque: 'Manqué' };
+  const RESULTATS = { reussi: 'Réussi', rate: 'Raté', critique: 'Critique !', echec_critique: 'Échec critique', touche: 'Touché', manque: 'Manqué', partiel: 'Réussite partielle' };
 
   function creer(conteneur) {
     const racine = el('div', { className: 'des-plateau', hidden: true });

@@ -111,4 +111,105 @@ module.exports = [
       sansErreur(erreurs, 'Saga');
     },
   },
+  {
+    nom: 'Saga : un système de jeu à soi (résolution, parade, localisation, initiative, repos, états)',
+    async faire(ctx) {
+      const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeuDuModele(ctx, 'jdr', { taille: 32 }), { ctx });
+      await page.getByText('Mode table (MJ)').click();
+      await page.waitForFunction(() => App.moteur.table.actif && !App.moteur.table.occupe());
+      for (const n of ['Thorgrim', 'Elaria']) { await page.evaluate(() => { App.moteur.table.preparerHeros(); }); await page.getByText(n).first().click(); await page.waitForTimeout(500); }
+      await page.waitForFunction(() => App.moteur.table.partie().equipe.length === 2);
+
+      const r = await saga.lire(async ({ CHAMPS }) => {
+        const T = App.moteur.table, jeu = T.jeu(), partie = T.partie();
+        const R = jeu.donnees.reglages.reglages;
+        const fiche = FichePerso.defaut();
+        fiche.champs = [...CHAMPS, { id: 'parade', nom: 'Parade', type: 'nombre', depart: 5, modifiable: 'mj' }];
+        R.jdr = { ...R.jdr, fiche };
+        const regler = (m) => { R.jdr.mecaniques = { active: true, ...m }; };
+        const [thor] = partie.equipe;
+        const ui = { des: async () => {}, message: async () => {} };
+        const out = {};
+        const essais = async (n, f) => { const l = []; for (let i = 0; i < n; i++) l.push(await f()); return l; };
+        // d100 sous un score : le score lit la compétence en %.
+        regler({ resolution: { type: 'd100', score: '60' } });
+        const d100 = await essais(40, () => JdrTests.test({ jeu, partie, ui, c: thor, competence: 'athletisme', dd: 10, montrerJet: false }));
+        out.d100 = { ok: d100.every((t) => t.reussi === (t.total <= 60)), formule: d100[0].ligne.formule, contre: d100[0].ligne.contre, des: d100.every((t) => t.total >= 1 && t.total <= 100) };
+        // Une réserve de d6 : 4 dés, réussite sur 5+, il en faut 2.
+        regler({ resolution: { type: 'reserve', des: '4', face: 5, reussites: '2' } });
+        const res = await essais(30, () => JdrTests.test({ jeu, partie, ui, c: thor, competence: 'athletisme', dd: 10, montrerJet: false }));
+        out.reserve = res.every((t) => t.ligne.des.length === 4 && t.total === t.ligne.des.filter((x) => x.valeur >= 5).length && t.reussi === (t.total >= 2));
+        // 2d6 à paliers : 10+ réussite, 7-9 partielle.
+        regler({ resolution: { type: '2d6', plein: '10', partiel: '7' } });
+        const p2 = await essais(40, () => JdrTests.sauvegarde({ jeu, partie, ui, c: thor, carac: 'con', dd: 12, montrerJet: false }));
+        out.deux = { ok: p2.every((t) => t.reussi === (t.total >= 7) && Boolean(t.partiel) === (t.total >= 7 && t.total < 10)), partiel: p2.some((t) => t.ligne.resultat === 'partiel') };
+        // Les repos et les niveaux.
+        regler({ repos: { court: 'niveau + 2', long: 'pv_max / 2' } });
+        const max = JdrPerso.pvMax(jeu, thor);
+        thor.pv = 1;
+        await JdrHorsCombat.repos({ jeu, partie, ui: { dire: async () => {}, liste: async () => null }, sorte: 'court' });
+        out.court = thor.pv - 1;
+        thor.pv = 1;
+        await JdrHorsCombat.repos({ jeu, partie, ui: { dire: async () => {} }, sorte: 'long' });
+        out.long = [thor.pv, Math.min(max, 1 + Math.floor(max / 2))];
+        thor.pv = max;
+        regler({ niveau_pv: '7' });
+        const avant = JdrPerso.pvMax(jeu, thor);
+        thor.xp = 999999;
+        await JdrHorsCombat.monterNiveau(jeu, partie, { dire: async () => {}, liste: async () => 0 }, thor, { jalon: true });
+        out.niveau = JdrPerso.pvMax(jeu, thor) - avant - (Number(JdrPerso.origine(jeu, thor)?.pv_bonus_niveau) || 0); // le nain : +1 par niveau en plus
+        // Un combat : la parade, la localisation, les héros d'abord, un état qui blesse à chaque tour.
+        regler({
+          parade: 'parade', localisation: 'lieux', initiative: { mode: 'heros' },
+          tables: [{ id: 'lieux', nom: 'Localisation', de: '1d2', lignes: [{ min: 1, max: 1, texte: 'La tête', mult: 200 }, { min: 2, max: 2, texte: 'Le bras', mult: 50 }] }],
+          etats: [{ id: 'empoisonne', malus: -2, degats: '1', fin_de: '1d20', fin_seuil: 30 }],
+        });
+        out.malusEtat = JdrMeca.malus(jeu, thor, ['empoisonne']);
+        const messages = [];
+        const uiC = new Proxy({}, { get: (o, k) => {
+          if (k === 'commande') return async (i, items) => (items.find((x) => x.id === 'attaque' && !x.desactive) ? 'attaque' : (items.find((x) => x.id === 'fin') ? 'fin' : 'esquiver'));
+          if (k === 'cible') return async ({ possibles }) => { const i = (possibles || []).findIndex(Boolean); return i < 0 ? null : i; };
+          if (k === 'liste') return async () => 0;
+          if (k === 'message') return async (t) => { messages.push(String(t)); };
+          return async () => {};
+        } });
+        for (const h of partie.equipe) { h.pv = JdrPerso.pvMax(jeu, h); h.etats = ['empoisonne']; }
+        // Un monstre avec ses champs : sa parade vient de lui.
+        const gob = JdrBase.trouver(jeu, 'monstres_jdr', 'gobelin');
+        gob.champs = { parade: 30 };
+        const caGob = gob.ca;
+        gob.ca = 1; // les héros touchent toujours : le gobelin doit parer
+        const debut = partie.jdr.journal.length;
+        const issue = await JdrCombat.lancer({ jeu, partie, ui: uiC, groupe: { id: 'essai', nom: 'Essai', monstres: [{ monstre: 'gobelin', nombre: 2 }], fuite: false } });
+        delete gob.champs;
+        gob.ca = caGob;
+        const journal = partie.jdr.journal.slice(debut);
+        const premier = journal.findIndex((l) => / contre /.test(l.quoi));
+        out.combat = {
+          issue: issue?.issue,
+          paradeGobelin: journal.some((l) => l.quoi === 'Parade' && /Gobelin/i.test(l.qui) && l.resultat === 'reussi'),
+          lieu: journal.some((l) => /^Localisation : (La tête \(×200 %\)|Le bras \(×50 %\))$/.test(l.quoi)),
+          herosDabord: premier >= 0 && partie.equipe.some((h) => JdrPerso.nom(jeu, h) === journal[premier].qui),
+          sansInit: !journal.some((l) => l.quoi === 'Initiative'),
+          poison: journal.some((l) => l.quoi === JdrBase.nomEtat(jeu, 'empoisonne')),
+        };
+        return out;
+      }, { CHAMPS });
+
+      vrai(r.d100.ok && r.d100.des, 'd100 : réussi si le dé fait au plus le score');
+      egal([r.d100.formule, r.d100.contre], ['d100', '≤ 60'], 'd100 : le journal le dit');
+      vrai(r.reserve, 'réserve de d6 : on compte les 5 et les 6, il en faut deux');
+      vrai(r.deux.ok && r.deux.partiel, '2d6 : réussite à 10, partielle de 7 à 9');
+      vrai(r.court > 0 && r.court <= 4, `repos court : niveau + 2 PV (${r.court})`);
+      egal(r.long[0], r.long[1], 'repos long : la moitié des PV max');
+      egal(r.niveau, 7, 'un niveau donne 7 PV (et ce que donne son origine)');
+      egal(r.malusEtat, -2, 'un état donne son malus');
+      vrai(['victoire', 'defaite'].includes(r.combat.issue), `le combat va au bout (${r.combat.issue})`);
+      vrai(r.combat.paradeGobelin, 'un gobelin pare avec la parade de ses champs');
+      vrai(r.combat.lieu, 'la localisation multiplie les dégâts');
+      vrai(r.combat.herosDabord && r.combat.sansInit, 'les héros jouent d\'abord, sans jet d\'initiative');
+      vrai(r.combat.poison, 'le poison blesse à la fin du tour');
+      sansErreur(erreurs, 'Saga');
+    },
+  },
 ];

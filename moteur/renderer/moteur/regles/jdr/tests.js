@@ -24,8 +24,11 @@ const JdrTests = (() => {
   // { reussi, total, naturel, bonus, ligne }. dd 0 : un jet sans DD (le MJ dira).
   async function test({ jeu, partie, ui, c, competence, dd = 0, avantage = false, desavantage = false, quoi = '', montrerJet = true, etatsCombat = [] }) {
     const ef = effets(jeu, c, etatsCombat);
+    const bonus = P.bonusCompetence(jeu, c, competence) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null); // Saga 1.41 : ses blessures, ses états
+    // Saga 1.41 : le système de résolution du jeu (d100, réserve de d6, 2d6), s'il n'est pas le d20.
+    const sys = JdrMeca.resoudre(jeu, partie, { bonus, dd, avantage, desavantage: desavantage || ef.has('desavantage_tests'), vars: JdrMeca.varsHeros(jeu, c) });
+    if (sys) return autreSysteme(partie, ui, sys, { qui: P.nom(jeu, c), quoi: quoi || B.nomCompetence(jeu, competence), dd, bonus, montrerJet });
     const des = D.d20(partie, { avantage, desavantage: desavantage || ef.has('desavantage_tests') });
-    const bonus = P.bonusCompetence(jeu, c, competence) + JdrMeca.malus(jeu, c); // Saga 1.41 : ses blessures
     const normal = des.naturel + bonus;
     const total = Math.round(await Maison.formule('test', {
       naturel: des.naturel, bonus, dd: Number(dd) || 0, competence, carac: P.caracDe(jeu, competence), maitrise: P.competencesMaitrisees(jeu, c).includes(competence),
@@ -48,8 +51,10 @@ const JdrTests = (() => {
       if (montrerJet) await montrer(ui, quoi || nom, [ligne]);
       return { reussi: false, total: 0, naturel: 0, bonus: 0, ligne };
     }
+    const bonus = P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0) + JdrMeca.malus(jeu, c, etatsCombat.length ? [...new Set([...(c.etats || []), ...etatsCombat])] : null);
+    const sys = JdrMeca.resoudre(jeu, partie, { bonus, dd, avantage, desavantage: desavantage || (carac === 'dex' && ef.has('desavantage_sauvegardes_dex')), vars: JdrMeca.varsHeros(jeu, c) });
+    if (sys) return autreSysteme(partie, ui, sys, { qui: P.nom(jeu, c), quoi: quoi || nom, dd, bonus, montrerJet });
     const des = D.d20(partie, { avantage, desavantage: desavantage || (carac === 'dex' && ef.has('desavantage_sauvegardes_dex')) });
-    const bonus = P.bonusSauvegarde(jeu, c, carac) + (Number(bonusPlus) || 0) + JdrMeca.malus(jeu, c);
     const total = Math.round(await Maison.formule('sauvegarde', {
       naturel: des.naturel, bonus, dd: Number(dd) || 0, carac, maitrise: P.maitriseSauvegarde(jeu, c, carac),
     }, () => des.naturel + bonus));
@@ -60,6 +65,17 @@ const JdrTests = (() => {
     });
     if (montrerJet) await montrer(ui, quoi || nom, [ligne]);
     return { reussi, total, naturel: des.naturel, bonus, ligne };
+  }
+
+  // Un jet d'un autre système que le d20 (Mécaniques › Résolution) : noté, montré, rendu comme un test.
+  // Une réussite partielle (2d6) compte comme une réussite ; partiel le dit.
+  async function autreSysteme(partie, ui, sys, { qui, quoi, dd, bonus, montrerJet }) {
+    const ligne = D.noter(partie, {
+      qui, quoi, formule: sys.formule, des: sys.des, bonus: sys.bonus, total: sys.total,
+      contre: dd || sys.formule === '2d6' ? sys.contre : '', resultat: dd || sys.formule === '2d6' ? JdrMeca.resultat(sys) : '', mode: sys.mode,
+    });
+    if (montrerJet) await montrer(ui, quoi, [ligne]);
+    return { reussi: !dd && sys.formule !== '2d6' ? true : sys.reussi, partiel: sys.partiel, critique: sys.critique, total: sys.total, naturel: sys.total, bonus, ligne };
   }
 
   // Le « MJ » peut garder le jet ou forcer le résultat (règle maison mj_decide), en vraie partie.

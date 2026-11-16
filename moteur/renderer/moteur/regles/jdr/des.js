@@ -89,7 +89,7 @@ const JdrDes = (() => {
     const dés = des ? `[${des}]` : '';
     return `${l.formule ? `${l.formule} ` : ''}${dés}${l.bonus ? ` ${signe(l.bonus)}` : ''} = ${l.total}${l.contre ? ` contre ${l.contre}` : ''}`;
   }
-  const RESULTATS = { reussi: 'Réussi', rate: 'Raté', critique: 'Critique !', echec_critique: 'Échec critique', touche: 'Touché', manque: 'Manqué' };
+  const RESULTATS = { reussi: 'Réussi', rate: 'Raté', critique: 'Critique !', echec_critique: 'Échec critique', touche: 'Touché', manque: 'Manqué', partiel: 'Réussite partielle' };
 
   return { etat, aleatoire, d, chance, choisir, lancer, d20, noter, detail, RESULTATS, MAX_JOURNAL };
 })();
