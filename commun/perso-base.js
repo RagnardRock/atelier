@@ -144,8 +144,8 @@ const PersoBase = (() => {
     '............UTTTTWWTt...........',
     '............UTTTTTTTt...........',
     '............tTTTTTTtt...........',
-    '............GGGGGGGGG...........',
-    '............tTTTTTTTt...........', // 25
+    '............GGGGGGGG............',
+    '............tTTTTTTt............', // 25
     '................................',
     '................................',
     '................................',
@@ -253,7 +253,7 @@ const PersoBase = (() => {
     l = decaler(l, dy);
     if (dir === 'droite') {
       const e = o.pas === 1 ? 1 : o.pas === 2 ? -1 : 0;
-      if (!o.sansBras) brasProfil(l, 20 + dy, e * 3);
+      if (!o.sansBras) brasProfil(l, 20 + dy, e * 2);
       jambesProfil(l, 26 + plie, e);
     } else {
       const dos = dir === 'haut';
