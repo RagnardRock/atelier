@@ -281,6 +281,7 @@ const ESSAIS = {
   '1-tafl.js': 'essai-tafl', '5-saga-survivor.js': 'survivor', '7-saga-table-outils.js': 'outils',
   '9-compagnon.js': 'compagnon', '10-saga-table-interface.js': 'table', '11-saga-documents.js': 'docs',
   '12-saga-campagne.js': 'campagne', '14-saga-scene-image.js': 'scene', '15-saga-calque-initiative.js': 'calque',
+  '16-saga-initiative-reglable.js': 'reglable',
 };
 for (const [fichier, prefixe] of Object.entries(ESSAIS)) {
   scene(`essai-${prefixe}`, async (nav) => {

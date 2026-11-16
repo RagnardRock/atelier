@@ -90,7 +90,11 @@ module.exports = [
       for (let i = 0; i < 15 && !(await page.locator('.table-combat-titre', { hasText: 'Ordre libre' }).count()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(500); }
       const options = await page.locator('.table-combat-option').allTextContents();
       vrai(options.length >= 3, `le MJ choisit parmi tous (${options.length})`);
-      if (process.env.CAPTURES) await page.screenshot({ path: `${process.env.CAPTURES}/1-ordre-libre.png` });
+      if (process.env.CAPTURES) {
+        // Les dés de l'initiative s'effacent d'eux-mêmes : la capture montre le choix du MJ.
+        await page.waitForTimeout(8000);
+        await page.screenshot({ path: `${process.env.CAPTURES}/1-ordre-libre.png` });
+      }
       const dernier = options[options.length - 1].trim();
       await page.locator('.table-combat-option').last().click();
       await page.waitForTimeout(400);
