@@ -390,6 +390,10 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Saga 1.39.1
+
+- Compagnon : un seul bouton « Secousse : oui / non » (là où le téléphone demande la permission, le toucher la demande) ; la pastille « en direct » de l'accueil ne cache plus le nom du joueur.
+
 ## Ce que fait Saga 1.39 : le compagnon sans QR, et sur PC
 
 - **Rejoindre depuis le compagnon** : sur l'accueil, son prénom et le code de la partie ; le MJ accepte (sur
