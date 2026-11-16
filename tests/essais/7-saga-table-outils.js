@@ -83,7 +83,10 @@ module.exports = [
       await page.keyboard.press('g');
       await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.35);
       await page.keyboard.press('Escape');
-      egal(await saga.lire(() => App.moteur.table.vue().gabarits.length), 3, 'le gabarit posé à la souris');
+      // La vue est celle de la dernière image : on lui laisse le temps d'être redessinée (lent sur la CI).
+      let n = 0;
+      for (let i = 0; i < 30 && n !== 3; i++) { await page.waitForTimeout(100); n = await saga.lire(() => App.moteur.table.vue().gabarits.length); }
+      egal(n, 3, 'le gabarit posé à la souris');
       sansErreur(erreurs, 'avec les outils de la table');
 
       // L'écran d'un joueur (Thorgrim) : il ne reçoit que sa vue ; sa barre de macros et ses outils envoient des demandes.

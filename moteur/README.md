@@ -343,6 +343,7 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Dans Saga** : Multijoueur › Réglages du relais (son adresse et sa clé, gardées dans les réglages de Saga, jamais dans le code), puis « Par un relais ». Saga donne un **lien d'invitation** avec le code de la partie dedans ; l'ami n'a plus qu'à écrire son prénom, et le MJ l'accepte.
 - Rien ne s'ouvre sur la box. Saga rejoue chaque requête de l'ami sur son serveur de partie (`relais-client.js` → `reseau.js`, qui reconnaît le relais par un secret) : le code, l'accord du MJ et la vue filtrée de chacun restent chez le MJ.
 - Une coupure : Saga revient dans la même salle (le relais la garde 90 s), sinon le lien change et le panneau montre le nouveau.
+- **1.33.1** : la page des amis chargeait sans `perso-base.js` (« PersoBase is not defined », depuis Saga 1.31, en local aussi) ; tous les `../commun/*.js` d'`index.html` sont maintenant servis. Un voile « Connexion à la partie… » cache l'accueil du logiciel tant que l'interface arrive.
 
 ## La suite
 
