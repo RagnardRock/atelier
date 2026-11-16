@@ -266,9 +266,31 @@
       b.onclick = () => { onglet = id; vibrer(8); dessiner(); };
       nav.append(b);
     }
-    app.append(teteEl, ...(moi?.absent && !moi.mj ? [bandeauRejoindre()] : []), pageEl, nav);
+    app.append(teteEl, ...(moi?.absent && !moi.mj ? [bandeauRejoindre()] : []), ...(proposerInstallation() ? [bandeauInstaller()] : []), pageEl, nav);
     dessinerTete();
     dessinerPage();
+  }
+  // Saga 1.40 : installer l'appli. Le navigateur exige un geste : un bouton (Android, PC), ou le pas-à-pas (iPhone).
+  let invitation = null;
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); invitation = e; if (app.querySelector('.nav')) dessiner(); });
+  window.addEventListener('appinstalled', () => { invitation = null; ecrire('installee', true); toast('L\'appli est installée : retrouve-la sur l\'écran d\'accueil.'); if (app.querySelector('.nav')) dessiner(); });
+  const installee = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true || lire('installee', false);
+  const iphone = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const proposerInstallation = () => window.isSecureContext && !installee() && !lire('installer-plus-tard', false) && (invitation || iphone());
+  function installer() {
+    if (invitation) {
+      invitation.prompt();
+      invitation.userChoice.then((c) => { if (c?.outcome === 'accepted') ecrire('installee', true); invitation = null; dessiner(); }).catch(() => {});
+      return;
+    }
+    toast(iphone() ? 'Touche Partager (le carré avec la flèche), puis « Sur l\'écran d\'accueil ».' : 'Menu du navigateur (⋮), puis « Installer l\'application » ou « Ajouter à l\'écran d\'accueil ».');
+  }
+  function bandeauInstaller() {
+    const b = el('button', { className: 'btn', type: 'button' }, icone('desktop-download'), 'Installer l\'appli');
+    b.onclick = installer;
+    const non = el('button', { className: 'icone-bouton', type: 'button', title: 'Plus tard' }, icone('close'));
+    non.onclick = () => { ecrire('installer-plus-tard', true); dessiner(); };
+    return el('div', { className: 'bandeau-rejoindre verre' }, el('span', { textContent: iphone() && !invitation ? 'Garde le compagnon sur ton écran d\'accueil, comme une appli.' : 'Installe le compagnon : il s\'ouvre comme une appli, même hors séance.' }), b, non);
   }
   // Saga 1.39.1 : la séance est ouverte mais le joueur n'y est pas : le téléphone la rejoint lui-même.
   let rejoignant = false;
@@ -831,6 +853,11 @@
         }
       }
       boite.append(l);
+    }
+    if (window.isSecureContext && !installee() && (invitation || iphone())) {
+      const b = el('button', { className: 'btn2', type: 'button' }, icone('desktop-download'), 'Installer l\'appli');
+      b.onclick = installer;
+      boite.append(b);
     }
     // Saga 1.38.1 : rejoindre la partie de ce lien depuis le compagnon (prénom et code), sans QR ni PC.
     if (!liaison()) boite.append(formRejoindre());
