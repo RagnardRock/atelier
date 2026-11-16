@@ -239,6 +239,14 @@ const Jeu = (() => {
       // Tafl 1.12 (module roguelite) : une salle de donjon modèle : { type, poids, etage_min, etage_max }.
       salle: data.salle && typeof data.salle === 'object' && typeof data.salle.type === 'string' ? { type: data.salle.type, poids: nombre(data.salle.poids, 10), etage_min: nombre(data.salle.etage_min, 1), etage_max: nombre(data.salle.etage_max, 0) } : null,
       calques,
+      // Tafl 1.37 : une scène image (le mode table) : une image étirée sous les calques, chargée ici.
+      fond: (() => {
+        const src = typeof data.fond?.image === 'string' && /^data:image\/(?:png|jpeg|webp);base64,/.test(data.fond.image) ? data.fond.image : '';
+        if (!src || typeof Image === 'undefined') return null;
+        const img = new Image();
+        img.src = src;
+        return { src, img };
+      })(),
       passage: grille(data.passage, n, 0),
       zones: (Array.isArray(data.zones) ? data.zones : []).map((z) => ({
         id: z.id, nom: z.nom || '', type: z.type || 'autre',

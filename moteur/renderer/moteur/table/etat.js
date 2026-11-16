@@ -49,6 +49,11 @@ const TableEtat = (() => {
   // peuvent emprunter la même apparence), sinon par son personnage.
   const estMien = (role, c) => Boolean(c) && (role.heros ? c.pion === role.heros : Boolean(role.perso) && c.creature === role.perso);
 
+  // Saga 1.42 : l'apparence d'un pion (son jeton) : une image importée par le MJ, ou un personnage du jeu
+  // (son sprite de Tafl : directions, marche). Sans jeton : l'apparence du héros, l'image du monstre.
+  const IMAGE_JETON = /^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+  const imageJetonValide = (v) => typeof v === 'string' && v.length <= 600000 && IMAGE_JETON.test(v);
+  function idJeton(v) { let h = 2166136261; for (let i = 0; i < v.length; i += 7) h = Math.imul(h ^ v.charCodeAt(i), 16777619); return `jeton-${(h >>> 0).toString(36)}${v.length.toString(36)}`; }
   function preparer(jeu, partie) {
     const t = partie.table && typeof partie.table === 'object' ? partie.table : {};
     t.version = 1;
@@ -57,6 +62,9 @@ const TableEtat = (() => {
     t.pause = Boolean(t.pause);
     // Saga 1.32 : les macros du MJ ([{ nom, formule }]).
     t.macros = Array.isArray(t.macros) ? t.macros.filter((m) => m && m.nom && m.formule) : [];
+    // Saga 1.42 : les images des jetons ({ id: data: URL }), partagées par les pions qui les portent.
+    t.jetons = Object.fromEntries(Object.entries(t.jetons && typeof t.jetons === 'object' ? t.jetons : {}).filter(([k, v]) => /^jeton-[a-z0-9]+$/.test(k) && imageJetonValide(v)).slice(0, 200));
+    for (const p of t.pions) if (p.jeton && !(p.jeton.personnage ? typeof p.jeton.personnage === 'string' : t.jetons[p.jeton.image])) delete p.jeton;
     // Saga 1.34 : la campagne ({ nom, fond }) : son nom et le fond des compagnons.
     // Saga 1.38 : et ce qui la fait durer d'une séance à l'autre (table/campagne.js) : son identité sur le relais
     // (id, secret, code), les téléphones reliés, les clés du coffre des joueurs, les changements proposés hors séance.
@@ -189,6 +197,7 @@ const TableEtat = (() => {
       const montre = p.sorte === 'heros' || (visiblePour(p.visible, role) && voitCase(p.x, p.y));
       if (!montre) continue;
       const v = { id: p.id, sorte: p.sorte, x: p.x, y: p.y, direction: p.direction || 'bas', nom: p.nom || '' };
+      if (p.jeton) v.jeton = p.jeton.personnage ? { personnage: p.jeton.personnage } : { image: p.jeton.image };
       // Saga 1.32 : les marques posées à la main, puis (pour un héros) ses états des règles.
       const ids = [...(Array.isArray(p.marques) ? p.marques : [])];
       if (p.sorte === 'heros') for (const e of membreDe(partie, p)?.etats || []) if (!ids.includes(e)) ids.push(e);
@@ -352,6 +361,22 @@ const TableEtat = (() => {
     // Le reste est au MJ seulement.
     if (!role.mj) return non('Seul le MJ peut faire ça.');
     switch (a.type) {
+      case 'jeton': {
+        if (!pion) return non('Pion inconnu.');
+        if (a.personnage) {
+          if (!jeu.personnages?.get?.(String(a.personnage))) return non('Personnage inconnu.');
+          pion.jeton = { personnage: String(a.personnage) };
+        } else if (a.image) {
+          if (!imageJetonValide(a.image)) return non('Image trop grande ou illisible (PNG, JPEG ou WebP).');
+          const id = idJeton(a.image);
+          table.jetons[id] = a.image;
+          pion.jeton = { image: id };
+        } else delete pion.jeton;
+        // Les images que plus aucun pion ne porte s'en vont.
+        const portees = new Set(table.pions.map((q) => q.jeton?.image).filter(Boolean));
+        for (const k of Object.keys(table.jetons)) if (!portees.has(k)) delete table.jetons[k];
+        return { ok: true };
+      }
       case 'visibilite': {
         const v = normVisible(a.visible, '');
         if (!v) return non('Visibilité inconnue.');

@@ -218,6 +218,49 @@ const TablePanneau = (() => {
 
     // --- Combat : la boîte (table.js), l'ordre d'initiative, lancer une rencontre ---
     // --- Pions ---
+    // Le jeton d'un pion : un menu (par défaut, une image…, les personnages du jeu).
+    function choixJeton(jeu, p) {
+      const persos = [...(jeu.personnages?.values?.() || [])];
+      const valeur = p.jeton?.personnage ? `perso:${p.jeton.personnage}` : p.jeton?.image ? 'image' : '';
+      const s = select(valeur, [['', 'Jeton : par défaut'], ['image', p.jeton?.image ? 'Jeton : image (en changer…)' : 'Jeton : une image…'], ...persos.map((x) => [`perso:${x.id}`, `Jeton : ${x.nom || x.id}`])], async (v) => {
+        if (v === 'image') {
+          const src = await choisirImageJeton();
+          if (src) T.agir({ type: 'jeton', pion: p.id, image: src }); else dessiner();
+        } else if (v.startsWith('perso:')) T.agir({ type: 'jeton', pion: p.id, personnage: v.slice(6) });
+        else T.agir({ type: 'jeton', pion: p.id });
+        dessiner();
+      });
+      s.title = 'Son apparence sur le plateau : une image (un portrait, une vue de dessus) ou un personnage du jeu (son sprite de Tafl)';
+      s.classList.add('table-jeton');
+      return s;
+    }
+    // Une image du disque, recadrée au carré (le centre) et réduite à 256 px, en PNG ou JPEG.
+    function choisirImageJeton() {
+      return new Promise((ok) => {
+        const i = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+        i.onchange = () => {
+          const f = i.files?.[0];
+          if (!f) { ok(''); return; }
+          const r = new FileReader();
+          r.onload = () => {
+            const im = new Image();
+            im.onload = () => {
+              const cote = Math.min(im.naturalWidth, im.naturalHeight), n = Math.min(256, cote);
+              const c = el('canvas', { width: n, height: n });
+              const g = c.getContext('2d');
+              g.imageSmoothingEnabled = cote > 128;
+              g.drawImage(im, (im.naturalWidth - cote) / 2, (im.naturalHeight - cote) / 2, cote, cote, 0, 0, n, n);
+              const png = c.toDataURL('image/png');
+              ok(png.length < 500000 ? png : c.toDataURL('image/jpeg', 0.85));
+            };
+            im.onerror = () => { T.message('Cette image ne se lit pas.'); ok(''); };
+            im.src = r.result;
+          };
+          r.readAsDataURL(f);
+        };
+        i.click();
+      });
+    }
     function voletPions(jeu, partie, carte) {
       const vis = T.VISIBILITES();
       const out = [];
@@ -234,6 +277,8 @@ const TablePanneau = (() => {
             el('div', { className: `table-jauge${pc < 40 ? ' basse' : ''}` }, el('i', { style: `width:${pc}%` }))));
         ligne.onclick = (e) => { if (e.target.closest('select, button')) return; T.selection = T.selection === p.id ? null : p.id; dessiner(); };
         if (p.sorte !== 'heros') ligne.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
+        // Saga 1.42 : son jeton : par défaut, une image importée, ou un personnage du jeu (son sprite).
+        ligne.append(choixJeton(jeu, p));
         // Saga 1.21.3 : la fiche du héros (et les champs du jeu, que le MJ peut tous changer).
         if (c) ligne.append(btn('account', '', () => T.ouvrirFiche(c), { titre: `La fiche de ${nom}` }));
         out.push(ligne);
@@ -313,6 +358,18 @@ const TablePanneau = (() => {
           btn('circle-slash', 'Cacher au pinceau', () => { T.pinceau = T.pinceau === 'cacher' ? null : 'cacher'; T.redessinerOutils?.(); dessiner(); }, { classe: T.pinceau === 'cacher' ? 'actif' : '', titre: 'N' }),
           btn('discard', 'Tout recacher', () => T.agir({ type: 'tout_cacher' }), { titre: 'Remettre le brouillard partout sur cette carte (les pièces reprennent leur réglage de Tafl)' })));
         return o;
+      }));
+      // Saga 1.42 : aller sur une autre carte, ou sur une scène image (Tafl › Carte › Nouvelle scène).
+      out.push(section('cartes', 'Cartes et scènes', () => {
+        const l = [...jeu.cartes.values()];
+        const scenes = l.filter((c) => c.fond), autres = l.filter((c) => !c.fond);
+        const ligne = (c) => el('div', { className: `table-ligne${c.id === carte.id ? ' actif' : ''}` },
+          el('span', { className: 'table-nom', textContent: c.nom || c.id }),
+          c.id === carte.id ? el('small', { textContent: 'ici' }) : btn('arrow-right', 'Y aller', () => { if (!T.allerCarte(c.id)) T.message('Pas pendant un combat ou une scène.'); }, { titre: 'Le groupe et ses pions arrivent sur cette carte (au départ s\'il y est, sinon au milieu).' }));
+        return [
+          ...(scenes.length ? [el('div', { className: 'table-sous-titre', textContent: 'Scènes (une image)' }), ...scenes.map(ligne)] : [el('p', { className: 'table-note', textContent: 'Une scène, c\'est une image (une battlemap, un lieu) avec une grille dessus : Tafl › Carte › Nouvelle scène.' })]),
+          el('div', { className: 'table-sous-titre', textContent: 'Cartes' }), ...autres.map(ligne),
+        ];
       }));
       out.push(section('rencontres', 'Rencontres', () => rencontres(jeu)));
       out.push(section('musique', 'Musique et sons', () => {

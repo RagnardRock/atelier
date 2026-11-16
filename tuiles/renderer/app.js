@@ -963,10 +963,13 @@ const App = (() => {
     const doc = api.doc;
     return [
       { label: 'Nouvelle carte…', run: () => run(newMap) },
+      { label: 'Nouvelle scène (une image)…', run: () => run(newScene) },
       { label: 'Dupliquer la carte', run: duplicateMap },
       { label: 'Renommer la carte…', run: () => run(() => renameMap()) },
       { label: 'Taille de la carte…', run: () => run(resizeMap) },
       { label: 'Ambiance (météo, teinte)…', run: () => run(() => mapAmbiance()) },
+      { label: doc.map.fond ? 'Changer l\'image de fond…' : 'Image de fond (scène)…', run: () => run(() => sceneImage()) },
+      ...(doc.map.fond ? [{ label: 'Retirer l\'image de fond', run: () => { Doc.change(doc, 'Retirer l\'image de fond', () => { doc.maps[doc.mapIndex] = { ...doc.map, fond: '' }; Doc.selectMap(doc, doc.mapIndex); }); refresh(); } }] : []),
       null,
       { label: 'Mettre dans un groupe…', run: () => run(() => setMapGroup()) },
       { label: 'Carte intérieure (pas sur la carte monde)', checked: Boolean(doc.map.interieur), run: () => toggleInterior() },
@@ -985,6 +988,60 @@ const App = (() => {
   $('#map-delete').onclick = () => { if (api.doc) run(deleteMap); };
   $('#map-more').onclick = (e) => { if (api.doc) Menus.open(mapMenuItems(), e.clientX, e.clientY); };
 
+  // Tafl 1.37 : une scène image (pour le mode table de Saga) : une image en fond, une grille posée dessus.
+  // On choisit combien de cases en largeur ; la hauteur suit l'image. Les calques restent (des décors, des murs).
+  async function sceneImage({ nouvelle = false } = {}) {
+    const doc = api.doc;
+    const fi = await window.tafl.openFile({ kind: 'image', titre: 'Image de la scène' });
+    if (!fi) return false;
+    const src = (await Events.imagePortrait(fi)).png;
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ko(new Error('Image illisible')); i.src = src; });
+    const ratio = img.naturalHeight / img.naturalWidth;
+    const depart = clamp(Math.round(img.naturalWidth / 70), 4, 128);
+    const hauteur = (l) => clamp(Math.round(l * ratio), 1, 256);
+    const v = await Dialogs.form({
+      title: 'La grille de la scène',
+      okLabel: 'Poser l\'image',
+      fields: [
+        { type: 'info', text: `L'image (${img.naturalWidth} × ${img.naturalHeight} px) couvre toute la carte. Combien de cases en largeur ? Sur une battlemap, compte ses carreaux ; sur une simple image, une case ≈ un personnage.` },
+        { key: 'width', label: 'Largeur', type: 'number', value: depart, min: 1, max: 256, unit: 'cases' },
+      ],
+      onInput(values, f) { f.card.querySelector('.modal-extra').textContent = `${values.width} × ${hauteur(values.width)} cases`; },
+    });
+    if (!v) return false;
+    const l = clamp(Math.round(v.width), 1, 256), h = hauteur(l);
+    // Réduite (2400 px au plus) et en JPEG : le jeu reste léger (les amis le téléchargent).
+    const k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    const fond = c.toDataURL('image/jpeg', 0.85);
+    Doc.change(doc, nouvelle ? 'Nouvelle scène' : 'Image de fond', () => {
+      if (l !== doc.map.width || h !== doc.map.height) Doc.resizeMap(doc, l, h);
+      doc.maps[doc.mapIndex] = { ...doc.map, fond };
+      Doc.selectMap(doc, doc.mapIndex);
+    });
+    Stage.fit();
+    refresh();
+    notify(`Scène posée : ${l} × ${h} cases. Dans Saga (mode table), la carte montre l'image ; les pièces et le passage marchent comme ailleurs.`, 'success', 5000);
+    return true;
+  }
+  async function newScene() {
+    const doc = api.doc;
+    const v = await Dialogs.form({
+      title: 'Nouvelle scène', okLabel: 'Choisir l\'image…',
+      fields: [
+        { key: 'name', label: 'Nom', type: 'text', value: `Scène ${doc.maps.length + 1}` },
+        { type: 'info', text: 'Une scène : une image (une battlemap, un lieu, une ambiance) avec une grille posée dessus, pour le mode table de Saga. Les joueurs y posent leurs jetons. Elle ne va pas sur la carte monde.' },
+      ],
+    });
+    if (!v) return;
+    Doc.change(doc, 'Nouvelle scène', () => Doc.addMap(doc, { name: v.name.trim() || `Scène ${doc.maps.length + 1}`, width: 20, height: 15, groupe: doc.map.groupe, interieur: true }));
+    api.mode = 'map';
+    Stage.reset();
+    refresh();
+    if (!(await sceneImage({ nouvelle: true }))) notify('La scène est vide : choisis son image dans Carte › Image de fond.', 'info', 4000);
+  }
   async function resizeMap() {
     const doc = api.doc;
     const v = await Dialogs.form({

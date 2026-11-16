@@ -146,6 +146,8 @@ const DonneesJdr = (() => {
         nom: str(m?.nom || m?.id, `Monstre ${i + 1}`),
         numero: int(m?.numero, i + 1, 0, 99999),
         image: image(m?.image),
+        // Tafl 1.37 : son jeton dans le mode table de Saga : un personnage du jeu (son sprite), sinon son image.
+        apparence: str(m?.apparence).slice(0, 60),
         fp, type: str(m?.type, 'humanoïde'),
         taille: pick(m?.taille, TAILLES, 'moyenne'),
         ca: int(m?.ca, 12, 1, 40), ca_texte: str(m?.ca_texte),
@@ -628,6 +630,9 @@ const DonneesJdr = (() => {
         ['Chance %', (b) => nombreIn(b, 'chance', 1, 100)],
       ], () => ({ objet: '', chance: 10 }), { ajouter: '+ Butin', max: 6, vide: 'Il ne laisse rien.' }),
       info('L\'expérience vient du FP (partagée entre les héros debout).'),
+      section('Jeton'),
+      champ('Sur le plateau', sel([['', 'Son image, dans un rond'], ...(work.personnages || []).map((p) => [p.id, `Le sprite de ${p.nom || p.id}`])], m.apparence || '', (v) => { m.apparence = v; })),
+      info('Dans le mode table de Saga : son image ronde, ou un personnage du jeu (Données › Personnages : son sprite, ses quatre directions). Le MJ peut aussi changer le jeton d\'un pion pendant la séance.'),
       ...champsDuJeu(m, work),
       section('Utilisation'), ctx.usages('monstre_jdr', m.id),
     );

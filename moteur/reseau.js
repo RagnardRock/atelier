@@ -696,7 +696,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
     documents: (liste) => {
       const m = new Map();
       let poids = 0;
-      for (const x of Array.isArray(liste) ? liste.slice(0, 80) : []) {
+      for (const x of Array.isArray(liste) ? liste.slice(0, 300) : []) { // 60 documents et les images des jetons
         const r = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(x?.image || ''));
         if (!r || r[2].length > 6e6 || (poids += r[2].length) > 60e6) continue;
         const pour = x.pour === 'tous' ? 'tous' : Array.isArray(x.pour) ? x.pour.map((n) => String(n).slice(0, 24)).slice(0, 16) : [];
