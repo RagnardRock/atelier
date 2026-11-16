@@ -1478,3 +1478,26 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .table-carte-pion { flex-wrap: wrap; }
 .table-pion-choix { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 6px; }
 .table-carte-pion .table-pion-choix select { flex: 1 1 calc(50% - 6px); width: auto; max-width: none; min-width: 0; }
+/* Saga 1.46 : le son du MJ chez l'ami (couper, volume) */
+.ti-son { display: inline-flex; align-items: center; gap: 4px; }
+.ti-volume { width: 76px; accent-color: var(--accent, #ffb347); }
+
+/* Notifications de Saga : le même verre que le reste (et non le gris des outils). */
+#notifications { width: min(380px, calc(100% - 32px)); }
+.notification {
+  align-items: center; gap: 10px; padding: 9px 8px 9px 10px; border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03)), rgba(12, 12, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  font-size: 13px;
+}
+.notification > .codicon { margin-top: 0; flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(255, 255, 255, 0.08); font-size: 14px; }
+.notification.success > .codicon { background: rgba(115, 201, 145, 0.18); }
+.notification.error > .codicon { background: rgba(241, 76, 76, 0.18); }
+.notification.warning > .codicon { background: rgba(255, 179, 71, 0.18); }
+.notification.info > .codicon { background: rgba(255, 179, 71, 0.14); }
+.notification .message { line-height: 1.35; }
+.notification .icon-button { flex: none; border-radius: 8px; opacity: 0.6; }
+.notification .icon-button:hover { opacity: 1; }
+body.table-verre #notifications { bottom: auto; top: calc(var(--ti-haut) + 12px); right: auto; left: 50%; transform: translateX(-50%); }

@@ -221,10 +221,15 @@ module.exports = [
         gob.champs = { parade: 30 };
         const caGob = gob.ca;
         gob.ca = 1; // les héros touchent toujours : le gobelin doit parer
+        // Assez de PV pour que les héros frappent plusieurs fois : un critique (la moitié des coups ici) ne se pare
+        // pas, et deux gobelins tombés en deux critiques ne laissaient aucune parade à voir.
+        const pvGob = gob.pv;
+        gob.pv = 40;
         const debut = partie.jdr.journal.length;
         const issue = await JdrCombat.lancer({ jeu, partie, ui: uiC, groupe: { id: 'essai', nom: 'Essai', monstres: [{ monstre: 'gobelin', nombre: 2 }], fuite: false } });
         delete gob.champs;
         gob.ca = caGob;
+        gob.pv = pvGob;
         const journal = partie.jdr.journal.slice(debut);
         const premier = journal.findIndex((l) => / contre /.test(l.quoi));
         out.combat = {

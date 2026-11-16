@@ -156,7 +156,7 @@ const TablePanneau = (() => {
         ...chat.map((x) => ({ t: x.t || 0, n: x.n, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
         .concat(dits.map((e) => ({ t: e.heure || 0, el: () => ligneRecit(e) })))
         .sort((a, b) => a.t - b.t);
-      fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+3 pour lancer, /gr pour un jet que toi seul vois, ou ouvre le tapis de dés (D).' })]));
+      fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Jets et discussion. /r 1d20+3 pour lancer, /gr en secret, D pour le tapis.' })]));
       if (bas || force) fil.scrollTop = fil.scrollHeight;
       // À qui parler : tous, ou un ami.
       const options = [['tous', 'À tous'], ...(multi?.actif ? multi.joueurs.filter((j) => !j.hote).map((j) => [j.id, `→ ${j.nom}`]) : [])];
@@ -323,10 +323,10 @@ const TablePanneau = (() => {
               if (c) for (let k = 0; k < Math.max(1, Math.min(9, Math.round(Number(nb.value) || 1))); k++) T.agir({ type: 'pion_poser', monstre: monstreChoisi, x: c.x, y: c.y, visible: visAjout });
             }, { titre: 'Sa fiche du jeu (PV, CA, attaques) ; il compte dans l\'initiative à la main' })));
       }
-      out.push(el('p', { className: 'table-note', textContent: 'Une image (PNG, JPEG, WebP) déposée sur le plateau devient un pion : un portrait, un PNJ, un objet.' }));
+      out.push(el('p', { className: 'table-note', textContent: 'Dépose une image sur le plateau pour en faire un pion.' }));
       // Saga 1.38 : les joueurs créent leur héros depuis leur écran ; le MJ peut aussi en préparer un.
       out.push(btn('person-add', 'Préparer un héros', () => T.preparerHeros?.(), { titre: 'Un pré-tiré ou un nouveau personnage, que tu donneras ensuite à un joueur (onglet Joueurs)' }));
-      out.push(el('p', { className: 'table-note', textContent: 'Clique un pion puis une case pour le déplacer. Clic droit : qui le voit, ses marques. En bas à gauche : ses PV (+ et −).' }));
+      out.push(el('p', { className: 'table-note', textContent: 'Clic : déplacer. Clic droit : visibilité et marques.' }));
       return out;
     }
 
@@ -405,7 +405,7 @@ const TablePanneau = (() => {
           glisser(ligne, x.id, (de) => T.ordreCombat(de, k));
           o.push(ligne);
         });
-        o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour changer l\'ordre. Ça compte pour ceux qui n\'ont pas encore joué ce tour (en gris : déjà joué).' }));
+        o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour changer l\'ordre (en gris : a déjà joué).' }));
         return o;
       }
       const ini = partie.table.initiative || { liste: [], actif: '', tour: 1 };
@@ -431,7 +431,7 @@ const TablePanneau = (() => {
         glisser(ligne, x.id, (de) => T.agir({ type: 'init_placer', id: de, index: k }));
         o.push(ligne);
       });
-      if (!ini.liste.length) o.push(el('p', { className: 'table-note', textContent: 'Liste vide : « Jeter pour tous », ou ajoute un pion ou une ligne libre (un piège, un renfort, l\'action du repaire).' }));
+      if (!ini.liste.length) o.push(el('p', { className: 'table-note', textContent: 'Liste vide : « Jeter pour tous » ou ajoute une ligne.' }));
       // Ajouter : un pion de la carte qui n'y est pas, ou une ligne libre.
       const dans = new Set(ini.liste.map((x) => x.pion).filter(Boolean));
       const libres = TableEtat.pionsSur(partie.table, carte.id).filter((p) => !p.vaincu && !dans.has(p.id));
@@ -446,7 +446,7 @@ const TablePanneau = (() => {
           const r = T.agir({ type: 'init_ajouter', ...(p ? { pion: p.id, nom: T.nomPion(p) } : { nom: nomL.value }), init: Number(val.value) || 0 });
           if (r.ok) nomL.value = '';
         }, { titre: 'Ajouter à sa place dans l\'ordre' })));
-      o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour la placer. Les joueurs voient cet ordre en haut de leur écran, sans les chiffres ; un pion caché n\'y paraît pas chez eux.' }));
+      o.push(el('p', { className: 'table-note', textContent: 'Glisse une ligne pour la placer.' }));
       return o;
     }
     function voletScene(jeu, partie, carte) {
@@ -459,7 +459,7 @@ const TablePanneau = (() => {
         const o = [];
         const b = TableEtat.brouillard(partie.table, carte);
         o.push(el('label', { className: 'table-ligne' }, el('span', { textContent: 'Brouillard' }), select(b ? 'oui' : 'non', [['oui', 'Oui, sur cette carte'], ['non', 'Non, tout se voit']], (v) => T.agir({ type: 'brouillard', valeur: v === 'oui' }))));
-        if (!ps.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de pièce sur cette carte : dans Tafl, une zone cochée « pièce » se révèle d\'un clic ici.' }));
+        if (!ps.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de pièce sur cette carte.' }));
         for (const z of ps) {
           const v = TableEtat.visibilitePiece(partie.table, carte, z);
           o.push(el('div', { className: 'table-ligne piece' },
@@ -481,7 +481,7 @@ const TablePanneau = (() => {
           el('span', { className: 'table-nom', textContent: c.nom || c.id }),
           c.id === carte.id ? el('small', { textContent: 'ici' }) : btn('arrow-right', 'Y aller', () => { if (!T.allerCarte(c.id)) T.message('Pas pendant un combat ou une scène.'); }, { titre: 'Le groupe et ses pions arrivent sur cette carte (au départ s\'il y est, sinon au milieu).' }));
         return [
-          ...(scenes.length ? [el('div', { className: 'table-sous-titre', textContent: 'Scènes (une image)' }), ...scenes.map(ligne)] : [el('p', { className: 'table-note', textContent: 'Une scène, c\'est une image (une battlemap, un lieu) avec une grille dessus : Tafl › Carte › Nouvelle scène.' })]),
+          ...(scenes.length ? [el('div', { className: 'table-sous-titre', textContent: 'Scènes (une image)' }), ...scenes.map(ligne)] : [el('p', { className: 'table-note', textContent: 'Aucune scène (Tafl › Carte › Nouvelle scène).' })]),
           el('div', { className: 'table-sous-titre', textContent: 'Cartes' }), ...autres.map(ligne),
         ];
       }));
@@ -491,9 +491,9 @@ const TablePanneau = (() => {
         return [
           el('label', { className: 'table-ligne' }, el('span', { textContent: 'Vision' }), select(ec.vision, [['', 'Non : le brouillard des pièces'], ['jour', 'Dynamique, en plein jour'], ['sombre', 'Dynamique, dans le noir']], (v) => T.agir({ type: 'vision', valeur: v }))),
           el('p', { className: 'table-note', textContent: ec.vision === 'sombre'
-            ? 'Les héros ne voient que ce qui est éclairé (tuiles et événements qui éclairent, lumière des pions : onglet Pions) ou à portée de leur vision dans le noir. Les murs arrêtent la vue.'
+            ? 'Seul ce qui est éclairé se voit (lumières : onglet Pions).'
             : ec.vision === 'jour' ? 'Les héros voient tout ce qui est en vue, jusqu\'à 30 cases. Les murs arrêtent la vue ; l\'eau ou une barrière basse cochées « transparentes » dans Tafl, non.'
-              : 'Dynamique : chaque joueur ne voit que ce que voient ses héros ; ce qui a été vu reste voilé (le décor, sans qui s\'y trouve).' }),
+              : 'Chacun voit ce que voient ses héros.' }),
           ...(ec.vision ? [el('div', { className: 'table-boutons' },
             btn('eye-closed', 'Oublier ce qui a été vu', () => T.agir({ type: 'vision_oublier' }), { titre: 'Le décor déjà vu redevient noir' }),
             btn('lightbulb', 'Révéler au pinceau', () => { T.pinceau = T.pinceau === 'reveler' ? null : 'reveler'; T.redessinerOutils?.(); dessiner(); }, { classe: T.pinceau === 'reveler' ? 'actif' : '', titre: 'Le pinceau marche toujours : une case révélée se voit (B)' }))] : []),
@@ -503,6 +503,8 @@ const TablePanneau = (() => {
       out.push(section('initiative', `${T.combat ? 'Initiative du combat' : 'Initiative à la main'}${!T.combat && partie.table.initiative?.liste?.length ? ` (${partie.table.initiative.liste.length})` : ''}`, () => initiativeManuelle(jeu, partie, carte)));
       out.push(section('musique', 'Musique et sons', () => {
         const o = [el('div', { className: 'table-boutons' }, btn('mute', 'Silence', () => T.musique('aucune')), btn('home', 'Celle de la carte', () => T.musique('')))];
+        // Saga 1.46 : les amis connectés entendent la même musique et les mêmes bruitages (chacun règle son volume).
+        o.push(el('label', { className: 'table-ligne' }, el('span', { textContent: 'Qui entend' }), select(partie.table.audio === 'mj' ? 'mj' : 'tous', [['tous', 'Tous : les amis aussi, chez eux'], ['mj', 'Moi seul (ce PC)']], (v) => T.agir({ type: 'audio', valeur: v }))));
         if (!sons.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));
         for (const x of sons) {
           o.push(el('div', { className: 'table-ligne son' },
@@ -523,7 +525,7 @@ const TablePanneau = (() => {
         return [
           coche(tapis, 'Les jets roulent au milieu du plateau', (v) => { try { localStorage.setItem('saga:des-tapis', v ? '1' : '0'); } catch { /* */ } }),
           coche(anime, 'Animer les dés (sinon : posés tout de suite)', (v) => { try { localStorage.setItem('saga:des-animes', v ? '1' : '0'); } catch { /* */ } }),
-          el('p', { className: 'table-note', textContent: 'Au-delà de 10 dés, le résultat s\'affiche directement. Le tapis s\'ouvre aussi à la main (D) pour composer un jet.' }),
+          el('p', { className: 'table-note', textContent: 'Au-delà de 10 dés, le résultat s\'affiche directement.' }),
         ];
       }));
       return out;
@@ -567,7 +569,7 @@ const TablePanneau = (() => {
       };
       const o = [coche(tous, 'Tous les joueurs (et l\'écran des joueurs)', (v) => { donnerA.pour = v ? 'tous' : new Set(); })];
       if (!tous) for (const n of noms) o.push(coche(donnerA.pour.has(n), n, (v) => { if (v) donnerA.pour.add(n); else donnerA.pour.delete(n); }));
-      if (!tous && !noms.length) o.push(el('p', { className: 'table-note', textContent: 'Personne encore : les amis apparaissent ici quand ils rejoignent (onglet Joueurs). Tu peux le donner à tous.' }));
+      if (!tous && !noms.length) o.push(el('p', { className: 'table-note', textContent: 'Aucun joueur pour l\'instant.' }));
       o.push(coche(donnerA.montrer, 'L\'ouvrir tout de suite sur leur écran', (v) => { donnerA.montrer = v; }));
       const pour = tous ? 'tous' : [...donnerA.pour];
       const ok = btn('send', 'Donner', () => { T.docAgir({ type: 'doc_donner', id: d.id, pour, montrer: donnerA.montrer }); donnerA = null; dessiner(); }, { classe: 'accent' });
@@ -583,7 +585,7 @@ const TablePanneau = (() => {
       out.push(el('div', { className: 'table-boutons' },
         btn('file-media', 'Image…', () => fichierImage((url) => { edition = { id: null, titre: '', texte: '', image: url }; dessiner(); }), { classe: 'accent', titre: 'Une image (une carte, un portrait, une lettre scannée) : PNG, JPEG ou WebP' }),
         btn('note', 'Texte', () => { edition = { id: null, titre: '', texte: '', image: '' }; dessiner(); }, { titre: 'Une lettre, un indice, une légende' })));
-      if (!docs.length) out.push(el('p', { className: 'table-note table-vide', textContent: 'Prépare ici les documents de la séance : ils restent des brouillons tant que tu ne les donnes pas. Un joueur garde ce que tu lui donnes et le rouvre quand il veut (sur son écran ou son téléphone).' }));
+      if (!docs.length) out.push(el('p', { className: 'table-note table-vide', textContent: 'Aucun document. Ils restent privés tant que tu ne les donnes pas.' }));
       for (const d of [...docs].reverse()) {
         const montreIci = montre?.id === d.id;
         out.push(TableDocuments.ligne(d, {
@@ -599,7 +601,6 @@ const TablePanneau = (() => {
         }));
         if (donnerA?.id === d.id) out.push(formDonner(d));
       }
-      if (docs.length) out.push(el('p', { className: 'table-note', textContent: 'Les documents sont gardés avec la partie. Depuis ton téléphone (le compagnon), tu peux aussi prendre une photo et la donner.' }));
       return out;
     }
 
@@ -620,14 +621,13 @@ const TablePanneau = (() => {
             el('span', { className: 'table-nom', textContent: j.nom }),
             select(T.cleRole(j.nom), [['', 'Sans héros'], ...heros.map(([id, nom]) => [id, nom])], (val) => T.donnerRole(j.nom, val))));
         }
-        amis.append(el('p', { className: 'table-note', textContent: 'Un ami sans héros en prend un libre ou crée le sien depuis son écran. Un joueur voit ce que son héros a le droit de voir, le déplace hors combat, lance les jets de sa fiche et joue son tour en combat.' }));
         if (multi.element && multi.element.parentElement !== v) { multi.ouvrirPanneau?.(); v.append(multi.element); }
         v.replaceChildren(...[multi.element, amis, blocCampagne()].filter(Boolean));
         multi.element.hidden = false;
       } else {
         v.replaceChildren(el('div', { className: 'table-vide-joueurs' },
           el('i', { className: 'codicon codicon-organization' }),
-          el('p', { textContent: 'Tes amis rejoignent depuis leur navigateur (PC, tablette, téléphone), sans rien installer. Chacun reçoit seulement ce que son héros a le droit de voir.' }),
+          el('p', { textContent: 'Tes amis jouent depuis leur navigateur, sans rien installer.' }),
           btn('broadcast', 'Ouvrir la partie aux joueurs', () => document.dispatchEvent(new CustomEvent('saga:multijoueur')), { classe: 'accent' })), ...[blocCampagne()].filter(Boolean));
       }
     }

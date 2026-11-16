@@ -151,8 +151,8 @@ const TableCampagne = (() => {
       const out = el('div', { className: 'table-campagne' });
       out.append(el('div', { className: 'table-sous-titre', textContent: 'Campagne' }));
       out.append(el('p', { className: 'table-note', textContent: relais
-        ? 'Par le relais, le lien d\'invitation et son code restent les mêmes à chaque séance. Les téléphones reliés le restent aussi.'
-        : 'Les téléphones reliés le restent d\'une séance à l\'autre. Par le relais, le lien d\'invitation ne change plus, et les joueurs relisent leur fiche et leurs documents sur leur téléphone entre deux séances.' }));
+        ? 'Même lien et même code à chaque séance.'
+        : 'Les joueurs gardent leur fiche et leurs documents entre deux séances.' }));
       // Les téléphones de la campagne (même ceux dont le joueur n'est pas là ce soir).
       const tels = x.telephones || [];
       if (tels.length) {

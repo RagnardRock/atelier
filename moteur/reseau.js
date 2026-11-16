@@ -445,8 +445,9 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
       jeuPublic = jeuPublic || await lireJeuPublic(mode);
       return fin(res, 200, jeuPublic);
     }
-    // Les sons (le monde partagé : chacun entend son jeu ; à la table, la musique reste chez le MJ).
-    if (req.method === 'GET' && p === '/son' && mode === 'monde') {
+    // Les sons (le monde partagé : chacun entend son jeu ; Saga 1.46 : à la table, la musique et les bruitages
+    // que le MJ fait jouer, chez chacun). Seulement le dossier sons/ du jeu (lireSon le vérifie).
+    if (req.method === 'GET' && p === '/son') {
       try {
         const data = await lireSon(url.searchParams.get('chemin') || '');
         res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'max-age=3600' });

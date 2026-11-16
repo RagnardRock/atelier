@@ -88,9 +88,47 @@ const TableClient = (() => {
       montrerMacros();
       montrerDocuments();
       habit?.maj();
+      ecouter(v.audio);
       if (v.avis && v.avis.n !== dernierAvis) { if (dernierAvis >= 0) notify?.(v.avis.texte, 'warning', 5000); dernierAvis = v.avis.n; }
       else if (!v.avis && dernierAvis < 0) dernierAvis = 0;
     });
+
+    // --- Saga 1.46 : la musique et les bruitages du MJ, chez l'ami (par le réseau ; l'écran des joueurs du PC du MJ
+    // ne rejoue rien : le MJ l'entend déjà). Le volume (et couper le son) reste à chacun.
+    const lireVol = () => { try { const x = localStorage.getItem('saga:table-volume'); return x == null ? 70 : Math.max(0, Math.min(100, Number(x) || 0)); } catch { return 70; } };
+    let volume = lireVol(), audioT = null, dernierSon = -1, morceau = null;
+    function ecouter(a) {
+      if (!reseau || typeof Son === 'undefined') return;
+      if (!audioT) {
+        audioT = Son.creer({ charger: (c) => window.saga.lireSon(c) });
+        audioT.volumes({ musique: volume, sons: volume });
+        const reveil = () => audioT.reprendre();
+        document.addEventListener('pointerdown', reveil);
+        document.addEventListener('keydown', reveil);
+      }
+      const m = a?.musique && a.musique !== 'aucune' ? a.musique : null;
+      if (m !== morceau) { morceau = m; audioT.musique(m); }
+      for (const x of a?.sons || []) {
+        if (dernierSon < 0) continue; // à l'arrivée : pas de bruitages d'avant
+        if (x.n > dernierSon) audioT.fichier(x.chemin);
+      }
+      dernierSon = Math.max(dernierSon, ...(a?.sons || []).map((x) => x.n), 0);
+    }
+    function reglerVolume(v) {
+      volume = Math.max(0, Math.min(100, Math.round(v)));
+      try { localStorage.setItem('saga:table-volume', String(volume)); } catch { /* stockage refusé */ }
+      audioT?.volumes({ musique: volume, sons: volume });
+    }
+    function boutonSon() {
+      const b = el('button', { className: 'ti-bouton', type: 'button' });
+      const glisse = el('input', { className: 'ti-volume', type: 'range', min: '0', max: '100', value: String(volume), title: 'Le volume de la musique et des bruitages du MJ' });
+      const dessinerB = () => { b.replaceChildren(el('i', { className: `codicon codicon-${volume ? 'unmute' : 'mute'}` })); b.title = volume ? 'Couper le son du MJ' : 'Remettre le son du MJ'; glisse.value = String(volume); };
+      let avant = volume || 70;
+      b.onclick = () => { if (volume) { avant = volume; reglerVolume(0); } else reglerVolume(avant); dessinerB(); };
+      glisse.oninput = () => { reglerVolume(Number(glisse.value)); dessinerB(); };
+      dessinerB();
+      return el('span', { className: 'ti-son' }, b, glisse);
+    }
 
     // --- Saga 1.32 : mes macros (un clic : le jet ; + : en garder une ; clic droit : l'oublier) ---
     let dernierAvis = -1, signatureM = '', ajoutMacro = false;
@@ -255,7 +293,7 @@ const TableClient = (() => {
     }
     function listeDocuments() {
       const l = [...(vue?.documents || [])].sort((a, b) => b.t - a.t);
-      if (!l.length) return [el('p', { className: 'table-note table-vide', textContent: 'Les documents que le MJ te donne (images, lettres, cartes, indices) arrivent ici. Tu les gardes et les rouvres quand tu veux.' })];
+      if (!l.length) return [el('p', { className: 'table-note table-vide', textContent: 'Les documents du MJ arriveront ici.' })];
       return l.map((d) => TableDocuments.ligne(d, { image: imageDe(d), sous: TablePanneau.heure(d.t), nouveau: nouveauxDocs.has(d.id), ouvrir: () => ouvrirDocument(d) }));
     }
 
@@ -298,7 +336,7 @@ const TableClient = (() => {
       const titre = el('b'), lieu = el('small'), etat = el('span', { className: 'ti-etat ti-etat-vide' }), qui = el('span', { className: 'ti-qui' });
       const tel = el('button', { className: 'ti-bouton', type: 'button', title: 'Un QR code à scanner : ton téléphone lance tes dés, tes macros et montre ta fiche' }, el('i', { className: 'codicon codicon-device-mobile' }), el('span', { textContent: 'Compagnon' }));
       tel.onclick = () => multi?.compagnon();
-      const haut = el('header', { className: 'ti-haut ti-verre' }, el('div', { className: 'ti-titre' }, el('span', { className: 'ti-rune', textContent: 'ᛃ' }), titre, lieu), etat, el('div', { className: 'ti-actions' }, qui, tel));
+      const haut = el('header', { className: 'ti-haut ti-verre' }, el('div', { className: 'ti-titre' }, el('span', { className: 'ti-rune', textContent: 'ᛃ' }), titre, lieu), etat, el('div', { className: 'ti-actions' }, qui, boutonSon(), tel));
       // Le panneau : la discussion et les jets, le journal, ma fiche, les joueurs.
       const ONGLETS = [['chat', 'Chat', 'comment-discussion'], ['journal', 'Journal', 'book'], ['fiche', 'Fiche', 'person'], ['documents', 'Docs', 'files'], ['joueurs', 'Joueurs', 'organization']];
       const colonne = el('aside', { className: 'table-colonne' });
@@ -333,7 +371,7 @@ const TableClient = (() => {
       volets.chat.append(fil, el('div', { className: 'table-ecrire-zone' }, pourQui, form));
       volets.journal.append(journalEl);
       volets.fiche.append(fiche);
-      const sansFiche = el('p', { className: 'table-note table-vide', textContent: 'Pas encore de héros : prends-en un libre ou crée le tien (au milieu de l\'écran).' });
+      const sansFiche = el('p', { className: 'table-note table-vide', textContent: 'Pas encore de héros : choisis-en un au milieu de l\'écran.' });
       volets.fiche.append(sansFiche);
       volets.joueurs.append(multi.element);
       multi.ouvrirPanneau();
@@ -383,7 +421,7 @@ const TableClient = (() => {
           ...chat.map((x) => ({ t: x.t || 0, el: () => el('div', { className: `table-dit${x.pour !== 'tous' ? ' prive' : ''}` }, el('b', { textContent: x.nom }), el('span', { textContent: ` ${x.texte}` }), x.pour !== 'tous' ? el('small', { textContent: ' (privé)' }) : null) }))]
           .concat(dits.map((e) => ({ t: e.heure || 0, el: () => TablePanneau.ligneRecit(e) })))
           .sort((a, b) => a.t - b.t);
-        fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Les jets de dés et la discussion s\'affichent ici. Écris /r 1d20+@dex pour lancer, /gr pour un jet que seuls toi et le MJ voyez, ou ouvre le tapis de dés (D).' })]));
+        fil.replaceChildren(...(items.length ? items.map((x) => x.el()) : [el('p', { className: 'table-note table-vide', textContent: 'Jets et discussion. /r 1d20+@dex pour lancer, /gr en secret, D pour le tapis.' })]));
         if (auBas) fil.scrollTop = fil.scrollHeight;
         const options = [['tous', 'À tous'], ...multi.joueurs.filter((j) => j.id !== multi.moi?.id).map((j) => [j.id, `→ ${j.nom}`])];
         if (!pourQui.matches(':focus')) {
