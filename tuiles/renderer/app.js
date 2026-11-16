@@ -65,7 +65,8 @@ const App = (() => {
     box.innerHTML = '';
     for (const t of TOOLS) {
       const ok = t.modes.includes(api.mode);
-      const b = el('button', { className: `tool${api.tool === t.id ? ' active' : ''}`, title: `${t.nom} (${t.key})${ok ? '' : ` : dans l\'espace ${t.modes.includes('map') ? 'Cartes' : 'Tuiles'} seulement`}`, disabled: !ok }, [icon(t.icone)]);
+      // Tafl 1.42 : un outil d'un autre espace est caché, pas grisé.
+      const b = el('button', { className: `tool${api.tool === t.id ? ' active' : ''}`, title: `${t.nom} (${t.key})`, hidden: !ok }, [icon(t.icone)]);
       b.onclick = () => setTool(t.id);
       box.append(b);
     }
@@ -1623,24 +1624,46 @@ const App = (() => {
   }
 
   // game : true pour un dossier de jeu (plusieurs cartes, lu par le moteur), false pour un simple .tafl.
+  // Tafl 1.42 : le modèle d'abord ; un jeu vide choisit son pack de règles tout de suite.
+  const MODELES_JEU = [
+    ['vide', 'Un jeu vide', 'Les tuiles d\'exemple et un petit village, si la case est cochée.'],
+    ['jdr', 'La crypte de Brumeval (JDR)', 'D&D 5e : 2 cartes, 3 rencontres, des pré-tirés.'],
+    ['arene', 'L\'arène de duel (Pokémon)', 'À deux : chacun choisit 6 créatures, puis le duel.'],
+    ['domaine', 'Le petit domaine (gestion)', 'Bâtir, récolter, des habitants, des intérieurs.'],
+    ['donjon', 'Le petit donjon (temps réel)', 'Façon Zelda : une forêt, des slimes, une crypte et son gardien.'],
+    ['roguelite', 'Le petit roguelite (temps réel)', 'Un camp, des salles tirées au hasard, des perks.'],
+    ['survivor', 'Le petit survivor (temps réel)', 'Une arène, des hordes, un choix à chaque niveau.'],
+  ];
   async function newDocument(game = false) {
     if (!(await confirmDiscard())) return;
+    const resume = el('p', { className: 'modal-info' });
     const v = await Dialogs.form({
       title: game ? 'Nouveau jeu' : 'Nouveau lot de tuiles',
       okLabel: 'Créer',
       width: 470,
       fields: [
         { key: 'name', label: game ? 'Titre du jeu' : 'Nom', type: 'text', value: game ? 'Mon jeu' : 'mon-jeu' },
-        { key: 'tileSize', label: 'Taille des tuiles', type: 'select', value: String(api.config.tileSize), choices: [['8', '8 × 8 (Game Boy)'], ['16', '16 × 16 (Pokémon GBA et DS, le plus courant)'], ['24', '24 × 24'], ['32', '32 × 32 (RPG Maker)'], ['48', '48 × 48'], ['64', '64 × 64']] },
+        ...(game ? [
+          { key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: MODELES_JEU.map(([k, nom]) => [k, nom]) },
+          { type: 'element', element: resume },
+          { key: 'pack', label: 'Pack de règles', type: 'select', value: 'pokemon', choices: Donnees.REGLES.map(([k]) => [k, Donnees.nomPack(k)]) },
+        ] : []),
+        { key: 'tileSize', label: 'Taille des tuiles', type: 'select', value: String(api.config.tileSize), choices: [['8', '8 × 8 (Game Boy)'], ['16', '16 × 16 (GBA, DS)'], ['24', '24 × 24'], ['32', '32 × 32 (RPG Maker)'], ['48', '48 × 48'], ['64', '64 × 64']] },
         { key: 'palette', label: 'Palette', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]) },
         { key: 'mapName', label: 'Première carte', type: 'text', value: game ? 'Bourg' : 'Carte 1', hidden: !game },
         { key: 'mapWidth', label: 'Carte : largeur', type: 'number', value: 20, min: 1, max: 256, unit: 'cases' },
         { key: 'mapHeight', label: 'Carte : hauteur', type: 'number', value: 15, min: 1, max: 256, unit: 'cases' },
-        { key: 'samples', label: 'Commencer avec les tuiles d\'exemple (sols, eau animée, bords, murs, objets, une maison et une boutique) et un petit village', type: 'checkbox', value: true },
-        // Tafl 0.32 : un jeu peut partir de l'aventure d'exemple du pack JDR (exemple-jdr.js).
-        ...(game ? [{ key: 'modele', label: 'Partir de', type: 'select', value: 'vide', choices: [['vide', 'Un jeu vide (les tuiles d\'exemple si coché ci-dessus)'], ['jdr', 'L\'aventure JDR d\'exemple : la crypte de Brumeval (D&D 5e, 2 cartes, 3 rencontres)'], ['arene', 'L\'arène de duel (Pokémon, à deux) : chacun choisit 6 créatures puis vous vous affrontez'], ['domaine', 'Le petit domaine (module gestion) : bâtir, récolter, des habitants, des intérieurs'], ['donjon', 'Le petit donjon (temps réel, façon Zelda) : une forêt, des slimes, des chauves-souris, une crypte et son gardien'], ['roguelite', 'Le petit roguelite (temps réel + module roguelite) : un camp, des salles tirées au hasard, des perks et des améliorations'], ['survivor', 'Le petit survivor (temps réel + module survivor) : une arène, des hordes, des armes qui frappent toutes seules, un choix à chaque niveau']] }] : []),
-        ...(game ? [{ type: 'info', text: 'Un jeu est un dossier : jeu.json, tuiles.tafl et une carte par fichier dans cartes/. Tafl te demande où le créer au premier enregistrement (Ctrl+S). Le futur moteur lira ce dossier.' }] : []),
+        { key: 'samples', label: 'Les tuiles d\'exemple et un petit village', type: 'checkbox', value: true },
+        ...(game ? [{ type: 'info', text: 'Tafl demande où créer le dossier du jeu au premier Ctrl+S.' }] : []),
       ],
+      // Un modèle apporte son pack, ses cartes et ses tuiles : le pack, la carte et les exemples ne
+      // se choisissent que pour un jeu vide.
+      onInput: (val, f) => {
+        if (!game) return;
+        const vide = val.modele === 'vide';
+        resume.textContent = MODELES_JEU.find(([k]) => k === val.modele)?.[2] || '';
+        for (const k of ['pack', 'mapName', 'mapWidth', 'mapHeight', 'samples']) f.inputs[k].row.hidden = !vide;
+      },
     });
     if (!v) return;
     const tileSize = Number(v.tileSize);
@@ -1652,6 +1675,13 @@ const App = (() => {
     else if (game && v.modele === 'roguelite') ExempleRoguelite.remplir(doc);
     else if (game && v.modele === 'survivor') ExempleSurvivor.remplir(doc);
     else if (v.samples) Samples.fill(doc);
+    if (game && v.modele === 'vide' && v.pack && v.pack !== doc.data.reglages.regles) {
+      // Comme un clic sur un pack dans Données › Réglages (taille du groupe, monnaie du pack).
+      const r = doc.data.reglages;
+      r.regles = v.pack;
+      if (v.pack !== 'pokemon' && r.equipe_max === 6) r.equipe_max = 4;
+      r.monnaie = Donnees.MONNAIES_PACK[v.pack] || r.monnaie;
+    }
     if (game) doc.game = { folder: null, fichiers: [] };
     api.doc = null; // déjà confirmé plus haut
     await setDocument(doc);
@@ -2013,27 +2043,29 @@ const App = (() => {
       title: 'Réglages de Tafl',
       okLabel: 'Enregistrer',
       width: 480,
+      onglets: ['Apparence', 'Édition', 'Panneaux', 'Loki'],
       fields: [
-        { key: 'accentColor', label: 'Couleur d\'accent', type: 'color', value: api.config.accentColor },
-        { type: 'element', element: swatches },
-        { key: 'glass', label: 'Verre dépoli (glassmorphism)', type: 'checkbox', value: api.config.glass },
-        { key: 'windowBlur', label: blurOk ? 'Flou de Windows 11 derrière la fenêtre' : 'Flou de Windows 11 (non disponible ici)', type: 'checkbox', value: api.config.windowBlur },
-        { key: 'tileSize', label: 'Taille des tuiles par défaut', type: 'select', value: String(api.config.tileSize), choices: [['8', '8 × 8'], ['16', '16 × 16'], ['24', '24 × 24'], ['32', '32 × 32'], ['48', '48 × 48'], ['64', '64 × 64']] },
-        { key: 'palette', label: 'Palette par défaut', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]) },
-        { key: 'pixelGrid', label: 'Grille des pixels (Tuiles)', type: 'checkbox', value: api.config.pixelGrid },
-        { key: 'tileGrid', label: 'Grille des cases (Cartes)', type: 'checkbox', value: api.config.tileGrid },
-        { key: 'panelZoom', label: 'Taille des panneaux de droite (texte, boutons)', type: 'range', value: api.config.panelZoom ?? 100, min: Disposition.ZOOM.min, max: Disposition.ZOOM.max, step: 10, unit: '%' },
-        { key: 'vignette', label: 'Taille des vignettes (tuiles, tampons)', type: 'range', value: api.config.vignette ?? 44, min: Disposition.VIGNETTE.min, max: Disposition.VIGNETTE.max, step: 4, unit: 'px' },
-        { key: 'colonnes', label: 'Colonnes du panneau de droite', type: 'select', value: api.config.colonnes || 'auto', choices: [['auto', 'Automatique : deux quand il est large'], ['1', 'Toujours une'], ['2', 'Toujours deux']] },
-        { type: 'info', text: 'Ctrl+molette sur le panneau : sa taille ; clic sur un titre : le replier.' },
-        { key: 'historySteps', label: 'Étapes d\'annulation gardées', type: 'number', value: api.config.historySteps, min: 5, max: 500 },
-        { key: 'claudeModel', label: 'Modèle de Loki (propulsé par Claude)', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']] },
-        { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude' },
-        { key: 'claudeCommandes', label: 'Loki peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(api.config.claudeCommandes) },
+        { key: 'accentColor', label: 'Couleur d\'accent', type: 'color', value: api.config.accentColor, onglet: 'Apparence' },
+        { type: 'element', element: swatches, onglet: 'Apparence' },
+        { key: 'glass', label: 'Verre dépoli (glassmorphism)', type: 'checkbox', value: api.config.glass, onglet: 'Apparence' },
+        // Le flou de Windows 11 ne se propose que là où il marche.
+        { key: 'windowBlur', label: 'Flou de Windows 11 derrière la fenêtre', type: 'checkbox', value: api.config.windowBlur, hidden: !blurOk, onglet: 'Apparence' },
+        { key: 'tileSize', label: 'Tuiles d\'un nouveau jeu', type: 'select', value: String(api.config.tileSize), choices: [['8', '8 × 8'], ['16', '16 × 16'], ['24', '24 × 24'], ['32', '32 × 32'], ['48', '48 × 48'], ['64', '64 × 64']], onglet: 'Édition' },
+        { key: 'palette', label: 'Palette d\'un nouveau jeu', type: 'select', value: api.config.palette, choices: PALETTES.map((p) => [p.id, p.nom]), onglet: 'Édition' },
+        { key: 'pixelGrid', label: 'Grille des pixels (Tuiles)', type: 'checkbox', value: api.config.pixelGrid, onglet: 'Édition' },
+        { key: 'tileGrid', label: 'Grille des cases (Cartes)', type: 'checkbox', value: api.config.tileGrid, onglet: 'Édition' },
+        { key: 'panelZoom', label: 'Taille des panneaux de droite (texte, boutons)', type: 'range', value: api.config.panelZoom ?? 100, min: Disposition.ZOOM.min, max: Disposition.ZOOM.max, step: 10, unit: '%', onglet: 'Panneaux' },
+        { key: 'vignette', label: 'Taille des vignettes (tuiles, tampons)', type: 'range', value: api.config.vignette ?? 44, min: Disposition.VIGNETTE.min, max: Disposition.VIGNETTE.max, step: 4, unit: 'px', onglet: 'Panneaux' },
+        { key: 'colonnes', label: 'Colonnes du panneau de droite', type: 'select', value: api.config.colonnes || 'auto', choices: [['auto', 'Automatique : deux quand il est large'], ['1', 'Toujours une'], ['2', 'Toujours deux']], onglet: 'Panneaux' },
+        { type: 'info', text: 'Ctrl+molette sur le panneau : sa taille ; clic sur un titre : le replier.', onglet: 'Panneaux' },
+        { key: 'historySteps', label: 'Étapes d\'annulation gardées', type: 'number', value: api.config.historySteps, min: 5, max: 500, onglet: 'Édition' },
+        { key: 'claudeModel', label: 'Modèle de Loki (propulsé par Claude)', type: 'select', value: api.config.claudeModel || '', choices: [['', 'Par défaut (celui de Claude Code)'], ['opus', 'Opus'], ['sonnet', 'Sonnet'], ['haiku', 'Haiku']], onglet: 'Loki' },
+        { key: 'claudeCommand', label: 'Commande Claude Code', type: 'text', value: api.config.claudeCommand || 'claude', onglet: 'Loki' },
+        { key: 'claudeCommandes', label: 'Loki peut lancer des commandes (PowerShell, Python…) : plus lent, rarement utile', type: 'checkbox', value: Boolean(api.config.claudeCommandes), onglet: 'Loki' },
         ...(familles.length ? [
-          { type: 'info', text: 'Loki fait sans me demander la permission, pour de bon :' },
-          ...familles.map((f) => ({ key: `sansDemander-${f.id}`, label: f.libelle, type: 'checkbox', value: f.toujours })),
-          { type: 'info', text: 'Lire et regarder ne demande jamais. Ce qui est permis seulement pour la conversation en cours se voit et se retire avec le bouclier, en haut du panneau Loki.' },
+          { type: 'info', text: 'Loki fait sans me demander la permission, pour de bon :', onglet: 'Loki' },
+          ...familles.map((f) => ({ key: `sansDemander-${f.id}`, label: f.libelle, type: 'checkbox', value: f.toujours, onglet: 'Loki' })),
+          { type: 'info', text: 'Lire et regarder ne demande jamais. Ce qui est permis seulement pour la conversation en cours se voit et se retire avec le bouclier, en haut du panneau Loki.', onglet: 'Loki' },
         ] : []),
         { type: 'info', text: `Tafl ${version}. Réglages enregistrés dans ${api.configPath}.` },
       ],

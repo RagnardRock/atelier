@@ -63,7 +63,7 @@ const DEFAULT_CONFIG = {
   accentColor: '#7bd88f',
   glass: true,
   windowBlur: false,
-  tileSize: 16,
+  tileSize: 32,
   palette: 'nature',
   pixelGrid: true,
   tileGrid: true,

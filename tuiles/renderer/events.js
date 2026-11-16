@@ -2297,7 +2297,7 @@ const Events = (() => {
     function dessiner() {
       bloc.replaceChildren();
       const a = get();
-      bloc.append(champ('Tampon', selectEl(choix(a.tampon || '', doc.stamps.length ? 'Aucun' : 'Aucun (crée-en avec l\'outil Tampon)'), a.tampon || '', (v) => maj(v ? { tampon: v } : { tampon: undefined, tampons: undefined, animer: undefined })),
+      bloc.append(champ('Tampon', selectEl(choix(a.tampon || '', doc.stamps.length ? 'Aucun' : 'Aucun tampon'), a.tampon || '', (v) => maj(v ? { tampon: v } : { tampon: undefined, tampons: undefined, animer: undefined })),
         'Un objet de plusieurs tuiles : son coin haut gauche est sur la case de l\'événement. Passe avant la tuile et le personnage'));
       if (!a.tampon) return;
       const parDir = el('input', { type: 'checkbox', checked: Boolean(a.tampons) });

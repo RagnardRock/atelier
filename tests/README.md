@@ -76,6 +76,9 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/19-saga-scripts-table.js` : Saga 1.47 : le modèle « Réactions à la table » de Tafl dans un jeu ; « !soin » dans le
   chat du MJ rend des PV et le chat le dit ; à son tour, un héros à moins de la moitié de ses PV reçoit la marque rouge.
 
+- `essais/22-tafl-ergonomie.js` : Tafl 1.42 : un nouveau jeu vide choisit son pack (un modèle apporte le sien), les outils
+  d'un autre espace cachés, les Réglages de Tafl en onglets, les événements semblables groupés en « × N ».
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```
