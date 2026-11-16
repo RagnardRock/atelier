@@ -32,6 +32,8 @@
       for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
       return out;
     },
+    // Saga 1.48 : la liste des sons (le panneau du MJ, ses listes de lecture).
+    listeSons: async () => Object.keys(window.SAGA_SONS || {}).sort(),
     onJeuExterne: rien,
     demarrage: async () => ({ dossier: J.textes.dossier, depart: null }),
     pleinEcran: async (oui) => {

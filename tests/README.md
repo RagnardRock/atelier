@@ -75,6 +75,10 @@ la page de l'essai (rubrique **Artifacts**).
 
 - `essais/19-saga-scripts-table.js` : Saga 1.47 : le modèle « Réactions à la table » de Tafl dans un jeu ; « !soin » dans le
   chat du MJ rend des PV et le chat le dit ; à son tour, un héros à moins de la moitié de ses PV reçoit la marque rouge.
+- `essais/20-saga-auras-listes.js` : Saga 1.48 : une aura (vue de tous, puis du MJ seul) ; une liste de deux morceaux
+  qui s'enchaînent en boucle, arrêtée par une autre musique.
+- `essais/21-saga-cartes-separees.js` : Saga 1.48 : un héros envoyé sur une autre carte (son joueur la voit), « Y aller
+  seul », puis le groupe réuni.
 
 ## Les lancer sur un PC (pour un développeur)
 

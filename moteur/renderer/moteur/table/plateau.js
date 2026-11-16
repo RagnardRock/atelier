@@ -276,6 +276,17 @@ const Plateau = (() => {
         }
       };
       for (const g of vue.gabarits || []) gabarit(g, false);
+      // Saga 1.48 : les auras (un cercle qui suit le pion ; celle que seul le MJ voit : en pointillés).
+      for (const p of vue.pions) {
+        if (!p.aura) continue;
+        const coul = TableOutils.couleur(p.aura.couleur);
+        const r = (p.aura.rayon + 0.5) * s;
+        ctx.beginPath(); ctx.arc(cx(p.x) + s / 2, cy(p.y) + s / 2, r, 0, Math.PI * 2);
+        ctx.globalAlpha = 0.14; ctx.fillStyle = coul; ctx.fill();
+        ctx.globalAlpha = 0.75; ctx.strokeStyle = coul; ctx.lineWidth = 2;
+        ctx.setLineDash(p.aura.visible === 'mj' ? [6, 4] : []); ctx.stroke(); ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
       if (o.outil?.gabarit) gabarit(o.outil.gabarit, true);
       // Saga 1.43 : les dessins au feutre et les notes (celles du calque du MJ : en pointillés, chez lui seul).
       const trace = (d, apercu) => {
