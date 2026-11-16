@@ -84,6 +84,9 @@ module.exports = [
         // Le téléphone ouvre l'adresse du QR.
         const ctel = await ctx.navigateur.newContext({ ...devices['Pixel 7'] });
         tel = await ctel.newPage();
+        // Comme derrière un relais d'avant Saga 1.35.1 : l'en-tête X-Compagnon n'arrive pas à la partie (le
+        // téléphone se déliait au premier lancer) ; le jeton passe par l'adresse.
+        await ctel.route('**/compagnon/**', (r) => { const e = { ...r.request().headers() }; delete e['x-compagnon']; r.continue({ headers: e }); });
         ctx.pages.push(tel);
         const erreursTel = suivreErreurs(tel);
         const manques = [];

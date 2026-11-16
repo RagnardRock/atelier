@@ -390,6 +390,20 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.36 : après le premier essai de la table en verre
+
+- **Compagnon** : il ne se délie plus au premier lancer derrière le relais (le jeton passe aussi dans l'adresse ;
+  le relais transmet aussi l'en-tête X-Compagnon). Secouer marche sur plus de téléphones, et la page dit quand le
+  navigateur bloque les capteurs de mouvement.
+- **Rencontres** : l'onglet Scène liste celles qui sont posées sur la carte ; on coche celles qui commencent et
+  « Lancer le combat » les fait combattre ensemble. « Lancer sans poser » démarre une rencontre pas encore posée.
+- **Tapis de dés** : il se déplace par son haut, change de taille par son coin (retenu) ; double-clic : au centre.
+- **Échap** en combat à la table : s'il n'y a rien à annuler, il ouvre le menu du jeu. La roue crantée ouvre le
+  menu du jeu quand un jeu est ouvert (les options de Saga sinon).
+- Ouvrir la partie aux joueurs bascule sur l'onglet Joueurs.
+- **L'écran des joueurs** du MJ (la télé) a la barre du haut, l'initiative en pastilles et le tapis de dés.
+- Les menus, la fiche du MJ (sur deux colonnes), les dialogues et les fenêtres prennent le même verre à la table.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

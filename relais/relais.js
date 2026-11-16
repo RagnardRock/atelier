@@ -172,7 +172,7 @@ async function ami(req, res, url) {
     if (salle.requetes.delete(rid)) envoyer(salle, 'annuler', { rid });
   });
   const entetes = {};
-  for (const k of ['content-type', 'x-jeton', 'accept', 'last-event-id']) if (req.headers[k]) entetes[k] = String(req.headers[k]).slice(0, 512);
+  for (const k of ['content-type', 'x-jeton', 'x-compagnon', 'accept', 'last-event-id']) if (req.headers[k]) entetes[k] = String(req.headers[k]).slice(0, 512);
   envoyer(salle, 'requete', { rid, methode: req.method, chemin, entetes, ip: ipDe(req), corps: corps.length ? corps.toString('base64') : '' });
 }
 

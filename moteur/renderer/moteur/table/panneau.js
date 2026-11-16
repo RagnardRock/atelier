@@ -241,12 +241,36 @@ const TablePanneau = (() => {
     }
 
     // --- Scène ---
+    // Les rencontres : celles qui sont posées sur la carte (on coche celles qui combattent ensemble), et la
+    // liste du jeu pour en poser une autre.
+    const coches = new Set();
+    let rencontreChoisie = '';
     function rencontres(jeu) {
       const groupes = jeu.donnees.groupes?.groupes || [];
       if (!groupes.length) return [el('p', { className: 'table-note', textContent: 'Aucune rencontre dans ce jeu (Tafl › Données › Rencontres).' })];
-      let choisi = groupes[0].id;
-      const s = select(choisi, groupes.map((g) => [g.id, g.nom || g.id]), (v) => { choisi = v; });
+      if (!groupes.some((g) => g.id === rencontreChoisie)) rencontreChoisie = groupes[0].id;
+      let choisi = rencontreChoisie;
+      const s = select(choisi, groupes.map((g) => [g.id, g.nom || g.id]), (v) => { choisi = rencontreChoisie = v; });
+      const posees = T.rencontresPosees();
+      for (const id of [...coches]) if (!posees.some((r) => r.id === id)) coches.delete(id);
+      const voulues = () => (posees.length === 1 ? [posees[0].id] : [...coches]);
+      const haut = [];
+      if (posees.length) {
+        haut.push(el('div', { className: 'table-sous-titre', textContent: 'Sur cette carte' }));
+        for (const r of posees) {
+          const c = el('input', { type: 'checkbox', checked: posees.length === 1 || coches.has(r.id), disabled: posees.length === 1 });
+          c.onchange = () => { if (c.checked) coches.add(r.id); else coches.delete(r.id); dessiner(); };
+          haut.push(el('label', { className: 'table-ligne table-rencontre' }, c, el('span', { className: 'table-nom', textContent: r.nom }), el('small', { textContent: `${r.n} monstre${r.n > 1 ? 's' : ''}` })));
+        }
+        const n = voulues().length;
+        const lancer = btn('flame', n > 1 ? `Lancer le combat (${n} rencontres)` : 'Lancer le combat', () => { if (T.combat || T.occupe() || !voulues().length) return; T.lancerRencontres(voulues()); }, { classe: 'accent', titre: 'Les monstres des rencontres cochées combattent ensemble.' });
+        lancer.disabled = !n || Boolean(T.combat);
+        haut.push(el('div', { className: 'table-boutons' }, lancer));
+        if (posees.length > 1 && !n) haut.push(el('p', { className: 'table-note', textContent: 'Coche la ou les rencontres qui commencent.' }));
+        haut.push(el('div', { className: 'table-sous-titre', textContent: 'Poser une autre rencontre' }));
+      }
       return [
+        ...haut,
         el('label', { className: 'table-ligne' }, s),
         el('div', { className: 'table-boutons' },
           btn('add', 'Poser sur la table', async () => {
@@ -258,7 +282,7 @@ const TablePanneau = (() => {
             enAttente = false;
             if (c) T.agir({ type: 'groupe', groupe: choisi, x: c.x, y: c.y });
           }, { titre: 'Les monstres arrivent cachés ou non selon la rencontre (Visible par, dans Tafl). Clic droit sur un pion pour changer.' }),
-          btn('flame', 'Lancer le combat', () => { if (T.combat || T.occupe()) return; T.lancerCombat(choisi); }, { titre: 'Les pions de cette rencontre déjà posés combattent ; ceux qui manquent arrivent près du groupe.' })),
+          btn('flame', 'Lancer sans poser', () => { if (T.combat || T.occupe()) return; T.lancerCombat(choisi); }, { titre: 'Le combat commence tout de suite : les pions de cette rencontre déjà posés combattent, ceux qui manquent arrivent près du groupe.' })),
       ];
     }
     function voletScene(jeu, partie, carte) {

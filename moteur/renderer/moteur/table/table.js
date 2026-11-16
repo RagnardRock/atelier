@@ -462,7 +462,8 @@ const TableMode = (() => {
     // --- Les combats sur la grille ---
     function combattre(o) {
       const g = typeof o.groupe === 'string' ? (jeu().donnees.groupes?.groupes || []).find((x) => x.id === o.groupe) : o.groupe;
-      combat = { tour: 0, ordre: [], actif: '', reste: null, heros: [], ennemis: [], groupe: g?.id || '' };
+      // Saga 1.35.1 : plusieurs rencontres posées dans un même combat (g.ids : celles dont les pions combattent).
+      combat = { tour: 0, ordre: [], actif: '', reste: null, heros: [], ennemis: [], groupe: g?.id || '', groupes: Array.isArray(g?.ids) ? g.ids : null };
       return Regles.combattre({ ...o, ui, grille }).finally(() => {
         combat = null;
         boite.hidden = true;
@@ -487,7 +488,7 @@ const TableMode = (() => {
         combat.heros = heros.map((u) => t.pions.find((p) => p.id === u.c.pion && p.carte === c.id));
         // Les monstres : les pions de cette rencontre déjà posés sur la table, sinon de nouveaux, près de
         // l'événement qui a lancé le combat (ou à quelques cases du groupe).
-        const libres = t.pions.filter((p) => p.sorte === 'monstre' && p.carte === c.id && !p.vaincu && (!combat.groupe || p.groupe === combat.groupe));
+        const libres = t.pions.filter((p) => p.sorte === 'monstre' && p.carte === c.id && !p.vaincu && (combat.groupes ? combat.groupes.includes(p.groupe) : (!combat.groupe || p.groupe === combat.groupe)));
         const origine = h.origine?.() || (() => { const j = h.joueur(); return { x: j.x, y: Math.max(0, j.y - 3) }; })();
         combat.ennemis = monstres.map((u) => {
           let p = libres.find((q) => q.monstre === u.m.id);
@@ -551,7 +552,8 @@ const TableMode = (() => {
       viderChoix();
       if (titre) choix.append(el('div', { className: 'table-combat-titre', textContent: titre }));
       return new Promise((resoudre) => {
-        const a = { sorte: 'menu', resoudre, annulable, titre, n: ++numeroQuestion, boutons: [], i: Math.max(0, items.findIndex((x) => !x.desactive)) };
+        // Le menu d'un tour (il a « Finir le tour ») : Retour n'y mène nulle part, Échap y ouvre le menu du jeu.
+        const a = { sorte: 'menu', resoudre, annulable, titre, n: ++numeroQuestion, boutons: [], i: Math.max(0, items.findIndex((x) => !x.desactive)), racine: items.some((x) => x.id === 'fin') };
         items.forEach((it, k) => {
           const b = el('button', { className: `table-combat-option${it.desactive ? ' desactive' : ''}`, type: 'button', disabled: Boolean(it.desactive) },
             it.icone ? el('i', { className: `codicon codicon-${it.icone}` }) : null, el('span', { textContent: it.texte }), it.detail ? el('small', { textContent: it.detail }) : null);
@@ -586,7 +588,7 @@ const TableMode = (() => {
         for (let k = 1; k <= n; k++) { const j = (a.i + (t === 'bas' ? k : -k) + n * 2) % n; if (!a.items[j].desactive) { a.i = j; break; } }
         a.surligner();
       } else if (t === 'action') { if (!a.items[a.i]?.desactive) a.finir(a.i); }
-      else if ((t === 'retour' || t === 'echap') && a.annulable) a.finir(null);
+      else if ((t === 'retour' || t === 'echap') && a.annulable && !(t === 'echap' && a.racine)) a.finir(null);
       return true;
     }
     const ui = {
@@ -1008,7 +1010,7 @@ const TableMode = (() => {
       if (chronoEnvoi >= 0.12) {
         chronoEnvoi = 0;
         if (window.saga.tableEnvoyer) {
-          const v = JSON.stringify(vuePour({ mj: false, perso: null }));
+          const v = JSON.stringify({ ...vuePour({ mj: false, perso: null }), campagne: { nom: table().campagne?.nom || jeu()?.titre || '' } });
           if (v !== envoye) { envoye = v; window.saga.tableEnvoyer(v); }
         }
         // Le multijoueur : à chaque ami, la vue de SON rôle (un spectateur voit celle de l'écran partagé).
@@ -1034,6 +1036,7 @@ const TableMode = (() => {
     // Échap hors combat : annuler ce qui est en cours (un choix de case, le pinceau, le pion choisi).
     function annuler() {
       fermerMenu();
+      if (ficheMj) { ficheMj.fermer(); return true; }
       if (picker) { annulerPicker(); afficherAide(''); return true; }
       if (pinceau) { api.pinceau = null; panneau?.dessiner(); return true; }
       if (selection) { selection = null; panneau?.rafraichir(); return true; }
@@ -1046,6 +1049,8 @@ const TableMode = (() => {
       get enCombat() { return Boolean(combat); },
       // Saga 1.35 : le récit (le chat du MJ y mêle les phrases du combat).
       get recit() { return recit; },
+      // Saga 1.35.1 : en combat, Échap revient en arrière s'il y a de quoi ; sinon il ouvre le menu du jeu.
+      get retourPossible() { return Boolean(ficheMj || picker || (attente && attente.sorte !== 'message' && attente.annulable && !attente.racine)); },
       get combatOuvert() { return Boolean(combat) && !boite.hidden; },
       // Pour le panneau du MJ.
       jeu, partie, carte, table, agir, pion, VISIBILITES: () => VISIBILITES(jeu(), partie()), libelleVisible,
@@ -1072,6 +1077,25 @@ const TableMode = (() => {
       pointDe: (x, y) => { const r = canvas.getBoundingClientRect(); const q = plateau.pointDe(x, y, jeu()); return { x: r.left + q.px, y: r.top + q.py }; },
       musique: (c) => h.musique(c), son: (c) => h.son(c), message: (t) => h.message(t), des: (o) => h.des(o),
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),
+      // Saga 1.35.1 : les rencontres posées sur cette carte ([{ id, nom, n }]), et en lancer plusieurs d'un coup
+      // (les monstres du combat : ceux qui sont sur la table, pas un de plus).
+      rencontresPosees() {
+        const c = carte(), par = new Map();
+        for (const p of table().pions) if (p.sorte === 'monstre' && p.carte === c?.id && !p.vaincu && p.groupe) par.set(p.groupe, (par.get(p.groupe) || 0) + 1);
+        const noms = new Map((jeu().donnees.groupes?.groupes || []).map((g) => [g.id, g.nom || g.id]));
+        return [...par].map(([id, n]) => ({ id, nom: noms.get(id) || id, n }));
+      },
+      lancerRencontres(ids) {
+        const c = carte(), liste = (jeu().donnees.groupes?.groupes || []).filter((g) => ids.includes(g.id));
+        if (!liste.length) return null;
+        const compte = new Map();
+        for (const p of table().pions) if (p.sorte === 'monstre' && p.carte === c?.id && !p.vaincu && ids.includes(p.groupe)) compte.set(p.monstre, (compte.get(p.monstre) || 0) + 1);
+        if (!compte.size) return null;
+        return h.combattreDepuisTable({
+          id: liste[0].id, ids: liste.map((g) => g.id), nom: liste.map((g) => g.nom || g.id).join(' + '),
+          monstres: [...compte].map(([monstre, nombre]) => ({ monstre, nombre })), fuite: liste.every((g) => g.fuite !== false),
+        });
+      },
       // Saga 1.32 : une formule ou une commande du MJ (le panneau, ses macros).
       commande: (texte) => commande(texte, { mj: true }, 'MJ', 'hote'),
       changerPv,
