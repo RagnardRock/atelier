@@ -55,7 +55,10 @@
   // --- Le réseau ---
   let jeton = '', moi = null, vue = null, flux = null, connecte = false;
   async function envoyer(chemin, corps) {
-    const r = await fetch(`${racine}${chemin}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(jeton ? { 'X-Compagnon': jeton } : {}) }, body: JSON.stringify(corps || {}) });
+    // Le jeton va aussi dans l'adresse : un relais d'avant Saga 1.35.1 ne transmet pas l'en-tête X-Compagnon
+    // (le téléphone se croyait alors délié au premier lancer).
+    const adresse = jeton ? `${racine}${chemin}?jeton=${encodeURIComponent(jeton)}` : `${racine}${chemin}`;
+    const r = await fetch(adresse, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(jeton ? { 'X-Compagnon': jeton } : {}) }, body: JSON.stringify(corps || {}) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(d.erreur || `erreur ${r.status}`), { statut: r.status, delie: d.delie });
     return d;
@@ -198,8 +201,11 @@
       perm.onclick = () => DeviceMotionEvent.requestPermission().then((r) => { mouvement.permis = r === 'granted'; if (mouvement.permis) { brancherMouvement(); perm.remove(); } }).catch(() => {});
       options.append(perm);
     }
+    // Le téléphone ne donne aucun mouvement (capteurs bloqués par le navigateur) : on le dit, plutôt que rien.
+    const sansSecousse = el('p', { className: 'note-secousse', hidden: true, textContent: mouvementPossible() ? 'Secouer ne marche pas ici : le navigateur bloque les capteurs de mouvement. Autorise-les pour ce site (Brave : cadenas de l\'adresse › Paramètres du site › Capteurs de mouvement), ou glisse sur le tapis.' : 'Secouer demande une adresse en https (une partie par le relais). Glisse sur le tapis pour lancer.' });
+    setTimeout(() => { if (onglet === 'des' && !mouvement.recu && (typeof DeviceMotionEvent === 'undefined' || typeof DeviceMotionEvent.requestPermission !== 'function')) sansSecousse.hidden = false; }, 2500);
     histoEl = el('div', { className: 'histo verre' });
-    pageEl.append(tapis, des, el('div', { className: 'formule verre ligne' }, formuleEl, lancerB), options, histoEl);
+    pageEl.append(tapis, des, el('div', { className: 'formule verre ligne' }, formuleEl, lancerB), options, sansSecousse, histoEl);
     plateau = PlateauDes.creer(canvas, { accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#ffb347', anime: reglages.anime });
     // Glisser sur le tapis : on jette les dés dans ce sens.
     let trace = [];
@@ -269,15 +275,19 @@
     if (mouvement.branche || !mouvementPossible()) return;
     mouvement.branche = true;
     window.addEventListener('devicemotion', (e) => {
-      const a = e.acceleration || e.accelerationIncludingGravity;
-      if (!a || onglet !== 'des' || attenteJet) return;
-      const g = e.acceleration ? 0 : 9.8;
-      const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - g);
+      // Certains téléphones donnent une accélération vide (x nul) : on prend alors celle avec la gravité.
+      const pure = e.acceleration && e.acceleration.x != null;
+      const a = pure ? e.acceleration : e.accelerationIncludingGravity;
+      if (!a || a.x == null) return;
+      mouvement.recu = true;
+      if (onglet !== 'des' || attenteJet) return;
+      const f = Math.abs(Math.hypot(a.x || 0, a.y || 0, a.z || 0) - (pure ? 0 : 9.8));
       const t = performance.now();
-      if (f < 14) return;
-      mouvement.coups = mouvement.coups.filter((x) => t - x < 700);
-      mouvement.coups.push(t);
-      if (mouvement.coups.length >= 2) {
+      if (f < 10) return;
+      mouvement.coups = mouvement.coups.filter((x) => t - x < 900);
+      // Deux à-coups (séparés d'au moins 80 ms), ou un seul très fort.
+      if (!mouvement.coups.length || t - mouvement.coups.at(-1) > 80) mouvement.coups.push(t);
+      if (mouvement.coups.length >= 2 || f > 24) {
         mouvement.coups = [];
         const r = pageEl.querySelector('.tapis')?.getBoundingClientRect();
         lancer({ x: (r?.width || 300) / 2, y: (r?.height || 300) / 2, vx: -(a.x || 0) * 160, vy: (a.y || 0) * 160 });

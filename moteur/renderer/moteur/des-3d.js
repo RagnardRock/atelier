@@ -215,6 +215,15 @@ const PlateauDes = (() => {
     }
 
     window.addEventListener('resize', () => { taille(); dessiner(); });
+    // Le tapis change de taille (Saga 1.35.1 : il se redimensionne à la souris) : la toile suit, les dés restent dedans.
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => {
+      const r = canvas.getBoundingClientRect();
+      if (!r.width || (Math.abs(r.width - w) < 1 && Math.abs(r.height - h) < 1)) return;
+      taille();
+      const m = rayon();
+      for (const d of des) { if (Number.isFinite(d.x)) d.x = Math.max(m, Math.min(w - m, d.x)); if (Number.isFinite(d.y)) d.y = Math.max(m, Math.min(h - m, d.y)); }
+      dessiner();
+    }).observe(canvas);
     taille();
     Object.assign(api, { lancer, poser, vider });
     // (Object.assign copierait la valeur d'un get une fois pour toutes : on les définit.)

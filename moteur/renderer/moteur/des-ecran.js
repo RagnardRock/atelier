@@ -82,12 +82,45 @@ const EcranDes = (() => {
       const toile = el('canvas');
       const fermer = el('button', { className: 'des-tapis-fermer', type: 'button', title: 'Fermer (Échap)' }, el('i', { className: 'codicon codicon-close' }));
       const compo = el('div', { className: 'des-tapis-compo' });
-      boite.append(el('div', { className: 'des-tapis-haut' }, tete, totalEl), toile, compo, fermer);
+      const haut = el('div', { className: 'des-tapis-haut', title: 'Glisser : déplacer le tapis · double-clic : le remettre au centre' }, tete, totalEl);
+      const coin = el('div', { className: 'des-tapis-coin', title: 'Glisser : changer la taille du tapis' });
+      boite.append(haut, toile, compo, fermer, coin);
       conteneur.append(boite);
+      // Saga 1.35.1 : le tapis se déplace (par son haut) et change de taille (par son coin) ; c'est retenu.
+      let place = null;
+      try { place = JSON.parse(localStorage.getItem('saga:des-tapis:place') || 'null'); } catch { place = null; }
+      function appliquerPlace() {
+        if (!place) { for (const k of ['left', 'top', 'width', 'height', 'transform']) boite.style.removeProperty(k); return; }
+        const r = conteneur.getBoundingClientRect();
+        const l = Math.max(300, Math.min(r.width - 16, place.l)), h = Math.max(220, Math.min(r.height - 16, place.h));
+        const x = Math.max(8, Math.min(r.width - l - 8, place.x)), y = Math.max(8, Math.min(r.height - h - 8, place.y));
+        Object.assign(boite.style, { left: `${x}px`, top: `${y}px`, width: `${l}px`, height: `${h}px`, transform: 'none' });
+      }
+      function glisserPlace(e, taille) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const r = conteneur.getBoundingClientRect(), b = boite.getBoundingClientRect();
+        const d = { x: b.left - r.left, y: b.top - r.top, l: b.width, h: b.height }, x0 = e.clientX, y0 = e.clientY;
+        const bouger = (m) => {
+          place = taille ? { ...d, l: d.l + m.clientX - x0, h: d.h + m.clientY - y0 } : { ...d, x: d.x + m.clientX - x0, y: d.y + m.clientY - y0 };
+          appliquerPlace();
+        };
+        const finir = () => {
+          window.removeEventListener('pointermove', bouger); window.removeEventListener('pointerup', finir);
+          try { if (place) localStorage.setItem('saga:des-tapis:place', JSON.stringify(place)); } catch { /* stockage refusé */ }
+        };
+        window.addEventListener('pointermove', bouger);
+        window.addEventListener('pointerup', finir);
+      }
+      haut.addEventListener('pointerdown', (e) => glisserPlace(e, false));
+      coin.addEventListener('pointerdown', (e) => glisserPlace(e, true));
+      haut.addEventListener('dblclick', () => { place = null; try { localStorage.removeItem('saga:des-tapis:place'); } catch { /* rien */ } appliquerPlace(); });
+      window.addEventListener('resize', () => { if (!boite.hidden) appliquerPlace(); });
       let plateau = null, ouvertParMoi = false, attendu = null, lanceur = null, fin = 0, choix = {};
       const anime = () => { try { return localStorage.getItem('saga:des-animes') !== '0'; } catch { return true; } };
       function preparer() {
         boite.hidden = false;
+        appliquerPlace();
         // Ouvert par un jet (pas à la main) : il laisse passer les clics vers le plateau.
         boite.classList.toggle('passif', !ouvertParMoi);
         if (!plateau) plateau = PlateauDes.creer(toile, { accent: getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#ffb347', finir: () => fini?.() });

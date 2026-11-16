@@ -208,6 +208,8 @@ function creerSaga() {
     try {
       const infos = await moteur.multi.ouvrir({ mode: moteur.modeTable ? 'table' : 'monde', nom, titre: ouvert.jeu.titre });
       notify(`Partie ouverte : ${infos.adresses[0] ? `http://${infos.adresses[0]}:${infos.port}` : `port ${infos.port}`} · code ${infos.code}`, 'success', 12000);
+      // À la table : l'onglet Joueurs montre l'adresse, le code, le relais et qui arrive.
+      if (moteur.modeTable) document.dispatchEvent(new CustomEvent('saga:table-onglet', { detail: 'joueurs' }));
       if (!moteur.modeTable) await choisirApparence();
     } catch (err) {
       notify(`Impossible d'ouvrir la partie : ${cleanError(err)}`, 'error');
@@ -624,8 +626,15 @@ function creerSaga() {
     else if (touche('carte', e) && ouvert && moteur.carteDisponible && !pauseOuverte() && !moteur.enScript && !moteur.enCombat) { e.preventDefault(); moteur.ouvrirCarte(); }
     else if ((e.key === 'Escape' || touche('pause', e)) && ouvert) {
       e.preventDefault();
-      if (moteur.enScript) return; // pendant un dialogue, Échap n'ouvre pas le menu
-      else if (moteur.enCombat) return; // ni pendant un combat : Échap y sert à revenir en arrière
+      // Un combat à la table tourne lui aussi « en script » : on le regarde avant le cas du dialogue.
+      if (moteur.enScript && !(moteur.enCombat && moteur.table.actif)) return; // pendant un dialogue, Échap n'ouvre pas le menu
+      else if (moteur.enCombat) {
+        // Pendant un combat, Échap sert à revenir en arrière. À la table (Saga 1.35.1), un combat dure : s'il n'y
+        // a rien à annuler, Échap ouvre quand même le menu du jeu.
+        if (pauseOuverte()) pauseOuArriere();
+        else if (moteur.table.actif && !moteur.table.retourPossible) ouvrirPause();
+        return;
+      }
       else if (!pauseOuverte() && moteur.table.actif && moteur.table.annuler()) return; // mode table : Échap annule d'abord le choix en cours
       else if (!pauseOuverte()) ouvrirPause(); else pauseOuArriere();
     }
@@ -673,7 +682,8 @@ function creerSaga() {
   $('#btn-recharger').onclick = recharger;
   $('#btn-debug').onclick = basculerDebug;
   $('#btn-plein').onclick = basculerPleinEcran;
-  $('#btn-reglages').onclick = reglages;
+  // Un jeu ouvert : la roue ouvre le menu du jeu (Options y est) ; sinon, les options de Saga.
+  $('#btn-reglages').onclick = () => { if (ouvert && !pauseOuverte() && (moteur.enCombat ? moteur.table.actif : !moteur.enScript)) ouvrirPause(); else if (pauseOuverte()) fermerPause(); else reglages(); };
   new ResizeObserver(() => { if (ouvert) moteur.redimensionner(); }).observe($('#scene'));
 
   // Sauvegarder en quittant Saga ? Non : la sauvegarde reste un geste du joueur (Ctrl+S ou la pause),

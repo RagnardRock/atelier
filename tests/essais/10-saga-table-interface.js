@@ -99,6 +99,16 @@ module.exports = [
         const j3 = await dernier();
         await page.waitForFunction((t) => document.querySelector('.des-tapis-total')?.textContent === String(t), j3.total, { timeout: 8000 });
         await capture(page, '1-mj-tapis');
+        // Le tapis se déplace par son haut et change de taille par son coin ; c'est retenu (Saga 1.35.1).
+        const th = await page.locator('.des-tapis-haut').boundingBox();
+        await page.mouse.move(th.x + 60, th.y + 12); await page.mouse.down(); await page.mouse.move(th.x - 60, th.y + 62, { steps: 4 }); await page.mouse.up();
+        const tc = await page.locator('.des-tapis-coin').boundingBox();
+        await page.mouse.move(tc.x + 9, tc.y + 9); await page.mouse.down(); await page.mouse.move(tc.x - 91, tc.y - 51, { steps: 4 }); await page.mouse.up();
+        const place = await page.evaluate(() => JSON.parse(localStorage.getItem('saga:des-tapis:place')));
+        const tb = await page.locator('.des-tapis').boundingBox();
+        vrai(place && Math.abs(tb.x - (th.x - 120)) < 30 && Math.abs(tb.width - place.l) < 2 && place.l < th.width + 44, 'le tapis déplacé et rétréci, place retenue');
+        await page.locator('.des-tapis-haut').dblclick();
+        vrai(await page.evaluate(() => localStorage.getItem('saga:des-tapis:place')) === null, 'double-clic : le tapis revient au centre');
         await page.click('.des-tapis-fermer');
         // Un pion choisi : sa carte en bas, ses PV aux boutons.
         const pion = await page.evaluate(() => { const T = App.moteur.table; const p = T.vue().pions.find((x) => x.sorte === 'heros'); T.selection = p.id; return { id: p.id, pv: p.pv }; });
@@ -178,10 +188,22 @@ module.exports = [
         // et les phrases du combat tombent dans le chat, chez le MJ comme chez l'ami.
         await onglet(page, 'Chat');
         await onglet(ami, 'Chat');
-        await page.evaluate(() => { const T = App.moteur.table; T.lancerCombat(T.jeu().donnees.groupes?.groupes?.[0]?.id); });
+        // Deux rencontres posées sur la carte : on coche celles qui combattent ensemble (Saga 1.35.1).
+        const posees = await page.evaluate(() => {
+          const T = App.moteur.table, g = T.jeu().donnees.groupes.groupes;
+          T.agir({ type: 'groupe', groupe: g[0].id, x: 9, y: 3 });
+          T.agir({ type: 'groupe', groupe: g[1].id, x: 12, y: 3 });
+          return T.rencontresPosees();
+        });
+        egal(posees.length, 2, 'deux rencontres posées sur la carte');
+        await onglet(page, 'Scène');
+        await page.waitForSelector('.table-rencontre >> nth=1');
+        for (const c of await page.locator('.table-rencontre input').all()) await c.check();
+        await page.getByRole('button', { name: /Lancer le combat \(2 rencontres\)/ }).click();
+        await onglet(page, 'Chat');
         await page.waitForSelector('#scene > .table-combat:not([hidden])');
         for (let i = 0; i < 12 && !(await page.locator('.ti-ordre .ti-init').count()); i++) { await page.keyboard.press('Enter'); await page.waitForTimeout(700); }
-        vrai(await page.locator('.ti-ordre .ti-init').count() >= 4, 'l\'initiative dans la bande du haut');
+        egal(await page.locator('.ti-ordre .ti-init.monstre').count(), posees[0].n + posees[1].n, 'les monstres des deux rencontres combattent, pas un de plus');
         vrai(await page.locator('.ti-etat-combat').isVisible(), 'l\'état du combat dans la barre du haut');
         vrai(await page.locator('.table-panneau .table-combat').count() === 0, 'le menu du tour n\'est plus dans le panneau');
         await page.waitForSelector('.table-fil .table-dit.recit');
@@ -190,6 +212,14 @@ module.exports = [
         await page.waitForTimeout(2500);
         await capture(page, '9-mj-combat');
         await capture(ami, '10-ami-combat');
+        // En combat, Échap ouvre quand même le menu du jeu (rien à annuler), et le referme.
+        await page.locator('.table-plateau').click({ position: { x: 200, y: 700 } });
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+        vrai(await page.locator('#pause').isVisible(), 'Échap ouvre le menu du jeu en plein combat');
+        await capture(page, '11-mj-menu');
+        await page.keyboard.press('Escape');
+        vrai(await page.locator('#pause').isHidden(), 'Échap referme le menu');
         sansErreur(erreurs);
         sansErreur(erreursAmi);
       } finally {

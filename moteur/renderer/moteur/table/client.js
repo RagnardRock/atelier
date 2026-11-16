@@ -48,7 +48,7 @@ const TableClient = (() => {
     let jeu = null, vue = null, selection = null, survol = null, imageFiche = '', ficheLarge = false;
     let dernierEffet = -1, dernierJet = -1;
     // Saga 1.35 : l'ami qui joue depuis son navigateur a la même table en verre que le MJ (verre()).
-    const ecranDes = reseau && typeof EcranDes !== 'undefined' ? EcranDes.creer(scene) : null;
+    const ecranDes = typeof EcranDes !== 'undefined' ? EcranDes.creer(scene) : null;
     const tapisVoulu = () => { try { return localStorage.getItem('saga:des-tapis') !== '0'; } catch { return true; } };
     function ouvrirTapis() {
       ecranDes?.tapis.basculer({ lancer: (f, secret) => multi?.dire(f.startsWith('/') ? f : `${secret ? '/gr' : '/r'} ${f}`, 'tous'), secretTitre: 'Un jet que seuls toi et le MJ voyez' });
@@ -177,7 +177,7 @@ const TableClient = (() => {
       const lignes = vue?.journal || [];
       if (dernierJet < 0) dernierJet = lignes.length ? lignes[lignes.length - 1].n : 0;
       const neufs = lignes.filter((x) => x.n > dernierJet);
-      if (habit && neufs.length) {
+      if (habit && neufs.length && (reseau || tapisVoulu())) {
         if (tapisVoulu() && neufs.some((l) => l.des?.length)) ecranDes.tapis.montrer({ lignes: neufs.filter((l) => l.des?.length).slice(-3) });
         dernierJet = neufs.at(-1).n;
       }
@@ -200,6 +200,35 @@ const TableClient = (() => {
         else plateau.flotter(e.id, e.texte, e.sorte);
         dernierEffet = e.n;
       }
+    }
+
+    // --- Saga 1.35.1 : l'écran des joueurs du MJ (la télé, un 2e écran) dans le même verre : la barre du haut
+    // (la campagne, la carte, l'état du combat), l'initiative en pastilles, les jets sur le tapis. Pas de
+    // panneau ni de barre du bas : c'est un écran qu'on regarde.
+    function habillerEcran() {
+      document.body.classList.add('table-verre', 'ecran-partage');
+      document.body.style.setProperty('--table-panneau', '0px');
+      const titre = el('b'), lieu = el('small'), etat = el('span', { className: 'ti-etat ti-etat-vide' });
+      const haut = el('header', { className: 'ti-haut ti-verre' }, el('div', { className: 'ti-titre' }, el('span', { className: 'ti-rune', textContent: 'ᛃ' }), titre, lieu), etat, el('div', { className: 'ti-actions' }, el('span', { className: 'ti-qui', textContent: 'Écran des joueurs' })));
+      scene.append(haut);
+      ordre.className = 'ti-ordre ti-verre';
+      journalBouton.hidden = true;
+      plateau.marges = () => ({ g: 12, d: 12, h: vue?.combat ? 120 : 64, b: 12 });
+      let sig = '', enCombat = false;
+      function maj() {
+        const s = JSON.stringify([vue?.campagne?.nom, jeu?.titre, vue?.nom, vue?.combat?.tour, vue?.combat?.actif, vue?.pause]);
+        if (s !== sig) {
+          sig = s;
+          titre.textContent = vue?.campagne?.nom || jeu?.titre || 'Saga';
+          lieu.textContent = vue?.nom || '';
+          const actif = vue?.combat?.ordre.find((o) => o.id === vue.combat.actif);
+          etat.className = `ti-etat ${vue?.pause ? 'ti-etat-pause' : vue?.combat ? 'ti-etat-combat' : 'ti-etat-vide'}`;
+          etat.replaceChildren(...(vue?.pause ? [el('i', { className: 'codicon codicon-debug-pause' }), 'Pause'] : vue?.combat ? [el('i', { className: 'codicon codicon-flame' }), `Combat · tour ${vue.combat.tour || 1}${actif ? ` · ${actif.nom}` : ''}`] : []));
+        }
+        if (Boolean(vue?.combat) !== enCombat) { enCombat = Boolean(vue?.combat); plateau.oublier(); }
+      }
+      window.addEventListener('resize', () => plateau.oublier());
+      return { maj, onglet: '' };
     }
 
     // --- Saga 1.35 : l'habillage en verre de l'ami (la barre du haut, le panneau à onglets, mon héros en bas) ---
@@ -357,6 +386,7 @@ const TableClient = (() => {
       journalBouton.textContent = nonLus && journalEl.hidden ? `Journal · ${nonLus}` : 'Journal';
       journalBouton.classList.toggle('nouveau', Boolean(nonLus && journalEl.hidden));
       if (habit ? habit.onglet !== 'journal' : journalEl.hidden) return;
+      if (!reseau) return;
       if (habit) ongletJournal = 'recit';
       const s = `${fin}|${ongletJournal}`;
       if (s === signatureJ) return;
@@ -651,7 +681,8 @@ const TableClient = (() => {
       const cibles = ch?.cibles ? new Set(ch.cibles) : null;
       plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles, outil: outils.dessin(survol) });
     }
-    if (reseau) { habit = habiller(); habit.maj(); }
+    habit = reseau ? habiller() : habillerEcran();
+    habit.maj();
     requestAnimationFrame(tour);
     return { plateau, multi, get vue() { return vue; }, get jeu() { return jeu; } };
   }
