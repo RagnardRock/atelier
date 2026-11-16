@@ -62,9 +62,9 @@ const MODELES = {
 };
 
 // Crée dans Tafl un jeu à partir d'un modèle, comme Fichier › Nouveau jeu (sans l'enregistrer).
-async function nouveauJeu(page, modele, { modules } = {}) {
-  await page.evaluate(async ({ global, modules }) => {
-    const doc = Doc.create({ name: 'Essai', tileSize: 16, palette: [], mapWidth: 20, mapHeight: 15, mapName: 'Bourg' });
+async function nouveauJeu(page, modele, { modules, taille = 16 } = {}) {
+  await page.evaluate(async ({ global, modules, taille }) => {
+    const doc = Doc.create({ name: 'Essai', tileSize: taille, palette: [], mapWidth: 20, mapHeight: 15, mapName: 'Bourg' });
     // Les modèles sont des const du script de Tafl (pas des propriétés de window).
     const modeles = { ExempleDomaine, ExempleJdr, ExempleArene, ExempleDonjon, ExempleRoguelite, ExempleSurvivor };
     if (global) modeles[global].remplir(doc); else Samples.fill(doc);
@@ -72,7 +72,7 @@ async function nouveauJeu(page, modele, { modules } = {}) {
     doc.game = { folder: null, fichiers: [] };
     App.doc = null; // comme Fichier › Nouveau jeu : l'ancien jeu (un essai) est laissé sans demander
     await App.setDocument(doc);
-  }, { global: MODELES[modele] || null, modules });
+  }, { global: MODELES[modele] || null, modules, taille });
 }
 
 // Les fichiers du jeu ouvert, tels que Tafl les écrirait (IO.gameFiles) : { chemin: texte }.

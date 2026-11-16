@@ -26,6 +26,7 @@ const Plateau = (() => {
     const camera = { x: 0, y: 0, z: 2 }; // x, y : le coin haut gauche, en pixels de jeu ; z : pixels d'écran par pixel de jeu
     let dpr = 1, L = 1, H = 1, cadree = '';
     const flottants = []; // { id, texte, sorte, t0 }
+    const pingsVus = new Map(); // n → l'heure où ce ping est arrivé ici
     const eclats = [];    // { id, couleur, t0, secousse }
 
     function taille() {
@@ -188,6 +189,24 @@ const Plateau = (() => {
           ctx.setLineDash([]);
         }
       }
+      // Saga 1.32 : les gabarits de zone (de tous), puis l'aperçu de celui qu'on pose.
+      const gabarit = (g, apercu) => {
+        const coul = TableOutils.couleur(g.couleur);
+        ctx.fillStyle = coul;
+        ctx.globalAlpha = apercu ? 0.22 : 0.3;
+        for (const i of TableOutils.casesGabarit(carte, g, vue.diagonales)) ctx.fillRect(cx(i % carte.largeur), cy(Math.floor(i / carte.largeur)), s, s);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = coul;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx(g.x) + s / 2, cy(g.y) + s / 2, Math.max(3, s * 0.12), 0, Math.PI * 2); ctx.stroke();
+        if (g.forme === 'cone' || g.forme === 'ligne') {
+          ctx.setLineDash([5, 4]);
+          ctx.beginPath(); ctx.moveTo(cx(g.x) + s / 2, cy(g.y) + s / 2); ctx.lineTo(cx(g.vx) + s / 2, cy(g.vy) + s / 2); ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      };
+      for (const g of vue.gabarits || []) gabarit(g, false);
+      if (o.outil?.gabarit) gabarit(o.outil.gabarit, true);
       // Les cases en surbrillance (où l'on peut aller, la zone d'un sort).
       if (o.cases) {
         for (const [i, sorte] of o.cases) {
@@ -226,6 +245,17 @@ const Plateau = (() => {
           ctx.fillStyle = COULEURS[p.sante] || '#ccc';
           ctx.beginPath(); ctx.arc(x + s - 6, y + 6, 4, 0, Math.PI * 2); ctx.fill();
         }
+        // Saga 1.32 : les marques, de petites pastilles en haut à gauche (l'initiale du nom dedans).
+        if (p.marques?.length && s >= 14) {
+          const r0 = Math.max(4, Math.min(8, s * 0.13));
+          p.marques.slice(0, 6).forEach((m, k) => {
+            const mx = x + r0 + 2 + (k % 3) * (r0 * 2 + 1), my = y + s - r0 - 7 - Math.floor(k / 3) * (r0 * 2 + 1);
+            ctx.fillStyle = m.couleur;
+            ctx.beginPath(); ctx.arc(mx, my, r0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'; ctx.lineWidth = 1; ctx.stroke();
+            if (r0 >= 6) { ctx.save(); ctx.font = `700 ${Math.round(r0 * 1.2)}px "Segoe UI", system-ui, sans-serif`; ctx.fillStyle = '#10121a'; ctx.fillText(m.nom.replace(/^Marque /, '')[0].toUpperCase(), mx, my + r0 * 0.42); ctx.restore(); }
+          });
+        }
         if (p.cache) {
           ctx.fillStyle = 'rgba(150, 120, 255, 0.95)';
           ctx.fillRect(x + 2, y + 2, police * 1.9, police + 3);
@@ -240,6 +270,41 @@ const Plateau = (() => {
           ctx.fillStyle = p.ko ? '#aaa' : '#f4f4f6';
           ctx.fillText(p.nom, x + s / 2, y + s + police + 1);
         }
+      }
+      // Saga 1.32 : les pings (des ondes qui s'élargissent, avec le nom de qui a pingé).
+      for (const q of vue.pings || []) {
+        if (!pingsVus.has(q.n)) pingsVus.set(q.n, maintenant);
+        const dt = maintenant - pingsVus.get(q.n);
+        if (dt > 2400) continue;
+        const px = cx(q.x) + s / 2, py = cy(q.y) + s / 2;
+        ctx.strokeStyle = q.couleur || '#ffd36b';
+        for (let k = 0; k < 3; k++) {
+          const f = ((dt / 900) + k / 3) % 1;
+          ctx.globalAlpha = (1 - f) * Math.max(0, 1 - dt / 2400) * 1.4;
+          ctx.lineWidth = 3;
+          ctx.beginPath(); ctx.arc(px, py, s * (0.3 + f * 1.6), 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.globalAlpha = Math.max(0, 1 - dt / 2400);
+        ctx.fillStyle = q.couleur || '#ffd36b';
+        ctx.fillText(q.qui || '', px, py - s * 0.7);
+        ctx.globalAlpha = 1;
+      }
+      if (pingsVus.size > 40) for (const k of [...pingsVus.keys()].slice(0, 20)) pingsVus.delete(k);
+      // La règle (seulement chez celui qui mesure).
+      const rg = o.outil?.regle;
+      if (rg) {
+        const ax = cx(rg.de.x) + s / 2, ay = cy(rg.de.y) + s / 2, bx = cx(rg.a.x) + s / 2, by = cy(rg.a.y) + s / 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.strokeStyle = '#8fd6ff'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+        ctx.fillStyle = '#8fd6ff';
+        ctx.beginPath(); ctx.arc(ax, ay, 4, 0, Math.PI * 2); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
+        const w = ctx.measureText(rg.texte).width + 12;
+        ctx.fillStyle = 'rgba(8, 10, 18, 0.85)';
+        ctx.fillRect(bx - w / 2, by - s * 0.6 - police - 6, w, police + 8);
+        ctx.fillStyle = '#e8f6ff';
+        ctx.fillText(rg.texte, bx, by - s * 0.6 - 4);
       }
       // Les nombres qui montent (dégâts, soins) et les éclats d'un sort.
       const tous2 = [...vue.pions, ...(vue.pnj || [])];

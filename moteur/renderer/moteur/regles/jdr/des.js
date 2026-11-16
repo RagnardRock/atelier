@@ -74,6 +74,8 @@ const JdrDes = (() => {
       des: (ligne.des || []).map((x) => ({ faces: x.faces, valeur: x.valeur, garde: x.garde !== false })), bonus: Number(ligne.bonus) || 0,
       total: Number(ligne.total) || 0, contre: String(ligne.contre || ''), resultat: ligne.resultat || '', mode: ligne.mode || '',
       cache: Boolean(ligne.cache), temps: Number(partie.temps) || 0,
+      // Saga 1.32 : un jet secret d'un joueur (/gr) se voit aussi de lui (son pion).
+      ...(ligne.voit ? { voit: String(ligne.voit) } : {}),
     };
     j.journal.push(l);
     if (j.journal.length > MAX_JOURNAL) j.journal.splice(0, j.journal.length - MAX_JOURNAL);

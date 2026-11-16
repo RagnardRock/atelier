@@ -1,0 +1,211 @@
+// Le mode table (Saga 1.32) : les outils d'une séance, à la Roll20. Les jets tapés dans le chat (/r),
+// les macros, les marques sur les pions, la règle, les gabarits de zone et le ping.
+//
+// Deux parties dans ce fichier :
+//   - des calculs purs (sans écran), utilisés par l'hôte et testables sous Node :
+//       commande(texte)                    « /r 2d6+3 Épée » → { sorte: 'jet', formule, quoi, cache } ou { sorte: 'macro', nom } ou null
+//       remplacer(formule, refs)           « 1d20+@dex » → « 1d20+3 » (refs : { dex: 3, … }), ou { erreur }
+//       casesGabarit(carte, g, diag)       les index des cases couvertes par un gabarit
+//       marquesDispo(jeu)                  les marques qu'on peut poser : les états du jeu, puis des couleurs
+//   - la barre d'outils des deux écrans (celui du MJ et celui des joueurs) : barre({ … }).
+//
+// Un gabarit : { id, forme: 'cercle'|'cone'|'ligne'|'carre', x, y (l'origine, ou le centre), vx, vy (la
+// case visée, pour le cône et la ligne), taille (en cases), auteur, couleur }. Tout ce que voit un écran
+// vient de la vue (table/etat.js) : l'écran d'un téléphone (le futur compagnon) n'a qu'à la dessiner.
+
+const TableOutils = (() => {
+  const FORMES = [['cercle', 'Cercle (rayon)', 6], ['cone', 'Cône', 4.5], ['ligne', 'Ligne', 9], ['carre', 'Cube (côté)', 3]];
+  const COULEURS = [['rouge', 'Rouge', '#ef5b5b'], ['orange', 'Orange', '#f0a04c'], ['jaune', 'Jaune', '#f2d14c'], ['vert', 'Vert', '#6fd17d'], ['bleu', 'Bleu', '#5ea8ff'], ['violet', 'Violet', '#a77bff']];
+
+  // --- Le chat : /r (ou /roll) jet public, /gr (ou /mj) jet secret pour le MJ, /m nom : une macro ---
+  function commande(texte) {
+    const t = String(texte || '').trim();
+    const m = t.match(/^\/(r|roll|gr|mj|m|macro)(?:\s+(.*))?$/i);
+    if (!m) return null;
+    const mot = m[1].toLowerCase(), reste = (m[2] || '').trim();
+    if (mot === 'm' || mot === 'macro') return reste ? { sorte: 'macro', nom: reste } : null;
+    // La formule : tout ce qui ressemble à des dés au début (espaces permis autour des + et -), puis le « pour quoi ».
+    const f = reste.match(/^((?:[+-]?\s*(?:\d*d\d+|\d+|@[a-z0-9_]+)\s*)+(?:[*x×]\s*\d+)?)(.*)$/i);
+    const formule = f ? f[1].replace(/\s+/g, '') : '1d20';
+    const quoi = (f ? f[2] : reste).trim();
+    return { sorte: 'jet', formule: formule || '1d20', quoi, cache: mot === 'gr' || mot === 'mj' };
+  }
+  // Les @ d'une formule : les modificateurs du héros qui lance (@for, @dex…, @maitrise, @niveau).
+  function remplacer(formule, refs = {}) {
+    let erreur = '';
+    const out = String(formule || '').replace(/@([a-z0-9_]+)/gi, (_, k) => {
+      const v = refs[k.toLowerCase()];
+      if (!Number.isFinite(v)) { erreur = erreur || `@${k} inconnu`; return '0'; }
+      return v < 0 ? `-${Math.abs(v)}` : `+${v}`;
+    }).replace(/^\+/, '').replace(/([+-])\+/g, '$1').replace(/\+-/g, '-').replace(/--/g, '+');
+    return erreur ? { erreur } : { formule: out };
+  }
+  // Ce que valent les @ pour un héros (avec les règles du pack JDR).
+  function refsHeros(jeu, c) {
+    const r = {};
+    if (!c || typeof JdrPerso === 'undefined') return r;
+    for (const x of JdrBase.caracteristiques(jeu)) r[x.id] = JdrBase.mod(JdrPerso.carac(jeu, c, x.id));
+    r.maitrise = r.pb = JdrPerso.pb(c);
+    r.niveau = Number(c.niveau) || 1;
+    // Les champs chiffrés de la fiche du jeu (Tafl › Fiche des personnages) : @sante_mentale, @armure…
+    // (un tiret de l'id devient un tiret bas). Ils ne remplacent pas les caractéristiques.
+    if (typeof JdrFiches !== 'undefined') {
+      try {
+        for (const x of JdrFiches.champs(jeu, c) || []) {
+          const k = String(x.id || '').toLowerCase().replace(/-/g, '_');
+          if (k && !(k in r) && Number.isFinite(Number(x.valeur)) && x.valeur !== '' && typeof x.valeur !== 'boolean') r[k] = Math.round(Number(x.valeur));
+        }
+      } catch { /* une fiche sans champs */ }
+    }
+    if (JdrPerso.lanceur(jeu, c)) { r.magie = JdrPerso.attaqueSorts(jeu, c); r.dd = JdrPerso.ddSorts(jeu, c); }
+    return r;
+  }
+
+  // --- Les gabarits sur la grille ---
+  function casesGabarit(carte, g, diagonales = 'simple') {
+    const out = [];
+    const n = Math.max(1, Math.min(60, Math.round(Number(g.taille) || 1)));
+    const W = carte.largeur, H = carte.hauteur;
+    const ajouter = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) out.push(y * W + x); };
+    if (g.forme === 'cercle') {
+      for (let y = g.y - n; y <= g.y + n; y++) for (let x = g.x - n; x <= g.x + n; x++) {
+        const dx = Math.abs(x - g.x), dy = Math.abs(y - g.y), grand = Math.max(dx, dy), petit = Math.min(dx, dy);
+        if ((diagonales === 'alternees' ? grand + Math.floor(petit / 2) : grand) <= n) ajouter(x, y);
+      }
+      return out;
+    }
+    if (g.forme === 'carre') {
+      const a = Math.floor((n - 1) / 2), b = n - 1 - a;
+      for (let y = g.y - a; y <= g.y + b; y++) for (let x = g.x - a; x <= g.x + b; x++) ajouter(x, y);
+      return out;
+    }
+    // Le cône et la ligne partent de l'origine vers la case visée.
+    let vx = Number(g.vx) - g.x, vy = Number(g.vy) - g.y;
+    const l = Math.hypot(vx, vy);
+    if (!l) { vx = 0; vy = 1; } else { vx /= l; vy /= l; }
+    for (let y = g.y - n; y <= g.y + n; y++) for (let x = g.x - n; x <= g.x + n; x++) {
+      if (x === g.x && y === g.y) continue;
+      const px = x - g.x, py = y - g.y;
+      const avant = px * vx + py * vy; // le long de la direction
+      const cote = Math.abs(px * vy - py * vx);
+      if (avant <= 0 || avant > n + 0.01) continue;
+      // Un cône de la 5e est aussi large que long : un demi-angle d'atan(1/2).
+      if (g.forme === 'cone' ? cote <= avant / 2 + 0.01 : cote <= 0.5) ajouter(x, y);
+    }
+    return out;
+  }
+  function normGabarit(a, carte) {
+    const forme = FORMES.some(([f]) => f === a.forme) ? a.forme : 'cercle';
+    const borne = (v, max) => Math.max(0, Math.min(max - 1, Math.round(Number(v) || 0)));
+    return {
+      forme, x: borne(a.x, carte.largeur), y: borne(a.y, carte.hauteur), vx: borne(a.vx ?? a.x, carte.largeur), vy: borne(a.vy ?? a.y, carte.hauteur),
+      taille: Math.max(1, Math.min(60, Math.round(Number(a.taille) || 1))),
+      couleur: COULEURS.some(([c]) => c === a.couleur) ? a.couleur : 'orange',
+    };
+  }
+  const couleur = (id) => COULEURS.find(([c]) => c === id)?.[2] || '#f0a04c';
+
+  // --- Les marques des pions : les états du jeu (empoisonné, à terre…), puis six couleurs ---
+  function marquesDispo(jeu) {
+    const etats = (jeu?.donnees?.etats?.etats || []).map((e) => ({ id: e.id, nom: e.nom || e.id, couleur: e.couleur || '' }));
+    return [...etats, ...COULEURS.map(([id, nom, c]) => ({ id: `c-${id}`, nom: `Marque ${nom.toLowerCase()}`, couleur: c }))];
+  }
+  const PALETTE = ['#9b6bff', '#ef5b5b', '#f0a04c', '#6fd17d', '#5ea8ff', '#e86bd0', '#4cd4c8', '#c9b458'];
+  function couleurMarque(m, i = 0) {
+    if (m.couleur) return m.couleur;
+    let h = 0;
+    for (const ch of String(m.id)) h = (h * 31 + ch.charCodeAt(0)) | 0;
+    return PALETTE[Math.abs(h + i * 0) % PALETTE.length];
+  }
+
+  // --- La barre d'outils (les deux écrans) ---
+  // o : { conteneur, caseM(), diagonales(), placer(gabarit), ping(case), effacer() (ses gabarits) }
+  // Rend { appuyer(c, e) → true si l'outil prend le clic, bouger(c), lacher(c), dessin() (pour le plateau), outil }.
+  function barre(o) {
+    let outil = null;               // null | 'regle' | 'gabarit'
+    let forme = 'cercle', metres = 6, teinte = 'orange';
+    let trait = null;               // { de: { x, y }, a: { x, y }, gabarit: bool } pendant qu'on glisse
+    const racine = el('div', { className: 'table-outils' });
+    const boutonOutil = (id, icone, titre) => {
+      const b = el('button', { className: 'table-outil', type: 'button', title: titre }, el('i', { className: `codicon codicon-${icone}` }));
+      b.onclick = () => { outil = outil === id ? null : id; dessinerBarre(); };
+      b.dataset.outil = id;
+      return b;
+    };
+    const regle = boutonOutil('regle', 'symbol-ruler', 'Règle (R) : glisse sur le plateau pour mesurer. Maj + glisser marche aussi sans l\'outil.');
+    const gab = boutonOutil('gabarit', 'circle-large-outline', 'Gabarit de zone (G) : clique le centre, ou glisse de l\'origine vers la direction pour un cône ou une ligne');
+    const choixForme = el('select', { className: 'table-outil-choix', title: 'La forme du gabarit' }, ...FORMES.map(([f, nom]) => el('option', { value: f, textContent: nom })));
+    const champM = el('input', { className: 'table-outil-m', type: 'number', min: '0.5', step: '0.5', title: 'La taille, en mètres' });
+    const choixTeinte = el('select', { className: 'table-outil-choix', title: 'La couleur' }, ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
+    const effacer = el('button', { className: 'table-outil', type: 'button', title: 'Effacer mes gabarits' }, el('i', { className: 'codicon codicon-clear-all' }));
+    const aide = el('span', { className: 'table-outil-aide', textContent: 'Alt + clic : ping' });
+    choixForme.onchange = () => { forme = choixForme.value; metres = FORMES.find(([f]) => f === forme)[2]; dessinerBarre(); };
+    champM.onchange = () => { metres = Math.max(0.5, Number(champM.value) || 1.5); };
+    choixTeinte.onchange = () => { teinte = choixTeinte.value; };
+    effacer.onclick = () => o.effacer?.();
+    const reglages = el('span', { className: 'table-outil-reglages' }, choixForme, champM, el('small', { textContent: 'm' }), choixTeinte);
+    racine.append(regle, gab, reglages, effacer, aide);
+    o.conteneur.append(racine);
+    function dessinerBarre() {
+      for (const b of [regle, gab]) b.classList.toggle('actif', outil === b.dataset.outil);
+      reglages.hidden = outil !== 'gabarit';
+      choixForme.value = forme;
+      champM.value = String(metres);
+      choixTeinte.value = teinte;
+      document.body.classList.toggle('outil-table', Boolean(outil));
+    }
+    dessinerBarre();
+    const taille = () => Math.max(1, Math.round(metres / (o.caseM() || 1.5)));
+    const longueur = (de, a) => {
+      const dx = Math.abs(a.x - de.x), dy = Math.abs(a.y - de.y), grand = Math.max(dx, dy), petit = Math.min(dx, dy);
+      return o.diagonales() === 'alternees' ? grand + Math.floor(petit / 2) : grand;
+    };
+    const metresDe = (n) => `${Math.round(n * (o.caseM() || 1.5) * 10) / 10} m`.replace('.', ',');
+    const api = {
+      get outil() { return outil; },
+      set outil(v) { outil = v; dessinerBarre(); },
+      touche(e) {
+        if (e.target?.matches?.('input, select, textarea')) return false;
+        if (e.key === 'r' || e.key === 'R') { outil = outil === 'regle' ? null : 'regle'; dessinerBarre(); return true; }
+        if (e.key === 'g' || e.key === 'G') { outil = outil === 'gabarit' ? null : 'gabarit'; dessinerBarre(); return true; }
+        if (e.key === 'Escape' && (outil || trait)) { outil = null; trait = null; dessinerBarre(); return true; }
+        return false;
+      },
+      appuyer(c, e) {
+        if (e.altKey) { o.ping?.(c); return true; }
+        if (outil === 'regle' || e.shiftKey) { trait = { de: c, a: c, gabarit: false }; return true; }
+        if (outil === 'gabarit') { trait = { de: c, a: c, gabarit: true }; return true; }
+        return false;
+      },
+      bouger(c) { if (trait && c) trait.a = c; },
+      lacher() {
+        const t = trait;
+        trait = null;
+        if (!t?.gabarit) return Boolean(t);
+        // Un cercle et un cube se posent au clic ; le cône et la ligne vont vers là où l'on a lâché.
+        const vise = t.a.x !== t.de.x || t.a.y !== t.de.y ? t.a : { x: t.de.x, y: t.de.y + 1 };
+        o.placer?.({ forme, x: t.de.x, y: t.de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte });
+        return true;
+      },
+      get occupe() { return Boolean(trait); },
+      // Ce que le plateau dessine en plus pour cet écran seulement : la règle, l'aperçu du gabarit.
+      dessin(survol) {
+        if (trait && !trait.gabarit) {
+          const n = longueur(trait.de, trait.a);
+          return { regle: { de: trait.de, a: trait.a, texte: `${n} case${n > 1 ? 's' : ''} · ${metresDe(n)}` } };
+        }
+        if (outil === 'gabarit' && (trait || survol)) {
+          const de = trait?.de || survol, a = trait?.a || survol;
+          const vise = a.x !== de.x || a.y !== de.y ? a : { x: de.x, y: de.y + 1 };
+          return { gabarit: { forme, x: de.x, y: de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte } };
+        }
+        return null;
+      },
+    };
+    return api;
+  }
+
+  return { FORMES, COULEURS, commande, remplacer, refsHeros, casesGabarit, normGabarit, couleur, marquesDispo, couleurMarque, barre };
+})();
+
+if (typeof module !== 'undefined') module.exports = TableOutils;

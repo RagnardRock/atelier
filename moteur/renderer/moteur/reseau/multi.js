@@ -243,9 +243,9 @@ const Multi = (() => {
 
       const journal = el('div', { className: 'multi-journal' });
       for (const x of lignes.slice(-60)) {
-        journal.append(el('div', { className: `multi-ligne${x.pour !== 'tous' ? ' prive' : ''}` },
+        journal.append(el('div', { className: `multi-ligne${x.pour !== 'tous' ? ' prive' : ''}${x.jet ? ' jet' : ''}` },
           el('b', { textContent: x.nom }),
-          x.pour !== 'tous' ? el('small', { textContent: x.de === moi?.id ? ` → ${nomDe(x.pour)}` : ' (privé)' }) : null,
+          x.pour !== 'tous' ? el('small', { textContent: x.jet ? ' (secret)' : x.de === moi?.id ? ` → ${nomDe(x.pour)}` : ' (privé)' }) : null,
           el('span', { textContent: ` ${x.texte}` })));
       }
       racine.append(journal);
@@ -257,7 +257,7 @@ const Multi = (() => {
       }
       aQui.value = pour;
       aQui.onchange = () => { pour = aQui.value; };
-      const champ = el('input', { className: 'multi-champ', type: 'text', maxLength: MAX, placeholder: 'Écrire…' });
+      const champ = el('input', { className: 'multi-champ', type: 'text', maxLength: MAX, placeholder: 'Écrire… (/r 2d6+3 pour lancer des dés)', title: '/r 1d20+@dex Discrétion : un jet vu de tous · /gr : un jet secret pour le MJ · /m nom : une de tes macros' });
       const form = el('form', { className: 'multi-ecrire' }, aQui, champ, el('button', { className: 'multi-envoyer', type: 'submit' }, el('i', { className: 'codicon codicon-send' })));
       form.onsubmit = (e) => { e.preventDefault(); dire(champ.value); champ.value = ''; };
       racine.append(form);

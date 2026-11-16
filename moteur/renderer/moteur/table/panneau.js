@@ -165,6 +165,18 @@ const TablePanneau = (() => {
           el('div', { className: 'table-ligne' }, formule, btn('debug-start', 'Lancer', lancer)),
           el('div', { className: 'table-ligne' }, quoi),
           el('label', { className: 'table-ligne coche' }, cache, el('span', { textContent: 'Caché aux joueurs' })),
+          // Saga 1.32 : les macros du MJ (une formule gardée, en un clic ; « /gr … » pour un jet caché).
+          el('div', { className: 'table-boutons table-macros' },
+            ...(partie.table.macros || []).map((m, k) => {
+              const b = btn('symbol-event', m.nom, () => T.commande(`/m ${m.nom}`), { titre: `${m.formule} · clic droit : oublier cette macro`, classe: 'petit' });
+              b.oncontextmenu = (e) => { e.preventDefault(); T.agir({ type: 'macro_retirer', k }); dessiner(); };
+              return b;
+            }),
+            btn('add', 'Garder en macro', () => {
+              if (!jet.formule) { T.message('Écris d\'abord une formule.'); return; }
+              T.agir({ type: 'macro_ajouter', nom: jet.quoi || jet.formule, formule: `${jet.cache ? '/gr ' : ''}${jet.formule}` });
+              dessiner();
+            }, { classe: 'petit', titre: 'Garder cette formule (et son « pour quoi ») comme macro du MJ. Dans le chat : /m nom.' })),
           el('div', { className: 'table-journal' }, ...lignes.map((l) => el('div', { className: `table-jet${l.cache ? ' cache' : ''}` },
             el('div', { className: 'table-jet-tete' }, el('b', { textContent: l.qui }), el('span', { textContent: ` ${l.quoi}` }), el('span', { className: 'table-jet-total', textContent: String(l.total) })),
             el('div', { className: 'table-jet-detail', textContent: `${JdrDes.detail(l)}${l.resultat ? ` · ${JdrDes.RESULTATS[l.resultat] || l.resultat}` : ''}` }),

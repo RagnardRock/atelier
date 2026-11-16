@@ -326,6 +326,17 @@ Saga 1.4 pose les fondations ; Saga 1.5 livre le premier module.
 - **Qui a construit** (module gestion) : un bâtiment de la commande `gestion_construire` est marqué « construit par un script » (`script` dans l'état), sauf avec `par_joueur` ; ceux que le joueur pose (menu Construire, `gestion_placer`) ne le sont pas. Les conditions `gestion_batiment` et `gestion_chantier` prennent `par` (`joueur`, `script`, ou tous), et `gestion_batiment` peut compter aussi les chantiers (`chantiers`). La maison du héros posée par un script ne compte donc pas pour une quête « construis une maison ».
 - **Réagir tout de suite** : un module peut demander au moteur de relancer des scènes (`hote.relancer(nom)`, MODULES.md) : les événements « Tout seul » de la carte marqués pour cette relance (`relances`) se jouent après le script ou le menu en cours. Le module gestion demande `construction` dès qu'un bâtiment est posé ou commencé, et émet le moment `gestion_construction` (`batiment`, `id`, `par`, `etat`) pour les scripts.
 
+## Ce que fait Saga 1.32 : les outils d'une séance au mode table (comme sur Roll20)
+
+- **Les dés dans le chat** : `/r 2d6+3 Épée longue` lance pour tout le monde, `/gr d20` (ou `/mj`) lance en secret (le MJ et celui qui lance le voient, pas les autres). C'est l'hôte qui lance : le jet va au journal, au plateau de dés et dans le chat.
+- **Les `@`** dans une formule : les modificateurs du héros qui lance (`@for`, `@dex`…, `@maitrise`, `@niveau`, `@magie`, `@dd`) et tout champ chiffré de la fiche du jeu (`@sante_mentale`…).
+- **Les macros** : chaque joueur garde ses jets (barre en bas de son écran, `+` pour en ajouter, clic droit pour oublier ; `/m nom` dans le chat). Le MJ a les siennes dans Jets de dés › « Garder en macro ».
+- **Les marques sur les pions** : les états du jeu et six couleurs, posées au clic droit (le MJ sur tous, un joueur sur son héros). Les états des règles d'un héros s'y montrent tout seuls.
+- **La règle** (R, ou Maj + glisser) : la distance en cases et en mètres, avec la règle des diagonales du jeu.
+- **Les gabarits de zone** (G) : cercle, cône, ligne, cube, en mètres et en couleur, vus de tous ; chacun efface les siens, le MJ tous (clic droit dessus).
+- **Le ping** (Alt + clic) : des ondes à la couleur du joueur, avec son nom, chez tout le monde.
+- Tout passe par la vue filtrée de chaque rôle (`table/etat.js` › `vue` : `gabarits`, `pings`, `marques`, `macros`) : un autre écran (le futur compagnon sur téléphone) n'a qu'à la dessiner. Les calculs sont dans `table/outils.js`.
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.
