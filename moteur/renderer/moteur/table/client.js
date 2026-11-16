@@ -468,6 +468,14 @@ const TableClient = (() => {
       liste.scrollTop = liste.scrollHeight;
     }
 
+    // Saga 1.42 : l'image d'un jeton, demandée une fois à l'hôte (une adresse chez un ami, une data: URL à l'écran des joueurs).
+    const jetons = new Map();
+    function srcJeton(id) {
+      if (jetons.has(id)) return jetons.get(id);
+      jetons.set(id, '');
+      Promise.resolve(window.saga.tableDocument?.(id, id)).then((src) => { if (src) jetons.set(id, src); else setTimeout(() => jetons.delete(id), 3000); }).catch(() => setTimeout(() => jetons.delete(id), 3000));
+      return '';
+    }
     // --- La fiche du joueur : la lire, et lancer ses jets (c'est l'hôte qui lance les dés) ---
     let ongletFiche = 'caracs';
     let signature = '';
@@ -744,7 +752,7 @@ const TableClient = (() => {
       const ch = vue.question?.choix;
       const cases = ch?.cases ? new Map(ch.cases.map((i) => [i, 'aller'])) : null;
       const cibles = ch?.cibles ? new Set(ch.cibles) : null;
-      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles, outil: outils.dessin(survol) });
+      plateau.dessiner({ jeu, carte, vue, maintenant, mj: false, jeton: srcJeton, selection: selection || (vue.question ? vue.combat?.actif : null), survol, cases, cibles, outil: outils.dessin(survol) });
     }
     habit = reseau ? habiller() : habillerEcran();
     habit.maj();

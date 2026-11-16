@@ -1608,6 +1608,12 @@ const Moteur = (() => {
       ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, W, H);
+      // 0. (Tafl 1.37) une scène image, sous tout ;
+      if (carte.fond?.img.complete && carte.fond.img.naturalWidth) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(carte.fond.img, -Math.round(cam.x), -Math.round(cam.y), carte.largeur * jeu.taille, carte.hauteur * jeu.taille);
+        ctx.imageSmoothingEnabled = false;
+      }
       // 1. les calques « dessous » et « joueur », dans l'ordre de la liste ;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') dessinerCalque(c, maintenant);
       // (Saga 1.20) les traces de pas, les ondes, les touffes qui frémissent ;

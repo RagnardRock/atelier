@@ -324,10 +324,21 @@ const Stage = (() => {
     }
   }
 
+  const fonds = new Map();
+  function imageFond(src) {
+    let im = fonds.get(src);
+    if (!im) { im = new Image(); im.onload = () => render(); im.src = src; if (fonds.size > 20) fonds.clear(); fonds.set(src, im); }
+    return im.complete && im.naturalWidth ? im : null;
+  }
   function drawMap() {
     const doc = App.doc, v = view(), s = doc.tileSize, { map } = doc;
     const cell = s * v.zoom, mw = map.width * cell, mh = map.height * cell;
     drawChecker(ctx, v.x, v.y, mw, mh, 8);
+    // Tafl 1.37 : une scène image, étirée sur toute la carte, sous les calques.
+    if (map.fond) {
+      const im = imageFond(map.fond);
+      if (im) { ctx.imageSmoothingEnabled = true; ctx.drawImage(im, v.x, v.y, mw, mh); ctx.imageSmoothingEnabled = false; }
+    }
     // Sur la carte, les tuiles animées bougent (si la lecture est en marche).
     const now = App.playing ? performance.now() : 0;
     const canvases = doc.tiles.map((t) => Doc.tileCanvas(t, s, Doc.frameAt(t, now)));

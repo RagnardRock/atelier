@@ -71,6 +71,8 @@ const IO = (() => {
       monde: map.monde ? { x: map.monde.x, y: map.monde.y } : null,
       // Tafl 1.12 (module roguelite) : une salle de donjon modèle.
       ...(map.salle ? { salle: { ...map.salle } } : {}),
+      // Tafl 1.37 : une scène image (le mode table de Saga) : une image en fond, sous les calques.
+      ...(map.fond ? { fond: { image: map.fond } } : {}),
     };
   }
   const oneOf = (v, list, fallback) => (list.some(([k]) => k === v) ? v : fallback);
@@ -107,6 +109,7 @@ const IO = (() => {
     map.events = Events.normEvents(data.evenements, width, height, tileCount);
     map.groupe = String(data.groupe || '').trim().slice(0, 60);
     map.interieur = data.interieur === true;
+    map.fond = typeof data.fond?.image === 'string' && /^data:image\/(?:png|jpeg|webp);base64,/.test(data.fond.image) ? data.fond.image : '';
     map.salle = typeof DonneesRoguelite !== 'undefined' ? DonneesRoguelite.normSalle(data.salle) : (data.salle || null);
     map.monde = Number.isFinite(Number(data.monde?.x)) && Number.isFinite(Number(data.monde?.y)) ? { x: int(data.monde.x), y: int(data.monde.y) } : null;
     return map;

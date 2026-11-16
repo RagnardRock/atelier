@@ -992,10 +992,12 @@ const TableMode = (() => {
     function pousserDocuments() {
       if (!window.saga.tableDocuments) return;
       const l = TableDocuments.liste(table()).filter((d) => d.image && !TableDocuments.brouillon(d));
-      const sig = JSON.stringify(l.map((d) => [d.id, d.pour, TableDocuments.empreinte(d.image)]));
+      // Saga 1.42 : les images des jetons partent avec, pour tout le monde (leur id porte leur empreinte).
+      const jetons = Object.entries(table().jetons || {});
+      const sig = JSON.stringify([l.map((d) => [d.id, d.pour, TableDocuments.empreinte(d.image)]), jetons.map(([id]) => id)]);
       if (sig === docsPousses) return;
       docsPousses = sig;
-      window.saga.tableDocuments(l.map((d) => ({ id: d.id, image: d.image, pour: d.pour })));
+      window.saga.tableDocuments([...l.map((d) => ({ id: d.id, image: d.image, pour: d.pour })), ...jetons.map(([id, image]) => ({ id, image, pour: 'tous' }))]);
     }
     // Une photo prise avec le téléphone du MJ arrive en morceaux (une demande est petite) ; au dernier, c'est
     // un nouveau document.
@@ -1123,7 +1125,7 @@ const TableMode = (() => {
           }
         }
       }
-      plateau.dessiner({ jeu: jeu(), carte: carte(), vue: derniereVue, maintenant, mj: r.mj, apercu: !r.mj, cases: cases || casesZone, cibles: picker?.sorte === 'pion' ? picker.cibles : null, selection, survol, outil: outils.dessin(survol) });
+      plateau.dessiner({ jeu: jeu(), carte: carte(), vue: derniereVue, maintenant, mj: r.mj, jeton: (id) => table().jetons?.[id] || '', apercu: !r.mj, cases: cases || casesZone, cibles: picker?.sorte === 'pion' ? picker.cibles : null, selection, survol, outil: outils.dessin(survol) });
       // L'écran des joueurs : sa vue, au plus 8 fois par seconde, seulement quand elle change.
       chronoEnvoi += dt;
       if (chronoEnvoi >= 0.12) {
@@ -1205,6 +1207,27 @@ const TableMode = (() => {
         for (const p of table().pions) if (p.sorte === 'monstre' && p.carte === c?.id && !p.vaincu && p.groupe) par.set(p.groupe, (par.get(p.groupe) || 0) + 1);
         const noms = new Map((jeu().donnees.groupes?.groupes || []).map((g) => [g.id, g.nom || g.id]));
         return [...par].map(([id, n]) => ({ id, nom: noms.get(id) || id, n }));
+      },
+      // Saga 1.42 : le MJ emmène le groupe sur une autre carte ou une scène image (onglet Scène › Cartes).
+      // Le groupe arrive au départ de la carte s'il y est, sinon sur la case libre la plus proche du centre.
+      allerCarte(id) {
+        const c = jeu().cartes.get(id);
+        if (!c || combat || h.occupe() || id === carte()?.id) return false;
+        const d = jeu().depart?.carte === id ? jeu().depart : null;
+        let pos = d ? { x: d.x, y: d.y } : null;
+        if (!pos) {
+          const cx = Math.floor(c.largeur / 2), cy = Math.floor(c.hauteur / 2);
+          let best = null;
+          for (let y = 0; y < c.hauteur; y++) for (let x = 0; x < c.largeur; x++) {
+            if (!G.libre(c, x, y)) continue;
+            const k = Math.abs(x - cx) + Math.abs(y - cy);
+            if (!best || k < best.k) best = { x, y, k };
+          }
+          pos = best || { x: cx, y: cy };
+        }
+        h.teleporter({ carte: id, x: pos.x, y: pos.y, direction: 'bas' });
+        noterRecit?.({ texte: `Le groupe arrive : ${c.nom}.` });
+        return true;
       },
       lancerRencontres(ids) {
         const c = carte(), liste = (jeu().donnees.groupes?.groupes || []).filter((g) => ids.includes(g.id));

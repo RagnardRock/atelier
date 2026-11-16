@@ -390,6 +390,17 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.42 : des scènes image et des jetons à soi (avec Tafl 1.37)
+
+- **Scène image** : dans Tafl, Carte › Nouvelle scène (ou Image de fond) pose une image (une battlemap, un lieu, une
+  ambiance) sous une grille dont on choisit la largeur. Dans le mode table, onglet Scène › **Cartes et scènes** : le
+  MJ y emmène le groupe (« Y aller »), ou sur n'importe quelle autre carte. Pions, brouillard au pinceau, gabarits et
+  combats marchent comme ailleurs.
+- **Jetons** : onglet Pions, chaque pion a son jeton : par défaut, une **image** importée pendant la séance (recadrée
+  au carré, dans un rond) ou un **personnage du jeu** (son sprite de Tafl, qui se tourne). Dans Tafl, un monstre
+  peut prendre le sprite d'un personnage (Monstres › Jeton). Les images vont aux amis et à l'écran des joueurs
+  comme les documents.
+
 ## Ce que fait Saga 1.41 : des mécaniques à soi, sans code (avec Tafl 1.36)
 
 Tafl › Données › Réglages › **Mécaniques** (pack JDR) change le fonctionnement du jeu sans script ; Saga le joue

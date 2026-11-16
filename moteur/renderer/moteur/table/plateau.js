@@ -112,10 +112,50 @@ const Plateau = (() => {
       ctx.drawImage(jeu.planche, im.sx, im.sy, jeu.taille, jeu.taille, x, y, jeu.taille, jeu.taille);
     }
     // Un pion : le sprite du personnage, sa tuile, l'image du monstre dans un rond, ou une pastille.
+    // Un jeton rond : une image (celle d'un monstre, ou importée par le MJ), recadrée dans le cercle.
+    function rond(src, x, y, t, couleur = '#3a1d22', lisse = false) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x + t / 2, y + t / 2, t * 0.46, 0, Math.PI * 2);
+      ctx.fillStyle = couleur;
+      ctx.fill();
+      ctx.clip();
+      const im = image(src);
+      if (im) {
+        const k = Math.min(t / im.naturalWidth, t / im.naturalHeight);
+        ctx.imageSmoothingEnabled = lisse && im.naturalWidth > t * 2; // une photo importée se lisse, le pixel art reste net
+        ctx.drawImage(im, x + (t - im.naturalWidth * k) / 2, y + (t - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
+        ctx.imageSmoothingEnabled = false;
+      }
+      ctx.restore();
+    }
+    let jetonSrc = () => '';
     function corps(jeu, p, x, y, maintenant) {
       const t = jeu.taille;
       if (p.tuile >= 0) { tuile(jeu, p.tuile, x, y, maintenant); return; }
-      const perso = p.personnage ? jeu.personnages.get(p.personnage) : null;
+      // Saga 1.42 : le jeton choisi par le MJ (une image, ou un personnage du jeu et son sprite).
+      if (p.jeton?.image) {
+        const src = jetonSrc(p.jeton.image);
+        rond(src, x, y, t, p.sorte === 'heros' ? '#1d2a3a' : '#3a1d22', true);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x + t / 2, y + t / 2, t * 0.46, 0, Math.PI * 2);
+        ctx.lineWidth = Math.max(1, t / 16);
+        ctx.strokeStyle = p.sorte === 'heros' ? 'rgba(125,190,255,.9)' : 'rgba(255,120,120,.9)';
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      const mDeJeton = !p.jeton && p.monstre ? (jeu.donnees.monstres_jdr?.monstres_jdr || []).find((q) => q.id === p.monstre) : null;
+      const idPerso = p.jeton?.personnage || (mDeJeton?.apparence) || p.personnage;
+      const perso = idPerso ? jeu.personnages.get(idPerso) : null;
+      if (perso && (p.jeton?.personnage || mDeJeton?.apparence)) {
+        Sprites.ombre(ctx, x, y, t);
+        if (perso.sprite) Sprites.dessinerSprite(ctx, perso.sprite, p.direction, 0, x, y, t);
+        else if (perso.tuile >= 0) tuile(jeu, perso.tuile, x, y, maintenant);
+        else Sprites.dessiner(ctx, perso.couleur || '#5ec8ff', p.direction, 0, x, y, t);
+        return;
+      }
       if (perso || p.sorte === 'heros' || (!p.monstre && !p.obstacle)) {
         const a = perso || jeu.heros;
         Sprites.ombre(ctx, x, y, t);
@@ -130,23 +170,12 @@ const Plateau = (() => {
         return;
       }
       const m = (jeu.donnees.monstres_jdr?.monstres_jdr || []).find((q) => q.id === p.monstre);
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(x + t / 2, y + t / 2, t * 0.46, 0, Math.PI * 2);
-      ctx.fillStyle = '#3a1d22';
-      ctx.fill();
-      ctx.clip();
-      const im = image(m?.image);
-      if (im) {
-        const k = Math.min(t / im.naturalWidth, t / im.naturalHeight);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(im, x + (t - im.naturalWidth * k) / 2, y + (t - im.naturalHeight * k) / 2, im.naturalWidth * k, im.naturalHeight * k);
-      }
-      ctx.restore();
+      rond(m?.image, x, y, t);
     }
 
     function dessiner(o) {
       const { jeu, carte, vue, maintenant } = o;
+      jetonSrc = o.jeton || (() => '');
       taille();
       if (cadree !== carte.id) cadrer(carte, jeu);
       const t = jeu.taille, z = camera.z;
@@ -164,6 +193,12 @@ const Plateau = (() => {
         ctx.globalAlpha = 1;
       }
       enJeu();
+      // Tafl 1.37 : une scène image (une battlemap, un lieu), étirée sous les calques. Lissée : c'est une photo.
+      if (carte.fond?.img.complete && carte.fond.img.naturalWidth) {
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(carte.fond.img, 0, 0, carte.largeur * t, carte.hauteur * t);
+      }
       ctx.imageSmoothingEnabled = false;
       for (const c of carte.calques) if (c.visible && c.profondeur !== 'dessus') calque(jeu, carte, c, maintenant);
       // Les pions et les PNJ, du haut vers le bas (celui qui est plus bas passe devant).
