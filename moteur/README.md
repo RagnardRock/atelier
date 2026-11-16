@@ -366,6 +366,26 @@ Une petite page web pour le téléphone (`compagnon/`), en plus de Saga sur le P
 Pour l'instant le lien vaut le temps de la partie ouverte dans Saga ; les documents du MJ et la salle de
 campagne permanente (consulter hors séance) viendront ensuite.
 
+## Ce que fait Saga 1.35 : la table en verre
+
+Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les panneaux en verre flottent dessus :
+- **En haut** : la campagne et la carte, l'état (combat, tour, pause), « Voir comme », l'écran des joueurs,
+  la pause, le compagnon.
+- **À gauche** : le rail d'outils, chacun avec sa touche (V déplacer, R règle, G gabarit, P ping, B et N le
+  pinceau du brouillard, D le tapis de dés).
+- **À droite** : un panneau à onglets, dont la largeur se règle en glissant son bord (retenue).
+  MJ : Chat (les jets en cartes et la discussion, mêlés ; on y tape `/r`, `/gr`, `/m`), Combat, Pions, Scène
+  (campagne, brouillard, rencontres, musique, dés), Joueurs. Ami : Chat, Journal, Fiche, Joueurs.
+- **En bas** : le pion choisi (PV + et −, Maj : par 5) et la barre des macros (touches 1 à 9, clic droit :
+  oublier). La hauteur se règle aussi.
+- **Le tapis de dés** : les jets roulent au milieu du plateau (`moteur/des-3d.js`, les mêmes dés que le
+  compagnon) et s'arrêtent sur les valeurs tirées par la partie. D l'ouvre pour composer un jet : toucher les
+  dés ou écrire une formule, puis Lancer ou glisser sur le tapis. Scène › Dés : sans tapis, sans animation.
+- L'ami qui joue dans son navigateur a la même table (`table/client.js`). L'écran des joueurs local (la télé)
+  garde son affichage dépouillé.
+
+Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
+
 ## La suite
 
 1. Les combats en duo et les talents qui changent le combat.

@@ -34,6 +34,10 @@ la page de l'essai (rubrique **Artifacts**).
 - `essais/9-compagnon.js` : le compagnon de Saga 1.34 sur un téléphone simulé (Pixel 7) : le QR du MJ, le
   téléphone relié, un jet dont les dés s'arrêtent sur ceux de Saga, une macro, les PV d'un pion, le fond, puis le téléphone d'un joueur (macros calculées, fiche, dés), le lien coupé.
 
+- `essais/10-saga-table-interface.js` : la table en verre de Saga 1.35 : les onglets du MJ, une macro à la
+  touche 1, le chat, le tapis de dés, les PV du pion choisi, la largeur retenue ; puis un ami dans son
+  navigateur (ses onglets, ses macros calculées, le chat, sa fiche, le tapis).
+
 ## Les lancer sur un PC (pour un développeur)
 
 ```

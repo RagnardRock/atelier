@@ -153,6 +153,7 @@ const EcranDes = (() => {
           ouvertParMoi = true;
           preparer();
           boite.classList.remove('passif');
+          plateau?.vider();
           if (!formule.value && l?.formule) formule.value = l.formule;
           tete.replaceChildren(el('span', { textContent: 'Choisis des dés, ou écris une formule (@for, @pb…) · glisse sur le tapis pour lancer' }));
           totalEl.textContent = '';

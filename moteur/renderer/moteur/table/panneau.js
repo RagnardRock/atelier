@@ -14,6 +14,27 @@ const TablePanneau = (() => {
   const lire = (k, d) => { try { const v = localStorage.getItem(`saga:table:${k}`); return v == null ? d : v; } catch { return d; } };
   const ecrire = (k, v) => { try { localStorage.setItem(`saga:table:${k}`, String(v)); } catch { /* stockage refusé */ } };
 
+  // La carte d'un jet dans le fil (le MJ et l'écran d'un ami la dessinent pareil).
+  const heureDe = (t) => {
+    if (!t) return '';
+    const s = Math.round((Date.now() - t) / 1000);
+    return s < 45 ? 'maintenant' : s < 3600 ? `il y a ${Math.round(s / 60)} min` : new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  };
+  function carteJetCommune(l, action = null) {
+    const res = l.resultat ? el('span', { className: `table-jet-res ${l.resultat}`, textContent: JdrDes.RESULTATS[l.resultat] || l.resultat }) : null;
+    const b = el('div', { className: `table-jet${l.cache ? ' cache' : ''}` },
+      el('div', { className: 'table-jet-tete' },
+        l.cache ? el('i', { className: 'codicon codicon-eye-closed' }) : null,
+        el('span', { textContent: [l.qui, l.quoi && l.quoi !== 'Jet' ? l.quoi : ''].filter(Boolean).join(' · ') + (l.cache ? ' (secret)' : '') }),
+        el('small', { textContent: l.cache ? (l.voit ? 'le MJ et son auteur' : 'MJ seulement') : heureDe(l.heure) })),
+      el('div', { className: 'table-jet-corps' },
+        el('span', { className: 'table-jet-des' },
+          ...l.des.map((d) => el('span', { className: `table-de d${d.faces}${d.garde ? '' : ' ecarte'}${d.garde && d.valeur === d.faces ? ' max' : ''}${d.garde && d.valeur === 1 && d.faces === 20 ? ' min' : ''}`, title: `d${d.faces}`, textContent: String(d.valeur) })),
+          l.bonus ? el('span', { className: 'table-jet-bonus', textContent: `${l.bonus > 0 ? '+' : '−'}${Math.abs(l.bonus)}` }) : null),
+        el('span', { className: 'table-jet-fin' }, el('b', { className: 'table-jet-total', textContent: String(l.total) }), res, action)));
+    return b;
+  }
+
   function creer({ conteneur, scene, boite, table: T }) {
     // Le panneau : ses onglets, un volet par onglet (le combat garde la boîte de table.js).
     const racine = el('div', { className: 'table-panneau' });
@@ -112,26 +133,7 @@ const TablePanneau = (() => {
     champ.onkeydown = (e) => e.stopPropagation();
     volets.chat.append(fil, el('div', { className: 'table-ecrire-zone' }, pourQui, formulaire));
     let signatureFil = '';
-    const heureDe = (t) => {
-      if (!t) return '';
-      const s = Math.round((Date.now() - t) / 1000);
-      return s < 45 ? 'maintenant' : s < 3600 ? `il y a ${Math.round(s / 60)} min` : new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    };
-    function carteJet(l) {
-      const res = l.resultat ? el('span', { className: `table-jet-res ${l.resultat}`, textContent: JdrDes.RESULTATS[l.resultat] || l.resultat }) : null;
-      const b = el('div', { className: `table-jet${l.cache ? ' cache' : ''}` },
-        el('div', { className: 'table-jet-tete' },
-          l.cache ? el('i', { className: 'codicon codicon-eye-closed' }) : null,
-          el('span', { textContent: [l.qui, l.quoi && l.quoi !== 'Jet' ? l.quoi : ''].filter(Boolean).join(' · ') + (l.cache ? ' (secret)' : '') }),
-          el('small', { textContent: l.cache ? 'MJ seulement' : heureDe(l.heure) })),
-        el('div', { className: 'table-jet-corps' },
-          el('span', { className: 'table-jet-des' },
-            ...l.des.map((d) => el('span', { className: `table-de d${d.faces}${d.garde ? '' : ' ecarte'}${d.garde && d.valeur === d.faces ? ' max' : ''}${d.garde && d.valeur === 1 && d.faces === 20 ? ' min' : ''}`, title: `d${d.faces}`, textContent: String(d.valeur) })),
-            l.bonus ? el('span', { className: 'table-jet-bonus', textContent: `${l.bonus > 0 ? '+' : '−'}${Math.abs(l.bonus)}` }) : null),
-          el('span', { className: 'table-jet-fin' }, el('b', { className: 'table-jet-total', textContent: String(l.total) }), res,
-            l.cache ? btn('eye', 'Révéler', () => { l.cache = false; dessinerFil(true); }, { classe: 'petit', titre: 'Montrer ce jet aux joueurs' }) : null)));
-      return b;
-    }
+    const carteJet = (l) => carteJetCommune(l, l.cache ? btn('eye', 'Révéler', () => { l.cache = false; dessinerFil(true); }, { classe: 'petit', titre: 'Montrer ce jet aux joueurs' }) : null);
     function dessinerFil(force = false) {
       const partie = T.partie();
       const multi = T.multi?.();
@@ -380,5 +382,5 @@ const TablePanneau = (() => {
       },
     };
   }
-  return { creer };
+  return { creer, carteJet: carteJetCommune };
 })();

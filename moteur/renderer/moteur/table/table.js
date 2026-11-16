@@ -187,7 +187,7 @@ const TableMode = (() => {
     // --- Démarrer, changer de carte ---
     function demarrer() {
       actif = true;
-      document.body.classList.add('mode-table');
+      document.body.classList.add('mode-table', 'table-verre');
       E.preparer(jeu(), partie());
       h.dialogue.observer((o) => {
         sceneTexte = o;
@@ -204,7 +204,7 @@ const TableMode = (() => {
     }
     function arreter() {
       actif = false;
-      document.body.classList.remove('mode-table');
+      document.body.classList.remove('mode-table', 'table-verre');
       h.dialogue.observer(null);
       panneau?.fermer();
       panneau = null;
