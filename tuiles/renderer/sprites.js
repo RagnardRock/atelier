@@ -148,7 +148,7 @@ const Sprites = (() => {
   // Tafl 1.34 : le personnage de base de Saga (../commun/perso-base.js), en planches PNG prêtes à retoucher :
   // { sprite, animations: { repos, attaque, coup, mort } }. coiffure : '' (tirée de la couleur), casquette,
   // courts ou longs. Agrandi pour des tuiles de 32 ou 48 px.
-  const COIFFURES = [['', 'Au hasard (selon sa couleur)'], ['courts', 'Cheveux courts'], ['longs', 'Cheveux longs']];
+  const COIFFURES = [['', 'Au hasard (selon sa couleur)'], ['courts', 'Cheveux courts'], ['longs', 'Cheveux longs'], ['queue', 'Queue de cheval'], ['couettes', 'Couettes'], ['chignon', 'Chignon'], ['herisses', 'Cheveux hérissés']];
   function persoBase(couleur, coiffure, tileSize = 16) {
     const pl = PersoBase.planches(couleur, coiffure ? { coiffure } : {}, Math.max(1, Math.round(tileSize / 32)));
     const m = pl.marche;

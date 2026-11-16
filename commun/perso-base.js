@@ -21,7 +21,7 @@ const PersoBase = (() => {
   const L = 32, H = 32;          // une image (marche et animations)
   const LA = 32, HA = 32;
   const ORDRE = ['bas', 'gauche', 'droite', 'haut'];
-  const COIFFURES = ['courts', 'longs'];
+  const COIFFURES = ['courts', 'longs', 'queue', 'couettes', 'chignon', 'herisses'];
 
   // ---------- Outils ----------
   const vide = (w = L, h = H) => Array.from({ length: h }, () => '.'.repeat(w));
@@ -155,11 +155,39 @@ const PersoBase = (() => {
   ];
 
   // Les cheveux longs : des mèches en plus, sur les épaules (de face), dans le dos, derrière l'oreille.
-  const LONGS = {
-    bas: [[13, 4, 'hH'], [14, 4, 'hHH'], [15, 4, 'hHHh'], [16, 5, 'hHHh'], [17, 5, 'hHHh'], [18, 6, 'hHh'], [19, 6, 'hH'], [20, 6, 'hh'],
-      [13, 26, 'Hh'], [14, 25, 'HHh'], [15, 24, 'hHHh'], [16, 23, 'hHHh'], [17, 23, 'hHHh'], [18, 23, 'hHh'], [19, 24, 'Hh'], [20, 24, 'hh']],
-    haut: [[17, 7, 'hHHHHHHHHHHHHHHHHh'], [18, 7, 'hHHoHHHHHHHHoHHHHh'], [19, 8, 'hHHHHHHHHHHHHHHh'], [20, 8, 'hHHHoHHHHoHHHHHh'], [21, 9, 'hhHHHHHHHHHHhh'], [22, 11, 'hhhhhhhhhh']],
-    droite: [[16, 6, 'HHHHHh'], [17, 6, 'hHHHHh'], [18, 7, 'hHHHh'], [19, 7, 'hHHh'], [20, 8, 'hHh'], [21, 8, 'hh']],
+  // Les coupes : des mèches ajoutées par-dessus la tête de base (« courts »), par direction (gauche = miroir
+  // de droite). [rangée, colonne, pixels].
+  const sym = (liste) => [...liste, ...liste.map(([r, c, t]) => [r, L - c - t.length, [...t].reverse().join('')])];
+  const COUETTE = [[8, 1, 'hHh'], [9, 0, 'hHHh'], [10, 0, 'hHHHh'], [11, 0, 'hHHHh'], [12, 0, 'hHoHh'], [13, 0, 'hHHHh'], [14, 1, 'hHHh'], [15, 1, 'hHHh'], [16, 1, 'hHh'], [17, 2, 'hh']];
+  const HERISSES = [[0, 8, 'h'], [0, 14, 'hh'], [0, 21, 'h'], [1, 7, 'hH'], [1, 13, 'hHHh'], [1, 20, 'hHh'], [2, 6, 'hHH'], [3, 5, 'hHH'], [4, 4, 'hH'], [2, 24, 'Hh'], [3, 25, 'Hh'], [4, 26, 'Hh'], [7, 3, 'hH'], [8, 2, 'hHH'], [7, 27, 'Hh'], [8, 27, 'HHh']];
+  const CHIGNON = [[0, 12, 'hHHHHh'], [1, 11, 'hHHlHHHh'], [2, 11, 'hKKKKKKh']];
+  const COUPES = {
+    courts: { bas: [], haut: [], droite: [] },
+    longs: {
+      bas: sym([[11, 3, 'hH'], [12, 3, 'hHH'], [13, 3, 'hHH'], [14, 3, 'hHHH'], [15, 3, 'hHHHh'], [16, 4, 'hHHHh'], [17, 4, 'hHHHh'], [18, 5, 'hHHh'], [19, 5, 'hHHh'], [20, 6, 'hHh'], [21, 6, 'hh']]),
+      haut: [[17, 7, 'hHHHHHHHHHHHHHHHHh'], [18, 7, 'hHHoHHHHHHHHoHHHHh'], [19, 8, 'hHHHHHHHHHHHHHHh'], [20, 8, 'hHHHoHHHHoHHHHHh'], [21, 9, 'hhHHHHHHHHHHhh'], [22, 11, 'hhhhhhhhhh']],
+      droite: [[16, 6, 'HHHHHh'], [17, 6, 'hHHHHh'], [18, 7, 'hHHHh'], [19, 7, 'hHHh'], [20, 8, 'hHh'], [21, 8, 'hh']],
+    },
+    queue: {
+      bas: [[12, 26, 'hH'], [13, 26, 'hHh'], [14, 26, 'hHh'], [15, 27, 'Hh'], [16, 27, 'hh']],
+      haut: [[13, 13, 'hKKKKh'], [14, 13, 'hHHHHh'], [15, 13, 'hHHHHh'], [16, 14, 'hHHh'], [17, 14, 'hHoh'], [18, 14, 'hHHh'], [19, 14, 'hHHh'], [20, 15, 'hh']],
+      droite: [[7, 4, 'K'], [7, 2, 'hH'], [8, 1, 'hHHh'], [9, 1, 'hHHh'], [10, 1, 'hHoh'], [11, 1, 'hHHh'], [12, 1, 'hHHh'], [13, 2, 'hHh'], [14, 2, 'hHh'], [15, 3, 'hh']],
+    },
+    couettes: {
+      bas: sym(COUETTE),
+      haut: sym(COUETTE),
+      droite: [[10, 2, 'hHh'], [11, 1, 'hHHh'], [12, 1, 'hHHHh'], [13, 1, 'hHoHh'], [14, 1, 'hHHh'], [15, 2, 'hHHh'], [16, 2, 'hHh'], [17, 3, 'hh']],
+    },
+    chignon: {
+      bas: CHIGNON,
+      haut: CHIGNON,
+      droite: [[0, 7, 'hHHHh'], [1, 6, 'hHHlHHh'], [2, 6, 'hHHHHHh'], [3, 7, 'KKKKK']],
+    },
+    herisses: {
+      bas: HERISSES,
+      haut: HERISSES,
+      droite: [[0, 10, 'h'], [0, 16, 'h'], [0, 20, 'h'], [1, 9, 'hH'], [1, 15, 'hHh'], [1, 19, 'hH'], [2, 7, 'hHH'], [3, 6, 'hH'], [4, 5, 'hH'], [6, 3, 'hH'], [7, 2, 'hHH']],
+    },
   };
 
   // ---------- Les jambes et les bras selon la pose ----------
@@ -244,7 +272,7 @@ const PersoBase = (() => {
     // Pendant un pas, tout le haut du corps descend d'un pixel (les genoux plient).
     const plie = o.pas ? 1 : 0, dy = plie + (o.respire || 0);
     let l = (dir === 'droite' ? PROFIL : dir === 'haut' ? DOS : FACE).slice();
-    if (o.coiffure === 'longs') for (const [r, c, s] of LONGS[dir]) poser(l, r, c, s);
+    for (const [r, c, s] of COUPES[o.coiffure]?.[dir] || []) poser(l, r, c, s);
     l = ombrer(l);
     if (o.cligne && dir !== 'haut') {
       // Les yeux fermés : la peau à la place de l'œil, et un trait de cils en bas.
