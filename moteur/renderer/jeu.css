@@ -1501,6 +1501,8 @@ body.table-verre .joueurs-jet-bouton:hover { background: rgba(255, 179, 71, 0.2)
 .notification .icon-button { flex: none; border-radius: 8px; opacity: 0.6; }
 .notification .icon-button:hover { opacity: 1; }
 body.table-verre #notifications { bottom: auto; top: calc(var(--ti-haut) + 12px); right: auto; left: 50%; transform: translateX(-50%); }
+/* Saga 1.49 : un outil ouvert (ses réglages en haut) : les notifications passent dessous. */
+body.table-verre.outil-table #notifications { top: calc(var(--ti-haut) + 108px); }
 /* Saga 1.48 : les listes de lecture du MJ. */
 .table-ligne.son.actif { background: rgba(255, 179, 71, 0.12); border-radius: 7px; }
 .table-ligne.son.actif .table-nom { color: var(--accent); }

@@ -10,12 +10,17 @@
 //   - la barre d'outils des deux écrans (celui du MJ et celui des joueurs) : barre({ … }).
 //
 // Un gabarit : { id, forme: 'cercle'|'cone'|'ligne'|'carre', x, y (l'origine, ou le centre), vx, vy (la
-// case visée, pour le cône et la ligne), taille (en cases), auteur, couleur }. Tout ce que voit un écran
+// case visée, pour le cône et la ligne), taille (en cases), auteur, couleur, anim (Saga 1.49 : '' ou une
+// des ANIMS), duree (secondes, 0 : il reste), fin (l'heure de l'hôte où il s'efface) }. Tout ce que voit un écran
 // vient de la vue (table/etat.js) : l'écran d'un téléphone (le futur compagnon) n'a qu'à la dessiner.
 
 const TableOutils = (() => {
   const FORMES = [['cercle', 'Cercle (rayon)', 6], ['cone', 'Cône', 4.5], ['ligne', 'Ligne', 9], ['carre', 'Cube (côté)', 3]];
   const COULEURS = [['rouge', 'Rouge', '#ef5b5b'], ['orange', 'Orange', '#f0a04c'], ['jaune', 'Jaune', '#f2d14c'], ['vert', 'Vert', '#6fd17d'], ['bleu', 'Bleu', '#5ea8ff'], ['violet', 'Violet', '#a77bff']];
+  // Saga 1.49 : les animations d'un gabarit (dessinées par le plateau), et combien de temps il reste.
+  const ANIMS = [['', 'Sans animation'], ['flammes', 'Flammes'], ['eau', 'Eau'], ['magie', 'Magie'], ['coeurs', 'Cœurs'], ['glace', 'Glace'], ['poison', 'Poison'], ['eclairs', 'Éclairs']];
+  const DUREES = [[3, '3 s'], [5, '5 s'], [10, '10 s'], [30, '30 s'], [60, '1 min'], [0, 'Il reste']];
+  const DUREE_DEFAUT = 5;
 
   // --- Le chat : /r (ou /roll) jet public, /gr (ou /mj) jet secret pour le MJ, /m nom : une macro ---
   function commande(texte) {
@@ -101,6 +106,8 @@ const TableOutils = (() => {
       forme, x: borne(a.x, carte.largeur), y: borne(a.y, carte.hauteur), vx: borne(a.vx ?? a.x, carte.largeur), vy: borne(a.vy ?? a.y, carte.hauteur),
       taille: Math.max(1, Math.min(60, Math.round(Number(a.taille) || 1))),
       couleur: COULEURS.some(([c]) => c === a.couleur) ? a.couleur : 'orange',
+      anim: ANIMS.some(([x]) => x && x === a.anim) ? a.anim : '',
+      duree: DUREES.some(([d]) => d === Number(a.duree)) ? Number(a.duree) : 0, // sans durée (anciens, scripts) : il reste
     };
   }
   const couleur = (id) => COULEURS.find(([c]) => c === id)?.[2] || '#f0a04c';
@@ -123,7 +130,9 @@ const TableOutils = (() => {
   // Rend { appuyer(c, e) → true si l'outil prend le clic, bouger(c), lacher(c), dessin() (pour le plateau), outil }.
   function barre(o) {
     let outil = null;               // null | 'regle' | 'gabarit'
-    let forme = 'cercle', metres = 6, teinte = 'orange';
+    let forme = 'cercle', metres = 6, teinte = 'orange', anim = '', duree = DUREE_DEFAUT;
+    // Saga 1.49 : la couleur de mes pings ('' : la mienne), la règle que les autres voient (le MJ peut mesurer en secret).
+    let teinteP = '', regleSecrete = false, envoiRegle = 0, regleEnvoyee = '';
     let trait = null;               // { de: { x, y }, a: { x, y }, gabarit: bool } pendant qu'on glisse
     const racine = el('div', { className: 'table-outils' });
     const boutonOutil = (id, icone, titre) => {
@@ -158,13 +167,23 @@ const TableOutils = (() => {
     const choixForme = el('select', { className: 'table-outil-choix', title: 'La forme du gabarit' }, ...FORMES.map(([f, nom]) => el('option', { value: f, textContent: nom })));
     const champM = el('input', { className: 'table-outil-m', type: 'number', min: '0.5', step: '0.5', title: 'La taille, en mètres' });
     const choixTeinte = el('select', { className: 'table-outil-choix', title: 'La couleur' }, ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
+    const choixAnim = el('select', { className: 'table-outil-choix', title: 'Une animation sur la zone' }, ...ANIMS.map(([a, nom]) => el('option', { value: a, textContent: nom })));
+    const choixDuree = el('select', { className: 'table-outil-choix', title: 'Combien de temps il reste' }, ...DUREES.map(([d, nom]) => el('option', { value: String(d), textContent: nom })));
+    const choixTeinteP = el('select', { className: 'table-outil-choix', title: 'La couleur de mes pings' }, el('option', { value: '', textContent: 'Ma couleur' }), ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
+    const choixRegle = el('select', { className: 'table-outil-choix', title: 'Qui voit ta règle' }, el('option', { value: 'tous', textContent: 'Vue de tous' }), el('option', { value: 'mj', textContent: 'Secrète (moi seul)' }));
+    choixAnim.onchange = () => { anim = choixAnim.value; };
+    choixDuree.onchange = () => { duree = Number(choixDuree.value) || 0; };
+    choixTeinteP.onchange = () => { teinteP = choixTeinteP.value; };
+    choixRegle.onchange = () => { regleSecrete = choixRegle.value === 'mj'; };
+    const reglagesP = el('span', { className: 'table-outil-reglages' }, choixTeinteP);
+    const reglagesR = el('span', { className: 'table-outil-reglages' }, choixRegle);
     const effacer = el('button', { className: 'table-outil', type: 'button', title: 'Effacer mes gabarits' }, el('i', { className: 'codicon codicon-clear-all' }));
     const aide = el('span', { className: 'table-outil-aide', textContent: 'Alt + clic : ping' });
     choixForme.onchange = () => { forme = choixForme.value; metres = FORMES.find(([f]) => f === forme)[2]; dessinerBarre(); };
     champM.onchange = () => { metres = Math.max(0.5, Number(champM.value) || 1.5); };
     choixTeinte.onchange = () => { teinte = choixTeinte.value; };
     effacer.onclick = () => o.effacer?.();
-    const reglages = el('span', { className: 'table-outil-reglages' }, choixForme, champM, el('small', { textContent: 'm' }), choixTeinte);
+    const reglages = el('span', { className: 'table-outil-reglages' }, choixForme, champM, el('small', { textContent: 'm' }), choixTeinte, choixAnim, choixDuree);
     const choixTeinteD = el('select', { className: 'table-outil-choix', title: 'La couleur du feutre' }, ...COULEURS.map(([c, nom]) => el('option', { value: c, textContent: nom })));
     const champNote = el('input', { className: 'table-outil-texte', type: 'text', maxLength: 120, placeholder: 'Texte de la note', title: 'Le texte de la note' });
     const choixCalque = el('select', { className: 'table-outil-choix', title: 'Qui voit ce que tu dessines' },
@@ -175,13 +194,19 @@ const TableOutils = (() => {
     effacerD.onclick = () => o.effacerDessins?.(o.mj ? calque : '');
     if (!o.mj) choixCalque.hidden = true;
     const reglagesD = el('span', { className: 'table-outil-reglages' }, choixTeinteD, champNote, choixCalque, effacerD);
-    racine.append(main, regle, gab, pingB, feutreB, noteB, effacer, ...(extras.length ? [el('span', { className: 'table-outil-sep' }), ...extras.map(([b]) => b)] : []), reglages, reglagesD, aide);
+    racine.append(main, regle, gab, pingB, feutreB, noteB, effacer, ...(extras.length ? [el('span', { className: 'table-outil-sep' }), ...extras.map(([b]) => b)] : []), reglages, reglagesD, reglagesP, ...(o.mj ? [reglagesR] : []), aide);
     o.conteneur.append(racine);
     function dessinerBarre() {
       for (const b of [regle, gab, pingB, feutreB, noteB]) b.classList.toggle('actif', outil === b.dataset.outil);
       main.classList.toggle('actif', !outil);
       for (const [b, x] of extras) { let on = false; try { on = Boolean(x.actif?.()); } catch { /* pas encore prêt */ } b.classList.toggle('actif', on); }
       reglages.hidden = outil !== 'gabarit';
+      reglagesP.hidden = outil !== 'ping';
+      reglagesR.hidden = outil !== 'regle';
+      choixAnim.value = anim;
+      choixDuree.value = String(duree);
+      choixTeinteP.value = teinteP;
+      choixRegle.value = regleSecrete ? 'mj' : 'tous';
       reglagesD.hidden = outil !== 'feutre' && outil !== 'note';
       champNote.hidden = outil !== 'note';
       choixTeinteD.value = teinteD;
@@ -213,11 +238,11 @@ const TableOutils = (() => {
         if (e.key === 'v' || e.key === 'V') { outil = null; dessinerBarre(); return true; }
         const x = extras.find(([, k]) => k.touche && k.touche.toLowerCase() === e.key.toLowerCase());
         if (x) { x[1].faire(); dessinerBarre(); return true; }
-        if (e.key === 'Escape' && (outil || trait)) { outil = null; trait = null; dessinerBarre(); return true; }
+        if (e.key === 'Escape' && (outil || trait)) { outil = null; trait = null; if (regleEnvoyee) { regleEnvoyee = ''; o.mesurer?.(null); } dessinerBarre(); return true; }
         return false;
       },
       appuyer(c, e) {
-        if (e.altKey || outil === 'ping') { o.ping?.(c); return true; }
+        if (e.altKey || outil === 'ping') { o.ping?.(c, teinteP); return true; }
         if (outil === 'regle' || e.shiftKey) { trait = { de: c, a: c, gabarit: false }; return true; }
         if (outil === 'gabarit') { trait = { de: c, a: c, gabarit: true }; return true; }
         if (outil === 'feutre') { trait = { de: c, a: c, points: [[c.fx ?? c.x + 0.5, c.fy ?? c.y + 0.5]] }; return true; }
@@ -233,6 +258,15 @@ const TableOutils = (() => {
       bouger(c) {
         if (!trait || !c) return;
         trait.a = c;
+        // Saga 1.49 : la règle se voit chez les autres (au plus 10 fois par seconde, quand elle change).
+        if (!trait.gabarit && !trait.points && !regleSecrete && o.mesurer) {
+          const n = longueur(trait.de, c), cle = `${trait.de.x},${trait.de.y},${c.x},${c.y}`;
+          const t = Date.now();
+          if (cle !== regleEnvoyee && t - envoiRegle >= 100) {
+            envoiRegle = t; regleEnvoyee = cle;
+            o.mesurer({ de: { x: trait.de.x, y: trait.de.y }, a: { x: c.x, y: c.y }, texte: `${n} case${n > 1 ? 's' : ''} · ${metresDe(n)}` });
+          }
+        }
         if (trait.points && trait.points.length < 400) {
           const p = [c.fx ?? c.x + 0.5, c.fy ?? c.y + 0.5], q = trait.points[trait.points.length - 1];
           if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.12) trait.points.push([Math.round(p[0] * 100) / 100, Math.round(p[1] * 100) / 100]);
@@ -241,11 +275,12 @@ const TableOutils = (() => {
       lacher() {
         const t = trait;
         trait = null;
+        if (regleEnvoyee) { regleEnvoyee = ''; o.mesurer?.(null); }
         if (t?.points) { o.dessiner?.({ points: t.points, couleur: teinteD, visible: calque }); return true; }
         if (!t?.gabarit) return Boolean(t);
         // Un cercle et un cube se posent au clic ; le cône et la ligne vont vers là où l'on a lâché.
         const vise = t.a.x !== t.de.x || t.a.y !== t.de.y ? t.a : { x: t.de.x, y: t.de.y + 1 };
-        o.placer?.({ forme, x: t.de.x, y: t.de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte });
+        o.placer?.({ forme, x: t.de.x, y: t.de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte, anim, duree });
         return true;
       },
       get occupe() { return Boolean(trait); },
@@ -259,7 +294,7 @@ const TableOutils = (() => {
         if (outil === 'gabarit' && (trait || survol)) {
           const de = trait?.de || survol, a = trait?.a || survol;
           const vise = a.x !== de.x || a.y !== de.y ? a : { x: de.x, y: de.y + 1 };
-          return { gabarit: { forme, x: de.x, y: de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte } };
+          return { gabarit: { forme, x: de.x, y: de.y, vx: vise.x, vy: vise.y, taille: taille(), couleur: teinte, anim } };
         }
         return null;
       },
@@ -267,7 +302,7 @@ const TableOutils = (() => {
     return api;
   }
 
-  return { FORMES, COULEURS, commande, remplacer, refsHeros, casesGabarit, normGabarit, couleur, marquesDispo, couleurMarque, barre };
+  return { FORMES, COULEURS, ANIMS, DUREES, commande, remplacer, refsHeros, casesGabarit, normGabarit, couleur, marquesDispo, couleurMarque, barre };
 })();
 
 if (typeof module !== 'undefined') module.exports = TableOutils;

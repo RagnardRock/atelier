@@ -322,7 +322,9 @@ const TableEtat = (() => {
       scene: ctx.scene && visiblePour(ctx.scene.visible || 'tous', role) ? { qui: ctx.scene.qui || '', texte: ctx.scene.texte || '', ...(Array.isArray(ctx.scene.choix) ? { choix: ctx.scene.choix.map(String) } : {}) } : null,
       caseM: reglages(jeu).caseM, diagonales: reglages(jeu).diagonales,
       // Saga 1.32 : les gabarits (tout le monde les voit), les pings récents.
-      gabarits: etatCarte(table, carte.id).gabarits.map((g) => ({ ...g, mien: mj || g.auteur === auteur(role) })),
+      gabarits: etatCarte(table, carte.id).gabarits.filter((g) => !g.fin || g.fin > (Number(ctx.maintenant) || Date.now())).map(({ fin, ...g }) => ({ ...g, mien: mj || g.auteur === auteur(role) })),
+      // Saga 1.49 : les règles des autres, pendant qu'ils mesurent.
+      regles: (ctx.regles || []).filter((q) => q.carte === carte.id && q.auteur !== auteur(role)).map(({ n, de, a, texte, qui, couleur }) => ({ n, de, a, texte, qui, couleur })),
       dessins: etatCarte(table, carte.id).dessins.filter((d) => mj || d.visible === 'tous').map((d) => ({ id: d.id, points: d.points, couleur: d.couleur, visible: d.visible, mien: mj || d.auteur === auteur(role) })),
       notes: etatCarte(table, carte.id).notes.filter((n) => mj || n.visible === 'tous').map((n) => ({ id: n.id, x: n.x, y: n.y, texte: n.texte, couleur: n.couleur, visible: n.visible, mien: mj || n.auteur === auteur(role) })),
       pings: (ctx.pings || []).filter((q) => q.carte === carte.id).map(({ n, x, y, qui, couleur }) => ({ n, x, y, qui, couleur })),
@@ -493,13 +495,27 @@ const TableEtat = (() => {
       case 'ping': {
         const x = Math.round(Number(a.x)), y = Math.round(Number(a.y));
         if (!(x >= 0 && y >= 0 && x < carte.largeur && y < carte.hauteur)) return non('Hors de la carte.');
-        return { ok: true, ping: { carte: carte.id, x, y } };
+        // Saga 1.49 : la couleur choisie (sinon celle de qui pingue).
+        const couleur = O.COULEURS.some(([c]) => c === a.couleur) ? a.couleur : '';
+        return { ok: true, ping: { carte: carte.id, x, y, ...(couleur ? { couleur: O.couleur(couleur) } : {}) } };
+      }
+      // Saga 1.49 : la règle de quelqu'un, que les autres voient pendant qu'il mesure (rien de gardé : table.js la tient).
+      case 'regle': {
+        if (role.spectateur) return non('Les spectateurs ne mesurent pas.');
+        if (!a.de || !a.a) return { ok: true, regle: { carte: carte.id, fin: true } };
+        const pt = (q) => ({ x: Math.max(0, Math.min(carte.largeur - 1, Math.round(Number(q.x) || 0))), y: Math.max(0, Math.min(carte.hauteur - 1, Math.round(Number(q.y) || 0))) });
+        return { ok: true, regle: { carte: carte.id, de: pt(a.de), a: pt(a.a), texte: String(a.texte || '').replace(/[\u0000-\u001f]/g, ' ').slice(0, 40), auteur: auteur(role) } };
       }
       case 'gabarit': {
         if (role.spectateur) return non('Les spectateurs ne posent pas de gabarit.');
-        const l = etatCarte(table, carte.id).gabarits;
+        const ec = etatCarte(table, carte.id);
+        // Saga 1.49 : ceux dont le temps est passé s'en vont.
+        const maintenant = Number(ctx.maintenant) || Date.now();
+        ec.gabarits = ec.gabarits.filter((g) => !g.fin || g.fin > maintenant);
+        const l = ec.gabarits;
         if (l.filter((g) => g.auteur === auteur(role)).length >= 12) return non('Pas plus de 12 gabarits chacun : efface les anciens.');
         const g = { id: `g-${Date.now().toString(36)}-${l.length}`, ...O.normGabarit(a, carte), auteur: auteur(role) };
+        if (g.duree) g.fin = maintenant + g.duree * 1000;
         l.push(g);
         return { ok: true, gabarit: g };
       }

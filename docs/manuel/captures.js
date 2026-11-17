@@ -282,7 +282,7 @@ const ESSAIS = {
   '9-compagnon.js': 'compagnon', '10-saga-table-interface.js': 'table', '11-saga-documents.js': 'docs',
   '12-saga-campagne.js': 'campagne', '14-saga-scene-image.js': 'scene', '15-saga-calque-initiative.js': 'calque',
   '16-saga-initiative-reglable.js': 'reglable',
-  '17-saga-vision.js': 'vision', '20-saga-auras-listes.js': 'auras', '21-saga-cartes-separees.js': 'cartes',
+  '17-saga-vision.js': 'vision', '20-saga-auras-listes.js': 'auras', '21-saga-cartes-separees.js': 'cartes', '22-saga-pings-gabarits-regle.js': 'pings',
 };
 for (const [fichier, prefixe] of Object.entries(ESSAIS)) {
   scene(`essai-${prefixe}`, async (nav) => {
