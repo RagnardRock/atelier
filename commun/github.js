@@ -20,6 +20,7 @@ const path = require('node:path');
 
 const DEPOT = 'RagnardRock/atelier';
 const API_MAX_AGE = 30 * 60_000; // on relit la liste complète (API) au plus une fois par demi-heure
+const HISTORIQUE_MAX_AGE = 24 * 60 * 60_000; // l'historique complet (toutes les pages de l'API) : une fois par jour
 
 class LimiteGithub extends Error {}
 
@@ -61,7 +62,8 @@ function lireFlux(xml) {
     if (!tag) continue;
     const contenu = entree.match(/<content[^>]*>([\s\S]*?)<\/content>/)?.[1] || '';
     // Le HTML de la Release est lui-même échappé dans le XML : on décode une fois pour retrouver le HTML.
-    releases.push({ tag_name: tag, body: htmlEnTexte(decoder(contenu)), draft: false, prerelease: false, assets: null });
+    const date = entree.match(/<updated>([^<]+)<\/updated>/)?.[1] || null; // pour la page Nouveautés d'Atelier
+    releases.push({ tag_name: tag, body: htmlEnTexte(decoder(contenu)), published_at: date, draft: false, prerelease: false, assets: null });
   }
   return releases;
 }
@@ -181,7 +183,54 @@ function creerGithub({ net, dossier, agent, api = `https://api.github.com/repos/
     return e.limiteJusqua && Date.now() < e.limiteJusqua ? e.limiteJusqua : null;
   };
 
-  return { releases, demanderApi, urlFichier, limiteJusqua };
+  // Toutes les Releases depuis le début (pour la page « Nouveautés » d'Atelier), les plus récentes en
+  // tête, réduites à ce qui sert : étiquette, notes, date, lien. releases() n'en donne que 100 (une
+  // page de l'API) : ici on lit aussi les pages suivantes, mais au plus une fois par jour (2 ou 3
+  // demandes). Entre-temps, chaque lecture s'ajoute à l'historique gardé sur le disque, si bien
+  // qu'une Release qui glisse de la page 1 à la page 2 n'est jamais perdue.
+  // recentes : la liste de releases() si on l'a déjà sous la main (sinon on la relit).
+  async function historique(recentes = null) {
+    recentes ??= await releases();
+    const e = await etat();
+    const parTag = new Map((e.historique || []).map((r) => [r.tag_name, r]));
+    const ajouter = (list) => {
+      for (const r of list) {
+        if (r.draft || r.prerelease) continue;
+        const avant = parTag.get(r.tag_name);
+        parTag.set(r.tag_name, {
+          tag_name: r.tag_name,
+          // Une Release venue de suivantes() n'a ni notes ni date : on garde celles qu'on connaissait.
+          body: r.body || avant?.body || '',
+          published_at: r.published_at || avant?.published_at || null,
+          html_url: r.html_url || avant?.html_url || `${site}/releases/tag/${encodeURIComponent(r.tag_name)}`,
+        });
+      }
+    };
+    ajouter(recentes);
+    let erreur = null;
+    if ((e.list?.length || 0) >= 100 && (!e.historiqueAt || Date.now() - e.historiqueAt > HISTORIQUE_MAX_AGE)) {
+      try {
+        for (let page = 2; page <= 20; page++) { // 20 : garde-fou (2 000 Releases)
+          const list = await (await demanderApi(`/releases?per_page=100&page=${page}`)).json();
+          ajouter(list);
+          if (list.length < 100) break;
+        }
+        e.historiqueAt = Date.now();
+      } catch (err) {
+        erreur = err; // limite atteinte ou réseau : on montre ce qu'on a, et on réessaiera
+      }
+    }
+    const liste = [...parTag.values()].sort((a, b) => {
+      // Sans date (Release toute neuve, pas encore lue en détail) : en tête, c'est la plus récente.
+      if (!a.published_at || !b.published_at) return Number(!b.published_at) - Number(!a.published_at);
+      return b.published_at.localeCompare(a.published_at);
+    });
+    e.historique = liste;
+    await enregistrer();
+    return { liste, erreur };
+  }
+
+  return { releases, historique, demanderApi, urlFichier, limiteJusqua };
 }
 
 module.exports = { creerGithub, LimiteGithub, lireFlux };

@@ -658,3 +658,56 @@ input[type=date], input[type=time] { height: 26px; padding: 0 8px; border: 1px s
 .ia-barre { height: 4px; border-radius: 2px; background: var(--hover); overflow: hidden; }
 .ia-barre span { display: block; height: 100%; background: var(--accent); transition: width 0.3s; }
 @media (max-width: 640px) { .ia-modele { flex-wrap: wrap; } }
+
+/* ---------- Nouveautés : toutes les versions de tous les outils ---------- */
+/* Pastille sur le bouton de la barre de titre : nombre de versions sorties depuis la dernière visite. */
+#btn-nouveautes { position: relative; }
+#btn-nouveautes .pastille { position: absolute; top: 1px; right: -2px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--accent-text); font-size: 10px; font-weight: 700; line-height: 15px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none; }
+.nv-overlay { padding: 56px 20px 20px !important; align-items: stretch; }
+.nv-panneau { width: min(1180px, 100%); max-width: none; max-height: none; height: 100%; overflow: hidden; }
+.nv-panneau > header { gap: 8px; height: 52px; padding: 0 10px 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); flex-shrink: 0; }
+.nv-panneau > header .modal-title { flex: 0 0 auto; margin-right: auto; font-size: 15px; }
+.nv-titre-icone { color: var(--accent); font-size: 16px; }
+.nv-recherche { width: min(320px, 40vw); height: 28px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; background: rgba(0, 0, 0, 0.2); outline: none; }
+.nv-corps { flex: 1; min-height: 0; display: grid; grid-template-columns: 210px 1fr; }
+/* Filtre par outil : une colonne à gauche (une ligne de pastilles sur un écran étroit, plus bas). */
+.nv-filtres { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; border-right: 1px solid rgba(255, 255, 255, 0.06); overflow-y: auto; }
+.nv-filtre { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--text); font-size: 13px; cursor: pointer; text-align: left; white-space: nowrap; flex-shrink: 0; }
+.nv-filtre:hover { background: var(--hover); color: var(--text-strong); }
+.nv-filtre.actif { border-color: color-mix(in srgb, var(--accent) 50%, transparent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--text-strong); }
+.nv-filtre img { width: 18px; height: 18px; }
+.nv-filtre .codicon { width: 18px; text-align: center; color: var(--accent); }
+.nv-filtre-nom { flex: 1; }
+.nv-filtre .compte { min-width: 22px; padding: 0 5px; border-radius: 9px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 11px; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.nv-filtre.actif .compte { color: var(--accent); }
+.nv-point { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.nv-droite { min-height: 0; display: flex; flex-direction: column; }
+.nv-info { margin: 10px 20px 0; }
+.nv-liste { flex: 1; overflow-y: auto; padding: 4px 20px 24px; user-select: text; }
+.nv-rien { margin: 24px 4px; }
+.nv-jour-titre { position: sticky; top: 0; z-index: 1; margin: 0; padding: 14px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); background: linear-gradient(rgba(26, 27, 36, 0.98) 70%, rgba(26, 27, 36, 0)); }
+/* Les versions d'un même jour : en colonnes quand il y a la place (écran large ou ultralarge). */
+.nv-jour-versions { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 10px; align-items: start; }
+.nv-version { display: grid; grid-template-columns: 32px 1fr; gap: 12px; padding: 12px 14px; border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 12px; background: rgba(255, 255, 255, 0.03); }
+.nv-version.nouvelle { border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: color-mix(in srgb, var(--accent) 6%, rgba(255, 255, 255, 0.02)); }
+.nv-icone { width: 32px; height: 32px; }
+.nv-contenu { min-width: 0; }
+.nv-titre { display: flex; align-items: center; gap: 8px; min-height: 22px; }
+.nv-nom { font-weight: 600; color: var(--text-strong); font-size: 14px; }
+.nv-numero { color: var(--accent); font-variant-numeric: tabular-nums; }
+.nv-badge { padding: 0 7px; border-radius: 9px; background: var(--accent); color: var(--accent-text); font-size: 10px; font-weight: 700; line-height: 17px; text-transform: uppercase; letter-spacing: 0.04em; }
+.nv-lien { display: inline-flex; color: var(--muted); }
+.nv-lien:hover { color: var(--text-strong); }
+.nv-notes { margin: 6px 0 0; padding-left: 16px; line-height: 1.5; color: var(--text); }
+.nv-notes li + li { margin-top: 3px; }
+.nv-notes a { color: var(--accent); text-decoration: none; }
+.nv-notes a:hover { text-decoration: underline; }
+.nv-vide { margin: 6px 0 0; }
+@media (max-width: 860px) {
+  .nv-corps { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .nv-filtres { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-right: none; border-bottom: 1px solid rgba(255, 255, 255, 0.06); max-height: 30vh; }
+  .nv-filtre { height: 28px; }
+  .nv-jour-versions { grid-template-columns: 1fr; }
+}
+.nv-version header.nv-titre { height: auto; padding: 0; }
+.nv-version { align-items: start; }

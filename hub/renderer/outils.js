@@ -42,6 +42,13 @@ const Outils = (() => {
     return o.derniere ? `Pas installé · Dernière version : ${o.derniere}` : 'Pas installé · Aucune version publiée';
   }
 
+  // Ouvre la page Nouveautés filtrée sur cet outil (toutes ses versions et leurs notes).
+  function boutonNouveautes(o) {
+    const b = el('button', { className: 'icon-button', title: `Nouveautés de ${o.nom} : toutes ses versions` }, el('i', { className: 'codicon codicon-megaphone' }));
+    b.onclick = () => Nouveautes.ouvrir(o.id);
+    return b;
+  }
+
   function carte(o) {
     const busy = enCours.has(o.id);
     const actions = el('div', { className: 'outil-actions' });
@@ -60,11 +67,11 @@ const Outils = (() => {
       dossier.onclick = () => window.atelier.ouvrirDossier(o.id);
       const corbeille = el('button', { className: 'icon-button desinstaller', title: `Désinstaller ${o.nom}`, disabled: busy }, el('i', { className: 'codicon codicon-trash' }));
       corbeille.onclick = () => desinstaller(o);
-      actions.append(el('span', { className: 'spacer' }), dossier, corbeille);
+      actions.append(el('span', { className: 'spacer' }), boutonNouveautes(o), dossier, corbeille);
     } else {
       const b = bouton('Installer', 'desktop-download', () => installer(o), true);
       if (!o.derniere && !o.enPreparation) b.disabled = true;
-      actions.append(b);
+      actions.append(b, el('span', { className: 'spacer' }), boutonNouveautes(o));
     }
 
     const fav = favoris.has(o.id);

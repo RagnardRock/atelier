@@ -474,6 +474,7 @@ const WIDGETS = [
   ['minuteurs', 'Minuteurs', 'comptes à rebours qui tournent en même temps (raccourcis 5, 15, 25 min, Pomodoro), carillon et notification à la fin, gardés si Atelier se ferme.', 'Lancer un minuteur.'],
   ['calendrier', 'Calendrier', 'évènements à une date, avec ou sans heure, et une note.', 'Lire (calendrier.md), ajouter, modifier, supprimer.'],
   ['calculatrice', 'Calculatrice', 'calcul tapé ou cliqué, résultat pendant la frappe ; + − × ÷, ^, √, parenthèses, %, π, « Rés » ; historique des 30 derniers calculs.', 'Calculer (action calculer, même interpréteur que le widget).'],
+  ['nouveautes', 'Nouveautés (bouton mégaphone de la barre de titre, Ctrl+Maj+N ; aussi sur chaque carte d\'outil)', 'toutes les versions publiées de tous les outils et d\'Atelier, les plus récentes en tête, rangées par jour ; pour chaque version, les notes de GitHub (titres des PR, lien vers chaque PR) ; filtre par outil, « Nouveau » = sorti depuis la dernière visite (pastille sur le bouton), recherche dans les notes. Ce n\'est pas un widget qu\'on cache.', 'aucun accès direct : propose à l\'utilisateur d\'ouvrir cette page.'],
   ['claude', 'Loki', 'toi : cette conversation ; « + » nouvelle conversation, horloge = conversations précédentes.', ''],
 ];
 
