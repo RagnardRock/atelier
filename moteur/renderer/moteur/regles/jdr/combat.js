@@ -81,7 +81,6 @@ const JdrCombat = (() => {
     const pv = (u) => (estHeros(u) ? u.c.pv : u.pv);
     const pvMax = (u) => (estHeros(u) ? P.pvMax(jeu, u.c) : u.pvMax);
     const debout = (u) => pv(u) > 0;
-    const mort = (u) => (estHeros(u) ? Boolean(u.c.mort_definitive) : pv(u) <= 0);
     const nom = (u) => (estHeros(u) ? P.nom(jeu, u.c) : u.nom);
     const le = (u) => (estHeros(u) ? nom(u) : `le ${nom(u)}`.replace(/^le ([AEIOUYÉÈÊHaeiouyéèêh])/, 'l\'$1'));
     const Le = (u) => { const t = le(u); return t[0].toUpperCase() + t.slice(1); };
@@ -97,7 +96,6 @@ const JdrCombat = (() => {
     const caDe = (u) => (M?.defense ? JdrMeca.defense(jeu, varsDe(u), caBrute(u)) : caBrute(u));
     const nomDefense = M?.defense ? 'Défense' : 'CA';
     const idsEtats = (u) => u.etats.map((e) => e.id);
-    const allies = (u) => (estHeros(u) ? heros : monstres);
     const adversaires = (u) => (estHeros(u) ? monstres : heros);
     const vivants = (l) => l.filter(debout);
     const plusBlesse = (l) => [...l].sort((a, b) => pv(a) / pvMax(a) - pv(b) / pvMax(b))[0];

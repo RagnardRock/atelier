@@ -11,7 +11,7 @@
 // vers le fichier rangé à côté du document).
 
 (() => {
-  const { xml, lireXml, enfants, enfant, attr, htmlRun, htmlMedia, stylePara, assemblerListes } = Formats;
+  const { xml, lireXml, enfants, enfant, htmlRun, htmlMedia, stylePara, assemblerListes } = Formats;
   const NS = {
     office: 'urn:oasis:names:tc:opendocument:xmlns:office:1.0',
     style: 'urn:oasis:names:tc:opendocument:xmlns:style:1.0',

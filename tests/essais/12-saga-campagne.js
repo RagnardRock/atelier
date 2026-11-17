@@ -116,7 +116,6 @@ module.exports = [
         reseau.accepter(reseau.infos().attente[0].id, true);
         await ami.waitForSelector('.ti-haut', { timeout: 15000 });
       }
-      const fichiers = () => (fs.existsSync(donnees) ? fs.readdirSync(donnees, { recursive: true }).map(String) : []);
       let tel = null;
       try {
         await page.goto(`file://${html}`);

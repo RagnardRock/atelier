@@ -19,14 +19,13 @@
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const rpc = require('vscode-jsonrpc/node');
-const { pathToFileURL, fileURLToPath } = require('node:url');
+const { pathToFileURL } = require('node:url');
 
 const NODE_MODULES = path.join(__dirname, 'node_modules');
 const TSSERVER = path.join(NODE_MODULES, 'typescript', 'lib', 'tsserver.js');
 const VUE_SERVER = path.join(NODE_MODULES, '@vue', 'language-server', 'bin', 'vue-language-server.js');
 
 const toUri = (file) => pathToFileURL(file).href;
-const toPath = (uri) => fileURLToPath(uri);
 // tsserver veut des chemins avec des / (même sous Windows).
 const tsPath = (file) => file.replace(/\\/g, '/');
 

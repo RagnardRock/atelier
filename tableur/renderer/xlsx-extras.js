@@ -261,7 +261,6 @@ const XlsxExtras = (() => {
     const numCache = (valeurs) => `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${valeurs.length}"/>${valeurs.map((v, i) => (typeof v === 'number' ? `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>` : '')).join('')}</c:numCache>`;
     const rond = g.type === 'secteurs' || g.type === 'anneau';
     // Les références de chaque série (titre, catégories, valeurs) dans la plage.
-    const n = d.enColonnes ? p.r2 - p.r1 + 1 - d.r0 : p.c2 - p.c1 + 1 - d.c0;
     const refsSerie = (k) => (d.enColonnes
       ? { tx: d.ligneTitres ? ref(p.r1, p.c1 + k, p.r1, p.c1 + k) : null, cat: d.colonneTitres ? ref(p.r1 + d.r0, p.c1, p.r2, p.c1) : null, val: ref(p.r1 + d.r0, p.c1 + k, p.r2, p.c1 + k) }
       : { tx: d.colonneTitres ? ref(p.r1 + k, p.c1, p.r1 + k, p.c1) : null, cat: d.ligneTitres ? ref(p.r1, p.c1 + d.c0, p.r1, p.c2) : null, val: ref(p.r1 + k, p.c1 + d.c0, p.r1 + k, p.c2) });

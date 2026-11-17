@@ -1,0 +1,13 @@
+{
+  "name": "atelier-verif",
+  "private": true,
+  "description": "Le vérificateur de code de l'Atelier (ESLint) et les essais rapides de la logique (voir LISEZMOI.md)",
+  "scripts": {
+    "code": "eslint ..",
+    "essais": "node --test"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "playwright": "1.63.0"
+  }
+}

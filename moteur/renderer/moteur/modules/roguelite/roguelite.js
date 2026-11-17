@@ -26,7 +26,6 @@
   const estBoss = (jeu, id) => Boolean((jeu.donnees?.ennemis?.ennemis || []).find((e) => e?.id === id)?.boss);
   const modeleDe = (d, id) => d.salles.find((s) => s.id === id) || null;
   const idSalle = (run, i) => `${run.salles[i].modele}@rl-${run.etage}-${i}`;
-  const NOMS_COTES = { n: 'nord', s: 'sud', e: 'est', o: 'ouest' };
   const DIR_COTE = { n: 'haut', s: 'bas', e: 'droite', o: 'gauche' };
 
   // Les cases de porte de la carte affichée : index → côté (préparé à l'arrivée, bloque doit rester rapide).

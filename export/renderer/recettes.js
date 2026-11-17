@@ -20,7 +20,6 @@ const Recettes = (() => {
     return projet.publicDir ? `/${rel}` : rel;
   }
 
-  const qualiteDefaut = (ctx, format) => (format === 'jpeg' ? ctx.config.jpegQuality : ctx.config.webpQuality);
   const secoursDefaut = (ctx) => (hasTransparency(ctx.image) ? 'png' : 'jpeg');
 
   // Une sortie image : on prépare le canvas tout de suite (pour la miniature) et on encode à la demande.

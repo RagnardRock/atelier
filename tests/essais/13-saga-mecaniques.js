@@ -45,7 +45,7 @@ module.exports = [
         fiche.champs = CHAMPS;
         fiche.blocs.splice(1, 0, { type: 'champs', titre: 'Défense', colonne: 1, champs: CHAMPS.map((c) => c.id) });
         R.jdr = { ...R.jdr, fiche, mecaniques: MECANIQUES };
-        const [thor, elaria] = partie.equipe;
+        const [thor] = partie.equipe;
         const out = {};
         // Les formules lisent les champs de la fiche.
         out.defense = JdrMeca.defense(jeu, JdrMeca.varsHeros(jeu, thor), 99);

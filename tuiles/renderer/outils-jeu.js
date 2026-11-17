@@ -123,7 +123,6 @@ const OutilsJeu = (() => {
     const jdr = d.reglages?.regles === 'jdr';
     const enGroupe = jrpg || jdr;
     const nivMax = jdr ? 20 : 100;
-    const nom = (liste, id) => liste.find((x) => x.id === id)?.nom || liste.find((x) => x.id === id)?.titre || id;
     // Les membres possibles : les créatures (Pokémon), les personnages qui ont une classe (JRPG), ou les
     // pré-tirés (JDR : un personnage avec une fiche de classe).
     const membres = jdr ? d.personnages.filter((p) => p.jdr?.classe).map((p) => [p.id, `${p.nom || p.id}${p.heros ? ' (héros)' : ''}`])

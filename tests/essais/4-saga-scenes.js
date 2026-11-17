@@ -54,7 +54,7 @@ module.exports = [
   {
     nom: 'Saga : changer d\'apparence puis disparaître en pleine scène (Saga 1.27)',
     async faire(ctx) {
-      const { page, erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeu(ctx), { ctx });
+      const { erreurs, saga } = await ouvrirSaga(ctx.navigateur, await jeu(ctx), { ctx });
       await saga.attendreLibre();
       // La statue bloque sa case.
       await saga.aller(12, 14);
