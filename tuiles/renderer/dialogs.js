@@ -74,7 +74,7 @@ const Dialogs = (() => {
     }, 0);
   }
 
-  function form({ title, fields, okLabel = 'OK', cancelLabel = 'Annuler', onInput, extra, width = 420, buttons = [] }) {
+  function form({ title, fields, okLabel = 'OK', cancelLabel = 'Annuler', onInput, extra, width = 420, buttons = [], onglets = null }) {
     close(null);
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -86,16 +86,28 @@ const Dialogs = (() => {
       card.querySelector('.modal-title').textContent = title;
       const body = card.querySelector('.modal-body');
       const inputs = {};
+      // Tafl 1.42 : des onglets (onglets: ['Apparence', …], et onglet: 'Apparence' sur chaque champ).
+      // Un champ sans onglet se voit dans tous.
+      const parOnglet = [];
+      const ranger = (node, f) => { if (onglets && f.onglet) parOnglet.push([node, f.onglet]); };
+      let barre = null;
+      if (onglets) {
+        barre = document.createElement('div');
+        barre.className = 'modal-onglets';
+        barre.setAttribute('role', 'tablist');
+        body.appendChild(barre);
+      }
 
       for (const f of fields) {
         if (f.type === 'info') {
           const p = document.createElement('p');
           p.className = 'modal-info';
           p.textContent = f.text;
+          ranger(p, f);
           body.appendChild(p);
           continue;
         }
-        if (f.type === 'element') { body.appendChild(f.element); continue; }
+        if (f.type === 'element') { ranger(f.element, f); body.appendChild(f.element); continue; }
         const row = document.createElement('label');
         row.className = `field field-${f.type}`;
         if (f.hidden) row.hidden = true;
@@ -138,7 +150,24 @@ const Dialogs = (() => {
         }
         if (f.type === 'checkbox') row.classList.add('checkbox-row');
         inputs[f.key] = { input, field: f, row };
+        ranger(row, f);
         body.appendChild(row);
+      }
+      if (onglets) {
+        const montrer = (nom) => {
+          for (const b of barre.children) { b.classList.toggle('active', b.textContent === nom); b.setAttribute('aria-selected', String(b.textContent === nom)); }
+          for (const [node, o] of parOnglet) node.classList.toggle('hors-onglet', o !== nom);
+        };
+        for (const nom of onglets) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'modal-onglet';
+          b.setAttribute('role', 'tab');
+          b.textContent = nom;
+          b.onclick = () => montrer(nom);
+          barre.appendChild(b);
+        }
+        montrer(onglets[0]);
       }
 
       const values = () => {

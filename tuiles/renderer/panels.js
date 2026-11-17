@@ -421,7 +421,7 @@ const Panels = (() => {
       eye(App.options.showPassage || App.options.layer < 0, 'Montrer le passage par-dessus la carte', () => App.toggleOption('showPassage')),
       el('i', { className: 'codicon codicon-shield lead' }),
       el('span', { className: 'row-name', textContent: 'Passage' }),
-      el('span', { className: 'row-meta', textContent: `${map.passage.reduce((n, v) => n + (v > 0), 0)} case(s) peinte(s)` }),
+      el('span', { className: 'row-meta', textContent: ((n) => (n ? `${n} case${n > 1 ? 's' : ''} peinte${n > 1 ? 's' : ''}` : 'rien de peint'))(map.passage.reduce((n, v) => n + (v > 0), 0)) }),
     ]);
     passage.onclick = () => App.selectLayer(-1);
     layersEl.append(passage);

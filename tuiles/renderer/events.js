@@ -21,7 +21,7 @@
 //     interrupteurs: [{ id, nom, description }],
 //     variables: [{ id, nom, description, defaut }] } (Tafl 0.31 : un nombre ou un texte, pour les scripts)
 //
-// Les deux grandes fenêtres (l'éditeur d'un événement, et Jeu › Données du jeu) travaillent sur une
+// Les deux grandes fenêtres (l'éditeur d'un événement, et Données) travaillent sur une
 // copie et la rendent d'un bloc quand on valide : App la remet dans le jeu avec Doc.change(), ce qui
 // s'annule en un seul Ctrl+Z.
 
@@ -131,7 +131,7 @@ const Events = (() => {
   const choixQuetes = (doc, actuelle) => {
     const list = doc.data.quetes.map((q) => [q.id, q.titre || q.id]);
     if (actuelle && !list.some(([k]) => k === actuelle)) list.unshift([actuelle, `${actuelle} (n'existe plus)`]);
-    return list.length ? list : [['', 'Aucune quête : crée-la dans Jeu › Données du jeu']];
+    return list.length ? list : [['', 'Aucune quête : crée-la dans Données']];
   };
   // Tafl 0.16 : les badges (Réglages), les tenues du héros, la monnaie.
   const badges = (doc) => doc.data.reglages?.badges || [];
@@ -150,7 +150,7 @@ const Events = (() => {
   const choixBadges = (doc, actuel) => {
     const list = badges(doc).map((b) => [b.id, b.nom]);
     if (actuel && !list.some(([k]) => k === actuel)) list.unshift([actuel, `${actuel} (n'existe plus)`]);
-    return list.length ? list : [['', 'Aucun badge : crée-les dans Jeu › Données du jeu › Réglages']];
+    return list.length ? list : [['', 'Aucun badge : crée-les dans Données › Réglages']];
   };
   const tenues = (doc) => doc.data.personnages.find((p) => p.heros)?.tenues || [];
   const monnaie = (doc) => doc.data.reglages?.monnaie || 'Pokédollars';
@@ -238,7 +238,7 @@ const Events = (() => {
         { key: 'expression', label: 'Expression', type: 'text', value: c.expression, list: 'tafl-expressions', placeholder: 'normal' },
         { key: 'texte', label: 'Texte', type: 'textarea', rows: 5, value: c.texte, placeholder: 'Bonjour {joueur} ! Belle journée pour partir à l\'aventure.' },
         { type: 'element', element: el('div', { className: 'dialogue-apercu' }) },
-        { type: 'info', text: '{joueur} est remplacé par le nom du joueur. Une ligne vide coupe le texte en plusieurs boîtes de dialogue. Le portrait vient de Jeu › Données du jeu › Personnages.' },
+        { type: 'info', text: '{joueur} est remplacé par le nom du joueur. Une ligne vide coupe le texte en plusieurs boîtes de dialogue. Le portrait vient de Données › Personnages.' },
       ],
       onInput: (v, f, doc, ev) => apercuDialogue(f.card.querySelector('.dialogue-apercu'), doc, { qui: v.qui, expression: v.expression || 'normal', texte: v.texte }, ev),
       depuis: (v) => ({ type: 'dire', qui: v.qui, expression: v.expression.trim() || 'normal', texte: v.texte.trim() }),
@@ -328,7 +328,7 @@ const Events = (() => {
         { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['donner', 'Donner au joueur'], ['retirer', 'Retirer au joueur']] },
         { key: 'objet', label: 'Objet', type: 'text', value: c.objet, list: 'tafl-objets', placeholder: 'potion' },
         { key: 'nombre', label: 'Combien', type: 'number', value: c.nombre, min: 1, max: 999 },
-        { type: 'info', text: 'L\'identifiant de l\'objet (potion, planche-de-surf…), parmi les objets de Jeu › Données du jeu.' },
+        { type: 'info', text: 'L\'identifiant de l\'objet (potion, planche-de-surf…), parmi les objets de Données.' },
       ],
       depuis: (v) => ({ type: 'objet', action: v.action, objet: Doc.slug(v.objet, ''), nombre: clamp(Math.round(v.nombre) || 1, 1, 999) }),
       valide: (c) => (c.objet ? null : 'Quel objet ?'),
@@ -340,7 +340,7 @@ const Events = (() => {
       champs: (doc, c) => [
         { key: 'creature', label: 'Créature', type: 'text', value: c.creature, list: 'tafl-creatures', placeholder: 'salameche' },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 1, max: 100 },
-        { type: 'info', text: 'Le starter, un cadeau, un échange… Une créature de Jeu › Données du jeu.' },
+        { type: 'info', text: 'Le starter, un cadeau, un échange… Une créature de Données.' },
       ],
       depuis: (v) => ({ type: 'creature', creature: Doc.slug(v.creature, ''), niveau: clamp(Math.round(v.niveau) || 5, 1, 100) }),
       valide: (c) => (c.creature ? null : 'Quelle créature ?'),
@@ -363,7 +363,7 @@ const Events = (() => {
       nouveau: () => ({ type: 'combat_dresseur', dresseur: '' }),
       champs: (doc, c) => [
         { key: 'dresseur', label: 'Dresseur', type: 'text', value: c.dresseur, list: 'tafl-dresseurs', placeholder: 'rival-1' },
-        { type: 'info', text: 'Un dresseur de Jeu › Données du jeu : son équipe, ses dialogues, l\'argent gagné, et son niveau qui peut suivre la progression du joueur (Réglages).' },
+        { type: 'info', text: 'Un dresseur de Données : son équipe, ses dialogues, l\'argent gagné, et son niveau qui peut suivre la progression du joueur (Réglages).' },
       ],
       depuis: (v) => ({ type: 'combat_dresseur', dresseur: Doc.slug(v.dresseur, '') }),
       valide: (c) => (c.dresseur ? null : 'Quel dresseur ?'),
@@ -378,7 +378,7 @@ const Events = (() => {
         // Tafl 1.24 (Saga 1.22) : le combat amical (un duel, un entraînement).
         { key: 'amical', label: 'Combat amical (un duel : perdre ne coûte rien)', type: 'checkbox', value: Boolean(c.amical) },
         { key: 'soigner', label: 'Amical : le groupe est soigné après', type: 'checkbox', value: c.soigner !== false },
-        { type: 'info', text: 'Un groupe de Jeu › Données du jeu › Groupes de monstres. Perdu : le script s\'arrête et le joueur se réveille au dernier soin. Pour un boss, décoche « On peut fuir » dans le groupe. Combat amical : perdu, le joueur reste là, ne perd ni argent ni stock, et le script continue ; le bloc a alors deux branches, « gagné » et « perdu (ou fui) ». Pour un adversaire qui est un personnage (un duel d\'honneur), fais-en un monstre du même nom dans un groupe à lui.' },
+        { type: 'info', text: 'Un groupe de Données › Groupes de monstres. Perdu : le script s\'arrête et le joueur se réveille au dernier soin. Pour un boss, décoche « On peut fuir » dans le groupe. Combat amical : perdu, le joueur reste là, ne perd ni argent ni stock, et le script continue ; le bloc a alors deux branches, « gagné » et « perdu (ou fui) ». Pour un adversaire qui est un personnage (un duel d\'honneur), fais-en un monstre du même nom dans un groupe à lui.' },
       ],
       depuis: (v, c) => (v.amical ? { type: 'combat_groupe', groupe: Doc.slug(v.groupe, ''), amical: true, soigner: Boolean(v.soigner), reussi: c.reussi || [], rate: c.rate || [] } : { type: 'combat_groupe', groupe: Doc.slug(v.groupe, '') }),
       valide: (c) => (c.groupe ? null : 'Quel groupe de monstres ?'),
@@ -553,7 +553,7 @@ const Events = (() => {
       ],
       onInput: (v, f) => { f.inputs.etape.row.hidden = v.action !== 'etape'; },
       depuis: (v) => ({ type: 'quete', quete: v.quete, action: v.action, etape: clamp(Math.round(v.etape) || 1, 1, 99) }),
-      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Jeu › Données du jeu.'),
+      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Données.'),
       resume: (doc, c) => {
         const q = quete(doc, c.quete);
         const t = q?.titre || c.quete;
@@ -566,10 +566,10 @@ const Events = (() => {
       nouveau: (doc) => ({ type: 'badge', badge: badges(doc)[0]?.id || '' }),
       champs: (doc, c) => [
         { key: 'badge', label: 'Badge', type: 'select', value: c.badge, choices: choixBadges(doc, c.badge) },
-        { type: 'info', text: 'Le joueur reçoit ce badge (une seule fois, même si le script repasse). Le compteur « Badges » vaut le nombre de badges différents reçus : c\'est lui qui fait monter le niveau maximum de l\'équipe et celui des dresseurs (Jeu › Données du jeu › Réglages).' },
+        { type: 'info', text: 'Le joueur reçoit ce badge (une seule fois, même si le script repasse). Le compteur « Badges » vaut le nombre de badges différents reçus : c\'est lui qui fait monter le niveau maximum de l\'équipe et celui des dresseurs (Données › Réglages).' },
       ],
       depuis: (v) => ({ type: 'badge', badge: v.badge }),
-      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Jeu › Données du jeu › Réglages.'),
+      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Données › Réglages.'),
       resume: (doc, c) => `Donner le badge « ${nomBadge(doc, c.badge)} »`,
     },
     personnaliser: {
@@ -578,7 +578,7 @@ const Events = (() => {
       champs: (doc, c) => [
         { key: 'nom', label: 'Le joueur choisit son nom', type: 'checkbox', value: c.nom },
         { key: 'tenue', label: 'Le joueur choisit sa tenue', type: 'checkbox', value: c.tenue },
-        { type: 'info', text: tenues(doc).length ? `Tenues proposées : la tenue de base et ${tenues(doc).map((t) => t.nom).join(', ')}. Elles se créent dans la fiche du héros (Jeu › Données du jeu › Personnages).` : 'Le héros n\'a pas encore de tenue en plus : crée-les dans sa fiche (Jeu › Données du jeu › Personnages, section Tenues).' },
+        { type: 'info', text: tenues(doc).length ? `Tenues proposées : la tenue de base et ${tenues(doc).map((t) => t.nom).join(', ')}. Elles se créent dans la fiche du héros (Données › Personnages).` : 'Le héros n\'a pas encore de tenue en plus : crée-les dans sa fiche (Données › Personnages, section Tenues).' },
       ],
       depuis: (v) => ({ type: 'personnaliser', nom: Boolean(v.nom), tenue: Boolean(v.tenue) }),
       valide: (c) => (c.nom || c.tenue ? null : 'Coche au moins le nom ou la tenue.'),
@@ -602,11 +602,11 @@ const Events = (() => {
         { key: 'action', label: 'Action', type: 'select', value: c.action, choices: [['rejoindre', 'Rejoint le groupe'], ['quitter', 'Quitte le groupe']] },
         { key: 'personnage', label: 'Personnage', type: 'select', value: c.personnage, choices: doc.data.personnages.map((p) => [p.id, `${p.nom}${p.jdr?.classe && doc.data.reglages?.regles === 'jdr' ? ` (${nomData(doc, 'classes_jdr', p.jdr.classe)})` : p.classe ? ` (${nomData(doc, 'classes', p.classe)})` : ' (sans classe)'}`]) },
         { key: 'niveau', label: 'Niveau', type: 'number', value: c.niveau, min: 0, max: 999, unit: '0 = son niveau de départ' },
-        { type: 'info', text: 'Le personnage (avec sa classe, son niveau et son équipement de départ : Jeu › Données du jeu › Personnages) rejoint le groupe, ou la Réserve si le groupe est complet. Un héros qui part puis revient retrouve son niveau et son équipement.' },
+        { type: 'info', text: 'Le personnage (avec sa classe, son niveau et son équipement de départ : Données › Personnages) rejoint le groupe, ou la Réserve si le groupe est complet. Un héros qui part puis revient retrouve son niveau et son équipement.' },
       ],
       onInput: (v, f) => { f.inputs.niveau.row.hidden = v.action !== 'rejoindre'; },
       depuis: (v) => ({ type: 'groupe', action: v.action === 'quitter' ? 'quitter' : 'rejoindre', personnage: v.personnage, niveau: clamp(Math.round(v.niveau) || 0, 0, 999) }),
-      valide: (c) => (c.personnage ? null : 'Crée d\'abord le personnage (Jeu › Données du jeu › Personnages).'),
+      valide: (c) => (c.personnage ? null : 'Crée d\'abord le personnage (Données › Personnages).'),
       resume: (doc, c) => `${nomData(doc, 'personnages', c.personnage)} ${c.action === 'quitter' ? 'quitte le groupe' : `rejoint le groupe${c.niveau ? ` (niveau ${c.niveau})` : ''}`}`,
     },
     // Tafl 1.0 (Saga 1.0) : le joueur compose son équipe lui-même (les jeux « arène », un tournoi…).
@@ -668,7 +668,7 @@ const Events = (() => {
       nouveau: () => ({ type: 'boutique', boutique: '' }),
       champs: (doc, c) => [
         { key: 'boutique', label: 'Boutique', type: 'text', value: c.boutique, list: 'tafl-boutiques', placeholder: 'boutique-bourg' },
-        { type: 'info', text: 'Une boutique de Jeu › Données du jeu : ses articles, et ce qui débloque chacun (captures, dresseurs battus, évolutions, quêtes…).' },
+        { type: 'info', text: 'Une boutique de Données : ses articles, et ce qui débloque chacun (captures, dresseurs battus, évolutions, quêtes…).' },
       ],
       depuis: (v) => ({ type: 'boutique', boutique: Doc.slug(v.boutique, '') }),
       valide: (c) => (c.boutique ? null : 'Quelle boutique ?'),
@@ -992,7 +992,7 @@ const Events = (() => {
       ],
       onInput: (v, f) => { f.inputs.etape.row.hidden = v.etat !== 'en_cours'; },
       depuis: (v) => ({ type: 'quete', quete: v.quete, etat: v.etat, etape: v.etat === 'en_cours' ? clamp(Math.round(v.etape) || 0, 0, 99) : 0 }),
-      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Jeu › Données du jeu.'),
+      valide: (c) => (c.quete ? null : 'Crée d\'abord une quête dans Données.'),
     },
     compteur: {
       nom: 'Un compteur du joueur (quêtes finies, pas…)',
@@ -1020,7 +1020,7 @@ const Events = (() => {
         { type: 'info', text: 'Pour un garde qui ne laisse passer qu\'avec le badge de la ville. Pour « au moins 3 badges », prends plutôt la condition « Un compteur du joueur ».' },
       ],
       depuis: (v) => ({ type: 'badge', badge: v.badge }),
-      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Jeu › Données du jeu › Réglages.'),
+      valide: (c) => (c.badge ? null : 'Crée d\'abord les badges dans Données › Réglages.'),
     },
     membre: {
       nom: 'Un héros est avec le joueur (JRPG)', packs: ['jrpg'],
@@ -2261,9 +2261,11 @@ const Events = (() => {
     (page || document.body).append(root);
     if (page) close.hidden = true;
     const bouton = (label, run, primary = false) => {
-      const b = el('button', { className: `button${primary ? ' primary' : ''}`, textContent: label });
+      // Tafl 1.41.2 : « Supprimer » à gauche, loin d'Appliquer, en rouge.
+      const suppr = /^Supprimer/.test(label);
+      const b = el('button', { className: `button${primary ? ' primary' : ''}${suppr ? ' danger' : ''}`, textContent: label });
       b.onclick = run;
-      foot.append(b);
+      if (suppr) hint.before(b); else foot.append(b);
       return b;
     };
     return { root, card, body, tabs, close, hint, bouton, setTitle: (t) => { title.textContent = t; }, setIcon: (n) => { headIcon.className = `codicon codicon-${n}`; } };
@@ -2295,7 +2297,7 @@ const Events = (() => {
     function dessiner() {
       bloc.replaceChildren();
       const a = get();
-      bloc.append(champ('Tampon', selectEl(choix(a.tampon || '', doc.stamps.length ? 'Aucun' : 'Aucun (crée-en avec l\'outil Tampon)'), a.tampon || '', (v) => maj(v ? { tampon: v } : { tampon: undefined, tampons: undefined, animer: undefined })),
+      bloc.append(champ('Tampon', selectEl(choix(a.tampon || '', doc.stamps.length ? 'Aucun' : 'Aucun tampon'), a.tampon || '', (v) => maj(v ? { tampon: v } : { tampon: undefined, tampons: undefined, animer: undefined })),
         'Un objet de plusieurs tuiles : son coin haut gauche est sur la case de l\'événement. Passe avant la tuile et le personnage'));
       if (!a.tampon) return;
       const parDir = el('input', { type: 'checkbox', checked: Boolean(a.tampons) });
@@ -2386,7 +2388,7 @@ const Events = (() => {
         const aide = el('p', { className: 'modal-info' });
         const majAide = () => {
           aide.textContent = {
-            pnj: 'Un habitant, un dresseur, le prof… Choisis son personnage (Jeu › Données du jeu) : ses dialogues prennent son nom et ses portraits.',
+            pnj: 'Un habitant, un dresseur, le prof… Choisis son personnage (Données) : ses dialogues prennent son nom et ses portraits.',
             panneau: 'Le joueur le lit en se plaçant devant et en appuyant sur A.',
             coffre: 'La page 2 (« déjà fait ») prend le relais une fois le coffre ouvert.',
             objet: 'Une fois ramassé, la page 2 le fait disparaître (case « absent »).',
@@ -2411,7 +2413,7 @@ const Events = (() => {
           blocObstacle.append(
             section('Obstacle'),
             champ('Sorte', selectEl(SORTES_OBSTACLE, o.sorte, (v) => { const avant = OBJETS_OBSTACLE[o.sorte]; o.sorte = v; if (!o.objet || o.objet === avant) o.objet = OBJETS_OBSTACLE[v]; majObstacle(); })),
-            champ('Objet requis', objet, 'L\'objet du sac qui ouvre le passage (Jeu › Données du jeu › Objets, effet « Ouvre un passage »)'),
+            champ('Objet requis', objet, 'L\'objet du sac qui ouvre le passage (Données › Objets, effet « Ouvre un passage »)'),
             champ('Message', message, 'Ce que Saga dit quand le joueur le regarde (vide : la phrase grise)'),
             ...(o.sorte === 'pousser' ? [] : [champ('Repousse quand le joueur quitte la carte', repousse)]),
           );
@@ -2442,7 +2444,7 @@ const Events = (() => {
           champ('Colonne (x)', num('x', map.width - 1)),
           champ('Rangée (y)', num('y', map.height - 1)),
           section('Apparence'),
-          champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Jeu › Données du jeu) : son nom, ses portraits et son sprite'),
+          champ('Personnage', selectEl([['', 'Aucun'], ...doc.data.personnages.map((p) => [p.id, p.nom])], work.apparence.personnage, (v) => { work.apparence = { ...work.apparence, personnage: v }; majApercu(); renderPage(); }), 'Le personnage (Données) : son nom, ses portraits et son sprite'),
           el('div', { className: 'field' }, [el('span', { className: 'field-label', textContent: 'Tuile' }), selectEl(choixTuiles(doc), work.apparence.tuile, (v) => { work.apparence = { ...work.apparence, tuile: Number(v) }; majApercu(); }), apercuTuile]),
           blocTampon(doc, () => work.apparence, (a) => { work.apparence = a; }),
           champ('Regarde', selectEl(Doc.DIRECTIONS, work.direction, (v) => { work.direction = v; })),
@@ -2488,7 +2490,7 @@ const Events = (() => {
           { label: 'Supprimer la page', disabled: work.pages.length < 2, run: () => { work.pages.splice(page, 1); renderPage(); } },
         ], e.clientX, e.clientY)));
         main.append(tabs);
-        main.append(el('p', { className: 'modal-info', textContent: 'Le jeu joue la dernière page dont toutes les conditions sont vraies. Page 1 sans condition = ce qui se passe d\'habitude ; les pages suivantes prennent le relais quand l\'histoire avance.' }));
+        main.append(el('p', { className: 'modal-info', textContent: 'Le jeu joue la dernière page dont les conditions sont vraies.', title: 'Page 1 sans condition = ce qui se passe d\'habitude ; les pages suivantes prennent le relais quand l\'histoire avance.' }));
 
         // Conditions.
         main.append(section('Conditions de la page'));
@@ -2610,7 +2612,8 @@ const Events = (() => {
       w.close.onclick = fermer;
       if (hote) {
         // En page : les changements s'appliquent en quittant la page, en enregistrant ou en jouant.
-        w.hint.textContent = 'Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'événement ou d\'espace, enregistres ou joues.';
+        w.hint.textContent = 'Ctrl+Entrée : appliquer · Ctrl+Z : annuler';
+        w.hint.title = 'Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'événement ou d\'espace, enregistres ou joues.';
         w.bouton('Supprimer l\'événement', async () => {
           if (await Dialogs.ask('Supprimer l\'événement', `Supprimer « ${work.nom || libelle(TYPES, work.type)} » ? (Ctrl+Z le remet)`, [{ label: 'Annuler', value: false }, { label: 'Supprimer', value: true, primary: true }])) finir('supprimer');
         });
@@ -2631,14 +2634,14 @@ const Events = (() => {
     });
   }
 
-  // --- Jeu › Données du jeu : personnages, quêtes, interrupteurs (0.7), et les bases de Tafl 0.8 ---
+  // --- Données : personnages, quêtes, interrupteurs (0.7), et les bases de Tafl 0.8 ---
   // Chaque onglet : { key, groupe, label, icon, kind (pour « Utilisé par »), base (nom d'un nouveau),
   // nouveau(id, work), meta(o, work), lead(o), vide, form(o, ctx), unique (un seul objet, sans liste) }.
   // Les onglets de Tafl 0.8 viennent de donnees.js (Donnees.ONGLETS).
   const ONGLETS = [
     { key: 'personnages', groupe: 'Histoire', label: 'Personnages', icon: 'person', kind: 'personnage', base: 'Nouveau personnage',
       nouveau: (id) => ({ id, nom: 'Nouveau personnage', description: '', heros: false, couleur: '', tuile: -1, portraits: [], sprite: null, tenues: [], classe: '', niveau: 1, equipement: {} }),
-      meta: (o) => (o.heros ? 'héros' : o.jdr ? 'pré-tiré' : `${o.portraits.length} portrait(s)`), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
+      meta: (o) => (o.heros ? 'héros' : o.jdr ? 'pré-tiré' : (o.portraits.length ? `${o.portraits.length} portrait${o.portraits.length > 1 ? 's' : ''}` : '')), lead: (o) => (o.portraits[0] ? el('img', { className: 'row-portrait', src: o.portraits[0].png, alt: '' }) : null),
       vide: 'Aucun personnage. Ajoute le héros, sa mère, le prof, les deux rivaux…' },
     { key: 'quetes', groupe: 'Histoire', label: 'Quêtes', icon: 'book', kind: 'quete', base: 'Nouvelle quête', nomKey: 'titre',
       nouveau: (id) => ({ id, titre: 'Nouvelle quête', description: '', secondaire: false, suivante: '', personnages: [], etapes: [{ texte: '' }] }),
@@ -3080,7 +3083,8 @@ const Events = (() => {
       w.hint.textContent = 'Tout sert dans les scripts des événements (outil Événement, N), les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire.';
       const supprimerBtn = w.bouton('Supprimer', () => w.bouton.supprimer?.());
       if (page) {
-        w.hint.textContent = 'Tout sert dans les scripts des événements, les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'espace, enregistres ou joues.';
+        w.hint.textContent = 'Ctrl+Entrée : appliquer · Ctrl+Z : annuler';
+        w.hint.title = 'Tout sert dans les scripts des événements, les zones et les combats. Ctrl+Z / Ctrl+Y : annuler / refaire · Ctrl+Entrée : appliquer. Les changements s\'appliquent aussi tout seuls quand tu changes d\'espace, enregistres ou joues.';
         w.bouton('Annuler les changements', fermer);
         w.bouton('Appliquer', valider, true);
         courantPage = { fermer, valider, jeter: () => finir(null), suivi: historique, change };

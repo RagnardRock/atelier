@@ -71,7 +71,7 @@ const ScriptsTafl = (() => {
     const pack = packDe(doc);
     const objet = doc.data.objets?.find((o) => o.id === 'potion')?.id || doc.data.objets?.[0]?.id || 'potion';
     const jrpg = pack === 'jrpg';
-    const nomPack = { jrpg: 'JRPG', jdr: 'JDR' }[pack] || 'Pokémon';
+    const nomPack = Donnees.nomPack(pack);
     return [
       { id: 'dialogue', nom: 'Commande avec dialogue', aide: 'Un personnage qui offre un objet une seule fois, avec une question.', nomFichier: 'cadeau', code: `// Une commande pour le bloc Script d'un événement : un personnage offre un objet, une seule fois.
 // Dans l'événement : ajoute le bloc « Script JS », choisis « cadeau » et règle l'objet et le nombre.
@@ -404,13 +404,13 @@ quand('table_jet', async (saga, infos) => {
       row.onclick = () => choisir(s.nom);
       box.append(row);
     }
-    if (!doc.scripts.length) box.append(el('p', { className: 'modal-info', textContent: 'Pas encore de script. Le + en propose des modèles : une commande avec dialogue, un jet de dés, une règle de dégâts maison…' }));
+    if (!doc.scripts.length) box.append(el('p', { className: 'modal-info', textContent: 'Pas encore de script : le + propose des modèles.' }));
     return box;
   }
 
   async function nouveau(doc, x, y) {
     if (!doc.game) {
-      const ok = await Dialogs.ask('Scripts JS', 'Les scripts vivent dans un dossier de jeu (scripts/*.js), que Saga lit. Ce document est un simple jeu de tuiles : enregistre-le d\'abord comme dossier de jeu (Fichier › Enregistrer comme dossier de jeu). Tu peux quand même écrire le script maintenant.', [
+      const ok = await Dialogs.ask('Scripts JS', 'Les scripts vivent dans un dossier de jeu (scripts/*.js), que Saga lit. Ce document est un simple lot de tuiles : enregistre-le d\'abord comme dossier de jeu (Fichier › Enregistrer comme dossier de jeu). Tu peux quand même écrire le script maintenant.', [
         { label: 'Annuler', value: false }, { label: 'Écrire quand même', value: true, primary: true }]);
       if (!ok) return null;
     }

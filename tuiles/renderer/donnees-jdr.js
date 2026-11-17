@@ -740,9 +740,10 @@ const DonneesJdr = (() => {
     };
     return [
       section('Règles du JDR'),
-      info('Un jeu de rôle sur table façon D&D 5e : on crée ses personnages (origine, classe, caractéristiques), les tests se font au d20 contre un DD, les combats au tour par tour avec l\'initiative. Saga lance les dés à l\'écran et les note dans le journal des jets.'),
+      info('Façon D&D 5e : tests au d20 contre un DD, combats à l\'initiative.'),
       el('div', { className: 'field' }, [modele]),
-      info(`Le modèle ajoute ce qui manque, sans rien remplacer. ${typeof ModeleDnd5e !== 'undefined' ? ModeleDnd5e.ATTRIBUTION : ''}`),
+      info('Le modèle ajoute ce qui manque, sans rien remplacer.'),
+      ...(typeof ModeleDnd5e !== 'undefined' ? [el('details', { className: 'licence' }, [el('summary', { textContent: 'Licence du SRD 5.1' }), el('p', { className: 'modal-info', textContent: ModeleDnd5e.ATTRIBUTION })])] : []),
       section('Création des personnages'),
       coche(j.creation, 'active', 'Le joueur crée ses personnages au début', 'sinon le héros et les pré-tirés'),
       el('div', { className: 'field-grid' }, [
@@ -1032,7 +1033,7 @@ const DonneesJdr = (() => {
     return n;
   }
 
-  // --- Les onglets (dans Jeu › Données du jeu, groupe « JDR ») ---
+  // --- Les onglets (dans Données, groupe « JDR ») ---
   const point = (couleur) => el('span', { className: 'row-dot', style: { background: couleur || '#8a8f98' } });
   const leadImage = (src) => el('img', { className: 'row-portrait pixel', src, alt: '' });
   const vide = (texte) => `${texte} Le plus simple : Réglages › Règles du JDR › « Charger le modèle D&D 5e ».`;

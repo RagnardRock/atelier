@@ -1613,3 +1613,52 @@ body:not(.glass) .editor.en-page { background: var(--plate); backdrop-filter: no
 .mecanique-formule .unit.erreur { color: #ff8a8a; }
 .mecanique-table { margin: 6px 0 12px; padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
 .mecaniques-modeles { gap: 8px; flex-wrap: wrap; margin: 4px 0 10px; }
+
+/* ---------- Tafl 1.42 : l'audit de l'interface ---------- */
+/* Sur une seule colonne (écran normal), les tuiles restent visibles : en Cartes, les listes au-dessus
+   (cartes, calques, tampons, événements) rétrécissent et défilent, les tuiles gardent un bon tiers de la
+   hauteur. Plus rien ne passe sous la barre d'état. */
+#sidepanel:not(.deux-colonnes) { overflow-y: auto; }
+#sidepanel:not(.deux-colonnes) #maps-panel, #sidepanel:not(.deux-colonnes) #layers-panel,
+#sidepanel:not(.deux-colonnes) #stamps-panel, #sidepanel:not(.deux-colonnes) #events-panel { flex: 0 1 auto; }
+#sidepanel:not(.deux-colonnes) #maps-panel { min-height: 90px; }
+#sidepanel:not(.deux-colonnes) #layers-panel { min-height: 130px; }
+#sidepanel:not(.deux-colonnes) #stamps-panel { min-height: 80px; }
+#sidepanel:not(.deux-colonnes) #events-panel { min-height: 72px; }
+body.espace-cartes #sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 0 36%; }
+/* En Tuiles, la palette reste entière ; les tuiles, l'animation et l'aperçu se partagent le reste. */
+body.espace-tuiles #sidepanel:not(.deux-colonnes) #tiles-panel { flex: 1 1 auto; min-height: 130px; }
+#sidepanel:not(.deux-colonnes) #frames-panel, #sidepanel:not(.deux-colonnes) #preview-panel { flex: 0 1 auto; min-height: 34px; }
+.panel.folded { min-height: 0 !important; }
+/* La barre d'état ne parle de tuile et de zoom que là où on dessine. */
+body.espace-page #status-tile, body.espace-page #status-zoom { display: none; }
+/* Test rapide : l'aide sous le groupe ne pousse plus le reste vers le bas. */
+.test-main .editor-hint { flex: 0 0 auto; }
+/* Tafl 1.41.2 : la licence du SRD repliée, sous le bouton du modèle. */
+details.licence { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+details.licence summary { cursor: pointer; }
+details.licence p { margin: 6px 0 0; user-select: text; }
+.button.danger { color: #ff9b9b; border-color: rgba(255, 120, 120, 0.3); }
+.button.danger:hover { background: rgba(255, 90, 90, 0.14); color: #ffc1c1; }
+/* Tafl 1.41.2 : un seul style pour les boutons « + Ajouter » (plus de pointillés). */
+.cmd-add { border-style: solid; border-color: var(--border, rgba(255, 255, 255, 0.1)); background: rgba(255, 255, 255, 0.04); color: var(--text); }
+
+/* ---------- Tafl 1.42 : ergonomie (audit, lot 3) ---------- */
+/* Des onglets dans une fenêtre (Réglages de Tafl), comme ceux des Réglages du jeu. */
+.modal-onglets { display: flex; gap: 4px; margin: -4px 0 6px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.modal-onglet { padding: 6px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.modal-onglet:hover { background: var(--hover); color: var(--text); }
+.modal-onglet.active { background: var(--active); border-color: rgba(255, 255, 255, 0.08); color: var(--text-strong); }
+.hors-onglet { display: none !important; }
+/* Ctrl+B cache aussi la liste des événements : l'éditeur prend toute la largeur. */
+body.sans-panneaux #ev-liste { display: none; }
+/* Le nom du jeu reste dans la barre de titre, raccourci, sur un écran normal. */
+@media (max-width: 1500px) {
+  #doc-name { display: inline; max-width: 140px; }
+}
+@media (max-width: 1280px) {
+  #doc-name { display: none; }
+}
+/* Événements : un lot d'événements semblables, et ses lignes une fois déplié. */
+.row.lot-evenements .codicon:last-child { margin-left: 4px; color: var(--muted); font-size: 12px; }
+.row.sous { padding-left: 22px; }

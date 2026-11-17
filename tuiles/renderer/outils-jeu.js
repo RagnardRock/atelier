@@ -223,7 +223,7 @@ const OutilsJeu = (() => {
 
       // Équipe (ou groupe)
       main.append(section(enGroupe ? 'Groupe de héros' : 'Équipe'));
-      if (!membres.length) main.append(el('div', { className: 'rows-empty', textContent: jdr ? 'Aucun pré-tiré : donne une fiche de JDR à un personnage dans Données du jeu › Personnages (sinon, la création de personnage se fait au début du test).' : jrpg ? 'Aucun personnage n\'a de classe : donne-leur une classe dans Données du jeu › Personnages.' : 'Pas encore de créatures : importe-les ou crée-les dans Données du jeu › Créatures.' }));
+      if (!membres.length) main.append(el('div', { className: 'rows-empty', textContent: jdr ? 'Aucun pré-tiré : donne une fiche de JDR à un personnage dans Données › Personnages (sinon, la création de personnage se fait au début du test).' : jrpg ? 'Aucun personnage n\'a de classe : donne-leur une classe dans Données › Personnages.' : 'Pas encore de créatures : importe-les ou crée-les dans Données › Créatures.' }));
       else {
         etat.equipe.forEach((m, i) => {
           main.append(el('div', { className: 'field test-ligne' }, [
@@ -256,7 +256,7 @@ const OutilsJeu = (() => {
 
       // Objets
       main.append(section('Objets du sac'));
-      if (!objets.length) main.append(el('div', { className: 'rows-empty', textContent: 'Pas encore d\'objets : crée-les dans Données du jeu › Objets.' }));
+      if (!objets.length) main.append(el('div', { className: 'rows-empty', textContent: 'Pas encore d\'objets : crée-les dans Données › Objets.' }));
       else {
         for (const [id, n] of Object.entries(etat.objets)) {
           main.append(el('div', { className: 'field test-ligne' }, [
