@@ -120,9 +120,9 @@ Electron, sans framework ni bundler, comme Rune. Toute la retouche se fait dans 
 | `renderer/tools-extra.js` | Dégradé, formes et transformation libre. |
 | `renderer/ops.js` | Les opérations des menus (réglages, effets de logo, taille, calques, presse-papiers). |
 | `renderer/io.js` | Lecture et écriture PSD/images, export, ICO, pack d'icônes. |
-| `renderer/dialogs.js` | Les fenêtres de dialogue. |
+| `../commun/dialogues.js`, `renderer/fenetres.js` | Les fenêtres de dialogue (communes aux outils), et celles propres à Skald (nouvelle image, texte). |
 | `renderer/app.js` | Onglets, menus, raccourcis, panneaux, réglages. |
-| `renderer/update.js` | Le bouton de mise à jour. |
+| `../commun/mise-a-jour.js` | Le bouton de mise à jour (commun aux outils). |
 
 ## Pas encore
 

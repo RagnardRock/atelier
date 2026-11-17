@@ -185,12 +185,13 @@ async function htmlUnique({ textes, titre, nom, moteur, version, configDefaut, d
     `<script>\n${dansScript(await fs.readFile(path.join(moteur, 'web', 'saga-web.js'), 'utf8'))}\n</script>`,
   ].join('\n  ');
   // Les scripts de Saga, mis dans la page à leur place (sauf la mise à jour, qui ne sert qu'à Saga).
-  html = html.replace(/\s*<script src="update\.js"><\/script>/, '');
+  html = html.replace(/\s*<script src="\.\.\/commun\/mise-a-jour\.js"[^>]*><\/script>/, '');
   progres?.('Assemblage du moteur…');
-  const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((x) => x[1]);
+  // Une balise peut porter des réglages (data-api="saga") : ils restent sur le script mis dans la page.
+  const scripts = [...html.matchAll(/<script src="([^"]+)"([^>]*)><\/script>/g)].map((x) => x[1]);
   const contenus = {};
   for (const rel of scripts) contenus[rel] = (await lireRel(rel)).toString('utf8');
-  html = html.replace(/<script src="([^"]+)"><\/script>/g, (tout, rel) => `${rel === 'base.js' ? `${avant}\n  ` : ''}<script>\n// --- ${rel} ---\n${dansScript(contenus[rel])}\n</script>`);
+  html = html.replace(/<script src="([^"]+)"([^>]*)><\/script>/g, (tout, rel, reglages) => `${rel === 'base.js' ? `${avant}\n  ` : ''}<script${reglages}>\n// --- ${rel} ---\n${dansScript(contenus[rel])}\n</script>`);
   // Une seule page, sans fichiers à côté : les scripts sont dans la page (rien ne vient d'Internet).
   html = html
     .replace(/<meta http-equiv="Content-Security-Policy"[\s\S]*?>/, `<meta http-equiv="Content-Security-Policy"\n        content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src data:; img-src data: blob:; media-src data: blob:; connect-src data: blob:; worker-src blob:">`)
@@ -273,7 +274,7 @@ async function preparerJeuWindows({ textes, titre, nom, dossier, moteur, version
   }
   // commun/ manque dans le clone si npm install n'a pas tourné : on prend celui d'atelier/.
   if (!(await fs.stat(path.join(app, 'commun')).catch(() => null))) {
-    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js'].includes(r));
+    await copier(path.join(moteur, '..', 'commun'), path.join(app, 'commun'), (r) => ['github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js', 'notifications.js', 'dialogues.js', 'mise-a-jour.js'].includes(r));
   }
   const pkg = JSON.parse(await fs.readFile(path.join(moteur, 'package.json'), 'utf8'));
   await fs.writeFile(path.join(app, 'package.json'), JSON.stringify({

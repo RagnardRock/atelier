@@ -176,7 +176,8 @@ const App = (() => {
     }
   }
 
-  return { start, prepareQuit };
+  // ../commun/mise-a-jour.js : les notes en attente sont enregistrées avant de fermer.
+  return { start, prepareQuit, avantMiseAJour: prepareQuit };
 })();
 
 App.start();
