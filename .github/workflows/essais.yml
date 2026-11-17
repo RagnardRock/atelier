@@ -2,6 +2,8 @@
 # Saga ou les fichiers communs, un robot crée les jeux modèles, les joue dans Saga et vérifie le résultat.
 # Une PR rouge = quelque chose qui marchait ne marche plus. Les captures des essais ratés sont dans
 # la rubrique « Artifacts » de cette page.
+# Les essais sont répartis en 4 parts, lancées en même temps sur 4 machines (tests/lancer.js --partie) :
+# chaque essai tourne seul sur sa machine, comme avant, mais l'attente totale est divisée par trois environ.
 name: Essais Tafl et Saga
 
 on:
@@ -21,8 +23,14 @@ concurrency:
 
 jobs:
   essais:
+    name: essais (part ${{ matrix.partie }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      # Une part qui rate n'arrête pas les autres : on voit tous les essais ratés d'un coup.
+      fail-fast: false
+      matrix:
+        partie: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,11 +48,11 @@ jobs:
         run: npm install --no-audit --no-fund && npx playwright install --with-deps chromium
       - name: Lancer les essais
         working-directory: tests
-        run: node lancer.js
+        run: node lancer.js --partie ${{ matrix.partie }}/4
       - name: Garder les captures des essais ratés
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: captures-essais-rates
+          name: captures-essais-rates-${{ matrix.partie }}
           path: tests/resultats/
           if-no-files-found: ignore
