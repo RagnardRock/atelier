@@ -266,6 +266,42 @@ const TablePanneau = (() => {
         }
       });
     }
+    // Saga 1.48 : les listes de lecture : jouer (un morceau après l'autre, en boucle), dans l'ordre ou au hasard.
+    let listeOuverte = '';
+    function listesLecture(partie) {
+      const lecture = T.lecture?.();
+      const o = [el('div', { className: 'table-sous-titre', textContent: 'Listes de lecture' })];
+      for (const l of partie.table.listes || []) {
+        const joue = lecture?.id === l.id;
+        o.push(el('div', { className: `table-ligne son${joue ? ' actif' : ''}` },
+          joue ? btn('debug-stop', '', () => { T.arreterListe(); dessiner(); }, { titre: 'Arrêter' }) : btn('play', '', () => { if (!T.jouerListe(l.id)) T.message?.('Liste vide.'); dessiner(); }, { titre: 'Jouer la liste' }),
+          el('span', { className: 'table-nom', textContent: `${l.nom} (${l.morceaux.length})`, title: joue ? lecture.chemin.replace(/^sons\//, '') : '' }),
+          joue ? btn('debug-step-over', '', () => T.morceauSuivant(), { titre: 'Morceau suivant' }) : null,
+          btn(l.hasard ? 'arrow-swap' : 'list-ordered', '', () => { T.agir({ type: 'liste_modifier', id: l.id, hasard: !l.hasard }); }, { titre: l.hasard ? 'Au hasard (cliquer : dans l\'ordre)' : 'Dans l\'ordre (cliquer : au hasard)' }),
+          btn(listeOuverte === l.id ? 'chevron-up' : 'edit', '', () => { listeOuverte = listeOuverte === l.id ? '' : l.id; dessiner(); }, { titre: 'Modifier' })));
+        if (listeOuverte !== l.id) continue;
+        const nom = el('input', { type: 'text', value: l.nom, className: 'table-champ', maxLength: 40 });
+        nom.onchange = () => T.agir({ type: 'liste_modifier', id: l.id, nom: nom.value });
+        o.push(el('div', { className: 'table-ligne' }, nom, btn('trash', '', () => { if (T.lecture?.()?.id === l.id) T.arreterListe(); listeOuverte = ''; T.agir({ type: 'liste_retirer', id: l.id }); }, { titre: 'Supprimer la liste' })));
+        l.morceaux.forEach((m, k) => o.push(el('div', { className: 'table-ligne son morceau' }, el('span', { className: 'table-nom', textContent: m.replace(/^sons\//, '') }), btn('close', '', () => T.agir({ type: 'liste_modifier', id: l.id, enlever: k }), { titre: 'Enlever' }))));
+        o.push(select('', [['', '+ Ajouter un morceau…'], ...sons.map((x) => [x, x.replace(/^sons\//, '')])], (v) => { if (v) T.agir({ type: 'liste_modifier', id: l.id, ajouter: v }); }));
+      }
+      o.push(el('div', { className: 'table-boutons' }, btn('add', 'Nouvelle liste', () => { const r = T.agir({ type: 'liste_nouvelle' }); if (r.ok) listeOuverte = r.liste.id; dessiner(); })));
+      return o;
+    }
+    // Saga 1.48 : la carte d'un héros : celle du MJ (avec le groupe) ou une autre (son joueur y est seul).
+    function choixCarte(jeu, p, ici) {
+      const l = [...jeu.cartes.values()];
+      const s = select(p.carte === ici.id ? '' : p.carte, [['', 'Avec le groupe'], ...l.filter((c) => c.id !== ici.id).map((c) => [c.id, `Envoyer : ${c.nom || c.id}`])], (v) => T.envoyerHeros(p.id, v || ici.id));
+      s.title = 'Sa carte : son joueur voit celle où est son héros';
+      return s;
+    }
+    function herosAilleurs(jeu, partie, carte) {
+      const l = T.herosAilleurs?.() || [];
+      if (!l.length) return [];
+      return [el('div', { className: 'table-sous-titre', textContent: 'Sur une autre carte' }),
+        ...l.map((p) => el('div', { className: 'table-ligne' }, el('span', { className: 'table-nom', textContent: T.nomPion(p) }), choixCarte(jeu, p, carte)))];
+    }
     let monstreChoisi = '', visAjout = 'tous';
     function voletPions(jeu, partie, carte) {
       const vis = T.VISIBILITES();
@@ -286,6 +322,18 @@ const TablePanneau = (() => {
         if (p.sorte !== 'heros') choix.append(select(TableEtat.normVisible(p.visible), vis, (v) => T.agir({ type: 'visibilite', pion: p.id, visible: v })));
         // Saga 1.42 : son jeton : par défaut, une image importée, ou un personnage du jeu (son sprite).
         choix.append(choixJeton(jeu, p));
+        // Saga 1.48 : envoyer un héros (et son joueur) sur une autre carte.
+        if (c && jeu.cartes.size > 1) choix.append(choixCarte(jeu, p, carte));
+        // Saga 1.48 : son aura (un cercle qui le suit), sa couleur et qui la voit.
+        const aura = p.aura || null;
+        const ra = select(aura ? String(aura.rayon) : '', [['', 'Pas d\'aura'], ['1.5', 'Aura : 1,5 m'], ['3', 'Aura : 3 m'], ['4.5', 'Aura : 4,5 m'], ['6', 'Aura : 6 m'], ['9', 'Aura : 9 m'], ['18', 'Aura : 18 m'], ...(aura && ![1.5, 3, 4.5, 6, 9, 18].includes(aura.rayon) ? [[String(aura.rayon), `Aura : ${aura.rayon} m`]] : [])], (v) => T.agir({ type: 'aura', pion: p.id, metres: v }));
+        ra.title = 'Un cercle autour du pion, qui le suit';
+        choix.append(ra);
+        if (aura) {
+          const co = select(aura.couleur, TableOutils.COULEURS.map(([id, n]) => [id, `Couleur : ${n.toLowerCase()}`]), (v) => T.agir({ type: 'aura', pion: p.id, metres: aura.rayon, couleur: v }));
+          const vi = select(aura.visible, [['tous', 'Aura vue de tous'], ['mj', 'Aura vue du MJ seul']], (v) => T.agir({ type: 'aura', pion: p.id, metres: aura.rayon, visible: v }));
+          choix.append(co, vi);
+        }
         // Saga 1.45 : avec la vision dynamique : sa lumière (une torche…) et, pour un héros, sa vision dans le noir.
         if (TableEtat.etatCarte(partie.table, carte.id).vision) {
           const l = select(String(p.lumiere || ''), [['', 'Pas de lumière'], ['3', 'Bougie (3 m)'], ['6', 'Torche (6 m)'], ['9', 'Lanterne (9 m)'], ['18', 'Grande lumière (18 m)']], (v) => T.agir({ type: 'lumiere', pion: p.id, metres: v }));
@@ -304,6 +352,7 @@ const TablePanneau = (() => {
         out.push(ligne);
       }
       if (!pions.length) out.push(el('p', { className: 'table-note', textContent: 'Aucun pion sur cette carte.' }));
+      out.push(...herosAilleurs(jeu, partie, carte));
       // Saga 1.44 : un monstre du jeu en pleine séance (clic sur une case), ou une image déposée sur le plateau.
       const monstres = jeu.donnees.monstres_jdr?.monstres_jdr || [];
       if (monstres.length) {
@@ -479,7 +528,10 @@ const TablePanneau = (() => {
         const scenes = l.filter((c) => c.fond), autres = l.filter((c) => !c.fond);
         const ligne = (c) => el('div', { className: `table-ligne${c.id === carte.id ? ' actif' : ''}` },
           el('span', { className: 'table-nom', textContent: c.nom || c.id }),
-          c.id === carte.id ? el('small', { textContent: 'ici' }) : btn('arrow-right', 'Y aller', () => { if (!T.allerCarte(c.id)) T.message('Pas pendant un combat ou une scène.'); }, { titre: 'Le groupe et ses pions arrivent sur cette carte (au départ s\'il y est, sinon au milieu).' }));
+          ...(c.id === carte.id ? [el('small', { textContent: 'ici' })] : [
+            btn('arrow-right', 'Y aller', () => { if (!T.allerCarte(c.id)) T.message('Pas pendant un combat ou une scène.'); }, { titre: 'Le groupe et ses pions arrivent sur cette carte (au départ s\'il y est, sinon au milieu).' }),
+            // Saga 1.48 : le MJ seul (préparer, ou retrouver un héros envoyé là) : les joueurs restent où ils sont.
+            btn('eye', '', () => { if (!T.allerCarte(c.id, { seul: true })) T.message('Pas pendant un combat ou une scène.'); }, { titre: 'Y aller seul : les héros restent où ils sont' })]));
         return [
           ...(scenes.length ? [el('div', { className: 'table-sous-titre', textContent: 'Scènes (une image)' }), ...scenes.map(ligne)] : [el('p', { className: 'table-note', textContent: 'Aucune scène (Tafl › Carte › Nouvelle scène).' })]),
           el('div', { className: 'table-sous-titre', textContent: 'Cartes' }), ...autres.map(ligne),
@@ -492,7 +544,7 @@ const TablePanneau = (() => {
           el('label', { className: 'table-ligne' }, el('span', { textContent: 'Vision' }), select(ec.vision, [['', 'Non : le brouillard des pièces'], ['jour', 'Dynamique, en plein jour'], ['sombre', 'Dynamique, dans le noir']], (v) => T.agir({ type: 'vision', valeur: v }))),
           el('p', { className: 'table-note', textContent: ec.vision === 'sombre'
             ? 'Seul ce qui est éclairé se voit (lumières : onglet Pions).'
-            : ec.vision === 'jour' ? 'Les héros voient tout ce qui est en vue, jusqu\'à 30 cases. Les murs arrêtent la vue ; l\'eau ou une barrière basse cochées « transparentes » dans Tafl, non.'
+            : ec.vision === 'jour' ? 'Les murs arrêtent la vue (pas les tuiles transparentes).'
               : 'Chacun voit ce que voient ses héros.' }),
           ...(ec.vision ? [el('div', { className: 'table-boutons' },
             btn('eye-closed', 'Oublier ce qui a été vu', () => T.agir({ type: 'vision_oublier' }), { titre: 'Le décor déjà vu redevient noir' }),
@@ -506,6 +558,8 @@ const TablePanneau = (() => {
         // Saga 1.46 : les amis connectés entendent la même musique et les mêmes bruitages (chacun règle son volume).
         o.push(el('label', { className: 'table-ligne' }, el('span', { textContent: 'Qui entend' }), select(partie.table.audio === 'mj' ? 'mj' : 'tous', [['tous', 'Tous : les amis aussi, chez eux'], ['mj', 'Moi seul (ce PC)']], (v) => T.agir({ type: 'audio', valeur: v }))));
         if (!sons.length) o.push(el('p', { className: 'table-note', textContent: 'Pas de son dans le dossier sons/ du jeu.' }));
+        // Saga 1.48 : les listes de lecture.
+        else o.push(...listesLecture(partie));
         for (const x of sons) {
           o.push(el('div', { className: 'table-ligne son' },
             el('span', { className: 'table-nom', textContent: x.replace(/^sons\//, '') }),

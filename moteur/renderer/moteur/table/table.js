@@ -91,14 +91,26 @@ const TableMode = (() => {
     const table = () => partie().table;
     const R = () => E.reglages(jeu());
     const role = () => apercu || { mj: true };
-    const ctxVue = () => ({
+    // Saga 1.48 : un joueur dont le héros est sur une autre carte que le MJ voit celle-là (sans ses PNJ ni le combat).
+    const carteDe = (r) => {
+      if (!r || r.mj || !r.perso) return null;
+      const c = herosDuGroupe().find((q) => E.estMien(r, q));
+      const p = c ? pion(c.pion) : null;
+      return p && p.carte !== carte()?.id ? jeu().cartes.get(p.carte) || null : null;
+    };
+    const ctxVue = (r = null) => {
+      const ailleurs = carteDe(r);
+      if (ailleurs) return { ...ctxIci(), carte: ailleurs, presents: [], scene: null, combat: null, pings: [] };
+      return ctxIci();
+    };
+    const ctxIci = () => ({
       carte: carte(), presents: h.presents(), scene: sceneTexte,
       combat: combat ? { tour: combat.tour, ordre: combat.ordre, actif: combat.actif, reste: combat.reste, libre: combat.libre, attente: combat.attente } : null,
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
       ficheDe: (perso) => fichePour(perso),
       pings: pings.filter((q) => performance.now() - q.t < 3000),
       // Saga 1.46 : la musique et les bruitages du MJ, que les amis entendent chez eux (sauf s'il les garde pour lui).
-      audio: table().audio === 'mj' ? null : { musique: h.morceau?.() || '', sons: sons.filter((x) => Date.now() - x.t < 8000).map(({ n, chemin }) => ({ n, chemin })) },
+      audio: table().audio === 'mj' ? null : { musique: lecture?.chemin || h.morceau?.() || '', sons: sons.filter((x) => Date.now() - x.t < 8000).map(({ n, chemin }) => ({ n, chemin })) },
     });
     // La fiche qu'un joueur reçoit (la sienne) : de quoi la lire et lancer ses jets.
     function fichePour(role) {
@@ -188,7 +200,7 @@ const TableMode = (() => {
       maj();
     }
     const vuePour = (r) => {
-      const v = { ...E.vue(jeu(), partie(), r, ctxVue()), effets: effets.filter((e) => r.mj || e.public) };
+      const v = { ...E.vue(jeu(), partie(), r, ctxVue(r)), effets: effets.filter((e) => r.mj || e.public) };
       v.recit = recit.filter((e) => r.mj || E.visiblePour(e.visible, r)).slice(-50);
       // Saga 1.21 : en combat, le joueur du héros dont c'est le tour reçoit ses choix (le menu, les cases, les cibles).
       const q = questionPour(r);
@@ -200,7 +212,10 @@ const TableMode = (() => {
     };
     const pion = (id) => table().pions.find((p) => p.id === id) || null;
     const presentDe = (id) => h.presents().find((q) => `ev:${q.ev.id}` === id) || null;
-    const occupee = (x, y, sauf = null) => E.occupee(table(), carte().id, x, y, sauf) || h.presents().some((q) => q.bloque && q.x === x && q.y === y);
+    const occupee = (x, y, sauf = null) => {
+      const id = sauf?.carte || carte().id;
+      return E.occupee(table(), id, x, y, sauf) || (id === carte().id && h.presents().some((q) => q.bloque && q.x === x && q.y === y));
+    };
 
     function noterEffet(id, sorte, texte, couleur) {
       const p = pion(id);
@@ -250,10 +265,17 @@ const TableMode = (() => {
       if (m) m.avantFermeture = null;
     }
     // Le groupe arrive sur une carte (le départ, un téléporteur, une sauvegarde) : ses pions autour de (x, y).
+    // Saga 1.48 : les héros envoyés ailleurs (p.ailleurs) restent où ils sont ; « Y aller seul » : aucun ne suit.
+    // Ceux que le MJ retrouve sur la carte où il arrive refont partie du groupe.
+    let seul = false;
     function entrerCarte(c, x, y) {
       if (!actif) return;
       E.preparer(jeu(), partie());
-      E.placerHeros(table(), partie(), c, x, y, h.presents());
+      const garder = new Set(table().pions.filter((p) => p.sorte === 'heros' && (seul || p.ailleurs)).map((p) => p.id));
+      E.placerHeros(table(), partie(), c, x, y, h.presents(), garder);
+      for (const p of table().pions) if (p.sorte === 'heros' && p.carte === c.id) delete p.ailleurs;
+      if (seul) for (const p of table().pions) if (p.sorte === 'heros' && p.carte !== c.id) p.ailleurs = true;
+      seul = false;
       selection = null;
       plateau.oublier();
       panneau?.rafraichir();
@@ -261,7 +283,7 @@ const TableMode = (() => {
 
     // --- Ce que le MJ fait sur le plateau ---
     function agir(a, r = { mj: true }, nom = '') {
-      const res = E.agir(jeu(), partie(), r, a, ctxVue());
+      const res = E.agir(jeu(), partie(), r, a, ctxVue(r));
       if (!res.ok && r.mj) h.message(res.erreur);
       else if (!res.ok && nom) avertir(nom, res.erreur);
       if (res.jet) lancerJet(res.jet);
@@ -324,7 +346,7 @@ const TableMode = (() => {
     // Un héros arrivé sur sa case (hors combat) : le meneur du groupe est là ; un déclencheur ou un
     // téléporteur sous ses pieds se lance.
     function arrive(p) {
-      if (p.sorte !== 'heros' || combat) return;
+      if (p.sorte !== 'heros' || combat || p.carte !== carte()?.id) return;
       h.placerJoueur(p.x, p.y, p.direction);
       if (h.occupe()) return;
       const q = Monde.presentEn(h.presents(), p.x, p.y);
@@ -347,7 +369,7 @@ const TableMode = (() => {
     async function deplacerHorsCombat(p, x, y, r = { mj: true }) {
       if (enMarche || (p.x === x && p.y === y)) return;
       const depart = { x: p.x, y: p.y };
-      const ch = G.chemin(carte(), p, { x, y }, { diagonales: R().diagonales, occupe: (cx, cy) => occupee(cx, cy, p) });
+      const ch = G.chemin(jeu().cartes.get(p.carte) || carte(), p, { x, y }, { diagonales: R().diagonales, occupe: (cx, cy) => occupee(cx, cy, p) });
       const res = agir({ type: 'deplacer', pion: p.id, x, y }, r);
       if (!res.ok) return;
       if (ch && ch.length > 1 && ch.length <= 40) {
@@ -1147,6 +1169,44 @@ const TableMode = (() => {
       }
     }
     let ecouteMulti = false;
+    // --- Saga 1.48 : les listes de lecture du MJ (un morceau après l'autre, dans l'ordre ou au hasard, en boucle) ---
+    let lecture = null, numeroLecture = 0;
+    function jouerListe(id) {
+      const l = table().listes.find((x) => x.id === id);
+      if (!l?.morceaux.length) return false;
+      lecture = { id, i: -1, ordre: [], rates: 0, chemin: '' };
+      morceauSuivant();
+      return true;
+    }
+    async function morceauSuivant() {
+      if (!lecture) return;
+      const l = table().listes.find((x) => x.id === lecture.id);
+      if (!l?.morceaux.length) { arreterListe(); return; }
+      lecture.i++;
+      if (lecture.i >= lecture.ordre.length || lecture.ordre.length !== l.morceaux.length) {
+        const ordre = l.morceaux.map((_, k) => k);
+        if (l.hasard) for (let k = ordre.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [ordre[k], ordre[j]] = [ordre[j], ordre[k]]; }
+        lecture.ordre = ordre;
+        lecture.i = 0;
+      }
+      const chemin = l.morceaux[lecture.ordre[lecture.i]];
+      const moi = ++numeroLecture;
+      lecture.chemin = chemin;
+      envoyes.clear();
+      panneau?.rafraichir();
+      const t0 = Date.now();
+      try { await h.musiqueFois?.(chemin); } catch { /* illisible : compté comme raté */ }
+      if (numeroLecture !== moi || !lecture) return; // un autre morceau ou une autre musique entre-temps
+      // Une autre musique a pris la place (un combat, une scène) : la liste s'arrête là.
+      if (Date.now() - t0 >= 300 && h.morceau && h.morceau() !== chemin) { arreterListe(); return; }
+      // Un morceau qui finit tout de suite est illisible : si aucun ne se lit, la liste s'arrête.
+      if (Date.now() - t0 < 300) {
+        if (++lecture.rates >= l.morceaux.length) { arreterListe(); h.message(`« ${l.nom} » : aucun morceau ne se lit.`); return; }
+      } else lecture.rates = 0;
+      morceauSuivant();
+    }
+    function arreterListe() { numeroLecture++; lecture = null; envoyes.clear(); panneau?.rafraichir(); }
+
     // --- Saga 1.47 : les scripts JS du jeu à la table (BacASable.MOMENTS › table_*, saga.table) ---
     // Les jets et ce que dit un script arrivent marqués « jet » : un script ne se répond pas à lui-même.
     function chatPourScripts(l) {
@@ -1292,6 +1352,7 @@ const TableMode = (() => {
       // Le choix en cours sur le plateau (pour les tests) : { sorte, cases: [index], cibles: [id] }.
       get choix() { return picker ? { sorte: picker.sorte, cases: picker.cases ? [...picker.cases.keys()] : null, cibles: picker.cibles ? [...picker.cibles] : null } : null; },
       vue: () => derniereVue,
+      vuePour,
       choisirCase, afficherAide, annulerPicker,
       cadrer: () => plateau.oublier(),
       // Saga 1.35 : le zoom (les boutons en bas du plateau), le tapis de dés.
@@ -1302,7 +1363,7 @@ const TableMode = (() => {
       set marges(f) { plateau.marges = f; },
       redessinerOutils: () => outils.rafraichir(),
       pointDe: (x, y) => { const r = canvas.getBoundingClientRect(); const q = plateau.pointDe(x, y, jeu()); return { x: r.left + q.px, y: r.top + q.py }; },
-      musique: (c) => h.musique(c), son: (c) => { h.son(c); sons.push({ n: ++numeroSon, chemin: c, t: Date.now() }); if (sons.length > 6) sons.shift(); envoyes.clear(); }, message: (t) => h.message(t), des: (o) => h.des(o),
+      musique: (c) => { if (lecture) arreterListe(); h.musique(c); }, son: (c) => { h.son(c); sons.push({ n: ++numeroSon, chemin: c, t: Date.now() }); if (sons.length > 6) sons.shift(); envoyes.clear(); }, message: (t) => h.message(t), des: (o) => h.des(o),
       lancerCombat: (groupe) => h.combattreDepuisTable(groupe),
       // Saga 1.35.1 : les rencontres posées sur cette carte ([{ id, nom, n }]), et en lancer plusieurs d'un coup
       // (les monstres du combat : ceux qui sont sur la table, pas un de plus).
@@ -1383,9 +1444,28 @@ const TableMode = (() => {
       },
       // Saga 1.42 : le MJ emmène le groupe sur une autre carte ou une scène image (onglet Scène › Cartes).
       // Le groupe arrive au départ de la carte s'il y est, sinon sur la case libre la plus proche du centre.
-      allerCarte(id) {
+      // Saga 1.48 : envoyer un héros (et son joueur) sur une autre carte ; celle du MJ : il rejoint le groupe.
+      envoyerHeros(pionId, carteId) {
+        const p = pion(pionId), c = jeu().cartes.get(carteId);
+        if (!p || p.sorte !== 'heros' || !c || combat) return false;
+        const ici = c.id === carte()?.id;
+        const autre = ici ? table().pions.find((q) => q.sorte === 'heros' && q !== p && q.carte === c.id) : null;
+        const d = jeu().depart?.carte === c.id ? jeu().depart : null;
+        const vise = autre || d || { x: Math.floor(c.largeur / 2), y: Math.floor(c.hauteur / 2) };
+        const pos = E.caseLibre(table(), c, vise.x, vise.y, [], ici ? h.presents() : []);
+        Object.assign(p, { carte: c.id, x: pos.x, y: pos.y });
+        if (ici) delete p.ailleurs; else p.ailleurs = true;
+        if (selection === p.id) selection = null;
+        noterRecit({ texte: `${nomPion(p)} : ${c.nom || c.id}.`, visible: 'mj' });
+        envoyes.clear(); plateau.oublier(); panneau?.rafraichir();
+        return true;
+      },
+      // Les héros sur une autre carte que celle du MJ.
+      herosAilleurs: () => table().pions.filter((p) => p.sorte === 'heros' && p.carte !== carte()?.id),
+      allerCarte(id, { seul: s = false } = {}) {
         const c = jeu().cartes.get(id);
         if (!c || combat || h.occupe() || id === carte()?.id) return false;
+        seul = Boolean(s);
         const d = jeu().depart?.carte === id ? jeu().depart : null;
         let pos = d ? { x: d.x, y: d.y } : null;
         if (!pos) {
@@ -1399,7 +1479,7 @@ const TableMode = (() => {
           pos = best || { x: cx, y: cy };
         }
         h.teleporter({ carte: id, x: pos.x, y: pos.y, direction: 'bas' });
-        noterRecit?.({ texte: `Le groupe arrive : ${c.nom}.` });
+        if (!seul) noterRecit?.({ texte: `Le groupe arrive : ${c.nom}.` });
         return true;
       },
       lancerRencontres(ids) {
@@ -1416,6 +1496,8 @@ const TableMode = (() => {
       // Saga 1.32 : une formule ou une commande du MJ (le panneau, ses macros).
       commande: (texte) => commande(texte, { mj: true }, 'MJ', 'hote'),
       changerPv,
+      // Saga 1.48 : les listes de lecture.
+      jouerListe, morceauSuivant, arreterListe, lecture: () => (lecture ? { id: lecture.id, chemin: lecture.chemin } : null),
       // Saga 1.47 : les scripts JS du jeu (saga.table).
       pourScript, commandeScript,
       outils,
