@@ -123,7 +123,7 @@ Electron, sans framework ni outil de compilation, comme Skald. Les images sont t
 | `renderer/sources.js` | Lecture des images : PSD (image entière, ou un calque / groupe recomposé avec masques, opacités, modes de fusion et masques d'écrêtage), SVG (dessiné en 2048 px), autres formats |
 | `renderer/recettes.js` | Les cinq recettes : leurs réglages, leurs fichiers produits et leur code à coller. Pour en ajouter une : un bloc de plus dans ce fichier |
 | `renderer/app.js` | L'interface : projet, liste des assets, aperçu, panneau de réglages, export, surveillance, raccourcis |
-| `renderer/dialogs.js`, `notify.js`, `update.js` | Fenêtres de dialogue, notifications et bouton de mise à jour (repris de Skald) |
+| `../commun/dialogues.js`, `notifications.js`, `mise-a-jour.js` | Fenêtres de dialogue, notifications et bouton de mise à jour (communs aux outils, recopiés par `npm install`) |
 | `build/icon.svg` | L'icône : la rune ᛒ (Berkanan, le « B » de Brokk) en dégradé de braise. `icon.png` et `icon.ico` en sont tirés |
 
 ## Pas encore

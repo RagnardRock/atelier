@@ -12,6 +12,9 @@ Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude*
 | `github.js` | Lit les Releases GitHub pour les mises à jour sans épuiser la limite de 60 demandes par heure de GitHub : le flux des Releases d'abord (non compté), l'API seulement en complément (au plus une fois par demi-heure, gardée sur le disque), et un message clair avec l'heure où réessayer si la limite est atteinte. Atelier et Saga l'utilisent aussi (`hub/commun/`, `moteur/commun/`, copiés par `npm install`). |
 | `ollama.js` | L'IA locale : parle à Ollama (serveur sur le PC, `127.0.0.1:11434`), le démarre, l'installe (Windows), télécharge ou supprime les modèles, libère la carte graphique. Réglages partagés : `%APPDATA%\atelier-commun\ia-locale.json`. |
 | `loki-local.js` | Loki avec un modèle local : la boucle « réfléchir → action → résultat » que Claude Code fait d'habitude, avec les mêmes actions, la même mémoire et les mêmes cartes Autoriser / Refuser. Aussi utilisé par Atelier et Rune. |
+| `notifications.js` | Les notifications en bas à droite (`notify`) et les erreurs inattendues. La balise dit quel pont écouter : `data-api="brokk"`. |
+| `dialogues.js` | Les fenêtres de dialogue en verre : `Dialogs.form` (une fenêtre faite d'une liste de champs) et `Dialogs.ask` (une petite question). |
+| `mise-a-jour.js` | Le bouton « Mise à jour » de la barre de titre : `data-api="brokk" data-nom="Brokk"`. Avant de fermer pour s'installer, il appelle `App.avantMiseAJour()` si l'outil en a une (enregistrer ce qui ne l'est pas, ou `false` pour annuler). |
 | `copier.js` | Recopie ces fichiers dans `<outil>/commun/`. |
 
 **Pourquoi une copie ?** Chaque outil est fabriqué depuis son propre dossier, et son installeur

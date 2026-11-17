@@ -1,5 +1,7 @@
-// Fenêtres de dialogue (plaque de verre au milieu de l'écran), reprises de Skald : Dialogs.form
-// construit chaque fenêtre à partir d'une liste de champs, Dialogs.ask pose une petite question.
+// Fenêtres de dialogue (plaque de verre au milieu de l'écran), communes aux outils de l'Atelier
+// (recopiées dans <outil>/commun/ par copier.js) : Dialogs.form construit chaque fenêtre à partir
+// d'une liste de champs, Dialogs.ask pose une petite question.
+// La page doit avoir un <div id="modal-root"> et la fonction $ (base.js de l'outil).
 //
 // Un champ : { key, label, type, value, ... } avec type parmi
 //   number, range (curseur + nombre), select, checkbox, color, text, textarea, info (texte seul).
