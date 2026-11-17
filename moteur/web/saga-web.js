@@ -43,7 +43,7 @@
       return Boolean(document.fullscreenElement);
     },
     onPleinEcran: (callback) => document.addEventListener('fullscreenchange', () => callback(Boolean(document.fullscreenElement))),
-    onError: rien, // notify.js écoute déjà les erreurs de la page
+    onError: rien, // commun/notifications.js écoute déjà les erreurs de la page
 
     readConfig: async () => ({ config: { ...J.config, ...(lire('reglages') || {}) }, path: '' }),
     writeConfig: async (changes) => {

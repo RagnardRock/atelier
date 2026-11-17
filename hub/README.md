@@ -98,4 +98,4 @@ npm start
 | `renderer/app.js` | Démarrage, thème, réglages, widgets affichés |
 | `renderer/outils.js` | La colonne Outils |
 | `renderer/notes.js`, `projets.js`, `presse-papiers.js`, `minuteurs.js`, `calendrier.js`, `calculatrice.js`, `claude.js` | Un fichier par widget |
-| `renderer/base.js`, `notify.js`, `dialogs.js`, `update.js` | Petits outils communs : raccourcis, notifications, fenêtres de dialogue, bouton de mise à jour |
+| `renderer/base.js` et `../commun/notifications.js`, `dialogues.js`, `mise-a-jour.js` | Petits outils communs : raccourcis, notifications, fenêtres de dialogue, bouton de mise à jour |

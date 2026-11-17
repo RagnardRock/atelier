@@ -252,7 +252,7 @@ function creer({ moteur, lireJeuPublic, lireSon, versHote, clientsChanges, campa
       .replace('../node_modules/@vscode/codicons/dist/codicon.css', `${racine}/codicons/codicon.css`)
       .replace(/<title>[^<]*<\/title>/, `<title>${titre.replace(/[<>&]/g, '') || 'Saga'} · rejoindre la partie</title>`)
       .replace('<body class="glass">', `<body class="glass web reseau">\n  ${CHARGEMENT}`)
-      .replace(/\s*<script src="update\.js"><\/script>/, '')
+      .replace(/\s*<script src="\.\.\/commun\/mise-a-jour\.js"[^>]*><\/script>/, '')
       .replace('<script src="base.js"></script>', `<script src="${racine}/web/saga-reseau.js"></script>\n  <script src="base.js"></script>`);
   }
   // Un fichier sous une racine, sans jamais en sortir.

@@ -52,7 +52,7 @@ const Adjust = (() => {
   const fromRgb = (c) => (c && 'r' in c ? rgbToHex(c.r, c.g, c.b) : null);
 
   // --- Les réglages ---
-  // name : nom affiché ; fields : la fenêtre de réglage (voir dialogs.js) ; apply(canvas, v) ;
+  // name : nom affiché ; fields : la fenêtre de réglage (voir ../commun/dialogues.js) ; apply(canvas, v) ;
   // psd : correspondance avec les calques de réglage de Photoshop (lecture et écriture des PSD).
 
   const TYPES = {

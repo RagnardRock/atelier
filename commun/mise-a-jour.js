@@ -45,7 +45,7 @@ const Updater = (() => {
     ]);
     if (!go) return;
     // Ce qui n'est pas enregistré : l'outil le propose (ou annule).
-    if (typeof App !== 'undefined' && App.avantMiseAJour && (await App.avantMiseAJour()) === false) return;
+    if (typeof App !== 'undefined' && App?.avantMiseAJour && (await App.avantMiseAJour()) === false) return;
     if (mode === 'installer') notify(`Téléchargement ${de} ${version}…`, 'info', 60000);
     await api.installUpdate();
   }

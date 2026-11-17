@@ -805,6 +805,7 @@ const App = (() => {
     openDocument,
     closeDocument,
     prepareQuit,
+    avantMiseAJour: prepareQuit, // ../commun/mise-a-jour.js : proposer d'enregistrer les images modifiées
     refresh,
     refreshPanels,
     refreshTool,

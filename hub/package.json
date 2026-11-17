@@ -1,12 +1,12 @@
 {
   "name": "atelier-hub",
   "productName": "Atelier",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "description": "Atelier, le hub de mes outils : lance Rune, Skald et les suivants, les installe et les met à jour, et réunit mes widgets (notes…)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "postinstall": "node ../commun/copier.js github.js ollama.js loki-local.js",
+    "postinstall": "node ../commun/copier.js github.js ollama.js loki-local.js notifications.js dialogues.js mise-a-jour.js",
     "dist": "electron-builder --win nsis --publish never"
   },
   "author": "Ragna",

@@ -61,7 +61,7 @@ const App = (() => {
         { key: 'page', label: 'Page', type: 'select', value: config.page, choices: [['claire', 'Blanche, comme sur papier'], ['sombre', 'Sombre (pour écrire le soir)']] },
         { type: 'info', text: 'Sur la page sombre, le texte noir s\'affiche en blanc et les couleurs trop foncées sont éclaircies (et l\'inverse sur la page blanche). Le fichier garde les vraies couleurs.' },
         { key: 'police', label: 'Police des nouveaux documents', type: 'text', value: config.police, list: 'liste-polices' },
-        { key: 'taille', label: 'Taille (points)', type: 'number', value: config.taille, min: 6, max: 72, step: 0.5 },
+        { key: 'taille', label: 'Taille (points)', type: 'number', vide: true, value: config.taille, min: 6, max: 72, step: 0.5 },
         { key: 'formatParDefaut', label: 'Enregistrer en', type: 'select', value: config.formatParDefaut, choices: Object.values(Formats.liste).map((f) => [f.id, `${f.nom} (.${f.extensions[0]})`]) },
         { key: 'orthographe', label: 'Souligner les fautes d\'orthographe', type: 'checkbox', value: config.orthographe !== false },
         { key: 'languesOrthographe', label: 'Langue', type: 'select', value: config.languesOrthographe || 'fr', choices: [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']] },
@@ -430,12 +430,12 @@ const App = (() => {
         { key: 'format', label: 'Papier', type: 'select', value: mp.format, choices: Object.entries(Formats.PAPIERS).map(([id, p]) => [id, `${p.nom} (${p.largeur} × ${p.hauteur} cm)`]) },
         { key: 'orientation', label: 'Orientation', type: 'select', value: mp.orientation, choices: [['portrait', 'Portrait (en hauteur)'], ['paysage', 'Paysage (en largeur)']] },
         { key: 'marges', label: 'Marges', type: 'select', value: margesType(mp.marges), choices: [['perso', 'Personnalisées (ci-dessous)'], ['normales', 'Normales (2,5 cm)'], ['etroites', 'Étroites (1,27 cm)'], ['larges', 'Larges (2,54 / 5,08 cm)']] },
-        { key: 'haut', label: 'Marge du haut', type: 'number', value: mp.marges.haut, min: 0, max: 10, step: 0.1, unit: 'cm' },
-        { key: 'bas', label: 'Marge du bas', type: 'number', value: mp.marges.bas, min: 0, max: 10, step: 0.1, unit: 'cm' },
-        { key: 'gauche', label: 'Marge de gauche', type: 'number', value: mp.marges.gauche, min: 0, max: 10, step: 0.1, unit: 'cm' },
-        { key: 'droite', label: 'Marge de droite', type: 'number', value: mp.marges.droite, min: 0, max: 10, step: 0.1, unit: 'cm' },
+        { key: 'haut', label: 'Marge du haut', type: 'number', vide: true, value: mp.marges.haut, min: 0, max: 10, step: 0.1, unit: 'cm' },
+        { key: 'bas', label: 'Marge du bas', type: 'number', vide: true, value: mp.marges.bas, min: 0, max: 10, step: 0.1, unit: 'cm' },
+        { key: 'gauche', label: 'Marge de gauche', type: 'number', vide: true, value: mp.marges.gauche, min: 0, max: 10, step: 0.1, unit: 'cm' },
+        { key: 'droite', label: 'Marge de droite', type: 'number', vide: true, value: mp.marges.droite, min: 0, max: 10, step: 0.1, unit: 'cm' },
         { key: 'police', label: 'Police du document', type: 'text', value: d.police, list: 'liste-polices' },
-        { key: 'taille', label: 'Taille du texte', type: 'number', value: d.taille, min: 6, max: 72, step: 0.5, unit: 'pt' },
+        { key: 'taille', label: 'Taille du texte', type: 'number', vide: true, value: d.taille, min: 6, max: 72, step: 0.5, unit: 'pt' },
         { key: 'parDefaut', label: 'Utiliser aussi pour les nouveaux documents', type: 'checkbox', value: false },
       ],
       onInput(values, f) {
@@ -629,15 +629,15 @@ const App = (() => {
         { key: 'nom', label: 'Nom', type: 'text', value: s0.nom, hidden: !s0.perso },
         { key: 'balise', label: 'Sorte de paragraphe', type: 'select', value: s0.balise, choices: StylesDoc.BALISES, hidden: !s0.perso },
         { key: 'police', label: 'Police', type: 'text', value: v0.police, list: 'liste-polices', placeholder: id === 'p' ? 'Calibri' : 'Celle du texte normal' },
-        { key: 'taille', label: 'Taille (points)', type: 'number', value: v0.taille, min: 1, max: 400, step: 0.5 },
+        { key: 'taille', label: 'Taille (points)', type: 'number', vide: true, value: v0.taille, min: 1, max: 400, step: 0.5 },
         { key: 'couleur', label: 'Couleur', type: 'couleur', value: v0.couleur, aucune: 'Automatique' },
         { key: 'gras', label: 'Gras', type: 'checkbox', value: v0.gras },
         { key: 'italique', label: 'Italique', type: 'checkbox', value: v0.italique },
         { key: 'souligne', label: 'Souligné', type: 'checkbox', value: v0.souligne },
-        { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', value: v0.avant, min: 0, max: 200, step: 1 },
-        { key: 'apres', label: 'Espace en dessous (points)', type: 'number', value: v0.apres, min: 0, max: 200, step: 1 },
+        { key: 'avant', label: 'Espace au-dessus (points)', type: 'number', vide: true, value: v0.avant, min: 0, max: 200, step: 1 },
+        { key: 'apres', label: 'Espace en dessous (points)', type: 'number', vide: true, value: v0.apres, min: 0, max: 200, step: 1 },
         { key: 'alignement', label: 'Alignement', type: 'select', value: v0.alignement, choices: StylesDoc.ALIGNEMENTS },
-        { key: 'retrait', label: 'Retrait à gauche (cm)', type: 'number', value: v0.retrait, min: 0, max: 20, step: 0.1 },
+        { key: 'retrait', label: 'Retrait à gauche (cm)', type: 'number', vide: true, value: v0.retrait, min: 0, max: 20, step: 0.1 },
         { type: 'element', element: aide },
         { key: 'modele', label: 'Utiliser ces styles pour les nouveaux documents', type: 'checkbox', value: false },
         { type: 'info', text: 'Les changements se voient tout de suite dans la page. Ils sont enregistrés avec le document (Word, LibreOffice, page web).' },
@@ -840,8 +840,8 @@ const App = (() => {
   }
   async function tableauSurMesure() {
     const v = await Dialogs.form({ title: 'Insérer un tableau', okLabel: 'Insérer', fields: [
-      { key: 'colonnes', label: 'Colonnes', type: 'number', value: 3, min: 1, max: 30 },
-      { key: 'lignes', label: 'Lignes', type: 'number', value: 3, min: 1, max: 200 },
+      { key: 'colonnes', label: 'Colonnes', type: 'number', vide: true, value: 3, min: 1, max: 30 },
+      { key: 'lignes', label: 'Lignes', type: 'number', vide: true, value: 3, min: 1, max: 200 },
     ] });
     if (v) Editeur.insererTableau(Math.min(200, Math.max(1, v.lignes)), Math.min(30, Math.max(1, v.colonnes)));
   }
@@ -1144,7 +1144,22 @@ const App = (() => {
   $('#accueil-ouvrir').onclick = ouvrir;
   window.addEventListener('resize', majStatutBientot);
 
+  // ../commun/mise-a-jour.js : avant de fermer pour s'installer, les documents pas encore enregistrés.
+  async function avantMiseAJour() {
+    const modifies = docs.filter((d) => d.modifie);
+    if (!modifies.length) return true;
+    const choix = await Dialogs.ask('Documents pas enregistrés', `${modifies.map((d) => d.nom).join(', ')} : enregistrer avant la mise à jour ?`, [
+      { label: 'Annuler', value: null },
+      { label: 'Ne pas enregistrer', value: false },
+      { label: 'Enregistrer', value: true, primary: true },
+    ]);
+    if (choix === null) return false;
+    if (choix) for (const d of modifies) if (!(await enregistrer(d))) return false;
+    return true;
+  }
+
   return {
+    avantMiseAJour,
     // Pour Claude (claude-actions.js) : les mêmes fonctions que les boutons.
     claude: {
       docs: () => docs,

@@ -1,16 +1,86 @@
 // Fenêtres de dialogue (plaque de verre au milieu de l'écran), communes aux outils de l'Atelier
 // (recopiées dans <outil>/commun/ par copier.js) : Dialogs.form construit chaque fenêtre à partir
-// d'une liste de champs, Dialogs.ask pose une petite question.
+// d'une liste de champs, Dialogs.ask pose une petite question. Un outil peut y ajouter ses propres
+// fenêtres (Skald : Object.assign(Dialogs, { newImage, text })).
 // La page doit avoir un <div id="modal-root"> et la fonction $ (base.js de l'outil).
 //
 // Un champ : { key, label, type, value, ... } avec type parmi
-//   number, range (curseur + nombre), select, checkbox, color, text, textarea, info (texte seul).
+//   number, range (curseur + nombre), select, checkbox, color, couleur (le sélecteur d'Edda, avec ses
+//   palettes : couleurs.js), text, textarea, info (texte seul), element (un contenu libre).
+// Un nombre avec vide: true peut rester vide ('' : « rien de choisi ») ; sinon un nombre vide vaut 0.
+// Des onglets : onglets: ['Apparence', …] dans form(), et onglet: 'Apparence' sur chaque champ.
+// onInput(values, form) est appelé à chaque modification (pour l'aperçu en direct).
+//
+// Quand Loki lance une commande d'un menu (claude-actions.js), la fenêtre s'ouvre pour de vrai,
+// se remplit avec les valeurs qu'il a données et se valide toute seule : voir automatique().
 
 const Dialogs = (() => {
   const root = $('#modal-root');
   let open = null;
 
-  function form({ title, fields, okLabel = 'OK', cancelLabel = 'Annuler', onInput, extra, width = 420, buttons = [] }) {
+  // --- Fenêtres remplies par Claude ---
+  // automatique({ valeurs, choix, apercu }, fn) lance fn ; chaque fenêtre ouverte pendant ce temps
+  // prend ses valeurs dans « valeurs » (un objet, ou une liste : un objet par fenêtre, dans l'ordre),
+  // puis se valide (ou s'annule avec apercu: true, pour seulement connaître ses champs).
+  // Une question (ask) prend le bouton dont la valeur ou le libellé vaut « choix », sinon le bouton principal.
+  // Renvoie { resultat, fenetres } : ce que chaque fenêtre demandait et les valeurs utilisées.
+  let auto = null;
+  async function automatique(options, fn) {
+    const avant = auto;
+    const a = { ...options, fenetres: [], n: 0 };
+    auto = a;
+    try {
+      const resultat = await fn();
+      // Une fenêtre peut s'ouvrir un peu plus tard (après la lecture d'un fichier…) ou être encore en
+      // train de se valider : on attend que plus rien ne bouge.
+      let vues = -1;
+      for (let t = 0; t < 50 && (vues !== a.fenetres.length || open); t++) {
+        vues = a.fenetres.length;
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      return { resultat, fenetres: a.fenetres };
+    } finally {
+      auto = avant;
+    }
+  }
+  const decrireChamp = (f) => {
+    const d = { cle: f.key, libelle: f.label, type: f.type };
+    if (f.choices) d.choix = f.choices.map(([v, l]) => (v === l ? v : `${v} (${l})`));
+    if (f.min !== undefined) d.min = f.min;
+    if (f.max !== undefined) d.max = f.max;
+    if (f.unit) d.unite = f.unit;
+    return d;
+  };
+  function remplir(a, title, api, finish) {
+    const voulues = (Array.isArray(a.valeurs) ? a.valeurs[a.n] : a.valeurs) || {};
+    a.n++;
+    const fenetre = { titre: title, champs: Object.values(api.inputs).filter((i) => !i.row.hidden).map((i) => decrireChamp(i.field)) };
+    a.fenetres.push(fenetre);
+    const inconnues = Object.keys(voulues).filter((k) => !api.inputs[k]);
+    const erreurs = [];
+    if (inconnues.length && !a.apercu) erreurs.push(`champs inconnus : ${inconnues.join(', ')}`);
+    // Les listes d'abord : choisir un modèle peut changer les autres champs (nouvelle image…).
+    const cles = Object.keys(voulues).filter((k) => api.inputs[k]).sort((x, y) => (api.inputs[y].field.type === 'select') - (api.inputs[x].field.type === 'select'));
+    for (const k of cles) {
+      const { field } = api.inputs[k];
+      let v = voulues[k];
+      if (field.type === 'select' && !field.choices.some(([c]) => String(c) === String(v))) {
+        erreurs.push(`${k} : « ${v} » n'est pas un choix possible (${field.choices.map(([c]) => c).join(', ')})`);
+        continue;
+      }
+      if (field.type === 'checkbox') v = Boolean(v);
+      // Comme au clavier : certaines fenêtres regardent quel champ a le focus (proportions…).
+      api.inputs[k].input.focus();
+      api.setValue(k, v);
+    }
+    if (erreurs.length) fenetre.erreur = erreurs.join(' ; ');
+    setTimeout(() => {
+      fenetre.valeurs = api.values();
+      finish(a.apercu || erreurs.length ? null : fenetre.valeurs);
+    }, 0);
+  }
+
+  function form({ title, fields, okLabel = 'OK', cancelLabel = 'Annuler', onInput, extra, width = 420, buttons = [], onglets = null }) {
     close(null);
     return new Promise((resolve) => {
       const overlay = document.createElement('div');
@@ -22,16 +92,28 @@ const Dialogs = (() => {
       card.querySelector('.modal-title').textContent = title;
       const body = card.querySelector('.modal-body');
       const inputs = {};
+      // Tafl 1.42 : des onglets (onglets: ['Apparence', …], et onglet: 'Apparence' sur chaque champ).
+      // Un champ sans onglet se voit dans tous.
+      const parOnglet = [];
+      const ranger = (node, f) => { if (onglets && f.onglet) parOnglet.push([node, f.onglet]); };
+      let barre = null;
+      if (onglets) {
+        barre = document.createElement('div');
+        barre.className = 'modal-onglets';
+        barre.setAttribute('role', 'tablist');
+        body.appendChild(barre);
+      }
 
       for (const f of fields) {
         if (f.type === 'info') {
           const p = document.createElement('p');
           p.className = 'modal-info';
           p.textContent = f.text;
+          ranger(p, f);
           body.appendChild(p);
           continue;
         }
-        if (f.type === 'element') { body.appendChild(f.element); continue; }
+        if (f.type === 'element') { ranger(f.element, f); body.appendChild(f.element); continue; }
         const row = document.createElement('label');
         row.className = `field field-${f.type}`;
         if (f.hidden) row.hidden = true;
@@ -44,6 +126,31 @@ const Dialogs = (() => {
           input = document.createElement('select');
           for (const [value, label] of f.choices) input.add(new Option(label, value));
           input.value = f.value;
+        } else if (f.type === 'couleur') {
+          // Le sélecteur de couleur d'Edda (palettes, couleurs récentes, « automatique ») : voir couleurs.js.
+          // La valeur : « rrggbb », ou '' (automatique / aucune).
+          input = document.createElement('input');
+          input.type = 'hidden';
+          input.value = f.value ?? '';
+          const bouton = document.createElement('button');
+          bouton.type = 'button';
+          bouton.className = 'button champ-couleur';
+          const pastille = document.createElement('span');
+          pastille.className = 'pastille-mini';
+          const texte = document.createElement('span');
+          bouton.append(pastille, texte, Object.assign(document.createElement('i'), { className: 'codicon codicon-chevron-down' }));
+          const montrer = () => {
+            pastille.classList.toggle('auto', !input.value);
+            pastille.style.background = input.value ? `#${input.value}` : '';
+            texte.textContent = input.value ? `#${input.value}` : (f.aucune || 'Automatique');
+          };
+          input.montrer = montrer;
+          montrer();
+          bouton.onclick = (e) => {
+            e.preventDefault();
+            Couleurs.ouvrir(bouton, { titre: f.label, aucune: f.aucune || 'Automatique', valeur: input.value || null, choisir: (c) => { input.value = c || ''; montrer(); input.dispatchEvent(new Event('input', { bubbles: true })); } });
+          };
+          row.append(bouton);
         } else if (f.type === 'textarea') {
           input = document.createElement('textarea');
           input.value = f.value ?? '';
@@ -57,7 +164,7 @@ const Dialogs = (() => {
           else input.value = f.value ?? '';
         }
         input.name = f.key;
-        row.appendChild(input);
+        if (f.type === 'couleur') row.insertBefore(input, row.lastChild); else row.appendChild(input);
         if (f.type === 'range') {
           // Le nombre à côté du curseur se modifie aussi au clavier.
           const number = document.createElement('input');
@@ -74,19 +181,37 @@ const Dialogs = (() => {
         }
         if (f.type === 'checkbox') row.classList.add('checkbox-row');
         inputs[f.key] = { input, field: f, row };
+        ranger(row, f);
         body.appendChild(row);
+      }
+      if (onglets) {
+        const montrer = (nom) => {
+          for (const b of barre.children) { b.classList.toggle('active', b.textContent === nom); b.setAttribute('aria-selected', String(b.textContent === nom)); }
+          for (const [node, o] of parOnglet) node.classList.toggle('hors-onglet', o !== nom);
+        };
+        for (const nom of onglets) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'modal-onglet';
+          b.setAttribute('role', 'tab');
+          b.textContent = nom;
+          b.onclick = () => montrer(nom);
+          barre.appendChild(b);
+        }
+        montrer(onglets[0]);
       }
 
       const values = () => {
         const out = {};
         for (const [key, { input, field }] of Object.entries(inputs)) {
           if (field.type === 'checkbox') out[key] = input.checked;
-          else if (field.type === 'number' || field.type === 'range') out[key] = Number(input.value);
+          // Un nombre laissé vide avec vide: true reste vide ('') : « rien de choisi », pas 0.
+          else if (field.type === 'number' || field.type === 'range') out[key] = field.vide && input.value === '' ? '' : Number(input.value);
           else out[key] = input.value;
         }
         return out;
       };
-      const api = { inputs, values, card, body, setValue(key, v) { const i = inputs[key]; if (!i) return; if (i.field.type === 'checkbox') i.input.checked = v; else i.input.value = v; i.input.dispatchEvent(new Event('input', { bubbles: true })); } };
+      const api = { inputs, values, card, body, setValue(key, v) { const i = inputs[key]; if (!i) return; if (i.field.type === 'checkbox') i.input.checked = v; else i.input.value = v; i.input.montrer?.(); i.input.dispatchEvent(new Event('input', { bubbles: true })); } };
 
       const footer = card.querySelector('footer');
       for (const b of buttons) {
@@ -94,6 +219,7 @@ const Dialogs = (() => {
         button.type = 'button';
         button.className = 'button';
         button.textContent = b.label;
+        if (b.title) button.title = b.title;
         button.onclick = () => b.run(api);
         footer.appendChild(button);
       }
@@ -105,6 +231,8 @@ const Dialogs = (() => {
       ok.type = 'submit';
       ok.className = 'button primary';
       ok.textContent = okLabel;
+      // Annuler / OK restent groupés à droite, même quand les boutons en plus passent sur une autre ligne.
+      (cancelLabel ? cancel : ok).classList.add('pousse-droite');
       if (cancelLabel) footer.append(cancel);
       footer.append(ok);
       if (extra) card.querySelector('.modal-extra').append(extra);
@@ -124,6 +252,7 @@ const Dialogs = (() => {
       root.appendChild(overlay);
       open = { overlay, finish };
       onInput?.(values(), api);
+      if (auto) return remplir(auto, title, api, finish);
       const first = card.querySelector('textarea, input:not([type=range]):not([type=checkbox]), select');
       (first || ok).focus();
       if (first?.select) first.select();
@@ -148,7 +277,7 @@ const Dialogs = (() => {
       const finish = (v) => { overlay.remove(); open = null; resolve(v); };
       for (const c of choices) {
         const b = document.createElement('button');
-        b.className = `button${c.primary ? ' primary' : ''}`;
+        b.className = `button${c.primary ? ' primary' : ''}${c.danger ? ' danger' : ''}`;
         b.textContent = c.label;
         b.onclick = () => finish(c.value);
         card.querySelector('footer').appendChild(b);
@@ -156,9 +285,15 @@ const Dialogs = (() => {
       overlay.appendChild(card);
       root.appendChild(overlay);
       open = { overlay, finish };
+      if (auto) {
+        const a = auto;
+        const c = choices.find((x) => a.choix !== undefined && (String(x.value) === String(a.choix) || x.label === a.choix)) || choices.find((x) => x.primary) || choices[choices.length - 1];
+        a.fenetres.push({ titre: title, question: message, boutons: choices.map((x) => x.label), reponse: a.apercu ? 'Annuler (aperçu)' : c.label });
+        return setTimeout(() => finish(a.apercu ? null : c.value), 0);
+      }
       card.querySelector('.button.primary')?.focus();
     });
   }
 
-  return { form, ask, close, isOpen };
+  return { form, ask, close, isOpen, automatique };
 })();

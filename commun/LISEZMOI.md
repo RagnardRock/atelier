@@ -86,7 +86,7 @@ familles « pour de bon » se cochent aussi dans les réglages de l'outil.
 
 Skald et Tafl donnent aussi à Claude toutes leurs commandes de menu (actions `menus`, `champs_menu`
 et `menu`). Une commande qui ouvre une fenêtre de réglages passe par `Dialogs.automatique()` (dans
-le `renderer/dialogs.js` de l'outil) : la vraie fenêtre s'ouvre, se remplit avec les valeurs de
+`commun/dialogues.js`) : la vraie fenêtre s'ouvre, se remplit avec les valeurs de
 Claude comme au clavier, puis se valide toute seule. Une question (« Enregistrer ? ») prend le bouton
 demandé, sinon le bouton principal. Les fenêtres de Windows (choisir un fichier, un dossier) restent
 pour Ragna : pour écrire dans le projet, Claude a ses propres actions (exporter, enregistrer_sous…).
