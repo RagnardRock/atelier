@@ -54,7 +54,9 @@ module.exports = [
       await page.waitForTimeout(400);
       await capture(saga, '1-arrivee.png');
       // Les premiers ennemis arrivent du bord de l'écran : on tourne jusqu'à ce que la dague en touche un.
-      for (let i = 0; i < 20 && !(await saga.lire(() => SagaSurvivor.run.tues)); i++) { await bouger(page, 1200); await immortel(page); }
+      // (On attend aussi que la horde soit là : une dague qui tue tôt, sur les tout premiers, ne dit pas qu'elle arrive.)
+      const pret = () => saga.lire(() => SagaSurvivor.run.tues > 0 && SagaSurvivor.horde.vivants + SagaSurvivor.run.tues > 3);
+      for (let i = 0; i < 20 && !(await pret()); i++) { await bouger(page, 1200); await immortel(page); }
       const r = await saga.lire(() => ({ vivants: SagaSurvivor.horde.vivants, tues: SagaSurvivor.run.tues, temps: SagaSurvivor.run.temps, armes: SagaSurvivor.run.armes }));
       vrai(r.vivants + r.tues > 3, `la horde n'arrive pas (${r.vivants} ennemis, ${r.tues} vaincus)`);
       vrai(r.tues > 0, 'la dague ne tue personne');

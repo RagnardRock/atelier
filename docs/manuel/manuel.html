@@ -597,9 +597,9 @@
   <table class="tableau compact">
     <tr><th>Outil</th><th>Touche</th><th>Ce qu'il fait</th></tr>
     <tr><td>Déplacer</td><td><kbd>V</kbd></td><td>Prendre et poser les pions.</td></tr>
-    <tr><td>Règle</td><td><kbd>R</kbd> ou Maj+glisser</td><td>La distance en cases et en mètres, avec la règle des diagonales du jeu.</td></tr>
-    <tr><td>Gabarit</td><td><kbd>G</kbd></td><td>Cercle, cône, ligne, cube, en mètres et en couleur, vus de tous. Clic droit dessus : l'effacer.</td></tr>
-    <tr><td>Ping</td><td><kbd>P</kbd> ou Alt+clic</td><td>Des ondes à ta couleur, avec ton nom, chez tout le monde.</td></tr>
+    <tr><td>Règle</td><td><kbd>R</kbd> ou Maj+glisser</td><td>La distance en cases et en mètres, vue de tous pendant qu'on mesure (le MJ peut la garder secrète).</td></tr>
+    <tr><td>Gabarit</td><td><kbd>G</kbd></td><td>Cercle, cône, ligne, cube, en mètres, en couleur, animé ou non, pour quelques secondes ou pour rester. Clic droit dessus : l'effacer ; <kbd>X</kbd> efface tout (le MJ : ceux de tous).</td></tr>
+    <tr><td>Ping</td><td><kbd>P</kbd> ou Alt+clic</td><td>Des ondes à ta couleur (ou celle choisie), avec ton nom, chez tout le monde.</td></tr>
     <tr><td>Brouillard</td><td><kbd>B</kbd> <kbd>N</kbd></td><td>Le pinceau qui cache ou révèle les pièces.</td></tr>
     <tr><td>Feutre · Notes</td><td><kbd>F</kbd> <kbd>T</kbd></td><td>Dessiner et écrire sur le plateau : sur le <b>calque du MJ</b> (lui seul) ou pour tous.</td></tr>
     <tr><td>Tapis de dés</td><td><kbd>D</kbd></td><td>Composer un jet en touchant les dés ou en écrivant une formule, puis Lancer ou glisser.</td></tr>
@@ -663,6 +663,19 @@
       <p>Dans Tafl, une tuile <b>transparente</b> (clic droit sur la tuile) bloque le pas mais pas la vue : l'eau, une barrière basse.</p>
     </div>
   </div>
+</section>
+
+<section class="page" data-titre="Saga · Gabarits animés, règle partagée">
+  <p class="kicker">Saga · 3</p>
+  <h2 class="premier">Gabarits animés, pings en couleur, règle partagée</h2>
+  <figure class="fig"><img src="captures/pings-1-gabarits-animes.jpg" alt=""><figcaption>Des flammes (6 m), de l'eau et des cœurs : chaque gabarit peut avoir son animation.</figcaption></figure>
+  <div class="grid2 haut">
+    <figure class="fig"><img src="captures/pings-3-outil-gabarit.jpg" alt=""><figcaption>L'outil Gabarit (<kbd>G</kbd>) : forme, taille, couleur, animation, durée.</figcaption></figure>
+    <figure class="fig"><img src="captures/pings-2-regle-joueur.jpg" alt=""><figcaption>Chez le MJ : la règle de Thorgrim pendant qu'il mesure.</figcaption></figure>
+  </div>
+  <p><b>Gabarits</b> : flammes, eau, magie, cœurs, glace, poison ou éclairs. Ils restent 5 s par défaut (3 s à 1 min), puis s'effacent ; « Il reste » les garde.</p>
+  <p><b>Pings</b> : l'outil <kbd>P</kbd> propose une couleur ; Alt+clic garde la dernière choisie.</p>
+  <p><b>Règle</b> : tout le monde voit qui mesure, et combien. Le MJ peut choisir « Secrète (moi seul) » dans l'outil <kbd>R</kbd>.</p>
 </section>
 
 <section class="page" data-titre="Saga · Auras, musique, cartes">
@@ -778,7 +791,7 @@
   <h2>Mode table</h2>
   <table class="tableau compact raccourcis">
     <tr><td><kbd>V</kbd></td><td>Déplacer</td><td><kbd>R</kbd></td><td>Règle</td></tr>
-    <tr><td><kbd>G</kbd></td><td>Gabarit</td><td><kbd>P</kbd> · Alt+clic</td><td>Ping</td></tr>
+    <tr><td><kbd>G</kbd> · <kbd>X</kbd></td><td>Gabarit · tout effacer</td><td><kbd>P</kbd> · Alt+clic</td><td>Ping</td></tr>
     <tr><td><kbd>B</kbd> <kbd>N</kbd></td><td>Brouillard</td><td><kbd>F</kbd> <kbd>T</kbd></td><td>Feutre, notes</td></tr>
     <tr><td><kbd>D</kbd></td><td>Tapis de dés</td><td><kbd>1</kbd> … <kbd>9</kbd></td><td>Macros</td></tr>
     <tr><td><code>/r 1d20+@dex</code></td><td>Jet pour tous</td><td><code>/gr d20</code></td><td>Jet secret</td></tr>

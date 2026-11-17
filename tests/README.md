@@ -79,6 +79,8 @@ la page de l'essai (rubrique **Artifacts**).
   qui s'enchaînent en boucle, arrêtée par une autre musique.
 - `essais/21-saga-cartes-separees.js` : Saga 1.48 : un héros envoyé sur une autre carte (son joueur la voit), « Y aller
   seul », puis le groupe réuni.
+- `essais/22-saga-pings-gabarits-regle.js` : Saga 1.49 : un ping bleu, un gabarit de flammes qui s'en va au bout de 3 s,
+  la règle d'un joueur vue du MJ, celle du MJ vue des joueurs, sauf en secret.
 
 - `essais/22-tafl-ergonomie.js` : Tafl 1.42 : un nouveau jeu vide choisit son pack (un modèle apporte le sien), les outils
   d'un autre espace cachés, les Réglages de Tafl en onglets, les événements semblables groupés en « × N ».

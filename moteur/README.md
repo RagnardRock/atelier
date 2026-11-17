@@ -390,6 +390,13 @@ Le mode table a une nouvelle interface. Le plateau prend tout l'écran, les pann
 
 Fichiers : `table/interface.js` (l'habillage du MJ), `table/panneau.js` (les onglets), `des-ecran.js` (le tapis).
 
+## Ce que fait Saga 1.49 : gabarits animés, pings en couleur, règle partagée
+
+- **Les gabarits** peuvent être animés (flammes, eau, magie, cœurs, glace, poison, éclairs) et durer 3 s à 1 min
+  (5 s par défaut), ou rester.
+- **Les pings** prennent la couleur choisie dans l'outil P.
+- **La règle** se voit chez tout le monde pendant qu'on mesure ; le MJ peut la garder secrète.
+
 ## Ce que fait Saga 1.48 : auras, listes de lecture et cartes séparées
 
 - **Une aura autour d'un pion** (onglet Pions) : un cercle de 1,5 à 18 m, de la couleur choisie, qui le suit. Vue de

@@ -35,8 +35,9 @@ const TableMode = (() => {
     const outils = TableOutils.barre({
       conteneur: scene, caseM: () => R().caseM, diagonales: () => R().diagonales,
       placer: (g) => agir({ type: 'gabarit', ...g }),
-      ping: (c) => agir({ type: 'ping', x: c.x, y: c.y }),
+      ping: (c, couleur) => agir({ type: 'ping', x: c.x, y: c.y, couleur }),
       effacer: () => agir({ type: 'gabarit_retirer' }),
+      mesurer: (m) => agir({ type: 'regle', ...(m || {}) }),
       // Saga 1.43 : le feutre et les notes (le MJ choisit : son calque, ou pour tous).
       mj: true,
       dessiner: (d) => agir({ type: 'dessin', ...d }),
@@ -78,6 +79,8 @@ const TableMode = (() => {
     let effets = [], numero = 0; // les nombres et éclats, pour les rejouer chez les joueurs
     // Saga 1.32 : les pings (quelques secondes), et les avis pour un ami (« formule incomprise »…).
     let pings = [], numeroPing = 0;
+    // Saga 1.49 : la règle de chacun pendant qu'il mesure (qui → { carte, de, a, texte, t }).
+    const regles = new Map();
     const avis = new Map(); // nom → { n, texte }
     let numeroAvis = 0;
     let derniereVue = null, envoye = '', chronoEnvoi = 0;
@@ -109,6 +112,8 @@ const TableMode = (() => {
       nomHeros: (c) => JdrPerso.nom(jeu(), c), pvMaxHeros: (c) => JdrPerso.pvMax(jeu(), c),
       ficheDe: (perso) => fichePour(perso),
       pings: pings.filter((q) => performance.now() - q.t < 3000),
+      regles: [...regles.values()].filter((q) => performance.now() - q.t < 8000),
+      maintenant: Date.now(),
       // Saga 1.46 : la musique et les bruitages du MJ, que les amis entendent chez eux (sauf s'il les garde pour lui).
       audio: table().audio === 'mj' ? null : { musique: lecture?.chemin || h.morceau?.() || '', sons: sons.filter((x) => Date.now() - x.t < 8000).map(({ n, chemin }) => ({ n, chemin })) },
     });
@@ -289,8 +294,14 @@ const TableMode = (() => {
       if (res.jet) lancerJet(res.jet);
       if (res.ping) {
         const qui = r.mj ? 'MJ' : nom || 'Joueurs';
-        pings.push({ n: ++numeroPing, ...res.ping, qui, couleur: r.mj ? '#ffd36b' : couleurDe(qui), t: performance.now() });
+        pings.push({ n: ++numeroPing, couleur: r.mj ? '#ffd36b' : couleurDe(qui), ...res.ping, qui, t: performance.now() });
         if (pings.length > 12) pings.shift();
+      }
+      if (res.regle) {
+        const qui = r.mj ? 'MJ' : nom || 'Joueurs';
+        if (res.regle.fin) regles.delete(qui);
+        else regles.set(qui, { n: ++numeroPing, ...res.regle, qui, couleur: r.mj ? '#ffd36b' : couleurDe(qui), t: performance.now() });
+        return res;
       }
       if (res.ok && a.type !== 'ping') envoyes.clear();
       panneau?.rafraichir();
@@ -819,7 +830,7 @@ const TableMode = (() => {
         // Saga 1.32 : les jets du chat, les macros, les marques, les gabarits, le ping.
         if (a.type === 'commande') { if (!creations.has(nom)) commande(String(a.texte || ''), r, nom, a.client); return; }
         if (a.type === 'macro') { const m = herosDuGroupe().find((q) => E.estMien(r, q))?.macros?.[Math.round(Number(a.k))]; if (m) commande(`/m ${m.nom}`, r, nom, a.client); return; }
-        if (['ping', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer', 'marque', 'macro_ajouter', 'macro_retirer'].includes(a.type)) {
+        if (['ping', 'regle', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer', 'marque', 'macro_ajouter', 'macro_retirer'].includes(a.type)) {
           agir({ ...a, pion: typeof a.pion === 'string' ? a.pion : undefined }, r, nom);
           return;
         }
@@ -857,7 +868,7 @@ const TableMode = (() => {
         agir({ type: 'jet', sorte: a.sorte, id: a.id, quoi: a.quoi }, r);
       } else if (a.type === 'repondre') {
         repondre(a, r);
-      } else if (['ping', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer'].includes(a.type)) {
+      } else if (['ping', 'regle', 'gabarit', 'gabarit_retirer', 'dessin', 'note', 'dessin_retirer'].includes(a.type)) {
         agir(a, r);
       }
     }

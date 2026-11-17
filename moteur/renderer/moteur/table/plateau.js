@@ -21,6 +21,60 @@ const Plateau = (() => {
     return im.complete && im.naturalWidth ? im : null;
   }
 
+  // Saga 1.49 : les animations des gabarits, case par case (k : un nombre propre à la case, pour décaler).
+  const hacher = (k) => { let h = (k + 1) * 2654435761; h ^= h >>> 15; return (h >>> 0) / 4294967296; };
+  function animerCase(ctx, anim, x, y, s, t, k) {
+    const a = hacher(k), b = hacher(k + 7919), c = hacher(k + 104729);
+    if (anim === 'flammes') {
+      for (let i = 0; i < 2; i++) {
+        const f = ((t / 900) + a + i * 0.5) % 1, px = x + s * (0.25 + 0.5 * ((b + i * 0.37) % 1)), py = y + s * (0.95 - f * 0.8);
+        const r = s * 0.2 * (1 - f * 0.6);
+        ctx.globalAlpha = 0.85 * (1 - f);
+        ctx.fillStyle = f < 0.35 ? '#ffe27a' : f < 0.7 ? '#ff8a2a' : '#d6331f';
+        ctx.beginPath(); ctx.moveTo(px, py - r * 2.2); ctx.quadraticCurveTo(px + r * 1.2, py, px, py + r); ctx.quadraticCurveTo(px - r * 1.2, py, px, py - r * 2.2); ctx.fill();
+      }
+    } else if (anim === 'eau') {
+      const f = ((t / 1600) + a) % 1;
+      ctx.strokeStyle = '#d8f0ff'; ctx.lineWidth = Math.max(1.5, s * 0.06);
+      ctx.globalAlpha = 0.7 * (1 - f);
+      ctx.beginPath(); ctx.ellipse(x + s * (0.3 + b * 0.4), y + s * (0.3 + c * 0.4), s * (0.05 + f * 0.3), s * (0.03 + f * 0.18), 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.35;
+      const v = Math.sin(t / 500 + a * 6) * s * 0.06;
+      ctx.beginPath(); ctx.moveTo(x + s * 0.1, y + s * 0.7 + v); ctx.quadraticCurveTo(x + s * 0.5, y + s * 0.6 - v, x + s * 0.9, y + s * 0.7 + v); ctx.stroke();
+    } else if (anim === 'magie' || anim === 'glace') {
+      const f = ((t / (anim === 'magie' ? 1100 : 2200)) + a) % 1, eclat = Math.sin(f * Math.PI);
+      const px = x + s * (0.2 + b * 0.6), py = y + s * (0.2 + c * 0.6) - (anim === 'magie' ? f * s * 0.25 : 0), r = s * (anim === 'magie' ? 0.16 : 0.2) * (0.4 + eclat * 0.6);
+      ctx.globalAlpha = 0.9 * eclat;
+      ctx.strokeStyle = ctx.fillStyle = anim === 'magie' ? (a < 0.5 ? '#e6d4ff' : '#c08bff') : '#e8fbff';
+      if (anim === 'magie') {
+        ctx.beginPath(); ctx.moveTo(px, py - r); ctx.quadraticCurveTo(px, py, px + r, py); ctx.quadraticCurveTo(px, py, px, py + r); ctx.quadraticCurveTo(px, py, px - r, py); ctx.quadraticCurveTo(px, py, px, py - r); ctx.fill();
+      } else {
+        ctx.lineWidth = Math.max(1, s * 0.035);
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) { const an = i * Math.PI / 3; ctx.moveTo(px - Math.cos(an) * r, py - Math.sin(an) * r); ctx.lineTo(px + Math.cos(an) * r, py + Math.sin(an) * r); }
+        ctx.stroke();
+      }
+    } else if (anim === 'coeurs') {
+      const f = ((t / 1800) + a) % 1, px = x + s * (0.25 + b * 0.5) + Math.sin(f * 6 + a * 9) * s * 0.06, py = y + s * (0.9 - f * 0.75), r = s * 0.17;
+      ctx.globalAlpha = 0.9 * Math.sin(f * Math.PI);
+      ctx.fillStyle = b < 0.5 ? '#ff6fa8' : '#ff9cc6';
+      ctx.beginPath(); ctx.moveTo(px, py + r); ctx.bezierCurveTo(px - r * 1.6, py - r * 0.2, px - r * 0.6, py - r * 1.4, px, py - r * 0.5); ctx.bezierCurveTo(px + r * 0.6, py - r * 1.4, px + r * 1.6, py - r * 0.2, px, py + r); ctx.fill();
+    } else if (anim === 'poison') {
+      const f = ((t / 1400) + a) % 1, px = x + s * (0.2 + b * 0.6), py = y + s * (0.85 - f * 0.6), r = s * (0.05 + c * 0.07) * (f > 0.85 ? 1.6 : 1);
+      ctx.globalAlpha = f > 0.85 ? 0.9 * (1 - f) / 0.15 : 0.8;
+      ctx.strokeStyle = '#b6ff7a'; ctx.fillStyle = 'rgba(120, 220, 80, 0.35)'; ctx.lineWidth = Math.max(1, s * 0.03);
+      ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    } else if (anim === 'eclairs') {
+      const p = Math.floor(t / 180 + a * 50), on = hacher(p * 31 + k) < 0.12;
+      if (!on) return;
+      ctx.globalAlpha = 0.95; ctx.strokeStyle = '#fff6a8'; ctx.lineWidth = Math.max(1.5, s * 0.05);
+      let px = x + s * (0.3 + hacher(p + k) * 0.4), py = y + s * 0.05;
+      ctx.beginPath(); ctx.moveTo(px, py);
+      for (let i = 0; i < 4; i++) { px += (hacher(p * 7 + i + k) - 0.5) * s * 0.4; py += s * 0.22; ctx.lineTo(px, py); }
+      ctx.stroke();
+    }
+  }
+
   function creer(canvas) {
     const ctx = canvas.getContext('2d');
     const camera = { x: 0, y: 0, z: 2 }; // x, y : le coin haut gauche, en pixels de jeu ; z : pixels d'écran par pixel de jeu
@@ -28,6 +82,7 @@ const Plateau = (() => {
     const ambiance = { toile: document.createElement('canvas'), pret: false, carte: '', t: 0 };
     const flottants = []; // { id, texte, sorte, t0 }
     const pingsVus = new Map(); // n → l'heure où ce ping est arrivé ici
+    const gabaritsVus = new Map(); // Saga 1.49 : id → l'heure où ce gabarit est arrivé ici (pour s'effacer en douceur)
     const eclats = [];    // { id, couleur, t0, secousse }
 
     function taille() {
@@ -262,10 +317,28 @@ const Plateau = (() => {
       // Saga 1.32 : les gabarits de zone (de tous), puis l'aperçu de celui qu'on pose.
       const gabarit = (g, apercu) => {
         const coul = TableOutils.couleur(g.couleur);
+        // Saga 1.49 : un gabarit qui dure s'efface en douceur à la fin.
+        let fondu = 1;
+        if (!apercu && g.duree) {
+          if (!gabaritsVus.has(g.id)) gabaritsVus.set(g.id, maintenant);
+          const reste = g.duree * 1000 - (maintenant - gabaritsVus.get(g.id));
+          fondu = Math.max(0, Math.min(1, reste / 800));
+        }
+        const cases = TableOutils.casesGabarit(carte, g, vue.diagonales);
         ctx.fillStyle = coul;
-        ctx.globalAlpha = apercu ? 0.22 : 0.3;
-        for (const i of TableOutils.casesGabarit(carte, g, vue.diagonales)) ctx.fillRect(cx(i % carte.largeur), cy(Math.floor(i / carte.largeur)), s, s);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = (apercu ? 0.22 : g.anim ? 0.2 : 0.3) * fondu;
+        for (const i of cases) ctx.fillRect(cx(i % carte.largeur), cy(Math.floor(i / carte.largeur)), s, s);
+        if (g.anim && fondu > 0) {
+          ctx.save();
+          const pas = Math.max(1, Math.floor(cases.length / 500));
+          for (let j = 0; j < cases.length; j += pas) {
+            const i = cases[j];
+            animerCase(ctx, g.anim, cx(i % carte.largeur), cy(Math.floor(i / carte.largeur)), s, maintenant, i);
+          }
+          ctx.restore();
+          ctx.globalAlpha = 1;
+        }
+        ctx.globalAlpha = fondu;
         ctx.strokeStyle = coul;
         ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(cx(g.x) + s / 2, cy(g.y) + s / 2, Math.max(3, s * 0.12), 0, Math.PI * 2); ctx.stroke();
@@ -274,8 +347,10 @@ const Plateau = (() => {
           ctx.beginPath(); ctx.moveTo(cx(g.x) + s / 2, cy(g.y) + s / 2); ctx.lineTo(cx(g.vx) + s / 2, cy(g.vy) + s / 2); ctx.stroke();
           ctx.setLineDash([]);
         }
+        ctx.globalAlpha = 1;
       };
       for (const g of vue.gabarits || []) gabarit(g, false);
+      if (gabaritsVus.size > 80) for (const k of [...gabaritsVus.keys()].slice(0, 40)) gabaritsVus.delete(k);
       // Saga 1.48 : les auras (un cercle qui suit le pion ; celle que seul le MJ voit : en pointillés).
       for (const p of vue.pions) {
         if (!p.aura) continue;
@@ -405,22 +480,23 @@ const Plateau = (() => {
         ctx.globalAlpha = 1;
       }
       if (pingsVus.size > 40) for (const k of [...pingsVus.keys()].slice(0, 20)) pingsVus.delete(k);
-      // La règle (seulement chez celui qui mesure).
-      const rg = o.outil?.regle;
-      if (rg) {
+      // La règle : la mienne, et (Saga 1.49) celles des autres pendant qu'ils mesurent, à leur couleur.
+      const regle = (rg, couleur = '#8fd6ff') => {
         const ax = cx(rg.de.x) + s / 2, ay = cy(rg.de.y) + s / 2, bx = cx(rg.a.x) + s / 2, by = cy(rg.a.y) + s / 2;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)'; ctx.lineWidth = 5;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-        ctx.strokeStyle = '#8fd6ff'; ctx.lineWidth = 2.5;
+        ctx.strokeStyle = couleur; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-        ctx.fillStyle = '#8fd6ff';
+        ctx.fillStyle = couleur;
         ctx.beginPath(); ctx.arc(ax, ay, 4, 0, Math.PI * 2); ctx.arc(bx, by, 4, 0, Math.PI * 2); ctx.fill();
         const w = ctx.measureText(rg.texte).width + 12;
         ctx.fillStyle = 'rgba(8, 10, 18, 0.85)';
         ctx.fillRect(bx - w / 2, by - s * 0.6 - police - 6, w, police + 8);
         ctx.fillStyle = '#e8f6ff';
         ctx.fillText(rg.texte, bx, by - s * 0.6 - 4);
-      }
+      };
+      for (const q of vue.regles || []) regle({ ...q, texte: q.qui ? `${q.qui} · ${q.texte}` : q.texte }, q.couleur || '#8fd6ff');
+      if (o.outil?.regle) regle(o.outil.regle);
       // Les nombres qui montent (dégâts, soins) et les éclats d'un sort.
       const tous2 = [...vue.pions, ...(vue.pnj || [])];
       for (let i = eclats.length - 1; i >= 0; i--) {

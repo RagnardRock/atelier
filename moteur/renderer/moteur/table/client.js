@@ -39,8 +39,9 @@ const TableClient = (() => {
     const outils = TableOutils.barre({
       conteneur: scene, caseM: () => vue?.caseM || 1.5, diagonales: () => vue?.diagonales || 'simple',
       placer: (g) => window.saga.tableDemander({ type: 'gabarit', ...g }),
-      ping: (c) => window.saga.tableDemander({ type: 'ping', x: c.x, y: c.y }),
+      ping: (c, couleur) => window.saga.tableDemander({ type: 'ping', x: c.x, y: c.y, couleur }),
       effacer: () => window.saga.tableDemander({ type: 'gabarit_retirer' }),
+      mesurer: (m) => window.saga.tableDemander({ type: 'regle', ...(m || {}) }),
       // Saga 1.43 : le feutre et les notes d'un joueur (vus de tous).
       dessiner: (d) => window.saga.tableDemander({ type: 'dessin', ...d }),
       noter: (n) => window.saga.tableDemander({ type: 'note', ...n }),
