@@ -95,6 +95,14 @@ cd tests && npm install && npx playwright install chromium && node lancer.js
 
 `node lancer.js domaine` ne lance que les essais dont le nom contient « domaine ».
 
+Pour attendre moins longtemps, `node lancer.js --parallele 4` lance 4 parts en même temps (chacune
+son Chromium) et donne le total à la fin (environ 80 s au lieu de 4 min sur un PC à 4 cœurs).
+`--partie 2/4` ne lance que la 2e part : c'est ce que fait GitHub, avec les 4 parts sur 4 machines
+à la fois. Les essais d'un même fichier restent ensemble, dans l'ordre. Les parts s'équilibrent
+avec `durees.json` ; après avoir ajouté un gros essai, `node lancer.js --noter-durees` (un passage
+complet, sans mot) réécrit ce fichier. Chaque essai qui ouvre une partie en réseau prend son propre
+port (7840, 7851, 7853…) : un nouvel essai en prend un qui n'est pas encore utilisé.
+
 ## Ajouter un essai
 
 Un fichier de `essais/` exporte une liste `[{ nom, faire(ctx) }]`. `lib/tafl.js` ouvre Tafl

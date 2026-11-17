@@ -48,8 +48,17 @@ module.exports = [
       await page.locator('.table-section-titre', { hasText: 'Initiative à la main' }).click();
       vrai(await page.locator('.ti-ordre .ti-init-libre').isVisible(), 'la barre du haut dit « Ordre libre »');
       // Glisser une ligne dans le panneau (C sur la première place).
-      await page.locator('.table-init', { hasText: 'C' }).first().dragTo(page.locator('.table-init').first());
-      const apres = await page.evaluate(() => App.moteur.table.table().initiative.liste.map((x) => x.nom).join(''));
+      // Le panneau se redessine un peu après le clic (au plus 5 fois par seconde) : un glisser commencé sur une
+      // ligne qui vient d'être remplacée ne tombe nulle part. On laisse le panneau se poser, et on reprend le geste
+      // (jusqu'à trois fois) s'il a été perdu ; l'ordre attendu reste le même.
+      const ordre = () => page.evaluate(() => App.moteur.table.table().initiative.liste.map((x) => x.nom).join(''));
+      await page.locator('.table-init', { hasText: 'C' }).first().waitFor();
+      for (let essai = 0; essai < 3 && (await ordre()) === 'DABC'; essai++) {
+        await page.waitForTimeout(500);
+        await page.locator('.table-init', { hasText: 'C' }).first().dragTo(page.locator('.table-init').first());
+        await page.waitForFunction(() => App.moteur.table.table().initiative.liste.map((x) => x.nom).join('') !== 'DABC', null, { timeout: 1500 }).catch(() => {});
+      }
+      const apres = await ordre();
       egal(apres, 'CDAB', 'glisser une ligne du panneau la place');
       await page.evaluate(() => App.moteur.table.agir({ type: 'init_vider' }));
 
