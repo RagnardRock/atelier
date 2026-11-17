@@ -31,7 +31,7 @@ const Updater = (() => {
       { label: 'Mettre à jour', value: true, primary: true },
     ]);
     if (!go) return;
-    // Jeu de tuiles pas encore enregistré : Tafl propose de l'enregistrer avant de fermer.
+    // Lot de tuiles pas encore enregistré : Tafl propose de l'enregistrer avant de fermer.
     if (!(await App.prepareQuit())) return;
     if (mode === 'installer') notify(`Téléchargement de Tafl ${version}…`, 'info', 60000);
     await window.tafl.installUpdate();

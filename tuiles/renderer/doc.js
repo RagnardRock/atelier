@@ -1,8 +1,8 @@
-// Le jeu de tuiles ouvert (le « document ») et son historique d'annulation.
+// Le lot de tuiles ouvert (le « document ») et son historique d'annulation.
 //
 // doc = {
 //   name, path,              nom affiché, fichier .tafl (null tant qu'il n'est pas enregistré)
-//   game,                    null pour un simple jeu de tuiles ; pour un dossier de jeu (Tafl 0.6) :
+//   game,                    null pour un simple lot de tuiles ; pour un dossier de jeu (Tafl 0.6) :
 //                            { folder, fichiers } = le dossier, et les fichiers de cartes lus à l'ouverture
 //                            (pour retirer ceux des cartes supprimées). Voir ../FORMAT.md.
 //   tileSize,                taille d'une tuile en pixels (16 pour un jeu façon Pokémon GBA)

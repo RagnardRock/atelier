@@ -1,4 +1,4 @@
-// Tuiles d'exemple proposées à la création d'un jeu de tuiles (Tafl 1.14, arbres et style « val » en 1.15) : toutes les recettes de
+// Tuiles d'exemple proposées à la création d'un lot de tuiles (Tafl 1.14, arbres et style « val » en 1.15) : toutes les recettes de
 // recettes.js (sols, eau animée, murs, falaises, toits, intérieurs, petits objets, hautes herbes), leurs
 // jeux de bords (chemin, eau, sable), une maison, une boutique, un sapin et un arbre (avec leurs tampons), rangées par
 // catégorie, avec une petite carte de village qui les utilise. De quoi voir tout de suite comment Tafl
@@ -28,7 +28,7 @@ const Samples = (() => {
     ['arbre', 'arbre', 'Arbres', null, 1],
   ];
 
-  // Remplit un jeu de tuiles neuf avec les tuiles d'exemple et une petite carte de village.
+  // Remplit un lot de tuiles neuf avec les tuiles d'exemple et une petite carte de village.
   function fill(doc) {
     const s = doc.tileSize, lire = (c) => PixelArt.lireCouleur(doc, c, '', new Set());
     const tiles = [], idx = {}, stamps = [];

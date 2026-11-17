@@ -300,7 +300,7 @@ const Apercu = (() => {
     etat.theme = etat.theme || (reglages.theme === 'pixel' ? 'pixel' : 'verre');
     const { boites, index } = suite(o);
     const tete = el('div', { className: 'flow-apercu-tete' }, [icon('preview'), el('span', { textContent: 'Aperçu dans Saga' })]);
-    const theme = el('select', { title: 'Le thème de l\'interface du jeu (Données du jeu › Réglages › Interface)' });
+    const theme = el('select', { title: 'Le thème de l\'interface du jeu (Données › Réglages › Interface)' });
     theme.add(new Option('Verre', 'verre'));
     theme.add(new Option('Pixel', 'pixel'));
     theme.value = etat.theme;
@@ -347,7 +347,7 @@ const Apercu = (() => {
       scene.append(choix);
     }
     box.append(cadre);
-    if (c && !img && p) box.append(el('p', { className: 'flow-apercu-note', textContent: `${p.nom} n'a pas de portrait « ${c.expression || 'normal'} » : Jeu › Données du jeu › Personnages.` }));
+    if (c && !img && p) box.append(el('p', { className: 'flow-apercu-note', textContent: `${p.nom} n'a pas de portrait « ${c.expression || 'normal'} » : Données › Personnages.` }));
     if (c && c.qui && !p) box.append(el('p', { className: 'flow-apercu-note', textContent: c.qui === '@evenement' ? 'Cet événement n\'a pas de personnage (colonne de gauche) : Saga montre le texte sans nom.' : `Pas de personnage « ${c.qui} » : Saga montre le texte sans nom.` }));
 
     // Le texte s'écrit lettre par lettre, comme dans le jeu (55 lettres par seconde).

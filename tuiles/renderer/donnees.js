@@ -7,7 +7,7 @@
 // (../officiel.js) ; chaque élément importé garde son nom anglais dans « officiel », pour être retrouvé
 // quand on réimporte. Les éléments qu'on crée soi-même n'ont pas ce champ, et l'import n'y touche jamais.
 //
-// Ce module donne aussi les onglets de la fenêtre Jeu › Données du jeu (Events.editData) :
+// Ce module donne aussi les onglets de la fenêtre Données (Events.editData) :
 // chaque onglet dit comment créer, résumer et modifier un élément de sa sorte, et pour quels packs de
 // règles il sert (packs : sinon tous). Les types et les attaques servent aux deux packs : le pack JRPG
 // les appelle Éléments et Compétences.
@@ -585,7 +585,7 @@ const Donnees = (() => {
     return [...out];
   }
 
-  // --- Les données officielles (Jeu › Données du jeu › Importer) ---
+  // --- Les données officielles (Données › Importer) ---
   // Met l'import dans les données : les éléments déjà importés sont retrouvés par leur nom officiel
   // (ils gardent leur identifiant, que les scripts utilisent), les nouveaux s'ajoutent, et ceux qu'on a
   // créés soi-même ne bougent pas. maj = false : seulement ajouter ce qui manque.
@@ -759,7 +759,7 @@ const Donnees = (() => {
     ? { couleur: normalizeHex(l.couleur) || '#ffd890', rayon: num(l.rayon, 3, 0.5, 16), intensite: int(l.intensite, 80, 0, 100), scintille: Boolean(l.scintille) }
     : null);
 
-  // --- Les onglets de Jeu › Données du jeu ---
+  // --- Les onglets de Données ---
   // ctx (donné par Events.editData) : { doc, work, form, input, zone, coche, nombre, idLigne, usages,
   // render, renderListe, choisirImage, couleurType, ligne }.
   // Texte sombre sur les couleurs claires (Électrik, Glace…), clair sur les autres.
@@ -1635,7 +1635,7 @@ const Donnees = (() => {
     });
     return [
       section('Le pack de règles'),
-      info('Il décide des combats, des personnages qui se battent et des statistiques ; Saga le suit. Les onglets du groupe Combat et les réglages ci-dessous changent avec lui. Changer de pack ne touche ni aux cartes, ni aux événements, ni aux quêtes, et ne perd aucun réglage.'),
+      info('Il décide des combats et des statistiques. En changer ne perd rien.'),
       el('div', { className: 'pack-cartes' }, cartes),
     ];
   }
@@ -1674,7 +1674,7 @@ const Donnees = (() => {
     const inconnus = r.modules.filter((id) => !cat[id]);
     const out = [
       section('Modules'),
-      info('Le pack de règles décide des combats et de la progression. Un module ajoute au jeu une chose qu\'il sait faire en plus (gérer un domaine…), quel que soit le pack. Un jeu peut en activer plusieurs.'),
+      info('Un module ajoute une chose en plus, quel que soit le pack.'),
     ];
     if (!ids.length) out.push(info('Aucun module n\'est encore disponible dans cette version de Tafl.'));
     for (const id of ids) {
@@ -2085,7 +2085,7 @@ const Donnees = (() => {
   for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);
 
   return {
-    ui, SORTES, REGLES, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
+    ui, SORTES, REGLES, nomPack, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
     METEOS, ambianceVide, normAmbiance, lumiereVide, normLumiere, son, SONS_INTEGRES, HORLOGES, tableRencontres, normRencontres,
     vides, normer, normElement, reglagesVides, normCarteMonde, ICONES_REPERE, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };
