@@ -73,6 +73,14 @@ module.exports = [
       await page.locator('select[title="Qui voit ta règle"]').selectOption('mj');
       await page.evaluate(() => document.activeElement?.blur()); await page.keyboard.press('v');
       egal(await mesurer(), [], 'une règle secrète ne part pas chez les joueurs');
+      // X : le MJ efface tous les gabarits de la carte d'un coup (même ceux des joueurs).
+      await page.evaluate(() => {
+        const T = App.moteur.table, h = T.partie().equipe.find((c) => c.jdr);
+        T.agir({ type: 'gabarit', forme: 'cercle', x: 3, y: 3, taille: 1, couleur: 'vert' }, { mj: false, perso: h.creature, heros: h.pion }, 'Thorgrim');
+        document.activeElement?.blur();
+      });
+      await page.keyboard.press('x');
+      egal(await vue(() => App.moteur.table.vuePour({ mj: true }).gabarits.length), 0, 'X : le MJ efface tous les gabarits');
       sansErreur(erreurs, 'Saga');
     },
   },

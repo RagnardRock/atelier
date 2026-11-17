@@ -177,7 +177,9 @@ const TableOutils = (() => {
     choixRegle.onchange = () => { regleSecrete = choixRegle.value === 'mj'; };
     const reglagesP = el('span', { className: 'table-outil-reglages' }, choixTeinteP);
     const reglagesR = el('span', { className: 'table-outil-reglages' }, choixRegle);
-    const effacer = el('button', { className: 'table-outil', type: 'button', title: 'Effacer mes gabarits' }, el('i', { className: 'codicon codicon-clear-all' }));
+    // Saga 1.49 : X efface d'un coup (le MJ : tous les gabarits de la carte ; un joueur : les siens).
+    const effacer = el('button', { className: 'table-outil', type: 'button', title: o.mj ? 'Effacer tous les gabarits (X)' : 'Effacer mes gabarits (X)' }, el('i', { className: 'codicon codicon-clear-all' }));
+    effacer.dataset.touche = 'X';
     const aide = el('span', { className: 'table-outil-aide', textContent: 'Alt + clic : ping' });
     choixForme.onchange = () => { forme = choixForme.value; metres = FORMES.find(([f]) => f === forme)[2]; dessinerBarre(); };
     champM.onchange = () => { metres = Math.max(0.5, Number(champM.value) || 1.5); };
@@ -236,6 +238,7 @@ const TableOutils = (() => {
         if (e.key === 'f' || e.key === 'F') { outil = outil === 'feutre' ? null : 'feutre'; dessinerBarre(); return true; }
         if (e.key === 't' || e.key === 'T') { outil = outil === 'note' ? null : 'note'; dessinerBarre(); if (outil) champNote.focus(); return true; }
         if (e.key === 'v' || e.key === 'V') { outil = null; dessinerBarre(); return true; }
+        if ((e.key === 'x' || e.key === 'X') && !e.ctrlKey && !e.metaKey) { o.effacer?.(); return true; }
         const x = extras.find(([, k]) => k.touche && k.touche.toLowerCase() === e.key.toLowerCase());
         if (x) { x[1].faire(); dessinerBarre(); return true; }
         if (e.key === 'Escape' && (outil || trait)) { outil = null; trait = null; if (regleEnvoyee) { regleEnvoyee = ''; o.mesurer?.(null); } dessinerBarre(); return true; }
