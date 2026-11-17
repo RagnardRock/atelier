@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('atelier', {
   estOuvert: (id) => ipcRenderer.invoke('outils:ouvert', id),
   ouvrirDossier: (id) => ipcRenderer.invoke('outils:ouvrirDossier', id),
   onProgression: (callback) => ipcRenderer.on('outils:progression', (_event, data) => callback(data)),
+  nouveautes: () => ipcRenderer.invoke('nouveautes:liste'),
 
   // Notes
   lireNotes: () => ipcRenderer.invoke('notes:read'),

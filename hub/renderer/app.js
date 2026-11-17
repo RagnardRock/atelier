@@ -168,6 +168,7 @@ const App = (() => {
     // le réglage est coché (sinon seulement quand tu cliques ↻).
     try {
       const outils = await Outils.refresh({ github: config.checkToolUpdates, silencieux: true });
+      Nouveautes.start(config, { github: config.checkToolUpdates }); // la pastille du bouton Nouveautés
       const dispo = outils.filter((o) => o.miseAJour);
       if (dispo.length) notify(`Mise(s) à jour disponible(s) : ${dispo.map((o) => `${o.nom} ${o.derniere}`).join(', ')}`, 'info', 10000);
     } catch (err) {

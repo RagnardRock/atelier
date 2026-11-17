@@ -29,6 +29,8 @@ Une carte par outil, avec sa version installée et la dernière publiée sur Git
 
 **Favoris** (depuis Atelier 0.21.1) : l'étoile en haut à droite d'une carte (visible au survol) met l'outil en favori. Les favoris passent en tête de leur catégorie, et le filtre **Favoris** (qui apparaît dès le premier favori) ne montre qu'eux. Gardés dans `config.json` (`outilsFavoris`).
 
+**Nouveautés** (depuis Atelier 0.22.0) : le bouton mégaphone de la barre de titre (ou Ctrl+Maj+N, ou le mégaphone d'une carte d'outil) ouvre la liste de toutes les versions publiées de tous les outils et d'Atelier, des plus récentes aux plus anciennes, rangées par jour, avec les notes de GitHub (titres des PR, lien vers chaque PR). Filtre par outil à gauche, recherche dans les notes, badge « Nouveau » sur ce qui est sorti depuis la dernière visite (pastille sur le bouton ; `config.json` : `nouveautesVuesLe`). L'historique complet (plus de 100 Releases) est lu page par page dans l'API au plus une fois par jour et gardé dans `github-releases.json` (`commun/github.js` › `historique`).
+
 Le bouton ↻ redemande les dernières versions à GitHub. Au démarrage, Atelier le fait tout seul (réglable).
 
 **Comment Atelier trouve les outils installés.** Les installeurs de Rune, Skald, Brokk et Tafl s'inscrivent dans le registre de Windows, à l'endroit que lit « Paramètres › Applications » (nom, version, dossier). Atelier lit cet endroit ; s'il n'y trouve rien, il regarde `%LOCALAPPDATA%\Programs\<nom>`.

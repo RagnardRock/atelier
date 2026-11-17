@@ -508,6 +508,32 @@ async function etatOutils({ refresh = false, github = true, suivi = false } = {}
 }
 handle('outils:etat', async (_event, options) => etatOutils(options));
 
+// --- Nouveautés : l'historique de toutes les versions publiées, tous outils réunis ---
+// Une ligne par Release : l'outil (reconnu à son préfixe), la version, la date et ses notes telles
+// que GitHub les a écrites (les titres des PR, avec leur numéro). Le tri et le filtre se font dans
+// l'interface (renderer/nouveautes.js).
+async function nouveautes() {
+  // Sans réseau : on montre quand même l'historique gardé sur le disque, avec le message d'erreur.
+  let recentes = [];
+  let erreurRecentes = null;
+  try { recentes = await githubReleases(); } catch (err) { erreurRecentes = err; }
+  const { liste, erreur: erreurHistorique } = await depotGithub().historique(recentes);
+  const erreur = erreurRecentes || erreurHistorique;
+  const versions = [];
+  // Atelier lui-même n'est pas dans OUTILS : on l'ajoute pour voir aussi ses versions.
+  const connus = [...OUTILS, { id: 'atelier', nom: 'Atelier', glyphe: '', icone: 'atelier.svg', prefixe: 'atelier-v' }];
+  for (const r of liste) {
+    const tool = connus.find((t) => r.tag_name.startsWith(t.prefixe));
+    const version = tool && r.tag_name.slice(tool.prefixe.length);
+    if (!tool || !/^\d+\.\d+\.\d+$/.test(version)) continue;
+    versions.push({ id: tool.id, nom: tool.nom, glyphe: tool.glyphe, icone: tool.icone, version, tag: r.tag_name, date: r.published_at, notes: notesToList(r.body || ''), url: r.html_url });
+  }
+  return { versions, depot: `https://github.com/${GITHUB_REPO}`, erreur: erreur ? messageGithub(erreur) : null };
+}
+handle('nouveautes:liste', async () => {
+  try { return await nouveautes(); } catch (err) { return { versions: [], erreur: messageGithub(err) }; }
+});
+
 const toolById = (id) => {
   const tool = OUTILS.find((t) => t.id === id);
   if (!tool) throw new Error(`Outil inconnu : ${id}`);
