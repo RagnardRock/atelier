@@ -2087,7 +2087,6 @@ const Events = (() => {
   // Tafl 1.3 : celles d'un module (modules : ['gestion']) seulement si le jeu active ce module.
   const duModule = (doc, d) => !d.modules || d.modules.some((m) => (doc?.data?.reglages?.modules || []).includes(m));
   const duPack = (doc, d) => (!d.packs || d.packs.includes(doc?.data?.reglages?.regles || 'pokemon') || Boolean(d.aussiSi?.(doc))) && duModule(doc, d);
-  const menuConditions = (doc) => Object.entries(CONDITIONS).filter(([, d]) => duPack(doc, d)).map(([k, d]) => ({ label: d.nom, value: k }));
   function menuCommandes(doc) {
     const items = [];
     let groupe = null;

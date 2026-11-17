@@ -134,7 +134,6 @@ const DonneesSurvivor = (() => {
   }
   const choixCartes = (doc, vide) => [...(vide ? [['', vide]] : []), ...(doc?.maps || []).map((m) => [m.id, m.name])];
   const descEnnemi = (work) => (id) => { const e = arr(work.ennemis).find((x) => x.id === id); return e ? el('span', { textContent: `${e.nom} · ${e.pv} PV${e.boss ? ' · boss' : ''}` }) : null; };
-  const unite = (t) => el('span', { className: 'unit', textContent: t });
 
   function formArene(a, ctx) {
     const { champ, info, nombreIn, sel, section, table, refInfo } = U();

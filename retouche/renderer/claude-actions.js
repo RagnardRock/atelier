@@ -30,7 +30,6 @@
     return lignes.join('\n');
   };
   const nombre = { type: 'number' };
-  const pixels = (description) => ({ type: 'number', description });
 
   const REGLAGES = {
     luminosite_couleurs: [Ops.colors, 'brightness (-100 à 100), contrast (-100 à 100), saturation (-100 à 100), hue (-180 à 180°)'],

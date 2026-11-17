@@ -1,7 +1,7 @@
 // Saga 1.49 : la couleur d'un ping, les gabarits animés qui s'en vont au bout de quelques secondes, et la
 // règle que tout le monde voit (le MJ peut mesurer en secret).
 const { ouvrirSaga, jeuDuModele } = require('../lib/saga');
-const { egal, vrai, sansErreur } = require('../lib/verifier');
+const { egal, sansErreur } = require('../lib/verifier');
 
 module.exports = [
   {

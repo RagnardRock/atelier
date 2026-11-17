@@ -204,7 +204,6 @@ const DonneesRelations = (() => {
     );
   }
 
-  const leadImage = (src) => el('img', { className: 'row-portrait pixel', src, alt: '' });
   const ONGLETS = [
     { key: 'relations', modules: MODULE, groupe: 'Relations', label: 'Relations', icon: 'heart', kind: 'relation', base: 'personnage',
       nouveau: (id, work) => {

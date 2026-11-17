@@ -7,7 +7,6 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, net, shell } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const path = require('node:path');
-const os = require('node:os');
 const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 

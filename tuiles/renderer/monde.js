@@ -38,7 +38,6 @@ const Monde = (() => {
     if (sens === 'bas') return { x: ax - bx, y: A.height };
     return { x: ax - bx, y: -B.height };
   }
-  const OPPOSE = { droite: 'gauche', gauche: 'droite', bas: 'haut', haut: 'bas' };
 
   // Les liens entre cartes extérieures : [{ a, b, dx, dy }] = poser b à (a.x + dx, a.y + dy).
   function liens(doc, exterieures, estInterieure) {

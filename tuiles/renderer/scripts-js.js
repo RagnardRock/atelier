@@ -70,7 +70,6 @@ const ScriptsTafl = (() => {
   function modeles(doc) {
     const pack = packDe(doc);
     const objet = doc.data.objets?.find((o) => o.id === 'potion')?.id || doc.data.objets?.[0]?.id || 'potion';
-    const jrpg = pack === 'jrpg';
     const nomPack = Donnees.nomPack(pack);
     return [
       { id: 'dialogue', nom: 'Commande avec dialogue', aide: 'Un personnage qui offre un objet une seule fois, avec une question.', nomFichier: 'cadeau', code: `// Une commande pour le bloc Script d'un événement : un personnage offre un objet, une seule fois.

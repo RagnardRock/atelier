@@ -18,7 +18,6 @@ const Classeur = (() => {
   let metas = new Map();        // id de feuille → meta (voir nouvelleMeta)
   let annuler = [], refaire = [];
   const ecouteurs = new Set();
-  let enCours = null;           // l'action en train de se faire (pour regrouper)
 
   const OPTIONS = {
     licenseKey: 'gpl-v3', // HyperFormula est sous licence GPL v3, comme le permet un dépôt public

@@ -267,7 +267,7 @@ const DonneesAction = (() => {
 
   // Le corps (ce qu'un coup touche, et les pieds qui se cognent aux murs) et la zone de son coup, sur l'image du personnage.
   function editeurBoites(p, t) {
-    const { champ, info, nombreIn } = U();
+    const { champ, nombreIn } = U();
     const Z = 8;
     const toile = el('canvas', { className: 'boites-apercu checker', width: t * 3 * Z, height: t * 2 * Z });
     toile.style.imageRendering = 'pixelated';

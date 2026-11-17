@@ -362,7 +362,7 @@ const DonneesJdr = (() => {
     );
   }
   function formOrigine(o, ctx) {
-    const { champ, sel, section, info, nombreIn, table } = U();
+    const { champ, sel, section, info, nombreIn } = U();
     const { work } = ctx;
     const idl = ctx.idLigne(o);
     if (!o.maitrises) o.maitrises = { armes: [], competences: [], armures: [] };
@@ -815,7 +815,6 @@ const DonneesJdr = (() => {
       corps.replaceChildren();
       const f = j.fiche;
       if (!f?.active) { majApercu(); return; }
-      const idsChamps = () => f.champs.map((c) => c.id);
       // Les blocs, colonne par colonne.
       const blocs = table(f.blocs, [
         ['Bloc', (b, k, rendre) => sel(F.BLOCS, b.type, (v) => { b.type = v; if (v === 'champs' && !b.champs) b.champs = []; rendre(); }), true],

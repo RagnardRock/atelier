@@ -714,22 +714,6 @@ const Recettes = (() => {
     return base;
   }
 
-  // Un point (centre du pixel x, y) est-il dans le polygone pts ?
-  function dansPoly(pts, x, y) {
-    const px = x + 0.5, py = y + 0.5;
-    let dedans = false;
-    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-      const [xi, yi] = pts[i], [xj, yj] = pts[j];
-      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) dedans = !dedans;
-    }
-    return dedans;
-  }
-  // Les coordonnées (s, t) d'un point dans le parallélogramme o + s·a + t·b.
-  function local(o, a, b, x, y) {
-    const px = x + 0.5 - o[0], py = y + 0.5 - o[1], det = a[0] * b[1] - a[1] * b[0];
-    return [(px * b[1] - py * b[0]) / det, (a[0] * py - a[1] * px) / det];
-  }
-
   // Une maison à toit en pignon vue de 3/4 : le toit pointu (pan gauche éclairé, pan droit à l'ombre,
   // faîtage au milieu), le pignon de face à colombages, puis les murs (crépi en haut, planches en bas),
   // la porte, les fenêtres et le soubassement.

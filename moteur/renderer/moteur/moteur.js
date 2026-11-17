@@ -1848,7 +1848,6 @@ const Moteur = (() => {
       get jeuOuvert() { return jeu; },
       get multi() { return multi; },
       get monde() { return monde; },
-      get duel() { return duel; },
       set autres(l) { autres = Array.isArray(l) ? l : []; },
       // Où sont dessinés les autres joueurs, en pixels de la page (pour écrire leur nom au-dessus).
       etiquettes() {

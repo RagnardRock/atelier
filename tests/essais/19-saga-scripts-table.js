@@ -1,6 +1,5 @@
 // Saga 1.47 + Tafl 1.41 : les scripts JS du jeu réagissent au mode table (le chat, les tours, les jets) et
 // agissent comme le MJ (saga.table : dire, pv, marque). Le modèle « Réactions à la table » de Tafl.
-const fs = require('node:fs');
 const path = require('node:path');
 const { RACINE, ouvrirTafl, nouveauJeu, fichiersDuJeu, suivreErreurs } = require('../lib/tafl');
 const { exporter } = require('../lib/saga');
