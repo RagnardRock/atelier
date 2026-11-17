@@ -1,4 +1,6 @@
-// Notifications en bas à droite (comme dans Rune).
+// Notifications en bas à droite, communes aux outils de l'Atelier (recopiées dans <outil>/commun/ par
+// copier.js). La balise dit quel pont de l'outil écouter pour les erreurs venant de main.js :
+//   <script src="../commun/notifications.js" data-api="brokk"></script>   → window.brokk.onError
 // notify(message) : info qui disparaît seule ; notify(message, 'error') : reste jusqu'à fermeture.
 // actions : boutons dans la notification, par exemple [{ label: 'Mettre à jour', run: () => … }].
 
@@ -29,11 +31,13 @@ function notify(message, type = 'info', duration = 3500, actions = []) {
   notifications.appendChild(el);
   while (notifications.children.length > 4) notifications.firstChild.remove();
   if (type !== 'error') setTimeout(() => el.remove(), duration);
+  return el;
 }
 
 // Les erreurs venant de main.js arrivent préfixées par "Error invoking remote method '…': Error: ".
 const cleanError = (err) => String(err && err.message ? err.message : err).replace(/^Error invoking remote method '[^']+': (\w*Error: )?/, '');
 
-window.addEventListener('error', (e) => notify(`Erreur inattendue : ${e.message}`, 'error'));
+// « ResizeObserver loop… » n'est pas une erreur : le navigateur prévient seulement qu'un dessin a été remis à plus tard.
+window.addEventListener('error', (e) => { if (!/ResizeObserver loop/.test(e.message)) notify(`Erreur inattendue : ${e.message}`, 'error'); });
 window.addEventListener('unhandledrejection', (e) => notify(`Erreur inattendue : ${cleanError(e.reason)}`, 'error'));
-window.reikna.onError((message) => notify(message, 'error'));
+window[document.currentScript.dataset.api]?.onError?.((message) => notify(message, 'error'));

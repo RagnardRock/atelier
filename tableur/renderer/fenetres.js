@@ -1,6 +1,6 @@
 // Les menus et les fenêtres de Reikna : menus déroulants, palette de couleurs, liste de toutes les
 // fonctions, format de cellule, tri, filtre, rechercher / remplacer.
-// Les petites fenêtres de réglages simples passent par Dialogs.form (dialogs.js).
+// Les petites fenêtres de réglages simples passent par Dialogs.form (../commun/dialogues.js).
 
 const Fenetres = (() => {
   // --- Menu déroulant ---

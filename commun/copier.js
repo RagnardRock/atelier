@@ -16,7 +16,9 @@ const path = require('node:path');
 // modules.js : le catalogue des modules de jeu (Tafl 1.2, Saga 1.4).
 // fiche-perso.js : la fiche personnalisée d'un jeu JDR (Tafl 1.23, Saga 1.21.3).
 // perso-base.js : le personnage de base (Saga 1.31, Tafl 1.34).
-const TOUS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css', 'github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js', 'ollama.js', 'loki-local.js'];
+const TOUS = ['claude.js', 'mcp-commun.js', 'claude-panneau.js', 'claude-panneau.css', 'github.js', 'bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js', 'ollama.js', 'loki-local.js',
+  // Le socle de l'interface (Brokk, Mímir, Reikna pour l'instant) : notifications, fenêtres de dialogue, mise à jour.
+  'notifications.js', 'dialogues.js', 'mise-a-jour.js'];
 const FICHIERS = process.argv.length > 2 ? process.argv.slice(2).filter((f) => TOUS.includes(f)) : TOUS;
 const cible = path.join(process.cwd(), 'commun');
 fs.mkdirSync(cible, { recursive: true });

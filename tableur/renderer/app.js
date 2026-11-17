@@ -1184,6 +1184,7 @@ const App = (() => {
 
   return {
     avantDeFermer,
+    avantMiseAJour: avantDeFermer, // ../commun/mise-a-jour.js : proposer d'enregistrer le classeur
     // Pour Claude (claude-actions.js) : les mêmes fonctions que les boutons, sans fenêtres.
     claude: {
       doc: () => ({ ...doc }),
