@@ -1,0 +1,45 @@
+# Le vérificateur de code et les essais rapides (verif/LISEZMOI.md), à chaque pull request.
+# - ESLint cherche les vraies erreurs (variable jamais utilisée, clé en double, code jamais atteint…).
+# - Les essais rapides vérifient la logique pure : formules de Reikna, dés du pack JDR de Saga,
+#   enregistrer puis rouvrir un document Edda dans chaque format.
+# Moins d'une minute. Une PR rouge ici : le message dit quel fichier et quelle ligne.
+name: Vérificateur de code
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verif-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verif:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: verif
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: verif/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Vérifier le code (ESLint)
+        run: npx eslint ..
+      # Edda : ses modules (JSZip, marked, turndown), sans télécharger Electron.
+      - name: Préparer Edda
+        working-directory: texte
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Préparer Chromium (pour les formats d'Edda)
+        run: npx playwright install --with-deps chromium
+      - name: Essais rapides
+        run: node --test
