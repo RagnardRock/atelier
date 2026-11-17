@@ -9,7 +9,7 @@ const INDEX = path.join(RACINE, 'tuiles', 'renderer', 'index.html');
 // La configuration par défaut de Tafl (tuiles/main.js, DEFAULT_CONFIG).
 const CONFIG = {
   claudeCommand: 'claude', claudeModel: '', claudeCommandes: false, claudeSansDemander: {}, accentColor: '#7bd88f',
-  glass: true, windowBlur: false, tileSize: 16, palette: 'nature', pixelGrid: true, tileGrid: true, exportScale: 1,
+  glass: true, windowBlur: false, tileSize: 32, palette: 'nature', pixelGrid: true, tileGrid: true, exportScale: 1,
   historySteps: 60, panelZoom: 100, vignette: 44, colonnes: 'auto', recentFiles: [], lastFolder: '',
   comfy: { dossier: '', code: '', python: '', modeles: '', port: 8189 }, comfyDerniers: {},
 };

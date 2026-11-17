@@ -2085,7 +2085,7 @@ const Donnees = (() => {
   for (const o of ONGLETS) o.chercher = o.chercher || ((x) => `${x.nom} ${x.id} ${x.numero ?? ''} ${x.officiel || ''}`);
 
   return {
-    ui, SORTES, REGLES, nomPack, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
+    ui, SORTES, REGLES, nomPack, MONNAIES_PACK, STATS_JRPG, STATUTS_JRPG, PLACES, packDe, ajouterExemple, STATS, STATS_COMBAT, NATURES, CATEGORIES_ATTAQUE, CIBLES, STATUTS, CROISSANCES, MODES_EVOLUTION, CATEGORIES_OBJET, EFFETS_OBJET, AJUSTEMENTS, ONGLETS,
     METEOS, ambianceVide, normAmbiance, lumiereVide, normLumiere, son, SONS_INTEGRES, HORLOGES, tableRencontres, normRencontres,
     vides, normer, normElement, reglagesVides, normCarteMonde, ICONES_REPERE, trouver, nomDe, efficacite, nature, utilisations, fusionner, demanderImport, telechargerOfficiel, listes, resumer, typePill,
   };

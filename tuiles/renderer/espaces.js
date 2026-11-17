@@ -198,6 +198,7 @@ const Espaces = (() => {
     }
   }
   const replies = new Set();
+  const groupesOuverts = new Set(); // les lots d'événements semblables dépliés
   // Les scripts JS viennent d'être relus (une erreur de plus ou de moins) : la liste se met à jour.
   ScriptsTafl.ecouter(() => { if (courant === 'evenements' && App.doc) rendreListeEvenements(App.doc); });
   function rendreListeEvenements(doc) {
@@ -217,15 +218,38 @@ const Espaces = (() => {
         tete.onclick = () => { if (replies.has(m.id)) replies.delete(m.id); else replies.add(m.id); lignes(); };
         rows.append(tete);
         if (plie) continue;
-        for (const e of evs) {
+        const ligne = (e, sous = false) => {
           const actif = !memoEvenements.script && m.id === memoEvenements.carte && e.id === memoEvenements.id;
-          const row = el('button', { className: `row${actif ? ' active' : ''}`, title: Events.decrire(doc, e) }, [
+          const row = el('button', { className: `row${actif ? ' active' : ''}${sous ? ' sous' : ''}`, title: Events.decrire(doc, e) }, [
             icon(Events.TYPE_ICONS[e.type] || 'circle'),
             el('span', { className: 'row-name', textContent: e.nom || e.id }),
             el('span', { className: 'badge', textContent: `${e.x}, ${e.y}` }),
           ]);
           row.onclick = () => choisirEvenement(m.id, e.id);
           rows.append(row);
+        };
+        // Tafl 1.42 : trois événements ou plus à la suite, de même nom et de même type (un mur de
+        // gardiens, des tas de bois…) tiennent sur une ligne « × 8 », qu'un clic déplie.
+        for (let i = 0; i < evs.length;) {
+          const cle = (e) => `${e.nom || e.id}|${e.type}`;
+          let j = i + 1;
+          while (j < evs.length && cle(evs[j]) === cle(evs[i])) j++;
+          const lot = evs.slice(i, j);
+          const id = `${m.id}|${cle(evs[i])}|${i}`;
+          const contientActif = lot.some((e) => m.id === memoEvenements.carte && e.id === memoEvenements.id);
+          if (lot.length >= 3 && !q) {
+            const ouvert = groupesOuverts.has(id) || contientActif;
+            const tete = el('button', { className: 'row lot-evenements', title: ouvert ? 'Replier' : 'Déplier' }, [
+              icon(Events.TYPE_ICONS[evs[i].type] || 'circle'),
+              el('span', { className: 'row-name', textContent: evs[i].nom || evs[i].id }),
+              el('span', { className: 'badge', textContent: `× ${lot.length}` }),
+              icon(ouvert ? 'chevron-up' : 'chevron-down'),
+            ]);
+            tete.onclick = () => { if (groupesOuverts.has(id)) groupesOuverts.delete(id); else groupesOuverts.add(id); lignes(); };
+            rows.append(tete);
+            if (ouvert) for (const e of lot) ligne(e, true);
+          } else for (const e of lot) ligne(e);
+          i = j;
         }
       }
       if (!rows.childElementCount) rows.append(el('p', { className: 'modal-info', textContent: q ? 'Rien ne correspond.' : 'Aucun événement.' }));
@@ -345,7 +369,7 @@ const Espaces = (() => {
       el('div', { className: 'accueil-stats' }, stats.map(([n, l]) => el('div', { className: 'stat' }, [el('b', { textContent: String(n) }), el('span', { textContent: l })]))),
       el('div', { className: 'accueil-boutons' }, [
         bouton(`Reprendre : ${doc.map.name}`, 'map', () => aller('cartes'), false, 'Ouvrir la carte affichée en dernier (espace Cartes)'),
-        doc.game ? bouton('Jouer', 'play', () => App.jouer(false), true, 'Jouer dans Saga, depuis le départ (F5)') : bouton('En faire un jeu', 'game', () => IO.saveAsGame(doc), true, 'Enregistrer comme dossier de jeu : plusieurs cartes, des événements, jouable dans Saga'),
+        doc.game ? null : bouton('En faire un jeu', 'game', () => IO.saveAsGame(doc), true, 'Enregistrer comme dossier de jeu : plusieurs cartes, des événements, jouable dans Saga'),
       ]),
     ]);
 
