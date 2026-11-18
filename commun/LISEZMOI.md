@@ -15,6 +15,7 @@ Ce dossier contient ce que Skald, Tafl et Brokk partagent : le **panneau Claude*
 | `notifications.js` | Les notifications en bas à droite (`notify`) et les erreurs inattendues. La balise dit quel pont écouter : `data-api="brokk"`. |
 | `dialogues.js` | Les fenêtres de dialogue en verre : `Dialogs.form` (une fenêtre faite d'une liste de champs) et `Dialogs.ask` (une petite question). |
 | `mise-a-jour.js` | Le bouton « Mise à jour » de la barre de titre : `data-api="brokk" data-nom="Brokk"`. Avant de fermer pour s'installer, il appelle `App.avantMiseAJour()` si l'outil en a une (enregistrer ce qui ne l'est pas, ou `false` pour annuler). |
+| `socle.css` | Le style de base : page, boutons, champs, barre de titre, fenêtres de dialogue, notifications, verre. Chargé avant le `style.css` de l'outil, qui garde ses couleurs (`:root`) et ce qui lui est propre. |
 | `copier.js` | Recopie ces fichiers dans `<outil>/commun/`. |
 
 **Pourquoi une copie ?** Chaque outil est fabriqué depuis son propre dossier, et son installeur
