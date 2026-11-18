@@ -43,8 +43,25 @@ const RELOAD_SCRIPT = `<script>/* Rune : rechargement automatique (ajouté par l
   addEventListener('hashchange', tell);
   addEventListener('message', (e) => { if (e.source === parent && e.data === 'atelier:back') history.back(); });
   const events = new EventSource('/__atelier/events');
+  // Adresses dont la page dépend : elle-même et ce qu'elle a chargé (CSS, scripts, images, fetch…).
+  const used = () => {
+    const set = new Set([location.pathname]);
+    for (const r of performance.getEntriesByType('resource')) {
+      try { const u = new URL(r.name); if (u.origin === location.origin) set.add(u.pathname); } catch {}
+    }
+    return set;
+  };
+  const same = (a, b) => { try { return decodeURIComponent(a) === decodeURIComponent(b); } catch { return a === b; } };
   events.onmessage = (e) => {
     const change = JSON.parse(e.data);
+    // Un fichier que cette page n'utilise pas (une autre page, une image pas affichée…) : on ne
+    // recharge pas pour rien. Un fichier nouveau ou supprimé peut changer la page : on recharge.
+    if (Array.isArray(change.urls) && !change.structure) {
+      const mine = used();
+      const dir = location.pathname.endsWith('/') ? location.pathname : null;
+      const touches = change.urls.some((u) => [...mine].some((m) => same(m, u)) || (dir && same(u, dir + 'index.html')));
+      if (!touches) return;
+    }
     if (change.cssOnly) {
       for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
         const url = new URL(link.href);
@@ -69,15 +86,23 @@ let watchedRoot = null;
 let pending = new Set();     // fichiers changés depuis le dernier signal
 let timer = null;
 
-function notifyChange(file) {
+// structure : fichier créé, supprimé ou renommé (les pages rechargent toutes, une liste de dossier
+// ou un lien cassé peuvent changer).
+let structure = false;
+function notifyChange(file, { created = false } = {}) {
+  if (created) structure = true;
   pending.add(file);
   clearTimeout(timer);
   // On attend un court instant : un enregistrement déclenche souvent plusieurs événements.
   timer = setTimeout(() => {
     const files = [...pending];
     pending = new Set();
+    const changedStructure = structure;
+    structure = false;
     const cssOnly = files.every((f) => f.toLowerCase().endsWith('.css'));
-    const data = `data: ${JSON.stringify({ cssOnly, files })}\n\n`;
+    // Adresse de chaque fichier dans l'aperçu (« pages\\vie.html » → « /pages/vie.html »).
+    const urls = files.map((f) => `/${f.split(/[\\/]/).map(encodeURIComponent).join('/')}`);
+    const data = `data: ${JSON.stringify({ cssOnly, files, urls, structure: changedStructure })}\n\n`;
     for (const res of clients) res.write(data);
   }, 120);
 }
@@ -89,8 +114,8 @@ function watch(root) {
   watchedRoot = root;
   if (!root) return;
   try {
-    watcher = fs.watch(root, { recursive: true }, (_type, file) => {
-      if (file && !IGNORED.test(file)) notifyChange(file);
+    watcher = fs.watch(root, { recursive: true }, (type, file) => {
+      if (file && !IGNORED.test(file)) notifyChange(file, { created: type === 'rename' });
     });
     watcher.on('error', () => {}); // dossier supprimé ou inaccessible : l'aperçu ne recharge plus, sans planter
   } catch {
@@ -173,7 +198,17 @@ async function serve(req, res) {
     res.writeHead(200, { ...headers, 'Content-Length': body.length });
     return res.end(body);
   }
-  res.writeHead(200, { ...headers, 'Content-Length': stat.size });
+  // Images, polices, CSS, scripts : le navigateur garde sa copie et demande juste « a-t-il changé ? »
+  // (réponse 304, sans renvoyer le fichier). Avant, tout était renvoyé à chaque rechargement, ce qui
+  // rendait l'aperçu très lent sur un site plein de grosses images.
+  const etag = `"${stat.size.toString(36)}-${Math.floor(stat.mtimeMs).toString(36)}"`;
+  const cached = { ...headers, 'Cache-Control': 'no-cache', ETag: etag };
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, cached);
+    return res.end();
+  }
+  res.writeHead(200, { ...cached, 'Content-Length': stat.size });
+  if (req.method === 'HEAD') return res.end();
   fs.createReadStream(target).pipe(res);
 }
 

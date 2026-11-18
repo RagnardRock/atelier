@@ -140,6 +140,7 @@ La mise à jour se fait dans une fenêtre à part parce que, sous Windows, `npm 
 - **Aperçu navigateur** : le bouton œil (en haut) ou `Ctrl+Alt+P` ouvre à droite ton site tel qu'un navigateur l'affiche : le fichier HTML actif, sinon `index.html`.
   - **Rechargement automatique** : dès qu'un fichier du projet change (enregistré avec `Ctrl+S`, modifié par Claude ou par un autre programme), la page se recharge. Si seul le CSS a changé, seuls les styles sont rechargés, et la page garde sa position.
   - **Mise à jour pendant la frappe** : pas besoin d'enregistrer. Après une courte pause dans ta frappe, la page montre ce qui est dans l'éditeur (HTML, CSS, JS…), même non enregistré. Ferme un onglet sans enregistrer : la page revient au fichier du disque. Désactivable dans **Réglages › Aperçu** (la page ne change alors qu'à l'enregistrement, comme Live Server).
+  - **Ctrl+clic sur un lien** du HTML (`href="vie.html"`, `src="img/logo.png"`) : ouvre le fichier dans un onglet. Le chemin part du dossier du fichier, et `/…` part du dossier ouvert, comme dans un navigateur.
   - **Go Live** : dans la barre du bas, à droite. Un clic ouvre le fichier HTML actif (sinon l'accueil du site) **dans ton navigateur habituel**, sans ouvrir le panneau. Une fois le serveur lancé, il affiche son port (`Live · 5500`). Aussi dans la palette de commandes.
   - **Port fixe** : le serveur prend le port **5500** (comme Live Server), donc l'onglet de ton navigateur reste valable d'une session à l'autre. Si un autre programme l'utilise déjà, un port libre est pris à la place. Réglable dans **Réglages › Aperçu** (`0` = un port au hasard).
   - L'aperçu **suit l'onglet actif** : passe sur un autre fichier HTML, il l'affiche.
@@ -251,6 +252,7 @@ renderer/  (Chromium : l'interface en HTML/CSS/JS)
 | `ide/renderer/search.js` | La fenêtre `Ctrl+P` (avec sa recherche « floue ») et la vue Rechercher de la barre latérale. |
 | `ide/renderer/fileops.js` | Renommer, supprimer (corbeille) et déplacer par glisser-déposer dans l'arborescence, en gardant les onglets ouverts à jour. |
 | `ide/preview.js` | Le serveur web local de l'aperçu (Go Live) : sert le dossier ouvert (et le texte pas encore enregistré), surveille ses fichiers et prévient les pages pour qu'elles se rechargent. |
+| `ide/renderer/liens.js` | Le Ctrl+clic sur les liens d'une page HTML : trouve le fichier visé à partir du dossier du fichier et l'ouvre dans un onglet. |
 | `ide/renderer/preview.js` | Le panneau Aperçu : le cadre qui affiche la page, la barre d'adresse et ses boutons, le bouton Go Live, et l'envoi du texte non enregistré au serveur. |
 | `ide/git.js` | Le côté Node du panneau Git : lance `git status`, `add`, `restore --staged`, `commit`, `push`, `pull` dans le dossier ouvert et traduit les erreurs courantes en français. |
 | `ide/renderer/git.js` | Le panneau Git : la liste des fichiers, l'indexation, le commit, les boutons push / pull et la comparaison avec le dernier commit (l'éditeur de différences de Monaco). |
