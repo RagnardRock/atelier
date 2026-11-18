@@ -61,6 +61,7 @@ async function start() {
   registerConfigLanguages(); // .toml, .conf, .cfg, .env (toml.js)
   formatter.init(); // Prettier pour Maj+Alt+F (format.js)
   vueTools.init(); // Volar pour les fichiers .vue (vue.js)
+  Liens.init(); // Ctrl+clic sur href="…" / src="…" dans le HTML (liens.js)
   state.configPath = await window.atelier.getConfigPath();
   await loadConfig();
   createGroup();
