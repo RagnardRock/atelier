@@ -37,11 +37,11 @@ const LETTRES = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // sans I ni O (on les confond avec 
 const MAX_ATTENTE = 6;            // demandes en attente de l'hôte, au plus
 const MAX_MAUVAIS_CODES = 20;     // sur Internet : mauvais codes par minute, toutes adresses confondues
 // Les seuls fichiers de commun/ dont l'interface a besoin.
-// Saga 1.33.1 : on y ajoute tout ../commun/*.js que charge index.html (perso-base.js manquait : PersoBase is not defined).
+// Saga 1.33.1 : on y ajoute tout ../commun/*.js (et *.css, Saga 1.49.2) que charge index.html (perso-base.js manquait : PersoBase is not defined).
 const COMMUN = new Set(['bac-a-sable.js', 'modules.js', 'fiche-perso.js', 'perso-base.js']);
 try {
   const index = require('node:fs').readFileSync(path.join(__dirname, 'renderer', 'index.html'), 'utf8');
-  for (const m of index.matchAll(/src="\.\.\/commun\/([\w.-]+\.js)"/g)) COMMUN.add(m[1]);
+  for (const m of index.matchAll(/(?:src|href)="\.\.\/commun\/([\w.-]+\.(?:js|css))"/g)) COMMUN.add(m[1]);
 } catch { /* la liste fixe suffit */ }
 const SURETE = { 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer' };
 const TYPES = {
