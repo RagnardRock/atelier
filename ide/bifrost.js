@@ -143,9 +143,17 @@ function register({ handle, getRoot, dataDir, safeStorage, log }) {
     return { connecte: Boolean(dechiffrer(c)), serveur: c.serveur || '', email: c.email || '', lien };
   });
 
-  handle('bifrost:connexion', async (_e, { serveur, email, motDePasse }) => {
+  // Avec la double authentification, Bifrost répond CODE_REQUIS (ou CODE_INVALIDE) : on le dit à
+  // l'interface, qui demande le code (application d'authentification ou code de secours).
+  handle('bifrost:connexion', async (_e, { serveur, email, motDePasse, code }) => {
     const s = normaliserServeur(serveur);
-    const r = await api('POST', '/connexion', { serveur: s, jeton: null, corps: { email, motDePasse, appareil: `Rune (${require('node:os').hostname()})` } });
+    let r;
+    try {
+      r = await api('POST', '/connexion', { serveur: s, jeton: null, corps: { email, motDePasse, code: code?.trim() || undefined, appareil: `Rune (${require('node:os').hostname()})` } });
+    } catch (err) {
+      if (err.code === 'CODE_REQUIS' || err.code === 'CODE_INVALIDE') return { codeRequis: true, message: code ? err.message : '' };
+      throw err;
+    }
     await ecrireCompte({ serveur: s, email: r.email, ...chiffrer(r.jeton) });
     log?.('INFO', `Bifrost : connecté à ${s}`);
     return { serveur: s, email: r.email };
