@@ -41,7 +41,16 @@ const RELOAD_SCRIPT = `<script>/* Rune : rechargement automatique (ajouté par l
   const tell = () => parent !== window && parent.postMessage({ atelierPreview: location.pathname + location.search + location.hash }, '*');
   tell();
   addEventListener('hashchange', tell);
-  addEventListener('message', (e) => { if (e.source === parent && e.data === 'atelier:back') history.back(); });
+  addEventListener('message', (e) => {
+    if (e.source !== parent) return;
+    if (e.data === 'atelier:back') history.back();
+    // couleur ou taille essayée depuis le panneau Bifrost (onglet Thème), sans toucher au fichier
+    const v = e.data && e.data.atelierVar;
+    if (v && /^--[\\w-]+$/.test(v.nom)) {
+      if (v.valeur === null) document.documentElement.style.removeProperty(v.nom);
+      else document.documentElement.style.setProperty(v.nom, String(v.valeur));
+    }
+  });
   const events = new EventSource('/__atelier/events');
   // Adresses dont la page dépend : elle-même et ce qu'elle a chargé (CSS, scripts, images, fetch…).
   const used = () => {

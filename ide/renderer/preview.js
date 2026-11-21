@@ -3,7 +3,8 @@
 // - La page se recharge toute seule quand un fichier du projet change (voir ../preview.js) ;
 //   quand seul le CSS change, juste les styles sont rechargés.
 // - Quand tu passes sur un autre onglet HTML, l'aperçu le suit.
-// - Le bouton téléphone réduit la largeur à 390 px pour vérifier la version mobile.
+// - Les boutons tablette et téléphone réduisent la largeur à 820 ou 390 px pour vérifier ces versions.
+// - Le panneau Bifrost (onglet Thème) y essaie des couleurs en direct, sans toucher aux fichiers.
 // - Pendant la frappe (réglage "previewLive"), le texte pas encore enregistré est envoyé au
 //   serveur : la page change sans attendre Ctrl+S.
 // - « Go Live », dans la barre du bas, ouvre le site dans ton navigateur habituel, sans le panneau.
@@ -153,11 +154,16 @@ const previewPanel = (() => {
   };
   $('#preview-reload').onclick = () => go(current);
   $('#preview-back').onclick = () => frame.contentWindow?.postMessage('atelier:back', base);
-  $('#preview-device').onclick = () => {
-    const mobile = !panel.classList.contains('mobile');
-    panel.classList.toggle('mobile', mobile);
-    $('#preview-device').classList.toggle('active', mobile);
-  };
+  // largeur d'appareil : téléphone (390 px), tablette (820 px), ou toute la place (re-clic)
+  function largeur(mode) {
+    for (const m of ['mobile', 'tablette']) {
+      const on = m === mode && !panel.classList.contains(m);
+      panel.classList.toggle(m, on);
+      $(m === 'mobile' ? '#preview-device' : '#preview-tablette').classList.toggle('active', on);
+    }
+  }
+  $('#preview-device').onclick = () => largeur('mobile');
+  $('#preview-tablette').onclick = () => largeur('tablette');
   $('#preview-external').onclick = () => base && window.atelier.previewExternal(base + current)
     .catch((err) => notify.error(`Impossible d'ouvrir le navigateur : ${cleanError(err)}`));
   $('#preview-close').onclick = () => toggle(false);
@@ -184,5 +190,15 @@ const previewPanel = (() => {
     window.addEventListener('mouseup', onUp);
   });
 
-  return { toggle, show, goLive, applyConfig };
+  // Variable CSS essayée en direct (panneau Bifrost › Thème) ; valeur null : retour à celle du fichier.
+  // Gardées ici pour être réappliquées quand la page se recharge.
+  const essais = new Map();
+  function essayerVariable(nom, valeur) {
+    if (valeur === null) essais.delete(nom); else essais.set(nom, valeur);
+    frame.contentWindow?.postMessage({ atelierVar: { nom, valeur } }, base || '*');
+  }
+  function oublierEssais() { for (const nom of [...essais.keys()]) essayerVariable(nom, null); }
+  frame.addEventListener('load', () => { for (const [nom, valeur] of essais) frame.contentWindow?.postMessage({ atelierVar: { nom, valeur } }, base || '*'); });
+
+  return { toggle, show, goLive, applyConfig, essayerVariable, oublierEssais, get ouvert() { return !panel.hidden; } };
 })();
