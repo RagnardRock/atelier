@@ -1,6 +1,9 @@
 // Mode visuel de l'aperçu, côté Rune : bouton loupe de la barre de l'aperçu.
 // - Clic sur un élément de la page : son fichier s'ouvre et sa balise est sélectionnée dans le code ;
 //   le panneau Bifrost montre l'élément choisi (ses flags, de quoi le rendre modifiable).
+// - Curseur dans le code de la page affichée : l'élément s'éclaire dans l'aperçu.
+// - Double-clic sur un texte de l'aperçu : modifié sur place, puis réécrit dans le code.
+// - Image lâchée sur une image de l'aperçu : copiée à côté de l'ancienne, src changé.
 // - Poignée ▲ ▼ ⠿ sur les sections : le code de la section est déplacé (un seul Ctrl+Z pour annuler).
 // - Un bloc du panneau Bifrost glissé dans l'aperçu s'insère à l'endroit montré par la ligne violette.
 // Les positions viennent du serveur de l'aperçu (data-rune, voir visuel-page.js et visuel-texte.js) ;
@@ -9,13 +12,15 @@
 
 const visuelPanel = (() => {
   let dernier = null; // { fichier, debut, tag } : élément choisi
+  let pageAffichee = null; // fichier de la page affichée dans l'aperçu (mode visuel)
 
   const dansLeProjet = (p) => typeof p === 'string' && !!state.root && (p.startsWith(state.root + '/') || p.startsWith(state.root + '\\'));
 
   // Ouvre le fichier de la page et renvoie { file, editor } quand son éditeur est prêt.
   async function ouvrir(chemin) {
     if (!dansLeProjet(chemin)) return null;
-    await openFile(chemin, baseName(chemin));
+    // déjà l'onglet actif : on ne le réactive pas (ça donnerait le clavier à l'éditeur)
+    if (state.activeGroup?.active?.file.path !== chemin) await openFile(chemin, baseName(chemin));
     const group = state.activeGroup;
     if (group?.active?.file.path !== chemin || !group.editor || group.editor.getModel() !== group.active.file.model) return null;
     return { file: group.active.file, editor: group.editor };
@@ -24,7 +29,11 @@ const visuelPanel = (() => {
   const aChange = () => notify.info("La page a changé depuis son affichage : attends qu'elle se recharge, puis recommence.");
 
   async function choisir(m) {
+    // ouvrir l'onglet peut donner le clavier à l'éditeur : il doit rester à la page (double-clic
+    // pour modifier un texte, qui commence par un clic)
+    const cadre = document.activeElement?.id === 'preview-frame' ? document.activeElement : null;
     const o = await ouvrir(m.fichier);
+    if (cadre && document.activeElement !== cadre) cadre.focus();
     if (!o) return;
     const model = o.file.model;
     const e = VisuelTexte.trouver(model.getValue(), m.choix, m.tag);
@@ -89,10 +98,41 @@ const visuelPanel = (() => {
     await bifrostPanel.insererBloc(bloc, place);
   }
 
+  // Texte modifié sur place dans l'aperçu.
+  async function texte(m) {
+    const o = await ouvrir(m.fichier);
+    if (!o) return;
+    const t = o.file.model.getValue();
+    const { debut, tag, html } = m.texte;
+    if (!VisuelTexte.trouver(t, debut, tag)) return aChange();
+    const r = VisuelTexte.remplacerContenu(t, debut, tag, String(html));
+    if (r) retoucher(o, r, 'Texte modifié (Ctrl+Z pour annuler)');
+  }
+
+  // Image lâchée sur une image de l'aperçu : copiée dans le site, puis src changé.
+  async function image(m) {
+    const o = await ouvrir(m.fichier);
+    if (!o) return;
+    const t = o.file.model.getValue();
+    const e = VisuelTexte.trouver(t, m.image.debut, 'img');
+    if (!e) return aChange();
+    const sep = state.root.includes('\\') ? '\\' : '/';
+    const versSite = (p) => p.slice(state.root.length + 1).split(sep).join('/');
+    const page = versSite(m.fichier);
+    const cible = VisuelTexte.cheminImage(page, e.attrs.src || '', String(m.image.nom || 'image.png'));
+    const ecrit = await window.atelier.writeImage(state.root + sep + cible.split('/').join(sep), new Uint8Array(m.image.donnees));
+    // le texte a pu changer pendant l'écriture : on relit l'élément
+    const r = VisuelTexte.changerSrc(o.file.model.getValue(), e.debut, VisuelTexte.relatif(page, versSite(ecrit)));
+    if (!r) return aChange();
+    retoucher(o, r, `Image remplacée : ${versSite(ecrit)}`);
+  }
+
   window.addEventListener('message', (e) => {
     const m = e.data?.runeVisuel;
     if (!m || !previewPanel.vientDeLaPage(e) || !previewPanel.visuel) return;
-    const faire = m.choix !== undefined ? choisir : m.deplacer ? deplacer : m.deposer ? deposer : null;
+    if (m.pret) { pageAffichee = m.fichier; return; }
+    if (m.refus) return notify.info(String(m.refus));
+    const faire = m.choix !== undefined ? choisir : m.deplacer ? deplacer : m.deposer ? deposer : m.texte ? texte : m.image ? image : null;
     faire?.(m).catch((err) => notify.error(cleanError(err)));
   });
 
@@ -107,6 +147,30 @@ const visuelPanel = (() => {
   document.addEventListener('dragend', (e) => {
     if (e.target.closest?.('.bf-bloc[data-bloc]')) previewPanel.envoyer({ runeGlisse: null });
   });
+
+  // Curseur dans le code de la page affichée → l'élément s'éclaire dans l'aperçu.
+  // Seulement si l'aperçu montre bien ce texte (enregistré, ou brouillon envoyé pendant la frappe).
+  let minuteur = null;
+  function suivreCurseur(ed) {
+    ed.onDidChangeCursorPosition(() => {
+      if (!previewPanel.visuel || !previewPanel.ouvert || !pageAffichee) return;
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => {
+        const file = state.files.get(pageAffichee);
+        const model = ed.getModel();
+        if (!file || model !== file.model || !ed.hasTextFocus()) return;
+        if (isDirty(file) && state.config.previewLive === false) return;
+        const b = BifrostFlags.baliseA(model.getValue(), model.getOffsetAt(ed.getPosition()));
+        if (b) previewPanel.envoyer({ runeMontrer: b.debut });
+      }, 200);
+    });
+  }
+  const suivis = new WeakSet();
+  const equiper = (ed) => { if (ed?.onDidChangeCursorPosition && !suivis.has(ed)) { suivis.add(ed); suivreCurseur(ed); } };
+  const demarrer = () => { monaco.editor.getEditors?.().forEach(equiper); monaco.editor.onDidCreateEditor((ed) => setTimeout(() => equiper(ed), 0)); };
+  if (window.monaco?.editor) demarrer();
+  else pageReady.then(() => { const attendre = () => (window.monaco?.editor ? demarrer() : setTimeout(attendre, 100)); attendre(); });
+  document.addEventListener('visuel-bascule', () => { pageAffichee = null; });
 
   return { get dernier() { return dernier; } };
 })();

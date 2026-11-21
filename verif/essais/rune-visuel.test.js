@@ -66,3 +66,24 @@ test('Rune visuel : où insérer un bloc avant ou après une section', () => {
   const h2 = PAGE.slice(0, q.offset) + q.avant + '<x></x>' + q.apres + PAGE.slice(q.offset);
   assert.ok(h2.includes('  <main>\n    <x></x>\n    <section id="a">'));
 });
+
+test('Rune visuel : texte modifié sur place, seul le contenu change', () => {
+  const p = PAGE.indexOf('<h1>');
+  const h = V.appliquer(PAGE, V.remplacerContenu(PAGE, p, 'h1', 'Titre &amp; <em>neuf</em>'));
+  assert.equal(h, PAGE.replace('<h1>A</h1>', '<h1>Titre &amp; <em>neuf</em></h1>'));
+  assert.equal(V.remplacerContenu(PAGE, p, 'h1', 'A'), null);
+  assert.equal(V.remplacerContenu(PAGE, p, 'p', 'x'), null);
+});
+
+test('Rune visuel : image remplacée (src, srcset retiré) et chemins', () => {
+  const html = `<p><img alt="" srcset="a@2x.jpg 2x" src='img/a.jpg' data-src="x"></p>`;
+  const h = V.appliquer(html, V.changerSrc(html, 3, 'img/b "c".jpg'));
+  assert.equal(h, `<p><img alt="" src="img/b &quot;c&quot;.jpg" data-src="x"></p>`);
+  assert.equal(V.cheminImage('services/eau.html', '../assets/photos/x.jpg', 'Ma Photo été.JPG'), 'assets/photos/ma-photo-ete.jpg');
+  assert.equal(V.cheminImage('index.html', 'https://x/y.png', 'a.png'), 'assets/img/a.png');
+  assert.equal(V.cheminImage('index.html', '../../hors.png', 'a.png'), 'assets/img/a.png');
+  assert.equal(V.cheminImage('index.html', 'logo.png', 'b.webp'), 'b.webp');
+  assert.equal(V.relatif('services/eau.html', 'assets/img/a.png'), '../assets/img/a.png');
+  assert.equal(V.relatif('index.html', 'assets/img/a.png'), 'assets/img/a.png');
+  assert.equal(V.relatif('a/b/p.html', 'a/c/x.png'), '../c/x.png');
+});

@@ -8,6 +8,11 @@
 // - Sections de la page (enfants directs de <main>, ou de <body> s'il n'y en a pas) et éléments
 //   de liste Bifrost : une poignée pour les monter, descendre, ou les glisser ailleurs.
 // - Un bloc glissé depuis le panneau Bifrost se dépose entre deux sections.
+// - Double-clic sur un texte : il se modifie sur place (Entrée ou clic ailleurs pour valider,
+//   Échap pour annuler) ; Rune réécrit le contenu de la balise dans le code.
+// - Une image lâchée (depuis l'Explorateur) sur une image de la page la remplace : Rune copie le
+//   fichier à côté de l'ancienne image et change son src.
+// - Le curseur placé dans le code éclaire l'élément correspondant dans la page.
 // Rien n'est modifié ici : la page envoie à Rune ce qu'il faut faire, Rune retouche le code (Ctrl+Z
 // pour annuler) et l'aperçu se recharge.
 
@@ -40,7 +45,7 @@ html.rune-v-glisse *{cursor:copy!important}`;
   const monter = () => { document.documentElement.appendChild(style); document.documentElement.appendChild(ui); };
   if (document.body) monter(); else addEventListener('DOMContentLoaded', monter);
 
-  const envoyer = (m) => parent.postMessage({ runeVisuel: { fichier, ...m } }, '*');
+  const envoyer = (m, transfert) => parent.postMessage({ runeVisuel: { fichier, ...m } }, '*', transfert || []);
   const position = (el) => Number(el.getAttribute('data-rune'));
   const elDe = (n) => {
     if (!n || n.nodeType !== 1 || ui.contains(n)) return null;
@@ -120,6 +125,7 @@ html.rune-v-glisse *{cursor:copy!important}`;
       if (b.dataset.a === 'descendre' && i < f.length - 1) envoyer({ deplacer: { de: position(bloc), vers: position(f[i + 1]), apres: true } });
       return;
     }
+    if (edition && edition.el.contains(e.target)) return; // placer le curseur dans le texte
     bloquer(e);
     const el = elDe(e.target);
     if (!el) return;
@@ -127,8 +133,47 @@ html.rune-v-glisse *{cursor:copy!important}`;
     placer(choix, el);
     envoyer({ choix: position(el), tag: el.tagName.toLowerCase() });
   }, true);
-  for (const t of ['submit', 'auxclick', 'dblclick']) addEventListener(t, bloquer, true);
-  addEventListener('keydown', (e) => { if (e.key === 'Escape') { choisi = null; choix.hidden = true; } });
+  for (const t of ['submit', 'auxclick']) addEventListener(t, bloquer, true);
+  addEventListener('keydown', (e) => { if (e.key === 'Escape' && !edition) { choisi = null; choix.hidden = true; } });
+
+  // --- Double-clic : modifier un texte sur place ---
+  const EN_LIGNE = /^(B|I|EM|STRONG|BR|SPAN|A|SMALL|SUP|SUB|U|S|MARK|ABBR|CODE|Q|TIME)$/;
+  const modifiable = (el) => !/^(HTML|BODY|HEAD|MAIN|SCRIPT|STYLE|IMG|INPUT|SELECT|TEXTAREA|VIDEO|AUDIO|IFRAME|SVG|PICTURE)$/.test(el.tagName)
+    && el.textContent.trim() !== '' && [...el.querySelectorAll('*')].every((x) => EN_LIGNE.test(x.tagName));
+  let edition = null; // { el, avant }
+  function finEdition(garder) {
+    if (!edition) return;
+    const { el, avant } = edition;
+    edition = null;
+    el.removeAttribute('contenteditable');
+    if (!garder) { el.innerHTML = avant; return; }
+    const apres = el.innerHTML;
+    if (apres !== avant) envoyer({ texte: { debut: position(el), tag: el.tagName.toLowerCase(), html: apres.replace(/ data-rune="\d+"/g, '') } });
+  }
+  addEventListener('dblclick', (e) => {
+    if (ui.contains(e.target) || (edition && edition.el.contains(e.target))) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const el = elDe(e.target);
+    if (!el || !modifiable(el)) return;
+    finEdition(true);
+    edition = { el, avant: el.innerHTML };
+    el.setAttribute('contenteditable', el.children.length ? 'true' : 'plaintext-only');
+    el.focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    choisi = el;
+    placer(choix, el);
+  }, true);
+  addEventListener('keydown', (e) => {
+    if (!edition) return;
+    if (e.key === 'Escape') { e.preventDefault(); finEdition(false); }
+    else if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); finEdition(true); }
+  }, true);
+  // clic ailleurs dans la page : on valide ; la fenêtre de Rune qui prend le clavier : on attend
+  addEventListener('focusout', (e) => { if (edition && e.target === edition.el && document.hasFocus()) finEdition(true); }, true);
 
   // --- Glisser : une section de la page, ou un bloc venu du panneau Bifrost ---
   poignee.querySelector('[data-a="glisser"]').addEventListener('dragstart', (e) => {
@@ -155,6 +200,31 @@ html.rune-v-glisse *{cursor:copy!important}`;
     return { el: meilleur.el, apres };
   }
   const finGlisse = () => { glisse = null; cible = null; ligne.hidden = true; document.documentElement.classList.remove('rune-v-glisse'); };
+  // --- Image lâchée depuis l'Explorateur : remplace l'image visée ---
+  const avecFichier = (e) => !glisse && e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  // l'image sous la souris, même si un texte est posé dessus (photo de fond d'un bandeau)
+  const imageSous = (e) => document.elementsFromPoint(e.clientX, e.clientY).find((x) => x.tagName === 'IMG' && x.hasAttribute('data-rune') && !ui.contains(x)) || null;
+  addEventListener('dragover', (e) => {
+    if (!avecFichier(e)) return;
+    e.preventDefault(); // sinon le cadre ouvrirait le fichier à la place de la page
+    const img = imageSous(e);
+    e.dataTransfer.dropEffect = img ? 'copy' : 'none';
+    montrer(img);
+    if (img) nom.textContent = 'Remplacer cette image';
+  }, true);
+  addEventListener('drop', async (e) => {
+    if (!avecFichier(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    montrer(null);
+    const img = imageSous(e);
+    const f = e.dataTransfer.files[0];
+    if (!img || !f) return;
+    if (!/^image\//.test(f.type) || f.size > 20 * 1024 * 1024) return envoyer({ refus: 'Lâche une image (20 Mo au plus).' });
+    const donnees = await f.arrayBuffer();
+    envoyer({ image: { debut: position(img), nom: f.name, donnees } }, [donnees]);
+  }, true);
+
   addEventListener('dragover', (e) => {
     if (!glisse) return;
     e.preventDefault();
@@ -174,6 +244,7 @@ html.rune-v-glisse *{cursor:copy!important}`;
   }, true);
   addEventListener('dragend', finGlisse, true);
 
+  envoyer({ pret: true });
   addEventListener('message', (e) => {
     if (e.source !== parent || !e.data) return;
     // un bloc du panneau Bifrost commence (id) ou arrête (null) d'être glissé
@@ -182,10 +253,11 @@ html.rune-v-glisse *{cursor:copy!important}`;
       else finGlisse();
     }
     // Rune a sélectionné un autre élément dans le code : on le montre dans la page
-    if ('runeMontrer' in e.data) {
+    if ('runeMontrer' in e.data && !edition) {
       const el = document.querySelector(`[data-rune="${Number(e.data.runeMontrer)}"]`);
-      choisi = el;
-      if (el) { placer(choix, el); el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else choix.hidden = true;
+      if (el === choisi && !choix.hidden) return;
+      choisi = el && el.getClientRects().length ? el : null;
+      if (choisi) { placer(choix, choisi); choisi.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else choix.hidden = true;
     }
   });
 }
