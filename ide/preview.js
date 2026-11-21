@@ -23,6 +23,8 @@ const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
+const { VisuelTexte } = require('./renderer/visuel-texte');
+const { scriptVisuel } = require('./visuel-page');
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.htm': 'text/html; charset=utf-8',
@@ -41,7 +43,16 @@ const RELOAD_SCRIPT = `<script>/* Rune : rechargement automatique (ajouté par l
   const tell = () => parent !== window && parent.postMessage({ atelierPreview: location.pathname + location.search + location.hash }, '*');
   tell();
   addEventListener('hashchange', tell);
-  addEventListener('message', (e) => { if (e.source === parent && e.data === 'atelier:back') history.back(); });
+  addEventListener('message', (e) => {
+    if (e.source !== parent) return;
+    if (e.data === 'atelier:back') history.back();
+    // couleur ou taille essayée depuis le panneau Bifrost (onglet Thème), sans toucher au fichier
+    const v = e.data && e.data.atelierVar;
+    if (v && /^--[\\w-]+$/.test(v.nom)) {
+      if (v.valeur === null) document.documentElement.style.removeProperty(v.nom);
+      else document.documentElement.style.setProperty(v.nom, String(v.valeur));
+    }
+  });
   const events = new EventSource('/__atelier/events');
   // Adresses dont la page dépend : elle-même et ce qu'elle a chargé (CSS, scripts, images, fetch…).
   const used = () => {
@@ -80,6 +91,7 @@ let port = null;
 let startedFor = null;       // port demandé au dernier démarrage (pour redémarrer s'il change dans les réglages)
 let getRoot = () => null;
 const drafts = new Map();    // chemin complet -> texte pas encore enregistré
+let visuel = false;          // mode visuel du panneau Aperçu (voir visuel-page.js)
 const clients = new Set();   // pages ouvertes, à prévenir quand un fichier change
 let watcher = null;
 let watchedRoot = null;
@@ -189,7 +201,14 @@ async function serve(req, res) {
   const draft = drafts.get(target);
   if (type.startsWith('text/html')) {
     let html = draft ?? await fsp.readFile(target, 'utf8');
-    html = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${RELOAD_SCRIPT}</body>`) : html + RELOAD_SCRIPT;
+    let ajout = RELOAD_SCRIPT;
+    // Mode visuel : seulement dans le panneau Aperçu de Rune (cadre), pas dans ton navigateur (Go Live).
+    // Chaque balise reçoit sa position dans le texte, pour retrouver le code de ce qu'on clique.
+    if (visuel && req.headers['sec-fetch-dest'] === 'iframe') {
+      html = VisuelTexte.annoter(html);
+      ajout += scriptVisuel(target);
+    }
+    html = /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, `${ajout}</body>`) : html + ajout;
     res.writeHead(200, headers);
     return res.end(html);
   }
@@ -293,6 +312,8 @@ function register({ handle, getRoot: rootGetter, openExternal }) {
     else if (!drafts.delete(full)) return;
     if (!quiet) notifyChange(path.relative(root, full));
   });
+  // Mode visuel allumé ou éteint (le panneau recharge la page ensuite).
+  handle('preview:visuel', async (_event, on) => { visuel = !!on; });
   handle('preview:clearDrafts', async () => {
     const files = [...drafts.keys()];
     drafts.clear();

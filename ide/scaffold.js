@@ -26,6 +26,7 @@ const MAIN_FILE = {
   'vite-react': ['src/App.tsx', 'src/App.jsx'],
   'vite-svelte': ['src/App.svelte'],
   html: ['index.html'],
+  bifrost: ['index.html'],
 };
 
 // Un nom de dossier qui est aussi un nom de paquet npm valide : minuscules, chiffres, - _ .
@@ -150,7 +151,19 @@ function register({ handle, setRoot, readState, updateState, projectsFolder, def
     };
 
     step('Création des fichiers');
-    if (template === 'html') {
+    if (template === 'bifrost') {
+      // modèle de site Bifrost : fichiers reçus de Bifrost (en base64) par la fenêtre, écrits tels quels
+      const fichiers = request.fichiers || {};
+      if (!Object.keys(fichiers).some((f) => f.endsWith('.html'))) throw new Error('Modèle Bifrost vide : reconnecte-toi à Bifrost et réessaie.');
+      for (const [rel, base64] of Object.entries(fichiers)) {
+        const file = path.resolve(target, rel);
+        const x = path.relative(target, file);
+        if (!x || x.startsWith('..') || path.isAbsolute(x)) continue;
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(file, Buffer.from(String(base64), 'base64'));
+        send(`créé : ${rel}`);
+      }
+    } else if (template === 'html') {
       for (const [rel, text] of Object.entries(HTML_FILES(name))) {
         const file = path.join(target, rel);
         await fs.mkdir(path.dirname(file), { recursive: true });
@@ -165,7 +178,7 @@ function register({ handle, setRoot, readState, updateState, projectsFolder, def
       }
     }
 
-    if (install && template !== 'html') {
+    if (install && !['html', 'bifrost'].includes(template)) {
       step('Installation des dépendances (npm install), ça peut prendre une minute');
       await exec('npm', ['install'], target);
     }
@@ -194,7 +207,7 @@ function register({ handle, setRoot, readState, updateState, projectsFolder, def
       if (await fs.stat(file).then(() => true, () => false)) { mainFile = file; break; }
     }
     step('Terminé');
-    return { root, mainFile, hasDev: template !== 'html' && install, gitWarning };
+    return { root, mainFile, hasDev: !['html', 'bifrost'].includes(template) && install, gitWarning };
   });
 
   handle('project:cancel', async () => {

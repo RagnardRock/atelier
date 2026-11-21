@@ -1,5 +1,5 @@
 // Fenêtre « Nouveau projet » (Ctrl+Alt+N, la fusée de la barre de titre, ou l'écran d'accueil).
-// Tu choisis un modèle (Vue.js, Vite, React, Svelte, site HTML), un nom et un emplacement ;
+// Tu choisis un modèle (Vue.js, Vite, React, Svelte, site HTML, site Bifrost), un nom et un emplacement ;
 // main.js (scaffold.js) lance l'outil officiel, installe les dépendances et fait un premier commit.
 // Pendant ce temps, la fenêtre affiche ce que font les commandes, ligne par ligne.
 // À la fin : le projet s'ouvre dans l'IDE, avec son fichier principal, et le serveur de
@@ -14,7 +14,11 @@ const newProject = (() => {
     { id: 'vite-react', name: 'React', badge: 'R', color: '#61dafb', text: 'React + Vite.', options: [['typescript', 'TypeScript']] },
     { id: 'vite-svelte', name: 'Svelte', badge: 'S', color: '#ff3e00', text: 'Svelte + Vite.', options: [['typescript', 'TypeScript']] },
     { id: 'html', name: 'Site HTML', badge: '</>', color: '#e44d26', text: 'index.html, css/ et js/, sans outil ni installation.', options: [] },
+    { id: 'bifrost', name: 'Site Bifrost', badge: 'ᛒ', color: '#8b5cf6', text: 'Un modèle de site déjà flaggé (artisan, restaurant…), prêt à relier à Bifrost.', options: [] },
   ];
+  // Modèles de site de Bifrost (artisan, restaurant…), chargés au premier choix de « Site Bifrost »
+  let modelesBifrost = null;
+  let erreurModeles = '';
   const STORE = 'atelier.newProject';
 
   let remembered = {};
@@ -25,6 +29,7 @@ const newProject = (() => {
     install: remembered.install ?? true,
     git: remembered.git ?? true,
     dev: remembered.dev ?? true,
+    modele: remembered.modele || null,
     parent: '',
   };
   let running = false;
@@ -70,7 +75,7 @@ const newProject = (() => {
   const nameInput = form.elements.name;
 
   function save() {
-    try { localStorage.setItem(STORE, JSON.stringify({ template: choice.template, options: choice.options, install: choice.install, git: choice.git, dev: choice.dev })); } catch { /* pas grave */ }
+    try { localStorage.setItem(STORE, JSON.stringify({ template: choice.template, options: choice.options, install: choice.install, git: choice.git, dev: choice.dev, modele: choice.modele })); } catch { /* pas grave */ }
   }
 
   function toggleRow(label, hint, value, onChange) {
@@ -105,13 +110,14 @@ const newProject = (() => {
     const template = TEMPLATES.find((t) => t.id === choice.template);
     const options = $np('.np-options');
     options.innerHTML = '';
-    options.hidden = template.options.length === 0;
+    options.hidden = template.options.length === 0 && template.id !== 'bifrost';
+    if (template.id === 'bifrost') renderModeles(options);
     for (const [key, label, hint] of template.options) {
       options.appendChild(toggleRow(label, hint, Boolean(choice.options[key]), (on) => { choice.options[key] = on; }));
     }
     const common = $np('.np-common');
     common.innerHTML = '';
-    if (template.id !== 'html') {
+    if (!['html', 'bifrost'].includes(template.id)) {
       common.appendChild(toggleRow('Installer les dépendances', 'npm install', choice.install, (on) => { choice.install = on; render(); }));
       if (choice.install) common.appendChild(toggleRow('Lancer le serveur de développement', 'npm run dev, dans un terminal', choice.dev, (on) => { choice.dev = on; }));
     }
@@ -119,6 +125,33 @@ const newProject = (() => {
     $np('.np-parent').textContent = choice.parent;
     $np('.np-parent').title = choice.parent;
     updateTarget();
+  }
+
+  // Liste des modèles Bifrost (il faut être connecté à Bifrost : panneau globe de la barre de gauche)
+  function renderModeles(el) {
+    if (modelesBifrost === null && !erreurModeles) {
+      el.innerHTML = '<p class="np-hint">Chargement des modèles de Bifrost…</p>';
+      window.atelier.bifrost('modeles').then((m) => { modelesBifrost = m; }, (err) => { erreurModeles = cleanError(err); }).finally(() => render());
+      return;
+    }
+    if (erreurModeles) {
+      el.innerHTML = `<p class="np-hint">${escapeHtml(erreurModeles)}. Connecte-toi à Bifrost dans le panneau globe (barre de gauche), puis rouvre cette fenêtre.</p>`;
+      return;
+    }
+    if (!choice.modele || !modelesBifrost.some((m) => m.id === choice.modele)) choice.modele = modelesBifrost[0]?.id;
+    el.innerHTML = '<div class="np-modeles"></div>';
+    for (const m of modelesBifrost) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'np-modele';
+      b.classList.toggle('active', m.id === choice.modele);
+      b.innerHTML = '<span class="np-modele-icone"></span><strong></strong><small></small>';
+      b.querySelector('.np-modele-icone').textContent = m.icone;
+      b.querySelector('strong').textContent = m.nom;
+      b.querySelector('small').textContent = m.description;
+      b.onclick = () => { choice.modele = m.id; save(); render(); };
+      el.firstChild.appendChild(b);
+    }
   }
 
   function updateTarget() {
@@ -196,7 +229,8 @@ const newProject = (() => {
     if (!name) { $np('.np-error').textContent = 'Donne un nom à ton projet.'; return nameInput.focus(); }
     const template = TEMPLATES.find((t) => t.id === choice.template);
     const options = Object.fromEntries(template.options.map(([key]) => [key, Boolean(choice.options[key])]));
-    const install = template.id !== 'html' && choice.install;
+    const install = !['html', 'bifrost'].includes(template.id) && choice.install;
+    if (template.id === 'bifrost' && !choice.modele) { $np('.np-error').textContent = 'Choisis un modèle de site (connecte-toi d\'abord à Bifrost).'; return; }
 
     running = true;
     form.hidden = true;
@@ -208,7 +242,9 @@ const newProject = (() => {
     backdrop.classList.add('busy');
     let result;
     try {
-      result = await window.atelier.createProject({ template: template.id, name, parent: choice.parent, options, install, git: choice.git });
+      // modèle Bifrost : ses fichiers sont téléchargés ici, puis écrits par main.js comme un site HTML
+      const fichiers = template.id === 'bifrost' ? (await window.atelier.bifrost('modele', choice.modele)).fichiers : undefined;
+      result = await window.atelier.createProject({ template: template.id, name, parent: choice.parent, options, install, git: choice.git, fichiers });
     } catch (err) {
       running = false;
       backdrop.classList.remove('busy');

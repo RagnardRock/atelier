@@ -286,6 +286,89 @@ function register({ handle, getRoot, dataDir, safeStorage, log }) {
     return { html: BifrostFlags.cheminsRelatifs(r.html, dossierPage), feuille };
   });
 
+  // --- Pages, thème, modèles : les outils du mode dev de Bifrost, sur le dossier local ---
+  // Rune envoie le texte des pages (et feuilles) à Bifrost, qui renvoie les fichiers à écrire et à
+  // supprimer : même moteur que le mode dev de l'éditeur web. Bifrost ne garde rien.
+  // Les pages existantes sont retouchées sur place : seules les lignes concernées changent.
+
+  async function baseSite() {
+    const root = getRoot();
+    if (!root) throw new Error('Ouvre d\'abord le dossier du site');
+    const lien = await lireLien();
+    return lien?.site ? dossierSite(lien) : root;
+  }
+  async function textes(base, filtre) {
+    const res = {};
+    for (const [rel, full] of await fichiersLocaux(base)) if (filtre(rel)) res[rel] = await fs.readFile(full, 'utf8');
+    return res;
+  }
+  const estCss = (f) => /\.css$/i.test(f);
+  // Écrit ce que Bifrost renvoie. Une page supprimée est d'abord sauvegardée (bifrost-sauvegardes).
+  async function appliquer(base, r) {
+    const dans = (rel) => {
+      const full = path.resolve(base, rel);
+      const x = path.relative(base, full);
+      if (!x || x.startsWith('..') || path.isAbsolute(x)) throw new Error(`Chemin refusé : ${rel}`);
+      return full;
+    };
+    const ecrits = [];
+    for (const [rel, texte] of Object.entries(r.ecrits || {})) {
+      const full = dans(rel);
+      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.writeFile(full, texte, 'utf8');
+      ecrits.push(full);
+    }
+    const supprimes = [];
+    let sauvegarde = null;
+    for (const rel of r.supprimes || []) {
+      const full = dans(rel);
+      sauvegarde ??= path.join(dataDir, 'bifrost-sauvegardes', 'pages', new Date().toISOString().replace(/[:.]/g, '-'));
+      await fs.mkdir(path.dirname(path.join(sauvegarde, rel)), { recursive: true });
+      await fs.copyFile(full, path.join(sauvegarde, rel)).catch(() => {});
+      await fs.rm(full, { force: true });
+      supprimes.push(full);
+    }
+    return { ecrits, supprimes, sauvegarde };
+  }
+
+  handle('bifrost:pages', async () => {
+    const base = await baseSite();
+    return { base, pages: [...(await fichiersLocaux(base)).keys()].filter(estHtml).sort() };
+  });
+  handle('bifrost:pageCreer', async (_e, o) => {
+    const base = await baseSite();
+    const r = await api('POST', '/outils/pages/creer', { corps: { fichiers: await textes(base, estHtml), ...o } });
+    // les fichiers fournis (feuille des blocs, image d'attente) ne remplacent pas ceux du site
+    for (const rel of Object.keys(r.ecrits)) {
+      if (!estHtml(rel) && await fs.stat(path.join(base, rel)).then(() => true, () => false)) delete r.ecrits[rel];
+    }
+    const a = await appliquer(base, r);
+    log?.('INFO', `Bifrost : page ${r.page} créée`);
+    return { ...a, page: path.join(base, r.page), menus: r.menus };
+  });
+  handle('bifrost:pageRenommer', async (_e, page, nouveau) => {
+    const base = await baseSite();
+    const r = await api('POST', '/outils/pages/renommer', { corps: { fichiers: await textes(base, estHtml), page, nouveau } });
+    const a = await appliquer(base, r);
+    return { ...a, page: path.join(base, r.page), liens: r.liens };
+  });
+  handle('bifrost:pageSupprimer', async (_e, page) => {
+    const base = await baseSite();
+    const r = await api('POST', '/outils/pages/supprimer', { corps: { fichiers: await textes(base, estHtml), page } });
+    return { ...await appliquer(base, r), liensRestants: r.liensRestants };
+  });
+  handle('bifrost:theme', async () => api('POST', '/outils/theme/lire', { corps: { fichiers: await textes(await baseSite(), estCss) } }));
+  handle('bifrost:themeEcrire', async (_e, modifs) => {
+    const base = await baseSite();
+    const r = await api('POST', '/outils/theme/ecrire', { corps: { fichiers: await textes(base, (f) => estHtml(f) || estCss(f)), modifs } });
+    await appliquer(base, r);
+    return api('POST', '/outils/theme/lire', { corps: { fichiers: await textes(base, estCss) } });
+  });
+
+  // Modèles de site fournis avec Bifrost (fenêtre « Nouveau projet ») : fichiers en base64.
+  handle('bifrost:modeles', () => api('GET', '/modeles'));
+  handle('bifrost:modele', (_e, id) => api('GET', `/modeles/${encodeURIComponent(id)}`));
+
   // --- Envoyer sur Bifrost ---
 
   async function demande(lien, { supprimer = false, avec = [] } = {}) {

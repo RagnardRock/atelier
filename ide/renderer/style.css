@@ -895,7 +895,9 @@ body:not(.glass) .quick-card { background: var(--panel); }
 .preview-bar .icon-button.active, #btn-preview.active { color: var(--accent); }
 #preview-stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: rgba(0, 0, 0, 0.15); }
 #preview-frame { flex: 1; width: 100%; border: none; background: #fff; }
-#preview-panel.mobile #preview-frame { flex: 0 0 390px; max-width: 100%; margin: 10px 0; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+#preview-panel.mobile #preview-frame, #preview-panel.tablette #preview-frame { flex: 0 0 390px; max-width: 100%; margin: 10px 0; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4); }
+#preview-panel.tablette #preview-frame { flex-basis: 820px; }
+#preview-stage { overflow-x: auto; }
 
 /* ---------- Panneau Git (git.js) ---------- */
 #activitybar .badge {
@@ -1361,6 +1363,14 @@ body.glass .np-card { border-color: var(--glass-border); }
 .np-options, .np-common { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 16px; }
 .np-options { padding: 12px; border-radius: 10px; background: rgba(128, 128, 128, 0.08); }
 .np-options[hidden] { display: none; }
+.np-hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+.np-modeles { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+.np-modele { display: grid; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: rgba(128, 128, 128, 0.06); color: var(--text); font: inherit; cursor: pointer; }
+.np-modele:hover { border-color: var(--muted); }
+.np-modele.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.np-modele strong { color: var(--text-strong); font-size: 13px; }
+.np-modele small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.np-modele-icone { font-size: 18px; }
 .np-toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .np-toggle .text { display: flex; flex-direction: column; min-width: 0; }
 .np-toggle .label { color: var(--text-strong); }
@@ -1496,8 +1506,28 @@ em.bf-modifie, .bf-fichier.bf-modifie > span { color: var(--warning); }
 .bf-zones[open] > summary::before { transform: rotate(90deg); }
 
 /* Bifrost : insérer un bloc */
+.bf-page .icon-button { opacity: 0; }
+.bf-page:hover .icon-button, .bf-page .icon-button:focus-visible { opacity: 1; }
+.bf-page { cursor: pointer; }
+.bf-page:hover { background: var(--hover); }
+.bf-saisie { flex: 1; min-width: 0; background: var(--input-bg, rgba(255,255,255,.06)); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; color: var(--text); font: inherit; font-size: 12px; }
+.bf-form { display: grid; gap: 2px; padding-bottom: 4px; }
+.bf-form .bf-champ { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.bf-form .bf-champ input, .bf-form .bf-champ select { background: var(--input-bg, rgba(255,255,255,.06)); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 12.5px; }
+.bf-case { display: flex; align-items: center; gap: 8px; padding: 4px 14px; font-size: 12.5px; cursor: pointer; }
+.bf-var { display: flex; align-items: center; gap: 6px; padding: 2px 14px; font-size: 12px; }
+.bf-var > span { flex: 0 0 42%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-family: var(--mono, ui-monospace, Consolas, monospace); font-size: 11.5px; }
+.bf-var input[type="color"] { flex: none; width: 26px; height: 22px; padding: 0; border: 1px solid var(--border); border-radius: 5px; background: none; cursor: pointer; }
+.bf-var.modifie .bf-saisie { border-color: var(--accent); }
+.bf-titre small { font-weight: 400; }
 .bf-blocs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; padding: 6px 14px 10px; }
 .bf-bloc { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .bf-bloc:hover { border-color: var(--accent); background: var(--hover); }
 .bf-bloc span { font-size: 16px; }
 .bf-bloc strong { font-weight: 600; }
+
+/* Mode visuel de l'aperçu (visuel.js) et élément choisi dans le panneau Bifrost */
+#preview-panel.visuel #preview-frame { outline: 2px solid rgba(139, 92, 246, .55); outline-offset: -2px; }
+.bf-actions-choix { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px 10px; }
+.bf-actions-choix .secondary-button { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 8px; }
+.bf-bloc[draggable="true"] { cursor: grab; }
