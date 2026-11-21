@@ -357,8 +357,17 @@ const bifrostPanel = (() => {
     const erreur = $('#bf-erreur');
     erreur.textContent = '';
     occupe = true;
-    api('connexion', d).then(async () => {
+    api('connexion', d).then(async (r) => {
       occupe = false;
+      if (r?.codeRequis) {
+        // Double authentification : un champ pour le code, puis on renvoie le formulaire.
+        if (!e.target.querySelector('[name="code"]')) {
+          erreur.insertAdjacentHTML('beforebegin', '<label>Code de vérification <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456 ou code de secours" required></label>');
+        }
+        erreur.textContent = r.message || 'Ton compte a la double authentification : tape le code de ton application.';
+        e.target.querySelector('[name="code"]').focus();
+        return;
+      }
       sites = null;
       flash('Connecté à Bifrost');
       await charger();
