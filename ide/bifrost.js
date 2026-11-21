@@ -21,6 +21,7 @@ const IGNORES_FICHIERS = new Set([LIEN, '.DS_Store', 'Thumbs.db', 'desktop.ini']
 const estHtml = (f) => /\.html?$/i.test(f);
 // Même règle pour un chemin « a/b/c.css » venu de Bifrost : ce que Rune n'enverrait pas, il ne le rapatrie pas non plus.
 const ignore = (rel) => rel.split('/').some((m, i, t) => (i < t.length - 1 ? IGNORES_DOSSIERS.has(m) : IGNORES_FICHIERS.has(m)) || (m.startsWith('.') && m !== '.htaccess' && m !== '.well-known'));
+const { BifrostFlags } = require('./renderer/bifrost-flags.js');
 const sha1 = (b) => crypto.createHash('sha1').update(b).digest('hex');
 
 function register({ handle, getRoot, dataDir, safeStorage, log }) {
@@ -251,6 +252,38 @@ function register({ handle, getRoot, dataDir, safeStorage, log }) {
     await ecrireLien(lien);
     log?.('INFO', `Bifrost : ${chemins.length} fichier(s) rapatrié(s) de ${lien.site.nom}`);
     return { ecrits: chemins.length, sauvegarde: sauves ? sauvegarde : null };
+  });
+
+  // --- Insérer un bloc (la bibliothèque de sections du mode dev de Bifrost) ---
+
+  handle('bifrost:blocs', () => api('GET', '/blocs'));
+
+  // Prépare le bloc pour la page ouverte : clés renommées si elles existent déjà dans le site,
+  // chemins relatifs à la page, et fichiers du bloc copiés dans le site (feuille des blocs, image d'attente).
+  handle('bifrost:preparerBloc', async (_e, id, page) => {
+    const root = getRoot();
+    if (!root) throw new Error('Ouvre d\'abord le dossier du site');
+    const lien = await lireLien();
+    const base = lien?.site ? dossierSite(lien) : root;
+    const rel = path.relative(base, path.resolve(page));
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('La page doit être dans le dossier du site');
+    const pris = new Set();
+    for (const [f, full] of await fichiersLocaux(base)) {
+      if (!estHtml(f)) continue;
+      for (const p of BifrostFlags.prefixes(await fs.readFile(full, 'utf8'))) pris.add(p);
+    }
+    const r = await api('POST', `/blocs/${encodeURIComponent(id)}/preparer`, { corps: { pris: [...pris].slice(0, 5000) } });
+    const dossierPage = path.dirname(rel).split(path.sep).join('/');
+    // fichiers à copier avec le bloc (feuille des blocs, image d'attente), chemins depuis la racine du site
+    for (const [chemin, contenu] of Object.entries(r.fichiers || {})) {
+      const cible = path.resolve(base, chemin);
+      const relCible = path.relative(base, cible);
+      if (!relCible || relCible.startsWith('..') || path.isAbsolute(relCible)) continue;
+      await fs.mkdir(path.dirname(cible), { recursive: true });
+      await fs.writeFile(cible, contenu, 'utf8');
+    }
+    const feuille = r.feuille ? BifrostFlags.cheminsRelatifs(` href="${r.feuille}"`, dossierPage).slice(7, -1) : null;
+    return { html: BifrostFlags.cheminsRelatifs(r.html, dossierPage), feuille };
   });
 
   // --- Envoyer sur Bifrost ---

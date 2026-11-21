@@ -221,7 +221,42 @@ const BifrostFlags = (() => {
     return { offset: b.debut + 1 + b.tag.length, texte: ` ${attribut}` };
   }
 
-  return { analyser, analyserSite, balises, nomPropose, baliseA, insertion, typeDe };
+  // --- Blocs (sections toutes faites de Bifrost) ---
+
+  // Préfixes des clés hors liste et noms de listes : « galerie » pour galerie.titre et data-bf-liste="galerie".
+  function prefixes(html) {
+    const res = new Set();
+    for (const m of html.matchAll(/data-bf(?:-liste)?="([^"]+)"/g)) res.add(m[1].split('.')[0]);
+    return res;
+  }
+
+  // Les chemins d'un bloc sont écrits depuis la racine du site : on les rend relatifs à la page.
+  function relatif(url, dossierPage) {
+    if (!url || /^([a-z][a-z0-9+.-]*:|\/\/|#|\/)/i.test(url) || !dossierPage || dossierPage === '.') return url;
+    const depuis = dossierPage.split('/').filter(Boolean);
+    return `${'../'.repeat(depuis.length)}${url}`;
+  }
+  function cheminsRelatifs(html, dossierPage) {
+    return html.replace(/(\s(?:src|href)=")([^"]*)"/g, (_t, a, url) => `${a}${relatif(url, dossierPage)}"`);
+  }
+
+  // Où ajouter <link> vers une feuille dans <head> (juste avant </head>) ; null si elle y est déjà ou s'il n'y a pas de </head>.
+  function placeFeuille(html, href) {
+    const nom = href.split('/').pop();
+    if (new RegExp(`href="[^"]*${nom.replace(/[.]/g, '\\.')}"`).test(html)) return null;
+    const i = html.search(/<\/head>/i);
+    if (i < 0) return null;
+    const ligne = html.lastIndexOf('\n', i) + 1;
+    const indent = /^[ \t]*$/.test(html.slice(ligne, i)) ? html.slice(ligne, i) : '';
+    return { offset: ligne && indent === html.slice(ligne, i) ? ligne : i, texte: `${indent}  <link rel="stylesheet" href="${href}">\n` };
+  }
+
+  // Indente un bloc comme la ligne où il est inséré.
+  function indenter(html, indent) {
+    return html.split('\n').map((l, i) => (i && l ? indent + l : l)).join('\n');
+  }
+
+  return { analyser, analyserSite, balises, nomPropose, baliseA, insertion, typeDe, prefixes, cheminsRelatifs, placeFeuille, indenter };
 })();
 
 if (typeof module !== 'undefined') module.exports = { BifrostFlags };
