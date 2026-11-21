@@ -108,4 +108,7 @@ contextBridge.exposeInMainWorld('atelier', {
   listScripts: () => ipcRenderer.invoke('scripts:list'),
   runScript: (dir, script, cols, rows) => ipcRenderer.invoke('term:script', dir, script, cols, rows),
   connectServer: (id, cols, rows) => ipcRenderer.invoke('term:connect', id, cols, rows),
+
+  // Bifrost (le CMS des sites clients) : voir ../bifrost.js
+  bifrost: (action, ...args) => ipcRenderer.invoke(`bifrost:${action}`, ...args),
 });

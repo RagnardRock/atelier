@@ -1442,3 +1442,55 @@ body.glass .np-card { border-color: var(--glass-border); }
 }
 #claude-moteur:hover, #claude-moteur:focus { color: var(--text, inherit); outline: none; border-color: var(--accent, currentColor); }
 #claude-moteur option { background: var(--panel-2, #252526); color: var(--text, #ccc); }
+
+/* --- Panneau Bifrost (bifrost.js) --- */
+#bifrost.busy #bifrost-body { opacity: 0.6; pointer-events: none; }
+.bf-section { border-bottom: 1px solid var(--border); }
+.bf-entete { display: flex; align-items: center; gap: 4px; width: 100%; height: 26px; padding: 0 8px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; text-align: left; }
+.bf-entete:hover { color: var(--text); }
+.bf-entete .count { margin-left: auto; padding: 0 6px; border-radius: 9px; background: var(--active); letter-spacing: 0; color: var(--text); }
+.bf-contenu { padding: 2px 0 10px; }
+.bf-contenu > .hint { padding: 4px 14px; margin: 0; font-size: 12px; }
+.bf-titre { display: flex; align-items: center; gap: 6px; padding: 8px 14px 2px; font-size: 11px; color: var(--muted); font-weight: 600; }
+.bf-titre[data-ligne] { cursor: pointer; }
+.bf-ligne { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 10px 2px 14px; margin: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.bf-ligne[data-ligne], .bf-ligne[data-comparer], .bf-ligne[data-comparer-envoi] { cursor: pointer; }
+.bf-ligne[data-ligne]:hover, .bf-ligne[data-comparer]:hover, .bf-ligne[data-comparer-envoi]:hover { background: var(--hover); }
+.bf-ligne > span { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--text-strong); }
+.bf-ligne em { font-style: normal; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.bf-ligne small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.bf-ligne.bf-sous { padding-left: 28px; }
+.bf-ligne .codicon { flex: none; color: var(--muted); }
+.bf-erreur .codicon { color: var(--error); }
+.bf-attention .codicon { color: var(--warning); }
+.bf-ligne.bf-erreur > span, .bf-ligne.bf-attention > span, .bf-ligne.bf-info > span { color: var(--text); font-weight: 400; }
+.bf-fichier > span { font-family: var(--mono, monospace); font-size: 12px; }
+em.bf-nouveau, .bf-fichier.bf-nouveau > span { color: var(--success); }
+em.bf-modifie, .bf-fichier.bf-modifie > span { color: var(--warning); }
+.bf-fichier.bf-supprime > span { color: var(--error); text-decoration: line-through; }
+.bf-site .secondary-button { padding: 2px 10px; }
+.bf-form { display: flex; flex-direction: column; gap: 8px; padding: 4px 14px; }
+.bf-form .hint { padding: 0; margin: 0; font-size: 12px; }
+.bf-form label, .bf-champ { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.bf-champ { padding: 4px 14px; }
+.bf-form input, .bf-champ input { padding: 5px 8px; background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; font: inherit; }
+.bf-form input:focus, .bf-champ input:focus { outline: none; border-color: var(--accent); }
+.bf-contenu > .git-wide { width: calc(100% - 28px); margin: 6px 14px; }
+.bf-choix { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 4px 14px; font-size: 12px; }
+.bf-case { display: flex; align-items: flex-start; gap: 6px; padding: 6px 14px; font-size: 12px; color: var(--text); }
+.bf-boutons { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px; }
+.bf-boutons > button { flex: 1; justify-content: center; white-space: nowrap; }
+.bf-alerte { display: flex; gap: 6px; margin: 6px 14px; padding: 8px 10px; border-radius: 8px; font-size: 12px; background: color-mix(in srgb, var(--warning) 14%, transparent); color: var(--text-strong); }
+.bf-alerte .codicon { color: var(--warning); flex: none; }
+.bf-pub { margin: 0 6px; border-radius: 6px; font-size: 12.5px; }
+.bf-pub summary { display: flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 10px 2px 14px; cursor: pointer; list-style: none; }
+.bf-pub summary:hover { background: var(--hover); border-radius: 6px; }
+.bf-pub summary span { color: var(--text-strong); }
+.bf-pub summary em { flex: 1; font-style: normal; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bf-pub.annulee summary span { text-decoration: line-through; color: var(--muted); }
+.bf-sous-texte { padding: 1px 10px 1px 36px; color: var(--muted); font-size: 12px; }
+#bifrost:not([hidden]) { display: flex; flex-direction: column; overflow: hidden; }
+#bifrost-body { flex: 1; min-height: 0; overflow: auto; }
+.bf-zones > summary { cursor: pointer; list-style: none; }
+.bf-zones > summary::before { content: '›'; display: inline-block; width: 10px; transition: transform 0.15s; }
+.bf-zones[open] > summary::before { transform: rotate(90deg); }

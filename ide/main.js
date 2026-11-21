@@ -2,7 +2,7 @@
 // C'est lui qui crée la fenêtre et qui a le droit de toucher au disque.
 // L'interface (renderer/) ne lit et n'écrit des fichiers qu'en lui demandant via IPC.
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell, safeStorage } = require('electron');
 const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs/promises');
@@ -16,6 +16,7 @@ const preview = require('./preview');
 const gitPanel = require('./git');
 const scaffold = require('./scaffold');
 const vueLanguage = require('./vue');
+const bifrost = require('./bifrost');
 
 const DEFAULT_CONFIG = path.join(__dirname, 'config.default.json');
 
@@ -748,6 +749,7 @@ handle('window:blurSupported', async () => blurSupported());
 // Chat avec Claude (voir claude.js).
 claude.register({ handle, getRoot: () => rootFolder, readConfig, writeConfig: saveConfigChanges, log, dataDir: app.getPath('userData') });
 search.register({ handle, getRoot: () => rootFolder });
+bifrost.register({ handle, getRoot: () => rootFolder, dataDir: app.getPath('userData'), safeStorage, log });
 preview.register({ handle, getRoot: () => rootFolder, openExternal: (url) => shell.openExternal(url) });
 gitPanel.register({ handle, getRoot: () => rootFolder, assertAllowed });
 // Intelligence Vue (Volar) : tsserver + vue-language-server, lancés au premier fichier .vue ouvert.
