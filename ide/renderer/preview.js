@@ -5,6 +5,7 @@
 // - Quand tu passes sur un autre onglet HTML, l'aperçu le suit.
 // - Les boutons tablette et téléphone réduisent la largeur à 820 ou 390 px pour vérifier ces versions.
 // - Le panneau Bifrost (onglet Thème) y essaie des couleurs en direct, sans toucher aux fichiers.
+// - Le bouton loupe allume le mode visuel (voir visuel.js) : clic sur un élément = son code.
 // - Pendant la frappe (réglage "previewLive"), le texte pas encore enregistré est envoyé au
 //   serveur : la page change sans attendre Ctrl+S.
 // - « Go Live », dans la barre du bas, ouvre le site dans ton navigateur habituel, sans le panneau.
@@ -163,6 +164,19 @@ const previewPanel = (() => {
     }
   }
   $('#preview-device').onclick = () => largeur('mobile');
+  // Mode visuel : le serveur ajoute à la page de quoi choisir les éléments et déplacer les sections.
+  let visuel = false;
+  async function basculerVisuel(on = !visuel) {
+    visuel = on;
+    $('#preview-visuel').classList.toggle('active', on);
+    panel.classList.toggle('visuel', on);
+    try { localStorage.setItem('rune.preview.visuel', on ? '1' : ''); } catch { /* sans mémoire */ }
+    await window.atelier.previewVisuel(on).catch(() => {});
+    if (base && !panel.hidden) go(current);
+    document.dispatchEvent(new CustomEvent('visuel-bascule', { detail: on }));
+  }
+  $('#preview-visuel').onclick = () => basculerVisuel();
+  try { if (localStorage.getItem('rune.preview.visuel')) { visuel = true; $('#preview-visuel').classList.add('active'); panel.classList.add('visuel'); window.atelier.previewVisuel(true).catch(() => {}); } } catch { /* sans mémoire */ }
   $('#preview-tablette').onclick = () => largeur('tablette');
   $('#preview-external').onclick = () => base && window.atelier.previewExternal(base + current)
     .catch((err) => notify.error(`Impossible d'ouvrir le navigateur : ${cleanError(err)}`));
@@ -200,5 +214,12 @@ const previewPanel = (() => {
   function oublierEssais() { for (const nom of [...essais.keys()]) essayerVariable(nom, null); }
   frame.addEventListener('load', () => { for (const [nom, valeur] of essais) frame.contentWindow?.postMessage({ atelierVar: { nom, valeur } }, base || '*'); });
 
-  return { toggle, show, goLive, applyConfig, essayerVariable, oublierEssais, get ouvert() { return !panel.hidden; } };
+  // Message à la page affichée (mode visuel), et « ce message vient-il bien d'elle ? »
+  const envoyer = (m) => frame.contentWindow?.postMessage(m, base || '*');
+  const vientDeLaPage = (e) => e.source === frame.contentWindow && !!base && e.origin === base;
+
+  return {
+    toggle, show, goLive, applyConfig, essayerVariable, oublierEssais, basculerVisuel, envoyer, vientDeLaPage,
+    get ouvert() { return !panel.hidden; }, get visuel() { return visuel; },
+  };
 })();

@@ -1525,3 +1525,9 @@ em.bf-modifie, .bf-fichier.bf-modifie > span { color: var(--warning); }
 .bf-bloc:hover { border-color: var(--accent); background: var(--hover); }
 .bf-bloc span { font-size: 16px; }
 .bf-bloc strong { font-weight: 600; }
+
+/* Mode visuel de l'aperçu (visuel.js) et élément choisi dans le panneau Bifrost */
+#preview-panel.visuel #preview-frame { outline: 2px solid rgba(139, 92, 246, .55); outline-offset: -2px; }
+.bf-actions-choix { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 14px 10px; }
+.bf-actions-choix .secondary-button { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 4px 8px; }
+.bf-bloc[draggable="true"] { cursor: grab; }

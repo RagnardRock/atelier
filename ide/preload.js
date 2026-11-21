@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('atelier', {
   previewExternal: (url) => ipcRenderer.invoke('preview:external', url),
   previewDraft: (file, text, quiet) => ipcRenderer.invoke('preview:draft', file, text, quiet),
   previewClearDrafts: () => ipcRenderer.invoke('preview:clearDrafts'),
+  previewVisuel: (on) => ipcRenderer.invoke('preview:visuel', on),
   gitStatus: () => ipcRenderer.invoke('git:status'),
   // Nouveau projet (Vue, Vite, site HTML…)
   projectDefaults: () => ipcRenderer.invoke('project:defaults'),

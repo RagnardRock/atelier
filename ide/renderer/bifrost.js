@@ -28,6 +28,8 @@ const bifrostPanel = (() => {
   let nouvelle = null;      // formulaire « Nouvelle page » ouvert
   let renommage = null;     // page en cours de renommage
   let theme = null;         // variables CSS du site et des sections Bifrost (section Thème)
+  let choisi = null;        // { fichier, debut, tag } : élément cliqué dans l'aperçu (mode visuel)
+  let vueOuverteParVisuel = false;
   let essaisTheme = {};     // valeurs essayées dans l'aperçu, pas encore enregistrées (« fichier|nom » → valeur)
   const ouverts = new Set(JSON.parse(localStorage.getItem('rune.bifrost.sections') || '["flags","envoi","client"]'));
 
@@ -197,6 +199,71 @@ const bifrostPanel = (() => {
     return h;
   }
 
+  // --- Élément choisi dans l'aperçu (mode visuel) ---
+
+  const ACTIONS_CHOIX = [
+    ['texte', 'Rendre modifiable', 'edit', (a) => !('data-bf' in a)],
+    ['riche', 'Texte mis en forme', 'symbol-snippet', (a) => !('data-bf' in a)],
+    ['liste', 'Liste répétable', 'list-unordered', (a) => !('data-bf-liste' in a) && !('data-bf' in a)],
+    ['element', 'Élément de liste', 'symbol-array', (a) => !('data-bf-element' in a) && !('data-bf' in a)],
+    ['formulaire', 'Recevoir les messages', 'mail', (a, tag) => tag === 'form' && !('data-bf-formulaire' in a)],
+  ];
+
+  // L'élément choisi, relu dans le texte actuel du fichier (null s'il a disparu).
+  function elementChoisi() {
+    if (!choisi) return null;
+    const file = state.files.get(choisi.fichier);
+    if (!file || file.model.isDisposed()) return null;
+    const e = VisuelTexte.trouver(file.model.getValue(), choisi.debut, choisi.tag);
+    return e ? { file, e } : null;
+  }
+
+  function sectionChoisi() {
+    const c = elementChoisi();
+    if (!c) return '<p class="hint">Cet élément n\'est plus dans le code. Clique-le à nouveau dans l\'aperçu.</p>';
+    const { e } = c;
+    const flags = Object.entries(e.attrs).filter(([n]) => n.startsWith('data-bf'));
+    let h = `<div class="bf-ligne" data-fichier="${esc(choisi.fichier)}" data-ligne="${e.ligne}" data-col="${e.col}"><i class="codicon codicon-code"></i><span>&lt;${esc(e.tag)}&gt;${e.attrs.class ? ` .${esc(String(e.attrs.class).split(/\s+/).slice(0, 2).join('.'))}` : ''}</span><em>${esc(rel(choisi.fichier))}</em><small>${e.ligne}</small></div>`;
+    if (flags.length) {
+      h += flags.map(([n, v]) => `<div class="bf-ligne bf-sous"><i class="codicon codicon-tag"></i><span>${esc(n)}${v === '' || v === true ? '' : ` = ${esc(v)}`}</span></div>`).join('');
+      if (e.attrs['data-bf'] !== undefined) {
+        const type = BifrostFlags.typeDe({ tag: e.tag, attrs: e.attrs });
+        h += `<p class="hint">Le client pourra modifier ce ${type === 'image' ? 'visuel' : type === 'lien' ? 'lien' : 'texte'}${type === 'riche' ? ' avec sa mise en forme' : ''}.</p>`;
+      }
+    } else h += '<p class="hint">Pas de flag : le client ne peut pas modifier cet élément.</p>';
+    const boutons = ACTIONS_CHOIX.filter(([, , , ok]) => ok(e.attrs, e.tag))
+      .map(([id, label, icone]) => `<button class="secondary-button" data-choix-action="${id}"><i class="codicon codicon-${icone}"></i>${label}</button>`);
+    if (flags.length) boutons.push('<button class="secondary-button" data-choix-action="retirer"><i class="codicon codicon-trash"></i>Retirer les flags</button>');
+    if (boutons.length) h += `<div class="bf-actions-choix">${boutons.join('')}</div>`;
+    return h;
+  }
+
+  async function agirSurChoisi(id) {
+    const c = elementChoisi();
+    if (!c) return render();
+    await openFile(c.file.path, baseName(c.file.path));
+    const ed = state.activeGroup?.editor;
+    if (!ed || ed.getModel() !== c.file.model) return;
+    const m = c.file.model;
+    const texte = m.getValue();
+    if (id === 'retirer') {
+      const ouvrante = texte.slice(c.e.debut, c.e.fin);
+      const nette = ouvrante.replace(/\s+data-bf[\w-]*(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'=<>`]+))?/g, '');
+      const a = m.getPositionAt(c.e.debut);
+      const b = m.getPositionAt(c.e.fin);
+      ed.pushUndoStop();
+      ed.executeEdits('bifrost', [{ range: new monaco.Range(a.lineNumber, a.column, b.lineNumber, b.column), text: nette }]);
+      ed.pushUndoStop();
+      flash('Flags retirés (Ctrl+Z pour annuler)');
+    } else {
+      const b = BifrostFlags.baliseA(texte, c.e.debut + 1);
+      const action = ACTIONS.find(([x]) => x === id);
+      if (!b || b.debut !== c.e.debut || !action) return render();
+      action[2](ed, b, m);
+    }
+    render();
+  }
+
   // --- Insérer un bloc : les sections toutes faites du mode dev de Bifrost ---
 
   function sectionBlocs() {
@@ -205,25 +272,36 @@ const bifrostPanel = (() => {
       return '<p class="hint">Chargement…</p>';
     }
     if (!fichierActif()) return '<p class="hint">Ouvre une page HTML : le bloc s\'insère sous la ligne du curseur.</p>';
-    const carte = (b) => `<button class="bf-bloc" data-bloc="${esc(b.id)}" title="${esc(b.description || b.nom)}"><span>${esc(b.icone)}</span><strong>${esc(b.nom)}</strong></button>`;
+    const carte = (b) => `<button class="bf-bloc" draggable="true" data-bloc="${esc(b.id)}" title="${esc(b.description || b.nom)}"><span>${esc(b.icone)}</span><strong>${esc(b.nom)}</strong></button>`;
     const fournis = blocs.filter((b) => !b.perso);
     const perso = blocs.filter((b) => b.perso);
-    return `<p class="hint">Le bloc s'insère sous la ligne du curseur, flags déjà posés (renommés s'ils existent déjà dans le site).</p>
+    return `<p class="hint">Clic : le bloc s'insère sous la ligne du curseur. Avec le mode visuel de l'aperçu (loupe), glisse-le dans la page. Flags déjà posés (renommés s'ils existent déjà dans le site).</p>
       <div class="bf-blocs">${fournis.map(carte).join('')}</div>
       ${perso.length ? `<div class="bf-titre">Mes blocs</div><div class="bf-blocs">${perso.map(carte).join('')}</div>` : ''}`;
   }
 
-  async function insererBloc(id) {
+  // place (mode visuel) : { offset, avant, apres, indent } de VisuelTexte.place ; sinon sous la ligne du curseur.
+  async function insererBloc(id, place = null) {
     const f = fichierActif();
     const ed = state.activeGroup?.editor;
     if (!f || !ed || ed.getModel() !== f.model) return notify.info('Ouvre une page HTML et place le curseur où ajouter le bloc.');
+    const avantPrep = f.model.getAlternativeVersionId();
     const r = await agir(() => api('preparerBloc', id, f.path));
     if (!r) return;
     const m = f.model;
-    const ligne = ed.getPosition()?.lineNumber || m.getLineCount();
-    const indent = /^\s*/.exec(m.getLineContent(ligne))[0];
-    const fin = m.getLineMaxColumn(ligne);
-    const edits = [{ range: new monaco.Range(ligne, fin, ligne, fin), text: `\n${indent}${BifrostFlags.indenter(r.html.trim(), indent)}`, forceMoveMarkers: true }];
+    if (place && m.getAlternativeVersionId() !== avantPrep) return notify.info('La page a changé pendant la préparation du bloc : dépose-le à nouveau.');
+    let ligne;
+    let edits;
+    if (place) {
+      const p = m.getPositionAt(place.offset);
+      ligne = p.lineNumber;
+      edits = [{ range: new monaco.Range(p.lineNumber, p.column, p.lineNumber, p.column), text: `${place.avant}${BifrostFlags.indenter(r.html.trim(), place.indent)}${place.apres}`, forceMoveMarkers: true }];
+    } else {
+      ligne = ed.getPosition()?.lineNumber || m.getLineCount();
+      const indent = /^\s*/.exec(m.getLineContent(ligne))[0];
+      const fin = m.getLineMaxColumn(ligne);
+      edits = [{ range: new monaco.Range(ligne, fin, ligne, fin), text: `\n${indent}${BifrostFlags.indenter(r.html.trim(), indent)}`, forceMoveMarkers: true }];
+    }
     if (r.feuille) {
       const p = BifrostFlags.placeFeuille(m.getValue(), r.feuille);
       if (p) {
@@ -408,7 +486,7 @@ const bifrostPanel = (() => {
     const nbErreurs = f ? BifrostFlags.analyser(f.model.getValue()).erreurs.filter((e) => e.gravite === 'erreur').length : 0;
     const flags = section('flags', 'Flags de la page', sectionFlags, nbErreurs || '')
       + section('site-flags', 'Vérifier tout le site', () => `<button class="secondary-button git-wide" id="bf-verifier"><i class="codicon codicon-checklist"></i>Vérifier les flags de toutes les pages</button>${sectionVerification()}`, analyseSite?.erreurs.length || '');
-    let h = '';
+    let h = choisi ? section('choisi', 'Élément choisi dans l\'aperçu', sectionChoisi) : '';
     if (!etat) h += `${flags}<p class="hint">Chargement…</p>`;
     else if (!etat.connecte) h += flags + section('connexion', 'Se connecter à Bifrost', formulaireConnexion);
     else if (!state.root) h += `${flags}<p class="hint">Ouvre le dossier d'un site pour le relier à Bifrost.</p>`;
@@ -495,6 +573,7 @@ const bifrostPanel = (() => {
       return;
     }
     if (t.dataset.bloc) return insererBloc(t.dataset.bloc);
+    if (t.dataset.choixAction) return agirSurChoisi(t.dataset.choixAction);
     if (t.dataset.renommer) { renommage = t.dataset.renommer; render(); const i = $('#bf-renommer'); i?.focus(); i?.setSelectionRange(0, i.value.length - 5); return; }
     if (t.dataset.renommerOk) return renommerPage(t.dataset.renommerOk, $('#bf-renommer')?.value || '');
     if (t.dataset.supprimerPage) return supprimerPage(t.dataset.supprimerPage);
@@ -745,6 +824,17 @@ const bifrostPanel = (() => {
     if (theme && !Object.keys(essaisTheme).length && chemins.some((c) => /\.css$/i.test(c))) { theme = null; change = true; }
     if (change && !view.hidden && !occupe && (ouverts.has('pages') || ouverts.has('theme'))) render();
   });
+  // Mode visuel de l'aperçu : l'élément cliqué apparaît en tête du panneau (ouvert la première fois).
+  document.addEventListener('visuel-choix', (e) => {
+    choisi = { fichier: e.detail.fichier, debut: e.detail.element.debut, tag: e.detail.element.tag };
+    ouverts.add('choisi');
+    if (view.hidden && !vueOuverteParVisuel) {
+      vueOuverteParVisuel = true;
+      document.querySelector('#activitybar [data-view="bifrost"]').click();
+    } else render();
+    body.scrollTop = 0;
+  });
+  document.addEventListener('visuel-bascule', (e) => { if (!e.detail) { choisi = null; vueOuverteParVisuel = false; render(); } });
   $('#bifrost-refresh').onclick = () => { sites = null; analyseSite = null; pages = null; theme = null; charger(); };
   $('#bifrost-open').onclick = () => {
     if (etat?.serveur && etat.lien?.site) window.atelier.openLink(`${etat.serveur}/edition/${encodeURIComponent(etat.lien.site.slug || etat.lien.site.id)}`);
@@ -753,5 +843,5 @@ const bifrostPanel = (() => {
   new MutationObserver(() => { fiche = null; sites = null; rapatriement = null; envoi = null; analyseSite = null; pages = null; theme = null; essaisTheme = {}; nouvelle = null; if (!view.hidden) charger(); else etat = null; })
     .observe($('#tree-title'), { childList: true, characterData: true, subtree: true });
 
-  return { refresh: charger, verifierSite };
+  return { refresh: charger, verifierSite, insererBloc };
 })();
