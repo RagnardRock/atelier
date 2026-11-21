@@ -18,7 +18,9 @@ const VisuelTexte = (() => {
         const fermante = `</${b.tag}`;
         finEl = html.slice(b.ferme, b.ferme + fermante.length).toLowerCase() === fermante ? html.indexOf('>', b.ferme) + 1 || html.length : b.ferme;
       } else if (b.ferme === undefined) finEl = b.fin; // jamais fermée : on s'en tient à la balise ouvrante
-      return { tag: b.tag, attrs: b.attrs, debut: b.debut, fin: b.fin, finEl, ligne: b.ligne, col: b.col };
+      // fermante : début de la balise fermante (fin du contenu), si l'élément en a une
+      const fermante = b.ferme !== undefined && b.ferme > b.fin && html.slice(b.ferme, b.ferme + 2 + b.tag.length).toLowerCase() === `</${b.tag}` ? b.ferme : null;
+      return { tag: b.tag, attrs: b.attrs, debut: b.debut, fin: b.fin, finEl, fermante, ligne: b.ligne, col: b.col };
     });
   }
 
@@ -94,6 +96,60 @@ const VisuelTexte = (() => {
     return appliquer(html, retouches) === html ? null : retouches;
   }
 
+  // Nouveau contenu d'un élément (texte modifié dans l'aperçu) → retouche, ou null.
+  function remplacerContenu(html, debut, tag, contenu) {
+    const e = trouver(html, debut, tag);
+    if (!e || e.fermante === null || html.slice(e.fin, e.fermante) === contenu) return null;
+    return [{ debut: e.fin, fin: e.fermante, texte: contenu }];
+  }
+
+  // Nouvelle valeur de src d'une image (srcset retiré : il passerait devant le nouveau src).
+  function changerSrc(html, debut, src) {
+    const e = trouver(html, debut, 'img');
+    if (!e) return null;
+    const ouvrante = html.slice(e.debut, e.fin);
+    const valeur = src.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+    const ATTR = (nom) => new RegExp(`(\\s)${nom}\\s*=\\s*("[^"]*"|'[^']*'|[^\\s"'=<>\x60]+)`, 'i');
+    let nouvelle = ATTR('src').test(ouvrante) ? ouvrante.replace(ATTR('src'), (_t, esp) => `${esp}src="${valeur}"`) : ouvrante.replace(/^<img/i, (t) => `${t} src="${valeur}"`);
+    nouvelle = nouvelle.replace(new RegExp(`\\s+srcset\\s*=\\s*("[^"]*"|'[^']*'|[^\\s"'=<>\x60]+)`, 'i'), '');
+    return [{ debut: e.debut, fin: e.fin, texte: nouvelle }];
+  }
+
+  // --- Chemins (style web, « / ») pour une image lâchée dans l'aperçu ---
+  function normaliser(p) {
+    const res = [];
+    for (const x of p.split('/')) {
+      if (!x || x === '.') continue;
+      if (x === '..') { if (!res.length) return null; res.pop(); } else res.push(x);
+    }
+    return res.join('/');
+  }
+  const dossierDe = (p) => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+
+  // Où copier l'image lâchée : à côté de l'ancienne image si son src est un chemin du site, sinon
+  // dans assets/img. → chemin depuis la racine du site (« assets/img/ma-photo.jpg »).
+  function cheminImage(page, src, nomFichier) {
+    const point = nomFichier.lastIndexOf('.');
+    const ext = point > 0 ? nomFichier.slice(point).toLowerCase() : '.png';
+    const base = (point > 0 ? nomFichier.slice(0, point) : nomFichier).normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'image';
+    let dossier = 'assets/img';
+    if (src && !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(src)) {
+      const d = normaliser(`${dossierDe(page)}/${dossierDe(src.split(/[?#]/)[0])}`);
+      if (d !== null) dossier = d;
+    }
+    return `${dossier ? `${dossier}/` : ''}${base}${ext}`;
+  }
+
+  // Chemin relatif de la page vers un fichier (les deux depuis la racine du site).
+  function relatif(page, cible) {
+    const de = dossierDe(page).split('/').filter(Boolean);
+    const vers = cible.split('/');
+    let i = 0;
+    while (i < de.length && i < vers.length - 1 && de[i] === vers[i]) i++;
+    return `${'../'.repeat(de.length - i)}${vers.slice(i).join('/')}`;
+  }
+
   // Applique des retouches (pour les essais ; l'éditeur les applique lui-même, avec Ctrl+Z).
   function appliquer(html, retouches) {
     let res = html;
@@ -101,7 +157,7 @@ const VisuelTexte = (() => {
     return res;
   }
 
-  return { elements, annoter, trouver, indentation, seul, plage, place, deplacer, appliquer, reindenter };
+  return { elements, annoter, trouver, remplacerContenu, changerSrc, cheminImage, relatif, indentation, seul, plage, place, deplacer, appliquer, reindenter };
 })();
 
 if (typeof module !== 'undefined') module.exports = { VisuelTexte };

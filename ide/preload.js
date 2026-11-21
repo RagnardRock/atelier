@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('atelier', {
   openDefault: (file) => ipcRenderer.invoke('file:openDefault', file),
   revealFile: (file) => ipcRenderer.invoke('file:reveal', file),
   writeFile: (file, content) => ipcRenderer.invoke('file:write', file, content),
+  writeImage: (file, bytes) => ipcRenderer.invoke('file:writeImage', file, bytes),
   createFile: (file) => ipcRenderer.invoke('file:create', file),
   createFolder: (dir) => ipcRenderer.invoke('folder:create', dir),
   listFiles: () => ipcRenderer.invoke('files:list'),

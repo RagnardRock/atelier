@@ -309,6 +309,25 @@ handle('file:write', async (_event, file, content) => {
   assertAllowed(file);
   await fs.writeFile(file, content, 'utf8');
 });
+// Image ajoutée depuis l'aperçu (mode visuel) : écrite sans rien écraser (« photo-2.jpg » si
+// « photo.jpg » existe déjà). Renvoie le chemin choisi.
+handle('file:writeImage', async (_event, file, bytes) => {
+  assertAllowed(file);
+  if (!/\.(png|jpe?g|gif|webp|avif|svg)$/i.test(file)) throw new Error("Ce fichier n'est pas une image.");
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const ext = path.extname(file);
+  const base = file.slice(0, -ext.length);
+  for (let i = 1; i < 1000; i++) {
+    const cible = i === 1 ? file : `${base}-${i}${ext}`;
+    try {
+      await fs.writeFile(cible, Buffer.from(bytes), { flag: 'wx' });
+      return cible;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+  }
+  throw new Error('Trop de fichiers du même nom.');
+});
 
 // Création de fichiers et de dossiers. Un nom peut contenir des sous-dossiers
 // ("css/style.css") : ils sont créés au passage. On refuse d'écraser ce qui existe déjà.
