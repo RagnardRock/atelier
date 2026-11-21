@@ -188,13 +188,14 @@ const gitView = (() => {
   let diffPath = null;
   let sideBySide = true;
 
-  async function showDiff(path, name) {
+  // original / legende : comparer avec un autre texte que le dernier commit (version Bifrost du client…).
+  async function showDiff(path, name, { original, legende } = {}) {
     let head;
     let current;
     try {
-      head = await window.atelier.gitHead(path);
+      head = original ?? await window.atelier.gitHead(path);
       const file = state.files.get(path);
-      current = file ? null : await window.atelier.readFile(path);
+      current = file ? null : await window.atelier.readFile(path).catch((err) => { if (original === undefined) throw err; return ''; });
     } catch (err) {
       return notify.error(`Impossible de comparer ${name} : ${cleanError(err)}`);
     }
@@ -217,6 +218,7 @@ const gitView = (() => {
     }
     diffEditor.setModel({ original: diffOriginal, modified: diffModified });
     $('#diff-title').textContent = path.slice(state.root.length + 1);
+    $('#diff-view .diff-legend').textContent = legende || 'à gauche : dernier commit · à droite : ton fichier';
   }
 
   function closeDiff() {

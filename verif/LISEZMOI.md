@@ -20,6 +20,9 @@ l'interface d'un outil dans un bac à sable Node, comme le fait la page.
   une cellule (12,5 ; 15 % ; 24/10/2026…), dates ↔ numéros de série d'Excel.
 - `saga-jdr.test.js` : les dés du pack JDR (même graine = mêmes jets), formules `2d6+3`, avantage et
   désavantage, coups critiques, modificateurs et bonus de maîtrise, journal limité à 200 jets.
+- `rune-bifrost.test.js` : panneau Bifrost de Rune. Zones `data-bf` d'une page (type, ligne, listes,
+  formulaires), erreurs signalées (noms en double, liste sans élément, formulaire sans nom…), balise sous
+  le curseur et attribut ajouté au bon endroit.
 - `edda-formats.test.js` : un document enregistré puis rouvert en Word, OpenDocument, RTF, Markdown
   et HTML garde son texte, gras, italique, titres, listes et tableau (dans Chromium, car les formats
   ont besoin d'une vraie page).

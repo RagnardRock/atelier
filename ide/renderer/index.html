@@ -34,6 +34,7 @@
       <button data-view="git" title="Git : modifications, commit, push"><i class="codicon codicon-source-control"></i><span id="git-badge" class="badge" hidden></span></button>
       <button data-view="scripts" title="Scripts npm : dev, build, preview… en un clic"><i class="codicon codicon-run-all"></i><span id="scripts-badge" class="badge" hidden></span></button>
       <button data-view="servers" title="Serveurs"><i class="codicon codicon-server"></i></button>
+      <button data-view="bifrost" title="Bifrost : zones modifiables, modifications du client, envoi du site"><i class="codicon codicon-globe"></i></button>
       <span class="spacer"></span>
       <button id="btn-update" title="Chercher et installer la dernière version de Rune"><i class="codicon codicon-cloud-download"></i></button>
       <button id="btn-config" title="Réglages"><i class="codicon codicon-gear"></i></button>
@@ -126,6 +127,18 @@
             <button type="submit" class="primary">Enregistrer</button>
           </div>
         </form>
+      </div>
+
+      <!-- Bifrost, le CMS des sites clients (bifrost.js) -->
+      <div id="bifrost" class="side-view" hidden>
+        <div class="view-header">
+          <span class="view-title" id="bifrost-title">Bifrost</span>
+          <span class="view-actions">
+            <button id="bifrost-open" class="icon-button" title="Ouvrir l'éditeur du site dans Bifrost" hidden><i class="codicon codicon-link-external"></i></button>
+            <button id="bifrost-refresh" class="icon-button" title="Actualiser"><i class="codicon codicon-refresh"></i></button>
+          </span>
+        </div>
+        <div id="bifrost-body"></div>
       </div>
     </aside>
 
@@ -289,6 +302,8 @@
   <script src="preview.js"></script>
   <script src="git.js"></script>
   <script src="scripts.js"></script>
+  <script src="bifrost-flags.js"></script>
+  <script src="bifrost.js"></script>
   <script src="commands.js"></script>
 </body>
 </html>

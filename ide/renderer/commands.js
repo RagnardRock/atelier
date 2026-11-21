@@ -33,6 +33,8 @@ const commandPalette = (() => {
     ['Affichage', 'Afficher les scripts npm', null, () => showView('scripts')],
     ['Affichage', 'Afficher Git', null, () => showView('git')],
     ['Affichage', 'Afficher les serveurs', null, () => showView('servers')],
+    ['Bifrost', 'Afficher le panneau Bifrost', null, () => showView('bifrost')],
+    ['Bifrost', 'Vérifier les flags de toutes les pages', null, () => { showView('bifrost'); bifrostPanel.verifierSite(); }],
     ['Loki', 'Afficher / masquer le chat avec Loki', { shortcut: 'toggleClaude' }, () => claudePanel.toggle()],
     ['Loki', 'Nouvelle conversation', null, () => { if (!claudePanel.isOpen()) claudePanel.toggle(); document.querySelector('#claude-new').click(); }],
     ['Git', 'Actualiser le panneau Git', null, () => { showView('git'); gitView.refresh(true); }],
