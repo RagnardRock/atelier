@@ -75,3 +75,16 @@ test('Rune Bifrost : balise sous le curseur, nom proposé, insertion', () => {
   assert.equal(F.nomPropose('index.html', 'h1', '', ['accueil.titre']), 'accueil.titre-2');
   assert.equal(F.nomPropose('index.html', 'span', 'Téléphone du bureau'), 'accueil.telephone-bureau');
 });
+
+test('Rune Bifrost : insérer un bloc (préfixes, chemins relatifs, feuille)', () => {
+  assert.deepEqual([...F.prefixes('<h2 data-bf="galerie.titre"><ul data-bf-liste="cartes">')], ['galerie', 'cartes']);
+  assert.equal(F.cheminsRelatifs('<a href="contact.html"><img src="data:image/svg+xml,x"><a href="#x">', 'actualites/2026'),
+    '<a href="../../contact.html"><img src="data:image/svg+xml,x"><a href="#x">');
+  assert.equal(F.cheminsRelatifs('<a href="contact.html">', '.'), '<a href="contact.html">');
+  const page = '<html>\n<head>\n  <link rel="stylesheet" href="assets/style.css">\n</head>\n<body></body></html>';
+  const p = F.placeFeuille(page, 'assets/bifrost-blocs.css');
+  assert.equal(page.slice(0, p.offset) + p.texte + page.slice(p.offset),
+    '<html>\n<head>\n  <link rel="stylesheet" href="assets/style.css">\n  <link rel="stylesheet" href="assets/bifrost-blocs.css">\n</head>\n<body></body></html>');
+  assert.equal(F.placeFeuille(page, '../assets/style.css'), null);
+  assert.equal(F.indenter('<a>\n<b>\n</a>', '  '), '<a>\n  <b>\n  </a>');
+});

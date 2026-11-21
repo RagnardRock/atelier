@@ -23,6 +23,7 @@ const bifrostPanel = (() => {
   let analyseSite = null;   // vérification de tout le site
   let occupe = false;
   let zonesOuvertes = null; // liste des zones dépliée à la main (sinon : dépliée si courte)
+  let blocs = null;         // bibliothèque de sections de Bifrost (chargée à l'ouverture de la section)
   const ouverts = new Set(JSON.parse(localStorage.getItem('rune.bifrost.sections') || '["flags","envoi","client"]'));
 
   const esc = (s) => escapeHtml(String(s ?? ''));
@@ -191,6 +192,48 @@ const bifrostPanel = (() => {
     return h;
   }
 
+  // --- Insérer un bloc : les sections toutes faites du mode dev de Bifrost ---
+
+  function sectionBlocs() {
+    if (!blocs) {
+      api('blocs').then((b) => { blocs = b; render(); }).catch((err) => { blocs = []; notify.error(cleanError(err)); render(); });
+      return '<p class="hint">Chargement…</p>';
+    }
+    if (!fichierActif()) return '<p class="hint">Ouvre une page HTML : le bloc s\'insère sous la ligne du curseur.</p>';
+    const carte = (b) => `<button class="bf-bloc" data-bloc="${esc(b.id)}" title="${esc(b.description || b.nom)}"><span>${esc(b.icone)}</span><strong>${esc(b.nom)}</strong></button>`;
+    const fournis = blocs.filter((b) => !b.perso);
+    const perso = blocs.filter((b) => b.perso);
+    return `<p class="hint">Le bloc s'insère sous la ligne du curseur, flags déjà posés (renommés s'ils existent déjà dans le site).</p>
+      <div class="bf-blocs">${fournis.map(carte).join('')}</div>
+      ${perso.length ? `<div class="bf-titre">Mes blocs</div><div class="bf-blocs">${perso.map(carte).join('')}</div>` : ''}`;
+  }
+
+  async function insererBloc(id) {
+    const f = fichierActif();
+    const ed = state.activeGroup?.editor;
+    if (!f || !ed || ed.getModel() !== f.model) return notify.info('Ouvre une page HTML et place le curseur où ajouter le bloc.');
+    const r = await agir(() => api('preparerBloc', id, f.path));
+    if (!r) return;
+    const m = f.model;
+    const ligne = ed.getPosition()?.lineNumber || m.getLineCount();
+    const indent = /^\s*/.exec(m.getLineContent(ligne))[0];
+    const fin = m.getLineMaxColumn(ligne);
+    const edits = [{ range: new monaco.Range(ligne, fin, ligne, fin), text: `\n${indent}${BifrostFlags.indenter(r.html.trim(), indent)}`, forceMoveMarkers: true }];
+    if (r.feuille) {
+      const p = BifrostFlags.placeFeuille(m.getValue(), r.feuille);
+      if (p) {
+        const pos = m.getPositionAt(p.offset);
+        edits.push({ range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column), text: p.texte });
+      }
+    }
+    ed.pushUndoStop();
+    ed.executeEdits('bifrost', edits);
+    ed.pushUndoStop();
+    ed.revealLineInCenter(ligne + 1);
+    ed.focus();
+    flash(r.feuille ? 'Bloc inséré (feuille assets/bifrost-blocs.css ajoutée au site)' : 'Bloc inséré');
+  }
+
   function sectionReglages() {
     const l = etat.lien;
     return `<label class="bf-champ">Dossier du site dans le projet <input id="bf-dossier" value="${esc(l?.dossier || '')}" placeholder="vide = tout le dossier ouvert (ou public, dist…)"></label>
@@ -233,6 +276,7 @@ const bifrostPanel = (() => {
       h += flags;
       h += section('reglages', 'Lien du dossier', sectionReglages);
     }
+    if (etat?.connecte && state.root) h += section('blocs', 'Insérer un bloc', sectionBlocs, blocs?.length || '');
     if (etat?.connecte) h += section('compte', 'Compte Bifrost', sectionCompte);
     if (!etat?.lien?.site) $('#bifrost-title').textContent = 'Bifrost';
     body.innerHTML = h;
@@ -294,6 +338,7 @@ const bifrostPanel = (() => {
       if (fichier) openAt(fichier, Number(t.dataset.ligne), Number(t.dataset.col) || 1);
       return;
     }
+    if (t.dataset.bloc) return insererBloc(t.dataset.bloc);
     if (t.dataset.lier) {
       const site = sites.find((s) => s.id === t.dataset.lier);
       return agir(async () => { etat.lien = await api('lier', site); fiche = await api('fiche'); ouverts.add('client'); }, `Dossier relié à ${site.nom}`);
@@ -455,12 +500,22 @@ const bifrostPanel = (() => {
       if ('data-bf-element' in b.attrs) return notify.info('Cette balise est déjà un élément de liste.');
       poser(ed, b, ['data-bf-element']);
     }],
+    ['bloc', 'Bifrost : insérer un bloc (section toute faite)…', () => ouvrirBlocs()],
     ['formulaire', 'Bifrost : recevoir les messages de ce formulaire', (ed, b) => {
       if (b.tag !== 'form') return notify.info('Place le curseur dans la balise <form>.');
       if ('data-bf-formulaire' in b.attrs) return notify.info('Ce formulaire est déjà branché sur Bifrost.');
       poser(ed, b, ['data-bf-formulaire="contact"']);
     }],
   ];
+
+  // Ouvre le panneau Bifrost sur la section « Insérer un bloc ».
+  function ouvrirBlocs() {
+    ouverts.add('blocs');
+    localStorage.setItem('rune.bifrost.sections', JSON.stringify([...ouverts]));
+    if (view.hidden) document.querySelector('#activitybar [data-view="bifrost"]').click();
+    else render();
+    setTimeout(() => body.querySelector('[data-section="blocs"]')?.scrollIntoView({ block: 'start' }), 100);
+  }
 
   const equipes = new WeakSet();
   function ajouterActions(editor) {
@@ -470,7 +525,7 @@ const bifrostPanel = (() => {
       editor.addAction({
         id: `bifrost.${id}`, label, contextMenuGroupId: '9_bifrost', contextMenuOrder: i,
         precondition: 'editorLangId == html',
-        run: (ed) => { const b = balise(ed); if (b) fn(ed, b, ed.getModel()); },
+        run: (ed) => { if (id === 'bloc') return fn(); const b = balise(ed); if (b) fn(ed, b, ed.getModel()); },
       });
     });
   }

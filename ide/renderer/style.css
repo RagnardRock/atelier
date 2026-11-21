@@ -1494,3 +1494,10 @@ em.bf-modifie, .bf-fichier.bf-modifie > span { color: var(--warning); }
 .bf-zones > summary { cursor: pointer; list-style: none; }
 .bf-zones > summary::before { content: '›'; display: inline-block; width: 10px; transition: transform 0.15s; }
 .bf-zones[open] > summary::before { transform: rotate(90deg); }
+
+/* Bifrost : insérer un bloc */
+.bf-blocs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; padding: 6px 14px 10px; }
+.bf-bloc { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.bf-bloc:hover { border-color: var(--accent); background: var(--hover); }
+.bf-bloc span { font-size: 16px; }
+.bf-bloc strong { font-weight: 600; }
