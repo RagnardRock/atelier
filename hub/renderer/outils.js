@@ -113,7 +113,7 @@ const Outils = (() => {
   };
 
   function render() {
-    for (const b of document.querySelectorAll('#outils-filtres .filtre')) {
+    for (const b of $('#outils').querySelectorAll('#outils-filtres .filtre')) {
       b.classList.toggle('actif', b.dataset.filtre === filtre);
       b.setAttribute('aria-selected', String(b.dataset.filtre === filtre));
       const n = outils.filter(FILTRES[b.dataset.filtre]).length;
@@ -164,7 +164,7 @@ const Outils = (() => {
     window.atelier.writeConfig({ filtreOutils: filtre });
     render();
   }
-  for (const b of document.querySelectorAll('#outils-filtres .filtre')) b.onclick = () => choisirFiltre(b.dataset.filtre);
+  for (const b of $('#outils').querySelectorAll('#outils-filtres .filtre')) b.onclick = () => choisirFiltre(b.dataset.filtre);
 
   // Appelé au démarrage par app.js avec config.json.
   function reglages(c) {

@@ -15,6 +15,7 @@ const fs = require('node:fs/promises');
 const fsSync = require('node:fs');
 const OUTILS = require('./outils');
 const claude = require('./claude');
+const terminal = require('./terminal');
 
 // Réglages, notes et journal dans %APPDATA%\atelier-hub, qu'Atelier soit lancé depuis le clone
 // (npm start) ou installé avec Atelier-Setup.exe.
@@ -42,7 +43,7 @@ async function log(level, message) {
 function reportError(context, err) {
   const message = `${context} : ${err && err.message ? err.message : err}`;
   log('ERREUR', `${message}\n${(err && err.stack) || ''}`);
-  for (const win of BrowserWindow.getAllWindows()) win.webContents.send('app:error', message);
+  fenetrePrincipale()?.webContents.send('app:error', message);
 }
 process.on('uncaughtException', (err) => reportError('Erreur interne', err));
 process.on('unhandledRejection', (err) => reportError('Erreur interne', err));
@@ -59,7 +60,10 @@ function handle(channel, fn) {
   });
 }
 
-const sendToWindow = (channel, ...args) => BrowserWindow.getAllWindows()[0]?.webContents.send(channel, ...args);
+// La fenêtre d'Atelier (pas celles des widgets détachés, qui n'ont pas de code à elles).
+let principale = null;
+const fenetrePrincipale = () => (principale && !principale.isDestroyed() ? principale : null);
+const sendToWindow = (channel, ...args) => fenetrePrincipale()?.webContents.send(channel, ...args);
 
 // --- Fichiers JSON (réglages, notes) ---
 // On écrit d'abord un fichier temporaire, puis on le renomme : si le PC s'éteint en plein milieu,
@@ -155,14 +159,21 @@ function appliquerOrthographe(config) {
 
 // Clic droit dans une zone de texte : l'interface affiche le menu (corrections, couper, copier,
 // coller…) et demande ici ce que le menu de l'interface ne peut pas faire seul.
-handle('edition:commande', async (event, commande, mot) => {
-  const wc = event.sender;
+// fenetre : la fenêtre d'un widget détaché où était le clic droit (voir fenetresWidgets plus bas).
+handle('edition:commande', async (event, commande, mot, fenetre) => {
+  const wc = (fenetre && fenetresWidgets.get(fenetre)?.webContents) || event.sender;
   if (commande === 'remplacer') return wc.replaceMisspelling(String(mot));
   if (commande === 'dictionnaire') return wc.session.addWordToSpellCheckerDictionary(String(mot));
   if (['cut', 'copy', 'paste', 'selectAll', 'undo', 'redo'].includes(commande)) return wc[commande]();
   throw new Error(`Commande inconnue : ${commande}`);
 });
 handle('app:version', async () => app.getVersion());
+// Le widget Terminal (terminal.js).
+terminal.brancher({ handle, ipcMain, envoyer: sendToWindow, log });
+handle('lien:ouvrir', async (_event, url) => {
+  if (!/^https?:\/\//.test(String(url))) throw new Error('Seuls les liens http et https s\'ouvrent');
+  await shell.openExternal(String(url));
+});
 
 // --- Notes (notes.json) ---
 // Toutes les notes dans un seul fichier, sur ton PC : [{ id, texte, epinglee, modifiee }].
@@ -180,7 +191,9 @@ handle('notes:reveal', async () => shell.showItemInFolder(notesPath()));
 // projets-memoire : ce que Claude retient sur chaque projet, { nomDuProjet: [{ id, texte, quand }] }.
 // claude-conversations : les conversations du widget Claude (claude : l'ancienne, d'avant la liste).
 // calculatrice : les derniers calculs du widget Calculatrice, [{ calcul, resultat, quand }].
-const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire', 'calculatrice'];
+// disposition : la place des blocs et des fenêtres détachées (renderer/disposition.js).
+// terminal : les réglages et commandes favorites du widget Terminal.
+const DONNEES = ['couleurs', 'calendrier', 'presse-papiers', 'minuteurs', 'claude', 'claude-conversations', 'projets-memoire', 'calculatrice', 'disposition', 'terminal'];
 const donneesPath = (nom) => {
   if (!DONNEES.includes(nom)) throw new Error(`Données inconnues : ${nom}`);
   // La mémoire des projets vit dans le dossier partagé (voir plus bas) : Rune, Skald et Tafl la lisent aussi.
@@ -293,6 +306,8 @@ async function demarrerSurveillance() {
   surveillance = setInterval(verifierPressePapiers, 1000);
 }
 handle('presse:historique', async () => historique);
+// Coller dans le terminal (Ctrl+V).
+handle('presse:lire', async () => String(clipboard.readText() ?? ''));
 handle('presse:copier', async (_event, texte) => {
   await clipboard.writeText(String(texte));
   dernierTexte = String(texte);
@@ -969,6 +984,7 @@ handle('update:install', async () => {
 
 // --- Fenêtre ---
 const TITLE_BAR = { color: '#101014', symbolColor: '#cccccc', height: 40 };
+const TITLE_BAR_WIDGET = { ...TITLE_BAR, height: 34 };
 
 // Flou de Windows 11 ("acrylic"), à partir de Windows 11 22H2 (build 22621), comme dans Rune et Skald.
 function blurSupported() {
@@ -986,6 +1002,16 @@ handle('window:theme', async (event, { glass, blur }) => {
     win.setBackgroundColor(useBlur ? '#00000000' : '#101014');
   }
   if (process.platform !== 'darwin') win.setTitleBarOverlay({ ...TITLE_BAR, color: useBlur ? '#00000000' : '#101014' });
+  // Les fenêtres des widgets détachés suivent.
+  for (const w of fenetresWidgets.values()) {
+    if (w.isDestroyed()) continue;
+    if (win.blurCapable) {
+      w.setBackgroundMaterial(useBlur ? 'acrylic' : 'none');
+      w.setBackgroundColor(useBlur ? '#00000000' : '#101014');
+    }
+    if (process.platform !== 'darwin') w.setTitleBarOverlay({ ...TITLE_BAR_WIDGET, color: useBlur ? '#00000000' : '#101014' });
+  }
+  win.blurActif = useBlur;
   return { blur: useBlur, needsRestart: wanted && !win.blurCapable };
 });
 handle('window:blurSupported', async () => blurSupported());
@@ -1010,14 +1036,87 @@ function lireFenetre() {
   // (sinon, après avoir débranché un écran, elle s'ouvrirait hors de vue).
   if (nombre(f.x) && nombre(f.y)) {
     const zone = { x: Math.round(f.x), y: Math.round(f.y), ...bounds };
-    const visible = screen.getAllDisplays().some(({ workArea: w }) => {
-      const largeur = Math.min(zone.x + zone.width, w.x + w.width) - Math.max(zone.x, w.x);
-      const hauteur = Math.min(zone.y + zone.height, w.y + w.height) - Math.max(zone.y, w.y);
-      return largeur >= 100 && hauteur >= 40;
-    });
-    if (visible) Object.assign(bounds, { x: zone.x, y: zone.y });
+    if (surUnEcran(zone)) Object.assign(bounds, { x: zone.x, y: zone.y });
   }
   return { ...bounds, maximized: Boolean(f.maximized) };
+}
+
+// La zone reste-t-elle visible sur un écran branché ?
+function surUnEcran(zone) {
+  return screen.getAllDisplays().some(({ workArea: w }) => {
+    const largeur = Math.min(zone.x + zone.width, w.x + w.width) - Math.max(zone.x, w.x);
+    const hauteur = Math.min(zone.y + zone.height, w.y + w.height) - Math.max(zone.y, w.y);
+    return largeur >= 100 && hauteur >= 40;
+  });
+}
+
+// --- Widgets détachés (renderer/disposition.js) ---
+// L'interface ouvre une fenêtre vide (window.open) nommée « widget-<clé> » et y déplace le widget :
+// son code continue de tourner dans la fenêtre d'Atelier. Ici, on donne à cette fenêtre le même habit
+// que celle d'Atelier (verre, barre de titre de Windows), sa taille et sa place d'avant.
+const fenetresWidgets = new Map(); // nom -> BrowserWindow
+const preparations = new Map();    // nom -> { x, y, width, height, titre }
+handle('widget:preparer', async (_event, nom, options) => {
+  if (!/^widget-[\w-]+$/.test(String(nom))) throw new Error('Nom de fenêtre invalide');
+  preparations.set(nom, options || {});
+});
+handle('widget:devant', async (_event, nom, oui) => fenetresWidgets.get(nom)?.setAlwaysOnTop(Boolean(oui), 'floating'));
+
+function optionsFenetreWidget(parent, nom) {
+  const o = preparations.get(nom) || {};
+  preparations.delete(nom);
+  const nombre = (n) => Number.isFinite(n);
+  const bornes = { width: Math.max(280, Math.round(nombre(o.width) ? o.width : 520)), height: Math.max(180, Math.round(nombre(o.height) ? o.height : 420)) };
+  if (nombre(o.x) && nombre(o.y) && surUnEcran({ x: o.x, y: o.y, ...bornes })) Object.assign(bornes, { x: Math.round(o.x), y: Math.round(o.y) });
+  const blur = Boolean(parent.blurActif ?? parent.blurCapable);
+  return {
+    ...bornes,
+    minWidth: 280,
+    minHeight: 180,
+    title: String(o.titre || 'Atelier'),
+    backgroundColor: blur ? '#00000000' : '#101014',
+    ...(parent.blurCapable ? { backgroundMaterial: blur ? 'acrylic' : 'none' } : {}),
+    ...(fsSync.existsSync(WINDOW_ICON) ? { icon: WINDOW_ICON } : {}),
+    titleBarStyle: 'hidden',
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 10, y: 10 } } : { titleBarOverlay: { ...TITLE_BAR_WIDGET, color: blur ? '#00000000' : '#101014' } }),
+    autoHideMenuBar: true,
+  };
+}
+
+function brancherFenetreWidget(parent, child, nom) {
+  fenetresWidgets.set(nom, child);
+  child.setMenu(null);
+  child.on('closed', () => { if (fenetresWidgets.get(nom) === child) fenetresWidgets.delete(nom); });
+  child.on('focus', () => child.flashFrame(false));
+  // Clic droit dans une zone de texte : le menu est dessiné par l'interface, dans cette fenêtre.
+  child.webContents.on('context-menu', (_event, params) => {
+    if (!params.isEditable) return;
+    parent.webContents.send('menu:edition', {
+      x: params.x,
+      y: params.y,
+      mot: params.misspelledWord,
+      suggestions: params.dictionarySuggestions || [],
+      selection: Boolean(params.selectionText),
+      peutCouper: params.editFlags.canCut,
+      peutCopier: params.editFlags.canCopy,
+      peutColler: params.editFlags.canPaste,
+      fenetre: nom,
+    });
+  });
+  child.webContents.on('will-navigate', (event) => event.preventDefault());
+  child.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  child.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown' && input.key === 'F12') {
+      event.preventDefault();
+      parent.webContents.toggleDevTools();
+    } else if (input.type === 'keyDown' && input.control && !input.alt && !input.shift && input.key.toLowerCase() === 'r') {
+      event.preventDefault(); // recharger une fenêtre détachée la viderait : on recharge Atelier
+      parent.webContents.reload();
+    }
+  });
 }
 
 function retenirFenetre(win) {
@@ -1039,7 +1138,8 @@ function retenirFenetre(win) {
 // Un minuteur a sonné : l'icône d'Atelier clignote dans la barre des tâches jusqu'à ce que tu y reviennes.
 handle('window:attention', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
-  if (!win.isFocused()) win.flashFrame(true);
+  // Pas si tu es déjà dans une fenêtre d'Atelier (ou d'un de ses widgets détachés).
+  if (!BrowserWindow.getAllWindows().some((w) => w.isFocused())) win.flashFrame(true);
 });
 
 const WINDOW_ICON = path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
@@ -1064,6 +1164,9 @@ function createWindow(config) {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Les widgets détachés sont dessinés par cette page : elle doit continuer de tourner
+      // normalement quand la fenêtre d'Atelier est réduite ou cachée.
+      backgroundThrottling: false,
     },
   });
   win.blurCapable = blur;
@@ -1092,10 +1195,15 @@ function createWindow(config) {
     if (url !== win.webContents.getURL()) event.preventDefault();
   });
   // Un lien dans une note s'ouvre dans le navigateur, pas dans Atelier.
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  // Une fenêtre vide nommée « widget-… » : un widget qu'on détache (voir plus haut).
+  win.webContents.setWindowOpenHandler(({ url, frameName }) => {
     if (/^https?:\/\//.test(url)) shell.openExternal(url);
+    else if (url === 'about:blank' && /^widget-[\w-]+$/.test(frameName)) {
+      return { action: 'allow', overrideBrowserWindowOptions: optionsFenetreWidget(win, frameName) };
+    }
     return { action: 'deny' };
   });
+  win.webContents.on('did-create-window', (child, { frameName }) => brancherFenetreWidget(win, child, frameName));
   win.webContents.on('before-input-event', (event, input) => {
     // F12 = outils de développement, Ctrl+R = recharger l'interface (comme dans Rune et Skald).
     if (input.type === 'keyDown' && input.key === 'F12') {
@@ -1114,7 +1222,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   app.on('second-instance', () => {
-    const win = BrowserWindow.getAllWindows()[0];
+    const win = fenetrePrincipale();
     if (!win) return;
     if (win.isMinimized()) win.restore();
     win.focus();
@@ -1127,9 +1235,9 @@ if (!app.requestSingleInstanceLock()) {
     appliquerOrthographe(config);
     // Avant la fenêtre : la mémoire des projets doit être à sa nouvelle place quand le widget la lit.
     await preparerCommun().catch((err) => reportError('Dossier partagé', err));
-    createWindow(config);
+    principale = createWindow(config);
     demarrerSurveillance();
   });
   app.on('window-all-closed', () => app.quit());
-  app.on('will-quit', () => claude.stop());
+  app.on('will-quit', () => { claude.stop(); terminal.toutFermer(); });
 }

@@ -79,6 +79,7 @@ const Projets = (() => {
       ['Ouvrir dans Skald', () => ouvrir(p, 'skald')],
       ['Ouvrir dans Tafl', () => ouvrir(p, 'tafl')],
       ['Ouvrir dans l\'Explorateur', () => ouvrir(p, 'explorateur')],
+      ['Ouvrir un terminal ici', () => Terminal_.nouvelOnglet(p.dossier).catch((err) => notify(cleanError(err), 'error'))],
       // Brokk ne remplace pas l'outil du projet : il s'ouvre sur le projet pour en exporter les images.
       ['Exporter les assets avec Brokk', () => ouvrir(p, 'brokk')],
       // Edda s'ouvre sur le projet : son accueil liste les documents du dossier (Word, LibreOffice, Markdown…).

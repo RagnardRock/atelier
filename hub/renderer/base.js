@@ -1,5 +1,13 @@
 // Petits raccourcis communs à tous les scripts de l'interface.
-const $ = (sel, root = document) => root.querySelector(sel);
+// Un widget détaché (disposition.js) vit dans une autre fenêtre : $ le cherche aussi là-bas.
+const docsEnPlus = new Set();
+const $ = (sel, root) => {
+  if (root) return root.querySelector(sel);
+  const ici = document.querySelector(sel);
+  if (ici) return ici;
+  for (const d of docsEnPlus) { const n = d.querySelector(sel); if (n) return n; }
+  return null;
+};
 
 // Crée un élément : el('button', { className: 'button', textContent: 'OK' }, enfant1, enfant2…)
 function el(tag, props = {}, ...children) {
@@ -26,7 +34,8 @@ function dateRelative(ms) {
 // Petit menu au clic droit : ouvrirMenu(x, y, [[libellé, action, coché ?], null (séparateur), 'Titre', …]).
 let menuOuvert = null;
 function fermerMenu() { menuOuvert?.remove(); menuOuvert = null; }
-function ouvrirMenu(x, y, items) {
+// doc : la fenêtre où l'ouvrir (celle d'un widget détaché) ; par défaut, celle où tu es.
+function ouvrirMenu(x, y, items, doc = typeof Disposition !== 'undefined' ? Disposition.documentActif() : document) {
   fermerMenu();
   menuOuvert = el('div', { className: 'menu' });
   for (const item of items) {
@@ -40,17 +49,24 @@ function ouvrirMenu(x, y, items) {
   }
   // Le menu ne prend pas le focus : la zone de texte garde sa sélection (pour corriger un mot, coller…).
   menuOuvert.addEventListener('mousedown', (e) => e.preventDefault());
-  document.body.append(menuOuvert);
-  menuOuvert.style.left = `${Math.min(x, innerWidth - menuOuvert.offsetWidth - 8)}px`;
-  menuOuvert.style.top = `${Math.min(y, innerHeight - menuOuvert.offsetHeight - 8)}px`;
+  doc.body.append(menuOuvert);
+  const vue = doc.defaultView;
+  menuOuvert.style.left = `${Math.max(4, Math.min(x, vue.innerWidth - menuOuvert.offsetWidth - 8))}px`;
+  menuOuvert.style.top = `${Math.max(4, Math.min(y, vue.innerHeight - menuOuvert.offsetHeight - 8))}px`;
 }
-document.addEventListener('pointerdown', (e) => { if (menuOuvert && !menuOuvert.contains(e.target)) fermerMenu(); });
+// Fermer le menu en cliquant ailleurs : dans la fenêtre d'Atelier et dans celles des widgets détachés.
+function brancherDocument(doc) {
+  doc.addEventListener('pointerdown', (e) => { if (menuOuvert && !menuOuvert.contains(e.target)) fermerMenu(); });
+  doc.defaultView.addEventListener('blur', () => { if (menuOuvert?.ownerDocument === doc) fermerMenu(); });
+}
+brancherDocument(document);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenu(); });
 
 // Clic droit dans une zone de texte (notes, message à Claude…) : les corrections proposées pour un
 // mot souligné en rouge, « Ajouter au dictionnaire », puis couper, copier, coller.
-window.atelier.onMenuEdition(({ x, y, mot, suggestions, peutCouper, peutCopier, peutColler }) => {
-  const commande = (c, m) => () => window.atelier.edition(c, m).catch((err) => notify(cleanError(err), 'error'));
+// fenetre : le nom de la fenêtre d'un widget détaché où le clic droit a eu lieu (sinon, Atelier).
+window.atelier.onMenuEdition(({ x, y, mot, suggestions, peutCouper, peutCopier, peutColler, fenetre }) => {
+  const commande = (c, m) => () => window.atelier.edition(c, m, fenetre).catch((err) => notify(cleanError(err), 'error'));
   const items = [];
   if (mot) {
     if (suggestions.length) items.push(...suggestions.slice(0, 6).map((s) => [s, commande('remplacer', s)]));
@@ -64,7 +80,8 @@ window.atelier.onMenuEdition(({ x, y, mot, suggestions, peutCouper, peutCopier, 
     null,
     ['Tout sélectionner', commande('selectAll')],
   );
-  ouvrirMenu(x, y, items);
+  const doc = fenetre ? [...docsEnPlus].find((d) => d.defaultView?.name === fenetre) : document;
+  ouvrirMenu(x, y, items, doc || document);
   // Les corrections, en tête du menu, ressortent un peu.
   if (mot && suggestions.length) for (const b of [...menuOuvert.querySelectorAll('.menu-item')].slice(0, Math.min(6, suggestions.length))) b.classList.add('correction');
 });

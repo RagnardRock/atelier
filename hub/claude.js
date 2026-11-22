@@ -61,9 +61,12 @@ const FAMILLES = {
   retenir_projet: 'memoire', oublier_projet: 'memoire',
   installer_outil: 'installation', desinstaller_outil: 'installation',
   calculer: 'lecture', verifier_mises_a_jour: 'lecture',
+  // Le terminal : lancer une commande demande TOUJOURS ton accord (jamais « toujours autoriser ») ;
+  // lire ce qu'il affiche peut être autorisé pour toujours.
+  terminal_executer: 'terminal', terminal_lire: 'terminalLire',
 };
 // Celles qu'on peut autoriser pour toujours (la famille « lecture » est toujours autorisée : rien ne change).
-const FAMILLES_TOUJOURS = ['notes', 'calendrier', 'minuteurs', 'projets', 'memoire', 'installation'];
+const FAMILLES_TOUJOURS = ['notes', 'calendrier', 'minuteurs', 'projets', 'memoire', 'installation', 'terminalLire'];
 const actionsActives = (config) => config.claudeActions !== false;
 
 function envoyerAuWidget(event) {
@@ -473,6 +476,7 @@ const WIDGETS = [
   ['pressePapiers', 'Presse-papiers et couleurs', 'historique de ce que l\'utilisateur copie (texte), et une palette de couleurs partagée avec Skald et Rune, avec une pipette.', 'aucun accès (il peut contenir des mots de passe).'],
   ['minuteurs', 'Minuteurs', 'comptes à rebours qui tournent en même temps (raccourcis 5, 15, 25 min, Pomodoro), carillon et notification à la fin, gardés si Atelier se ferme.', 'Lancer un minuteur.'],
   ['calendrier', 'Calendrier', 'évènements à une date, avec ou sans heure, et une note.', 'Lire (calendrier.md), ajouter, modifier, supprimer.'],
+  ['terminal', 'Terminal', 'un vrai terminal (PowerShell, PowerShell 7, invite de commandes, Git Bash, WSL : choix par la flèche à côté du « + ») ; onglets, volets côte à côte ou l\'un sous l\'autre (boutons Diviser, Alt+Maj+= / Alt+Maj+-), Ctrl+C copie s\'il y a une sélection (sinon interrompt), Ctrl+V colle, clic droit = menu, Ctrl+F cherche, Ctrl+clic ouvre un lien ; barre de commandes favorites (étoile : ajouter, clic droit sur une commande : modifier) ; bouton Loki = t\'envoie la sortie pour que tu l\'expliques ; clic droit sur un projet récent = « Ouvrir un terminal ici ».', 'Lire ce qu\'il affiche (terminal_lire) et y lancer une commande (terminal_executer) : chaque commande lancée demande l\'accord de l\'utilisateur, toujours.'],
   ['calculatrice', 'Calculatrice', 'calcul tapé ou cliqué, résultat pendant la frappe ; + − × ÷, ^, √, parenthèses, %, π, « Rés » ; historique des 30 derniers calculs.', 'Calculer (action calculer, même interpréteur que le widget).'],
   ['nouveautes', 'Nouveautés (bouton mégaphone de la barre de titre, Ctrl+Maj+N ; aussi sur chaque carte d\'outil)', 'toutes les versions publiées de tous les outils et d\'Atelier, les plus récentes en tête, rangées par jour ; pour chaque version, les notes de GitHub (titres des PR, lien vers chaque PR) ; filtre par outil, « Nouveau » = sorti depuis la dernière visite (pastille sur le bouton), recherche dans les notes. Ce n\'est pas un widget qu\'on cache.', 'aucun accès direct : propose à l\'utilisateur d\'ouvrir cette page.'],
   ['claude', 'Loki', 'toi : cette conversation ; « + » nouvelle conversation, horloge = conversations précédentes.', ''],
@@ -520,6 +524,18 @@ function atelierMd(etat, config, version) {
   for (const [cle, nom, quoi, loki] of WIDGETS) {
     lignes.push(`- **${nom}**${config.widgets?.[cle] === false ? ' (caché en ce moment)' : ''} : ${quoi}${loki ? ` Toi : ${loki}` : ''}`);
   }
+  lignes.push(
+    '',
+    '## Disposition',
+    '',
+    'Les blocs (la colonne Outils et chaque widget) sont posés sur une grille libre : bouton Disposition de la',
+    'barre de titre (ou Ctrl+Maj+D) pour les déplacer en les glissant, changer leur taille par les bords et les',
+    'coins, les cacher (œil) ou les remettre (« Afficher un bloc »). Plusieurs dispositions enregistrées, avec un',
+    'nom (clic droit sur le bouton Disposition, ou Ctrl+Alt+1…9 pour passer de l\'une à l\'autre). Chaque widget',
+    'peut être détaché dans sa propre fenêtre (bouton ↗ au survol de son titre, ou clic droit sur le titre) :',
+    'on la met où on veut, sur un autre écran, au-dessus des autres fenêtres (punaise) ; la fermer le ramène.',
+    'Tu ne peux pas changer la disposition toi-même : explique comment faire.',
+  );
   const sans = FAMILLES_TOUJOURS.filter((f) => config.claudeSansDemander?.[f]);
   lignes.push(
     '',
@@ -579,6 +595,10 @@ function claudeMd(addDir, actions, prenom = '') {
         `Atelier demande à ${qui} de valider tes actions (sauf celles autorisées pour toujours) : quand ${qui}`,
         'te demande quelque chose, fais-le directement, sans le reproposer d\'abord.',
         'Pour modifier une note, envoie son texte complet. Les dates sont au format AAAA-MM-JJ.',
+        'Le widget Terminal : terminal_lire te montre ce qu\'il affiche ; terminal_executer y tape une commande et',
+        `te renvoie ce qu'elle affiche. ${qui} valide chaque commande : n'en lance que si on te le demande, une à la`,
+        'fois, et explique ce qu\'elle fait. Jamais de commande qui efface ou casse quelque chose sans que ce soit demandé.',
+        'Quand on t\'envoie la sortie d\'un terminal, explique l\'erreur simplement et propose la commande qui corrige.',
       ]
       : [
         `Tu ne peux rien modifier ni lancer de commande : si ${qui} te demande d'ajouter une note ou un évènement,`,
