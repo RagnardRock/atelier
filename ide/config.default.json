@@ -21,6 +21,7 @@
   "claudePermissionMode": "ask",
   "claudeSansDemander": {},
   "claudeAtelier": true,
+  "lokiMoteur": "auto",
   "terminalFontSize": 14,
   "terminalProfiles": [
     { "name": "PowerShell", "command": "default", "args": [] }
