@@ -7,7 +7,7 @@ Un ensemble d'outils pour le travail de tous les jours (web, graphisme, bureauti
 | Outil | Rôle | Dossier | Version |
 |---|---|---|---|
 | **Atelier** ᚨ | Le hub : lance, installe, met à jour et désinstalle les outils, avec des widgets (notes, projets récents, presse-papiers et couleurs, minuteurs, calendrier, calculatrice, Loki) | [`hub/`](hub/README.md) | 0.19.1 |
-| **Rune** ᚱ | IDE : Monaco, terminal, serveurs SSH, Git, aperçu Go Live, Vue, Emmet, Prettier, Bifrost | [`ide/`](ide/README.md) | 1.5.0 |
+| **Rune** ᚱ | IDE : Monaco, terminal, serveurs SSH, Git, aperçu Go Live, Vue, Emmet, Prettier, Bifrost | [`ide/`](ide/README.md) | 1.6.0 |
 | **Skald** ᛋ | Retouche d'images et de logos, à la Photoshop (calques, PSD) | [`retouche/`](retouche/README.md) | 1.1.3 |
 | **Brokk** ᛒ | Export d'assets : un PSD ou un logo vers toutes les tailles web d'un projet (favicons, responsive, Open Graph) | [`export/`](export/README.md) | 1.1.0 |
 | **Tafl** ᛏ | Éditeur de jeu : tuiles, cartes, événements, scripts JS, données, packs de règles et modules | [`tuiles/`](tuiles/README.md) | 1.24.1 |

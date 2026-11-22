@@ -11,7 +11,7 @@
 // et il voit tout de suite ce que Claude a retenu (il surveille le dossier).
 // Avant retenir/oublier, l'outil te montre la carte Autoriser / Refuser.
 //
-// (Rune a sa propre copie de ce fichier, ide/mcp-commun.js.)
+// (Rune s'en sert aussi depuis Rune 1.6, avec ses propres actions : ide/loki-rune.js.)
 //
 // En plus, les actions propres à l'outil (voir l'image, redimensionner, poser des tuiles…) : leur
 // liste est dans le fichier ATELIER_ACTIONS, et chaque appel est transmis à l'outil par le canal

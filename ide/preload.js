@@ -27,6 +27,9 @@ contextBridge.exposeInMainWorld('atelier', {
   claudeRetirerAutorisation: (quoi) => ipcRenderer.invoke('claude:autorisations:retirer', quoi),
   claudeMoteur: (choix) => ipcRenderer.invoke('claude:moteur', choix), // Claude, local (Ollama) ou auto
   onClaudeEvent: (callback) => ipcRenderer.on('claude:event', (_event, e) => callback(e)),
+  // Les actions de Loki dans Rune (voir renderer/loki-actions.js) : la demande arrive, la fenêtre répond.
+  onClaudeAction: (callback) => ipcRenderer.on('claude:action', (_event, demande) => callback(demande)),
+  claudeActionReponse: (id, reponse) => ipcRenderer.invoke('claude:action:reponse', { id, reponse }),
   platform: process.platform,
   readFolder: (dir) => ipcRenderer.invoke('folder:read', dir),
   readFile: (file) => ipcRenderer.invoke('file:read', file),

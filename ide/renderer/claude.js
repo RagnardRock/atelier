@@ -59,7 +59,7 @@ const claudePanel = (() => {
     el.innerHTML = `
       <i class="codicon rune-loki">ᛚ</i>
       <p>Pose une question sur ton code, ou demande une modification.</p>
-      <p class="hint">Loki voit le fichier ouvert et ta sélection, peut lire tout le projet, et te demande ton accord avant de modifier un fichier ou de lancer une commande.</p>`;
+      <p class="hint">Loki voit le fichier ouvert et ta sélection, connaît Rune et Bifrost (flags, aperçu, modifications du client), et te demande ton accord avant de modifier un fichier ou de lancer une commande.</p>`;
     list.appendChild(el);
   }
 
@@ -408,7 +408,7 @@ const claudePanel = (() => {
       case 'mcp__atelier__retenir_projet': return ['bookmark', `Retient : ${inp.texte || ''}`];
       case 'mcp__atelier__oublier_projet': return ['bookmark', `Oublie l'info ${inp.id || ''} du projet`];
       case 'Task': case 'Agent': return ['organization', `Confie une tâche à un sous-agent : ${inp.description || ''}`];
-      default: return ['tools', name];
+      default: return (name.startsWith('mcp__atelier__') && lokiActions.decrire(name.slice(14), inp)) || ['tools', name];
     }
   }
 
