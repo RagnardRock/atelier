@@ -12,12 +12,21 @@
 //
 // Claude connaît aussi ce que sait celui d'Atelier (le hub) : la mémoire du projet ouvert et tes
 // notes, dans le dossier partagé %APPDATA%\atelier-commun. Il y accède par un petit serveur MCP,
-// mcp-commun.js, qui peut aussi y retenir une info (avec ta permission, comme pour un fichier).
+// commun/mcp-commun.js, qui peut aussi y retenir une info (avec ta permission, comme pour un fichier).
+//
+// Depuis Rune 1.6, il sait aussi ce que fait Rune (loki-rune.js : ses fonctions, les flags Bifrost),
+// et il agit dans la fenêtre par le même serveur MCP : voir l'état de l'éditeur, vérifier les flags,
+// ouvrir un fichier, montrer une page, voir et rapatrier les modifications du client Bifrost.
+// mcp-commun.js transmet chaque action par un canal local (tube nommé + jeton) ; la fenêtre la fait
+// (renderer/loki-actions.js) et répond.
 //
 // Un seul processus par fenêtre, gardé ouvert entre les messages pour que Claude se souvienne
 // de la conversation. "Nouvelle conversation" l'arrête.
 
 const { spawn, execFile } = require('node:child_process');
+const crypto = require('node:crypto');
+const net = require('node:net');
+const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -25,6 +34,7 @@ const fsp = require('node:fs/promises');
 const ollama = require('./commun/ollama');
 const lokiLocal = require('./commun/loki-local');
 const outilsCommuns = require('./commun/mcp-commun');
+const lokiRune = require('./loki-rune');
 
 let proc = null;          // processus Claude Code en cours
 let procCwd = null;       // dossier dans lequel il a été lancé
@@ -107,8 +117,11 @@ function spawnClaude(command, args, cwd) {
 // Le serveur MCP est lancé avec le Node intégré à Electron (process.execPath + ELECTRON_RUN_AS_NODE).
 let communDir = null;     // %APPDATA%\atelier-commun
 let mcpFile = null;       // %APPDATA%\atelier-ide\mcp-atelier.json
+let actionsFile = null;   // %APPDATA%\atelier-ide\loki-actions.json (les actions de Rune, pour mcp-commun.js)
+let consignesFile = null; // %APPDATA%\atelier-ide\rune.md
 // Lire ne demande jamais la permission ; retenir ou oublier passe par la carte habituelle.
-const LECTURE = ['mcp__atelier__lire_contexte', 'mcp__atelier__lire_notes'];
+const LECTURE = ['mcp__atelier__lire_contexte', 'mcp__atelier__lire_notes',
+  ...lokiRune.ACTIONS.filter((a) => a.lecture).map((a) => `mcp__atelier__${a.name}`)];
 
 // --- Les autorisations ---
 // Chaque demande appartient à une famille. « Ne plus demander » vaut pour la famille, pendant la
@@ -122,6 +135,7 @@ const FAMILLES = {
   fichiers: { libelle: 'Modifier les fichiers du projet', outils: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'] },
   memoire: { libelle: 'Retenir ou oublier des infos sur le projet', outils: ['mcp__atelier__retenir_projet', 'mcp__atelier__oublier_projet'] },
   web: { libelle: 'Lire des pages et chercher sur le web', outils: ['WebFetch', 'WebSearch'] },
+  bifrost: { libelle: 'Rapatrier des fichiers depuis Bifrost', outils: lokiRune.ACTIONS.filter((a) => a.famille === 'bifrost').map((a) => `mcp__atelier__${a.name}`) },
 };
 const DEUX_MOTS = new Set(['npm', 'npx', 'pnpm', 'yarn', 'git', 'node', 'composer', 'php', 'python', 'py', 'pip', 'docker', 'ssh', 'scp', 'vue', 'vite']);
 const autoriseesConversation = new Set();
@@ -192,18 +206,82 @@ async function demanderPermission(m) {
   });
 }
 
-async function ecrireConfigMcp(cwd) {
+// --- Les actions dans Rune ---
+// mcp-commun.js les reçoit de Claude Code et les envoie ici par un canal local ; la fenêtre les fait.
+const enAttente = new Map(); // id d'action -> fonction qui reçoit la réponse de la fenêtre
+let canal = null;            // { chemin, jeton }
+
+function ouvrirCanal(log) {
+  if (canal) return Promise.resolve(canal);
+  const nom = `rune-loki-${process.pid}-${crypto.randomBytes(6).toString('hex')}`;
+  const chemin = process.platform === 'win32' ? `\\\\.\\pipe\\${nom}` : path.join(os.tmpdir(), `${nom}.sock`);
+  const jeton = crypto.randomBytes(24).toString('hex');
+  const serveur = net.createServer((socket) => {
+    let recu = '';
+    socket.setEncoding('utf8');
+    socket.on('error', () => {});
+    socket.on('data', async (chunk) => {
+      recu += chunk;
+      const i = recu.indexOf('\n');
+      if (i < 0) return;
+      let demande;
+      try { demande = JSON.parse(recu.slice(0, i)); } catch { return socket.end(); }
+      // Comparaison à durée constante : on ne laisse pas deviner le jeton.
+      const ok = typeof demande.jeton === 'string' && demande.jeton.length === jeton.length
+        && crypto.timingSafeEqual(Buffer.from(demande.jeton), Buffer.from(jeton));
+      if (!ok) return socket.end(`${JSON.stringify({ erreur: 'Jeton refusé' })}\n`);
+      const reponse = await executerAction(String(demande.outil), demande.args || {}, log);
+      socket.end(`${JSON.stringify(reponse)}\n`);
+    });
+  });
+  return new Promise((resolve, reject) => {
+    serveur.once('error', reject);
+    serveur.listen(chemin, () => {
+      canal = { chemin, jeton };
+      resolve(canal);
+    });
+  });
+}
+
+async function executerAction(nom, args, log) {
+  if (!lokiRune.ACTIONS.some((a) => a.name === nom)) return { erreur: `Action inconnue : ${nom}` };
+  if (!sender || sender.isDestroyed()) return { erreur: 'La fenêtre de Rune est fermée' };
+  const id = crypto.randomUUID();
+  log?.('INFO', `Loki : action ${nom} ${JSON.stringify(args).slice(0, 200)}`);
+  const r = await new Promise((resolve) => {
+    const delai = setTimeout(() => { enAttente.delete(id); resolve({ erreur: 'Rune n\'a pas répondu à temps' }); }, 120_000);
+    enAttente.set(id, (rep) => { clearTimeout(delai); enAttente.delete(id); resolve(rep || { erreur: 'Réponse vide' }); });
+    sender.send('claude:action', { id, nom, args });
+  });
+  const prenom = await lirePrenom();
+  if (typeof r.texte === 'string') r.texte = lokiRune.personnaliser(r.texte, prenom);
+  if (typeof r.erreur === 'string') r.erreur = lokiRune.personnaliser(r.erreur, prenom);
+  return r;
+}
+
+async function ecrireConfigMcp(cwd, log) {
+  const { chemin, jeton } = await ouvrirCanal(log);
+  await fsp.writeFile(actionsFile, JSON.stringify(lokiRune.pourMcp(await lirePrenom())), 'utf8');
   const config = {
     mcpServers: {
       atelier: {
         command: process.execPath,
-        args: [path.join(__dirname, 'mcp-commun.js')],
-        env: { ELECTRON_RUN_AS_NODE: '1', ATELIER_COMMUN: communDir, ATELIER_PROJET: path.basename(cwd) },
+        args: [path.join(__dirname, 'commun', 'mcp-commun.js')],
+        env: {
+          ELECTRON_RUN_AS_NODE: '1', ATELIER_COMMUN: communDir, ATELIER_PROJET: path.basename(cwd),
+          ATELIER_ACTIONS: actionsFile, ATELIER_CANAL: chemin, ATELIER_JETON: jeton,
+        },
       },
     },
   };
   await fsp.writeFile(mcpFile, JSON.stringify(config, null, 2), 'utf8');
   return mcpFile;
+}
+
+// rune.md : ce que Loki sait de Rune (loki-rune.js), donné à chaque lancement de Claude Code.
+async function ecrireConsignes() {
+  await fsp.writeFile(consignesFile, lokiRune.personnaliser(lokiRune.CONSIGNES, await lirePrenom()), 'utf8');
+  return consignesFile;
 }
 
 // Le prénom donné au premier lancement d'Atelier (recopié dans atelier-commun/utilisateur.json).
@@ -236,7 +314,7 @@ function introAtelier(cwd, prenom) {
   ].join('\n');
 }
 
-function start({ command, model, cwd, log, resume, mcpConfig }) {
+function start({ command, model, cwd, log, resume, mcpConfig, consignes }) {
   const args = [
     '-p',
     '--input-format', 'stream-json',
@@ -247,6 +325,8 @@ function start({ command, model, cwd, log, resume, mcpConfig }) {
   ];
   if (model) args.push('--model', model);
   if (resume) args.push('--resume', resume);
+  // Par un fichier : pas de souci de guillemets ni de retours à la ligne avec cmd.exe.
+  if (consignes) args.push('--append-system-prompt-file', consignes);
   if (mcpConfig) args.push('--mcp-config', mcpConfig, '--allowedTools', ...LECTURE);
 
   log('INFO', `Claude : lancement de « ${command} » dans ${cwd}`);
@@ -381,6 +461,9 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
   historyFile = path.join(dataDir, 'claude-conversations.json');
   communDir = path.join(path.dirname(dataDir), 'atelier-commun');
   mcpFile = path.join(dataDir, 'mcp-atelier.json');
+  actionsFile = path.join(dataDir, 'loki-actions.json');
+  consignesFile = path.join(dataDir, 'rune.md');
+  handle('claude:action:reponse', async (_event, { id, reponse } = {}) => { enAttente.get(id)?.(reponse); });
   ollama.configurer({ commun: communDir });
   const dossierLocal = path.join(dataDir, 'loki-local');
 
@@ -419,6 +502,14 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
       }
     }
     const prenom = await lirePrenom();
+    const actionsRune = lokiRune.pourMcp(prenom).map((a, i) => ({
+      name: a.name, description: a.description, parameters: a.inputSchema, affiche: `mcp__atelier__${a.name}`, lecture: Boolean(lokiRune.ACTIONS[i].lecture),
+      faire: async (args) => {
+        const r = await executerAction(a.name, args || {}, log);
+        if (r.erreur) throw new Error(r.erreur);
+        return { texte: r.texte || 'Fait.' };
+      },
+    }));
     const consignes = [
       `Tu es Loki, l'assistant intégré à Rune, un éditeur de code (web, Vue.js, sous Windows), un des outils de l'Atelier.`,
       lignePrenom(prenom),
@@ -427,8 +518,9 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
       'Pour les fichiers : lire_fichier, lister_fichiers, chercher_texte, modifier_fichier (remplace un passage exact), ecrire_fichier.',
       `Avant de modifier un fichier, lis-le. ${prenom || 'L\'utilisateur'} valide chaque modification sur une carte Autoriser / Refuser.`,
       ...(memoire.length ? ['La mémoire du projet (décisions, client, hébergement…) : lire_contexte ; ses notes : lire_notes ; retenir_projet / oublier_projet pour garder une info utile plus tard.'] : []),
+      lokiRune.personnaliser(lokiRune.CONSIGNES_COURTES, prenom),
     ].join('\n');
-    await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(root), ...memoire] });
+    await session.envoyer(texte, { consignes, outils: [...lokiLocal.outilsFichiers(root), ...memoire, ...actionsRune] });
   }
 
   basculer = (raison) => {
@@ -504,16 +596,18 @@ function register({ handle, getRoot, readConfig, writeConfig, log, dataDir }) {
       // Claude Code s'était arrêté en cours de conversation (plantage, mise en veille…) : on la reprend.
       const resume = lastSession && lastSession.cwd === root && /^[\w-]+$/.test(lastSession.id) ? lastSession.id : null;
       let mcpConfig = null;
+      let consignes = null;
+      try { consignes = await ecrireConsignes(); } catch (err) { log('ERREUR', `Claude : rune.md impossible à écrire : ${err.message}`); }
       if (config.claudeAtelier !== false) {
         try {
-          mcpConfig = await ecrireConfigMcp(root);
+          mcpConfig = await ecrireConfigMcp(root, log);
           intro = introAtelier(root, await lirePrenom());
         } catch (err) {
           log('ERREUR', `Claude : dossier partagé de l'Atelier indisponible : ${err.message}`);
         }
       }
       if (!intro) intro = `(Rune : dans l'Atelier, tu t'appelles Loki (propulsé par Claude). ${lignePrenom(await lirePrenom())})\n\n`;
-      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd: root, log, resume, mcpConfig })) return;
+      if (!start({ command: config.claudeCommand || 'claude', model: config.claudeModel, cwd: root, log, resume, mcpConfig, consignes })) return;
     }
     write({ type: 'user', message: { role: 'user', content: intro + text }, parent_tool_use_id: null, session_id: '' });
   });

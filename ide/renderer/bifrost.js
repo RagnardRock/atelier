@@ -89,8 +89,8 @@ const bifrostPanel = (() => {
     return h;
   }
 
-  async function verifierSite() {
-    if (!state.root) return;
+  // Les flags de tout le site (pages qui en ont), avec le texte des onglets ouverts. Aussi pour Loki.
+  async function analyserSite() {
     const { files } = await window.atelier.listFiles();
     const pages = [];
     for (const f of files.filter((x) => /\.html?$/i.test(x.rel)).slice(0, 2000)) {
@@ -105,7 +105,12 @@ const bifrostPanel = (() => {
       const cle = `${p.chemin}|${e.ligne}|${e.message}`;
       if (e.gravite !== 'info' && !vus.has(cle)) { vus.add(cle); erreurs.push({ ...e, chemin: p.chemin }); }
     }
-    analyseSite = { pages: pages.length, erreurs, chemins: Object.fromEntries(pages.map((p) => [p.chemin, p.path])) };
+    return { pages: pages.length, erreurs, chemins: Object.fromEntries(pages.map((p) => [p.chemin, p.path])) };
+  }
+
+  async function verifierSite() {
+    if (!state.root) return;
+    analyseSite = await analyserSite();
     ouverts.add('site-flags');
     render();
   }
@@ -843,5 +848,11 @@ const bifrostPanel = (() => {
   new MutationObserver(() => { fiche = null; sites = null; rapatriement = null; envoi = null; analyseSite = null; pages = null; theme = null; essaisTheme = {}; nouvelle = null; if (!view.hidden) charger(); else etat = null; })
     .observe($('#tree-title'), { childList: true, characterData: true, subtree: true });
 
-  return { refresh: charger, verifierSite, insererBloc };
+  return {
+    refresh: charger, verifierSite, insererBloc, analyserSite,
+    // Pour Loki : l'élément cliqué dans l'aperçu en mode visuel ({ fichier, ligne, tag, attrs } ou null).
+    get choisi() { const c = elementChoisi(); return c ? { fichier: c.file.path, ligne: c.e.ligne, tag: c.e.tag, attrs: c.e.attrs } : null; },
+    // Après un rapatriement fait par Loki : la fiche et l'aperçu du rapatriement sont à relire.
+    oublierClient() { fiche = null; rapatriement = null; envoi = null; if (!view.hidden) charger(); },
+  };
 })();

@@ -25,7 +25,8 @@ par git : on ne modifie que les fichiers de ce dossier-ci, puis `npm install` da
 `node ../commun/copier.js`) pour les recopier.
 
 Rune a son propre panneau Claude (`ide/`), plus riche (contexte de l'éditeur, rechargement des
-fichiers), et sa propre copie de `mcp-commun.js`.
+fichiers). Il prend seulement `mcp-commun.js` (avec ses actions à lui depuis Rune 1.6, voir
+`ide/loki-rune.js`), `ollama.js` et `loki-local.js`.
 
 ## Ce que Claude sait en arrivant
 
