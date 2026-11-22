@@ -86,6 +86,16 @@ const OUTILS = [
     inputSchema: { type: 'object', properties: { calcul: { type: 'string', description: 'Par exemple « (1200 + 15 %) / 12 » ou « 2^10 »' } }, required: ['calcul'] },
   },
   {
+    name: 'terminal_lire',
+    description: 'Lit les dernières lignes affichées par le widget Terminal (l\'onglet et le volet actifs), avec le shell et le dossier. Ne change rien.',
+    inputSchema: { type: 'object', properties: { lignes: { type: 'number', description: 'Nombre de lignes (60 par défaut, 300 au plus)' } } },
+  },
+  {
+    name: 'terminal_executer',
+    description: 'Tape une commande dans le widget Terminal et appuie sur Entrée, puis renvoie ce qu\'elle affiche. L\'utilisateur valide chaque commande. Une seule commande à la fois, dans la syntaxe du shell ouvert (souvent PowerShell).',
+    inputSchema: { type: 'object', properties: { commande: { type: 'string' }, nouvel_onglet: { type: 'boolean', description: 'Ouvrir un nouvel onglet pour elle (sinon : l\'onglet actif)' }, dossier: { type: 'string', description: 'Avec nouvel_onglet : dossier de départ (chemin complet)' }, attendre: { type: 'number', description: 'Secondes à attendre sa sortie au plus (5 par défaut, 50 au plus)' } }, required: ['commande'] },
+  },
+  {
     name: 'retenir_projet',
     description: 'Retient une info sur un projet (nom du dossier), gardée d\'une conversation à l\'autre et recopiée dans projets.md.',
     inputSchema: { type: 'object', properties: { projet: { type: 'string' }, texte: { type: 'string', description: 'Une info courte' } }, required: ['projet', 'texte'] },

@@ -8,6 +8,8 @@
   <title>Atelier</title>
   <!-- Codicons : les icônes de VS Code (les mêmes que dans Rune et Skald) -->
   <link rel="stylesheet" href="../node_modules/@vscode/codicons/dist/codicon.css">
+  <!-- xterm.js : l'affichage du widget Terminal (comme dans Rune) -->
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
   <link rel="stylesheet" href="../commun/socle.css">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,14 +19,32 @@
     <span id="brand"><img class="logo" src="atelier.svg" alt="">Atelier</span>
     <span id="salut"></span>
     <div class="title-actions">
+      <button id="btn-disposition" class="icon-button" title="Disposition (Ctrl+Maj+D)"><i class="codicon codicon-layout"></i></button>
       <button id="btn-nouveautes" class="icon-button" title="Nouveautés : toutes les versions de tes outils (Ctrl+Maj+N)"><i class="codicon codicon-megaphone"></i><span class="pastille" hidden></span></button>
       <button id="btn-update" class="icon-button" title="Chercher et installer la dernière version d'Atelier"><i class="codicon codicon-cloud-download"></i></button>
       <button id="btn-settings" class="icon-button" title="Réglages d'Atelier (Ctrl+,)"><i class="codicon codicon-gear"></i></button>
     </div>
   </header>
 
+  <!-- Mode édition de la disposition (bouton Disposition) : voir disposition.js -->
+  <div id="disposition-barre" hidden>
+    <i class="codicon codicon-layout"></i>
+    <select id="disposition-choix" title="Disposition affichée (Ctrl+Alt+1, 2, 3…)"></select>
+    <button id="btn-disposition-nouvelle" class="icon-button" title="Nouvelle disposition (copie de celle-ci)"><i class="codicon codicon-add"></i></button>
+    <button id="btn-disposition-renommer" class="icon-button" title="Renommer"><i class="codicon codicon-edit"></i></button>
+    <button id="btn-disposition-supprimer" class="icon-button" title="Supprimer cette disposition"><i class="codicon codicon-trash"></i></button>
+    <span class="sep"></span>
+    <button id="btn-disposition-ajouter" class="button small" title="Remettre un bloc caché, ou ramener un bloc détaché"><i class="codicon codicon-eye"></i>Afficher un bloc</button>
+    <label class="disposition-option" title="Les blocs remontent tout seuls dans les trous"><input id="disposition-tasser" type="checkbox">Tasser vers le haut</label>
+    <button id="btn-disposition-reinit" class="button small" title="Remettre la place de chaque bloc comme au début">Par défaut</button>
+    <span class="sep"></span>
+    <span class="discret">Glisse un bloc pour le déplacer, tire ses bords pour changer sa taille.</span>
+    <button id="btn-disposition-fini" class="button small primary">Terminé</button>
+  </div>
+
+  <!-- Une grille libre : chaque bloc (Outils, chaque widget) a sa place et sa taille (disposition.js). -->
   <main id="layout">
-    <!-- Colonne de gauche : les outils (Rune, Skald…) -->
+    <!-- Les outils (Rune, Skald…) -->
     <section id="outils" class="plaque">
       <header class="plaque-titre">
         <i class="codicon codicon-tools"></i><span>Outils</span>
@@ -42,8 +62,6 @@
       <p id="outils-info" class="discret"></p>
     </section>
 
-    <!-- Le reste : les widgets. Pour l'instant, Notes. -->
-    <section id="widgets">
       <article id="widget-notes" class="widget plaque">
         <header class="plaque-titre">
           <i class="codicon codicon-note"></i><span>Notes</span>
@@ -81,8 +99,6 @@
         <footer class="widget-pied discret"><span id="projets-racine"></span></footer>
       </article>
 
-      <!-- Deux widgets plus petits, l'un au-dessus de l'autre dans la même colonne -->
-      <div class="widget-pile">
       <article id="widget-presse-papiers" class="widget plaque">
         <header class="plaque-titre">
           <i class="codicon codicon-clippy"></i><span>Presse-papiers et couleurs</span>
@@ -104,7 +120,27 @@
         <div id="minuteurs-raccourcis"></div>
         <div id="minuteurs-liste"></div>
       </article>
-      </div>
+
+      <!-- Terminal : onglets, volets, commandes favorites (terminal.js et ../terminal.js) -->
+      <article id="widget-terminal" class="widget plaque">
+        <header class="plaque-titre">
+          <i class="codicon codicon-terminal"></i><span>Terminal</span>
+          <span class="spacer"></span>
+          <button id="btn-term-diviser" class="icon-button" title="Diviser à droite (Alt+Maj+=)"><i class="codicon codicon-split-horizontal"></i></button>
+          <button id="btn-term-diviser-bas" class="icon-button" title="Diviser en bas (Alt+Maj+-)"><i class="codicon codicon-split-vertical"></i></button>
+          <button id="btn-term-chercher" class="icon-button" title="Chercher (Ctrl+F dans le terminal)"><i class="codicon codicon-search"></i></button>
+          <button id="btn-term-favoris" class="icon-button" title="Commandes favorites"><i class="codicon codicon-star-full"></i></button>
+          <button id="btn-term-loki" class="icon-button" title="Demander à Loki d'expliquer la sélection, ou les dernières lignes"><i class="codicon rune-loki">ᛚ</i></button>
+          <button id="btn-term-reglages" class="icon-button" title="Réglages du terminal"><i class="codicon codicon-settings-gear"></i></button>
+        </header>
+        <div class="term-barre">
+          <div id="term-onglets" role="tablist"></div>
+          <button id="btn-term-nouveau" class="icon-button" title="Nouvel onglet (Ctrl+Maj+T)"><i class="codicon codicon-add"></i></button>
+          <button id="btn-term-shells" class="icon-button" title="Nouvel onglet avec un autre shell"><i class="codicon codicon-chevron-down"></i></button>
+        </div>
+        <div id="term-favoris"></div>
+        <div id="term-vues"></div>
+      </article>
 
       <article id="widget-calendrier" class="widget plaque">
         <header class="plaque-titre">
@@ -164,12 +200,15 @@
           </div>
         </div>
       </article>
-    </section>
   </main>
 
   <div id="modal-root"></div>
 
   <script src="base.js"></script>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script src="../node_modules/@xterm/addon-search/lib/addon-search.js"></script>
   <script src="../commun/notifications.js" data-api="atelier"></script>
   <script src="../commun/dialogues.js"></script>
   <script src="outils.js"></script>
@@ -179,10 +218,12 @@
   <script src="minuteurs.js"></script>
   <script src="calendrier.js"></script>
   <script src="calculatrice.js"></script>
+  <script src="terminal.js"></script>
   <script src="claude.js"></script>
   <script src="ia-locale.js"></script>
   <script src="nouveautes.js"></script>
   <script src="../commun/mise-a-jour.js" data-api="atelier" data-nom="Atelier"></script>
+  <script src="disposition.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -149,6 +149,8 @@ const ClaudeWidget = (() => {
       case 'calculer': return ['symbol-operator', `Calcule ${a.calcul}`];
       case 'retenir_projet': return ['bookmark', `Retenir sur ${a.projet} : « ${debut(a.texte)} »`, a.texte];
       case 'oublier_projet': return ['bookmark', `Oublier sur ${a.projet} : « ${debut(Projets.infoMemoire(a.projet, a.id)?.texte || a.id)} »`];
+      case 'terminal_lire': return ['terminal', 'Lire ce qu\'affiche le terminal'];
+      case 'terminal_executer': return ['terminal', `Lancer dans le terminal${a.nouvel_onglet ? ' (nouvel onglet)' : ''} : ${debut(a.commande)}`, a.commande];
       default: return ['tools', action];
     }
   }
@@ -191,6 +193,8 @@ const ClaudeWidget = (() => {
     },
     retenir_projet: (a) => Projets.retenir(a.projet, a.texte),
     oublier_projet: (a) => Projets.oublier(a.projet, a.id),
+    terminal_lire: (a) => Terminal_.pourLoki.lire(a),
+    terminal_executer: (a) => Terminal_.pourLoki.executer(a),
   };
   window.atelier.onClaudeAction(async ({ id, outil, args }) => {
     let resultat;
@@ -209,13 +213,14 @@ const ClaudeWidget = (() => {
     const [icone, phrase, detail] = decrireAction(e.action, e.input);
     const refuser = el('button', { className: 'button small', textContent: 'Refuser' });
     const autoriser = el('button', { className: 'button small primary', textContent: 'Autoriser' });
-    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets', installation: 'installer, mettre à jour ou désinstaller un outil' };
+    const LIBELLES = { notes: 'les notes', calendrier: 'le calendrier', minuteurs: 'les minuteurs', projets: 'les projets et outils', memoire: 'la mémoire des projets', installation: 'installer, mettre à jour ou désinstaller un outil', terminalLire: 'lire le terminal' };
     const toujours = el('button', { className: 'claude-carte-toujours', textContent: `Toujours autoriser pour ${LIBELLES[e.famille] || 'ce type d\'action'}`, title: 'Loki ne te demandera plus pour ce type d\'action (modifiable dans les réglages d\'Atelier)' });
+    // Une commande dans le terminal se valide toujours une par une : pas de « toujours autoriser ».
     const carte = el('div', { className: 'claude-carte' },
       el('div', { className: 'claude-carte-titre' }, el('i', { className: `codicon codicon-${icone}` }), el('span', { textContent: phrase })),
       detail ? el('pre', { className: 'claude-carte-detail', textContent: detail }) : null,
       el('div', { className: 'claude-carte-boutons' }, el('span', { className: 'spacer' }), refuser, autoriser),
-      toujours);
+      e.famille === 'terminal' ? null : toujours);
     const repondre = (oui) => {
       window.atelier.claudePermission({ requestId: e.requestId, toolUseId: e.toolUseId, autoriser: oui, input: e.input });
       // La carte s'efface : la ligne de l'action, juste au-dessus, montre la suite (✓ fait, ✗ refusé).
@@ -501,7 +506,14 @@ const ClaudeWidget = (() => {
     if (conversations.length) enregistrer(); // l'ancienne conversation est maintenant dans la liste
   }
 
-  return { start };
+  // Le widget Terminal envoie une question à Loki (bouton Loki : « explique cette erreur »).
+  async function envoyerDepuis(texteMessage) {
+    if (occupe) { notify('Loki répond déjà : attends la fin de sa réponse.', 'info'); return; }
+    if (!panneau.hidden) fermerListe();
+    await envoyer(texteMessage);
+  }
+
+  return { start, envoyerDepuis };
 })();
 
 // --- Petit moteur Markdown (le même que dans le panneau Claude de Rune) ---

@@ -12,29 +12,18 @@ const App = (() => {
     document.body.classList.toggle('glass', Boolean(c.glass));
     const { blur, needsRestart } = await window.atelier.setWindowTheme({ glass: c.glass, blur: c.windowBlur });
     document.body.classList.toggle('window-blur', blur);
+    if (typeof Disposition !== 'undefined') { Disposition.themeChange(); Terminal_.themeChange(); }
     return needsRestart;
   }
 
-  // --- Widgets affichés (Réglages › Widgets) ---
-  // Chaque widget est un <article id="widget-…"> dans index.html. Un nouveau widget se décrit aussi à
-  // Loki dans ../claude.js (WIDGETS), pour qu'il sache ce qu'il fait.
-  const WIDGETS = [
-    ['notes', 'Notes', 'widget-notes'],
-    ['projets', 'Projets récents', 'widget-projets'],
-    ['pressePapiers', 'Presse-papiers et couleurs', 'widget-presse-papiers'],
-    ['minuteurs', 'Minuteurs', 'widget-minuteurs'],
-    ['calendrier', 'Calendrier', 'widget-calendrier'],
-    ['calculatrice', 'Calculatrice', 'widget-calculatrice'],
-    ['claude', 'Loki', 'widget-claude'],
-  ];
-  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets'], ['installation', 'Installer, mettre à jour ou désinstaller un outil']];
+  // --- Widgets ---
+  // Leur place, leur taille, cachés ou détachés : disposition.js (bouton Disposition de la barre de titre).
+  // Un nouveau widget s'y ajoute (BLOCS), et se décrit aussi à Loki dans ../claude.js (WIDGETS).
+  const FAMILLES = [['notes', 'Les notes'], ['calendrier', 'Le calendrier'], ['minuteurs', 'Les minuteurs'], ['projets', 'Ouvrir un projet, lancer un outil'], ['memoire', 'Retenir ou oublier des infos sur mes projets'], ['installation', 'Installer, mettre à jour ou désinstaller un outil'], ['terminalLire', 'Lire ce qu\'affiche le terminal (lancer une commande demande toujours)']];
   const LANGUES = [['fr', 'Français'], ['fr+en', 'Français et anglais'], ['en', 'Anglais']];
   // Pour Loki, dans Atelier (chaque outil a son propre choix, en haut de son panneau Loki).
   const MOTEURS = [['auto', 'Auto : Claude, et l\'IA locale quand Claude n\'est pas là'], ['claude', 'Toujours Claude'], ['local', 'Toujours l\'IA locale (Ollama)']];
   const MODELES = [['', 'Celui de Claude Code (par défaut)'], ['haiku', 'Haiku (rapide)'], ['sonnet', 'Sonnet'], ['opus', 'Opus (le plus fort)']];
-  function applyWidgets(c) {
-    for (const [key, , id] of WIDGETS) $(`#${id}`).hidden = c.widgets?.[key] === false;
-  }
 
   // --- Réglages ---
   async function openSettings() {
@@ -68,11 +57,11 @@ const App = (() => {
         { key: 'claudeActions', label: 'Loki peut agir dans Atelier (notes, calendrier, minuteurs, projets, installer un outil…)', type: 'checkbox', value: config.claudeActions !== false },
         { type: 'info', text: 'Sans me demander la permission, pour :' },
         ...FAMILLES.map(([key, label]) => ({ key: `sansDemander-${key}`, label, type: 'checkbox', value: Boolean(config.claudeSansDemander?.[key]) })),
-        { type: 'info', text: 'Widgets affichés :' },
-        ...WIDGETS.map(([key, label]) => ({ key: `widget-${key}`, label, type: 'checkbox', value: config.widgets?.[key] !== false })),
+        { type: 'info', text: 'Widgets : leur place, leur taille, les cacher ou les détacher dans leur propre fenêtre se fait avec le bouton Disposition de la barre de titre (Ctrl+Maj+D).' },
         { type: 'info', text: `Atelier ${version}. Réglages enregistrés dans ${configPath}.` },
       ],
       buttons: [
+        { label: 'Disposition…', title: 'Déplacer, redimensionner, cacher ou détacher les widgets', run: () => { Dialogs.close(null); document.querySelector('#btn-disposition').click(); } },
         { label: 'IA locale…', run: () => IaLocale.ouvrir() },
         { label: 'Dossier des notes', run: () => window.atelier.montrerNotes() },
         { label: 'Dossier partagé', title: 'Ouvrir le dossier partagé avec les outils (mémoire des projets, notes, projet en cours)', run: () => window.atelier.ouvrirCommun() },
@@ -93,19 +82,17 @@ const App = (() => {
         // Aperçu immédiat de la couleur et du verre.
         document.documentElement.style.setProperty('--accent', values.accentColor);
         document.body.classList.toggle('glass', values.glass);
+        Disposition.themeChange();
       },
     });
     if (!v) return applyTheme(config);
-    // Les cases « widget-… » deviennent config.widgets = { notes: true, … }.
-    const widgets = {};
-    for (const [key] of WIDGETS) { widgets[key] = v[`widget-${key}`]; delete v[`widget-${key}`]; }
     v.claudeSansDemander = {};
     for (const [key] of FAMILLES) { v.claudeSansDemander[key] = v[`sansDemander-${key}`]; delete v[`sansDemander-${key}`]; }
     v.prenom = v.prenom.trim();
     if (v.prenom) v.prenomDemande = true;
     const dossierChange = v.dossierProjets !== config.dossierProjets;
-    config = await window.atelier.writeConfig({ ...v, widgets: { ...config.widgets, ...widgets } });
-    applyWidgets(config);
+    config = await window.atelier.writeConfig(v);
+    Terminal_.reglagesAtelier(config);
     if (dossierChange) Projets.refresh();
     salut();
     window.atelier.reglagesPressePapiers();
@@ -153,7 +140,7 @@ const App = (() => {
   async function start() {
     ({ config, path: configPath } = await window.atelier.readConfig());
     await applyTheme(config);
-    applyWidgets(config);
+    await Disposition.start(config);
     Outils.reglages(config);
     salut();
     demanderPrenom();
@@ -164,6 +151,9 @@ const App = (() => {
     await Calendrier.start();
     await Calculatrice.start();
     await ClaudeWidget.start();
+    await Terminal_.start(config);
+    // En dernier : les widgets détachés à la fermeture se rouvrent dans leur fenêtre.
+    await Disposition.rouvrir();
     // Les versions installées s'affichent tout de suite ; GitHub n'est contacté au démarrage que si
     // le réglage est coché (sinon seulement quand tu cliques ↻).
     try {

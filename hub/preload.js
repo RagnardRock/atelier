@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('atelier', {
   // Presse-papiers
   historiquePressePapiers: () => ipcRenderer.invoke('presse:historique'),
   copier: (texte) => ipcRenderer.invoke('presse:copier', texte),
+  lirePressePapiers: () => ipcRenderer.invoke('presse:lire'),
   supprimerDuPressePapiers: (texte) => ipcRenderer.invoke('presse:supprimer', texte),
   viderPressePapiers: () => ipcRenderer.invoke('presse:vider'),
   reglagesPressePapiers: () => ipcRenderer.invoke('presse:reglages'),
@@ -69,7 +70,21 @@ contextBridge.exposeInMainWorld('atelier', {
 
   // Clic droit dans une zone de texte (orthographe, couper, copier, coller)
   onMenuEdition: (callback) => ipcRenderer.on('menu:edition', (_event, data) => callback(data)),
-  edition: (commande, mot) => ipcRenderer.invoke('edition:commande', commande, mot),
+  edition: (commande, mot, fenetre) => ipcRenderer.invoke('edition:commande', commande, mot, fenetre),
+
+  // Widget Terminal (terminal.js)
+  shellsTerminal: () => ipcRenderer.invoke('term:shells'),
+  creerTerminal: (shell, cols, rows, dossier) => ipcRenderer.invoke('term:creer', shell, cols, rows, dossier),
+  ecrireTerminal: (id, data) => ipcRenderer.send('term:ecrire', id, data),
+  tailleTerminal: (id, cols, rows) => ipcRenderer.send('term:taille', id, cols, rows),
+  fermerTerminal: (id) => ipcRenderer.send('term:fermer', id),
+  onTerminalDonnees: (callback) => ipcRenderer.on('term:donnees', (_event, id, data) => callback(id, data)),
+  onTerminalFin: (callback) => ipcRenderer.on('term:fin', (_event, id, code) => callback(id, code)),
+  ouvrirLien: (url) => ipcRenderer.invoke('lien:ouvrir', url),
+
+  // Widgets détachés dans leur propre fenêtre (disposition.js)
+  preparerFenetreWidget: (nom, options) => ipcRenderer.invoke('widget:preparer', nom, options),
+  fenetreWidgetDevant: (nom, oui) => ipcRenderer.invoke('widget:devant', nom, oui),
 
   // Réglages, fenêtre, mise à jour d'Atelier
   readConfig: () => ipcRenderer.invoke('config:read'),
