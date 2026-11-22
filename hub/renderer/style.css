@@ -652,7 +652,7 @@ body.fenetre-widget .title-actions .icon-button.actif { color: var(--accent); }
 .term-onglet-vue { position: absolute; inset: 0; display: flex; gap: 0; }
 .term-onglet-vue.colonne { flex-direction: column; }
 .term-onglet-vue[hidden] { display: none; }
-.term-volet { position: relative; min-width: 0; min-height: 0; display: flex; padding: 6px 4px 4px 10px; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; background: rgba(0, 0, 0, 0.28); }
+.term-volet { position: relative; min-width: 0; min-height: 0; display: flex; padding: 6px 4px 4px 10px; border: 1px solid var(--plate-border); border-radius: 10px; background: rgba(255, 255, 255, 0.03); }
 .term-volet.actif { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 .term-volet.fini { opacity: 0.75; }
 .term-zone { flex: 1; min-width: 0; min-height: 0; }
