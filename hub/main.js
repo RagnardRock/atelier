@@ -307,7 +307,8 @@ async function demarrerSurveillance() {
 }
 handle('presse:historique', async () => historique);
 // Coller dans le terminal (Ctrl+V).
-handle('presse:lire', async () => String(clipboard.readText() ?? ''));
+// readText peut renvoyer une promesse selon la version d'Electron : on l'attend.
+handle('presse:lire', async () => String((await clipboard.readText()) ?? ''));
 handle('presse:copier', async (_event, texte) => {
   await clipboard.writeText(String(texte));
   dernierTexte = String(texte);
